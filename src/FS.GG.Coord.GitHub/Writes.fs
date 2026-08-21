@@ -346,9 +346,9 @@ module Writes =
 
         transport.Send request |> Result.map ignore
 
-    /// Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
-    /// generation uses the same marker; GitHub's comment id is the total order and a loser removes only
-    /// its own candidate. An unreadable census never means an empty lease set.
+    // Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
+    // generation uses the same marker; GitHub's comment id is the total order and a loser removes only
+    // its own candidate. An unreadable census never means an empty lease set.
     let acquireDurableLease
         (transport: IGitHubTransport)
         (ref: Ref)

@@ -520,6 +520,9 @@
          shared coordination engine version whose fresh-claim ordinary-exhaustion authorization now
          accepts advancing historical repair heads while retaining final-head, wait, legacy-backlink,
          and fail-before-write fences. Kit members and destinations are unchanged. -->
+    <!-- 0.69.0 -> 0.70.0, a coherent MINOR (.github#2801): the packed overlap protocol now teaches
+         automatic generation-bound arbitration, claim-preserving loser recovery, and the sole
+         board-orchestrator lease/request route. Additive policy and commands; no identity removed. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>

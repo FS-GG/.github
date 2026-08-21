@@ -2420,6 +2420,29 @@ for n in 42 43; do
     -d '{"body":"Mutual-overlap fixture.\n\nPaths: src/Mutual.fs"}' \
     "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$n" >/dev/null
 done
+# The host string is no longer authority. Acquire one immutable live board-orchestrator lease and bind
+# arbitration to that authority ref plus the current caller identity.
+curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
+  | jq -r '.[] | select(.body | contains("fsgg:board-orchestrator-")) | .id' \
+  | while read -r cid; do
+      [ -z "$cid" ] || curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$cid" >/dev/null
+    done
+authority="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD mutual-overlap-host FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; authority_rc=$?
+spoof="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD copied-public-values FS.GG.SDD#42 vole-418 --worker smew-e1d9 2>&1)"; spoof_rc=$?
+if [ "$spoof_rc" -ne 0 ] && grep -qF 'identity is authoritative' <<<"$spoof"; then
+  ok ".github#2801: copied public lease values cannot spoof the live orchestrator caller"
+else
+  bad ".github#2801: active-A authority must bind the current caller, not supplied strings" "rc=$spoof_rc: $spoof"
+fi
+routed="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD external-block FS.GG.SDD#42 smew-e1d9 --worker smew-e1d9 2>&1)"; routed_rc=$?
+promoted="$($ENGINE overlap orchestrate FS.GG.SDD#44 FS.GG.SDD run-priority FS.GG.SDD#42 vole-418 --worker vole-418 2>&1)"; promoted_rc=$?
+if [ "$routed_rc" -eq 0 ] && grep -qF 'ROUTED' <<<"$routed" \
+   && [ "$promoted_rc" -eq 0 ] && grep -qF 'promoted blocking request' <<<"$promoted"; then
+  ok ".github#2801: active A performs the highest-safe board priority mutation before ordinary work"
+else
+  bad ".github#2801: request priority must be projected, not merely printed" \
+      "route=$routed_rc:$routed promote=$promoted_rc:$promoted"
+fi
 wait42_gen="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=vole-418 lease=120 -->\nheld"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
@@ -2444,18 +2467,40 @@ else
       "gens=$wait42_gen/$wait43_gen first=$wait_a_rc:$wait_a second=$wait_b_rc:$wait_b rooms=$rooms body42=$body42 body43=$body43"
 fi
 
-arb="$($ENGINE overlap arbitrate FS.GG.SDD#43 FS.GG.SDD#42 host/root --worker vole-418 2>&1)"; arb_rc=$?
+arb="$($ENGINE overlap arbitrate FS.GG.SDD#43 FS.GG.SDD#42 FS.GG.SDD#44 --worker vole-418 2>&1)"; arb_rc=$?
 after42_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
 after42_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
 room_thread="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/$room_number/comments")"
-if [ "$arb_rc" -eq 0 ] && grep -qF 'PRECEDENCE APPLIED' <<<"$arb" \
+if [ "$authority_rc" -eq 0 ] && grep -qF 'ACQUIRED' <<<"$authority" \
+   && [ "$arb_rc" -eq 0 ] && grep -qF 'PRECEDENCE APPLIED' <<<"$arb" \
    && grep -qF 'Paths: any' <<<"$after42_body" && ! grep -qF 'src/Mutual.fs' <<<"$after42_body" \
    && [ "$(printf '%s' "$after42_thread" | jq --argjson gen "$wait42_gen" '[.[] | select(.id == $gen and (.body | contains("fsgg:claim worker=vole-418")))] | length')" = "1" ] \
    && [ "$(printf '%s' "$room_thread" | jq '[.[] | select(.body | contains("fsgg.coord.overlap-precedence/v1"))] | length')" = "1" ]; then
   ok ".github#2801: precedence narrows the loser atomically without releasing its live claim"
 else
   bad ".github#2801: compiled arbitration must preserve the loser claim and leave one current precedence" \
-      "rc=$arb_rc:$arb body=$after42_body item-thread=$after42_thread room-thread=$room_thread"
+      "authority=$authority_rc:$authority rc=$arb_rc:$arb body=$after42_body item-thread=$after42_thread room-thread=$room_thread"
+fi
+
+frozen="$($ENGINE widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; frozen_rc=$?
+frozen_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
+if [ "$frozen_rc" -ne 0 ] && grep -qF 'loser resume refused' <<<"$frozen" \
+   && grep -qF 'Paths: any' <<<"$frozen_body" && ! grep -qF 'src/Mutual.fs' <<<"$frozen_body"; then
+  ok ".github#2801: production widen enforces the generation-bound freeze before PATCH"
+else
+  bad ".github#2801: an active loser must not re-add shared reservations" "rc=$frozen_rc:$frozen body=$frozen_body"
+fi
+
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$wait43_gen" >/dev/null
+curl -fsS -X PATCH -H 'Content-Type: application/json' -d '{"state":"closed"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" >/dev/null
+resumed="$($ENGINE widen FS.GG.SDD#42 --paths src/Mutual.fs --worker vole-418 2>&1)"; resumed_rc=$?
+resumed_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42" | jq -r '.body')"
+if [ "$resumed_rc" -eq 0 ] && grep -qF 'src/Mutual.fs' <<<"$resumed_body"; then
+  ok ".github#2801: production resume gates winner-land, rebase, clear overlap and explicit re-widen"
+else
+  bad ".github#2801: loser resume must pass only after the complete production predicate" \
+      "rc=$resumed_rc:$resumed body=$resumed_body"
 fi
 
 # These ten write rows are driven by their dedicated state-transition assertions above.  Marking

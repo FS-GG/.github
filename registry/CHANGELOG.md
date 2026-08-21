@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-21** — **coherent set `github:0.70.0` prepared with a mapped release obligation**
+  (github; [.github#2801](https://github.com/FS-GG/.github/issues/2801)): makes mutual-overlap
+  arbitration and the single Coordination-board orchestrator executable, generation-bound,
+  caller-bound, fail-closed, and production-route tested. The claim owner must publish the prepared
+  Kit, Drivers, and Coord.Cli bytes to both feeds, prove payload identity and public installation,
+  promote the stable coherent-set row, and complete receiver handoff before Done.
+
 - **2026-08-21** — **coherent set `github:0.69.0` prepared with a mapped release obligation**
   (github; [.github#2807](https://github.com/FS-GG/.github/issues/2807)): repairs fresh-claim
   ordinary-exhaustion authorization for genuine H0/H1/H2/H3 head progression while retaining exact

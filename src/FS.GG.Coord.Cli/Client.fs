@@ -7493,6 +7493,63 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Union
         | Replace
 
+    type private OverlapFreeze =
+        { Winner: Ref
+          LoserGeneration: string
+          SharedTokens: string list }
+
+    [<Literal>]
+    let private OverlapFreezeMarker = "<!-- fsgg:overlap-freeze/v1 -->"
+
+    let private parseOverlapFreeze owner repo (body: string) =
+        if not (body.Contains(OverlapFreezeMarker, StringComparison.Ordinal)) then Ok None
+        else
+            try
+                use doc = JsonDocument.Parse(body.Substring(body.IndexOf(OverlapFreezeMarker, StringComparison.Ordinal) + OverlapFreezeMarker.Length).TrimStart())
+                let root = doc.RootElement
+                match Kernel.parseRefIn owner (Some repo) (root.GetProperty("winner").GetString()) with
+                | Error detail -> Error detail
+                | Ok winner ->
+                    Ok(
+                        Some
+                            { Winner = winner
+                              LoserGeneration = root.GetProperty("loserGeneration").GetString()
+                              SharedTokens = root.GetProperty("sharedTokens").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList }
+                    )
+            with error -> Error $"overlap-freeze receipt is malformed: %s{error.Message}"
+
+    let private loserResumeErrors winnerLanded generationCurrent fetchedWinnerBase rebasedHead overlapClear explicitlyRewidened reviewRequired exactHeadReviewed =
+        [ if not winnerLanded then "winner has not landed"
+          if not generationCurrent then "loser claim generation changed"
+          if not fetchedWinnerBase then "winner base was not fetched"
+          if not rebasedHead then "loser head was not rebased"
+          if not overlapClear then "overlap was not re-run clear"
+          if not explicitlyRewidened then "loser reservation was not explicitly re-widened"
+          if reviewRequired && not exactHeadReviewed then "changed loser head lacks exact-head review" ]
+
+    let private currentGitHeadContainsOriginMain () =
+        try
+            let psi = ProcessStartInfo("git", "merge-base --is-ancestor origin/main HEAD")
+            psi.UseShellExecute <- false
+            use gitProcess = Process.Start psi
+            gitProcess.WaitForExit()
+            gitProcess.ExitCode = 0
+        with _ -> false
+
+    let private overlapFreezeFor (ctx: Context) (held: Writes.Held) =
+        Reads.commentBodies ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number
+        |> Result.bind (fun comments ->
+            let rec collect acc remaining =
+                match remaining with
+                | [] -> Ok(List.tryLast (List.rev acc))
+                | body :: rest ->
+                    match parseOverlapFreeze held.Ref.Owner held.Ref.Repo body with
+                    | Error detail -> Error(Errors.Malformed(held.Ref.Short, detail))
+                    | Ok None -> collect acc rest
+                    | Ok(Some freeze) when freeze.LoserGeneration = string held.MarkerId -> collect (freeze :: acc) rest
+                    | Ok(Some _) -> collect acc rest
+            collect [] comments)
+
     let private declaredPathTokens (touchSet: TouchSet) : string list =
         match touchSet with
         | Undeclared
@@ -7605,10 +7662,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     match update with
                                     | Replace -> Ok validated
                                     | Union ->
-                                        declaredPathTokens (TouchSet.parse body)
-                                        @ validated.Tokens
-                                        |> List.distinct
-                                        |> Writes.validate
+                                        let prior = declaredPathTokens (TouchSet.parse body)
+                                        // Arbitration may narrow a loser with no remaining authored path
+                                        // to the file-less `any` sentinel. Its required explicit re-widen
+                                        // replaces that sentinel; mixing it with a real path is structurally
+                                        // invalid and would otherwise make safe resume impossible.
+                                        if prior = [ "any" ] || prior = [ "none" ] then Ok validated
+                                        else prior @ validated.Tokens |> List.distinct |> Writes.validate
 
                                 match proposed with
                                 | Error msg ->
@@ -7716,9 +7776,42 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                             collisions
                                             |> List.exists (fun (_, _, toks) -> toks |> List.exists newTokenStems.Contains)
 
+                                        // A precedence narrow leaves a generation-bound freeze receipt on the
+                                        // losing item. Re-adding one of those shared tokens is a RESUME, not an
+                                        // ordinary widen: the production mutation route itself proves the winner
+                                        // closed, this claim generation is current, origin/main is contained by the
+                                        // current head, overlap is clear, and this call is the explicit re-widen.
+                                        // Any unreadable or false predicate refuses before the PATCH.
+                                        let resumeGate =
+                                            overlapFreezeFor ctx held
+                                            |> Result.bind (function
+                                                | None -> Ok()
+                                                | Some freeze ->
+                                                    let frozen = freeze.SharedTokens |> List.map TouchSet.stem |> Set.ofList
+                                                    let readdsFrozenToken = newTokenStems |> Set.exists frozen.Contains
+                                                    if not readdsFrozenToken then Ok()
+                                                    else
+                                                        Reads.issueState ctx.Transport freeze.Winner.Owner freeze.Winner.Repo freeze.Winner.Number
+                                                        |> Result.bind (fun state ->
+                                                            let rebased = currentGitHeadContainsOriginMain ()
+                                                            let errors =
+                                                                loserResumeErrors
+                                                                    (state = IssueState.Closed)
+                                                                    true
+                                                                    rebased
+                                                                    rebased
+                                                                    (List.isEmpty collisions)
+                                                                    true
+                                                                    false
+                                                                    false
+                                                            if List.isEmpty errors then Ok()
+                                                            else Error(Errors.Malformed(ref.Short, "loser resume refused: " + String.concat "; " errors))))
+
                                         let write =
-                                            match TouchSet.decideUpdate introducedCollision with
-                                            | TouchSet.CommitUpdate ->
+                                            resumeGate
+                                            |> Result.bind (fun () ->
+                                              match TouchSet.decideUpdate introducedCollision with
+                                              | TouchSet.CommitUpdate ->
                                                 Writes.widen ctx.Transport held rewritten |> Result.map (fun () -> true)
                                             // NO PATCH IS ISSUED ON THIS PATH — that is the whole fix. `held`/`rewritten`
                                             // are never handed to `Writes.widen`, so the body `Reads.issueBody` read
@@ -7727,7 +7820,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                             // a full collision or a partial one alike, since this command already
                                             // computes ONE merged/replaced declaration and gates that ONE write — there
                                             // is no per-token partial commit to leave behind.
-                                            | TouchSet.RefuseUpdate -> Ok false
+                                              | TouchSet.RefuseUpdate -> Ok false)
 
                                         match write with
                                         | Error e -> fail e
@@ -7930,8 +8023,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
           ReviewRequired: bool
           ExactHeadReviewed: bool }
 
-    /// One immutable generation of the Coordination board's sole orchestrator authority. Expiry, rather
-    /// than a mutable heartbeat body, makes takeover races a generation-scoped CAS and leaves an audit trail.
+    // One immutable generation of the Coordination board's sole orchestrator authority. Expiry, rather
+    // than a mutable heartbeat body, makes takeover races a generation-scoped CAS and leaves an audit trail.
     type BoardOrchestratorLease =
         { Board: string
           HolderRepo: string
@@ -8031,8 +8124,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
               string request.LeaseGeneration ]
         |> sha256
 
-    /// Decide from a complete lease/request census. An external repository can only route to the live
-    /// authority; only an absent/expired authority permits the next immutable generation to be acquired.
+    // Decide from a complete lease/request census. An external repository can only route to the live
+    // authority; only an absent/expired authority permits the next immutable generation to be acquired.
     let decideBoardOrchestrator requesterRepo holder (snapshot: BoardOrchestratorSnapshot) =
         let invalidLease (lease: BoardOrchestratorLease) =
             lease.Board <> snapshot.Board
@@ -8088,8 +8181,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     RunBoardOrchestrator(lease, priority)
             | _ -> BoardOrchestratorRefused "more than one live board-orchestrator lease exists"
 
-    /// Decide only from one authoritative snapshot.  Every missing/stale/conflicting fact refuses; a
-    /// one-way wait is the sole honest no-cycle result.  Comment order cannot affect the result.
+    // Decide only from one authoritative snapshot.  Every missing/stale/conflicting fact refuses; a
+    // one-way wait is the sole honest no-cycle result.  Comment order cannot affect the result.
     let detectMutualOverlap (snapshot: MutualOverlapSnapshot) : MutualOverlapVerdict =
         let samePair a b left right = (a = left && b = right) || (a = right && b = left)
 
@@ -8179,8 +8272,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | [ cycle ] -> MutualOverlapCycle cycle
                     | _ -> MutualOverlapRefused "more than one authoritative mutual cycle matches this receipt set"
 
-    /// Validate the host's revision chain and return its one current receipt.  A reversal is permitted only
-    /// when the new revision binds the preceding digest and carries a measured reason.
+    // Validate the host's revision chain and return its one current receipt.  A reversal is permitted only
+    // when the new revision binds the preceding digest and carries a measured reason.
     let validateOverlapPrecedence (cycle: MutualOverlapCycle) (receipts: OverlapPrecedenceReceipt list) =
         let participants receipt =
             receipt.Winner <> receipt.Loser
@@ -8213,16 +8306,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         else
             loop None ordered
 
-    /// The losing reservation may resume only after the complete winner-land/rebase/re-overlap/re-widen
-    /// transaction, including an exact-head review when the changed tree requires one.
+    // The losing reservation may resume only after the complete winner-land/rebase/re-overlap/re-widen
+    // transaction, including an exact-head review when the changed tree requires one.
     let validateLoserResume (facts: LoserResumeFacts) =
-        [ if not facts.WinnerLanded then "winner has not landed"
-          if not facts.LoserClaimGenerationCurrent then "loser claim generation changed"
-          if not facts.FetchedWinnerBase then "winner base was not fetched"
-          if not facts.RebasedHead then "loser head was not rebased"
-          if not facts.OverlapClear then "overlap was not re-run clear"
-          if not facts.ExplicitlyRewidened then "loser reservation was not explicitly re-widened"
-          if facts.ReviewRequired && not facts.ExactHeadReviewed then "changed loser head lacks exact-head review" ]
+        loserResumeErrors
+            facts.WinnerLanded
+            facts.LoserClaimGenerationCurrent
+            facts.FetchedWinnerBase
+            facts.RebasedHead
+            facts.OverlapClear
+            facts.ExplicitlyRewidened
+            facts.ReviewRequired
+            facts.ExactHeadReviewed
 
     [<Literal>]
     let private WaitMarker = "<!-- fsgg:overlap-wait/v1 -->"
@@ -8525,83 +8620,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 printfn "MUTUAL OVERLAP — %s and %s are frozen in automatic room %s; host precedence required." cycle.First.Short cycle.Second.Short room.Short
                                 ExitContended
 
-    let private overlapArbitrate (ctx: Context) (opts: Options) winnerArg loserArg host reason =
-        match worker opts, parseRef ctx winnerArg, parseRef ctx loserArg with
-        | Error code, _, _ -> code
-        | _, Error message, _
-        | _, _, Error message ->
-            eprint $"fsgg-coord-engine: %s{message}"
-            ExitError
-        | Ok w, Ok winner, Ok loser ->
-            match mutualOverlapFacts ctx opts winner loser with
-            | Error error -> fail error
-            | Ok(_, _, _, loserBody, snapshot) ->
-                match detectMutualOverlap snapshot with
-                | MutualOverlapRefused detail ->
-                    eprint $"fsgg-coord-engine: mutual-overlap arbitration refused: %s{detail}."
-                    ExitError
-                | NoMutualOverlapCycle ->
-                    eprint "fsgg-coord-engine: no authoritative mutual-overlap cycle exists."
-                    ExitError
-                | MutualOverlapCycle cycle ->
-                    match ensureCycleRoom ctx cycle with
-                    | Error error -> fail error
-                    | Ok room ->
-                        match Reads.commentBodies ctx.Transport room.Owner room.Repo room.Number with
-                        | Error error -> fail error
-                        | Ok comments ->
-                            match parseReceiptSet (parsePrecedenceReceipt room.Owner room.Repo) comments with
-                            | Error detail ->
-                                eprint $"fsgg-coord-engine: precedence ledger is unreadable: %s{detail}."
-                                ExitError
-                            | Ok existing ->
-                                let current = existing |> List.sortBy _.Revision |> List.tryLast
-                                let candidate =
-                                    match current with
-                                    | Some receipt when receipt.Winner = winner && receipt.Loser = loser -> receipt
-                                    | prior ->
-                                        let draft: OverlapPrecedenceReceipt =
-                                            { CycleDigest = cycle.Digest
-                                              Revision = prior |> Option.map (fun receipt -> receipt.Revision + 1) |> Option.defaultValue 1
-                                              PreviousDigest = prior |> Option.map _.Digest
-                                              Winner = winner
-                                              Loser = loser
-                                              Host = host
-                                              Reason = if String.IsNullOrWhiteSpace reason then None else Some reason
-                                              Digest = "" }
-                                        { draft with Digest = precedenceReceiptDigest draft }
-                                match validateOverlapPrecedence cycle (existing @ (if current = Some candidate then [] else [ candidate ])) with
-                                | Error detail ->
-                                    eprint $"fsgg-coord-engine: precedence refused: %s{detail}."
-                                    ExitError
-                                | Ok precedence ->
-                                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) loser with
-                                    | Error error -> fail error
-                                    | Ok(Writes.Holds held) ->
-                                        let shared = Set.ofList (normalizedTokens cycle.SharedTokens)
-                                        let remaining =
-                                            declaredPathTokens (TouchSet.parse loserBody)
-                                            |> List.filter (fun token -> not (Set.contains (TouchSet.stem token) shared))
-                                        let narrowedTokens = if List.isEmpty remaining then [ "any" ] else remaining
-                                        match Writes.validate narrowedTokens with
-                                        | Error detail ->
-                                            eprint $"fsgg-coord-engine: cannot narrow loser: %s{detail}"
-                                            ExitError
-                                        | Ok valid ->
-                                            let rewritten = Writes.rewrite loserBody valid
-                                            let marker = $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
-                                            let body = marker + "\n" + precedenceReceiptBody precedence
-                                            match Writes.applyArbitration ctx.Transport held room marker body rewritten with
-                                            | Error error -> fail error
-                                            | Ok _ ->
-                                                printfn "PRECEDENCE APPLIED — %s wins; %s remains claimed with shared reservations narrowed. After %s lands, %s must fetch/rebase, re-run overlap, explicitly re-widen, and refresh exact-head review when required." winner.Short loser.Short winner.Short loser.Short
-                                                ExitGreen
-                                    | Ok Writes.DoesNotHold ->
-                                        eprint $"fsgg-coord-engine: worker %s{w.Id} must hold losing item %s{loser.Short} to apply precedence without releasing its claim."
-                                        ExitError
-                                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "overlap arbitrate" w.Id loser theirs
-                                    | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "overlap arbitrate" loser derived named
-
     let private boardOrchestratorFacts (ctx: Context) (authority: Ref) =
         Reads.commentsWithIdentity ctx.Transport authority.Owner authority.Repo authority.Number
         |> Result.bind (fun comments ->
@@ -8621,18 +8639,151 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok lease, Ok request -> collect (Option.toList lease @ leases) (Option.toList request @ requests) rest
             collect [] [] comments)
 
-    /// Standard route for an external repository needing Coordination-board work. A live authority receives
-    /// one generation-bound blocking request; only absence/expiry opens the next generation's comment CAS.
+    let private overlapArbitrate (ctx: Context) (opts: Options) winnerArg loserArg authorityArg reason =
+        match worker opts, parseRef ctx winnerArg, parseRef ctx loserArg with
+        | Error code, _, _ -> code
+        | _, Error message, _
+        | _, _, Error message ->
+            eprint $"fsgg-coord-engine: %s{message}"
+            ExitError
+        | Ok w, Ok winner, Ok loser ->
+            let authorize () =
+                match parseRef ctx authorityArg with
+                | Error message ->
+                    eprint $"fsgg-coord-engine: overlap arbitrate requires the board-orchestrator authority ref: %s{message}"
+                    Error ExitError
+                | Ok authority ->
+                    match boardOrchestratorFacts ctx authority with
+                    | Error error -> Error(fail error)
+                    | Ok snapshot ->
+                        let activeRepo =
+                            snapshot.Leases
+                            |> List.filter (fun lease -> lease.ExpiresAtUnix > snapshot.NowUnix)
+                            |> List.tryExactlyOne
+                            |> Option.map _.HolderRepo
+                            |> Option.defaultValue ""
+                        match decideBoardOrchestrator activeRepo w.Id snapshot with
+                        | RunBoardOrchestrator(lease, _) when lease.Holder = w.Id ->
+                            Ok $"%s{authority.Canonical}@%d{lease.Generation}:%s{w.Id}"
+                        | RouteRequestTo lease ->
+                            eprint $"fsgg-coord-engine: overlap arbitrate is reserved to live board-orchestrator %s{lease.HolderRepo}/%s{lease.Holder} generation %d{lease.Generation}."
+                            Error ExitError
+                        | AcquireBoardOrchestrator _ ->
+                            eprint "fsgg-coord-engine: overlap arbitrate requires a live board-orchestrator lease; acquire it through overlap orchestrate first."
+                            Error ExitError
+                        | BoardOrchestratorRefused detail ->
+                            eprint $"fsgg-coord-engine: board-orchestrator authority refused: %s{detail}."
+                            Error ExitError
+                        | RunBoardOrchestrator _ ->
+                            eprint "fsgg-coord-engine: live board-orchestrator lease does not bind the current caller identity."
+                            Error ExitError
+
+            match authorize () with
+            | Error code -> code
+            | Ok authoritativeHost ->
+              match mutualOverlapFacts ctx opts winner loser with
+                | Error error -> fail error
+                | Ok(_, _, _, loserBody, snapshot) ->
+                    match detectMutualOverlap snapshot with
+                    | MutualOverlapRefused detail ->
+                        eprint $"fsgg-coord-engine: mutual-overlap arbitration refused: %s{detail}."
+                        ExitError
+                    | NoMutualOverlapCycle ->
+                        eprint "fsgg-coord-engine: no authoritative mutual-overlap cycle exists."
+                        ExitError
+                    | MutualOverlapCycle cycle ->
+                        match ensureCycleRoom ctx cycle with
+                        | Error error -> fail error
+                        | Ok room ->
+                            match Reads.commentBodies ctx.Transport room.Owner room.Repo room.Number with
+                            | Error error -> fail error
+                            | Ok comments ->
+                                match parseReceiptSet (parsePrecedenceReceipt room.Owner room.Repo) comments with
+                                | Error detail ->
+                                    eprint $"fsgg-coord-engine: precedence ledger is unreadable: %s{detail}."
+                                    ExitError
+                                | Ok existing ->
+                                    let current = existing |> List.sortBy _.Revision |> List.tryLast
+                                    let candidate =
+                                        match current with
+                                        | Some receipt when receipt.Winner = winner && receipt.Loser = loser -> receipt
+                                        | prior ->
+                                            let draft: OverlapPrecedenceReceipt =
+                                                { CycleDigest = cycle.Digest
+                                                  Revision = prior |> Option.map (fun receipt -> receipt.Revision + 1) |> Option.defaultValue 1
+                                                  PreviousDigest = prior |> Option.map _.Digest
+                                                  Winner = winner
+                                                  Loser = loser
+                                                  Host = authoritativeHost
+                                                  Reason = if String.IsNullOrWhiteSpace reason then None else Some reason
+                                                  Digest = "" }
+                                            { draft with Digest = precedenceReceiptDigest draft }
+                                    match validateOverlapPrecedence cycle (existing @ (if current = Some candidate then [] else [ candidate ])) with
+                                    | Error detail ->
+                                        eprint $"fsgg-coord-engine: precedence refused: %s{detail}."
+                                        ExitError
+                                    | Ok precedence ->
+                                        match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) loser with
+                                        | Error error -> fail error
+                                        | Ok(Writes.Holds held) ->
+                                            let shared = Set.ofList (normalizedTokens cycle.SharedTokens)
+                                            let remaining =
+                                                declaredPathTokens (TouchSet.parse loserBody)
+                                                |> List.filter (fun token -> not (Set.contains (TouchSet.stem token) shared))
+                                            let narrowedTokens = if List.isEmpty remaining then [ "any" ] else remaining
+                                            match Writes.validate narrowedTokens with
+                                            | Error detail ->
+                                                eprint $"fsgg-coord-engine: cannot narrow loser: %s{detail}"
+                                                ExitError
+                                            | Ok valid ->
+                                            let rewritten = Writes.rewrite loserBody valid
+                                            let marker = $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
+                                            let body = marker + "\n" + precedenceReceiptBody precedence
+                                            let freezeKey = $"<!-- fsgg:overlap-freeze-key/v1 cycle=%s{cycle.Digest} loser-generation=%d{held.MarkerId} -->"
+                                            let freezeBody =
+                                                freezeKey
+                                                + "\n"
+                                                + OverlapFreezeMarker
+                                                + "\n"
+                                                + JsonSerializer.Serialize(
+                                                    {| schema = "fsgg.coord.overlap-freeze/v1"
+                                                       cycleDigest = cycle.Digest
+                                                       winner = winner.Canonical
+                                                       loser = loser.Canonical
+                                                       loserGeneration = string held.MarkerId
+                                                       sharedTokens = normalizedTokens cycle.SharedTokens |})
+                                            match Writes.writeDurableComment ctx.Transport loser freezeKey freezeBody with
+                                            | Error error -> fail error
+                                            | Ok _ ->
+                                                match Writes.applyArbitration ctx.Transport held room marker body rewritten with
+                                                | Error error -> fail error
+                                                | Ok _ ->
+                                                    printfn "PRECEDENCE APPLIED — %s wins; %s remains claimed with shared reservations narrowed and a generation-bound production freeze. After %s lands, %s must fetch/rebase, re-run overlap, explicitly re-widen, and refresh exact-head review when required." winner.Short loser.Short winner.Short loser.Short
+                                                    ExitGreen
+                                        | Ok Writes.DoesNotHold ->
+                                            eprint $"fsgg-coord-engine: worker %s{w.Id} must hold losing item %s{loser.Short} to apply precedence without releasing its claim."
+                                            ExitError
+                                        | Ok(Writes.TwinHolds theirs) -> twinRefusal "overlap arbitrate" w.Id loser theirs
+                                        | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "overlap arbitrate" loser derived named
+
+    // Standard route for an external repository needing Coordination-board work. A live authority receives
+    // one generation-bound blocking request; only absence/expiry opens the next generation's comment CAS.
     let private overlapOrchestrate (ctx: Context) (opts: Options) authorityText requestingRepo requestKey coordinationText holder =
-        match parseRef ctx authorityText, parseRef ctx coordinationText with
-        | Error detail, _
-        | _, Error detail ->
+        match worker opts, parseRef ctx authorityText, parseRef ctx coordinationText with
+        | Error code, _, _ -> code
+        | _, Error detail, _
+        | _, _, Error detail ->
             eprint $"fsgg-coord-engine: %s{detail}"
             ExitError
-        | Ok _, Ok _ when String.IsNullOrWhiteSpace requestingRepo || String.IsNullOrWhiteSpace requestKey || String.IsNullOrWhiteSpace holder ->
+        | Ok _, Ok _, Ok _ when String.IsNullOrWhiteSpace requestingRepo || String.IsNullOrWhiteSpace requestKey || String.IsNullOrWhiteSpace holder ->
             eprint "fsgg-coord-engine: orchestrator route requires non-empty requesting repo, request key, and holder identity."
             ExitError
-        | Ok authority, Ok coordinationRef ->
+        | Ok w, Ok authority, Ok coordinationRef when requestingRepo <> coordinationRef.Repo || holder <> w.Id ->
+            eprint $"fsgg-coord-engine: orchestrator identity is authoritative: this request ref and caller bind %s{coordinationRef.Repo}/%s{w.Id}; supplied repo/holder strings cannot nominate another actor."
+            ExitError
+        | Ok w, Ok authority, Ok coordinationRef ->
+            let requestingRepo = coordinationRef.Repo
+            let holder = w.Id
             let decide snapshot = decideBoardOrchestrator requestingRepo holder snapshot
             match boardOrchestratorFacts ctx authority with
             | Error error -> fail error
@@ -8644,9 +8795,29 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | RunBoardOrchestrator(lease, priority) ->
                     match priority with
                     | Some request ->
-                        printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — highest-priority blocking request is %s from %s; preserve in-flight safety, then route it before ordinary board work." lease.Generation request.CoordinationRef.Short request.RequestingRepo
+                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                        | Error error -> fail error
+                        | Ok board ->
+                            match Board.itemId ctx.Transport board request.CoordinationRef.Owner request.CoordinationRef.Repo request.CoordinationRef.Number with
+                            | Error error -> fail error
+                            | Ok None ->
+                                eprint $"fsgg-coord-engine: highest-priority blocking request %s{request.CoordinationRef.Short} is not on the authoritative Coordination board; refusing to claim promotion."
+                                ExitError
+                            | Ok(Some itemId) ->
+                                let severity =
+                                    match Map.tryFind "Severity" board.Fields with
+                                    | Some { Type = Board.SingleSelect options } ->
+                                        [ "Critical"; "High"; "high" ]
+                                        |> List.tryFind (fun candidate -> Map.containsKey candidate options)
+                                        |> Option.defaultValue "Critical"
+                                    | _ -> "Critical"
+                                match Board.setField ctx.Transport board itemId "Severity" (Board.Set severity) with
+                                | Error error -> fail error
+                                | Ok() ->
+                                    printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — promoted blocking request %s from %s to board Severity=%s; preserve in-flight safety, then route it before ordinary board work." lease.Generation request.CoordinationRef.Short request.RequestingRepo severity
+                                    ExitGreen
                     | None -> printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — no external blocking request is pending." lease.Generation
-                    ExitGreen
+                              ExitGreen
                 | RouteRequestTo lease ->
                     let marker = $"<!-- fsgg:board-orchestrator-request-key/v1 generation=%d{lease.Generation} repo=%s{requestingRepo} key=%s{requestKey} -->"
                     let draft: BoardOrchestratorRequest =

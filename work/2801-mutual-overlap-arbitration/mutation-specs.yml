@@ -126,7 +126,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.WinnerLanded then "winner has not landed"'
+    find: 'if not winnerLanded then "winner has not landed"'
     replace: 'if false then "winner has not landed"'
     breaks: loser resumes before the winner lands
     anchor: *test_anchor
@@ -136,7 +136,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.LoserClaimGenerationCurrent then "loser claim generation changed"'
+    find: 'if not generationCurrent then "loser claim generation changed"'
     replace: 'if false then "loser claim generation changed"'
     breaks: a replacement loser claim inherits stale arbitration
     anchor: *test_anchor
@@ -146,7 +146,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.FetchedWinnerBase then "winner base was not fetched"'
+    find: 'if not fetchedWinnerBase then "winner base was not fetched"'
     replace: 'if false then "winner base was not fetched"'
     breaks: loser resumes without fetching the winner's landed base
     anchor: *test_anchor
@@ -156,7 +156,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.RebasedHead then "loser head was not rebased"'
+    find: 'if not rebasedHead then "loser head was not rebased"'
     replace: 'if false then "loser head was not rebased"'
     breaks: loser resumes on its pre-winner head
     anchor: *test_anchor
@@ -166,7 +166,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.OverlapClear then "overlap was not re-run clear"'
+    find: 'if not overlapClear then "overlap was not re-run clear"'
     replace: 'if false then "overlap was not re-run clear"'
     breaks: loser resumes without a fresh disjoint verdict
     anchor: *test_anchor
@@ -176,7 +176,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if not facts.ExplicitlyRewidened then "loser reservation was not explicitly re-widened"'
+    find: 'if not explicitlyRewidened then "loser reservation was not explicitly re-widened"'
     replace: 'if false then "loser reservation was not explicitly re-widened"'
     breaks: loser edits without restoring its explicit reservation
     anchor: *test_anchor
@@ -186,7 +186,7 @@ mutations:
     discriminator: terminal
     command: ["dotnet", "test", "tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~ClaimOverlapTests"]
     target: src/FS.GG.Coord.Cli/Client.fs
-    find: 'if facts.ReviewRequired && not facts.ExactHeadReviewed then "changed loser head lacks exact-head review"'
+    find: 'if reviewRequired && not exactHeadReviewed then "changed loser head lacks exact-head review"'
     replace: 'if false then "changed loser head lacks exact-head review"'
     breaks: a changed loser tree resumes on a stale review head
     anchor: *test_anchor

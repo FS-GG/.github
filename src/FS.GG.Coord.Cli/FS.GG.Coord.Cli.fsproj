@@ -130,7 +130,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.69.0 — exhausted review authorization preserves advancing historical heads.
+    <PackageReleaseNotes>0.70.0 — mutual overlap waits and board-orchestrator authority become executable policy.
+
+WHAT MOVED, AND WHY IT IS A MINOR. Reciprocal, generation-bound overlap waits now detect one exact
+two-cycle, open one automatic ADR-0051 room, bind precedence to the current live board-orchestrator
+lease and caller, narrow the loser without releasing its claim, and leave a durable production freeze
+that `widen`/`set-paths` enforce before PATCH. Loser recovery requires winner closure, a current claim,
+an origin/main-containing rebased head, clear re-overlap, and explicit re-widen. External blocking
+requests route to the sole Coordination-board orchestrator; immutable lease generations fail closed on
+staleness/races and the active orchestrator projects the highest request to Severity=Critical. Additive
+commands and compatible safety enforcement, so the coherent set advances 0.69.0→0.70.0 (.github#2801).
+
+0.69.0 — exhausted review authorization preserves advancing historical heads.
 
 WHAT MOVED, AND WHY IT IS A MINOR. A real ordinary-exhaustion chain advances the PR head after each
 repair. Fresh-claim escalation now preserves each historical record's exact head and binds only the

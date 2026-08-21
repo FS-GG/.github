@@ -420,8 +420,14 @@
        production writer now also proves readable noncontiguous history and a malformed legacy
        confirmation backlink refuse before writes. This repairs receiver-visible review behavior;
        no command, member, destination, or package identity is removed. -->
+  <!-- 0.69.0 -> 0.70.0 (.github#2801): MINOR on the stable 0.x line. The coordination kit makes
+       reciprocal overlap waits automatically enforceable: one generation-bound room, live-lease
+       host precedence, claim-preserving loser narrowing, production mutation freezes, and guarded
+       winner-land/rebase/re-overlap/re-widen recovery. It also makes the single Coordination-board
+       orchestrator lease executable, caller-bound, race-safe, and able to project external blocking
+       requests to the board's highest safe severity. Additive commands/policy; no identities removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.69.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.70.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

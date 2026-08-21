@@ -618,10 +618,10 @@ module ClaimOverlapTests =
         runOverlapCommand transport [ "overlap"; "wait"; "FS.GG.SDD#42"; "FS.GG.SDD#43"; "host/root"; "--worker"; "vole-418" ]
 
     let private runOverlapArbitrate transport =
-        runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; "host/root"; "--worker"; "vole-418" ]
+        runOverlapCommand transport [ "overlap"; "arbitrate"; "FS.GG.SDD#43"; "FS.GG.SDD#42"; "FS.GG.SDD#99"; "--worker"; "vole-418" ]
 
     let private runOverlapOrchestrate transport =
-        runOverlapCommand transport [ "overlap"; "orchestrate"; "FS.GG.SDD#99"; "FS.GG.SDD"; "coord-fix-42"; "FS.GG.SDD#42"; "host-b" ]
+        runOverlapCommand transport [ "overlap"; "orchestrate"; "FS.GG.SDD#99"; "FS.GG.SDD"; "coord-fix-42"; "FS.GG.SDD#42"; "vole-418" ]
 
     [<Fact>]
     let ``#2801 compiled no-A route acquires one authoritative board-orchestrator generation`` () =
@@ -715,6 +715,27 @@ module ClaimOverlapTests =
         let cycle = detected snapshot
         thread.RoomBody <- Some($"<!-- fsgg:mutual-overlap-room/v1 cycle=%s{cycle.Digest} -->\n\nPaths: none")
         thread.Add(99, "ordinary room message") |> ignore
+        let authorityDraft: Client.BoardOrchestratorLease =
+            { Board = "FS-GG/FS.GG.SDD#99"
+              HolderRepo = "FS.GG.SDD"
+              Holder = "vole-418"
+              Generation = 1L
+              ExpiresAtUnix = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()
+              CommentId = 1L
+              Digest = "" }
+        let authorityLease = { authorityDraft with Digest = Client.boardOrchestratorLeaseDigest authorityDraft }
+        thread.Add(
+            99,
+            "<!-- fsgg:board-orchestrator-lease/v1 -->\n"
+            + JsonSerializer.Serialize
+                {| schema = "fsgg.coord.board-orchestrator-lease/v1"
+                   board = authorityLease.Board
+                   holderRepo = authorityLease.HolderRepo
+                   holder = authorityLease.Holder
+                   generation = authorityLease.Generation
+                   expiresAtUnix = authorityLease.ExpiresAtUnix
+                   digest = authorityLease.Digest |}
+        ) |> ignore
         let transport = waitWorld thread
         let code, output, errors = runOverlapArbitrate transport
         Assert.True((code = 0), $"expected arbitration success, got %d{code}; stdout=%s{output}; stderr=%s{errors}")

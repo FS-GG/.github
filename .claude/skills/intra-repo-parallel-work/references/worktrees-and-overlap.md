@@ -6,7 +6,10 @@ disposable isolation, not ownership—the claim marker owns the item.
 There is one authoritative Coordination-board orchestrator at a time. Before an orchestrator in an
 external repository starts or routes a Coordination fix, use the production orchestrator route against
 the board authority: `overlap orchestrate <authority-ref> <requesting-repo> <idempotence-key>
-<coordination-ref> <holder>`. Every board driver uses the same configured authority ref. If a live
+<coordination-ref> <holder>`. Every board driver uses the same configured authority ref. The route
+binds the repository to the request ref and the holder to the current
+minted worker; copied public lease strings cannot nominate another actor. The active holder projects
+the highest external block to board `Severity: Critical` before ordinary work—it does not merely print it. If a live
 generation exists, the external orchestrator must durably route one
 generation-bound, idempotent blocking request to that holder and must not start a competing
 Coordination implementation or orchestration lane. The board orchestrator preserves in-flight safety,
@@ -25,7 +28,10 @@ wait only against the other holder's exact live claim generation and current sha
 Two authoritative reciprocal waits freeze edits to those tokens and idempotently reuse one ADR-0051
 room. The host records one revisioned precedence receipt; the loser keeps its claim while the shared
 tokens are narrowed, and resumes only after the winner lands by fetching/rebasing, re-running overlap,
-explicitly re-widening, and refreshing any review invalidated by the new head. Stale generations,
+explicitly re-widening, and refreshing any review invalidated by the new head. The precedence
+application leaves a generation-bound freeze on the losing item; production `widen`
+and `set-paths` consume it and refuse a shared-token PATCH until the winner is closed, the current head
+contains `origin/main`, overlap is clear, and the call is the explicit re-widen. Stale generations,
 conflicting precedence at one revision, unreadable state, and incomplete writes refuse rather than
 guess; retry the same operation, which reconciles from live state.
 
