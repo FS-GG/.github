@@ -22,6 +22,12 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > it reuses this board and `fsgg-coord`, adding a claim lock, per-item git worktrees, and a
 > declared `Paths:` touch-set with an overlap check.
 
+> **Change-risk design.** The timestamped
+> [coordination change-risk mitigation design](2026-08-22-coordination-change-risk-mitigation-design.md)
+> analyzes the command-registration, lifecycle, self-hosting, CI, and release seams that amplified
+> `.github#2753`, and proposes a staged migration to single typed authorities and receipt-gated
+> completion.
+
 ## Requests and responses → cross-repo issues
 
 A "mailbox message" is a **GitHub issue in the target repo**.
