@@ -32,6 +32,7 @@
     <Compile Include="ChoresTests.fs" />
     <Compile Include="OpLockTests.fs" />
     <Compile Include="OpLockDispatchVerbTests.fs" />
+    <Compile Include="CommentMutationTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
     <Compile Include="ReviewApplicationTests.fs" />

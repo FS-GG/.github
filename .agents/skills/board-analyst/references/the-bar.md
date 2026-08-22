@@ -172,7 +172,7 @@ Create it once, on first use, and never a second one; find it by its exact title
 anything. Record each rejection like this:
 
 ```sh
-gh api -X POST repos/FS-GG/.github/issues/<register>/comments -f body='…'
+scripts/fsgg-coord comment create FS-GG/.github#<register> FS-GG/.github#<register> <owned-body-file> --text
 ```
 
 Sign every rejection with your minted id, and give it a `Verification:` line. A rejection with no

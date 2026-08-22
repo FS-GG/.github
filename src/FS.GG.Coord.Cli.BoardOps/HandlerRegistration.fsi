@@ -21,7 +21,8 @@ module HandlerRegistration =
           Intake: Handler
           Say: Handler
           Inbox: Handler
-          RoomOpen: Handler }
+          RoomOpen: Handler
+          Comment: Handler }
 
     val commands: Options.Command list
     val handlers: implementations: Implementations -> (Options.Command * Handler) list

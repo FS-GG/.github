@@ -21,7 +21,8 @@ module HandlerRegistration =
           Intake: Handler
           Say: Handler
           Inbox: Handler
-          RoomOpen: Handler }
+          RoomOpen: Handler
+          Comment: Handler }
 
     let commands =
         [ Options.Add
@@ -38,7 +39,8 @@ module HandlerRegistration =
           Options.IntakeCmd
           Options.Say
           Options.Inbox
-          Options.RoomOpen ]
+          Options.RoomOpen
+          Options.CommentCmd ]
 
     let handlers implementations =
         [ Options.Add, implementations.Add
@@ -55,7 +57,8 @@ module HandlerRegistration =
           Options.IntakeCmd, implementations.Intake
           Options.Say, implementations.Say
           Options.Inbox, implementations.Inbox
-          Options.RoomOpen, implementations.RoomOpen ]
+          Options.RoomOpen, implementations.RoomOpen
+          Options.CommentCmd, implementations.Comment ]
 
     let validate<'handler>
         (allCommands: Options.Command list)

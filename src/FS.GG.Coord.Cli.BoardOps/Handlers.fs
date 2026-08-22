@@ -5,6 +5,8 @@ module Handlers =
     open System
     open System.Diagnostics
     open System.IO
+    open System.Security.Cryptography
+    open System.Text
     open System.Text.Json
     open FS.GG.Coord
     open FS.GG.Coord.Types
@@ -1211,6 +1213,107 @@ module Handlers =
             eprint "fsgg-coord-engine: body-edits takes <ref>."
             ExitError
 
+    let private capabilitySegment (value: string) =
+        value
+        |> Seq.map (fun c -> if Char.IsLetterOrDigit c || c = '-' || c = '_' then c else '-')
+        |> Seq.toArray
+        |> String
+
+    [<Sealed>]
+    type CommentCapability internal (operationDirectory: string, path: string, body: string) =
+        member _.Path = path
+        member _.Body = body
+        member _.Cleanup() = Directory.Delete(operationDirectory, true)
+
+    let allocateCommentCapability (worker: string) (item: Ref) (source: string) =
+        let mutable recoveryPath = None
+
+        try
+            let sourcePath = Path.GetFullPath source
+
+            if not (File.Exists sourcePath) then
+                Error $"source file does not exist: %s{sourcePath}"
+            else
+                let attributes = File.GetAttributes sourcePath
+
+                if attributes.HasFlag FileAttributes.Directory || attributes.HasFlag FileAttributes.ReparsePoint then
+                    Error $"source must be a regular, non-symbolic file: %s{sourcePath}"
+                else
+                    let operationId = Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
+                    let operationDirectory =
+                        Path.Combine(
+                            Path.GetTempPath(),
+                            "fsgg-coord-comment-capabilities",
+                            capabilitySegment worker,
+                            capabilitySegment item.Canonical,
+                            operationId
+                        )
+
+                    Directory.CreateDirectory operationDirectory |> ignore
+                    let capabilityPath = Path.Combine(operationDirectory, "body.md")
+                    recoveryPath <- Some capabilityPath
+                    File.Copy(sourcePath, capabilityPath, false)
+                    let body = File.ReadAllText(capabilityPath, UTF8Encoding(false, true))
+                    Ok(CommentCapability(operationDirectory, capabilityPath, body))
+        with ex ->
+            match recoveryPath with
+            | Some path -> Error $"capability allocation failed; recovery capability preserved at %s{path}: %s{ex.Message}"
+            | None -> Error ex.Message
+
+    let commentCmd (ctx: Context) (opts: Options) : int =
+        let parsed =
+            match opts.Args with
+            | [ "create"; targetArg; itemArg; source ] -> Ok("create", targetArg, itemArg, None, source)
+            | [ "amend"; targetArg; itemArg; commentId; source ] ->
+                match Int64.TryParse commentId with
+                | true, id when id > 0L -> Ok("amend", targetArg, itemArg, Some id, source)
+                | _ -> Error "comment amend: COMMENT-ID must be a positive integer"
+            | _ -> Error "comment: usage comment <create TARGET ITEM FILE|amend TARGET ITEM COMMENT-ID FILE> [--json|--text]"
+
+        match parsed with
+        | Error message -> eprint $"fsgg-coord-engine: %s{message}"; ExitError
+        | Ok(operation, targetArg, itemArg, commentId, source) ->
+            match parseRef ctx targetArg, parseRef ctx itemArg, worker opts with
+            | Error message, _, _
+            | _, Error message, _ -> eprint $"fsgg-coord-engine: %s{message}"; ExitError
+            | _, _, Error code -> code
+            | Ok target, Ok item, Ok w ->
+                match allocateCommentCapability w.Id item source with
+                | Error message -> eprint $"fsgg-coord-engine: comment: %s{message}"; ExitError
+                | Ok capability ->
+                    let result =
+                        match commentId with
+                        | None -> Writes.createVerifiedComment ctx.Transport target capability.Body
+                        | Some id -> Writes.amendVerifiedComment ctx.Transport target id capability.Body
+
+                    match result with
+                    | Error error ->
+                        eprint $"fsgg-coord-engine: comment %s{operation} failed; recovery capability preserved at %s{capability.Path}"
+                        fail error
+                    | Ok receipt ->
+                        try
+                            capability.Cleanup()
+
+                            match opts.Render with
+                            | Json ->
+                                JsonSerializer.Serialize(
+                                    {| schema = "fsgg.coord.comment-mutation-result/v1"
+                                       operation = operation
+                                       target = target.Canonical
+                                       item = item.Canonical
+                                       commentId = receipt.CommentId
+                                       byteLength = receipt.ByteLength
+                                       sha256 = receipt.Sha256
+                                       cleanup = "removed" |}
+                                ) |> printfn "%s"
+                            | Text ->
+                                printfn "comment %s verified: target=%s item=%s id=%d bytes=%d sha256=%s cleanup=removed" operation target.Canonical item.Canonical receipt.CommentId receipt.ByteLength receipt.Sha256
+
+                            ExitGreen
+                        with ex ->
+                            eprint $"fsgg-coord-engine: comment %s{operation} was remotely verified, but cleanup failed; recovery capability remains at %s{capability.Path}: %s{ex.Message}"
+                            ExitError
+
     // The column `add` writes when the caller names none (.github#1823).
     //
     // **`Backlog`, and not `Ready`.** `Backlog` is visible to triage and NOT startable without a
@@ -1960,7 +2063,8 @@ module Handlers =
               Intake = intakeCmd
               Say = say
               Inbox = inbox
-              RoomOpen = roomOpen }
+              RoomOpen = roomOpen
+              Comment = commentCmd }
 
     // Program-level registrations are also a BoardOps-family product. Intake validation is the one
     // tokenless BoardOps route: it parses the draft and validates paths against the local checkout,

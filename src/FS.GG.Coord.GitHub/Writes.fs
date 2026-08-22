@@ -3,6 +3,8 @@ namespace FS.GG.Coord.GitHub
 module Writes =
 
     open System
+    open System.Security.Cryptography
+    open System.Text
     open System.Text.Json
     open System.Text.RegularExpressions
     open FS.GG.Coord
@@ -251,6 +253,48 @@ module Writes =
     // private CAS primitive; callers here have no capability to edit or remove another protocol marker.
     let postIssueComment transport ref body = postComment transport ref body
 
+    type VerifiedCommentMutation =
+        { CommentId: int64
+          ByteLength: int
+          Sha256: string }
+
+    let private bodyEvidence (body: string) =
+        let bytes = Encoding.UTF8.GetBytes body
+        bytes.Length, Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+
+    let private verifyCommentMutation
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (commentId: int64)
+        (body: string)
+        : IoResult<VerifiedCommentMutation> =
+
+        Reads.commentsWithIdentity transport ref.Owner ref.Repo ref.Number
+        |> Result.bind (fun comments ->
+            match comments |> List.filter (fun comment -> comment.Id = commentId) with
+            | [ observed ] ->
+                let expectedLength, expectedDigest = bodyEvidence body
+                let observedLength, observedDigest = bodyEvidence observed.Body
+
+                if expectedLength = observedLength && expectedDigest = observedDigest then
+                    Ok
+                        { CommentId = commentId
+                          ByteLength = expectedLength
+                          Sha256 = expectedDigest }
+                else
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            $"comment %d{commentId} readback mismatch: expected %d{expectedLength} UTF-8 bytes sha256=%s{expectedDigest}, observed %d{observedLength} bytes sha256=%s{observedDigest}"
+                        )
+                    )
+            | [] -> Error(Malformed(ref.Short, $"comment %d{commentId} is missing from the authoritative readback"))
+            | _ -> Error(Malformed(ref.Short, $"comment %d{commentId} occurs more than once in the authoritative readback")))
+
+    let createVerifiedComment transport ref body =
+        postComment transport ref body
+        |> Result.bind (fun commentId -> verifyCommentMutation transport ref commentId body)
+
     type DurableCommentWrite =
         | CommentWritten of commentId: int64
         | CommentAlreadyPresent
@@ -345,6 +389,10 @@ module Writes =
               Subject = ref.Short }
 
         transport.Send request |> Result.map ignore
+
+    let amendVerifiedComment transport ref commentId body =
+        patchComment transport ref commentId body
+        |> Result.bind (fun () -> verifyCommentMutation transport ref commentId body)
 
     // Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
     // generation uses the same marker; GitHub's comment id is the total order and a loser removes only

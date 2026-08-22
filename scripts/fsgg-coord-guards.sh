@@ -226,7 +226,7 @@
 # `who` and `reap` never see that issue (ADR-0041, on a third subject), but the fleet does: a stale engine
 # taking a dispatch grant is a stale engine deciding who may dispatch against a receiver, which is the
 # `.github#1858` failure with an extra step. Refuse it exactly as `claim` is refused.
-BOARD_WRITES="add adopt child claim done flush heartbeat intake op-lock release review room say set-field set-paths take widen"
+BOARD_WRITES="add adopt child claim comment done flush heartbeat intake op-lock release review room say set-field set-paths take widen"
 
 # WRITES ONLY UNDER A CONDITION — and the flat list above CANNOT say that, which is how it got wrong.
 # These are refused all the same, verb-level and fail-closed, and they are held in a set of their own so
