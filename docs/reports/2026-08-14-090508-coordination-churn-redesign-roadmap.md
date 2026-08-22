@@ -682,7 +682,7 @@ reader for this section. It derives all seven identifiers from one typed histori
 typed evidence becomes `unverified`, and measure 2 is explicitly retired rather than guessed.
 
 At the historical reading bound to `8813c463`, `python3 scripts/report-roadmap-health.py --format json --fixture
-tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json`
+tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json`
 established the following:
 
 | measure | verdict | observation |

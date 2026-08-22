@@ -3,7 +3,7 @@
 from __future__ import annotations
 import importlib.util,json,subprocess,tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[2]; SCRIPT=ROOT/"scripts/report-roadmap-health.py"; FIXTURE=ROOT/"tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json"
+ROOT=Path(__file__).resolve().parents[2]; SCRIPT=ROOT/"scripts/report-roadmap-health.py"; FIXTURE=ROOT/"tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json"
 spec=importlib.util.spec_from_file_location("roadmap_health",SCRIPT); assert spec and spec.loader
 module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 def main():
