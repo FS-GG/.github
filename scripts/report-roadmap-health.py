@@ -99,6 +99,7 @@ def main() -> int:
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=Path("."))
     parser.add_argument("--baseline")
+    parser.add_argument("--format", choices=("json",), default="json")
     args = parser.parse_args()
     try:
         print(json.dumps(report(read_fixture(args.fixture), args.repo, args.baseline), indent=2, sort_keys=True))

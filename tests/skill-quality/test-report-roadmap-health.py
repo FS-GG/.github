@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -27,6 +28,12 @@ def main() -> None:
     assert [row["id"] for row in reading["measures"]] == [item[0] for item in module.MEASURES]
     assert reading["measures"][0]["verdict"] == "unverified"
     assert all("verdict" in row and "reason" in row for row in reading["measures"])
+
+    cli = subprocess.run(
+        ["python3", str(SCRIPT), "--fixture", str(ROOT / "tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json"), "--format", "json"],
+        text=True, capture_output=True, check=True,
+    )
+    assert len(json.loads(cli.stdout)["measures"]) == 7
 
     with tempfile.TemporaryDirectory() as directory:
         broken = Path(directory) / "broken.json"

@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2754-roadmap-health-measures/ship.json",
-      "digest": "sha256:1e38da9076a8ab12c58bf8beee8cb246c88d97842a2f3884bae915bba02d3e5e",
+      "digest": "sha256:64f7c2b6bfe056c1e8d299d0801b76880e7131e94edfafc4329f4dae24ce5dea",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2754-roadmap-health-measures/verify.json",
-      "digest": "sha256:ecd9e79d8ec30888ea88ecc9c36aa021959d8fdd1d0661aaa1b7e39b6a163258",
+      "digest": "sha256:9a2910deda09945dd1a8d5fec1e5977952b2e704729e80e7692894d5e52209e9",
       "schemaVersion": 1
     },
     {

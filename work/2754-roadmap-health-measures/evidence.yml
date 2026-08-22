@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2754-roadmap-health-measures/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2754-roadmap-health-measures/analysis.json
-    digest: 706d3d822e10b7dc488e7cc5ec4a9e30ba0ee0403b0f98aa2879577e50651ffc
+    digest: b156e1e86b4aef53fc13d2d61aefa119d0247f23c72c411f3e0b3fcbb6c5ab3a
     schemaVersion: 1
   - label: checklist
     path: work/2754-roadmap-health-measures/checklist.md

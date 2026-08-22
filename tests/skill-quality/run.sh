@@ -56,6 +56,7 @@ python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py"
 python3 "$ROOT/tests/skill-quality/recency-comment-edit.py"
 python3 "$ROOT/tests/skill-quality/analyst-dispatch.py"
 python3 "$ROOT/tests/skill-quality/validated-intake-filing.py"
+python3 "$ROOT/tests/skill-quality/test-report-roadmap-health.py"
 
 # .github#2666 — a gate nothing invokes is graded NOT_MEASURED at best. Each gate above asserts its
 # own workflow path filter, but the workflow only ever runs THIS file, so a gate dropped from the

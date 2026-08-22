@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "12dbbd63171a2874c7ba8f6bd650e0a8a1056dbc22197227c004118df956cd66"
+        "value": "a2085c8524131faaa19d559941105fdc796a63d93aa600e8ba880be124453a4d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -86,5 +86,16 @@
       "kind": "skills"
     }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "id": "agents.staleGeneratedGuidance",
+      "severity": "warning",
+      "artifact": "readiness/2754-roadmap-health-measures/agent-commands/codex/guidance.json",
+      "message": "Generated agent guidance for target \u0027codex\u0027 no longer matches the current normalized work model.",
+      "correction": "Regenerate agent guidance so the generated view matches the current work model.",
+      "relatedIds": [
+        "codex"
+      ]
+    }
+  ]
 }

@@ -682,7 +682,7 @@ reader for this section. It emits all seven measure identifiers and an explicit 
 when the repository has no complete authority for a measure; it does not turn a missing census into a
 green result.
 
-At this reading, `python3 scripts/report-roadmap-health.py --fixture
+At this reading, `python3 scripts/report-roadmap-health.py --format json --fixture
 tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json --baseline 8813c463`
 established the following:
 
@@ -700,6 +700,17 @@ Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves
 seven-measure inventory is emitted and that a fixture without required issue counts fails closed. The
 fixture is a known-present positive control; its `rowsOpened` and `rowsClosed` values are read by the
 same parser used for the reported result.
+
+The receiver-yield dependency is consumed as evidence, not treated as a green health measure: the
+2026-08-20 report records 186 accepted kit transitions across all seven receivers but explicitly leaves
+prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
+while leaving the roadmap's rate-and-integrity measures unproven.
+
+M0 through M5 remain unchecked because their respective exit predicates have no current complete
+measurement. M6 is also unchecked: the three-cycle predicate is unverified and its successor clause is
+false while `.github#266` and `.github#2752` remain open; the pending register on `.github#2691` is
+unverified as a complete same-class census. This is a score from the reading, not a claim that the
+milestone deliverables were undone.
 
 The approved temporary freeze is in force from 2026-08-17 until the seven measures are both derived
 and green. It freezes new check scripts, workflows, skills, registers, and process/contract rows; it
