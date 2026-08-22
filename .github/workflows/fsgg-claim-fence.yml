@@ -1,4 +1,4 @@
-# The merge fence producer, OBSERVE-ONLY — slice 4 of the GitHub-native executor fencing design
+# The merge fence producer, fail-closed — slice 8 of the GitHub-native executor fencing design
 # (.github#2719, under .github#1858; docs/reports/2026-08-04-github-native-executor-fencing-design.md
 # §6.2 for this file's shape, §6.3 for the six checks, §9.1 for why it lands unarmed).
 #
@@ -7,32 +7,28 @@
 # single coordination verb — MERGED pull requests in six repositories. Every guard inside `fsgg-coord`
 # is unreachable for an executor that never runs it, so the fence has to live where the EFFECT lands.
 # This is that fence. `scripts/check-claim-fence.py` carries the six checks and the reasoning; this
-# file carries only the triggers, the permissions, and the deliberate refusal to enforce.
+# file carries the triggers, permissions, reporting, and fail-closed enforcement.
 #
 # ============================================================================================
-# OBSERVE-ONLY IS A HARD BOUNDARY, NOT A SOFT START
+# THE PRODUCER NOW FAILS CLOSED; BRANCH-PROTECTION ACTIVATION REMAINS SEPARATE
 # ============================================================================================
 #
-# Design doc §9.1 step 1: "Land the producer in observe-only. The fence workflow reports `success`
-# unconditionally and writes its real verdict to the job summary. Required in ZERO repositories."
-# ARMING IT IS SLICE 8's JOB (.github#2723, §9.1 steps 2-5), and the design separates the two so that
-# a half-built gate can never block a merge. Concretely, and checkably:
+# Design doc §9.1 separates producer enforcement from branch-protection activation so a half-built
+# gate can never block a merge. Slice 8 (.github#2723) has reached the former boundary: this workflow
+# now consumes the gate verdict and fails closed. Activation remains an administrative change after
+# the authorization census is clean. Concretely, and checkably:
 #
-#   * No verdict step in this file exits non-zero. A FINDING and both NO-VERDICT codes are reported
-#     as `::warning::` and written to the job summary. `tests/claim-fence/run.sh` asserts this
-#     structurally over this very file, in both directions — a mutated copy that DOES exit on a
-#     finding must be caught — so the boundary is a test rather than a promise.
+#   * A final, named enforcement step exits zero only for verdict 0. FINDING, both NO-VERDICT codes,
+#     and every unclassified code exit non-zero after their diagnostic summary is rendered.
+#     `tests/claim-fence/run.sh` executes and inverts that property over this file.
 #   * Nothing here adds a required status context to any repository. Arming is an administrative
 #     branch-protection edit made outside a merge; a workflow file cannot perform it and this one does
 #     not try.
-#   * The fixture step below IS allowed to fail the job, and that is not a hole in the above: it
-#     reds when THIS GATE is broken, never when a pull request's authorization is. A gate whose own
-#     breakage is unobservable would be #266's shape, and an observe-only verdict path is exactly the
-#     place that could hide it.
+#   * The fixture step below also fails the job when THIS GATE is broken. A gate whose own breakage
+#     is unobservable would be #266's shape.
 #
-# §9.1 also fixes what must be true before slice 8 arms anything, and neither condition is met yet:
-# the observe-only phase must run at least one full claim-lease window, and arming must confirm zero
-# open `item/<n>-*` pull requests lacking the marker.
+# §9.1 also fixes what must be true before slice 8 changes branch protection. The current live census
+# is not clean, so this change deliberately does not require the context in any repository yet.
 #
 # ============================================================================================
 # THE SUMMARY DERIVES THE FAILING CHECK. IT USED TO PREDICT ONE, AND THE PREDICTION WAS UNFALSIFIABLE
@@ -144,9 +140,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
 
-      # The gate on the gate. This step MAY fail the job — see the header's observe-only note for why
-      # that is not a hole in the boundary: it reds when this gate is broken, never when a pull
-      # request's authorization is.
+      # The gate on the gate. This step fails when this gate is broken.
       - name: Run the claim-fence fixture (no network)
         run: bash tests/claim-fence/run.sh
 
@@ -187,16 +181,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------------------------------
-      # OBSERVE-ONLY REPORTING. One named step per exit code, because "I could not check" must never
+# VERDICT REPORTING. One named step per exit code, because "I could not check" must never
       # be mistaken for "I checked, and it's fine" (#266) — the distinction is preserved in the
-      # SUMMARY even though none of these steps enforces it. NOT ONE OF THEM EXITS NON-ZERO, and
-      # `tests/claim-fence/run.sh` asserts that structurally over this file.
+      # summary. The final named step consumes the captured code and enforces it after reporting.
       # ------------------------------------------------------------------------------------------
       - name: 'OK: the authorization is grounded, or this PR does not deliver a board item'
         if: ${{ !cancelled() && steps.fence.outputs.rc == '0' }}
         run: |
           {
-            echo "### fsgg-claim-fence: OK (observe-only)"
+            echo "### fsgg-claim-fence: OK"
             echo
             echo '```'
             printf '%s\n' "$VERDICT"
@@ -210,7 +203,7 @@ jobs:
       # is how `tests/claim-fence/run.sh` section L selects this step: BY ID, never by position or by
       # name, because an assertion that quietly starts grading a different step is the same defect
       # class this file exists to close.
-      - name: 'FINDING (observed, NOT enforced): the authorization is not grounded'
+      - name: 'FINDING: the authorization is not grounded'
         id: finding
         if: ${{ !cancelled() && steps.fence.outputs.rc == '1' }}
         run: |
@@ -223,7 +216,7 @@ jobs:
             fired="${BASH_REMATCH[1]}"
           fi
           {
-            echo "### fsgg-claim-fence: FINDING — observed, NOT enforced — $fired"
+            echo "### fsgg-claim-fence: FINDING — $fired"
             echo
             if [ "$fired" = unnamed ]; then
               echo 'The gate reported a finding but its verdict names no check in `[checkN]` form.'
@@ -236,15 +229,14 @@ jobs:
               echo 'survived being false in two directions at once.'
             fi
             echo
-            echo 'This job is deliberately OBSERVE-ONLY (design 9.1 step 1): it reports `success`'
-            echo 'regardless, and arming this context is slice 8 (.github#2723), not this one. So this'
-            echo 'finding does NOT block the merge, and it is not meant to yet.'
+            echo 'This finding is fail-closed: the enforcement step below consumes the captured code.'
+            echo 'Branch protection is still unchanged until slice 8 authorization preconditions pass.'
             echo
             echo '```'
             printf '%s\n' "$VERDICT"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=fsgg-claim-fence: finding (observe-only)::The merge fence would refuse this head. See the job summary for which of design §6.3's checks failed. Nothing is blocked: this context is not armed."
+          echo "::error title=fsgg-claim-fence: finding::The merge fence refuses this head. See the job summary for which of design §6.3's checks failed."
         env:
           VERDICT: ${{ steps.fence.outputs.verdict }}
 
@@ -252,7 +244,7 @@ jobs:
         if: ${{ !cancelled() && steps.fence.outputs.rc == '2' }}
         run: |
           {
-            echo "### fsgg-claim-fence: NO VERDICT (retryable) — observed, NOT enforced"
+            echo "### fsgg-claim-fence: NO VERDICT (retryable) — fail closed"
             echo
             echo 'A rate limit, an outage, or a timeout kept this job from reading the item, so it does'
             echo 'NOT know whether the authorization is grounded. Once this context is armed (slice 8),'
@@ -264,7 +256,7 @@ jobs:
             printf '%s\n' "$VERDICT"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=fsgg-claim-fence: no verdict, retryable (observe-only)::The live item state could not be read. Nothing is blocked: this context is not armed."
+          echo "::error title=fsgg-claim-fence: no verdict, retryable::The live item state could not be read; the fence fails closed."
         env:
           VERDICT: ${{ steps.fence.outputs.verdict }}
 
@@ -272,7 +264,7 @@ jobs:
         if: ${{ !cancelled() && steps.fence.outputs.rc == '3' }}
         run: |
           {
-            echo "### fsgg-claim-fence: NO VERDICT (permanent) — observed, NOT enforced"
+            echo "### fsgg-claim-fence: NO VERDICT (permanent) — fail closed"
             echo
             echo 'A credential problem, an unusable input, or a bug in the gate kept this job from'
             echo 'establishing a verdict. Retrying will not help. Once armed this is RED, for the same'
@@ -282,7 +274,7 @@ jobs:
             printf '%s\n' "$VERDICT"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=fsgg-claim-fence: no verdict, permanent (observe-only)::See the job summary. Nothing is blocked: this context is not armed."
+          echo "::error title=fsgg-claim-fence: no verdict, permanent::See the job summary; the fence fails closed."
         env:
           VERDICT: ${{ steps.fence.outputs.verdict }}
 
@@ -290,12 +282,26 @@ jobs:
         if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.fence.outputs.rc) }}
         run: |
           {
-            echo "### fsgg-claim-fence: INCONCLUSIVE — observed, NOT enforced"
+            echo "### fsgg-claim-fence: INCONCLUSIVE — fail closed"
             echo
             echo "\`scripts/check-claim-fence.py\` exited \`$RC\`, which this workflow does not classify."
             echo 'That is a bug in one of the two, not a fact about this pull request. Once armed, this'
             echo 'state is RED — an unclassifiable exit code is not a pass.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=fsgg-claim-fence: inconclusive (observe-only)::The gate exited with a code this workflow does not classify. Nothing is blocked: this context is not armed."
+          echo "::error title=fsgg-claim-fence: inconclusive::The gate exited with an unclassified code; the fence fails closed."
         env:
           RC: ${{ steps.fence.outputs.rc }}
+
+      # Reporting comes first so every refusal remains diagnosable. Only verdict 0 is authorized;
+      # missing, stale, unreadable, malformed, and unclassified states all fail closed.
+      - name: Enforce the merge-fence verdict
+        id: enforce
+        if: ${{ !cancelled() }}
+        env:
+          RC: ${{ steps.fence.outputs.rc }}
+        run: |
+          case "$RC" in
+            0) exit 0 ;;
+            1|2|3) exit "$RC" ;;
+            *) exit 1 ;;
+          esac
