@@ -43,11 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"; RESUME_GIT="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"; RESUME_GIT="$(mktemp -d)"; COMMENT_CREATE_BODY="$(mktemp)"; COMMENT_AMEND_BODY="$(mktemp)"
 FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT" "$RESUME_GIT"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT" "$COMMENT_CREATE_BODY" "$COMMENT_AMEND_BODY"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT" "$RESUME_GIT"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -78,6 +78,27 @@ unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGEN
 export FSGG_WORKER=""
 
 run() { "$ENGINE" "$@" --worker vole-418; }
+
+# ---- #2753: explicit comment amendments prove target ownership before the global PATCH route ------
+printf '%s' 'owner-thread-original' >"$COMMENT_CREATE_BODY"
+printf '%s' 'cross-thread-replacement' >"$COMMENT_AMEND_BODY"
+comment_create_out="$(run comment create FS.GG.SDD#43 FS.GG.SDD#42 "$COMMENT_CREATE_BODY" --json 2>&1)"
+comment_create_rc=$?
+comment_id="$(printf '%s' "$comment_create_out" | jq -r '.commentId // empty' 2>/dev/null)"
+comment_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "${comment_id:-0}" '.[] | select(.id == $id) | .body')"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+comment_amend_out="$(run comment amend FS.GG.SDD#42 FS.GG.SDD#42 "${comment_id:-0}" "$COMMENT_AMEND_BODY" --json 2>&1)"
+comment_amend_rc=$?
+comment_mutations="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+comment_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "${comment_id:-0}" '.[] | select(.id == $id) | .body')"
+if [ "$comment_create_rc" -eq 0 ] && [ -n "$comment_id" ] && [ "$comment_before" = 'owner-thread-original' ] &&
+   [ "$comment_amend_rc" -ne 0 ] && printf '%s' "$comment_amend_out" | grep -q 'refusing before PATCH' &&
+   [ "$(printf '%s' "$comment_mutations" | jq -r '.count')" -eq 0 ] && [ "$comment_after" = "$comment_before" ]; then
+  ok "#2753: comment amend refuses a cross-thread id before PATCH with zero mutation"
+else
+  bad "#2753: comment amend refuses a cross-thread id before PATCH with zero mutation" "create=$comment_create_rc:$comment_create_out id=$comment_id before=$comment_before amend=$comment_amend_rc:$comment_amend_out mutations=$comment_mutations after=$comment_after"
+fi
+mark_contract "comment" "target-owned-verified-mutation"
 
 # ---- #2137: delivery-route record is the declared, source-bound comment write ----------------------
 #

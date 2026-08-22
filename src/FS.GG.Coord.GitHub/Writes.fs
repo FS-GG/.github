@@ -391,8 +391,26 @@ module Writes =
         transport.Send request |> Result.map ignore
 
     let amendVerifiedComment transport ref commentId body =
-        patchComment transport ref commentId body
-        |> Result.bind (fun () -> verifyCommentMutation transport ref commentId body)
+        Reads.commentsWithIdentity transport ref.Owner ref.Repo ref.Number
+        |> Result.bind (fun comments ->
+            match comments |> List.filter (fun comment -> comment.Id = commentId) with
+            | [ _ ] ->
+                patchComment transport ref commentId body
+                |> Result.bind (fun () -> verifyCommentMutation transport ref commentId body)
+            | [] ->
+                Error(
+                    Malformed(
+                        ref.Short,
+                        $"comment %d{commentId} does not belong to the declared target; refusing before PATCH"
+                    )
+                )
+            | _ ->
+                Error(
+                    Malformed(
+                        ref.Short,
+                        $"comment %d{commentId} occurs more than once on the declared target; refusing before PATCH"
+                    )
+                ))
 
     // Generation-scoped comment CAS for the one board-orchestrator authority. Every contender for one
     // generation uses the same marker; GitHub's comment id is the total order and a loser removes only

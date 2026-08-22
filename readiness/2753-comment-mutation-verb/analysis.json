@@ -4,7 +4,7 @@
   "workId": "2753-comment-mutation-verb",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -32,6 +32,16 @@
       "digest": {
         "algorithm": "sha256",
         "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2753-comment-mutation-verb/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c1a6099c19535e0f17ce63a26bba4a3d13aadb7124a944db0509114c6933afb0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -396,7 +406,7 @@
     {
       "path": "readiness/2753-comment-mutation-verb/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

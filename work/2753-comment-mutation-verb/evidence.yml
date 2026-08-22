@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2753-comment-mutation-verb/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2753-comment-mutation-verb/analysis.json
-    digest: 9855f875bee56c11c1d6187e7cfae1cc34d4e81d6e4b22140735621c6d2c5996
+    digest: 744359ae4e73fe5f99c3866d0d436c5131f14f85acd9bd25ac0436fdd5c9d665
     schemaVersion: 1
   - label: checklist
     path: work/2753-comment-mutation-verb/checklist.md
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The observed focused suite proves file-backed create and explicit-id amend command forms, with no edit-last surface.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The observed suite verifies the exact mutated comment from the authoritative collection using UTF-8 byte length and SHA-256.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The observed suite proves failed operations retain distinct per-worker, per-item, per-operation recovery capabilities.]
@@ -127,21 +127,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [src/FS.GG.Coord.GitHub/Writes.fs, tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs]
+    artifacts: [src/FS.GG.Coord.GitHub/Writes.fs, tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs, tests/coord-engine-e2e/writes.sh]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
     result: pass
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
-    notes: ["The mismatch negative control refuses a success receipt; mutation inversion makes this control fail when verification is bypassed."]
+    notes: ["The mismatch control refuses a success receipt; the compiled-route cross-thread control proves a foreign comment body and the mutation ledger remain unchanged because ownership is verified before PATCH; mutation inversions make both controls fail when their guards are bypassed."]
   - id: EV005
     kind: verification
     subject:
@@ -162,10 +164,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The missing-source negative control refuses before transport or capability allocation.]
@@ -189,10 +191,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The command contract and public signatures expose the verified mutation route and reusable capability API.]
@@ -216,13 +218,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
-    notes: ["The command-produced TRX records all six focused tests passing; the full CLI suite separately passes 517 tests."]
+    notes: ["The command-produced TRX records the full CLI suite passing 518 tests; the focused comment-mutation filter separately passes all seven tests."]
   - id: EV008
     kind: verification
     subject:
@@ -243,10 +245,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [The skill-quality gate proves canonical and mirrored recipes use the typed comment mutation verb.]
@@ -270,10 +272,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2753-comment-mutation-verb/test-results/comment-mutation.trx
-      digest: "sha256:33b920e3cca9767966f5664d0ef784279d5dd96f51da246d61db29f79b7a3840"
+      digest: "sha256:226bbffcd1f3b62370660e703d64919074ab1feb201823a8081c677192736483"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 517
+      passed: 518
       failed: 0
       skipped: 0
     notes: [Projection and skill-quality gates report current generated guidance and byte-consistent comment-edit recipes.]

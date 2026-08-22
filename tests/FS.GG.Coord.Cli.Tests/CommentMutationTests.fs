@@ -77,7 +77,9 @@ let ``verified amend addresses the supplied comment id and reads it back`` () =
     let requests = ResizeArray<Request>()
 
     let queue =
-        System.Collections.Generic.Queue<IoResult<Response>>([ ok "{}"; ok (comment 77L "replacement") ])
+        System.Collections.Generic.Queue<IoResult<Response>>(
+            [ ok (comment 77L "original"); ok "{}"; ok (comment 77L "replacement") ]
+        )
 
     let transport =
         Fake.Recorder(fun request ->
@@ -96,10 +98,37 @@ let ``verified amend addresses the supplied comment id and reads it back`` () =
     | Error error -> failwith (Errors.explain error)
     | Ok receipt ->
         Assert.Equal(77L, receipt.CommentId)
-        Assert.Equal("PATCH", requests[0].Method)
-        Assert.Equal("repos/FS-GG/.github/issues/comments/77", requests[0].Path)
-        Assert.Equal("GET", requests[1].Method)
-        Assert.Equal("repos/FS-GG/.github/issues/42/comments", requests[1].Path)
+        Assert.Equal("GET", requests[0].Method)
+        Assert.Equal("repos/FS-GG/.github/issues/42/comments", requests[0].Path)
+        Assert.Equal("PATCH", requests[1].Method)
+        Assert.Equal("repos/FS-GG/.github/issues/comments/77", requests[1].Path)
+        Assert.Equal("GET", requests[2].Method)
+        Assert.Equal("repos/FS-GG/.github/issues/42/comments", requests[2].Path)
+
+[<Fact>]
+let ``amend refuses before PATCH when the comment is not owned by the declared target`` () =
+    let requests = ResizeArray<Request>()
+    let transport =
+        Fake.Recorder(fun request ->
+            requests.Add request
+            ok "[]")
+
+    match
+        Writes.amendVerifiedComment
+            transport
+            { Owner = "FS-GG"
+              Repo = ".github"
+              Number = 42 }
+            77L
+            "replacement"
+    with
+    | Ok receipt -> failwithf "cross-thread amend unexpectedly produced receipt %A" receipt
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("does not belong to the declared target", detail)
+        Assert.Contains("refusing before PATCH", detail)
+        Assert.Single(requests) |> ignore
+        Assert.Equal("GET", requests[0].Method)
+    | Error other -> failwithf "unexpected refusal: %A" other
 
 [<Fact>]
 let ``mismatched readback is a refusal rather than a write receipt`` () =

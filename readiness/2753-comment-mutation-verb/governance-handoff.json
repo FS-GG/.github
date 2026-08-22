@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.1.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
   "workId": "2753-comment-mutation-verb",
   "sources": [
     {
       "path": "readiness/2753-comment-mutation-verb/ship.json",
-      "digest": "sha256:272457dc33419a812b908c5e154d4ced63093a8b7494cb2e75445bd066531538",
+      "digest": "sha256:05e0c05defe6c0522a1f1265385e8342fa90b24b671f555c0ab45382c5e18228",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2753-comment-mutation-verb/verify.json",
-      "digest": "sha256:720b32a2d10bf8c7e9053c80b3e2d8b2d9c72f41fdabfe074c9c70f1d9c804f5",
+      "digest": "sha256:ee35035661b0fa4310c21569c3b1d2679969c0a77b3528b6fa586b8360179803",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2753-comment-mutation-verb/work-model.json",
-      "digest": "sha256:e7b9153700cabcebabb7707644ae45e352ab0939f9eb79977a9706393dc85290",
+      "digest": "sha256:17ffefe5f769c6ed35b820c730e70df08de7a408d48ce975ad5edcda57c0fe9e",
       "schemaVersion": 1
     }
   ],
