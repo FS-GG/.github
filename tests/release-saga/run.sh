@@ -339,7 +339,7 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_GH_CALLS"
 case "$1 $2" in
   "release view")
-    printf '%s\n' true
+    printf '%s\n' "${FAKE_RELEASE_IMMUTABLE:-true}"
     ;;
   "release download")
     target=""
@@ -352,8 +352,15 @@ case "$1 $2" in
     cp "$FAKE_REMOTE_JOURNAL" "$target/journal-$FAKE_PACKAGE.json"
     ;;
   "release upload")
-    echo "HTTP 422: release is immutable" >&2
-    exit 22
+    if [ "${FAKE_RELEASE_IMMUTABLE:-true}" = false ]; then
+      case " $* " in
+        *" --clobber "*"/journal-$FAKE_PACKAGE.json "*) ;;
+        *) echo "mutable journal upload must clobber the exact package journal: $*" >&2; exit 2 ;;
+      esac
+    else
+      echo "HTTP 422: release is immutable" >&2
+      exit 22
+    fi
     ;;
   *) echo "unexpected fake gh call: $*" >&2; exit 2 ;;
 esac
@@ -410,6 +417,56 @@ if (
   echo "expected wrong-identity immutable journal to fail closed" >&2; exit 1
 fi
 echo "immutable release journal recovery: kit and engine replays read back exact state without mutation"
+
+# The other side of the production boundary is contractual too: while a release is mutable, each
+# journal update must replace the package's prior asset. Execute the real failure adapter and require
+# its exact `upload --clobber` call. Then delete that call from a review-only adapter copy and prove
+# the same production-shaped gate goes red; this keeps the mutable arm from becoming decorative.
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$IMMUTABLE/artifacts/packages" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json"
+python3 "$TOOL" preflight --manifest "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json" --feed both
+mutable_upload_gate() {
+  local adapter="$1" calls="$2" run_id="$3"
+  : > "$calls"
+  cp "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json" \
+    "$IMMUTABLE/artifacts/packages/journal-FS.GG.Kit.json"
+  (
+    cd "$IMMUTABLE"
+    PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+      GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID="$run_id" \
+      FAKE_RELEASE_IMMUTABLE=false FAKE_GH_CALLS="$calls" FAKE_PACKAGE=FS.GG.Kit \
+      FAKE_REMOTE_JOURNAL="$IMMUTABLE/remote/journal-FS.GG.Kit.json" \
+      bash "$adapter" failure FS.GG.Kit 9.8.7 0123456789012345678901234567890123456789
+  )
+  if ! grep -Eq '^release upload coherent-set/v9\.8\.7 .*--clobber .*journal-FS\.GG\.Kit\.json$' "$calls"; then
+    echo "expected mutable recovery to upload --clobber the exact package journal" >&2
+    return 1
+  fi
+}
+
+mutable_upload_gate "$ROOT/scripts/release-saga-ci.sh" "$IMMUTABLE/mutable-calls.log" mutable-control
+MUTABLE_MUTANT_ROOT="$IMMUTABLE/mutable-mutant-root"
+mkdir -p "$MUTABLE_MUTANT_ROOT/scripts"
+cp "$TOOL" "$MUTABLE_MUTANT_ROOT/scripts/release-saga.py"
+MUTABLE_MUTANT="$MUTABLE_MUTANT_ROOT/scripts/release-saga-ci.sh"
+sed '/^[[:space:]]*gh release upload .*--clobber .*"$journal"/d' \
+  "$ROOT/scripts/release-saga-ci.sh" > "$MUTABLE_MUTANT"
+mutable_mutant_rc=0
+mutable_mutant_output="$(mutable_upload_gate \
+  "$MUTABLE_MUTANT" "$IMMUTABLE/mutable-mutant-calls.log" mutable-mutant 2>&1)" \
+  || mutable_mutant_rc=$?
+if [ "$mutable_mutant_rc" -eq 0 ]; then
+  echo "expected mutable upload-removal inversion to red the production-shaped gate" >&2
+  exit 1
+fi
+case "$mutable_mutant_output" in
+  *"expected mutable recovery to upload --clobber the exact package journal"*) ;;
+  *) echo "mutable upload-removal inversion failed for the wrong reason: $mutable_mutant_output" >&2; exit 1 ;;
+esac
+echo "mutable release journal recovery: production upload --clobber control and removal inversion passed"
 
 # Once GitHub publishes a release, repository immutable-release enforcement activates. A queued
 # observer must compare the already-published content and return success; it may not try to clobber
