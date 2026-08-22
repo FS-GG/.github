@@ -26,9 +26,17 @@ Prose status: checklistReady
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
+- CHK-002 [FR-002] [AC-002] blocking: Milestone scoring is traceable to every M0–M6 exit predicate.
+- CHK-003 [FR-003] [AC-003] blocking: The M6 successor census names all three required issue subjects.
+- CHK-004 [FR-004] [AC-004] blocking: The freeze decision requires actor, date, state, scope, and lift condition.
+- CHK-005 [FR-005] [AC-005] blocking: Retirement is explicit and attributable in the roadmap document.
 
 ## Review Results
 - CR-001 [CHK:CHK-001] [FR-001] [AC-001] pass: Requirement FR-001 is testable and linked to acceptance coverage.
+- CR-002 [CHK:CHK-002] [FR-002] [AC-002] pass: The milestone table makes each exit gap independently reviewable.
+- CR-003 [CHK:CHK-003] [FR-003] [AC-003] pass: The successor census is bounded to the three named issue subjects.
+- CR-004 [CHK:CHK-004] [FR-004] [AC-004] pass: The decision record has explicit required fields.
+- CR-005 [CHK:CHK-005] [FR-005] [AC-005] pass: Retirement cannot be satisfied by silence.
 
 ## Accepted Deferrals
 No accepted checklist deferrals recorded.
@@ -40,6 +48,6 @@ No blocking findings recorded.
 No advisory notes recorded.
 
 ## Lifecycle Notes
-- Specification requirements reviewed: 1.
+- Specification requirements reviewed: 5.
 - Clarification decisions reviewed: 0.
 - Next lifecycle action: `fsgg-sdd plan --work 2754-roadmap-health-measures`.

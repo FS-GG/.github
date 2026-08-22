@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2754-roadmap-health-measures/spec.md
-    digest: 4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce
+    digest: f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858
     schemaVersion: 1
   - label: clarifications
     path: work/2754-roadmap-health-measures/clarifications.md
@@ -21,61 +21,61 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2754-roadmap-health-measures/checklist.md
-    digest: 1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336
+    digest: f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2
     schemaVersion: 1
   - label: plan
     path: work/2754-roadmap-health-measures/plan.md
-    digest: 5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368
+    digest: fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11
     schemaVersion: 1
 tasks:
   - id: T001
-    title: Implement the complete roadmap-health reporter
+    title: Derive seven measures from raw evidence
     status: done
-    owner: plover-8477
+    owner: osprey-d90d
     dependencies: []
     requirements: [FR-001]
     decisions: []
-    sourceIds: [AC-001, FR-001, PD-001]
+    sourceIds: [AC-001, FR-001, GV-001, PC-001, PD-001, PM-001, VO-001]
     requiredSkills: []
     requiredEvidence: [EV001]
   - id: T002
-    title: Document the reporter contract and reading
+    title: Score M0-M6 from exact exit predicates
     status: done
-    owner: plover-8477
+    owner: osprey-d90d
     dependencies: [T001]
-    requirements: []
+    requirements: [FR-002]
     decisions: []
-    sourceIds: [PC-001, PD-001]
+    sourceIds: [AC-002, FR-002, PD-002, VO-002]
     requiredSkills: []
     requiredEvidence: [EV002]
   - id: T003
-    title: Run the focused complete-inventory test
+    title: Evaluate M6 health cycles and successor census
     status: done
-    owner: plover-8477
+    owner: osprey-d90d
     dependencies: [T001]
-    requirements: []
+    requirements: [FR-003]
     decisions: []
-    sourceIds: [PC-001, PD-001, VO-001]
+    sourceIds: [AC-003, FR-003, PD-003, VO-003]
     requiredSkills: []
     requiredEvidence: [EV003]
   - id: T004
-    title: Preserve additive and explicit-unverified compatibility
+    title: Record the attributable freeze decision
     status: done
-    owner: plover-8477
+    owner: osprey-d90d
     dependencies: [T001]
-    requirements: []
+    requirements: [FR-004]
     decisions: []
-    sourceIds: [PC-001, PM-001]
+    sourceIds: [AC-004, FR-004, PD-004, VO-004]
     requiredSkills: []
     requiredEvidence: [EV004]
   - id: T005
-    title: Refresh SDD readiness views
+    title: Retire undefined measure in the roadmap
     status: done
-    owner: plover-8477
+    owner: osprey-d90d
     dependencies: [T001]
-    requirements: []
+    requirements: [FR-005]
     decisions: []
-    sourceIds: [GV-001, PD-001]
+    sourceIds: [AC-005, FR-005, PD-005, VO-005]
     requiredSkills: []
     requiredEvidence: [EV005]
 acceptedDeferrals: []

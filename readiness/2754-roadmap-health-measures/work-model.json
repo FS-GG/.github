@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336"
+        "value": "f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d9ae975c6b4bcda66b726e98e27881b6c2b132dc4bfd9453f70ecca9c6c0daac"
+        "value": "839c23fbbf3066b81b526bf411a275613e57770e5f7ed5068591d1838f6823f2"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368"
+        "value": "fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce"
+        "value": "f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "e16b19053d367d309993c40c305f3a416a612d14624bae77d5ae76eb65a035c8"
+        "value": "ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a"
       }
     }
   ],
@@ -128,8 +128,8 @@
   "requirements": [
     {
       "id": "FR-001",
-      "title": "A deterministic command shall emit all seven named measures for a stated window, never omitting an unverified result. (Stories: US-001; Acceptance: AC-001)",
-      "text": "A deterministic command shall emit all seven named measures for a stated window, never omitting an unverified result. (Stories: US-001; Acceptance: AC-001)",
+      "title": "A deterministic command shall emit all seven named measures for a stated window, derive issue flow from a canonical-digest-bound raw issue census, derive repository trends from resolvable exact Git objects, validate typed incidents/censuses, and never omit an unverified result. (Stories: US-001; Acceptance: AC-001)",
+      "text": "A deterministic command shall emit all seven named measures for a stated window, derive issue flow from a canonical-digest-bound raw issue census, derive repository trends from resolvable exact Git objects, validate typed incidents/censuses, and never omit an unverified result. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/2754-roadmap-health-measures/spec.md",
       "sourceLocation": {
-        "line": 31,
+        "line": 35,
         "column": 1
       },
       "linkedTaskIds": [
@@ -146,15 +146,99 @@
       "linkedEvidenceIds": [
         "EV001"
       ]
+    },
+    {
+      "id": "FR-002",
+      "title": "The roadmap shall score M0\u2013M6 from each milestone\u0027s exit predicate rather than deliverable completion, naming every violated or unverified predicate. (Stories: US-001; Acceptance: AC-002)",
+      "text": "The roadmap shall score M0\u2013M6 from each milestone\u0027s exit predicate rather than deliverable completion, naming every violated or unverified predicate. (Stories: US-001; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "M6 shall combine three consecutive health cycles with an explicit successor census covering \u0060.github#266\u0060, \u0060.github#2752\u0060, and \u0060.github#2691\u0060. (Stories: US-001; Acceptance: AC-003)",
+      "text": "M6 shall combine three consecutive health cycles with an explicit successor census covering \u0060.github#266\u0060, \u0060.github#2752\u0060, and \u0060.github#2691\u0060. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "The immediate-action freeze decision shall record its actor, date, approved/refused/superseded state, scope, and lift condition. (Stories: US-001; Acceptance: AC-004)",
+      "text": "The immediate-action freeze decision shall record its actor, date, approved/refused/superseded state, scope, and lift condition. (Stories: US-001; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Measure retirement shall be explicit in the document and record actor, date, retired state, and reason. (Stories: US-001; Acceptance: AC-005)",
+      "text": "Measure retirement shall be explicit in the document and record actor, date, retired state, and reason. (Stories: US-001; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
     }
   ],
   "decisions": [],
   "tasks": [
     {
       "id": "T001",
-      "title": "Implement the complete roadmap-health reporter",
+      "title": "Derive seven measures from raw evidence",
       "status": "done",
-      "owner": "plover-8477",
+      "owner": "osprey-d90d",
       "dependencies": [],
       "requirements": [
         "FR-001"
@@ -163,7 +247,11 @@
       "sourceIds": [
         "AC-001",
         "FR-001",
-        "PD-001"
+        "GV-001",
+        "PC-001",
+        "PD-001",
+        "PM-001",
+        "VO-001"
       ],
       "requiredSkills": [],
       "requiredEvidence": [
@@ -177,17 +265,21 @@
     },
     {
       "id": "T002",
-      "title": "Document the reporter contract and reading",
+      "title": "Score M0-M6 from exact exit predicates",
       "status": "done",
-      "owner": "plover-8477",
+      "owner": "osprey-d90d",
       "dependencies": [
         "T001"
       ],
-      "requirements": [],
+      "requirements": [
+        "FR-002"
+      ],
       "decisions": [],
       "sourceIds": [
-        "PC-001",
-        "PD-001"
+        "AC-002",
+        "FR-002",
+        "PD-002",
+        "VO-002"
       ],
       "requiredSkills": [],
       "requiredEvidence": [
@@ -201,18 +293,21 @@
     },
     {
       "id": "T003",
-      "title": "Run the focused complete-inventory test",
+      "title": "Evaluate M6 health cycles and successor census",
       "status": "done",
-      "owner": "plover-8477",
+      "owner": "osprey-d90d",
       "dependencies": [
         "T001"
       ],
-      "requirements": [],
+      "requirements": [
+        "FR-003"
+      ],
       "decisions": [],
       "sourceIds": [
-        "PC-001",
-        "PD-001",
-        "VO-001"
+        "AC-003",
+        "FR-003",
+        "PD-003",
+        "VO-003"
       ],
       "requiredSkills": [],
       "requiredEvidence": [
@@ -226,17 +321,21 @@
     },
     {
       "id": "T004",
-      "title": "Preserve additive and explicit-unverified compatibility",
+      "title": "Record the attributable freeze decision",
       "status": "done",
-      "owner": "plover-8477",
+      "owner": "osprey-d90d",
       "dependencies": [
         "T001"
       ],
-      "requirements": [],
+      "requirements": [
+        "FR-004"
+      ],
       "decisions": [],
       "sourceIds": [
-        "PC-001",
-        "PM-001"
+        "AC-004",
+        "FR-004",
+        "PD-004",
+        "VO-004"
       ],
       "requiredSkills": [],
       "requiredEvidence": [
@@ -250,17 +349,21 @@
     },
     {
       "id": "T005",
-      "title": "Refresh SDD readiness views",
+      "title": "Retire undefined measure in the roadmap",
       "status": "done",
-      "owner": "plover-8477",
+      "owner": "osprey-d90d",
       "dependencies": [
         "T001"
       ],
-      "requirements": [],
+      "requirements": [
+        "FR-005"
+      ],
       "decisions": [],
       "sourceIds": [
-        "GV-001",
-        "PD-001"
+        "AC-005",
+        "FR-005",
+        "PD-005",
+        "VO-005"
       ],
       "requiredSkills": [],
       "requiredEvidence": [
@@ -287,6 +390,7 @@
       ],
       "artifactRefs": [
         "scripts/report-roadmap-health.py",
+        "tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/issues-2026-08-22.json",
         "tests/skill-quality/test-report-roadmap-health.py"
       ],
       "result": "pass",
@@ -309,7 +413,9 @@
       "taskRefs": [
         "T002"
       ],
-      "requirementRefs": [],
+      "requirementRefs": [
+        "FR-002"
+      ],
       "artifactRefs": [
         "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
       ],
@@ -333,8 +439,11 @@
       "taskRefs": [
         "T003"
       ],
-      "requirementRefs": [],
+      "requirementRefs": [
+        "FR-003"
+      ],
       "artifactRefs": [
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md",
         "tests/skill-quality/test-report-roadmap-health.py"
       ],
       "result": "pass",
@@ -357,9 +466,11 @@
       "taskRefs": [
         "T004"
       ],
-      "requirementRefs": [],
+      "requirementRefs": [
+        "FR-004"
+      ],
       "artifactRefs": [
-        "scripts/report-roadmap-health.py"
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -381,9 +492,11 @@
       "taskRefs": [
         "T005"
       ],
-      "requirementRefs": [],
+      "requirementRefs": [
+        "FR-005"
+      ],
       "artifactRefs": [
-        "readiness/2754-roadmap-health-measures/analysis.json"
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -436,7 +549,7 @@
           "path": "work/2754-roadmap-health-measures/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336"
+            "value": "f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2"
           },
           "schemaVersion": 1
         },
@@ -452,7 +565,7 @@
           "path": "work/2754-roadmap-health-measures/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "d9ae975c6b4bcda66b726e98e27881b6c2b132dc4bfd9453f70ecca9c6c0daac"
+            "value": "839c23fbbf3066b81b526bf411a275613e57770e5f7ed5068591d1838f6823f2"
           },
           "schemaVersion": 1
         },
@@ -460,7 +573,7 @@
           "path": "work/2754-roadmap-health-measures/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368"
+            "value": "fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11"
           },
           "schemaVersion": 1
         },
@@ -468,7 +581,7 @@
           "path": "work/2754-roadmap-health-measures/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce"
+            "value": "f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858"
           },
           "schemaVersion": 1
         },
@@ -476,14 +589,14 @@
           "path": "work/2754-roadmap-health-measures/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "e16b19053d367d309993c40c305f3a416a612d14624bae77d5ae76eb65a035c8"
+            "value": "ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "72c34790ee27ff941a0b4e05b6d94b86f8e8e2574aad1a88dd8770e4f3901a07"
+        "value": "62a47e71423876c14546c8ecc704f6b83803bf4127ee0411d7001e2045bd124e"
       },
       "currency": "current"
     }

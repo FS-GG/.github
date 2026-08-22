@@ -677,9 +677,12 @@ Measure these weekly from M0 onward:
 ### Health-measure reading — 2026-08-22
 
 The checkbox state above is now deliberately conservative: the deliverables landed, but the evidence
-required by their exit criteria is incomplete.  `scripts/report-roadmap-health.py` is the repeatable
-reader for this section. It derives all seven identifiers from one typed historical input; missing
-typed evidence becomes `unverified`, and measure 2 is explicitly retired rather than guessed.
+required by their exit criteria is incomplete. `scripts/report-roadmap-health.py` is the repeatable
+reader for this section. It derives issue flow from a digest-bound raw issue snapshot and the two
+repository trends from exact Git objects; asserted period, artifact, or line-count summaries are not
+accepted. Missing typed evidence becomes `unverified`. Measure 2 is retired in this document by the
+operator-delegated host, effective 2026-08-22, with state `retired`: no authoritative
+behaviour-changing classifier exists, so the measure is not guessed or silently omitted.
 
 At the historical reading bound to `8813c463`, `python3 scripts/report-roadmap-health.py --format json --fixture
 tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json`
@@ -692,17 +695,18 @@ established the following:
 | scheduling intent | violated | #2691 records a reversed deliberate park |
 | complete reads | violated | #2735 records a later partial-read discovery |
 | release coherence | violated | the release packet records a green push publishing nothing |
-| artifact trend | violated | policy implementations stayed 1 → 1 while 49 checks / 100 workflows became 53 / 115 |
-| evidence growth | met | exact historical boundary `cb33188c..8813c463`: -19,694 generated against +2,745 implementation-and-test lines |
+| artifact trend | violated | all `scripts/check-*` files grew 49 → 54 and all `.github/workflows` files grew 100 → 115; independent policy-implementation count is unverified because no authoritative enumerator exists |
+| evidence growth | met | exact historical boundary `cb33188c..8813c463`: `work/` + `readiness/` net -19,694 against `src/` + `tests/` net +1,972 |
 
 The issue-flow census is independently reproducible. At `2026-08-22T21:08:23Z`, the query
 `gh issue list --repo FS-GG/.github --state all --limit 1500 --json number,createdAt,closedAt`
-returned 1,210 issues. Bucketing `createdAt` and non-null `closedAt` into the three half-open UTC
-windows `[2026-08-01,08)`, `[2026-08-08,15)`, and `[2026-08-15,22)` produced the counts above. The
-fixture records the repository, exact query, observation time, result count, and half-open-window
-method. Its policy-implementation count uses the reproducible top-level `scripts/*policy*.py` census:
-one implementation at each boundary (`check-policy-checker-inventory.py` at `cb33188c`,
-`policy-runner.py` at `8813c463`).
+returned 1,210 issues. The committed typed snapshot stores every raw `number`, `createdAt`, and
+`closedAt` record; `sourceBoundary.recordsSha256`
+`70402786f75ad66ba9e9e4abbdcca1863d3a02030b097981f3ba352771c6b8bd` binds their canonical JSON.
+The reporter validates that digest and every record before bucketing timestamps into the three
+half-open UTC windows `[2026-08-01,08)`, `[2026-08-08,15)`, and `[2026-08-15,22)`. The exact Git
+method resolves both commits, uses `git ls-tree -r --name-only` for the two file censuses, and uses
+`git diff --numstat` with `net = additions - deletions` for `work/ readiness/` and `src/ tests/`.
 
 Each milestone checkbox is traceable to its own exit predicate, rather than inferred from whether its
 deliverables landed:
@@ -714,18 +718,19 @@ deliverables landed:
 | M2 | violated | “incomplete reads cannot be returned as success” is contradicted by the typed `.github#2735` partial-read incident. |
 | M3 | violated | “one full coherent-set release reaches both feeds without manual recovery” is contradicted by `.github#2691` packet `5307831243`, where a green push published nothing and recovery was required. |
 | M4 | unverified | “every effective decision is bound to structured inputs and a revision” has no complete effective-decision census for this window. |
-| M5 | violated | “checker/workflow count and duplicated policy decline” fails: policy implementations are flat at 1, checks grow 49 → 53, and workflows grow 100 → 115. |
-| M6 | violated | Three healthy cycles fail on issue flow (83 opened / 64 closed in the first period), and the successor clause fails because `.github#266` remains open; `.github#2691` remains unverified as a complete same-class census. |
+| M5 | violated | “checker/workflow count and duplicated policy decline” fails: all `scripts/check-*` files grow 49 → 54 and all workflow files grow 100 → 115; the independent-policy-implementation predicate remains unverified. |
+| M6 | violated | Three healthy cycles fail on issue flow (83 opened / 64 closed in the first period). The named successor census is also not clear: `.github#266` is open, its fifth-mechanism successor `.github#2752` is closed, and the `.github#2691` finding-packet register remains open, so the successor clause is not satisfied. |
 
 All seven boxes remain `[ ]` because every corresponding score is `violated` or `unverified`; none is
 cleared merely because its deliverables shipped.
 
 Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves that the complete
 seven-measure inventory is emitted and that the production CLI agrees with the direct parser route.
-Its controlled mutations remove a required measure, break weekly period continuity, supply a
-non-boolean binary field, omit an inventory counter, and put Python booleans into each class of integer
-field (issue counts, artifact counts, and both evidence-growth counters); every mutation fails closed.
-The committed fixture is the known-present positive control used for the reported result.
+Its controlled mutations corrupt the raw-record digest; duplicate, zero, and boolean issue numbers;
+null, invalid, future, and closed-before-created timestamps; attempted period/artifact/line-count
+summaries; empty, placeholder, malformed, and out-of-window incident evidence; negative census fields;
+non-boolean completeness; and empty, null, or unresolvable Git boundaries. Every bypass fails closed.
+The committed raw snapshot and exact Git objects are the positive controls used for the reported result.
 
 The receiver-yield dependency is consumed as evidence, not treated as a green health measure: the
 2026-08-20 report records 186 accepted kit transitions across all seven receivers but explicitly leaves
@@ -738,10 +743,10 @@ clause while `.github#266` remains open; `.github#2752` is closed and the pendin
 `.github#2691` is unverified as a complete same-class census. This is a score from the reading, not a
 claim that the milestone deliverables were undone.
 
-The approved temporary freeze is in force from 2026-08-17 until the seven measures are both derived
-and green. It freezes new check scripts, workflows, skills, registers, and process/contract rows; it
-does not freeze repairs to existing surfaces or this measurement work. The operator decision is
-recorded on `.github#2754` comment `5317248936`.
+Freeze decision state: **approved** by the operator on **2026-08-17**, recorded for that actor by board
+analyst `avocet-bb9a` in `.github#2754` comment `5317248936`. It remains in force until the seven
+measures are both derived and green. It freezes new check scripts, workflows, skills, registers, and
+process/contract rows; it does not freeze repairs to existing surfaces or this measurement work.
 
 ## Sequencing and risk control
 

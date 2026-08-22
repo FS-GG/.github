@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "4d488473f80dd0c8a9374ed6be461a8ad5efb0e7b02aa39da366b0d3bae6250e"
+        "value": "efefcf0184c36dd303d9e37721345b830cd13b2d9bf3763cddb63524f7d3c50c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336"
+        "value": "f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368"
+        "value": "fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce"
+        "value": "f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "e16b19053d367d309993c40c305f3a416a612d14624bae77d5ae76eb65a035c8"
+        "value": "ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -192,6 +192,46 @@
       "id": "AR010",
       "sourcePath": "work/2754-roadmap-health-measures/plan.md",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": null,
       "targetId": null,
       "relationship": "taskSourcePlan",
@@ -199,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR015",
       "sourcePath": "work/2754-roadmap-health-measures/plan.md",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "VO-001",
@@ -209,7 +249,47 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR016",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2754-roadmap-health-measures/plan.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "VO-005",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "AC-001",
@@ -219,7 +299,47 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR021",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "AC-002",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "AC-003",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "AC-004",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "AC-005",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/checklist.md",
       "sourceId": null,
@@ -229,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR026",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/plan.md",
       "sourceId": null,
@@ -239,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR027",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "FR-001",
@@ -249,7 +369,47 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR028",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/2754-roadmap-health-measures/spec.md",
+      "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/clarifications.md",
       "sourceId": null,
@@ -259,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR033",
       "sourcePath": "work/2754-roadmap-health-measures/spec.md",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": null,
@@ -269,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR034",
       "sourcePath": "work/2754-roadmap-health-measures/tasks.yml",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "T002",
@@ -279,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR035",
       "sourcePath": "work/2754-roadmap-health-measures/tasks.yml",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "T003",
@@ -289,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR036",
       "sourcePath": "work/2754-roadmap-health-measures/tasks.yml",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "T004",
@@ -299,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR037",
       "sourcePath": "work/2754-roadmap-health-measures/tasks.yml",
       "targetPath": "work/2754-roadmap-health-measures/tasks.yml",
       "sourceId": "T005",
@@ -311,7 +471,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 21,
+    "readyCount": 37,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

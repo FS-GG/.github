@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "f40904501a51c423aeca05b39de9892e27ea3baa1039ee40f3a92c5dcbcc158c"
+        "value": "efefcf0184c36dd303d9e37721345b830cd13b2d9bf3763cddb63524f7d3c50c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,59 +19,70 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "f36bca1abd4f08858344aadfd8979e2ee42d623635830aea7b2e6759c117face"
+    "value": "ec1e6b55c6ed2de75acdbf3f4783b3f4b997bd51729995018116467d062bc362"
   },
   "commands": [
     {
       "id": "T001",
-      "title": "Implement the complete roadmap-health reporter",
+      "title": "Derive seven measures from raw evidence",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, PD-001.",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, GV-001, PC-001, PD-001, PM-001, VO-001.",
       "relatedIds": [
         "AC-001",
         "FR-001",
-        "PD-001"
-      ]
-    },
-    {
-      "id": "T002",
-      "title": "Document the reporter contract and reading",
-      "stage": "specify",
-      "purpose": "Carry out lifecycle task T002 (done) covering PC-001, PD-001.",
-      "relatedIds": [
-        "PC-001",
-        "PD-001"
-      ]
-    },
-    {
-      "id": "T003",
-      "title": "Run the focused complete-inventory test",
-      "stage": "specify",
-      "purpose": "Carry out lifecycle task T003 (done) covering PC-001, PD-001, VO-001.",
-      "relatedIds": [
+        "GV-001",
         "PC-001",
         "PD-001",
+        "PM-001",
         "VO-001"
       ]
     },
     {
-      "id": "T004",
-      "title": "Preserve additive and explicit-unverified compatibility",
+      "id": "T002",
+      "title": "Score M0-M6 from exact exit predicates",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T004 (done) covering PC-001, PM-001.",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-002, FR-002, PD-002, VO-002.",
       "relatedIds": [
-        "PC-001",
-        "PM-001"
+        "AC-002",
+        "FR-002",
+        "PD-002",
+        "VO-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Evaluate M6 health cycles and successor census",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering AC-003, FR-003, PD-003, VO-003.",
+      "relatedIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003",
+        "VO-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Record the attributable freeze decision",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering AC-004, FR-004, PD-004, VO-004.",
+      "relatedIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004",
+        "VO-004"
       ]
     },
     {
       "id": "T005",
-      "title": "Refresh SDD readiness views",
+      "title": "Retire undefined measure in the roadmap",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T005 (done) covering GV-001, PD-001.",
+      "purpose": "Carry out lifecycle task T005 (done) covering AC-005, FR-005, PD-005, VO-005.",
       "relatedIds": [
-        "GV-001",
-        "PD-001"
+        "AC-005",
+        "FR-005",
+        "PD-005",
+        "VO-005"
       ]
     }
   ],

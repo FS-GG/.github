@@ -11,11 +11,11 @@ sourceAnalysis: readiness/2754-roadmap-health-measures/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2754-roadmap-health-measures/analysis.json
-    digest: c25a52888e879b202caa693898bd6a0d39613f4b9c46d96c5994794b36fbbef9
+    digest: a55ec721db492b84393a5c9276d8d274b2298108a38dc6055f1e54f118206480
     schemaVersion: 1
   - label: checklist
     path: work/2754-roadmap-health-measures/checklist.md
-    digest: 1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336
+    digest: f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2
     schemaVersion: 1
   - label: clarifications
     path: work/2754-roadmap-health-measures/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2754-roadmap-health-measures/plan.md
-    digest: 5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368
+    digest: fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11
     schemaVersion: 1
   - label: spec
     path: work/2754-roadmap-health-measures/spec.md
-    digest: 4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce
+    digest: f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858
     schemaVersion: 1
   - label: tasks
     path: work/2754-roadmap-health-measures/tasks.yml
-    digest: e16b19053d367d309993c40c305f3a416a612d14624bae77d5ae76eb65a035c8
+    digest: ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -41,12 +41,12 @@ evidence:
       id: T001
     taskRefs: [T001]
     requirementRefs: [FR-001]
-    acceptanceScenarioRefs: []
+    acceptanceScenarioRefs: [AC-001]
     clarificationDecisionRefs: []
-    checklistResultRefs: []
+    checklistResultRefs: [CR-001]
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [scripts/report-roadmap-health.py, tests/skill-quality/test-report-roadmap-health.py]
+    artifacts: [scripts/report-roadmap-health.py, tests/skill-quality/test-report-roadmap-health.py, tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/issues-2026-08-22.json]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/test-report-roadmap-health.py
@@ -54,24 +54,24 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
+      digest: "sha256:7853f353525be94c099e7f1b69d5317468ee5d57bf0a586748ce0d2f58a0debc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 9
       failed: 0
       skipped: 0
-    notes: [Focused test passed locally on 2026-08-22.]
+    notes: [Observed test_complete_inventory_and_production_route derives all seven values from raw records and exact Git objects through direct and CLI routes.]
   - id: EV002
     kind: verification
     subject:
       type: task
       id: T002
     taskRefs: [T002]
-    requirementRefs: []
-    acceptanceScenarioRefs: []
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-002]
     clarificationDecisionRefs: []
-    checklistResultRefs: []
-    planDecisionRefs: [PD-001]
+    checklistResultRefs: [CR-002]
+    planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
     artifacts: [docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md]
     sourceRefs:
@@ -81,26 +81,26 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
+      digest: "sha256:7853f353525be94c099e7f1b69d5317468ee5d57bf0a586748ce0d2f58a0debc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 9
       failed: 0
       skipped: 0
-    notes: [The report documents the complete inventory and explicit unverified states.]
+    notes: [Observed test_milestone_exit_table_is_checkbox_authority directly verifies all seven unchecked milestones and their exit-predicate table; asserted-summary and bad-Git mutations protect its derivation boundary.]
   - id: EV003
     kind: verification
     subject:
       type: task
       id: T003
     taskRefs: [T003]
-    requirementRefs: []
-    acceptanceScenarioRefs: []
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
     clarificationDecisionRefs: []
-    checklistResultRefs: []
-    planDecisionRefs: [PD-001]
+    checklistResultRefs: [CR-003]
+    planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [tests/skill-quality/test-report-roadmap-health.py]
+    artifacts: [tests/skill-quality/test-report-roadmap-health.py, docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/test-report-roadmap-health.py
@@ -108,26 +108,26 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
+      digest: "sha256:7853f353525be94c099e7f1b69d5317468ee5d57bf0a586748ce0d2f58a0debc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 9
       failed: 0
       skipped: 0
-    notes: [Focused test passed locally on 2026-08-22.]
+    notes: [Observed test_m6_named_successor_census directly verifies the three-cycle predicate and all three named successors; raw-census mutations protect its issue-flow input.]
   - id: EV004
     kind: verification
     subject:
       type: task
       id: T004
     taskRefs: [T004]
-    requirementRefs: []
-    acceptanceScenarioRefs: []
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-004]
     clarificationDecisionRefs: []
-    checklistResultRefs: []
-    planDecisionRefs: []
+    checklistResultRefs: [CR-004]
+    planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [scripts/report-roadmap-health.py]
+    artifacts: [docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/test-report-roadmap-health.py
@@ -135,26 +135,26 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
+      digest: "sha256:7853f353525be94c099e7f1b69d5317468ee5d57bf0a586748ce0d2f58a0debc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 9
       failed: 0
       skipped: 0
-    notes: [The JSON contract retains unverified as an explicit verdict.]
+    notes: [Observed test_freeze_decision_records_authority directly verifies freeze state/date/actor/lift authority; incident/census mutations protect accountable evidence inputs.]
   - id: EV005
     kind: verification
     subject:
       type: task
       id: T005
     taskRefs: [T005]
-    requirementRefs: []
-    acceptanceScenarioRefs: []
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
     clarificationDecisionRefs: []
-    checklistResultRefs: []
-    planDecisionRefs: [PD-001]
+    checklistResultRefs: [CR-005]
+    planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [readiness/2754-roadmap-health-measures/analysis.json]
+    artifacts: [docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/test-report-roadmap-health.py
@@ -162,14 +162,14 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
+      digest: "sha256:7853f353525be94c099e7f1b69d5317468ee5d57bf0a586748ce0d2f58a0debc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 9
       failed: 0
       skipped: 0
-    notes: [Analysis was regenerated after the authored plan.]
+    notes: [Observed test_retirement_is_explicit_in_document directly verifies retirement actor/date/state/reason; the incomplete-census test proves undefined evidence stays unverified.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
-  - "Observed-run truth: EV001-EV005 are bound to the runner-produced roadmap-health-tests.junit.xml; verify/ship must report five observed and zero self-attested obligations."
+  - "Observed-run truth: EV001-EV005 each map one live issue acceptance criterion to a named runner-produced test in roadmap-health-tests.junit.xml; verify/ship must report five observed and zero self-attested obligations."
   - "Repository normalization: FS.GG.SDD CLI 1.2.0 ship is readiness-ready but reports coherent=false and re-adds the forbidden ship-verdict sourcesDigest. After generation, scripts/check-ship-verdict-provenance.py --fix removes that unverifiable field under .github#2208; this known producer gap is not represented as coherent generation."
