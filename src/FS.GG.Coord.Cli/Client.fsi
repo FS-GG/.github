@@ -32,23 +32,18 @@ namespace FS.GG.Coord.Cli
 ///     `say`, `roomOpen`, `context`, `bootstrapCmd`, `fieldId`, `optionId`, `itemIdCmd`, `flushCmd`
 ///     (each a verb `run` dispatches to itself). They are absent from this file and are now private.
 ///     `OpLock.LeaseMinutes` and `OpLock.release` went the same way.
-///   * 77 remain, and this is the finding the extraction programme (.github#2725–#2729) consumes: of
-///     those 77, exactly FOUR are required by production code outside this module. `Program.fs` needs
-///     `run`, `whoami`, `followupAudit` and `predicate`, and nothing else in `src/` names this module at
-///     all. The other 73 are held open by the TEST PROJECT ALONE.
+    ///   * 77 remained at that measurement point. The extraction programme (.github#2725–#2729) consumes
+    ///     that baseline; Lifecycle now owns the delivery/review/route/verify/followup command family and
+    ///     `Program.fs` reaches Client only for the residual composition seams.
 ///
 /// So this module's real external contract is four functions wide. Everything else exported below is a
 /// testability seam, and each one marks a place where a unit of behaviour is welded to a file that
 /// cannot be constructed in a test — which is the same force that produced the three mutable cells. The
 /// consumer-by-consumer table is in the pull request that added this file.
 ///
-/// WHAT THIS FILE DELIBERATELY DID NOT DO. `generatedPathCollector`, `completeDelivery` and
-/// `followupAuditContextOverride` are `let mutable private` forward declarations back-patched thousands
-/// of lines later, and `completeDelivery`'s initial value is a reachable `failwith`. They are the
-/// EVIDENCE motivating the extraction, not this file's work to remove: across two files each is an
-/// ordinary dependency inversion, and inside one module there is no way to express it except a mutable
-/// cell. Removing them here would turn a compiler-checked change into a design change. They stay, and
-/// they stay private.
+    /// `.github#2727` removes the reachable `completeDelivery` forward-reference failure by making the
+    /// completion step an explicit Lifecycle handler dependency. The follow-up audit override moved with
+    /// its command. `generatedPathCollector` remains a separate residual scheduling concern.
 module Client =
 
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
@@ -806,20 +801,6 @@ module Client =
     /// message the way it must never hide a lock).
     val inbox: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// Check a PR's changed files against the touch-set declared by the issue it implements.
-    ///
-    /// THE VERDICT VOCABULARY IS THE BASH CLIENT'S, because the shim will run one where the other ran:
-    ///   OK      — every changed file is inside the declared touch-set.
-    ///   DRIFT   — a file falls outside it (named), and the PR should widen or split.
-    ///   SKIP    — nothing to verify against (no touch-set, or the issue can't be identified). Green.
-    ///   INVALID — the declared touch-set has only unmatchable tokens (#273).
-    ///
-    /// "I COULD NOT CHECK" IS NEVER A VERDICT (#322). An unreadable head ref, body, or file list is an
-    /// ERROR — even under --warn, which downgrades a real DRIFT/INVALID to advisory but cannot downgrade a
-    /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
-    /// exact fail-open this command exists to prevent.
-    val verifyPaths: ctx: Kernel.Context -> opts: Options.Options -> int
-
     /// `whoami` — resolve, explain, or MINT this shell's worker identity. The only sanctioned source of a
     /// worker id.
     ///
@@ -1006,32 +987,8 @@ module Client =
     /// the live winner.
     val opLockRelease: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// Run `f` with a supplied `Context` installed as `followupAudit`'s ambient context, then restore whatever
-    /// was there before — INCLUDING when `f` throws.
-    ///
-    /// A TEST SEAM, and it is named one so nobody has to guess. `followupAudit` builds its own context from the
-    /// environment, which a unit test cannot do; this lets the application fixture hand it the same typed
-    /// context every other handler receives as an argument. The override is scoped and restored on both exits,
-    /// and production never installs one.
-    ///
-    /// It is exported because the alternative is worse, not because it is good: the honest fix is
-    /// `followupAudit` taking its context as a parameter like every other command here, and that is a
-    /// dependency inversion this file cannot express while it is one module. Read this binding as evidence for
-    /// the extraction programme (.github#2725 onward), not as a pattern to copy.
-    val withFollowupAuditContextForTest:
-      ctx: Kernel.Context -> f: (unit -> 'a) -> 'a
-
-    /// `followup audit` — the read-only reconciliation PREVIEW over the local follow-up queues.
-    ///
-    /// INTENTIONALLY READ-ONLY, and its evidence rule is the reason it can be trusted: a queue's mtime is a
-    /// CANDIDATE SELECTOR, never evidence that its worker died. Each queued issue is re-read from GitHub, and
-    /// its marker scan is required to be COMPLETE before this says the item has no live claim. An incomplete
-    /// scan is not an absence of claims (#1949).
-    ///
-    /// Exits 0 when the audit completed with nothing to report, `ExitRed` when it found unreadable queues or
-    /// residual promises. Like `whoami`, it is reached directly from `Program.fs` — it builds its own context
-    /// rather than receiving one, which is what `withFollowupAuditContextForTest` exists to work around.
-    val followupAudit: opts: Options.Options -> int
+    /// Build the shared live transport context used by the top-level composition.
+    val context: unit -> Result<Kernel.Context * System.IDisposable, int>
 
     /// `board` — the bootstrapped Coordination board as JSON: its number, title, owner and field map.
     ///
@@ -1151,10 +1108,6 @@ module Client =
     /// driven over a recording transport: the tests must count the issue-create POST, not infer it
     /// from a later board result.
     val intakeCmd: ctx: Kernel.Context -> opts: Options.Options -> int
-
-    /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
-    /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
-    val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// THE COMPOSITION EDGE: build the one `Context` for this process, resolve the repo scope, and dispatch to
     /// the IO command `opts` names.

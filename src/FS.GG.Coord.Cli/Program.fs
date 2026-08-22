@@ -342,7 +342,7 @@ let private legacyHandler (opts: Options) =
     | WhoAmI -> Client.whoami opts
     | Followup ->
         match Followups.parse opts.Args with
-        | Ok Followups.Audit -> Client.followupAudit opts
+        | Ok Followups.Audit -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit Client.context opts
         | _ -> Followups.run opts
     | Predicate -> Client.predicate opts
     | DiffAudit -> SemanticDiffApplication.run opts

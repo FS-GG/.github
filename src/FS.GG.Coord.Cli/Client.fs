@@ -105,135 +105,19 @@ module Client =
             && TouchSet.strictlyContains paths item.TouchSet)
         |> List.map _.Ref
 
-    // ---- the read / schedule commands ------------------------------------------------------------------
+    /// Compatibility projections for callers that historically reached delivery-route readiness
+    /// through Client; the Lifecycle assembly owns both implementations.
+    let sddReadinessEvidenceErrors workId raw =
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.sddReadinessEvidenceErrors workId raw
 
-    [<Literal>]
-    let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
+    let sddEvidenceErrors receipt =
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.sddEvidenceErrors receipt
+
+    // ---- the read / schedule commands ------------------------------------------------------------------
 
     [<Literal>]
     let private StructuredReviewMarker = "<!-- fsgg:review-decision/v2 -->"
 
-    /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
-    /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
-    /// (#2298): requiring it to be true before the receipt records or the item schedules made `sdd-required`
-    /// permanently unreachable for any item that does not already carry a package, because the only actor
-    /// positioned to author that package — a CLAIMED WORKER, inside a worktree, via `fsgg-sdd` — could never
-    /// get claimed to do so. `sddEvidenceErrors` is reported (by `record` and `show`) but never refuses.
-    /// Decode the current SDD analysis fact for the named work.  The route boundary owns this one
-    /// interpretation so a `workId` substitution and an unready analysis cannot be accepted on one
-    /// command path while another merely checks that JSON was present.
-    let sddReadinessEvidenceErrors workId (raw: string) =
-        try
-            use document = JsonDocument.Parse raw
-            let root = document.RootElement
-            [ match root.TryGetProperty "workId" with
-              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
-              | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
-              match root.TryGetProperty "status" with
-              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
-              | _ -> yield "sdd readiness status is not implementationReady" ]
-        with error -> [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
-
-    /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
-    /// route reads and route recording, so the test can pin both the current and missing-work inversions.
-    /// ADVISORY ONLY (#2298) — see the doc comment above. Never fed back into a `DeliveryRoute.Verdict`.
-    let sddEvidenceErrors (receipt: DeliveryRoute.Receipt) =
-        match receipt.Route, receipt.SddWorkId, receipt.SpecHome with
-        | Some DeliveryRoute.SddRequired, Some workId, Some specHome ->
-            let rec findRoot (directory: DirectoryInfo) =
-                let hasEvidence =
-                    Directory.Exists(Path.Combine(directory.FullName, "work"))
-                    && Directory.Exists(Path.Combine(directory.FullName, "readiness"))
-
-                if hasEvidence then Some directory.FullName
-                elif isNull directory.Parent then None
-                else findRoot directory.Parent
-
-            let root =
-                match env "FSGG_COORD_SDD_ROOT" "" with
-                | "" -> findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
-                | value -> Some value
-            let atRoot relative = root |> Option.map (fun value -> Path.Combine(value, relative)) |> Option.defaultValue relative
-            let specPath = atRoot specHome
-            let readiness = atRoot (Path.Combine("readiness", workId, "analysis.json"))
-            [ if not (File.Exists specPath) then
-                  yield $"sdd spec does not exist: %s{specHome}"
-              if not (File.Exists readiness) then
-                  yield $"sdd readiness evidence does not exist: %s{readiness}"
-              elif File.Exists readiness then
-                  yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
-        | _ -> []
-
-    /// Structured decisions are append-only ledgers, so every effective read must see revision 1 and
-    /// every predecessor. A bounded tail is unsafe: a buried record could otherwise disappear. Use the complete, paginated identity read
-    /// for reads and writes; the pagination guard fails closed rather than truncating authorization.
-    let private completeDeliveryRouteComments (ctx: Context) (target: Ref) =
-        Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number
-
-    let private readDeliveryRouteComments (ctx: Context) (target: Ref) =
-        completeDeliveryRouteComments ctx target
-
-    /// The validated delivery-route decision in the complete comment ledger — one search, in one place.
-    ///
-    /// It was written out three times (scheduling, the claim/take mutation boundary, and
-    /// `delivery-route show`/`record`) and .github#2324 needed a fourth caller in `verifyPaths`. A rule
-    /// copied a fourth time is #485's shape arriving by addition rather than by drift, so the copies are
-    /// collapsed here first. Every caller still owns what it does with `None` — the three existing ones
-    /// deliberately differ (`Unreadable`/`Stale` vs. a raw IO error), and that judgement is theirs, not
-    /// this function's.
-    ///
-    /// Read every structured record in comment order. Missing, malformed, gapped, or tampered evidence
-    /// is an explicit refusal; there is no alternate authority or prose fallback.
-    let private structuredRouteLedger (subject: string) (comments: string list) =
-        let marked =
-            comments
-            |> List.choose (fun comment ->
-                if comment.StartsWith(StructuredRouteMarker + "\n", StringComparison.Ordinal) then
-                    Some(comment.Substring(StructuredRouteMarker.Length).Trim())
-                else None)
-
-        if List.isEmpty marked then Ok None
-        else
-            let decoded = marked |> List.map DeliveryRouteApplication.decodeStructured
-            let failures = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
-            if not (List.isEmpty failures) then Error failures
-            else
-                let records = decoded |> List.choose Result.toOption
-                StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
-
-    let private routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =
-        match structuredRouteLedger subject comments with
-        | Error errors -> DeliveryRoute.Stale errors
-        | Ok(Some(_, latest)) ->
-            DeliveryRoute.Current(StructuredDecision.toEffectiveRoute latest)
-        | Ok None ->
-            DeliveryRoute.Stale [ "structured route ledger is missing" ]
-
-    /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
-    /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
-    /// unreadable, rather than collapsing into a missing/lightweight decision.
-    let private readDeliveryRouteVerdict (ctx: Context) (target: Ref) =
-        match readDeliveryRouteComments ctx target with
-        | Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
-        | Ok comments -> routeEvidence target.Canonical comments
-
-    /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
-    /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
-    /// a malformed/missing route and accidentally lose its back-off contract.
-    let private requireCurrentDeliveryRoute (ctx: Context) (target: Ref) =
-        match readDeliveryRouteComments ctx target with
-        | Error error -> Error error
-        | Ok comments ->
-            // .github#2583 repair 2: THIS is where the DEC-001 trade is spent — a worker claiming the row
-            // is committing to a route decision that may have had content added beside what it judged.
-            // `show` reporting it is not enough if the boundary that ACTS on the row says nothing, so the
-            // same note is emitted here, from the one shared spelling. The verdict is untouched: this
-            // reports, it does not refuse.
-            match routeEvidence target.Canonical comments with
-            | DeliveryRoute.Current route -> Ok route
-            | DeliveryRoute.Stale reasons
-            | DeliveryRoute.Unreadable reasons ->
-                Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
 
     let private offlineDeliveryRoute =
         DeliveryRoute.Current
@@ -288,7 +172,7 @@ module Client =
                     if routeCannotChangeVerdict request.AllowBacklog candidate.Item then
                         candidate
                     else
-                        let route = readDeliveryRouteVerdict ctx candidate.Item.Ref
+                        let route = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteVerdict ctx candidate.Item.Ref
                         { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
 
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
@@ -2231,14 +2115,14 @@ module Client =
     let private requireCurrentRouteIfReady (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
         if status <> Some BoardStatus.Ready then Ok()
         else
-            match readDeliveryRouteComments ctx ref with
+            match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteComments ctx ref with
             | Error e ->
                 eprint
                     $"fsgg-coord-engine: refusing Status=Ready on %s{ref.Short} — its delivery-route receipt ledger could NOT BE READ (%s{Errors.explain e}). That is a failed read, not an absent receipt, and it is not a present one either (#266). Nothing was written."
 
                 Error(Errors.exitCode e)
             | Ok comments ->
-                match routeEvidence ref.Canonical comments with
+                match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.routeEvidence ref.Canonical comments with
                 | DeliveryRoute.Current _ -> Ok()
                 | DeliveryRoute.Stale reasons
                 | DeliveryRoute.Unreadable reasons ->
@@ -4491,7 +4375,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // including --force and idempotent renewal.  A scheduler snapshot is advisory once
                     // a CAS/post/status mutation is about to occur; this is the mutation boundary that
                     // closes the scan-to-claim race and prevents an implicit route after scope changes.
-                    match requireCurrentDeliveryRoute ctx ref with
+                    match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute ctx ref with
                     | Ok _ ->
                         // The bounded existing claim scan is the first real-resource observation for a
                         // fresh session.  Check admission only after it, still before the claim CAS/post.
@@ -7788,382 +7672,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     do generatedPathCollector <- generatedPaths
 
-    // ---- .github#2324: the sdd-required route's own mandatory output is subtracted against -------------
-
-    /// The package directories the item this PR implements is OBLIGED to produce, as `PathToken`s ready
-    /// for `TouchSet.covers` — or the EMPTY list, which subtracts nothing.
-    ///
-    /// `work/<workId>/` and `readiness/<workId>/` are mandatory output of the `sdd-required` route itself
-    /// (#2298 makes the CLAIMED WORKER author them), and nothing in filing, routing, or claiming ever puts
-    /// them in the item's `Paths:` — the paths cannot be named before the item exists, and nothing
-    /// revisits the declaration once they do. So `verify-paths` reported DRIFT on the behaviour the
-    /// protocol MANDATES, on every single `sdd-required` item, and each one paid a `widen` to silence it.
-    /// That is #498's lesson exactly — a signal that fires on the instruction it enforces is one workers
-    /// learn to skip past — reached through a second door. See `DeliveryRoute.mandatorySddPaths`' own doc
-    /// for why the remedy is an exemption rather than an auto-declaration, and for why declaring them
-    /// nonetheless stays legal (this is NOT ADR-0044's refusal).
-    ///
-    /// BOUND TO THIS ITEM'S OWN RECEIPT, never to `work/`/`readiness/` as roots: another item's package is
-    /// ordinary drift, and stays so.
-    ///
-    /// FAILS CLOSED, ALWAYS, AND SAYS SO. An unreadable comment ledger or a receipt that is not `Current`
-    /// yields the empty list — "I could not ask what this route obliges" and "this route obliges nothing"
-    /// are opposite facts (#266) — and the reason goes to stderr rather than being swallowed, for the same
-    /// reason `generatedPaths` forwards its child's stderr: a mute fail-closed leaves the right verdict and
-    /// removes the only pointer to its cause. It takes the body the caller ALREADY read and one complete,
-    /// paginated REST ledger read, with no second `issueBody`.
-    let private sddPackageTokens (ctx: Context) (issue: Ref) (body: string) : PathToken list =
-        let nothingSubtracted (why: string) =
-            eprint
-                $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
-
-            []
-
-        match readDeliveryRouteComments ctx issue with
-        | Error e -> nothingSubtracted (Errors.explain e)
-        | Ok comments ->
-            match routeEvidence issue.Canonical comments with
-            // A `lightweight` route reaches here too and answers the empty list from
-            // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
-            // nothing we failed to read and nothing to warn about.
-            | DeliveryRoute.Current receipt -> DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
-            | DeliveryRoute.Stale reasons
-            | DeliveryRoute.Unreadable reasons -> nothingSubtracted (String.concat "; " reasons)
-
-    // ---- verify-paths ----------------------------------------------------------------------------------
-
-    /// Check a PR's changed files against the touch-set declared by the issue it implements.
-    ///
-    /// THE VERDICT VOCABULARY IS THE BASH CLIENT'S, because the shim will run one where the other ran:
-    ///   OK      — every changed file is inside the declared touch-set.
-    ///   DRIFT   — a file falls outside it (named), and the PR should widen or split.
-    ///   SKIP    — nothing to verify against (no touch-set, or the issue can't be identified). Green.
-    ///   INVALID — the declared touch-set has only unmatchable tokens (#273).
-    ///
-    /// "I COULD NOT CHECK" IS NEVER A VERDICT (#322). An unreadable head ref, body, or file list is an
-    /// ERROR — even under --warn, which downgrades a real DRIFT/INVALID to advisory but cannot downgrade a
-    /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
-    /// exact fail-open this command exists to prevent.
-    let verifyPaths (ctx: Context) (opts: Options) : int =
-        match opts.Pr with
-        | None ->
-            eprint "fsgg-coord-engine: verify-paths needs --pr <n>."
-            ExitError
-        | Some pr ->
-            let owner = ctx.Owner
-
-            // An explicit `--issue` (owner/repo#n, repo#n, or a URL) names the issue the PR implements —
-            // no branch or closing-ref resolution needed. It is parsed up front because its repo is
-            // authoritative: it decides the repo when `--repo` is absent, and a `--issue` in a DIFFERENT
-            // repo than `--repo` is a straddle the tool refuses (#479).
-            let issueRef =
-                match opts.Issue with
-                | None -> Ok None
-                | Some raw ->
-                    match parseRef ctx raw with
-                    | Ok r -> Ok(Some r)
-                    | Error m -> Result.Error m
-
-            match issueRef with
-            | Result.Error m ->
-                eprint $"fsgg-coord-engine: verify-paths --issue: %s{m}"
-                ExitError
-            | Ok issueRef ->
-
-            // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
-            // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
-            // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
-            // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
-            // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
-            // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
-            // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
-            // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
-            // `git config` failing is not a rate limit dressed up as one).
-            let repo =
-                match opts.Repo with
-                | Some r -> Ok(resolveRepo r)
-                | None ->
-                    match issueRef with
-                    | Some ir -> Ok ir.Repo
-                    | None ->
-                        match gitRemoteRepo () with
-                        | Some slug -> Ok(resolveRepo slug)
-                        | None ->
-                            eprint
-                                "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
-
-                            Result.Error ExitError
-
-            match repo with
-            | Result.Error rc -> rc
-            | Ok repo ->
-
-            // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
-            // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
-            // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
-            // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
-            // merge never closes the issue, and there is no repair once the PR has merged (editing the
-            // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
-            // because this is the one moment fixing it is free — the PR is still open.
-            //
-            // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
-            // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
-            // otherwise-healthy touch-set run red.
-            let closingFindings =
-                match Reads.prBody ctx.Transport owner repo pr with
-                | Error e ->
-                    eprint
-                        $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
-
-                    []
-                | Ok body -> RefParsing.boardShorthandCloses body
-
-            // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
-            // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
-            // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
-            // those already mean "no confident verdict was reached", and this is not the check that gets to
-            // override that.
-            let combine (rc: int) : int =
-                if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
-                    rc
-                else
-                    printfn
-                        "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
-                        pr
-
-                    for f in closingFindings do
-                        printfn "    `%s`" f.Matched
-
-                        printfn
-                            "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
-                            f.Ref
-                            f.Number
-                            f.Number
-
-                    eprint
-                        "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
-
-                    ExitRed
-
-            // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
-            // says nothing about the files changed in the other, and printing a verdict on the wrong subject
-            // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
-            // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
-            // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
-            // absent, `repo` IS the issue's repo and they agree by construction.)
-            match issueRef with
-            | Some ir when opts.Repo.IsSome && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase)) ->
-                // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
-                // produces none; it exits non-zero and the gate reads that as the failure it is.
-                eprint (
-                    sprintf
-                        "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
-                        pr
-                        owner
-                        repo
-                        ir.Owner
-                        ir.Repo
-                        ir.Number
-                )
-
-                ExitNoVerdict
-            | _ ->
-
-            // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
-            // #322, an unreadable head ref must not drag down a run that named its issue), else its
-            // `item/<n>-*` branch, else what it declares it closes.
-            let resolveIssue () : Result<Ref option, Errors.IoError> =
-                match issueRef with
-                | Some ir -> Ok(Some ir)
-                | None ->
-                    match Reads.prHeadRef ctx.Transport owner repo pr with
-                    | Error e -> Result.Error e
-                    | Ok head ->
-                        let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
-
-                        if m.Success then
-                            Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
-                        else
-                            // Not an item branch — ask what it closes.
-                            Reads.prClosingRef ctx.Transport owner repo pr
-
-            match resolveIssue () with
-            | Error e -> fail e
-            | Ok None ->
-                // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
-                // implements no tracked item has no touch-set to drift from.
-                printfn
-                    "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
-                    pr
-
-                combine ExitGreen
-            | Ok(Some issue) ->
-                // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
-                // against B's paths — those say nothing about A's files (#353).
-                if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
-                    printfn
-                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
-                        pr
-                        owner
-                        repo
-                        issue.Owner
-                        issue.Repo
-                        issue.Number
-
-                    combine ExitGreen
-                else
-
-                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
-                | Error e -> fail e
-                | Ok body ->
-                    match TouchSet.parse body with
-                    | Undeclared
-                    | DeclaredNone
-                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
-                    // could stray outside of — nothing to verify against (#1103 leg 8).
-                    | DeclaredChore ->
-                        printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
-                        combine ExitGreen
-                    | Unreadable reason ->
-                        // Should not happen (we just read the body), but the type demands it be handled, and
-                        // "I could not read the body" is an error, never a SKIP.
-                        eprint $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
-                        ExitError
-                    | Declared tokens ->
-                        let unmatchable =
-                            tokens
-                            |> List.choose (function
-                                | Unmatchable u -> Some u
-                                | Matchable _ -> None)
-
-                        if List.length unmatchable = List.length tokens then
-                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
-                            // INVALID, not "everything drifts": the touch-set is the broken thing.
-                            let bad = String.Join(", ", unmatchable)
-                            printfn "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s" issue.Short bad
-                            eprint $"  %s{Schedulability.TouchSetGrammar}"
-                            combine (if opts.Warn then ExitGreen else ExitRed)
-                        else
-
-                        match Reads.prFiles ctx.Transport owner repo pr with
-                        | Error e -> fail e
-                        | Ok files ->
-                            let drift =
-                                files
-                                |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
-
-                            // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
-                            // by the letter of the touch-set and are not a finding — §1 forbids declaring
-                            // them, so reporting them is the gate firing on its own instruction.
-                            //
-                            // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
-                            // --repo <other>` is a legal call, and the local generators say NOTHING about
-                            // another repo's artifacts: subtracting this repo's set there would suppress real
-                            // drift in a repo we never asked. That is the fail-open this change exists to
-                            // avoid, reached from the one direction the roster cannot see. Owner included —
-                            // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
-                            // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
-                            // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
-                            // failing `generated-paths` reports that nothing was subtracted "so a regenerated
-                            // artifact will be reported as drift below"; on a PR with no drift, that sentence
-                            // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
-                            // our stderr into the file it publishes). A gate that cries wolf on the happy path
-                            // teaches one lesson — that its output is noise — and the next warning will be
-                            // real (#698). With no drift there is nothing to subtract and nothing to say.
-                            //
-                            // .github#2324 shares this guard and this reason. The route receipt read is a
-                            // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
-                            // subtracted … so it will be reported as drift below") is FALSE on a PR with no
-                            // drift — the same sentence in the same sticky comment on the same green PR.
-                            // Both subtractions therefore hang off one `List.isEmpty drift` gate rather
-                            // than two, so neither can be re-armed on the happy path by accident.
-                            let sddPackage, regenerated, undeclared =
-                                if List.isEmpty drift then
-                                    [], [], []
-                                else
-
-                                // SUBTRACTED FIRST, and the order is not arbitrary: an SDD package file is
-                                // never a generated, CI-gated artifact, so the two sets are disjoint in
-                                // practice — but partitioning the sdd bucket out first means a file can
-                                // only ever land in ONE reported bucket, and a reader is never asked to
-                                // reconcile the same path appearing twice under two different reasons.
-                                let sddPackage, rest =
-                                    let tokens = sddPackageTokens ctx issue body
-                                    drift |> List.partition (fun f -> tokens |> List.exists (fun t -> TouchSet.covers t f))
-
-                                let subtractable =
-                                    let checkoutIsSubject =
-                                        match gitRemoteRepo () with
-                                        | Some slug ->
-                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
-                                        | None -> false
-
-                                    if not checkoutIsSubject then
-                                        Set.empty
-                                    else
-                                        match KitDigest.kitRoot () with
-                                        | Some root -> generatedPaths root
-                                        | None -> Set.empty
-
-                                let regenerated, undeclared =
-                                    rest |> List.partition (fun f -> Set.contains f subtractable)
-
-                                sddPackage, regenerated, undeclared
-
-                            // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
-                            // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
-                            // edits a kit source and never relocks reds `main` whether or not it drifted, so an
-                            // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
-                            // complaint — the worker's own pre-merge check is green while `main` is about to go
-                            // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
-                            // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
-                            // and left this one behind, so the warning stopped firing on the one command §5
-                            // tells every worker to run. A gate that silently stops running is #266's whole
-                            // shape, which is why it is restored here rather than left to the merge.
-                            KitDigest.digestWarn ()
-
-                            // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
-                            // context, not a finding. Printed after the verdict line so the first line of
-                            // output stays the answer, and named `regenerated (expected)` so a reader can
-                            // tell at a glance which list they are being asked to act on.
-                            let reportRegenerated () =
-                                if not (List.isEmpty regenerated) then
-                                    printfn "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
-
-                                    for f in regenerated do
-                                        printfn "    %s" f
-
-                            // .github#2324 — REPORTED, NEVER SILENTLY SUBTRACTED, and on BOTH verdicts for
-                            // the same reason `regenerated` is: an invisible subtraction is indistinguishable
-                            // from a gate that stopped looking. Naming the bucket and its reason is what lets
-                            // a reviewer check the exemption instead of trusting it.
-                            let reportSddPackage () =
-                                if not (List.isEmpty sddPackage) then
-                                    printfn
-                                        "  sdd package (expected) — mandatory output of %s's sdd-required delivery route, so not required in Paths: (.github#2324):"
-                                        issue.Short
-
-                                    for f in sddPackage do
-                                        printfn "    %s" f
-
-                            if List.isEmpty undeclared then
-                                printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
-                                reportRegenerated ()
-                                reportSddPackage ()
-                                combine ExitGreen
-                            else
-                                printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
-
-                                printfn "  undeclared (review):"
-
-                                for f in undeclared do
-                                    printfn "    %s" f
-
-                                reportRegenerated ()
-                                reportSddPackage ()
-                                eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
-                                combine (if opts.Warn then ExitGreen else ExitRed)
-
     // ---- identity --------------------------------------------------------------------------------------
 
     let whoami (opts: Options) : int =
@@ -8746,180 +8254,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 transport :> IDisposable
             )
 
-    /// `followup audit` is intentionally a read-only reconciliation PREVIEW. A queue's mtime is a
-    /// candidate selector, not evidence that its worker died: each queued issue is re-read from GitHub,
-    /// then its marker scan is required to be complete before we say it has no live claim.
-    // The application fixture supplies the same typed context every other Client handler receives. The
-    // override is scoped and restored even when its assertion throws; production never installs one.
-    let mutable private followupAuditContextOverride: (Context * IDisposable) option = None
-
-    let withFollowupAuditContextForTest (ctx: Context) (f: unit -> 'a) : 'a =
-        let prior = followupAuditContextOverride
-        followupAuditContextOverride <- Some(ctx, { new IDisposable with member _.Dispose() = () })
-
-        try f ()
-        finally followupAuditContextOverride <- prior
-
-    let followupAudit (opts: Options) : int =
-        let supplied =
-            match followupAuditContextOverride with
-            | Some value -> Ok value
-            | None -> context ()
-
-        match supplied with
-        | Error code -> code
-        | Ok(ctx, disposable) ->
-            use _ = disposable
-            let local = Followups.audit DateTimeOffset.UtcNow
-            let mutable failed = not (List.isEmpty local.Unreadable)
-
-            for (worker, why) in local.Unreadable do
-                eprint $"UNREADABLE-QUEUE: worker %s{worker}: %s{why}"
-
-            let repos =
-                (local.Stale @ local.Fresh)
-                |> List.collect (fun q -> q.Refs)
-                |> List.map (fun r -> r.Owner, r.Repo)
-                |> Set.ofList
-
-            // `openIssues` is a convenient per-repo candidate read, but absence from it is not a state:
-            // it can also be an off-board row, a PR, or a visibility mismatch. The fresh board scan owns
-            // the issue-state authority, and anything it cannot name remains UNKNOWN.
-            let boardRows =
-                Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
-                |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
-
-            // AC1 is about the QUEUE OWNER, not merely the owed issue. Mirror `who`'s A ∪ B sweep: board
-            // In-progress rows (A) union every open issue in every board repository (B). B is what finds
-            // an off-board claim after a failed status flip; every list and marker read must complete.
-            let liveClaims =
-                boardRows
-                |> Result.bind (fun rows ->
-                    let boardRepos =
-                        rows
-                        |> List.filter (fun row -> not row.IsPullRequest)
-                        |> List.map (fun row -> row.Ref.Owner, row.Ref.Repo)
-                        |> Set.ofList
-
-                    let allRepos = Set.union boardRepos repos
-
-                    let candidates =
-                        allRepos
-                        |> Seq.fold (fun state (owner, repo) ->
-                            state
-                            |> Result.bind (fun refs ->
-                                Reads.openIssues ctx.Transport owner repo
-                                |> Result.map (fun issues ->
-                                    issues
-                                    |> List.map (fun issue -> { Owner = owner; Repo = repo; Number = issue.Number })
-                                    |> List.append refs))) (Ok [])
-                        |> Result.map (fun openRefs ->
-                            let inProgress =
-                                rows
-                                |> List.filter (fun row -> not row.IsPullRequest && row.Status = BoardStatus.InProgress)
-                                |> List.map (fun row -> row.Ref)
-
-                            Set.union (Set.ofList openRefs) (Set.ofList inProgress) |> Set.toList)
-
-                    candidates
-                    |> Result.bind (List.fold (fun state (row: Ref) ->
-                        state
-                        |> Result.bind (fun claims ->
-                            Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
-                            |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
-                            |> Result.map (fun markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker -> (marker.Worker, row) :: claims
-                                | None -> claims))) (Ok [])))
-
-            let mutable closedByWorker: Map<string, Ref list> = Map.empty
-
-            let reportQueue (label: string) (queue: Followups.AuditedQueue) =
-                let ownerIsLive =
-                    match liveClaims with
-                    | Error e ->
-                        failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
-                        Error ()
-                    | Ok claims ->
-                        Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
-
-                let abandonedOwner =
-                    match label, ownerIsLive with
-                    | "ABANDONED", Ok None -> true
-                    | _ -> false
-
-                for (owed: Ref) in queue.Refs do
-                    match Reads.issueState ctx.Transport owed.Owner owed.Repo owed.Number with
-                    | Error e ->
-                        failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
-                    | Ok IssueState.Closed ->
-                        if abandonedOwner then
-                            closedByWorker <-
-                                closedByWorker
-                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                        eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
-                    | Ok IssueState.Open ->
-                            match
-                                Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
-                                |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
-                            with
-                            | Error e ->
-                                failed <- true
-                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
-                            | Ok markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker ->
-                                    if abandonedOwner then
-                                        closedByWorker <-
-                                            closedByWorker
-                                            |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                    eprint $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
-                                | None ->
-                                    match ownerIsLive with
-                                    | Ok(Some(_, held)) ->
-                                        eprint $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
-                                    | Ok None ->
-                                        if abandonedOwner then
-                                            closedByWorker <-
-                                                closedByWorker
-                                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                        eprint $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
-                                    | Error () ->
-                                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
-
-            for queue in local.Stale do reportQueue "ABANDONED" queue
-            for queue in local.Fresh do reportQueue "ACTIVE" queue
-
-            // The apply phase is deliberately after ALL reads: an unknown anywhere keeps every queue
-            // intact. For each abandoned ref (open is re-surfaced, closed is cleared), comment first; only a fully acknowledged batch may rewrite its
-            // worker's queue. A failed comment therefore leaves the original promise recoverable.
-            if opts.Apply && not failed then
-                for KeyValue(workerId, refs) in closedByWorker do
-                    match Identity.resolve (Some workerId) with
-                    | Error why ->
-                        failed <- true
-                        eprint $"UNKNOWN: cannot resolve queued worker %s{workerId}: %s{why}. Queue retained."
-                    | Ok worker ->
-                        let mutable durable = true
-                        for owed in refs do
-                            match Writes.followupDisposition ctx.Transport owed (WorkerId worker.Id) "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared." with
-                            | Ok () -> ()
-                            | Error e ->
-                                durable <- false
-                                failed <- true
-                                eprint $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
-
-                        if durable then
-                            match Followups.remove worker (Set.ofList refs) with
-                            | Ok removed -> eprint $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
-                            | Error why ->
-                                failed <- true
-                                eprint $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
-
-            if failed then ExitRed else ExitGreen
-
     /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
     /// defect boundary are in one place.
     // ---- the plumbing commands (#418 board/item cache, case 10) ---------------------------------------
@@ -9492,96 +8826,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// from a later board result.
     let intakeCmd (ctx: Context) (opts: Options) : int = Handlers.intakeCmd ctx opts
 
-    /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
-    /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
-    /// `show` renders only the current receipt (`kind = "current"`, never a history), but validates the
-    /// complete append-only ledger before selecting it. This is the same fail-closed read used at the
-    /// scheduling and mutation boundaries.
-    let private deliveryRouteFact (ctx: Context) (target: Ref) =
-        match readDeliveryRouteComments ctx target with
-        | Error error -> Error error
-        | Ok comments ->
-            match routeEvidence target.Canonical comments with
-            | DeliveryRoute.Current valid ->
-                let structuredCurrent =
-                    match structuredRouteLedger target.Canonical comments with
-                    | Ok(Some(_, current)) -> Some current
-                    | _ -> None
-                Ok(valid, structuredCurrent)
-            | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
-            | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
-
-    /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
-    /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
-    let deliveryRouteCmd (ctx: Context) (opts: Options) : int =
-        let target arg = parseRef ctx arg
-        match opts.Args with
-        | [ "show"; arg ] ->
-            match target arg with
-            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
-            | Ok ref ->
-                match deliveryRouteFact ctx ref with
-                | Error error -> fail error
-                | Ok(receipt, structuredCurrent) ->
-                    let route =
-                        match receipt.Route with
-                        | Some DeliveryRoute.Lightweight -> "lightweight"
-                        | Some DeliveryRoute.SddRequired -> "sdd-required"
-                        | None -> ""
-                    // #2298: the SDD package's on-disk readiness is reported, not enforced here — the
-                    // claimed worker is the actor who completes it, and this command must stay readable
-                    // (and postable, below) before that worker exists.
-                    let sddNotes = sddEvidenceErrors receipt
-                    let revision = structuredCurrent |> Option.map _.Revision
-                    let digest = structuredCurrent |> Option.map _.Digest |> Option.defaultValue receipt.SubjectRevision
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "current"; subject = receipt.Subject; decisionRevision = revision; revision = revision; digest = digest; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
-                    ExitGreen
-        | [ "record"; arg; path ] ->
-            match target arg with
-            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
-            | Ok ref ->
-                try
-                    let raw = File.ReadAllText path
-                    match completeDeliveryRouteComments ctx ref,
-                          DeliveryRouteApplication.decodeStructured raw with
-                    | Error error, _ -> fail error
-                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: only structured v2 records may be written: %s{reason}"; ExitError
-                    | Ok comments, Ok candidate ->
-                        let existing =
-                            match structuredRouteLedger ref.Canonical comments with
-                            | Ok(Some(records, _)) -> Ok records
-                            | Ok None -> Ok []
-                            | Error errors -> Error errors
-                        match existing |> Result.bind (fun records -> StructuredDecision.validateRouteLedger ref.Canonical (records @ [ candidate ])) with
-                        | Error errors ->
-                            let detail = String.concat "; " errors
-                            eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
-                            ExitError
-                        | Ok validRecord ->
-                            let valid = StructuredDecision.toEffectiveRoute validRecord
-                            // #2298: an `sdd-required` decision records on the strength of the AGENT'S
-                            // explicit, structurally valid receipt alone.  The coordinator authoring it
-                            // holds no worktree and cannot produce `work/<id>/spec.md` or the readiness
-                            // analysis (SB-002 of work/2137-delivery-route/spec.md: fsgg-coord does not
-                            // author SDD specifications). Requiring that package to exist here made
-                            // `sdd-required` permanently unrecordable for any item that did not already
-                            // carry one — the deadlock this fix removes. The evidence is still read and
-                            // reported so the ledger carries the honest state at record time; it never
-                            // refuses the write. The claimed worker owns completing it, before touching
-                            // the item's declared `Paths:` (see `.claude/skills/pnext-item` step 1).
-                            let sddNotes = sddEvidenceErrors valid
-                            if not (List.isEmpty sddNotes) then
-                                let detail = String.concat "; " sddNotes
-                                eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
-                            let marker = StructuredRouteMarker + "\n" + raw.Trim()
-                            match Writes.postIssueComment ctx.Transport ref marker with
-                            | Error error -> fail error
-                            | Ok commentId ->
-                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "recorded"; subject = valid.Subject; decisionRevision = validRecord.Revision; digest = validRecord.Digest; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
-                                ExitGreen
-                with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
-        | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
-
     let private graphQlOps (ctx: Context) (opts: Options) : int =
         let print value = printfn "%s" (JsonSerializer.Serialize value); ExitGreen
         let result value project = match value with Ok resolved -> print (project resolved) | Error error -> fail error
@@ -9674,7 +8918,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
                         (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd offerChoreAfterDone)
                         deliveryPathsVerified
-                        requireCurrentDeliveryRoute
+                        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
                         scanAndDecide
                         ctx
                         opts
@@ -9696,8 +8940,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | OpLockAcquire -> opLockAcquire ctx opts
                 | OpLockRelease -> opLockRelease ctx opts
                 | DoneCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd offerChoreAfterDone ctx opts
-                | VerifyPaths -> verifyPaths ctx opts
+                | VerifyPaths ->
+                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
+                        generatedPaths
+                        KitDigest.kitRoot
+                        KitDigest.digestWarn
+                        ctx
+                        opts
                 | GraphQlOps -> graphQlOps ctx opts
                 | LintCmd -> lint ctx opts
-                | RouteCmd -> deliveryRouteCmd ctx opts
+                | RouteCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd ctx opts
                 | other -> failwith $"Client.run received a non-IO command: %A{other}"

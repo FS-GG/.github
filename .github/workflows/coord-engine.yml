@@ -24,6 +24,10 @@ on:
   pull_request:
     paths:
       - "src/FS.GG.Coord.Cli/**"
+      # .github#2727 — Lifecycle is a separate production assembly referenced by the CLI. Both its
+      # source and its own test assembly must start this gate; otherwise the extraction is green by
+      # workflow absence or by running only the residual CLI tests (#266).
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
       # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
       # workflow would not start on such a change and would be green by absence (#266) — which is
@@ -33,6 +37,7 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/FS.GG.Coord.Cli.Lifecycle.Tests/**"
       # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
       # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
       # the CLI suite would report green over a kernel change it never executed.
@@ -74,6 +79,9 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Coord.Cli/**"
+      # Keep the push subject identical to the pull-request subject: Lifecycle changes are engine
+      # changes, and its independent test assembly is part of the protected evidence.
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
       # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
       # workflow would not start on such a change and would be green by absence (#266) — which is
@@ -83,6 +91,7 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/FS.GG.Coord.Cli.Lifecycle.Tests/**"
       # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
       # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
       # the CLI suite would report green over a kernel change it never executed.
@@ -260,6 +269,24 @@ jobs:
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      # THE LIFECYCLE SUITE IS A SEPARATE ASSEMBLY (.github#2727). Running the residual CLI suite
+      # cannot discover these tests, so this invocation and its independent count guard are both
+      # required evidence for the extracted family.
+      - name: Test — lifecycle handlers and dependency inversion
+        run: dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      - name: Non-vacuity — the Lifecycle run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 20 ]; then
+            echo "::error title=coord-engine: the Lifecycle suite audited nothing::Only ${passed:-0} tests ran. Lifecycle is a separate assembly; a green residual CLI suite cannot prove it ran (#266)."
+            exit 1
+          fi
+          echo "coord-engine (Lifecycle): $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test — BoardOps handlers and production registration agreement
         run: dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --logger "console;verbosity=normal"
