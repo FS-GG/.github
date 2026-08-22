@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2754-roadmap-health-measures",
+  "targetId": "codex",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/2754-roadmap-health-measures/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "12dbbd63171a2874c7ba8f6bd650e0a8a1056dbc22197227c004118df956cd66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "f36bca1abd4f08858344aadfd8979e2ee42d623635830aea7b2e6759c117face"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Implement the complete roadmap-health reporter",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, PD-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Document the reporter contract and reading",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (done) covering PC-001, PD-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Run the focused complete-inventory test",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering PC-001, PD-001, VO-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Preserve additive and explicit-unverified compatibility",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering PC-001, PM-001.",
+      "relatedIds": [
+        "PC-001",
+        "PM-001"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Refresh SDD readiness views",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (done) covering GV-001, PD-001.",
+      "relatedIds": [
+        "GV-001",
+        "PD-001"
+      ]
+    }
+  ],
+  "skills": [],
+  "renderedFiles": [
+    {
+      "path": "readiness/2754-roadmap-health-measures/agent-commands/codex/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/2754-roadmap-health-measures/agent-commands/codex/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": []
+}

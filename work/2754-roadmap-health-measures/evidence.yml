@@ -1,0 +1,133 @@
+schemaVersion: 1
+workId: 2754-roadmap-health-measures
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2754-roadmap-health-measures/spec.md
+sourceClarifications: work/2754-roadmap-health-measures/clarifications.md
+sourceChecklist: work/2754-roadmap-health-measures/checklist.md
+sourcePlan: work/2754-roadmap-health-measures/plan.md
+sourceTasks: work/2754-roadmap-health-measures/tasks.yml
+sourceAnalysis: readiness/2754-roadmap-health-measures/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2754-roadmap-health-measures/analysis.json
+    digest: 706d3d822e10b7dc488e7cc5ec4a9e30ba0ee0403b0f98aa2879577e50651ffc
+    schemaVersion: 1
+  - label: checklist
+    path: work/2754-roadmap-health-measures/checklist.md
+    digest: 1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2754-roadmap-health-measures/clarifications.md
+    digest: 80e63e71e184eeada45e5398839a4c8e20a2a369e0ea3df3ab48c8721872bf20
+    schemaVersion: 1
+  - label: plan
+    path: work/2754-roadmap-health-measures/plan.md
+    digest: 5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368
+    schemaVersion: 1
+  - label: spec
+    path: work/2754-roadmap-health-measures/spec.md
+    digest: 4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce
+    schemaVersion: 1
+  - label: tasks
+    path: work/2754-roadmap-health-measures/tasks.yml
+    digest: e16b19053d367d309993c40c305f3a416a612d14624bae77d5ae76eb65a035c8
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/report-roadmap-health.py, tests/skill-quality/test-report-roadmap-health.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/test-report-roadmap-health.py
+    result: pass
+    synthetic: false
+    notes: [Focused test passed locally on 2026-08-22.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/test-report-roadmap-health.py
+    result: pass
+    synthetic: false
+    notes: [The report documents the complete inventory and explicit unverified states.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [tests/skill-quality/test-report-roadmap-health.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/test-report-roadmap-health.py
+    result: pass
+    synthetic: false
+    notes: [Focused test passed locally on 2026-08-22.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [scripts/report-roadmap-health.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/test-report-roadmap-health.py
+    result: pass
+    synthetic: false
+    notes: [The JSON contract retains unverified as an explicit verdict.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [readiness/2754-roadmap-health-measures/analysis.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/test-report-roadmap-health.py
+    result: pass
+    synthetic: false
+    notes: [Analysis was regenerated after the authored plan.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
