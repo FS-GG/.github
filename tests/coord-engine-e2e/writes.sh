@@ -1280,132 +1280,45 @@ sp="$("$ENGINE" set-paths FS.GG.SDD#43 --worker vole-418 --paths 'src/Narrow/**'
   && ok "#1377: set-paths explicitly replaces (and can narrow) the touch-set" \
   || bad "#1377: set-paths is the explicit replacement operation" "rc=$sprc: $sp"
 
-# ---- done stamps a completed item ------------------------------------------------------------------
+# ---- standalone done is nonterminal completion replay ----------------------------------------------
+# Terminal completion authority belongs to `delivery --pr ... --apply`, where the typed lifecycle
+# receipt is minted and verified. The compatibility spelling may inspect facts, but it must never
+# synthesize the old FSGG-DONE stamp, alter the board, release a claim, or offer a completion chore.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not the loop keyword (SC1010, #648)
-[ "$dnrc" -eq 0 ] && printf '%s' "$dn" | grep -q 'FSGG-DONE' \
-  && ok "done stamps an item closed by a merged PR" \
-  || bad "done stamps a completed item" "rc=$dnrc: $dn"
-
-# ---- #1151: done SURFACES a DEFERRED Status write, keeps the GREEN stamp, and flush completes it -----
-# The exact condition #1151 closes: on an exhausted budget the Status=Done write returns `Deferred`
-# (QUEUED, and nothing replays it on its own). The Green arm used to `|> ignore` that outcome, so `done`
-# printed green, exited 0, and said NOTHING about the flush the board now needs — silent drift. It must
-# instead keep the green verdict (the WORK is done), DROP the claim (the lock's lifetime is the work's,
-# #533), and PRINT the flush remedy. Then `flush` lands the queued stamp.
-run claim FS.GG.SDD#42 >/dev/null 2>&1                                            # a live marker for done to drop
-curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null      # arm: the next field write RATE-LIMITS
-dd="$(run "done" FS.GG.SDD#42 --flip 2>&1)"; ddrc=$?
-if [ "$ddrc" -eq 0 ] \
-   && printf '%s' "$dd" | grep -q 'FSGG-DONE' \
-   && printf '%s' "$dd" | grep -qi 'DEFERRED' \
-   && printf '%s' "$dd" | grep -q 'scripts/fsgg-coord flush'; then
-  ok "#1151: done keeps the GREEN stamp but SURFACES the deferred Status write with flush advice"
+dn_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$dnrc" -ne 0 ] && grep -q 'FSGG-NOT-DONE' <<<"$dn" \
+   && grep -q 'delivery --pr' <<<"$dn" && [ "$(jq -r .count <<<"$dn_ledger")" = 0 ]; then
+  ok "change-risk: standalone done refuses without any remote mutation and names delivery authority"
 else
-  bad "#1151: done surfaces the deferred Status write with flush advice" "rc=$ddrc: $dd"
+  bad "change-risk: standalone done must be a nonterminal replay" "rc=$dnrc output=$dn ledger=$dn_ledger"
 fi
 
-# ...and the claim marker is DROPPED even though the column deferred — the lock must not outlive the work.
-after1151="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
-printf '%s' "$after1151" | grep -q 'fsgg:claim' \
-  && bad "#1151: done drops the claim marker on a deferred write" "the marker survives: $after1151" \
-  || ok "#1151: done drops the claim marker even when the Status write DEFERS"
+"$ENGINE" claim FS.GG.SDD#42 --worker done-guard >/dev/null 2>&1
+before_done_claim="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+dd="$("$ENGINE" "done" FS.GG.SDD#42 --flip --worker done-guard 2>&1)"; ddrc=$?
+after_done_claim="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+if [ "$ddrc" -ne 0 ] && grep -q 'FSGG-NOT-DONE' <<<"$dd" \
+   && grep -q 'fsgg:claim' <<<"$before_done_claim" && grep -q 'fsgg:claim' <<<"$after_done_claim" \
+   && ! grep -qi 'chore' <<<"$dd"; then
+  ok "change-risk: standalone done preserves the live claim and cannot conscript a chore"
+else
+  bad "change-risk: nonterminal done must preserve claim authority" "rc=$ddrc output=$dd before=$before_done_claim after=$after_done_claim"
+fi
+"$ENGINE" release FS.GG.SDD#42 --worker done-guard >/dev/null 2>&1
 
-# ...and flush REPLAYS the queued Status=Done write against the now-healthy server — the stamp is not lost.
-fdd="$(run flush 2>&1)"; fddrc=$?
-[ "$fddrc" -eq 0 ] && ! printf '%s' "$fdd" | grep -qi 'DROPPED' \
-  && ok "#1151: flush replays the deferred Status=Done write (the queued stamp lands)" \
-  || bad "#1151: flush replays the deferred stamp" "rc=$fddrc: $fdd"
+for done_ref in FS-GG/.github#51 FS.GG.SDD#42 FS.GG.Legacy#60; do
+  done_out="$("$ENGINE" "done" "$done_ref" --flip --worker snipe-733 2>&1)"; done_rc=$?
+  if [ "$done_rc" -ne 0 ] && grep -q 'FSGG-NOT-DONE' <<<"$done_out" && ! grep -qi 'chore' <<<"$done_out"; then
+    ok "change-risk: $done_ref cannot complete or offer a chore through standalone done"
+  else
+    bad "change-risk: standalone done authority is uniform across repositories" "ref=$done_ref rc=$done_rc output=$done_out"
+  fi
+done
 
-# ---- #1086: a worker mid-item in ANOTHER repo is NOT idle, and is offered nothing --------------------
-# The whole of #1086, end to end. `vole-418` holds a live claim on FS.GG.SDD#43 (taken above and never
-# released), and is here stamping a `.github` item. Condition 3 says they must not be handed a side-quest:
-# they are mid-lease with a live touch-set — in a different repo, which is exactly what makes it invisible.
-#
-# It was invisible. The offer asked "are you idle?" of a board scoped to `.github`, in which that SDD claim
-# does not appear, so the honest guard answered "idle" and handed over the chore. The board is read
-# UNFILTERED now and the scope rides in the type, so the claim is seen and the offer is withheld.
-#
-# IT RUNS FIRST, BEFORE ANY LEG TAKES THE CHORE LOCK, and that ordering is the whole assertion. Written
-# after the snipe-733 legs it PASSED WITH THE BUG SIMULATED: snipe-733 holds `.github#1033` by then, so
-# vole-418's offer lost the LOCK and returned None for a reason having nothing to do with idleness. A leg
-# that cannot fail is not evidence — it is the "shaped to pass" defect this issue's own review history
-# (plover-a4cf, #733) caught one level up. So: lock free, chore real, worker busy — one variable.
-#
-# The chore is REAL and offerable on exactly this board: snipe-733 is handed it by the very next leg.
-vb="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker vole-418 2>&1)"; vbrc=$?
-[ "$vbrc" -eq 0 ] && printf '%s' "$vb" | grep -q 'FSGG-DONE' && ! printf '%s' "$vb" | grep -qi 'chore' \
-  && ok "#1086: a worker holding a claim in ANOTHER repo is not idle — no chore, though one is on offer" \
-  || bad "#1086: cross-repo claim makes us busy" "rc=$vbrc: $vb"
-
-# ---- #733/§4.6: `done` is a SAFE POINT, and it is the one a working fleet reaches --------------------
-# Condition 3 names two boundaries — after `done`, or at `next`. #1056 wired `next`; `Chore.AfterDone` was
-# a case Core declared and NOTHING minted. That matters because of WHERE the two sit in the recipe:
-# `/pnext-item` takes (§1), stamps (§5), and loops back to `take` (§6), calling `next` only in its
-# "take found nothing" DIAGNOSTIC. An offer that fires only at `next` fires only when the board has no
-# work — and a board with no work has no fleet to conscript. This leg is the whole claim: stamping an item
-# offers a chore.
-#
-# .github#51 is stamped; .github#50 is the chore (CLOSED, board column still Ready → CLOSED-ISSUE-NOT-DONE).
-dc="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>&1)"; dcrc=$?
-[ "$dcrc" -eq 0 ] && printf '%s' "$dc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$dc" | grep -q '^chore \[quick\] \.github#50: fresh lifecycle facts project Status=Done' \
-  && ok "M6: done offers only the direct reducer's receipt-backed lifecycle projection" \
-  || bad "M6: done did not offer the direct reducer result" "rc=$dcrc: $dc"
-
-# THE OFFER IS A COURTESY, AND THE STAMP OUTRANKS IT. The chore rides on STDERR, never stdout: `done`'s
-# stdout carries the FSGG-DONE verdict a caller greps, and an offer printed there would corrupt the answer
-# it is attached to — the same rule `next` keeps for its item ref.
-dso="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>/dev/null)"
-printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'chore' \
-  && ok "#733: the AfterDone offer is on stderr — done's stdout verdict is untouched" \
-  || bad "#733: offer does not pollute done's stdout" "$dso"
-
-# #1087 — A RECEIVER NOW DRAINS. Before #1087 `choreLockRef` knew only `.github#1033`, so a `done` in any
-# receiver was refused for want of a lock and the queue drained in `.github` alone. The six receivers now
-# have closed `[chore-lock]` issues (SDD#518 among them) and the map resolves all seven, so stamping an SDD
-# item offers an SDD chore under SDD's OWN lock. This is the rollout's whole point, and it reds on pre-#1087
-# code (SDD had no lock). The direct reducer selects the first stale SDD projection (#44 → Ready).
-rc="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-1087 2>&1)"; rcrc=$?
-[ "$rcrc" -eq 0 ] && printf '%s' "$rc" | grep -q 'FSGG-DONE' \
-  && printf '%s' "$rc" | grep -q '^chore \[quick\] FS.GG.SDD#44: fresh lifecycle facts project Status=Ready' \
-  && ok "M6: receiver done also offers the direct reducer's fresh projection" \
-  || bad "M6: receiver done did not offer the direct reducer result" "rc=$rcrc: $rc"
-
-# AN UNROSTERED REPO IS REFUSED, FOR FREE. All seven FS-GG repos have a lock now, so the honest "no lock"
-# case is a repo `choreLockRef` does not know (FS.GG.Legacy). `Chores.offer`'s step 1 is that pure string
-# match, placed first "because it spends nothing" — so a `done` there stamps, offers nothing, and never
-# reads the board. No assertion on OUTPUT can catch a stray read (the output is identical either way:
-# nothing), so the fixture counts board reads and this asserts the count does not move.
-br0="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
-dn2="$("$ENGINE" "done" FS.GG.Legacy#60 --worker snipe-1087 2>&1)"; dn2rc=$?
-[ "$dn2rc" -eq 0 ] && printf '%s' "$dn2" | grep -q 'FSGG-DONE' && ! printf '%s' "$dn2" | grep -qi 'chore' \
-  && ok "#1087: an UNROSTERED repo is offered nothing, and still stamps" \
-  || bad "#1087: unrostered repo offers nothing" "rc=$dn2rc: $dn2"
-br1="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
-[ "$br0" = "$br1" ] \
-  && ok "#1087: an unrostered repo costs NO board read — the free question is asked first (${br0}→${br1})" \
-  || bad "#1087: unrostered done spends no board read" "board reads went ${br0} → ${br1}"
-
-# ---- .github#1535: `next` TAKES THE CHORE LOCK, and `batch` does not --------------------------------
-# The decision #1535 asked for, pinned as behaviour: `next` WRITES. Its contract everywhere a caller met
-# it — `/pnext-item` §1, the take exit-code table, and `tests/coord-engine-parity/shim.sh`, which used it
-# as the canonical READ verb in the stale-engine guard's read leg for that leg's whole life until #1528 —
-# said "tell me what to work on", and after printing that answer it POSTs a claim marker taking the
-# repo's chore lock (`.github#1033`,
-# ADR-0041). The write is real, it is deliberate (#733/§4.6 conscription), and it is now DECLARED rather
-# than discovered. This leg is what stops the declaration and the code drifting apart again.
-#
-# THE MARKER IS THE ASSERTION, NOT THE PRINTED OFFER. The chore text on stderr is what a human sees, and
-# a leg that grepped only for it would pass on an engine that printed the offer and took no lock — the
-# offer is a courtesy, the LOCK is the write, and only one of them is #1535's subject. So this reads the
-# comment thread on #1033 and asserts a marker naming THIS worker appeared on it.
-#
-# THE PRECONDITION IS ESTABLISHED, NOT ASSUMED, and that is the whole reason for the release and the
-# BEFORE assertion. `snipe-733` still holds #1033 from the AfterDone legs above; a leg written without
-# this would find a marker on #1033 either way and pass WITHOUT `next` having written anything — the
-# "shaped to pass" defect this file's own #1086 note records being caught one level up. Empty before,
-# ours after, one variable.
-"$ENGINE" release "FS-GG/.github#1033" --worker snipe-733 >/dev/null 2>&1
+# ---- next does not conscript legacy completion evidence --------------------------------------------
+# `next` remains conditionally write-capable when it offers an authorized chore. This fixture exposes
+# only legacy done markers, so the correct arm is the empty answer with an untouched chore-lock thread.
 lk0="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments")"
 printf '%s' "$lk0" | grep -q 'fsgg:claim' \
   && bad ".github#1535: the chore lock is FREE before the probe" "a marker survives: $lk0" \
@@ -1442,26 +1355,16 @@ printf '%s' "$bn" | grep -q 'nothing schedulable right now.' \
   && ok ".github#1535: ...and it is the same ANSWER — one shared \`nothingSchedulable\` spelling, so the words cannot drift" \
   || bad ".github#1535: batch --text prints next's answer" "rc=$bnrc: $bn"
 
-# ...AND `next`, same worker, same board, POSTS.
+# Legacy done markers are no longer completion authority, so `next` must not conscript their stale
+# projections or take a chore lock for them. A typed delivery receipt is the only terminal source.
 nx="$("$ENGINE" next --repo .github --worker teal-1535 2>&1)"; nxrc=$?
 lk1="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments")"
-[ "$nxrc" -eq 0 ] && printf '%s' "$lk1" | grep -q 'fsgg:claim' \
-  && printf '%s' "$lk1" | grep -q 'worker=teal-1535' \
-  && ok ".github#1535: \`next\` POSTs a claim marker to .github#1033 — it WRITES, and is declared so" \
-  || bad ".github#1535: next takes the chore lock" "rc=$nxrc: $nx / lock thread: $lk1"
+[ "$nxrc" -eq 0 ] && grep -q 'nothing schedulable right now.' <<<"$nx" \
+  && ! grep -q 'fsgg:claim' <<<"$lk1" && ! grep -qi '^chore ' <<<"$nx" \
+  && ok "change-risk: next ignores legacy completion markers and takes no chore lock" \
+  || bad "change-risk: legacy done evidence must not authorize chore conscription" "rc=$nxrc: $nx / lock thread: $lk1"
 
-# ...and the offer it printed names the chore it took the lock FOR, so the write and the reason a caller
-# is given for it are the same fact. A lock taken for a chore the caller is never told about would be the
-# write with none of the conscription that justifies it.
-#
-# ANCHORED ON THE CHORE LINE, not searched for `#50` anywhere in the output: `next` also prints `#50` in
-# its passed-over list, so an unanchored grep would be satisfied by an offer naming a DIFFERENT subject —
-# a leg that cannot see the thing it claims to check.
-printf '%s' "$nx" | grep -q '^chore \[quick\] \.github#50:' \
-  && ok ".github#1535: the lock \`next\` took is the one the offer it printed names (#50)" \
-  || bad ".github#1535: next's offer names its subject" "rc=$nxrc: $nx"
-
-# Hand the lock back, so nothing downstream inherits a held chore lock from a diagnostic verb.
+# Defensive cleanup keeps downstream tests isolated if this assertion ever regresses.
 "$ENGINE" release "FS-GG/.github#1033" --worker teal-1535 >/dev/null 2>&1
 
 # ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
@@ -2322,6 +2225,22 @@ must_mutate() {
   fi
 }
 
+# `self-host` advertises a write because its `record` arm appends stable-engine-authorized bootstrap
+# evidence to the accountable item. Mint the receipt with the candidate's real bytes/version, then
+# prove the record arm reaches the fixture comment thread.
+self_host_proposal="$CYCLE_FIX/self-host-proposal.json"
+self_host_snapshot="$CYCLE_FIX/self-host-snapshot.json"
+self_host_receipt="$CYCLE_FIX/self-host-receipt.txt"
+printf '%s\n' '{}' >"$self_host_snapshot"
+printf '%s\n' '{"baseSha":"fixture-base","candidateHeadSha":"fixture-head","sharedRefusal":"fixture shared engine refused a relocated decision boundary","reason":"relocated-decision-boundary","evidence":{"build":"fixture-build","unit":"fixture-unit","focusedProductionRoute":"fixture-route","provenance":"fixture-provenance","inversion":"fixture-inversion"},"candidateDecisionKey":"fixture-decision","candidateActionKey":"fixture-action","hostAcceptance":{"actor":"host/ron000","acceptedAt":"2026-08-22T12:00:00Z"}}' >"$self_host_proposal"
+self_host_mint="$("$ENGINE" self-host mint "$self_host_proposal" "$ENGINE" "$self_host_snapshot" "$self_host_receipt" 2>&1)"; self_host_mint_rc=$?
+if [ "$self_host_mint_rc" -eq 0 ] && grep -q 'SELF-HOST-RECEIPT' <<<"$self_host_mint"; then
+  must_mutate "self-host" run self-host record FS.GG.SDD#42 "$self_host_receipt"
+else
+  mark_contract "self-host" "record-driver-mint-failed"
+  bad "#1569: self-host receipt must mint before its record mutation" "rc=$self_host_mint_rc output=$self_host_mint"
+fi
+
 # #46 is deliberately off-board, so `add` cannot be satisfied by its idempotent existing-item arm.
 must_mutate "add" run add FS.GG.SDD#46
 # Use a new worker: the fixture's normal driver holds an item, and the one-item-per-worker guard
@@ -2386,7 +2305,7 @@ printf '%s' "$partial" | jq -e '
   map(select(.subject == "FS.GG.SDD#47")) | length == 1 and
   .[0].outcome == "failed" and
   (.[0].error | contains("Blocked by")) and
-  .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":"FS-GG/FS.GG.SDD#45"}]' >/dev/null 2>&1 \
+  .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":"FS-GG/FS.GG.SDD#48"}]' >/dev/null 2>&1 \
   && [ "$partial_rc" -ne 0 ] \
   && ok "#2157: partial Status-only projection fails closed and retains both fresh observations" \
   || bad "#2157: partial BLOCKER-CLEARED must fail closed" "rc=$partial_rc receipt=$partial"
