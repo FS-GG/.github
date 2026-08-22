@@ -680,7 +680,10 @@ The checkbox state above is now deliberately conservative: the deliverables land
 required by their exit criteria is incomplete. `scripts/report-roadmap-health.py` is the repeatable
 reader for this section. It derives issue flow from a digest-bound raw issue snapshot and the two
 repository trends from exact Git objects; asserted period, artifact, or line-count summaries are not
-accepted. Missing typed evidence becomes `unverified`. Measure 2 is retired in this document by the
+accepted. Its additive `milestoneScores` output is the typed M0–M6 authority: every entry carries the
+exact exit predicate(s), derived verdict, named gap and evidence, and expected checkbox state. The
+reporter parses this document's seven milestone checkboxes and refuses any mapping that differs from
+those typed scores. Missing typed evidence becomes `unverified`. Measure 2 is retired in this document by the
 operator-delegated host, effective 2026-08-22, with state `retired`: no authoritative
 behaviour-changing classifier exists, so the measure is not guessed or silently omitted.
 
@@ -737,11 +740,11 @@ The receiver-yield dependency is consumed as evidence, not treated as a green he
 prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
 while leaving the roadmap's rate-and-integrity measures unproven.
 
-The per-milestone table above is the checkbox authority: it names the exact violated or unverified
-predicate for M0 through M5. M6 additionally fails both the three-cycle predicate and its successor
-clause while `.github#266` remains open; `.github#2752` is closed and the pending register on
-`.github#2691` is unverified as a complete same-class census. This is a score from the reading, not a
-claim that the milestone deliverables were undone.
+The reporter's typed `milestoneScores` array is the checkbox authority; the table above is its human
+projection. It names the exact violated or unverified predicate for M0 through M5. M6 additionally
+fails both the three-cycle predicate and its successor clause while `.github#266` remains open;
+`.github#2752` is closed and `.github#2691` remains open. This is a score from the reading, not a claim
+that the milestone deliverables were undone.
 
 Freeze decision state: **approved** by the operator on **2026-08-17**, recorded for that actor by board
 analyst `avocet-bb9a` in `.github#2754` comment `5317248936`. It remains in force until the seven

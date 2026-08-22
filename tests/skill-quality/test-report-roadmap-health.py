@@ -145,25 +145,71 @@ def test_incident_measure_requires_complete_census_for_met():
     source = module.read_fixture(FIXTURE)
     incomplete = json.loads(json.dumps(source))
     incomplete["measures"]["scheduling-intent"]["incidents"] = []
-    assert module.report(incomplete)["measures"][2]["verdict"] == "unverified"
+    assert module.incident_measure(incomplete, "scheduling-intent", "scheduling reversal")["verdict"] == "unverified"
     complete = json.loads(json.dumps(incomplete))
     complete["measures"]["scheduling-intent"]["census"]["complete"] = True
-    assert module.report(complete)["measures"][2]["verdict"] == "met"
+    assert module.incident_measure(complete, "scheduling-intent", "scheduling reversal")["verdict"] == "met"
 
 
 def test_milestone_exit_table_is_checkbox_authority():
-    roadmap = ROADMAP.read_text()
-    for milestone in range(7):
-        assert f"- [ ] **M{milestone} " in roadmap
-        assert f"| M{milestone} |" in roadmap
-    assert "The per-milestone table above is the checkbox authority" in roadmap
+    source = module.read_fixture(FIXTURE)
+    scores = module.report(source, roadmap=ROADMAP.read_text())["milestoneScores"]
+    assert [score["id"] for score in scores] == [f"M{index}" for index in range(7)]
+    assert [score["verdict"] for score in scores] == [
+        "unverified", "violated", "violated", "violated", "unverified", "violated", "violated"
+    ]
+    assert all(score["checkboxExpected"] is False for score in scores)
+    assert all(
+        predicate["exitPredicate"] and predicate["gap"] and predicate["evidence"]
+        for score in scores
+        for predicate in score["predicates"]
+    )
+    assert [[predicate["id"] for predicate in score["predicates"]] for score in scores] == [
+        ["main-green", "repairs-settled", "baseline-reproducible"],
+        ["reconciliation-intent"],
+        ["complete-read-boundary"],
+        ["coherent-release"],
+        ["structured-decisions"],
+        ["artifact-decline"],
+        ["healthy-cycles", "no-open-successor"],
+    ]
+    assert scores[0]["predicates"][0] == {
+        "id": "main-green",
+        "exitPredicate": "Main has no standing red checks",
+        "verdict": "unverified",
+        "gap": "No complete required-check census is bound to the window.",
+        "evidence": ["milestoneEvidence.M0.mainChecksCensusComplete"],
+    }
+
+
+def test_milestone_authority_mutations_fail_closed():
+    source = module.read_fixture(FIXTURE)
+    expected = module.report(source, roadmap=ROADMAP.read_text())["milestoneScores"]
+
+    def rejected(mutate, roadmap=None):
+        candidate = json.loads(json.dumps(expected))
+        mutate(candidate)
+        try:
+            module.validate_milestone_scores(candidate, expected, roadmap or ROADMAP.read_text())
+        except ValueError:
+            return
+        raise AssertionError("mutated milestone authority must fail closed")
+
+    rejected(lambda scores: scores[0].update({"verdict": "met", "checkboxExpected": True}))
+    rejected(lambda scores: scores[1]["predicates"][0].update({"gap": "wrong", "evidence": ["x"]}))
+    rejected(lambda scores: None, ROADMAP.read_text().replace("- [ ] **M2", "- [x] **M2", 1))
+    rejected(lambda scores: scores.pop(3))
+    rejected(lambda scores: scores.__setitem__(3, json.loads(json.dumps(scores[2]))))
+    rejected(lambda scores: scores[6].update({"verdict": "met", "checkboxExpected": True}))
 
 
 def test_m6_named_successor_census():
-    roadmap = ROADMAP.read_text()
-    m6 = next(line for line in roadmap.splitlines() if line.startswith("| M6 |"))
-    assert all(subject in m6 for subject in ("`.github#266`", "`.github#2752`", "`.github#2691`"))
-    assert "Three healthy cycles fail" in m6
+    source = module.read_fixture(FIXTURE)
+    m6 = module.report(source)["milestoneScores"][6]
+    successor = next(predicate for predicate in m6["predicates"] if predicate["id"] == "no-open-successor")
+    assert successor["verdict"] == "violated"
+    assert all(subject in " ".join(successor["evidence"]) for subject in ("/266:", "/2752:", "/2691:"))
+    assert m6["checkboxExpected"] is False
 
 
 def test_freeze_decision_records_authority():
@@ -189,6 +235,7 @@ def main():
     test_incident_and_census_bypasses_are_rejected()
     test_incident_measure_requires_complete_census_for_met()
     test_milestone_exit_table_is_checkbox_authority()
+    test_milestone_authority_mutations_fail_closed()
     test_m6_named_successor_census()
     test_freeze_decision_records_authority()
     test_retirement_is_explicit_in_document()

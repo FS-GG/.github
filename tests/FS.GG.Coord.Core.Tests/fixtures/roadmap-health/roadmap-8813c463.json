@@ -16,6 +16,23 @@
     "base": "cb33188c",
     "head": "8813c463"
   },
+  "milestoneEvidence": {
+    "M0": {
+      "mainChecksCensusComplete": false,
+      "openRepairCensusComplete": false
+    },
+    "M4": {
+      "effectiveDecisionCensusComplete": false
+    },
+    "M6": {
+      "asOf": "2026-08-22T21:08:23Z",
+      "successors": [
+        {"ref": "https://github.com/FS-GG/.github/issues/266", "state": "open"},
+        {"ref": "https://github.com/FS-GG/.github/issues/2752", "state": "closed"},
+        {"ref": "https://github.com/FS-GG/.github/issues/2691", "state": "open"}
+      ]
+    }
+  },
   "measures": {
     "issue-flow": {},
     "behaviourless-repairs": {},

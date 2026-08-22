@@ -21,6 +21,7 @@ IDS = (
     "evidence-growth",
 )
 ROOT = Path(__file__).resolve().parents[1]
+ROADMAP = ROOT / "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
 DURABLE_REF = re.compile(
     r"https://github\.com/[^/]+/[^/]+/(?:issues/[1-9][0-9]*(?:#issuecomment-[1-9][0-9]*)?|actions/runs/[1-9][0-9]*|releases/tag/[^/#?]+)"
 )
@@ -121,6 +122,31 @@ def read_fixture(path: Path, repository: Path = ROOT) -> dict:
     git_boundary = data.get("gitBoundary")
     if not isinstance(git_boundary, dict) or set(git_boundary) != {"base", "head"}:
         fail("gitBoundary must contain exact base and head revisions")
+    milestone = data.get("milestoneEvidence")
+    if (
+        not isinstance(milestone, dict)
+        or set(milestone) != {"M0", "M4", "M6"}
+        or set(milestone["M0"]) != {"mainChecksCensusComplete", "openRepairCensusComplete"}
+        or not all(isinstance(value, bool) for value in milestone["M0"].values())
+        or set(milestone["M4"]) != {"effectiveDecisionCensusComplete"}
+        or not isinstance(milestone["M4"]["effectiveDecisionCensusComplete"], bool)
+        or set(milestone["M6"]) != {"asOf", "successors"}
+        or utc(milestone["M6"]["asOf"]) < utc(window["end"])
+        or not isinstance(milestone["M6"]["successors"], list)
+    ):
+        fail("milestoneEvidence must contain typed M0, M4, and M6 authority")
+    successors = milestone["M6"]["successors"]
+    expected_successors = {
+        "https://github.com/FS-GG/.github/issues/266",
+        "https://github.com/FS-GG/.github/issues/2752",
+        "https://github.com/FS-GG/.github/issues/2691",
+    }
+    if (
+        len(successors) != 3
+        or not all(isinstance(item, dict) and set(item) == {"ref", "state"} and item["state"] in {"open", "closed"} for item in successors)
+        or {item["ref"] for item in successors} != expected_successors
+    ):
+        fail("M6 successor census must contain exactly #266, #2752, and #2691 with typed states")
     data["_issueRecords"] = records
     return data
 
@@ -203,7 +229,72 @@ def incident_measure(data: dict, identifier: str, label: str) -> dict:
     return row(identifier, "unverified", f"Incident register is empty, but the typed {label} census is incomplete.", census)
 
 
-def report(data: dict, repository: Path = ROOT) -> dict:
+def milestone_predicate(identifier: str, text: str, verdict: str, gap: str, evidence: list[str]) -> dict:
+    return {"id": identifier, "exitPredicate": text, "verdict": verdict, "gap": gap, "evidence": evidence}
+
+
+def milestone_score(identifier: str, predicates: list[dict]) -> dict:
+    verdicts = [predicate["verdict"] for predicate in predicates]
+    verdict = "violated" if "violated" in verdicts else ("unverified" if "unverified" in verdicts else "met")
+    return {"id": identifier, "predicates": predicates, "verdict": verdict, "checkboxExpected": verdict == "met"}
+
+
+def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
+    by_id = {measure["id"]: measure for measure in measures}
+    m0 = data["milestoneEvidence"]["M0"]
+    m4 = data["milestoneEvidence"]["M4"]
+    successors = data["milestoneEvidence"]["M6"]["successors"]
+    issue_periods = by_id["issue-flow"]["value"]
+    def incident_evidence(identifier: str) -> list[str]:
+        value = by_id[identifier].get("value")
+        if isinstance(value, list):
+            return [item["ref"] for item in value]
+        if isinstance(value, dict):
+            return [value["method"]]
+        return []
+    return [
+        milestone_score("M0", [
+            milestone_predicate("main-green", "Main has no standing red checks", "met" if m0["mainChecksCensusComplete"] else "unverified", "No complete required-check census is bound to the window.", ["milestoneEvidence.M0.mainChecksCensusComplete"]),
+            milestone_predicate("repairs-settled", "Open repair PRs are mergeable or explicitly superseded", "met" if m0["openRepairCensusComplete"] else "unverified", "No complete open-repair census is bound to the window.", ["milestoneEvidence.M0.openRepairCensusComplete"]),
+            milestone_predicate("baseline-reproducible", "Baseline is reproducible", "met", "Raw issue census and exact Git objects reproduce the baseline.", [data["sourceBoundary"]["recordsSha256"], data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
+        ]),
+        milestone_score("M1", [
+            milestone_predicate("reconciliation-intent", "Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch", by_id["scheduling-intent"]["verdict"], "A typed scheduling-reversal incident contradicts survival of deliberate parks.", incident_evidence("scheduling-intent")),
+        ]),
+        milestone_score("M2", [
+            milestone_predicate("complete-read-boundary", "No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success", by_id["complete-reads"]["verdict"], "A typed partial-read incident contradicts the complete-read boundary.", incident_evidence("complete-reads")),
+        ]),
+        milestone_score("M3", [
+            milestone_predicate("coherent-release", "One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes", by_id["release-coherence"]["verdict"], "A typed ambiguous-release incident contradicts coherent resumable release.", incident_evidence("release-coherence")),
+        ]),
+        milestone_score("M4", [
+            milestone_predicate("structured-decisions", "Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision", "met" if m4["effectiveDecisionCensusComplete"] else "unverified", "No complete effective-decision census is bound to the window.", ["milestoneEvidence.M4.effectiveDecisionCensusComplete"]),
+        ]),
+        milestone_score("M5", [
+            milestone_predicate("artifact-decline", "Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss", by_id["artifact-trend"]["verdict"], "Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.", [data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
+        ]),
+        milestone_score("M6", [
+            milestone_predicate("healthy-cycles", "Three consecutive operating cycles meet the health measures below", by_id["issue-flow"]["verdict"], "The first weekly period has more opened than closed issues.", [f"{period['opened']}/{period['closed']}" for period in issue_periods]),
+            milestone_predicate("no-open-successor", "No same-class successor issue remains open", "violated" if any(item["state"] == "open" for item in successors) else "met", "The bounded successor census contains open issues.", [f"{item['ref']}:{item['state']}" for item in successors]),
+        ]),
+    ]
+
+
+def validate_milestone_scores(scores: object, expected: list[dict], roadmap: str) -> None:
+    if not isinstance(scores, list) or len(scores) != 7 or [item.get("id") if isinstance(item, dict) else None for item in scores] != [f"M{index}" for index in range(7)]:
+        fail("milestoneScores must contain exactly ordered unique M0-M6 entries")
+    if scores != expected:
+        fail("milestoneScores do not match the derived predicate verdict, gap, or evidence authority")
+    checkbox_rows = re.findall(r"^- \[([ xX])\] \*\*(M[0-6]) —", roadmap, re.MULTILINE)
+    if len(checkbox_rows) != 7 or [identifier for _, identifier in checkbox_rows] != [f"M{index}" for index in range(7)]:
+        fail("roadmap must contain exactly ordered unique M0-M6 checkboxes")
+    actual = {identifier: marker.lower() == "x" for marker, identifier in checkbox_rows}
+    for score in scores:
+        if score["verdict"] not in {"met", "violated", "unverified"} or score["checkboxExpected"] != (score["verdict"] == "met") or actual[score["id"]] != score["checkboxExpected"]:
+            fail(f"roadmap checkbox for {score['id']} must equal its typed milestone verdict")
+
+
+def report(data: dict, repository: Path = ROOT, roadmap: str | None = None) -> dict:
     start = utc(data["window"]["start"])
     records = data.get("_issueRecords")
     if not isinstance(records, list):
@@ -270,19 +361,25 @@ def report(data: dict, repository: Path = ROOT) -> dict:
     )
     source = dict(data["sourceBoundary"])
     source["resultCount"] = len(records)
+    measures = [
+        issue,
+        retired,
+        incident_measure(data, "scheduling-intent", "scheduling reversal"),
+        incident_measure(data, "complete-reads", "partial-read"),
+        incident_measure(data, "release-coherence", "ambiguous release"),
+        artifact,
+        evidence,
+    ]
+    scores = derive_milestone_scores(data, measures)
+    if roadmap is None:
+        roadmap = ROADMAP.read_text()
+    validate_milestone_scores(scores, scores, roadmap)
     return {
         "schema": "fsgg.coord.roadmap-health/v2",
         "window": data["window"],
         "sourceBoundary": source,
-        "measures": [
-            issue,
-            retired,
-            incident_measure(data, "scheduling-intent", "scheduling reversal"),
-            incident_measure(data, "complete-reads", "partial-read"),
-            incident_measure(data, "release-coherence", "ambiguous release"),
-            artifact,
-            evidence,
-        ],
+        "measures": measures,
+        "milestoneScores": scores,
     }
 
 
@@ -290,10 +387,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=ROOT)
+    parser.add_argument("--roadmap", type=Path, default=ROADMAP)
     parser.add_argument("--format", choices=("json",), default="json")
     args = parser.parse_args()
     try:
-        print(json.dumps(report(read_fixture(args.fixture, args.repo), args.repo), indent=2, sort_keys=True))
+        print(json.dumps(report(read_fixture(args.fixture, args.repo), args.repo, args.roadmap.read_text()), indent=2, sort_keys=True))
     except ValueError as error:
         print(f"report-roadmap-health: {error}", file=sys.stderr)
         return 2

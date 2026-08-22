@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:afbc47a46af123a6b2f23bbbbbae959ecf26a18f9257413c8ded77fe51b00a84"
+      digest: "sha256:9b06c6d8828ea74457f975c9754965e43186b20ff725d760cb6ddeef6a133c51"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Observed test_complete_inventory_and_production_route derives all seven values from raw records and exact Git objects through direct and CLI routes.]
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:afbc47a46af123a6b2f23bbbbbae959ecf26a18f9257413c8ded77fe51b00a84"
+      digest: "sha256:9b06c6d8828ea74457f975c9754965e43186b20ff725d760cb6ddeef6a133c51"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
-    notes: [Observed test_milestone_exit_table_is_checkbox_authority directly verifies all seven unchecked milestones and their exit-predicate table; asserted-summary and bad-Git mutations protect its derivation boundary.]
+    notes: [Observed test_milestone_exit_table_is_checkbox_authority parses the emitted typed M0-M6 authority and exact predicate/verdict/gap/evidence/checkbox relation; test_milestone_authority_mutations_fail_closed proves missing/duplicate/wrong-evidence/false-met/checked-while-unmet variants red.]
   - id: EV003
     kind: verification
     subject:
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:afbc47a46af123a6b2f23bbbbbae959ecf26a18f9257413c8ded77fe51b00a84"
+      digest: "sha256:9b06c6d8828ea74457f975c9754965e43186b20ff725d760cb6ddeef6a133c51"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Observed test_m6_named_successor_census directly verifies the three-cycle predicate and all three named successors; raw-census mutations protect its issue-flow input.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:afbc47a46af123a6b2f23bbbbbae959ecf26a18f9257413c8ded77fe51b00a84"
+      digest: "sha256:9b06c6d8828ea74457f975c9754965e43186b20ff725d760cb6ddeef6a133c51"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Observed test_freeze_decision_records_authority directly verifies freeze state/date/actor/lift authority; incident/census mutations protect accountable evidence inputs.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:afbc47a46af123a6b2f23bbbbbae959ecf26a18f9257413c8ded77fe51b00a84"
+      digest: "sha256:9b06c6d8828ea74457f975c9754965e43186b20ff725d760cb6ddeef6a133c51"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Observed test_retirement_is_explicit_in_document directly verifies retirement actor/date/state/reason; the incomplete-census test proves undefined evidence stays unverified.]
