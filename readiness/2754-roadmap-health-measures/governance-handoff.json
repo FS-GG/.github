@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2754-roadmap-health-measures/ship.json",
-      "digest": "sha256:386797db1e2b0ac25d9f5a2803b2344dd8db61f98c45d64dc78cfbfec19f6128",
+      "digest": "sha256:0e372d02ec38a5c51eef5bb1bee4358515246283178f0c9524dfc7e3b119f5a5",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2754-roadmap-health-measures/verify.json",
-      "digest": "sha256:6ab520cc70b70b855d51b452c102fe27005a3ab0f4c52d2667be9ced078ca078",
+      "digest": "sha256:7d1a5c4b1a581f08a4e8136af13cce739d1596354d6f0e434f4a8fd34e474101",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2754-roadmap-health-measures/work-model.json",
-      "digest": "sha256:efdb0aef0ea5df86616ffafe7e73254ab839116fae62d7c6eabb042568fc11e2",
+      "digest": "sha256:933e14b4fc40fcbcb3d948d8d84ddeb5d30c47200538f4eeb4c343ee233ebbb7",
       "schemaVersion": 1
     }
   ],

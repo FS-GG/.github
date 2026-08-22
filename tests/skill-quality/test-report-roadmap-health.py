@@ -13,10 +13,28 @@ SCRIPT = ROOT / "scripts/report-roadmap-health.py"
 FIXTURE = ROOT / "tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json"
 ISSUES = ROOT / "tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/issues-2026-08-22.json"
 ROADMAP = ROOT / "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
+GIT_OBJECTS = (
+    "cb33188c46ee51825315e79af9ef0c54223bce07",
+    "8813c46303588af6f159ef70bec0869e41266a64",
+)
 spec = importlib.util.spec_from_file_location("roadmap_health", SCRIPT)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+def ensure_historical_git_objects():
+    """Materialize the two exact positive-control commits in shallow CI clones."""
+    for revision in GIT_OBJECTS:
+        present = subprocess.run(
+            ["git", "-C", str(ROOT), "cat-file", "-e", f"{revision}^{{commit}}"],
+            capture_output=True,
+        )
+        if present.returncode != 0:
+            subprocess.run(
+                ["git", "-C", str(ROOT), "fetch", "--no-tags", "--depth=1", "origin", revision],
+                check=True,
+            )
 
 
 def invalid_fixture(source, mutate, expected=""):
@@ -56,6 +74,7 @@ def invalid_census(mutate, expected="", preserve_digest=False):
 
 
 def test_complete_inventory_and_production_route():
+    ensure_historical_git_objects()
     source = module.read_fixture(FIXTURE)
     reading = module.report(source)
     assert [item["id"] for item in reading["measures"]] == list(module.IDS)
