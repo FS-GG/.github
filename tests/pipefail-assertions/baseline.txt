@@ -52,7 +52,7 @@
 18 tests/closing-keywords/run.sh
 2 tests/coherent-set-version/run.sh
 7 tests/coord-engine-e2e/run.sh
-79 tests/coord-engine-e2e/writes.sh
+63 tests/coord-engine-e2e/writes.sh
 325 tests/coord-engine-parity/run.sh
 110 tests/coord-engine-parity/shim.sh
 19 tests/coord-guards/run.sh
