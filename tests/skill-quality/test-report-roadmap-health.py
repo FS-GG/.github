@@ -19,5 +19,16 @@ def main():
   try: module.read_fixture(bad)
   except ValueError as e: assert "period" in str(e)
   else: raise AssertionError("noncontiguous periods must fail closed")
+ for mutate in (
+  lambda x: x["measures"].pop("release-coherence"),
+  lambda x: x["measures"]["scheduling-intent"].update({"reversed":"true"}),
+  lambda x: x["measures"]["artifact-trend"].update({"current":{"checks":53}}),
+ ):
+  invalid=json.loads(json.dumps(source)); mutate(invalid)
+  with tempfile.TemporaryDirectory() as t:
+   bad=Path(t)/"bad.json"; bad.write_text(json.dumps(invalid))
+   try: module.read_fixture(bad); module.report(invalid)
+   except ValueError: pass
+   else: raise AssertionError("malformed typed input must fail closed")
  print("report-roadmap-health: typed seven-measure derivation and invalid windows hold")
 if __name__=="__main__": main()

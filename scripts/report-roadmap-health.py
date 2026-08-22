@@ -56,10 +56,17 @@ def report(data: dict) -> dict:
     retired = row("behaviourless-repairs", "retired", "Retired 2026-08-22 by operator-delegated host: no authoritative behaviour-changing classifier exists.")
     def binary(identifier: str, key: str, label: str) -> dict:
         value = measures[identifier].get(key)
+        if value is not None and not isinstance(value, bool):
+            fail(f"{identifier}.{key} must be boolean")
         return row(identifier, "unverified", f"No typed {label} evidence in this reading.") if value is None else row(identifier, "violated" if value else "met", f"Derived from typed {label} input.", value)
     inventory = measures["artifact-trend"]
     baseline, current = inventory.get("baseline"), inventory.get("current")
-    artifact = row("artifact-trend", "unverified", "No typed baseline/current inventory.") if not isinstance(baseline, dict) or not isinstance(current, dict) else row("artifact-trend", "met" if current["checks"] < baseline["checks"] and current["workflows"] < baseline["workflows"] else "violated", "Derived from typed baseline/current inventory.", [baseline, current])
+    if not isinstance(baseline, dict) or not isinstance(current, dict):
+        artifact = row("artifact-trend", "unverified", "No typed baseline/current inventory.")
+    elif not all(isinstance(scope.get(key), int) and not isinstance(scope.get(key), bool) for scope in (baseline, current) for key in ("checks", "workflows")):
+        fail("artifact-trend baseline/current maps require integer checks and workflows")
+    else:
+        artifact = row("artifact-trend", "met" if current["checks"] < baseline["checks"] and current["workflows"] < baseline["workflows"] else "violated", "Derived from typed baseline/current inventory.", [baseline, current])
     growth = measures["evidence-growth"]
     evidence = row("evidence-growth", "unverified", "No single typed git boundary.") if not isinstance(growth.get("generatedLines"), int) or not isinstance(growth.get("implementationLines"), int) else row("evidence-growth", "met" if growth["generatedLines"] < growth["implementationLines"] else "violated", f"Derived at {growth.get('baseline')}..{growth.get('head')}.", growth)
     return {"schema": "fsgg.coord.roadmap-health/v1", "window": data["window"], "sourceBoundary": data.get("sourceBoundary"), "measures": [issue, retired, binary("scheduling-intent", "reversed", "scheduling reversal"), binary("complete-reads", "partialDiscovered", "partial-read incident"), binary("release-coherence", "ambiguous", "ambiguous release"), artifact, evidence]}
