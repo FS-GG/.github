@@ -2,8 +2,11 @@ namespace FS.GG.Coord
 
 module Delivery =
     open System
+    open System.Globalization
     open System.Security.Cryptography
     open System.Text
+    open System.Text.Json
+    open Types
 
     type Stage =
         | Claimed
@@ -159,6 +162,59 @@ module Delivery =
           Obligations: Obligation list
           ParkedReason: string option }
 
+    type CompletionFacts =
+        { HeadSha: string
+          Merged: bool
+          MergeReachable: bool
+          IssueClosed: bool
+          BoardDone: bool
+          ClaimReleased: bool
+          PendingWrites: int
+          CleanupEligible: bool
+          ObligationsDeclared: bool
+          Obligations: Obligation list }
+
+    [<RequireQualifiedAccess>]
+    type CompletionDecision =
+        | NotMerged
+        | Refused of reason: string
+        | VerifyOutstandingObligation of name: string
+        | ProjectCompletion
+        | CleanupCompletedDelivery
+
+    type VerifiedObligationReceipt =
+        { Id: string
+          Kind: string
+          Evidence: string
+          HeadSha: string }
+
+    type DeliveryCompletionReceipt =
+        { Item: string
+          PullRequest: int
+          MergeSha: string
+          MergeReachable: bool
+          ObligationReceipts: VerifiedObligationReceipt list
+          PendingBoardWrites: int
+          FreshnessToken: string
+          ActionKey: string
+          CompletedAt: DateTimeOffset
+          Digest: string }
+
+    // Durable evidence that reconciliation observed premature issue closure before authoritative
+    // completion. The public contract is documented in Delivery.fsi; implementation-side XML comments
+    // would be discarded when a sibling signature exists.
+    type CompletionCorrectionReceipt =
+        { Item: string
+          Destination: BoardStatus
+          ObservedAt: DateTimeOffset
+          Digest: string }
+
+    [<Literal>]
+    let CompletionReceiptMarker = "<!-- fsgg:delivery-completion/v1 -->"
+
+    [<Literal>]
+    let CompletionCorrectionMarker = "<!-- fsgg:completion-correction/v1 -->"
+
     type Action =
         | ContinueImplementation
         | RepairReviewHandoff of reason: string
@@ -229,7 +285,7 @@ module Delivery =
     // released, nothing pending) has nothing left to touch, so `CleanupWorktree` does not need to know
     // what it once reserved — demanding the field here would block a stamped item's cleanup transition
     // forever on a residual empty fact (.github#2233, the measured `#2225` residue).
-    let private declaredPathsProblem snapshot =
+    let private declaredPathsProblem (snapshot: Snapshot) =
         if snapshot.CleanupEligible then
             None
         else
@@ -240,7 +296,7 @@ module Delivery =
             | Known [] -> Some "declared paths"
             | Known _ -> None
 
-    let private validate snapshot =
+    let private validate (snapshot: Snapshot) =
         let freshness = snapshot.Freshness
         [ missing freshness.ItemRef "item ref"
           missing freshness.ClaimGeneration "claim generation"
@@ -255,10 +311,287 @@ module Delivery =
           declaredPathsProblem snapshot ]
         |> List.choose id
 
-    let private next snapshot stage action =
+    let private next (snapshot: Snapshot) stage action =
         let token = freshnessToken snapshot.Freshness
         let actionKey = digest $"%s{token}\n%A{stage}\n%A{action}"
         Next { Stage = stage; Action = action; FreshnessToken = token; ActionKey = actionKey }
+
+    let completionFacts (snapshot: Snapshot) =
+        { HeadSha = snapshot.Freshness.HeadSha
+          Merged = snapshot.Merged
+          MergeReachable = snapshot.MergeReachable
+          IssueClosed = snapshot.IssueClosed
+          BoardDone = snapshot.BoardDone
+          ClaimReleased = snapshot.ClaimReleased
+          PendingWrites = snapshot.PendingWrites
+          CleanupEligible = snapshot.CleanupEligible
+          ObligationsDeclared = snapshot.ObligationsDeclared
+          Obligations = snapshot.Obligations }
+
+    let decideCompletion (facts: CompletionFacts) =
+        if not facts.Merged then
+            CompletionDecision.NotMerged
+        elif facts.PendingWrites < 0 then
+            CompletionDecision.Refused "pending board writes cannot be negative"
+        elif not facts.ObligationsDeclared then
+            CompletionDecision.Refused "delivery obligations are undeclared"
+        else
+            let duplicate =
+                facts.Obligations
+                |> List.groupBy _.Id
+                |> List.tryFind (fun (_, obligations) -> List.length obligations > 1)
+            let stale =
+                facts.Obligations
+                |> List.tryFind (fun obligation -> obligation.HeadSha <> facts.HeadSha)
+            let contradictory =
+                facts.Obligations
+                |> List.tryFind (fun obligation ->
+                    obligation.Verified <> obligation.Evidence.IsSome
+                    || (obligation.Evidence |> Option.exists String.IsNullOrWhiteSpace))
+
+            match duplicate, stale, contradictory with
+            | Some (id, _), _, _ ->
+                CompletionDecision.Refused($"delivery obligation '%s{id}' is declared more than once")
+            | _, Some obligation, _ ->
+                CompletionDecision.Refused(
+                    $"delivery obligation '%s{obligation.Id}' is for head %s{obligation.HeadSha}, not %s{facts.HeadSha}"
+                )
+            | _, _, Some obligation ->
+                CompletionDecision.Refused(
+                    $"delivery obligation '%s{obligation.Id}' has contradictory verification evidence"
+                )
+            | _ ->
+                match facts.Obligations |> List.tryFind (fun obligation -> not obligation.Verified) with
+                | Some obligation -> CompletionDecision.VerifyOutstandingObligation obligation.Id
+                | None when not facts.MergeReachable ->
+                    CompletionDecision.Refused "merged pull request is not reachable from the default branch"
+                | None when not facts.IssueClosed || not facts.BoardDone || not facts.ClaimReleased || facts.PendingWrites <> 0 ->
+                    CompletionDecision.ProjectCompletion
+                | None when not facts.CleanupEligible ->
+                    CompletionDecision.Refused "cleanup is not eligible before completion"
+                | None -> CompletionDecision.CleanupCompletedDelivery
+
+    let private completionReceiptDigest (receipt: DeliveryCompletionReceipt) =
+        [ receipt.Item
+          string receipt.PullRequest
+          receipt.MergeSha
+          string receipt.MergeReachable
+          string receipt.PendingBoardWrites
+          receipt.FreshnessToken
+          receipt.ActionKey
+          receipt.CompletedAt.ToUniversalTime().ToString("O")
+          yield!
+              receipt.ObligationReceipts
+              |> List.sortBy (fun obligation -> obligation.Id, obligation.Kind)
+              |> List.collect (fun obligation ->
+                  [ obligation.Id
+                    obligation.Kind
+                    obligation.Evidence
+                    obligation.HeadSha ]) ]
+        |> String.concat "\n"
+        |> digest
+
+    let createCompletionReceipt item pullRequest mergeSha completedAt freshnessToken actionKey facts =
+        let missing name value =
+            if String.IsNullOrWhiteSpace value then Some($"%s{name} is required") else None
+        let errors =
+            [ missing "item" item
+              if pullRequest <= 0 then Some "pull request must be positive" else None
+              missing "merge SHA" mergeSha
+              missing "freshness token" freshnessToken
+              missing "action key" actionKey ]
+            |> List.choose id
+
+        match errors, decideCompletion facts with
+        | _ :: _, _ -> Error errors
+        | [], CompletionDecision.ProjectCompletion ->
+            let obligations =
+                facts.Obligations
+                |> List.map (fun obligation ->
+                    { Id = obligation.Id
+                      Kind = obligation.Kind
+                      Evidence = obligation.Evidence.Value
+                      HeadSha = obligation.HeadSha })
+            let unsigned =
+                { Item = item
+                  PullRequest = pullRequest
+                  MergeSha = mergeSha
+                  MergeReachable = facts.MergeReachable
+                  ObligationReceipts = obligations
+                  PendingBoardWrites = facts.PendingWrites
+                  FreshnessToken = freshnessToken
+                  ActionKey = actionKey
+                  CompletedAt = completedAt
+                  Digest = "" }
+            Ok { unsigned with Digest = completionReceiptDigest unsigned }
+        | [], decision ->
+            Error [ $"completion receipt is not authorized by decision %A{decision}" ]
+
+    let verifyCompletionReceipt (receipt: DeliveryCompletionReceipt) =
+        let errors =
+            [ if String.IsNullOrWhiteSpace receipt.Item then yield "item is required"
+              if receipt.PullRequest <= 0 then yield "pull request must be positive"
+              if String.IsNullOrWhiteSpace receipt.MergeSha then yield "merge SHA is required"
+              if not receipt.MergeReachable then yield "merge is not reachable"
+              if receipt.PendingBoardWrites <> 0 then yield "pending board writes must be zero"
+              if String.IsNullOrWhiteSpace receipt.FreshnessToken then yield "freshness token is required"
+              if String.IsNullOrWhiteSpace receipt.ActionKey then yield "action key is required"
+              if receipt.ObligationReceipts |> List.exists (fun obligation ->
+                    String.IsNullOrWhiteSpace obligation.Id
+                    || String.IsNullOrWhiteSpace obligation.Kind
+                    || String.IsNullOrWhiteSpace obligation.Evidence
+                    || String.IsNullOrWhiteSpace obligation.HeadSha) then
+                  yield "verified obligation receipts must be complete"
+              let duplicateIds =
+                  receipt.ObligationReceipts
+                  |> List.countBy _.Id
+                  |> List.choose (fun (id, count) -> if count > 1 then Some id else None)
+              if not (List.isEmpty duplicateIds) then
+                  let names = String.concat ", " duplicateIds
+                  yield $"verified obligation receipts contain duplicate ids: %s{names}"
+              if completionReceiptDigest { receipt with Digest = "" } <> receipt.Digest then
+                  yield "completion receipt digest does not match its facts" ]
+        if List.isEmpty errors then Ok () else Error errors
+
+    let encodeCompletionReceipt (receipt: DeliveryCompletionReceipt) =
+        let obligations =
+            receipt.ObligationReceipts
+            |> List.map (fun obligation ->
+                {| id = obligation.Id
+                   kind = obligation.Kind
+                   evidence = obligation.Evidence
+                   headSha = obligation.HeadSha |})
+            |> List.toArray
+        let payload =
+            {| schema = "fsgg.coord.delivery-completion/v1"
+               item = receipt.Item
+               pullRequest = receipt.PullRequest
+               mergeSha = receipt.MergeSha
+               mergeReachable = receipt.MergeReachable
+               obligationReceipts = obligations
+               pendingBoardWrites = receipt.PendingBoardWrites
+               freshnessToken = receipt.FreshnessToken
+               actionKey = receipt.ActionKey
+               completedAt = receipt.CompletedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+               digest = receipt.Digest |}
+        CompletionReceiptMarker + "\n" + JsonSerializer.Serialize payload
+
+    let tryDecodeCompletionReceipt (body: string) =
+        if not (body.StartsWith(CompletionReceiptMarker, StringComparison.Ordinal)) then
+            Ok None
+        else
+            try
+                use document = JsonDocument.Parse(body.Substring(CompletionReceiptMarker.Length).Trim())
+                let root = document.RootElement
+                let requiredString (name: string) (element: JsonElement) =
+                    match element.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) ->
+                        value.GetString()
+                    | _ -> invalidArg name "must be a non-empty string"
+                let requiredInt (name: string) (element: JsonElement) =
+                    match element.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.Number -> value.GetInt32()
+                    | _ -> invalidArg name "must be an integer"
+                let requiredBool (name: string) (element: JsonElement) =
+                    match element.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.True -> true
+                    | true, value when value.ValueKind = JsonValueKind.False -> false
+                    | _ -> invalidArg name "must be a boolean"
+
+                if requiredString "schema" root <> "fsgg.coord.delivery-completion/v1" then
+                    invalidArg "schema" "must be fsgg.coord.delivery-completion/v1"
+                let obligationsElement = root.GetProperty "obligationReceipts"
+                if obligationsElement.ValueKind <> JsonValueKind.Array then
+                    invalidArg "obligationReceipts" "must be an array"
+                let obligations =
+                    obligationsElement.EnumerateArray()
+                    |> Seq.map (fun obligation ->
+                        { Id = requiredString "id" obligation
+                          Kind = requiredString "kind" obligation
+                          Evidence = requiredString "evidence" obligation
+                          HeadSha = requiredString "headSha" obligation })
+                    |> Seq.toList
+                let receipt: DeliveryCompletionReceipt =
+                    { Item = requiredString "item" root
+                      PullRequest = requiredInt "pullRequest" root
+                      MergeSha = requiredString "mergeSha" root
+                      MergeReachable = requiredBool "mergeReachable" root
+                      ObligationReceipts = obligations
+                      PendingBoardWrites = requiredInt "pendingBoardWrites" root
+                      FreshnessToken = requiredString "freshnessToken" root
+                      ActionKey = requiredString "actionKey" root
+                      CompletedAt = DateTimeOffset.Parse(requiredString "completedAt" root, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                      Digest = requiredString "digest" root }
+                match verifyCompletionReceipt receipt with
+                | Ok () -> Ok(Some receipt)
+                | Error errors -> Error errors
+            with error -> Error [ error.Message ]
+
+    let private completionCorrectionDigest (receipt: CompletionCorrectionReceipt) =
+        [ "fsgg.coord.completion-correction/v1"
+          receipt.Item
+          statusWireName receipt.Destination
+          receipt.ObservedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) ]
+        |> String.concat "\n"
+        |> digest
+
+    let verifyCompletionCorrectionReceipt (receipt: CompletionCorrectionReceipt) =
+        let errors =
+            [ if String.IsNullOrWhiteSpace receipt.Item then yield "item is required"
+              match receipt.Destination with
+              | BoardStatus.InReview
+              | BoardStatus.Blocked -> ()
+              | destination ->
+                  yield $"completion correction destination must be In review or Blocked, not %s{statusWireName destination}"
+              if completionCorrectionDigest { receipt with Digest = "" } <> receipt.Digest then
+                  yield "completion correction receipt digest does not match its facts" ]
+        if List.isEmpty errors then Ok () else Error errors
+
+    let createCompletionCorrectionReceipt (item: string) (destination: BoardStatus) (observedAt: DateTimeOffset) =
+        let unsigned: CompletionCorrectionReceipt =
+            { Item = item
+              Destination = destination
+              ObservedAt = observedAt
+              Digest = "" }
+        let signed = { unsigned with Digest = completionCorrectionDigest unsigned }
+        verifyCompletionCorrectionReceipt signed |> Result.map (fun () -> signed)
+
+    let encodeCompletionCorrectionReceipt receipt =
+        let payload =
+            {| schema = "fsgg.coord.completion-correction/v1"
+               item = receipt.Item
+               destination = statusWireName receipt.Destination
+               observedAt = receipt.ObservedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+               digest = receipt.Digest |}
+        CompletionCorrectionMarker + "\n" + JsonSerializer.Serialize payload
+
+    let tryDecodeCompletionCorrectionReceipt (body: string) =
+        if not (body.StartsWith(CompletionCorrectionMarker, StringComparison.Ordinal)) then
+            Ok None
+        else
+            try
+                use document = JsonDocument.Parse(body.Substring(CompletionCorrectionMarker.Length).Trim())
+                let root = document.RootElement
+                let requiredString (name: string) : string =
+                    match root.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) ->
+                        value.GetString()
+                    | _ -> invalidArg name "must be a non-empty string"
+                if requiredString "schema" <> "fsgg.coord.completion-correction/v1" then
+                    invalidArg "schema" "must be fsgg.coord.completion-correction/v1"
+                let destination =
+                    match requiredString "destination" with
+                    | "In review" -> BoardStatus.InReview
+                    | "Blocked" -> BoardStatus.Blocked
+                    | value -> invalidArg "destination" $"must be In review or Blocked, not '%s{value}'"
+                let receipt: CompletionCorrectionReceipt =
+                    { Item = requiredString "item"
+                      Destination = destination
+                      ObservedAt = DateTimeOffset.Parse(requiredString "observedAt", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                      Digest = requiredString "digest" }
+                verifyCompletionCorrectionReceipt receipt
+                |> Result.map (fun () -> Some receipt)
+            with error -> Error [ error.Message ]
 
     let private handoffProblem snapshot =
         if not snapshot.ItemBranchCanonical then Some "item branch is not canonical"
@@ -348,17 +681,13 @@ module Delivery =
             match snapshot.ParkedReason with
             | Some reason when not (String.IsNullOrWhiteSpace reason) -> next snapshot Parked (RouteFollowUp reason)
             | _ when snapshot.Merged ->
-                if not snapshot.ObligationsDeclared then NoVerdict "delivery obligations are undeclared"
-                else
-                    match snapshot.Obligations |> List.tryFind (fun obligation -> not obligation.Verified) with
-                    | Some obligation -> next snapshot MergedAwaitingObligations (VerifyObligation obligation.Id)
-                    | None when not snapshot.MergeReachable -> NoVerdict "merged pull request is not reachable from the default branch"
-                    | None when not snapshot.IssueClosed -> next snapshot MergedAwaitingObligations Complete
-                    | None when not snapshot.BoardDone -> next snapshot MergedAwaitingObligations Complete
-                    | None when not snapshot.ClaimReleased -> next snapshot MergedAwaitingObligations Complete
-                    | None when snapshot.PendingWrites <> 0 -> next snapshot MergedAwaitingObligations Complete
-                    | None when not snapshot.CleanupEligible -> NoVerdict "cleanup is not eligible before completion"
-                    | None -> next snapshot Done CleanupWorktree
+                match decideCompletion (completionFacts snapshot) with
+                | CompletionDecision.NotMerged -> NoVerdict "completion facts do not describe a merged pull request"
+                | CompletionDecision.Refused reason -> NoVerdict reason
+                | CompletionDecision.VerifyOutstandingObligation name ->
+                    next snapshot MergedAwaitingObligations (VerifyObligation name)
+                | CompletionDecision.ProjectCompletion -> next snapshot MergedAwaitingObligations Complete
+                | CompletionDecision.CleanupCompletedDelivery -> next snapshot Done CleanupWorktree
             | _ when Option.isNone snapshot.Freshness.PullRequest ->
                 next snapshot Implementation ContinueImplementation
             | _ ->

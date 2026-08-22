@@ -143,12 +143,39 @@ module Done =
           BoardStatus: BoardStatus
           Parent: Ref option }
 
+    /// Exhaustive durable completion evidence. Legacy evidence is classified for migration diagnostics,
+    /// but only a verified typed receipt is terminal authority.
+    type ReceiptState =
+        | NoReceipt
+        | LegacyReceipt
+        | VerifiedCompletionReceipt of FS.GG.Coord.Delivery.DeliveryCompletionReceipt
+        | InvalidCompletionReceipt of errors: string list
+
+    type CompletionCorrectionState =
+        | NoCompletionCorrection
+        | VerifiedCompletionCorrection of FS.GG.Coord.Delivery.CompletionCorrectionReceipt
+        | InvalidCompletionCorrection of errors: string list
+
     /// Read the facts. The only IO in the decision.
     val facts: transport: IGitHubTransport -> board: Board.BoardMap -> ref: Ref -> IoResult<Facts>
 
-    /// Recognises the immutable receipt written only by a successful `done` precondition transaction.
-    /// Absence is deliberately not inferred from a closed issue or a Project Status value.
+    /// Recognises only digest-verified typed completion authority. Absence is deliberately not inferred
+    /// from a closed issue, a Project Status value, or a legacy receipt marker.
     val hasReceipt: comments: string list -> bool
+
+    /// Classify malformed and duplicate typed receipts explicitly instead of collapsing them to absence.
+    val receiptState: comments: string list -> ReceiptState
+
+    /// Bind a typed receipt to the issue thread it is authorizing.
+    val receiptStateFor: ref: Ref -> comments: string list -> ReceiptState
+
+    /// Subject-bound typed terminal predicate used by lifecycle projections.
+    val hasReceiptFor: ref: Ref -> comments: string list -> bool
+
+    /// Subject-bound, fail-closed classification of the durable premature-closure correction evidence.
+    val completionCorrectionStateFor: ref: Ref -> comments: string list -> CompletionCorrectionState
+
+    val selfHostReplayState: comments: string list -> FS.GG.Coord.SelfHost.ReplayState
 
     /// **THE PRECONDITIONS, AS A TOTAL FUNCTION.** No IO. It cannot fail open, because it cannot fail.
     ///

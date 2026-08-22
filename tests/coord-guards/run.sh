@@ -246,27 +246,47 @@ else
   bad "the lease-specific line must not be printed for verbs that are not the lease renewal" "err=$DRIVE_ERR"
 fi
 
-# ---- 5. THE ROUTE IS EXECUTED, AND THE CLAIM IS RENEWABLE (.github#2581 acceptance 1) -------------
-# The whole item reduces to this leg. Same fixture, same behind-ness, same shared checkout untouched,
-# same head — and the worker's own CURRENT engine named through tier 1. If this is red, the refusal is
-# advertising a route that does not work, which is worse than printing nothing.
-#
-# AND IT IS GREEN AGAINST THE PRE-REPAIR MODULE TOO — SAID PLAINLY, BECAUSE THAT IS THE FINDING, NOT A
-# WEAKNESS OF THE LEG. Tier 1 always worked; .github#2581's defect was never that the route was broken,
-# it was that the refusal named the ONE checkout the blocked worker must not touch and never mentioned
-# this one. So the legs that go red under inversion are §2, §3, §4 and §9 (the text and the
-# justification), and this leg is a REGRESSION guard on the property they now advertise: the moment the
-# route stops working, the refusal starts lying.
+# ---- 5. AN OPAQUE EXPLICIT BINARY IS NOT AUTOMATICALLY TRUSTED ------------------------------------
+# `MYENGINE` is deliberately outside any git checkout. It used to bypass every guard merely because the
+# caller named it. The self-host contract makes that absence of provenance a refusal for write verbs.
 RECOVER_ERR="$ROOT/.recover.err"
 RECOVER_OUT="$( cd "$BEHIND/wt" && FSGG_COORD_ENGINE_BIN="$MYENGINE" "$SHIM" heartbeat "$FIXREF" 2>"$RECOVER_ERR" )"
 RECOVER_RC=$?
 RECOVER_ERR_TXT="$(cat "$RECOVER_ERR")"
-if [ "$RECOVER_RC" -eq 0 ] \
-   && printf '%s' "$RECOVER_OUT" | grep -q 'MY CURRENT ENGINE RAN: heartbeat' \
-   && [ -z "$RECOVER_ERR_TXT" ]; then
-  ok "the recovery route WORKS: the same blocked worker renews through a CURRENT engine it built — exit 0, no staleness verdict consulted, shared checkout untouched"
+if [ "$RECOVER_RC" -eq 69 ] \
+   && grep -q 'FSGG_SELF_HOST_RECEIPT' <<<"$RECOVER_ERR_TXT" \
+   && ! grep -q 'MY CURRENT ENGINE RAN' <<<"$RECOVER_OUT"; then
+  ok "an opaque explicit engine cannot write without typed self-host authority"
 else
-  bad "the printed recovery route must actually lift the refusal" "rc=$RECOVER_RC out=$RECOVER_OUT err=$RECOVER_ERR_TXT"
+  bad "an opaque explicit engine must fail closed before a write" "rc=$RECOVER_RC out=$RECOVER_OUT err=$RECOVER_ERR_TXT"
+fi
+
+# The inverse is equally load-bearing: once a DISTINCT stable verifier accepts the receipt and exact
+# candidate path, the candidate receives the original write argv. The verifier is a fixture here; the
+# real verifier's digest/bytes/version/head behavior is exercised by SelfHostCliTests.
+SELF_HOST_RECEIPT="$ROOT/self-host.receipt"
+SELF_HOST_STABLE="$ROOT/stable-engine"
+SELF_HOST_LOG="$ROOT/stable.log"
+printf '%s\n' 'typed receipt fixture' >"$SELF_HOST_RECEIPT"
+cat >"$SELF_HOST_STABLE" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >"$FSGG_SELF_HOST_TEST_LOG"
+[ "$1" = self-host ] && [ "$2" = verify ] && [ "$3" = "$FSGG_SELF_HOST_RECEIPT" ] && [ "$4" = "$FSGG_COORD_ENGINE_BIN" ]
+EOF
+chmod +x "$SELF_HOST_STABLE"
+AUTHORIZED_OUT="$(cd "$BEHIND/wt" && \
+  FSGG_SELF_HOST_TEST_LOG="$SELF_HOST_LOG" \
+  FSGG_SELF_HOST_RECEIPT="$SELF_HOST_RECEIPT" \
+  FSGG_COORD_STABLE_ENGINE_BIN="$SELF_HOST_STABLE" \
+  FSGG_COORD_ENGINE_BIN="$MYENGINE" \
+  "$SHIM" heartbeat "$FIXREF" 2>/dev/null)"
+AUTHORIZED_RC=$?
+if [ "$AUTHORIZED_RC" -eq 0 ] \
+   && grep -q 'MY CURRENT ENGINE RAN: heartbeat' <<<"$AUTHORIZED_OUT" \
+   && grep -q '^self-host verify ' "$SELF_HOST_LOG"; then
+  ok "a distinct stable verifier authorizes the exact candidate before its write argv runs"
+else
+  bad "accepted typed self-host authority must admit the candidate write" "rc=$AUTHORIZED_RC out=$AUTHORIZED_OUT log=$(cat "$SELF_HOST_LOG" 2>/dev/null)"
 fi
 
 # AND THE SHARED CHECKOUT REALLY IS UNTOUCHED — the property that makes the route safe under
@@ -461,16 +481,19 @@ else
 fi
 
 # ---- 10. THE SUBJECT IS REACHABLE FROM CI (.github#2581 SB-008) ----------------------------------
-# `scripts/fsgg-coord-guards.sh` was named by NO workflow `paths:` filter anywhere in the repository.
-# Since .github#1586 moved the partition and both guards into it, a PR editing only that file started
-# `coord-engine.yml` on no path — so §3b and §3c, whose entire subject IS that file, were silent on
-# exactly the pull requests that change it (.github#2551's class).
+# The required completeness context must exist on every PR, so the PR trigger is intentionally unfiltered.
+# The expensive successor still needs exact impact classification, and pushes retain their path filter.
+# This proves a guard-only edit reaches both of those path-sensitive decisions without reintroducing the
+# selectively silent PR trigger that `.github#2551` identified.
 CE="$REPO_ROOT/.github/workflows/coord-engine.yml"
-n="$(grep -c '"scripts/fsgg-coord-guards.sh"' "$CE" 2>/dev/null || true)"
-if [ "${n:-0}" -ge 2 ]; then
-  ok "coord-engine.yml names scripts/fsgg-coord-guards.sh in both its pull_request and push paths filters ($n occurrences) — the parity gate now runs on the PRs whose subject it is"
+pr_trigger="$(sed -n '/^  pull_request:/,/^  push:/p' "$CE")"
+push_trigger="$(sed -n '/^  push:/,/^  workflow_dispatch:/p' "$CE")"
+if ! grep -q 'paths:' <<<"$pr_trigger" \
+   && grep -q '"scripts/fsgg-coord-guards.sh"' <<<"$push_trigger" \
+   && grep -q 'fsgg-coord-guards\\\.sh' "$REPO_ROOT/scripts/change-completeness"; then
+  ok "coord-engine.yml runs change-completeness on every PR, while push filtering and the impact classifier both select the guard module"
 else
-  bad "coord-engine.yml must select a change to the guard module in BOTH trigger filters" "occurrences=${n:-0}"
+  bad "coord-engine.yml must keep PR completeness unfiltered and retain guard-module selection in push + impact classification"
 fi
 
 CG="$REPO_ROOT/.github/workflows/coord-guards.yml"

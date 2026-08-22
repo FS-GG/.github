@@ -40,6 +40,7 @@ mkdir -p "$CONTRACT_REPO/scripts" \
 git -C "$CONTRACT_REPO" init -q
 cp "$REPO_ROOT/scripts/generate-projections" "$CONTRACT_REPO/scripts/generate-projections"
 cp "$REPO_ROOT/scripts/fsgg-coord" "$CONTRACT_REPO/scripts/fsgg-coord"
+cp "$REPO_ROOT/scripts/fsgg-coord-guards.sh" "$CONTRACT_REPO/scripts/fsgg-coord-guards.sh"
 printf '%s\n' 'demo contract' > "$CONTRACT_REPO/.agents/skills/demo/SKILL.md"
 cp "$CONTRACT_REPO/.agents/skills/demo/SKILL.md" \
   "$CONTRACT_REPO/.claude/skills/demo/SKILL.md"

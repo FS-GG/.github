@@ -1,0 +1,18 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  legacy completion evidence remains diagnosable during migration
+PASS  candidate read-only verify/replay remains available without write authority
+PASS  the predecessor promotion command remains available
+PASS  catalogue metadata remains centralized after coexistence
+PASS  observed green compatibility evidence: command-catalogue-kernel.test-report.xml
+PASS  observed green compatibility evidence: lifecycle-model-core.test-report.xml
+PASS  observed green compatibility evidence: completion-receipts-core.test-report.xml
+PASS  observed green compatibility evidence: self-host-core.test-report.xml
+PASS  observed green compatibility evidence: change-completeness-kernel.test-report.xml
+PASS  observed green compatibility evidence: release-recovery.junit.xml
+PASS  catalogue slice retains an effective omission inversion
+PASS  lifecycle slice retains decision-boundary mutations
+PASS  self-host slice retains digest inversions
+PASS  CI slice reds when a structural family disappears
+PASS  release slice retains receiver-receipt inversion
+
+change-risk compatibility: 15 passed, 0 failed
+]]></system-out></testcase></testsuite>

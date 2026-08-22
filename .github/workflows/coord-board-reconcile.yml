@@ -152,6 +152,11 @@ jobs:
       # the `on:` block fix alone got a job scheduled, and this is what the job then hit. Mirrors
       # `touch-set-drift.yml`'s established build-then-run wiring, the one other workflow that
       # executes the client on a runner rather than only referencing it in a comment or path filter.
+      # The shim discovers this canonical checkout build through tier 2. Do not set
+      # `FSGG_COORD_ENGINE_BIN` here: that tier-1 override means an operator-selected candidate, and
+      # write-capable candidate use correctly requires a self-host bootstrap receipt. This workflow
+      # is executing the revision GitHub checked out for the workflow itself, not selecting an ad hoc
+      # binary outside the resolver's canonical source-build route.
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -337,7 +342,6 @@ jobs:
         if: steps.budget.outputs.defer != 'true'
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
           FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
           FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
           FSGG_COORD_HEALTH_REPORT: artifacts/coordination-health/health-observation.json

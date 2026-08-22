@@ -11,10 +11,21 @@ module Chore =
 
         member Label: string
 
+    /// The only safe destinations after premature issue closure.
+    type CompletionCorrectionStatus =
+        | CorrectionInReview
+        | CorrectionBlocked
+
+    val completionCorrectionStatus: CompletionCorrectionStatus -> BoardStatus
+
     /// Non-lifecycle maintenance plus the reducer's one Status repair carrier.
     type ChoreKind =
         | StaleClaim of holder: WorkerId
         | LifecycleProjectionLag of destination: BoardStatus
+        /// Receipt-free issue closure must be restored to a safe nonterminal projection.
+        | PrematureCompletion of destination: CompletionCorrectionStatus
+        /// A typed completion receipt exists but issue/Projects projections are incomplete.
+        | CompletionProjection
         | ClassProjectionLag of declared: ItemClass
         /// The board's `Kind` column disagrees with the item's own `Kind:` line (.github#2712).
         ///
@@ -62,6 +73,12 @@ module Chore =
 
     /// Carry the one verified intent-reducer destination into the reconcile write path.
     val lifecycleProjection: item: Item -> destination: BoardStatus -> Chore option
+
+    /// Carry the fail-closed completion correction chosen from the same observed item facts.
+    val prematureCompletion: item: Item -> destination: BoardStatus -> Chore option
+
+    /// Carry repair of issue closure and Status=Done from existing typed completion authority.
+    val completionProjection: item: Item -> Chore option
 
     val offer: at: SafePoint -> Chore option
     /// Rank reducer-produced lifecycle repairs beside maintenance without deriving a second Status authority.

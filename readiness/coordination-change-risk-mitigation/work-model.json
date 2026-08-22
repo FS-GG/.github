@@ -1,0 +1,2452 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "coordination-change-risk-mitigation",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ac1c0ac8b8feafbedd9582ac17b8196e57b46867459a31c380cbb83e0a342548"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "02eedf550b282d9788487b3efbd6f0034d35e5982b70dcf8abf01bd6fa61b18c"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "4f56b80be2007d2e7048e262eb370fdda44619d11da81e75d319e8ac948b45f3"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "6ac822bae2e476fadcadf67890e437775bafd311f11baf6574cc70c48e1dcab6"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "596003775028144db71fd9a411385e205ed07488ee164d79471c153bb0ec084e"
+      }
+    },
+    {
+      "path": "work/coordination-change-risk-mitigation/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d18dc3eacc78599e0cdcf030e8a8d74c324bb10d35788702e44e3781c5b6083c"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "coordination-change-risk-mitigation",
+    "title": "Coordination Change Risk Mitigation",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The engine MUST own one exhaustive command catalogue and one BoardOps handler binding list, deriving declarative command metadata and conformance cases while keeping heterogeneous parser arms explicit. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The engine MUST own one exhaustive command catalogue and one BoardOps handler binding list, deriving declarative command metadata and conformance cases while keeping heterogeneous parser arms explicit. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 79,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Every disputed lifecycle transition MUST expose one complete typed fact input and decision output consumed unchanged by projection and writer admission; writers may add only freshness, idempotency, and effect mechanics. (Stories: US-002; Acceptance: AC-002)",
+      "text": "Every disputed lifecycle transition MUST expose one complete typed fact input and decision output consumed unchanged by projection and writer admission; writers may add only freshness, idempotency, and effect mechanics. (Stories: US-002; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 80,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Completion MUST require an exact-merge \u0060DeliveryCompletionReceipt\u0060 proving reachability, verified declared obligations, no contradictions, and zero pending board writes before projecting issue closure or \u0060Status=Done\u0060. (Stories: US-003; Acceptance: AC-003)",
+      "text": "Completion MUST require an exact-merge \u0060DeliveryCompletionReceipt\u0060 proving reachability, verified declared obligations, no contradictions, and zero pending board writes before projecting issue closure or \u0060Status=Done\u0060. (Stories: US-003; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 81,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Candidate-engine writes MUST require an enumerated bootstrap reason, a digest-bound \u0060SelfHostBootstrapReceipt\u0060, stable-verifier validation, accountable host acceptance, and post-merge shared-engine replay. (Stories: US-004; Acceptance: AC-004)",
+      "text": "Candidate-engine writes MUST require an enumerated bootstrap reason, a digest-bound \u0060SelfHostBootstrapReceipt\u0060, stable-verifier validation, accountable host acceptance, and post-merge shared-engine replay. (Stories: US-004; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 82,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "A required \u0060change-completeness\u0060 context MUST run structural closure, parity, path, message, provenance, and focused route checks before independent review and expensive mutation work, with a five-minute ordinary-change target. (Stories: US-005; Acceptance: AC-005)",
+      "text": "A required \u0060change-completeness\u0060 context MUST run structural closure, parity, path, message, provenance, and focused route checks before independent review and expensive mutation work, with a five-minute ordinary-change target. (Stories: US-005; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 83,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Bounded Review and Delivery models MUST prove projection decision, writer admission, and reducer transition parity, and MUST include effective mutations that make every consumer red on divergence. (Stories: US-002; Acceptance: AC-006)",
+      "text": "Bounded Review and Delivery models MUST prove projection decision, writer admission, and reducer transition parity, and MUST include effective mutations that make every consumer red on divergence. (Stories: US-002; Acceptance: AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 84,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "Immutable release recovery MUST verify existing journal and artifact identity, perform zero asset mutation, resume downstream delivery, and append verified receiver receipts outside the immutable asset set. (Stories: US-006; Acceptance: AC-007)",
+      "text": "Immutable release recovery MUST verify existing journal and artifact identity, perform zero asset mutation, resume downstream delivery, and append verified receiver receipts outside the immutable asset set. (Stories: US-006; Acceptance: AC-007)",
+      "acceptanceCriteria": [
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 85,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "Rollout MUST use independently mergeable, reversible compatibility slices and MUST retain predecessor paths until behavior parity and an effective inversion pass. (Stories: US-001, US-005; Acceptance: AC-008)",
+      "text": "Rollout MUST use independently mergeable, reversible compatibility slices and MUST retain predecessor paths until behavior parity and an effective inversion pass. (Stories: US-001, US-005; Acceptance: AC-008)",
+      "acceptanceCriteria": [
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 86,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ],
+      "linkedEvidenceIds": [
+        "EV008"
+      ]
+    },
+    {
+      "id": "FR-009",
+      "title": "The implementation MUST establish phase-0 baselines and monthly success metrics, with zero divergence, premature \u0060Done\u0060, and unreceipted self-host writes as invariant targets. (Stories: US-003, US-006; Acceptance: AC-009)",
+      "text": "The implementation MUST establish phase-0 baselines and monthly success metrics, with zero divergence, premature \u0060Done\u0060, and unreceipted self-host writes as invariant targets. (Stories: US-003, US-006; Acceptance: AC-009)",
+      "acceptanceCriteria": [
+        "AC-009"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/coordination-change-risk-mitigation/spec.md",
+      "sourceLocation": {
+        "line": 87,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ],
+      "linkedEvidenceIds": [
+        "EV009"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Use expand-and-contract migration for the command catalogue; coexistence precedes deletion.",
+      "decision": "Use expand-and-contract migration for the command catalogue; coexistence precedes deletion.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/coordination-change-risk-mitigation/clarifications.md",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "Preserve current external JSON schemas by adapter translation unless a phase proves a versioned",
+      "decision": "Preserve current external JSON schemas by adapter translation unless a phase proves a versioned",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/coordination-change-risk-mitigation/clarifications.md",
+      "sourceLocation": {
+        "line": 35,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "Stage \u0060change-completeness\u0060 advisory first, then required only after its boundedness and signal are",
+      "decision": "Stage \u0060change-completeness\u0060 advisory first, then required only after its boundedness and signal are",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/coordination-change-risk-mitigation/clarifications.md",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T012"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Store receiver receipts as append-only evidence outside immutable assets and include them in the",
+      "decision": "Store receiver receipts as append-only evidence outside immutable assets and include them in the",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/coordination-change-risk-mitigation/clarifications.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T013"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Treat the source design as one umbrella work package whose tasks map to phases 0 through 5; each phase may",
+      "decision": "Treat the source design as one umbrella work package whose tasks map to phases 0 through 5; each phase may",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/coordination-change-risk-mitigation/clarifications.md",
+      "sourceLocation": {
+        "line": 41,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T014"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T009"
+      ],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T002",
+        "T006"
+      ],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T003"
+      ],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T003"
+      ],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-006"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T002"
+      ],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-007"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-007",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T004",
+        "T005",
+        "T006"
+      ],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-007",
+        "FR-007",
+        "PD-008"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement requirement FR-008",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T007"
+      ],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-008",
+        "FR-008",
+        "PD-009"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-009",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-009"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-009",
+        "FR-009",
+        "PD-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T002"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T005"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Implement clarification decision DEC-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T007"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Implement clarification decision DEC-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T008"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Update contract surface PC-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T002"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Update contract surface PC-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T003"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Update contract surface PC-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T004"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-004",
+        "PD-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "T019",
+      "title": "Update contract surface PC-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T005"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-005",
+        "PD-006"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "T020",
+      "title": "Update contract surface PC-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T006"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-006",
+        "PD-007"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV020"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "T021",
+      "title": "Update contract surface PC-007",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T007"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-007",
+        "PD-008"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV021"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "T022",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T009"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV022"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "T023",
+      "title": "Record verification evidence VO-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T015"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-002",
+        "VO-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV023"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "T024",
+      "title": "Record verification evidence VO-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T015"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-002",
+        "VO-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV024"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "T025",
+      "title": "Record verification evidence VO-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T016",
+        "T020"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003",
+        "PD-007",
+        "VO-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV025"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "T026",
+      "title": "Record verification evidence VO-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T017"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-004",
+        "VO-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV026"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "T027",
+      "title": "Record verification evidence VO-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T018"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-004",
+        "PD-005",
+        "VO-006"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV027"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "T028",
+      "title": "Record verification evidence VO-007",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T019"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-005",
+        "PD-006",
+        "VO-007"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV028"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "T029",
+      "title": "Record verification evidence VO-008",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T020"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-006",
+        "PD-007",
+        "VO-008"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV029"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "T030",
+      "title": "Record verification evidence VO-009",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T021"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-007",
+        "PD-008",
+        "VO-009"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV030"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    },
+    {
+      "id": "T031",
+      "title": "Record verification evidence VO-010",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T008",
+        "T022",
+        "T023",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-009",
+        "VO-010"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV031"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      }
+    },
+    {
+      "id": "T032",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T015"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV032"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      }
+    },
+    {
+      "id": "T033",
+      "title": "Handle migration posture PM-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T016"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PM-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV033"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      }
+    },
+    {
+      "id": "T034",
+      "title": "Handle migration posture PM-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T017"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PM-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV034"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      }
+    },
+    {
+      "id": "T035",
+      "title": "Handle migration posture PM-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T019"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-005",
+        "PM-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV035"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 35,
+        "column": 1
+      }
+    },
+    {
+      "id": "T036",
+      "title": "Handle migration posture PM-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T021"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-007",
+        "PM-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV036"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      }
+    },
+    {
+      "id": "T037",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T031"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV037"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      }
+    },
+    {
+      "id": "T038",
+      "title": "Refresh generated view impact GV-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T015"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-002",
+        "PD-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV038"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      }
+    },
+    {
+      "id": "T039",
+      "title": "Refresh generated view impact GV-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T017"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-003",
+        "PD-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV039"
+      ],
+      "source": "work/coordination-change-risk-mitigation/tasks.yml",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/self-host-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-github.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/release-recovery.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-009"
+      ],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/phase-0-baseline.json",
+        "work/coordination-change-risk-mitigation/phase-0-baseline.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV020",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T020",
+      "taskRefs": [
+        "T020"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 20,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV021",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T021",
+      "taskRefs": [
+        "T021"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 21,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV022",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T022",
+      "taskRefs": [
+        "T022"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 22,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV023",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T023",
+      "taskRefs": [
+        "T023"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 23,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV024",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T024",
+      "taskRefs": [
+        "T024"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV025",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T025",
+      "taskRefs": [
+        "T025"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 25,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV026",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T026",
+      "taskRefs": [
+        "T026"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 26,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV027",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T027",
+      "taskRefs": [
+        "T027"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV028",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T028",
+      "taskRefs": [
+        "T028"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV029",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T029",
+      "taskRefs": [
+        "T029"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV030",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T030",
+      "taskRefs": [
+        "T030"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV031",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T031",
+      "taskRefs": [
+        "T031"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV032",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T032",
+      "taskRefs": [
+        "T032"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV033",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T033",
+      "taskRefs": [
+        "T033"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV034",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T034",
+      "taskRefs": [
+        "T034"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV035",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T035",
+      "taskRefs": [
+        "T035"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 35,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV036",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T036",
+      "taskRefs": [
+        "T036"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV037",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T037",
+      "taskRefs": [
+        "T037"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV038",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T038",
+      "taskRefs": [
+        "T038"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV039",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T039",
+      "taskRefs": [
+        "T039"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/coordination-change-risk-mitigation/evidence.yml",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/coordination-change-risk-mitigation/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.1.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ac1c0ac8b8feafbedd9582ac17b8196e57b46867459a31c380cbb83e0a342548"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "02eedf550b282d9788487b3efbd6f0034d35e5982b70dcf8abf01bd6fa61b18c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "4f56b80be2007d2e7048e262eb370fdda44619d11da81e75d319e8ac948b45f3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "6ac822bae2e476fadcadf67890e437775bafd311f11baf6574cc70c48e1dcab6"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "596003775028144db71fd9a411385e205ed07488ee164d79471c153bb0ec084e"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/coordination-change-risk-mitigation/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d18dc3eacc78599e0cdcf030e8a8d74c324bb10d35788702e44e3781c5b6083c"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "13c832bd909b456434d193bc713829f24830cf8aa55b7e0326628fcd00765ed5"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

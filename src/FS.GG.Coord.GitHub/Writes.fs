@@ -1268,16 +1268,223 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
-    // The durable terminal fact for lifecycle reconciliation.  A Project field is a projection which can
-    // be queued or repaired; the receipt is the evidence that the guarded `done` transaction actually
-    // reached its green preconditions.
-    let doneReceipt (transport: IGitHubTransport) (ref: Ref) (receipt: string) : IoResult<unit> =
-        let body =
-            "<!-- fsgg:done-receipt v=1 -->\n"
-            + "**Verified done receipt**\n\n"
-            + receipt
+    let deliveryCompletionReceipt
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (receipt: FS.GG.Coord.Delivery.DeliveryCompletionReceipt)
+        : IoResult<unit> =
+        FS.GG.Coord.Delivery.verifyCompletionReceipt receipt
+        |> Result.mapError (fun errors ->
+            Malformed(ref.Short, "invalid delivery completion receipt: " + String.concat "; " errors))
+        |> Result.bind (fun () ->
+            Reads.commentBodies transport ref.Owner ref.Repo ref.Number
+            |> Result.bind (fun comments ->
+                let parsed =
+                    comments
+                    |> List.filter (fun body ->
+                        body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
+                    |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionReceipt
+                let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
+                let receipts = parsed |> List.choose (function Ok (Some value) -> Some value | _ -> None)
+                if not (List.isEmpty errors) then
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            "an existing delivery completion receipt is unreadable: "
+                            + (errors |> List.collect id |> String.concat "; ")
+                        )
+                    )
+                else
+                    let sameAuthority (existing: FS.GG.Coord.Delivery.DeliveryCompletionReceipt) =
+                        existing.Item = receipt.Item
+                        && existing.PullRequest = receipt.PullRequest
+                        && existing.MergeSha = receipt.MergeSha
+                        && existing.MergeReachable = receipt.MergeReachable
+                        && existing.ObligationReceipts = receipt.ObligationReceipts
+                        && existing.PendingBoardWrites = receipt.PendingBoardWrites
+                        && existing.FreshnessToken = receipt.FreshnessToken
+                        && existing.ActionKey = receipt.ActionKey
+                    match receipts with
+                    | [] ->
+                        postComment transport ref (FS.GG.Coord.Delivery.encodeCompletionReceipt receipt)
+                        |> Result.map ignore
+                    | existing :: rest when sameAuthority existing && List.isEmpty rest -> Ok ()
+                    | _ ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                "a contradictory or duplicate delivery completion receipt already exists"
+                            )
+                        )))
 
-        postComment transport ref body |> Result.map ignore
+    let selfHostBootstrapReceipt
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (receipt: FS.GG.Coord.SelfHost.SelfHostBootstrapReceipt)
+        : IoResult<unit> =
+        FS.GG.Coord.SelfHost.authorizeWrite receipt
+        |> Result.mapError (fun errors ->
+            Malformed(ref.Short, "invalid self-host bootstrap receipt: " + String.concat "; " errors))
+        |> Result.bind (fun () ->
+            Reads.commentBodies transport ref.Owner ref.Repo ref.Number
+            |> Result.bind (fun comments ->
+                let parsed =
+                    comments
+                    |> List.filter (fun body ->
+                        body.StartsWith(FS.GG.Coord.SelfHost.ReceiptMarker, StringComparison.Ordinal))
+                    |> List.map FS.GG.Coord.SelfHost.tryDecodeReceipt
+                let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
+                let receipts = parsed |> List.choose (function Ok(Some value) -> Some value | _ -> None)
+                if not (List.isEmpty errors) then
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            "existing self-host bootstrap evidence is unreadable: "
+                            + (errors |> List.collect id |> String.concat "; ")
+                        )
+                    )
+                else
+                    match receipts with
+                    | [] ->
+                        postComment transport ref (FS.GG.Coord.SelfHost.encodeReceipt receipt)
+                        |> Result.map ignore
+                    | [ existing ] when existing = receipt -> Ok ()
+                    | _ ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                "contradictory or duplicate self-host bootstrap evidence already exists"
+                            )
+                        )))
+
+    let completionCorrectionReceipt
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (receipt: FS.GG.Coord.Delivery.CompletionCorrectionReceipt)
+        : IoResult<unit> =
+        FS.GG.Coord.Delivery.verifyCompletionCorrectionReceipt receipt
+        |> Result.mapError (fun errors ->
+            Malformed(ref.Short, "invalid completion correction receipt: " + String.concat "; " errors))
+        |> Result.bind (fun () ->
+            if receipt.Item <> ref.Canonical then
+                Error(Malformed(ref.Short, $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'"))
+            else
+                Reads.commentBodies transport ref.Owner ref.Repo ref.Number
+                |> Result.bind (fun comments ->
+                    let typedCompletionEvidence =
+                        comments
+                        |> List.filter (fun body ->
+                            body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
+                    let parsed =
+                        comments
+                        |> List.filter (fun body ->
+                            body.StartsWith(FS.GG.Coord.Delivery.CompletionCorrectionMarker, StringComparison.Ordinal))
+                        |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionCorrectionReceipt
+                    let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
+                    let receipts = parsed |> List.choose (function Ok (Some value) -> Some value | _ -> None)
+                    match typedCompletionEvidence, errors, receipts with
+                    | _ :: _, _, _ ->
+                        Error(Malformed(ref.Short, "completion evidence already exists; refusing a premature-completion correction"))
+                    | [], _ :: _, _ ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                "existing completion correction evidence is invalid: "
+                                + (errors |> List.collect id |> String.concat "; ")
+                            )
+                        )
+                    | [], [], [] ->
+                        postComment transport ref (FS.GG.Coord.Delivery.encodeCompletionCorrectionReceipt receipt)
+                        |> Result.map ignore
+                    | [], [], [ existing ]
+                        when existing.Item = receipt.Item
+                             && existing.Destination = receipt.Destination -> Ok ()
+                    | _ ->
+                        Error(Malformed(ref.Short, "a contradictory completion correction receipt already exists"))
+                        ))
+
+    let selfHostReplayReceipt
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (receipt: FS.GG.Coord.SelfHost.SelfHostReplayReceipt)
+        : IoResult<unit> =
+        Reads.commentBodies transport ref.Owner ref.Repo ref.Number
+        |> Result.bind (fun comments ->
+            match FS.GG.Coord.SelfHost.replayState comments with
+            | FS.GG.Coord.SelfHost.NoBootstrap ->
+                Error(Malformed(ref.Short, "self-host replay cannot be recorded without durable bootstrap authority"))
+            | FS.GG.Coord.SelfHost.InvalidReplay errors ->
+                Error(Malformed(ref.Short, "invalid self-host evidence: " + String.concat "; " errors))
+            | FS.GG.Coord.SelfHost.VerifiedReplay existing when existing = receipt -> Ok ()
+            | FS.GG.Coord.SelfHost.VerifiedReplay _ ->
+                Error(Malformed(ref.Short, "contradictory self-host replay evidence already exists"))
+            | FS.GG.Coord.SelfHost.ReplayRequired bootstrap ->
+                FS.GG.Coord.SelfHost.verifyReplayReceipt bootstrap receipt
+                |> Result.mapError (fun errors ->
+                    Malformed(ref.Short, "invalid self-host replay receipt: " + String.concat "; " errors))
+                |> Result.bind (fun () ->
+                    postComment transport ref (FS.GG.Coord.SelfHost.encodeReplayReceipt receipt)
+                    |> Result.map ignore))
+
+    let reopenIssue (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
+        let payload = """{"state":"open"}"""
+        let request =
+            { Method = "PATCH"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        let attempted = transport.Send request
+        match Reads.issueState transport ref.Owner ref.Repo ref.Number with
+        | Ok IssueState.Open -> Ok ()
+        | Ok IssueState.Closed ->
+            match attempted with
+            | Error error -> Error error
+            | Ok _ -> Error(Malformed(ref.Short, "issue reopen was accepted but fresh state is still CLOSED"))
+        | Error verificationError ->
+            match attempted with
+            | Error error -> Error error
+            | Ok _ ->
+                Error(
+                    Malformed(
+                        ref.Short,
+                        "issue reopen was accepted but fresh state could not be verified: "
+                        + Errors.explain verificationError
+                    )
+                )
+
+    let closeIssueCompleted (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
+        let payload = """{"state":"closed","state_reason":"completed"}"""
+        let request =
+            { Method = "PATCH"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        let attempted = transport.Send request
+        match Reads.issueState transport ref.Owner ref.Repo ref.Number with
+        | Ok IssueState.Closed -> Ok ()
+        | Ok IssueState.Open ->
+            match attempted with
+            | Error error -> Error error
+            | Ok _ -> Error(Malformed(ref.Short, "issue close was accepted but fresh state is still OPEN"))
+        | Error verificationError ->
+            match attempted with
+            | Error error -> Error error
+            | Ok _ ->
+                Error(
+                    Malformed(
+                        ref.Short,
+                        "issue close was accepted but fresh state could not be verified: "
+                        + Errors.explain verificationError
+                    )
+                )
 
     // Persist the ordering receipt only after the caller has freshly verified its board mutation.
     let lifecycleWatermark (transport: IGitHubTransport) (ref: Ref) (marker: string) : IoResult<unit> =

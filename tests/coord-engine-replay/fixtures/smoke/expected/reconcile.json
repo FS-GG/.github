@@ -8,11 +8,11 @@
     "subject": "FS.GG.SDD#44"
   },
   {
-    "id": "LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#45",
-    "remedy": "Status=Done",
-    "rule": "LIFECYCLE-PROJECTION-LAG",
+    "id": "PREMATURE-COMPLETION:FS-GG/FS.GG.SDD#45",
+    "remedy": "Status=In review",
+    "rule": "PREMATURE-COMPLETION",
     "size": "quick",
-    "statement": "FS.GG.SDD#45: fresh lifecycle facts project Status=Done; repair the stale board projection.",
+    "statement": "FS.GG.SDD#45: the issue closed without authoritative completion evidence; preserve a correction receipt and restore the nonterminal Status=In review.",
     "subject": "FS.GG.SDD#45"
   },
   {

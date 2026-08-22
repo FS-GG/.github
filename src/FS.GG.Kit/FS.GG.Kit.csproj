@@ -530,6 +530,10 @@
     <!-- 0.71.0 -> 0.72.0, a coherent MINOR (.github#2753): packed coordination skills now use the
          verified file-backed comment create/explicit-id amend route. Additive behavior; no member,
          destination, or command identity is removed. -->
+    <!-- 0.72.0 -> 0.73.0, a coherent MINOR (.github#2830): packed coordination skills now prescribe
+         typed review/delivery authority and the exact terminal delivery-apply route; the sibling
+         engine adds receipted completion, candidate self-hosting, bounded change-completeness, and
+         release recovery. Additive behavior; no member, destination, or command identity is removed. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>

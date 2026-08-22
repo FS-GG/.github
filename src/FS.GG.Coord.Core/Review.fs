@@ -121,6 +121,21 @@ module Review =
           ActionKey: string
           RetiredChains: Driver.ChainRetirement list }
 
+    type OrdinaryExhaustionFacts =
+        { Phase: Phase
+          HeadSha: string
+          CurrentClaimGeneration: string
+          Checks: PrState
+          Comments: Driver.ReviewComment list
+          WaitState: ReviewWait.State option }
+
+    [<RequireQualifiedAccess>]
+    type OrdinaryExhaustionDecision =
+        | NotExhausted of reason: string
+        | AwaitChecks
+        | HostAcceptanceEligible
+        | CompletedOrdinaryExhaustion
+
     let private digest (value: string) =
         value
         |> Encoding.UTF8.GetBytes
@@ -218,6 +233,38 @@ module Review =
             | Some (latestHead, StructuredDecision.Pass), PrRed when latestHead = headSha -> true
             | _ -> false
 
+    let decideOrdinaryExhaustion (facts: OrdinaryExhaustionFacts) =
+        let completedWait () =
+            match facts.WaitState with
+            | Some (ReviewWait.Completed (receipt, _))
+                when receipt.Kind = ReviewWait.RepairConfirmation
+                     && receipt.ClaimGeneration <> facts.CurrentClaimGeneration
+                     && receipt.ReviewGeneration =
+                        ReviewWait.generationToken
+                            facts.HeadSha
+                            ReviewWait.RepairConfirmation
+                            Protocol.reviewPolicy.MaxAutomatedRepairRounds ->
+                OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
+            | Some (ReviewWait.Completed _) ->
+                OrdinaryExhaustionDecision.NotExhausted "the completed wait does not bind the terminal head, round, or prior claim generation"
+            | Some (ReviewWait.Invalid errors) ->
+                let detail = String.concat "; " errors
+                OrdinaryExhaustionDecision.NotExhausted($"the review-wait ledger is invalid: %s{detail}")
+            | Some _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal review wait is not completed"
+            | None -> OrdinaryExhaustionDecision.NotExhausted "the live adapter supplied no durable review-wait state"
+
+        if facts.Phase <> Ordinary then
+            OrdinaryExhaustionDecision.NotExhausted "repair-phase review cannot be reclassified as ordinary exhaustion"
+        elif isOrdinaryExhaustionTerminal facts.HeadSha facts.Checks facts.Comments then
+            completedWait ()
+        elif isOrdinaryExhaustionTerminal facts.HeadSha PrRed facts.Comments then
+            match facts.Checks with
+            | PrPending -> OrdinaryExhaustionDecision.AwaitChecks
+            | PrGreen -> OrdinaryExhaustionDecision.HostAcceptanceEligible
+            | _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal pass has neither settled red nor remained eligible for host acceptance"
+        else
+            OrdinaryExhaustionDecision.NotExhausted "the ordinary review ledger has not reached the bounded terminal set"
+
     let private ordinaryExhaustionOutcome (facts: Facts) =
         match facts.RepairPhaseGranted with
         | Some receipt -> RepairPhaseSetup, EnterRepairPhase receipt
@@ -232,12 +279,11 @@ module Review =
                 let reason = "the ordinary review chain is exhausted and no repair route is available"
                 TerminalHumanPark reason, Park reason
 
-    // Re-project a verdict after the live adapter has established the completed-wait and claim-
-    // turnover facts that pure `inspect` cannot observe. The terminal-set decision itself remains
-    // here, beside `classify`, and rebuilding through `makeVerdict` keeps the action key consistent.
-    let projectCompletedOrdinaryExhaustion binding facts verdict =
-        if binding.Phase = Ordinary
-           && isOrdinaryExhaustionTerminal binding.HeadSha facts.Checks facts.Comments then
+    // Re-project a verdict from the complete live decision. This consumer deliberately does not
+    // re-test phase, ledger, checks, wait generation, or claim turnover; all of those belong to
+    // `decideOrdinaryExhaustion`. Rebuilding through `makeVerdict` keeps the action key consistent.
+    let projectOrdinaryExhaustion decision (binding: Binding) (facts: Facts) (verdict: Verdict) =
+        if decision = OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion then
             let state, action = ordinaryExhaustionOutcome facts
             makeVerdict binding verdict.RetiredChains state action
         else

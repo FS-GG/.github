@@ -1,0 +1,1147 @@
+schemaVersion: 1
+workId: coordination-change-risk-mitigation
+stage: evidence
+status: evidenceReady
+sourceSpec: work/coordination-change-risk-mitigation/spec.md
+sourceClarifications: work/coordination-change-risk-mitigation/clarifications.md
+sourceChecklist: work/coordination-change-risk-mitigation/checklist.md
+sourcePlan: work/coordination-change-risk-mitigation/plan.md
+sourceTasks: work/coordination-change-risk-mitigation/tasks.yml
+sourceAnalysis: readiness/coordination-change-risk-mitigation/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/coordination-change-risk-mitigation/analysis.json
+    digest: 37c0545383a55866f5f83b5da4f0f5301fcbe4e046b0591811ad5a9651443dfa
+    schemaVersion: 1
+  - label: checklist
+    path: work/coordination-change-risk-mitigation/checklist.md
+    digest: ac1c0ac8b8feafbedd9582ac17b8196e57b46867459a31c380cbb83e0a342548
+    schemaVersion: 1
+  - label: clarifications
+    path: work/coordination-change-risk-mitigation/clarifications.md
+    digest: 02eedf550b282d9788487b3efbd6f0034d35e5982b70dcf8abf01bd6fa61b18c
+    schemaVersion: 1
+  - label: plan
+    path: work/coordination-change-risk-mitigation/plan.md
+    digest: 6ac822bae2e476fadcadf67890e437775bafd311f11baf6574cc70c48e1dcab6
+    schemaVersion: 1
+  - label: spec
+    path: work/coordination-change-risk-mitigation/spec.md
+    digest: 596003775028144db71fd9a411385e205ed07488ee164d79471c153bb0ec084e
+    schemaVersion: 1
+  - label: tasks
+    path: work/coordination-change-risk-mitigation/tasks.yml
+    digest: d18dc3eacc78599e0cdcf030e8a8d74c324bb10d35788702e44e3781c5b6083c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-001]
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV001]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Kernel.Tests/CommandSurfaceTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
+      digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 181
+      failed: 0
+      skipped: 0
+    notes: [Catalogue closure, "and full Kernel suite passed; the paired BoardOps report passed 230 tests.", descriptor-derived parsing/render/contract behavior]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-002]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-002]
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV002]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewHeadDivergenceTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml
+      digest: "sha256:579d54e97fc5f26857d1d087ea69482705e67f2068bfd96ade57eda1a319c495"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 912
+      failed: 0
+      skipped: 0
+    notes: [Complete typed ordinary-exhaustion and delivery-completion decisions, "full Core suite passed 912 tests; the paired CLI report passed 524 tests.", projection and live writer admission consume the same decisions]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-003]
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV003]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/DoneFactsTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DoneStderrTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml
+      digest: "sha256:3d90a24f97bb0c9a574e14e7100e8302c666ee2923a01c1b13a5c5d816a6dfee"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 918
+      failed: 0
+      skipped: 0
+    notes: [Exact-merge typed completion authority precedes issue and board projections, all five Release suites passed 2525 tests with zero failures., standalone done is replay-only and legacy evidence is nonterminal and correctable]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-004]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-004]
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV004]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/self-host-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-github.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/SelfHostTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/SelfHostCliTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+      - kind: verification
+        path: tests/coord-guards/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml
+      digest: "sha256:5026567d0924243cf5a8415897eaa66a6bb824c442cdb0d0f1030803749f1be3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 926
+      failed: 0
+      skipped: 0
+    notes: [Stable-verifier candidate authorization and digest-bound post-merge replay are enforced before completion., all five Release suites passed 2539 tests with zero failures and the shim guard suite passed 32 cases.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-005]
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV005]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: scripts/change-completeness
+      - kind: verification
+        path: tests/change-completeness/run.sh
+      - kind: verification
+        path: ".github/workflows/coord-engine.yml"
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Kernel.Tests/CommandSurfaceTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/HandlerRegistrationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml
+      digest: "sha256:870bbc9da9262fba8e06f4f54e0bed87ff0a495bf108ff608282aebb87c86874"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [The unfiltered required predecessor completes under its five-minute timeout and gates the path-sensitive expensive engine job., focused Release reports passed 119 tests with zero failures and the workflow fixture passed 12 checks.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: [AC-006]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-006]
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV006]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/ReviewHeadDivergenceTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml
+      digest: "sha256:adcbc94b741dfb0b24294e007707c98be7ae770fece40446263146427caefe48"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 916
+      failed: 0
+      skipped: 0
+    notes: [Bounded Review and Delivery models enumerate 5720 histories, effective mutation controls kill head check wait claim obligation evidence and consumer-fork mutations, projection writer and reducer parity]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: [AC-007]
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: [CR-007]
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV007]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/release-recovery.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: scripts/release-saga.py
+      - kind: verification
+        path: scripts/release-saga-ci.sh
+      - kind: verification
+        path: scripts/dashboard-tick.py
+      - kind: verification
+        path: tests/release-saga/run.sh
+      - kind: verification
+        path: ".github/workflows/release-saga-promote.yml"
+      - kind: verification
+        path: ".github/workflows/release-kit.yml"
+      - kind: verification
+        path: ".github/workflows/release-coord-engine.yml"
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/release-recovery.junit.xml
+      digest: "sha256:3106e594b0e60b437b4de88e85a10618d9a00218d06b9a81b71ba9a719303a90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Immutable exact-source recovery verifies stored journal and artifact identity with zero release-asset mutation., receiver delivery emits digest-bound append-only Actions artifacts and coherent-set promotion requires the complete declared receipt set.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: [AC-008]
+    clarificationDecisionRefs: [DEC-001, DEC-002, DEC-003, DEC-004]
+    checklistResultRefs: [CR-008]
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV008]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+      - kind: verification
+        path: ".github/workflows/coord-engine.yml"
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Each authority phase retains its predecessor interpretation until a green observed parity artifact and an effective inversion are present., the compatibility fixture passed all 15 slice assertions.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: [AC-009]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-009]
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [work/coordination-change-risk-mitigation/phase-0-baseline.json, work/coordination-change-risk-mitigation/phase-0-baseline.md]
+    sourceRefs:
+      - kind: verification
+        path: work/coordination-change-risk-mitigation/phase-0-baseline.json
+      - kind: verification
+        path: docs/coordination/2026-08-22-coordination-change-risk-mitigation-design.md
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml
+      digest: "sha256:3d90a24f97bb0c9a574e14e7100e8302c666ee2923a01c1b13a5c5d816a6dfee"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 918
+      failed: 0
+      skipped: 0
+    notes: ["Phase-0 incident corpus and monthly metric contract captured against immutable Git commits; JSON invariants checked with jq."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
+      digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 230
+      failed: 0
+      skipped: 0
+    notes: ["Expand-and-contract completed after parity; the duplicate Implementations record and commands inventory were removed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.Kernel/Options.fsi
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
+      digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 230
+      failed: 0
+      skipped: 0
+    notes: [Public Kernel descriptor contract and narrowed BoardOps registration contract compile through the full BoardOps suite.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV016]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV017]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV020]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV023]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Kernel.Tests/CommandSurfaceTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
+      digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 181
+      failed: 0
+      skipped: 0
+    notes: [Full Kernel conformance suite observed catalogue closure, and write conditions., help coverage, parser dispatch, render flags]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV024]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-007]
+    obligationRefs: [EV025]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV026]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV027]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV028]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV029]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV030]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV031]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV032
+    kind: verification
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV032]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
+      digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 230
+      failed: 0
+      skipped: 0
+    notes: [Compatibility path was retained through parity, then contracted without changing handler behavior.]
+  - id: EV033
+    kind: verification
+    subject:
+      type: task
+      id: T033
+    taskRefs: [T033]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV033]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV034
+    kind: verification
+    subject:
+      type: task
+      id: T034
+    taskRefs: [T034]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV034]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV035
+    kind: verification
+    subject:
+      type: task
+      id: T035
+    taskRefs: [T035]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV035]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV036
+    kind: verification
+    subject:
+      type: task
+      id: T036
+    taskRefs: [T036]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV036]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV037
+    kind: verification
+    subject:
+      type: task
+      id: T037
+    taskRefs: [T037]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV037]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+  - id: EV038
+    kind: verification
+    subject:
+      type: task
+      id: T038
+    taskRefs: [T038]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV038]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coord.Cli.Kernel/Options.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
+      digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 181
+      failed: 0
+      skipped: 0
+    notes: [Command contract and positive conformance cases are deterministic catalogue projections.]
+  - id: EV039
+    kind: verification
+    subject:
+      type: task
+      id: T039
+    taskRefs: [T039]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV039]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/change-risk-compatibility/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Umbrella compatibility verification binds this obligation to observed green phase reports and effective inversions.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

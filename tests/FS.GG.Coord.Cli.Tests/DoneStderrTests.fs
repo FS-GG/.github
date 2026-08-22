@@ -95,6 +95,35 @@ module DoneStderrTests =
         + closingPrs
         + """]},"timelineItems":{"nodes":[]},"subIssues":{"totalCount":0,"nodes":[]},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},"parent":null}}},"rateLimit":{"cost":1,"remaining":4977}}"""
 
+    let private typedCompletionReceipt =
+        let completionFacts: FS.GG.Coord.Delivery.CompletionFacts =
+            { HeadSha = "head"
+              Merged = true
+              MergeReachable = true
+              IssueClosed = true
+              BoardDone = false
+              ClaimReleased = false
+              PendingWrites = 0
+              CleanupEligible = false
+              ObligationsDeclared = true
+              Obligations = [] }
+
+        FS.GG.Coord.Delivery.createCompletionReceipt
+            ref.Canonical
+            413
+            "e605d37"
+            (DateTimeOffset.Parse "2026-08-22T15:00:00Z")
+            "freshness"
+            "action"
+            completionFacts
+        |> Result.defaultWith (String.concat "; " >> failwith)
+        |> FS.GG.Coord.Delivery.encodeCompletionReceipt
+
+    let private completionComments =
+        "[{\"body\":" + System.Text.Json.JsonSerializer.Serialize typedCompletionReceipt + "}]"
+
+    let mutable private serveTypedCompletionAuthority = true
+
     /// Posted comment bodies, so a test can also assert the durable receipt's divergence from stdout —
     /// not just that stdout stayed clean.
     let private postedComments = System.Collections.Generic.List<string>()
@@ -122,7 +151,8 @@ module DoneStderrTests =
                         Error(Errors.NotFound "the fixture serves no board WRITE — done's stdout/stderr split is what is under test")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "GET", p when p.EndsWith "issues/9001/comments" -> ok "[]"
+            | "GET", p when p.EndsWith "issues/9001/comments" ->
+                ok (if serveTypedCompletionAuthority then completionComments else "[]")
             | "POST", p when p.EndsWith "issues/9001/comments" ->
                 match req.Body with
                 | Json payload ->
@@ -146,7 +176,7 @@ module DoneStderrTests =
     /// `LandableNotOpenTests.runLandable`/`ForceStealTests.runClaim`: `AssemblyInfo.fs` disables
     /// cross-class parallelism, so pointing the process-global `FSGG_COORD_CACHE` somewhere private per
     /// call is safe.
-    let private runDone () : int * string * string =
+    let private runDone (withTypedAuthority: bool) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-2444-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
@@ -159,6 +189,7 @@ module DoneStderrTests =
             Directory.CreateDirectory dir |> ignore
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            serveTypedCompletionAuthority <- withTypedAuthority
             Console.SetOut capturedOut
             Console.SetError capturedErr
 
@@ -185,7 +216,7 @@ module DoneStderrTests =
     [<Fact>]
     let ``#2444 done's stdout carries only the FSGG-DONE verdict - the passed-over note is not on it`` () =
         postedComments.Clear()
-        let code, stdout, stderr = runDone ()
+        let code, stdout, stderr = runDone true
 
         Assert.Equal(0, code)
         Assert.Contains("FSGG-DONE", stdout)
@@ -213,16 +244,16 @@ module DoneStderrTests =
         Assert.Equal(1, occurrences)
 
     [<Fact>]
-    let ``#2444 the durable receipt comment DELIBERATELY keeps the note stdout no longer carries`` () =
+    let ``standalone done replays typed authority without appending legacy evidence`` () =
         postedComments.Clear()
-        runDone () |> ignore
+        runDone true |> ignore
+        Assert.Empty(postedComments)
 
-        // Exactly one comment posted (the done-receipt) — and it is the RECEIPT, not a repeat of stdout's
-        // clean line: it deliberately diverges from stdout by keeping the cross-repo provenance note.
-        Assert.Single(postedComments) |> ignore
-        let receipt = postedComments.[0]
-        Assert.Contains("fsgg:done-receipt", receipt)
-        Assert.Contains("FSGG-DONE", receipt)
-        Assert.Contains("PR #413", receipt)
-        Assert.Contains("EHotwagner/S.I.R.#195", receipt)
-        Assert.Contains("passed over", receipt)
+    [<Fact>]
+    let ``standalone done refuses to mint authority when no typed receipt exists`` () =
+        postedComments.Clear()
+        let code, stdout, _ = runDone false
+        Assert.NotEqual(0, code)
+        Assert.Contains("FSGG-NOT-DONE", stdout)
+        Assert.Contains("standalone done cannot mint completion authority", stdout)
+        Assert.Empty(postedComments)

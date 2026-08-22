@@ -11,6 +11,7 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   contents: write
   packages: read
 
@@ -62,6 +63,39 @@ jobs:
           done
           [ "$journal_count" -eq 3 ] || { echo "::error::expected exactly 3 package journals, found $journal_count"; exit 1; }
           python3 scripts/release-saga.py merge-journals --manifest artifacts/packages/release-manifest.json "${journals[@]}"
+
+          # Receiver evidence is intentionally NOT a release asset: promotion makes that asset set
+          # immutable. Each package run publishes an append-only Actions artifact, and this observer
+          # binds every receipt back to the exact journal/package/source identity before promotion.
+          mkdir -p artifacts/receiver-receipts
+          receipt_args=(); expected_args=()
+          for package_workflow in "FS.GG.Coord.Cli=release-coord-engine.yml" "FS.GG.Kit=release-kit.yml"; do
+            package="${package_workflow%%=*}"
+            workflow="${package_workflow#*=}"
+            target="artifacts/receiver-receipts/$package"
+            mkdir -p "$target"
+            downloaded=false
+            while IFS= read -r run_id; do
+              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                   --name "receiver-receipts-$package-$version" --dir "$target" 2>/dev/null; then
+                downloaded=true
+                break
+              fi
+            done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" \
+              --status success --limit 100 --json databaseId,createdAt \
+              --jq 'sort_by(.createdAt) | reverse | .[].databaseId')
+            [ "$downloaded" = true ] || { echo "::error::no successful $workflow run published receiver receipts for $package $version"; exit 1; }
+            for receipt in "$target"/*.json; do
+              [ -f "$receipt" ] && receipt_args+=(--receipt "$receipt")
+            done
+            while IFS= read -r receiver; do
+              [ -n "$receiver" ] && expected_args+=(--expected "$package=$receiver")
+            done < <(bash scripts/repos.sh list --receives coordination-kit --kit-delivery package)
+          done
+          [ "${#receipt_args[@]}" -gt 0 ] || { echo "::error::no receiver receipts were downloaded"; exit 1; }
+          python3 scripts/release-saga.py verify-receivers \
+            --manifest artifacts/packages/release-manifest.json \
+            "${expected_args[@]}" "${receipt_args[@]}"
       - name: Observe both registries
         env:
           GH_TOKEN: ${{ github.token }}

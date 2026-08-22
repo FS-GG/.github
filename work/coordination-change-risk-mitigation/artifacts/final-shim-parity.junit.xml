@@ -1,0 +1,90 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  the full D.1 parity corpus (605 assertions) is green THROUGH the shim — no arg, byte of output, or exit code lost
+PASS  .github#1818: the diagnostic names an early failure that a tail -25 of the same log would have hidden, plus the inner run's summary
+PASS  tier 1: FSGG_COORD_ENGINE_BIN is honoured — the named engine runs and its version prints through
+PASS  tier 1: an explicit-but-missing bin is REFUSED (exit 69), naming it — never a silent fall-back
+PASS  tier 2: with the env unset, the shim resolves an engine from source and answers (version 0.72.0.0)
+PASS  refusal: an unresolvable environment exits non-zero (69) with advice — never a silent green no-op (#266)
+PASS  staleness: an engine NEWER than its src/ is silent — no warning on the happy path, and the FIXTURE is what ran
+PASS  staleness: a stale engine WARNS on a read verb ('who') — and still runs, exit code intact
+PASS  staleness: a stale engine REFUSES the board write 'release' (exit 69) — the engine never ran
+PASS  staleness: a stale engine REFUSES the board write 'set-field' (exit 69) — the engine never ran
+PASS  staleness: a stale engine REFUSES the board write 'done' (exit 69) — the engine never ran
+PASS  staleness: a stale engine REFUSES the board write 'claim' (exit 69) — the engine never ran
+PASS  staleness: with NO source present, even a board write is unaffected — nothing to be stale against
+PASS  self-host: an opaque explicit engine cannot write without typed bootstrap authority
+PASS  partition: every verb the engine advertises (53) is classified by the shim — a new verb cannot slip in unguarded
+PASS  partition: every verb the shim classifies is a verb the engine actually has — no set has rotted past the surface it describes
+PASS  partition: the three sets are DISJOINT — no verb is classified twice, so there is one answer per verb
+PASS  partition: shim membership matches every engine writes contract
+PASS  staleness: every write verb the shim declares is refused on a stale engine — add adopt child claim comment done flush heartbeat intake op-lock release review room say set-field set-paths take widen delivery delivery-route graphql next reap reconcile self-host
+PASS  staleness: every read verb the shim declares still runs (with a warning) on a stale engine — batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap packet predicate ready scan verify-paths who whoami
+PASS  staleness: stale delivery-route validate FS.GG.SDD#70 receipt.json warns and runs as a delivery-route read
+PASS  staleness: stale delivery-route show FS.GG.SDD#70 warns and runs as a delivery-route read
+PASS  staleness: delivery-route record is refused before its receipt write
+PASS  staleness: 'widen' is REFUSED on a stale engine (exit 69) — the touch-set pair cannot drift apart again
+PASS  staleness: 'set-paths' is REFUSED on a stale engine (exit 69) — the touch-set pair cannot drift apart again
+PASS  staleness: a verb the shim classifies NOWHERE is REFUSED on a stale engine (exit 69) — unknown write-ness fails closed
+PASS  staleness: '--help' is not a verb and is not refused — the exemption is the grammar, not a list
+PASS  staleness: '-h' is not a verb and is not refused — the exemption is the grammar, not a list
+PASS  staleness: '--version' is not a verb and is not refused — the exemption is the grammar, not a list
+PASS  staleness: a BARE invocation (empty verb) is not matched as a board write — it warns and reaches the engine
+PASS  .github#1572: a newer generated 'obj/**/*.fs' is NOT source — the board write lands, exit 0
+PASS  .github#1572: a newer '.fs' under 'bin/' is build OUTPUT, not input — the board write lands
+PASS  .github#1572: a newer HAND-WRITTEN src/**/*.fs still REFUSES the board write, and is the file NAMED
+PASS  .github#1549: a checkout LEVEL with its upstream is silent — a board write lands, exit 0
+PASS  .github#1549: BEHIND on a non-engine path is not stale — the bar is drift in the engine's own source trees
+PASS  .github#1549: a checkout BEHIND main under the engine's source trees REFUSES 'widen' (exit 69) — the engine never ran
+PASS  .github#1549: the refusal names WHICH checkout to update and WHICH build to re-run, by absolute path
+PASS  .github#1549: a READ on a behind-main checkout WARNS and still runs — reads warn, writes refuse, unchanged
+PASS  .github#1549: a CURRENT worktree resolving a BEHIND shared engine is refused, and the SHARED checkout is the one named (#931 + #1549)
+PASS  .github#1549: the remedy AS PRINTED (git -C $CL merge --ff-only refs/remotes/origin/main) clears the refusal on a checkout that is on a branch
+PASS  .github#1664: a DETACHED checkout behind main still REFUSES the write — the state is reachable here
+PASS  .github#1664: the remedy AS PRINTED (git -C $CL merge --ff-only refs/remotes/origin/main) fast-forwards a DETACHED checkout and clears the refusal
+PASS  .github#1549: a checkout with NO origin remote has no default branch to be behind — no verdict, not a refusal
+PASS  .github#1549: an unanswerable staleness question REFUSES the board write (exit 69) — it does not read as freshness (#266)
+PASS  .github#1549: a no-verdict still PERMITS a read — the refusal is scoped to writes, as #929 scoped it
+PASS  .github#1549: an engine-source pathspec that matches NO commit is a no-verdict, not a zero — the guard refuses to report on an unwatched subject
+PASS  #1586: 'scripts/fsgg-coord' IS a kit row — the split's premise still holds (if this ever flips the split is moot, not passing)
+PASS  #1586: the guard module has NO kit row, so the packer cannot stage it — a partition edit is now a .github commit, not a republish + 7-receiver fan-out
+PASS  #1586: a source build with NO guard module beside the shim REFUSES the board write (exit 69) and NAMES the module — an absent guard is not a clean bill of health (#266)
+PASS  #1586: with NO source build, the missing guard module is never asked for — the receivers' shape resolves (or refuses) exactly as before
+PASS  #1615: the engine tool manifest has NO kit row (ADR-0068), so an engine version bump is a .github commit and a per-receiver Renovate PR — not a republish + 7-receiver fan-out. With leg (a), #1586's criterion 5 is now MEETABLE
+PASS  #1615/#1077: the engine-manifest sweep is present in repos-audit.sh — the invariant the kit row used to buy by construction is asserted against every receiver's tree (AC2)
+PASS  .github#2653: a worktree carrying an INCIDENTAL engine build writes the board through the SHARED checkout's current engine — the build no longer shadows tier 2b
+PASS  .github#2653: with the shared engine REMOVED, g1's condition no longer holds — the leg examines a real fall-through target rather than passing over nothing
+PASS  .github#2653: a worktree that AUTHORS engine source of its own keeps tier 2a — and a genuinely stale deliberate build is still REFUSED, with neither engine reached
+PASS  .github#2653: the worktree-local refusal names the worktree, says it is not the shared checkout, and reports the observed reason tier 2a preferred that build
+PASS  .github#2653: with the SHARED engine stale, an incidental-but-CURRENT local build is kept — resolution only ever moves toward an engine that answers 'current'
+PASS  .github#2653: with no default-branch ref to answer the authorship question, the caller's own build is still preferred and still guarded — an unanswerable probe changes nothing
+PASS  .github#2653: a FAILING dirt probe (corrupt index, exit 128, empty stdout) is read as unanswerable, not as a clean tree — the caller's own build is kept, no engine runs, and the refusal says the question could not be answered
+PASS  precedence: a global tool on PATH does NOT preempt the source build — .github never runs the feed (ADR-0034 decision 2)
+PASS  precedence: a global tool cannot route a board write around the STALE guard (exit 69) — #929's guard is REACHABLE (#1018)
+PASS  precedence: tier 1 still outranks the source build — an explicit bin is an instruction, and the operator's escape hatch
+PASS  precedence: a receiver (no source build) still resolves the global tool — the reorder keys on the BUILD, not a repo name
+PASS  tier 2b: an item worktree with NO build resolves the SHARED checkout's engine — not exit 69 (#931)
+PASS  tier 2b: a FRESH worktree is not STALE — the guards measure the shared tree's own src/↔build, so board writes still land (#931)
+PASS  tier 2b: a genuinely STALE shared engine still REFUSES a board write driven from a worktree — the guard measures, it does not skip
+PASS  tier 2b: a DIRTY shared checkout warns the worktree worker whose claims that WIP decides (#709)
+PASS  tier 2b: a worktree that HAS its own build runs it — the fallback is after 2a, never before it (#931)
+PASS  .github#2471: a STALE tier-2a build beside a CURRENT shared checkout names ITS OWN toplevel, says plainly it is not the shared one (naming /tmp/tmp.TdmfNWBKzU/shared), and does not send the reader to merge main into a feature branch
+PASS  dirtiness: a COMMITTED checkout is silent — a built, gitignored bin/ is not dirt (#709)
+PASS  dirtiness: a dirty checkout WARNS on the board write 'claim' and STILL RUNS it — warn, never refuse (#709)
+PASS  dirtiness: STAGED work still warns — 'status --porcelain' sees what 'diff --quiet' cannot
+PASS  dirtiness: an UNTRACKED source file warns — it is not on main either
+PASS  dirtiness: a dirty 'scripts/fsgg-coord' warns and is NAMED — it ends up inside the engine as surely as a .fs does
+PASS  dirtiness: a dirty 'Directory.Build.props' warns and is NAMED — it ends up inside the engine as surely as a .fs does
+PASS  dirtiness: a dirty 'Directory.Packages.props' warns and is NAMED — it ends up inside the engine as surely as a .fs does
+PASS  dirtiness: a dirty 'global.json' warns and is NAMED — it ends up inside the engine as surely as a .fs does
+PASS  dirtiness: the warning lists 5 paths and counts the remainder — '7 path(s)', 'and 2 more'
+PASS  self-host: an authored explicit engine cannot write without typed bootstrap authority
+PASS  dirtiness: a kit author's DIRTY worktree is exempt — §2's sanctioned flow is not the violation it enforces (#709)
+PASS  dirtiness: 'status.showUntrackedFiles=no' cannot blind the guard — the probe forces its own scope (#1043)
+PASS  dirtiness: a checkout with NO HEAD has no baseline to be dirty against — no verdict, not a false alarm
+PASS  #1029: tier 4 hands dotnet a '--' separator, so the caller's argv is dotnet's tool args, not dotnet's own
+PASS  #1029: ...so '--help' reaches the ENGINE on a receiver — the pipe is transparent at tier 4
+PASS  #1029: ...and dotnet does NOT answer for the engine (no 'Run a local tool', which exited 0 and read as success)
+PASS  #1029: '-h' reaches the engine too — dotnet's short form is separated by the same '--'
+
+coord-engine shim parity: 86 assertion(s), 86 passed, 0 failed
+green — the D.1 corpus is green through the shim, and the shim resolves or refuses, never no-ops.
+]]></system-out></testcase></testsuite>

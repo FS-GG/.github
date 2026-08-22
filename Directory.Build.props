@@ -435,8 +435,13 @@
        file-backed create and explicit-id amend comment mutation, authoritative UTF-8 length/SHA-256
        readback, and per-operation recovery capabilities. Packed skills adopt this verified route in
        place of raw comment mutation. Additive behavior; no command or package identity is removed. -->
+  <!-- 0.72.0 -> 0.73.0 (.github#2830): MINOR on the stable 0.x line. The coordination engine adds
+       typed review/delivery lifecycle authority, exact completion receipts, digest-bound candidate
+       self-hosting, bounded change-completeness gates, and receiver release recovery. Packed skills
+       adopt the terminal delivery-apply route and stop treating standalone `done` as completion.
+       Receiver-visible behavior changes additively; no package, command, or member identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.72.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.73.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

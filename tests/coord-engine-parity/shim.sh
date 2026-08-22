@@ -84,13 +84,17 @@ unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGEN
 export FSGG_WORKER=""
 
 # ---- 1. THE WHOLE D.1 CORPUS, THROUGH THE SHIM ---------------------------------------------------
-# run.sh drives its engine from FSGG_COORD_ENGINE_BIN. Point it at a wrapper that hands the shim the
-# real engine (tier 1) and execs it — so run.sh's 445 assertions are decided by the shim, transparently.
-# (The wrapper must RESET the var: run.sh exports it pointing at the wrapper, and the shim would
-# otherwise resolve the wrapper as its "explicit bin" and loop.)
+# run.sh drives its engine from FSGG_COORD_ENGINE_BIN. Point it at a wrapper that presents the one fixed
+# engine as the stable engine on PATH, then hands every argv to the shim. A fixed engine is load-bearing:
+# several corpus worlds deliberately `cd` into synthetic repositories to test scope inference, so asking
+# the shim to rediscover a source build from each synthetic cwd changes the subject under test. Naming the
+# same PATH engine explicitly selects the shim's stable packaged-engine classification and keeps argv,
+# cwd, stdout, stderr and exit-code parity measurable. Candidate refusal and accepted-receipt behaviour
+# have their own legs below; this leg measures transparent stable-host dispatch, not candidate bootstrap.
 WRAP="$(mktemp)"
 cat >"$WRAP" <<EOF
 #!/usr/bin/env bash
+PATH="$(dirname "$ENGINE"):\$PATH"
 FSGG_COORD_ENGINE_BIN="$ENGINE" exec "$SHIM" "\$@"
 EOF
 chmod +x "$WRAP"
@@ -273,16 +277,14 @@ else
   bad "staleness: a source-less checkout must not warn or refuse" "rc=$rc out=$out err=$err"
 fi
 
-# AN EXPLICIT BIN IS EXEMPT, and structurally: tier 1 execs before tier 2 is ever reached. This is why
-# the D.1 corpus above (which drives the shim through FSGG_COORD_ENGINE_BIN) sees no warnings, and why
-# the receivers' shape cannot be broken by this guard.
+# AN OPAQUE EXPLICIT BIN IS A CANDIDATE. It must not regain write authority merely by outranking tier 2.
 fixture "$FIX"; stale "$FIX"
 err="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
 out="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release "$FIXREF" 2>/dev/null)"
-if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'; then
-  ok "staleness: an explicit FSGG_COORD_ENGINE_BIN is honoured silently — an instruction, not a hint"
+if [ "$rc" -eq 69 ] && printf '%s' "$err" | grep -q 'FSGG_SELF_HOST_RECEIPT' && ! printf '%s' "$out" | grep -q 'ENGINE RAN'; then
+  ok "self-host: an opaque explicit engine cannot write without typed bootstrap authority"
 else
-  bad "staleness: tier 1 must not consult staleness" "rc=$rc out=$out err=$err"
+  bad "self-host: an opaque explicit engine must fail closed before a write" "rc=$rc out=$out err=$err"
 fi
 
 # ---- 3b. THE VERB PARTITION IS TOTAL AND EXACT (.github#1528) ------------------------------------
@@ -1433,16 +1435,14 @@ else
 fi
 rm -f "$D"/src/FS.GG.Coord.Core/f?.fs
 
-# TIER 1 IS EXEMPT, STRUCTURALLY — an explicit bin execs before tier 2 is ever reached. This is why §1's
-# corpus, which drives the shim through FSGG_COORD_ENGINE_BIN from a checkout that may well be dirty
-# (somebody is always working this repo), cannot be polluted by this guard.
+# AN AUTHORED EXPLICIT BIN IS A CANDIDATE. Dirty engine inputs are precisely the self-host population.
 printf '// WIP\n' >>"$D/$FIXSRC"; touch -d '3 hours ago' "$D/$FIXSRC"
 err="$(cd "$D" && FSGG_COORD_ENGINE_BIN="$DBIN" "$SHIM" claim "$FIXREF" 2>&1 >/dev/null)"; rc=$?
 out="$(cd "$D" && FSGG_COORD_ENGINE_BIN="$DBIN" "$SHIM" claim "$FIXREF" 2>/dev/null)"
-if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'MAIN ENGINE RAN'; then
-  ok "dirtiness: an explicit FSGG_COORD_ENGINE_BIN never consults the guard — tier 1 execs first"
+if [ "$rc" -eq 69 ] && printf '%s' "$err" | grep -q 'FSGG_SELF_HOST_RECEIPT' && ! printf '%s' "$out" | grep -q 'MAIN ENGINE RAN'; then
+  ok "self-host: an authored explicit engine cannot write without typed bootstrap authority"
 else
-  bad "dirtiness: tier 1 must not consult dirtiness" "rc=$rc out=$out err=$err"
+  bad "self-host: authored explicit bytes must fail closed before a write" "rc=$rc out=$out err=$err"
 fi
 ( cd "$D" && git checkout -q -- "$FIXSRC" ) >/dev/null 2>&1; touch -d '3 hours ago' "$D/$FIXSRC"
 

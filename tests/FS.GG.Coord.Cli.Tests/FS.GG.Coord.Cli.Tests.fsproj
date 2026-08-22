@@ -19,6 +19,7 @@
          the stdout/stderr split. The decode and validation contract is pure and lives in
          FS.GG.Coord.Core.Tests/FindingPacketTests.fs. -->
     <Compile Include="PacketCliTests.fs" />
+    <Compile Include="SelfHostCliTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="SkillProgressiveDisclosureTests.fs" />

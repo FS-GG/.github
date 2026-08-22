@@ -326,7 +326,9 @@ jobs:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
           set +eu
-          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "$VERSION"
+          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "$VERSION" \
+            --journal artifacts/packages/journal-FS.GG.Coord.Cli.json \
+            --receipt-dir artifacts/receiver-receipts
           rc=$?
           set -eu
           # By EXIT CODE, never by prose (#335). Every non-zero is red; the arms differ so the
@@ -338,6 +340,14 @@ jobs:
             3) echo "::error title=release-coord-engine: delivery never ran::scripts/dashboard-tick.py exited 3 — a permanent no-verdict (the roster would not read, or the credential was empty). NOTHING was attempted, so no receiver was told. The engine IS published." ; exit 1 ;;
             *) echo "::error title=release-coord-engine: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The engine IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
           esac
+
+      - name: Persist append-only receiver receipts outside immutable release assets
+        uses: actions/upload-artifact@v6
+        with:
+          name: receiver-receipts-FS.GG.Coord.Cli-${{ steps.v.outputs.version }}
+          path: artifacts/receiver-receipts/*.json
+          if-no-files-found: error
+          retention-days: 90
       # ─────────────────────────────────────────────────────────────────────────────────────────
 
       # `always()`: a DELIVERY failure above must not suppress the record that the package reached

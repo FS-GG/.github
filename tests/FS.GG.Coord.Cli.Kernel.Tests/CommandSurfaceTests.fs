@@ -24,97 +24,47 @@ open FS.GG.Coord.Cli.Options
 /// shrinking it cost a line in a diff instead of costing nothing.
 module CommandSurfaceTests =
 
-    /// The declared command surface: every verb the engine dispatches, and what it dispatches to.
-    ///
-    /// A verb leaves the surface only by leaving THIS LIST — a decision in the diff, reviewable,
-    /// exactly the standard ADR-0040's D.4 disposition manifest set for the five assertions it did
-    /// dispose of on the record. Adding a verb to the engine without adding it here is caught by the
-    /// DU cross-check below, so the list cannot silently rot in either direction.
+    [<Fact>]
+    let ``command catalogue is exhaustive unique and behavior-conformant`` () =
+        let descriptors = Options.commandCatalogue
+        let commands = descriptors |> List.map _.Command
+        let verbs = descriptors |> List.map _.Verb
+
+        Assert.True(Options.validateCommandCatalogue Options.allCommands descriptors |> Result.isOk)
+        Assert.Equal<Options.Command list>(Options.allCommands |> List.sort, commands |> List.sort)
+        Assert.Equal(commands.Length, commands |> List.distinct |> List.length)
+        Assert.Equal(verbs.Length, verbs |> List.distinct |> List.length)
+
+        for descriptor in descriptors do
+            Assert.Equal(Options.commandName descriptor.Command, descriptor.Verb)
+            Assert.Equal(Options.renderSupport descriptor.Command, descriptor.Render)
+            Assert.True(descriptor.Documented)
+
+    [<Fact>]
+    let ``command catalogue closure names missing duplicate and undocumented rows`` () =
+        let descriptor = Options.commandCatalogue |> List.find (fun row -> row.Command = Options.CommentCmd)
+        let mutant =
+            Options.commandCatalogue
+            |> List.filter (fun row -> row.Command <> Options.Help)
+            |> fun rows -> { descriptor with Documented = false } :: descriptor :: rows
+
+        match Options.validateCommandCatalogue Options.allCommands mutant with
+        | Ok _ -> failwith "an incomplete duplicated undocumented catalogue was accepted"
+        | Error errors ->
+            Assert.Contains("duplicate command descriptors: [CommentCmd]", errors)
+            Assert.Contains("duplicate command verbs: [\"comment\"]", errors)
+            Assert.Contains("missing command descriptors: [Help]", errors)
+            Assert.Contains("undocumented commands: [CommentCmd]", errors)
+
+    /// Positive behavior cases are generated from the catalogue rather than maintained as another
+    /// writable command inventory. Parsing still observes the real heterogeneous parser arms.
     let private surface: (string * Command) list =
-        [
-          // DECISION — pure; read state on stdin and touch no network (ADR-0034).
-          "decide", Decide
-          "delivery", DeliveryCmd
-          "review", ReviewCmd
-          "driver", DriverCmd
-          "cycle", CycleCmd
-          "scan", Scan
-          "lanes", LanesView
-          "facts", Facts
-          "command-contract", CommandContractCmd
-          "intake", IntakeCmd
-          "packet", PacketCmd
-          "delivery-route", RouteCmd
-
-          // IO — the client surface the shim execs in place of bash (ADR-0040 Phase D).
-          "whoami", WhoAmI
-          "budget", Budget
-          "next", Next
-          "batch", BatchCmd
-          "ready", Ready
-          "reconcile", Reconcile
-          "who", Who
-          "reap", Reap
-          "claim", Claim
-          "adopt", Adopt
-          "landable", Landable
-          "take", Take
-          "release", Release
-          "heartbeat", Heartbeat
-          "add", Add
-          "set-field", SetField
-          "child", Child
-          "widen", Widen
-          "set-paths", SetPaths
-          "overlap", Overlap
-          "say", Say
-          "inbox", Inbox
-          "done", DoneCmd
-          "verify-paths", VerifyPaths
-          // #862/#878, landed on main while this gate was being written — and caught BY it: CI builds the
-          // merge ref, so the DU cross-check went red naming `Flush` on this PR's first run. The verb
-          // entered the surface, so it cost a line here. That is the whole point (#869).
-          "flush", Flush
-
-          // The #418 board-map plumbing.
-          "bootstrap", Bootstrap
-          "board", BoardCmd
-          "field-id", FieldId
-          "option-id", OptionId
-          "item-id", ItemId
-          // `.github#2477`: the metered `userContentEdits` read the independent-review contract's
-          // body-edit provenance check names as authoritative.
-          "body-edits", BodyEdits
-          // M6 operational reads and partial archive mutations cross the single typed GraphQL boundary.
-          "graphql", GraphQlOps
-
-          // The board-health gate (#496) and the REST listing (#446).
-          "lint", LintCmd
-          "issues", Issues
-
-          // The follow-up queue (#1063) — LOCAL, like `whoami`: a file, no board, no token.
-          "followup", Followup
-
-          // The ADR-0050 registry-predicate oracle (#1202) — LOCAL: reads registry + producer manifests,
-          // no board, no token.
-          "predicate", Predicate
-          "diff-audit", DiffAudit
-
-          // `.github#2753`: the verified file-backed comment writer is part of the typed IO surface.
-          // Keeping it in this inventory makes both dispatch and write-ness coverage fail if the command
-          // is added to the DU without an emitted contract row.
-          "comment", CommentCmd
-
-          // Coordination rooms (ADR-0051, #1215). The ONE two-word verb — a `room` namespace so
-          // `room close`/`room list` have a home; the dispatch check below splits on whitespace for it.
-          "room open", RoomOpen
-
-          // The per-receiver dispatch fence (`.github#2312` under `.github#1858`). TWO two-word verbs in
-          // one `op-lock` namespace — the pair is one mechanism and reads as one, and an unknown third
-          // word is named and refused rather than swallowed into `acquire`'s four positionals. The
-          // dispatch check below splits on whitespace for them exactly as it does for `room open`.
-          "op-lock acquire", OpLockAcquire
-          "op-lock release", OpLockRelease ]
+        Options.commandCatalogue
+        |> List.choose (fun descriptor ->
+            match descriptor.Command with
+            | Help
+            | Version -> None
+            | _ -> Some(descriptor.Verb, descriptor.Command))
 
     /// The two commands with no verb form — they are reached by flag (`--help`, `--version`), so the
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.

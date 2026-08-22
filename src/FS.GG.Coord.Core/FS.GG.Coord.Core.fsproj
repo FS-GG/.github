@@ -47,6 +47,8 @@
          compiled at all. -->
     <Compile Include="Operation.fsi" />
     <Compile Include="Operation.fs" />
+    <Compile Include="SelfHost.fsi" />
+    <Compile Include="SelfHost.fs" />
     <!-- RegistryPredicate is dependency-free (it opens no sibling module) and is compiled FIRST among
          the domain files so `Types.Item` can carry its `Verdict` — the ADR-0050 flip-time gate needs
          the predicate verdict as a resolved FACT on the item, the way `Blocker.State` is a fact, and a

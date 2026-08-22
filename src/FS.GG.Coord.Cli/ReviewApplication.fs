@@ -299,24 +299,20 @@ module ReviewApplication =
            expiresAt = receipt.ExpiresAt
            evidenceRef = receipt.EvidenceRef |}
 
-    let private isCompletedOrdinaryExhaustion (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
-        match binding.Phase, waitState with
-        | Review.Ordinary, Some (ReviewWait.Completed (receipt, _)) ->
-            receipt.Kind = ReviewWait.RepairConfirmation
-            && receipt.ClaimGeneration <> binding.ClaimGeneration
-            && receipt.ReviewGeneration =
-                ReviewWait.generationToken
-                    binding.HeadSha
-                    ReviewWait.RepairConfirmation
-                    Protocol.reviewPolicy.MaxAutomatedRepairRounds
-            && Review.isOrdinaryExhaustionTerminal binding.HeadSha facts.Checks facts.Comments
-        | _ -> false
+    let private ordinaryExhaustionDecision (binding: Review.Binding) (facts: Review.Facts) waitState =
+        Review.decideOrdinaryExhaustion
+            { Phase = binding.Phase
+              HeadSha = binding.HeadSha
+              CurrentClaimGeneration = binding.ClaimGeneration
+              Checks = facts.Checks
+              Comments = facts.Comments
+              WaitState = waitState }
 
-    let private hasRecordedRepairPhaseEntry (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
+    let private hasRecordedRepairPhaseEntry (facts: Review.Facts) ordinaryExhaustionCompleted =
         let phaseFacts = Driver.reviewPhaseFacts facts.Comments
-        isCompletedOrdinaryExhaustion binding facts waitState && phaseFacts.EscalationPresent
+        ordinaryExhaustionCompleted && phaseFacts.EscalationPresent
 
-    let private waitAuthority (binding: Review.Binding) (facts: Review.Facts) (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
+    let private waitAuthority (binding: Review.Binding) (facts: Review.Facts) ordinaryExhaustionCompleted (state: Review.State) (action: Review.NextAction) (waitState: ReviewWait.State option) =
         let dispatchAuthority =
             match action with
             | Review.DispatchCritic -> Some(ReviewWait.InitialReview, ReviewWait.generationToken binding.HeadSha ReviewWait.InitialReview 0)
@@ -325,7 +321,7 @@ module ReviewApplication =
                 Some(ReviewWait.RepairConfirmation, ReviewWait.generationToken binding.HeadSha ReviewWait.RepairConfirmation round)
             | _ -> None
         match waitState, dispatchAuthority with
-        | _ when hasRecordedRepairPhaseEntry binding facts waitState ->
+        | _ when hasRecordedRepairPhaseEntry facts ordinaryExhaustionCompleted ->
             Error
                 [ "the structured ordinary-exhaustion escalation is recorded; enter the fresh repair phase "
                   + "instead of dispatching, resuming, accepting, or manufacturing ordinary round four on the exhausted pull request" ]
@@ -362,6 +358,10 @@ module ReviewApplication =
         (repairAssertionGranted: Review.RepairAssertionReceipt option)
         (waitState: ReviewWait.State option)
         : int =
+        let exhaustionDecision = ordinaryExhaustionDecision binding facts waitState
+        let ordinaryExhaustionCompleted =
+            exhaustionDecision = Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
+
         match Review.inspect binding facts successionGranted repairAssertionGranted with
         | Error reasons ->
             match opts.Render with
@@ -373,16 +373,13 @@ module ReviewApplication =
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
             let verdict =
-                if isCompletedOrdinaryExhaustion binding facts waitState then
-                    Review.projectCompletedOrdinaryExhaustion binding facts verdict
-                else
-                    verdict
+                Review.projectOrdinaryExhaustion exhaustionDecision binding facts verdict
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
             let waitStatus =
-                if hasRecordedRepairPhaseEntry binding facts waitState then Some "repairPhaseEntry"
-                elif isCompletedOrdinaryExhaustion binding facts waitState then Some "ordinaryExhaustion"
+                if hasRecordedRepairPhaseEntry facts ordinaryExhaustionCompleted then Some "repairPhaseEntry"
+                elif ordinaryExhaustionCompleted then Some "ordinaryExhaustion"
                 else waitStatus
-            match waitAuthority binding facts verdict.State verdict.NextAction waitState, opts.Render with
+            match waitAuthority binding facts ordinaryExhaustionCompleted verdict.State verdict.NextAction waitState, opts.Render with
             | Error reasons, Json ->
                 printfn
                     "%s"

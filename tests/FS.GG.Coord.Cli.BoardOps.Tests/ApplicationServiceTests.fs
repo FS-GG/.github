@@ -2283,17 +2283,78 @@ module ApplicationServiceTests =
     /// still says In progress — a `CLOSED-ISSUE-NOT-DONE` chore, whose remedy is Status=Done. A number in
     /// `rateLimited` meets an exhausted GraphQL budget on its item-id lookup, which is what makes its board
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
-    let private reconcileWorldWithQueries (closed: int list) (rateLimited: Set<int>) (queries: ResizeArray<string> option) =
+    let private typedCompletionComments (number: int) =
+        let facts: Delivery.CompletionFacts =
+            { HeadSha = "head"
+              Merged = true
+              MergeReachable = true
+              IssueClosed = true
+              BoardDone = false
+              ClaimReleased = false
+              PendingWrites = 0
+              CleanupEligible = false
+              ObligationsDeclared = true
+              Obligations = [] }
+
+        let receipt =
+            Delivery.createCompletionReceipt
+                $"FS-GG/FS.GG.SDD#%d{number}"
+                number
+                $"merge-%d{number}"
+                (DateTimeOffset.Parse "2026-08-22T15:00:00Z")
+                $"freshness-%d{number}"
+                $"action-%d{number}"
+                facts
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> Delivery.encodeCompletionReceipt
+
+        JsonSerializer.Serialize [| {| body = receipt |} |]
+
+    [<Literal>]
+    let private SubjectBoundTypedCompletion = "__subject-bound-typed-completion__"
+
+    let private reconcileWorldWithQueriesAndComments
+        (closed: int list)
+        (rateLimited: Set<int>)
+        (queries: ResizeArray<string> option)
+        (comments: string) =
         // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
         // fixture therefore models the projection separately: only a subsequent scan after an accepted
         // mutation observes Done.  The rate-limited item never reaches that transition.
-        let mutable written: Set<int> = Set.empty
+        let mutable written: Map<int, string> = Map.empty
+        let mutable reopened: Set<int> =
+            if comments.Contains(Delivery.CompletionReceiptMarker, StringComparison.Ordinal) then
+                Set.ofList closed
+            else
+                Set.empty
+        let projectedStatus = if comments = "[]" then "In review" else "Done"
+        let mutable storedCommentBodies =
+            if comments = SubjectBoundTypedCompletion then
+                []
+            else
+                use document = JsonDocument.Parse comments
+                document.RootElement.EnumerateArray()
+                |> Seq.choose (fun entry ->
+                    match entry.TryGetProperty "body" with
+                    | true, body when body.ValueKind = JsonValueKind.String -> Some(body.GetString())
+                    | _ -> None)
+                |> List.ofSeq
+
+        let commentsJson number =
+            if comments = SubjectBoundTypedCompletion then
+                typedCompletionComments number
+            else
+                storedCommentBodies
+                |> List.mapi (fun index body -> {| id = 9001 + index; body = body |})
+                |> List.toArray
+                |> JsonSerializer.Serialize
 
         let items () =
             closed
             |> List.map (fun n ->
-                let status = if written.Contains n then "Done" else "In progress"
-                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
+                let status = Map.tryFind n written |> Option.defaultValue "In progress"
+                let state = if reopened.Contains n then "OPEN" else "CLOSED"
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -2340,7 +2401,7 @@ module ApplicationServiceTests =
 
                         match item, field with
                         | Some n, Some "Status" when closed |> List.contains n ->
-                            let status = if written.Contains n then "Done" else "In progress"
+                            let status = Map.tryFind n written |> Option.defaultValue "In progress"
                             ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         | _ -> Error(Errors.NotFound "a targeted verification read addressed an unknown reconcile field")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
@@ -2349,7 +2410,7 @@ module ApplicationServiceTests =
                             match v with
                             | VId id when id.StartsWith "PVTI_" -> id.Substring("PVTI_".Length) |> Int32.TryParse |> function | true, n -> Some n | _ -> None
                             | _ -> None)
-                        |> Option.iter (fun n -> written <- written.Add n)
+                        |> Option.iter (fun n -> written <- Map.add n projectedStatus written)
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     elif document.Contains "projectsV2" then
                         ok
@@ -2358,7 +2419,7 @@ module ApplicationServiceTests =
                         // `Done` is an option here because the remedy WRITES it: a single-select write
                         // resolves the value to an option id before it is attempted.
                         ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_review","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
                         ok
                             $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -2372,9 +2433,40 @@ module ApplicationServiceTests =
             // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
             // exists only to keep an unexpected REST call loud rather than silently empty.
             | "GET", path when path.EndsWith "/comments" ->
-                ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
-            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9001}"""
+                let parts = path.Split '/'
+                let number = Int32.Parse parts.[parts.Length - 2]
+                ok (commentsJson number)
+            | "GET", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
+                let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
+                let state = if reopened.Contains number then "open" else "closed"
+                ok ($"{{\"state\":\"%s{state}\",\"body\":\"\"}}")
+            | "PATCH", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
+                let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
+                match req.Body with
+                | Json payload ->
+                    use document = JsonDocument.Parse payload
+                    match document.RootElement.GetProperty("state").GetString() with
+                    | "open" -> reopened <- reopened.Add number
+                    | "closed" -> reopened <- reopened.Remove number
+                    | state -> failwithf "unexpected issue state %s" state
+                | _ -> failwith "issue PATCH carried no JSON body"
+                ok "{}"
+            | "POST", path when path.EndsWith "/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use document = JsonDocument.Parse payload
+                    storedCommentBodies <-
+                        storedCommentBodies @ [ document.RootElement.GetProperty("body").GetString() ]
+                | _ -> failwith "comment POST carried no JSON body"
+                ok """{"id":9001}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private reconcileWorldWithQueries (closed: int list) (rateLimited: Set<int>) (queries: ResizeArray<string> option) =
+        reconcileWorldWithQueriesAndComments
+            closed
+            rateLimited
+            queries
+            SubjectBoundTypedCompletion
 
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
         reconcileWorldWithQueries closed rateLimited None
@@ -3052,7 +3144,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal("Done", str "value" queued)
 
         // The finding fields are still there — `--apply` ADDS to the dry-run row, it does not replace it.
-        Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" queued)
+        Assert.Equal("COMPLETION-PROJECTION-LAG", str "rule" queued)
         Assert.Equal("quick", str "size" queued)
 
         // Exit code UNCHANGED. A deferred write is not a failure — it is a promise the queue keeps.
@@ -3103,8 +3195,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let expected =
             "applying (2 mechanical finding(s))" + nl
-            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#101            Status=Done" + nl
-            + "  LIFECYCLE-PROJECTION-LAG FS.GG.SDD#102            Status=Done" + nl
+            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#101            Status=Done" + nl
+            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#102            Status=Done" + nl
             + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
             + "applied  FS.GG.SDD#101  Status=Done" + nl
             + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)" + nl
@@ -3304,10 +3396,141 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // non-ASCII character, and it does so identically for the old `JsonSerializer` and the new
         // `Utf8JsonWriter`. Spelled from ASCII so the assertion says which bytes it means.
         let expected =
-            """[{"id":"LIFECYCLE-PROJECTION-LAG:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"LIFECYCLE-PROJECTION-LAG","size":"quick","statement":"FS.GG.SDD#101: fresh lifecycle facts project Status=Done; repair the stale board projection.","subject":"FS.GG.SDD#101"}]"""
+            """[{"id":"COMPLETION-PROJECTION-LAG:FS-GG/FS.GG.SDD#101","remedy":"Status=Done","rule":"COMPLETION-PROJECTION-LAG","size":"quick","statement":"FS.GG.SDD#101: authoritative completion evidence exists; repair issue closure and Status=Done from that receipt.","subject":"FS.GG.SDD#101"}]"""
 
         Assert.Equal(expected, out.Trim())
         Assert.Equal(0, code)
+
+    let private runReconcileWithHealthReport (world: Fake.Recorder) =
+        let path = Path.Combine(Path.GetTempPath(), "fsgg-completion-health-" + Guid.NewGuid().ToString "n" + ".json")
+        let previous = Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
+
+        try
+            Environment.SetEnvironmentVariable("FSGG_COORD_HEALTH_REPORT", path)
+            let code, out, err = runReconcile world (reconcileArgs [ "--json" ])
+            code, out, err, File.ReadAllText path
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_HEALTH_REPORT", previous)
+
+            if File.Exists path then
+                File.Delete path
+
+    [<Fact>]
+    let ``a closed non-Done row without a completion receipt exposes one dry-run correction without mutating`` () =
+        let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None "[]"
+        let code, out, err, report = runReconcileWithHealthReport world
+
+        Assert.Equal(0, code)
+        Assert.Equal("", err)
+        let rows = parsedArray out
+        Assert.Single rows |> ignore
+        Assert.Equal("PREMATURE-COMPLETION", rows.Head.GetProperty("rule").GetString())
+        Assert.Equal("Status=In review", rows.Head.GetProperty("remedy").GetString())
+        Assert.False(world.Logged "updateProjectV2ItemFieldValue", $"a receipt-free row reached a mutation: %A{world.Log}")
+
+        use document = JsonDocument.Parse report
+        let root = document.RootElement
+        let subjects = root.GetProperty("subjects").EnumerateArray() |> List.ofSeq
+        Assert.Equal("typed-complete-success/1", root.GetProperty("completeReadBoundary").GetString())
+        Assert.Equal(1, root.GetProperty("subjectCount").GetInt32())
+        Assert.Single subjects |> ignore
+        Assert.Equal("FS-GG/FS.GG.SDD#101", subjects.Head.GetProperty("subject").GetString())
+        Assert.Equal("In progress", subjects.Head.GetProperty("current").GetString())
+        Assert.Equal("In review", subjects.Head.GetProperty("intended").GetString())
+        Assert.True(subjects.Head.GetProperty("readComplete").GetBoolean())
+
+    [<Fact>]
+    let ``premature completion apply persists authority then reopens then projects In review`` () =
+        let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None "[]"
+        let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+
+        Assert.Equal(0, code)
+        Assert.Equal("", err)
+        let row = parsedArray out |> List.exactlyOne
+        Assert.Equal("PREMATURE-COMPLETION", row.GetProperty("rule").GetString())
+        Assert.Equal("written", row.GetProperty("outcome").GetString())
+        Assert.Equal("In review", row.GetProperty("value").GetString())
+
+        let firstComment = world.Log |> List.findIndex (fun entry -> entry.Contains "comment-post")
+        let reopen = world.Log |> List.findIndex (fun entry -> entry.Contains "issue-patch")
+        let statusWrite = world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+        Assert.True(firstComment < reopen, $"correction authority was not first: %A{world.Log}")
+        Assert.True(reopen < statusWrite, $"issue reopen did not precede Status projection: %A{world.Log}")
+
+        let secondCode, secondOut, secondErr =
+            runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+        if secondCode <> 0 then failwithf "second completion projection failed (exit %d): %s\n%s\n%A" secondCode secondErr secondOut world.Log
+        Assert.Equal("", secondErr)
+        Assert.Empty(parsedArray secondOut)
+        Assert.Equal(1, world.Count "issue-patch")
+        Assert.Equal(1, world.Count "item-edit")
+
+    [<Fact>]
+    let ``typed completion receipt repairs an open issue and Status Done idempotently`` () =
+        let facts: Delivery.CompletionFacts =
+            { HeadSha = "head"
+              Merged = true
+              MergeReachable = true
+              IssueClosed = true
+              BoardDone = false
+              ClaimReleased = false
+              PendingWrites = 0
+              CleanupEligible = false
+              ObligationsDeclared = true
+              Obligations = [] }
+        let receipt =
+            Delivery.createCompletionReceipt
+                "FS-GG/FS.GG.SDD#101"
+                99
+                "merge-sha"
+                (DateTimeOffset.Parse("2026-08-22T17:00:00Z"))
+                "freshness"
+                "action"
+                facts
+            |> Result.defaultWith (String.concat "; " >> failwith)
+        let comments =
+            JsonSerializer.Serialize [| {| body = Delivery.encodeCompletionReceipt receipt |} |]
+        let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None comments
+
+        let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+        if code <> 0 then failwithf "completion projection failed (exit %d): %s\n%s\n%A" code err out world.Log
+        Assert.Equal("", err)
+        let row = parsedArray out |> List.exactlyOne
+        Assert.Equal("COMPLETION-PROJECTION-LAG", row.GetProperty("rule").GetString())
+        Assert.Equal("Done", row.GetProperty("value").GetString())
+        Assert.Equal("written", row.GetProperty("outcome").GetString())
+        let close = world.Log |> List.findIndex (fun entry -> entry.Contains "issue-patch")
+        let statusWrite = world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+        Assert.True(close < statusWrite, $"issue closure did not precede Status=Done: %A{world.Log}")
+
+        let secondCode, secondOut, secondErr =
+            runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+        if secondCode <> 0 then failwithf "second typed completion projection failed (exit %d): %s\n%s\n%A" secondCode secondErr secondOut world.Log
+        Assert.Equal("", secondErr)
+        Assert.Empty(parsedArray secondOut)
+        Assert.Equal(1, world.Count "issue-patch")
+        Assert.Equal(1, world.Count "item-edit")
+
+    [<Fact>]
+    let ``malformed typed completion evidence is visible in health and never corrected`` () =
+        let comments =
+            JsonSerializer.Serialize
+                [| {| body = Delivery.CompletionReceiptMarker + Environment.NewLine + "{}" |} |]
+        let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None comments
+        let code, out, err, report = runReconcileWithHealthReport world
+
+        Assert.Equal(0, code)
+        Assert.Empty(parsedArray out)
+        Assert.Contains("invalid delivery completion evidence", err)
+        Assert.False(world.Logged "updateProjectV2ItemFieldValue", $"invalid evidence reached a mutation: %A{world.Log}")
+
+        use document = JsonDocument.Parse report
+        let subjects = document.RootElement.GetProperty("subjects").EnumerateArray() |> List.ofSeq
+        Assert.Single subjects |> ignore
+        Assert.StartsWith(
+            "withheld: invalid delivery completion evidence:",
+            subjects.Head.GetProperty("intended").GetString())
+        Assert.False(subjects.Head.GetProperty("readComplete").GetBoolean())
 
     /// The four environment variables `Identity.resolve` consults, cleared and restored. Clearing ALL of
     /// them is what makes "no worker id resolves" a property of the TEST rather than of whoever's machine

@@ -277,7 +277,7 @@ BOARD_WRITES="add adopt child claim comment done flush heartbeat intake op-lock 
 # that reasoning, and `next` cannot be argument-aware at all — its write is gated on board state, not on a
 # flag. Take the refusal. If a permitted stale dry run is ever wanted, the honest way is for the engine to
 # declare per-invocation write-ness, not for this shim to re-implement the parser.
-BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile"
+BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile self-host"
 
 # READS — permitted (with a warning) on a stale engine, because a stale read misinforms ONE worker where a
 # stale write corrupts what the fleet shares. This set exists so the partition is total: it is the half that
@@ -307,6 +307,37 @@ BOARD_WRITES_CONDITIONAL="delivery delivery-route graphql next reap reconcile"
 # file and refuses any that is not a plain literal, so a `$…`/`$(…)`/continuation spelling would red §3b
 # rather than be evaluated. Long, therefore, on purpose.
 BOARD_READS="batch board body-edits bootstrap budget command-contract cycle decide diff-audit driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap packet predicate ready scan verify-paths who whoami"
+
+# Candidate selection is a trust transition only when it can mutate shared state. Keep the classification
+# beside the stale-engine partition so the self-host gate and stale guard cannot disagree about a new verb.
+coord_verb_may_write() { # $1 = verb, $2 = first argument
+  if [ "$1" = self-host ] && { [ "${2:-}" = verify ] || [ "${2:-}" = replay ]; }; then return 1; fi
+  case " $BOARD_WRITES $BOARD_WRITES_CONDITIONAL " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Verify explicit candidate bytes with a DISTINCT stable engine before the candidate sees a write argv.
+# The verifier performs no remote IO; a missing receipt/verifier or any disagreement is a hard refusal.
+self_host_candidate_guard() { # $1 = candidate binary, $2 = verb, $3 = candidate checkout, $4 = first argument
+  local candidate="$1" verb="$2" candidate_top="${3:-}" first_arg="${4:-}" stable receipt
+  coord_verb_may_write "$verb" "$first_arg" || return 0
+  receipt="${FSGG_SELF_HOST_RECEIPT:-}"
+  stable="${FSGG_COORD_STABLE_ENGINE_BIN:-}"
+  [ -n "$receipt" ] || die "REFUSED — explicit candidate engine '$candidate' may write through '$verb', but FSGG_SELF_HOST_RECEIPT is not set."
+  [ -f "$receipt" ] || die "REFUSED — self-host receipt does not exist: $receipt"
+  [ -n "$stable" ] || die "REFUSED — FSGG_COORD_STABLE_ENGINE_BIN must name the shared stable verifier for a candidate write."
+  [ -x "$stable" ] || die "REFUSED — stable self-host verifier is not executable: $stable"
+  [ "$stable" != "$candidate" ] || die "REFUSED — the candidate engine cannot verify its own bootstrap receipt; name a distinct stable engine."
+  if [ -n "$candidate_top" ]; then
+    "$stable" self-host verify "$receipt" "$candidate" "$candidate_top" >/dev/null \
+      || die "REFUSED — the stable engine rejected the self-host bootstrap receipt, candidate bytes, version, or Git heads."
+  else
+    "$stable" self-host verify "$receipt" "$candidate" >/dev/null \
+      || die "REFUSED — the stable engine rejected the self-host bootstrap receipt, candidate bytes, or version."
+  fi
+}
 
 # STAT THE .dll, NOT THE APPHOST. `fsgg-coord-engine` is the .NET apphost — a fixed ~78 KB native stub,
 # BYTE-IDENTICAL across every build of every commit. The IL, which is the thing that goes stale, is in
@@ -978,6 +1009,12 @@ stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first a
     echo "fsgg-coord: WARNING — the engine is STALE, so it need not behave as the code you are reading does." >&2
     printf '%s\n' "$detail" >&2
     echo "            Board writes are refused until you do." >&2
+    return 0
+  fi
+
+  if [ "$verb" = "self-host" ] && { [ "${4:-}" = "verify" ] || [ "${4:-}" = "replay" ]; }; then
+    echo "fsgg-coord: WARNING — the engine is STALE, so its stable self-host verifier may not match the code you are reading." >&2
+    printf '%s\n' "$detail" >&2
     return 0
   fi
 

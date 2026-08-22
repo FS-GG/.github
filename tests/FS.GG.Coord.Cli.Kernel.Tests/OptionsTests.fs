@@ -564,6 +564,12 @@ module OptionsTests =
         Assert.Equal(None, o.Partial)
 
     [<Fact>]
+    let ``delivery accepts flip so typed completion can perform the terminal roll-up`` () =
+        let o = parse [ "delivery"; "FS.GG.SDD#62"; "--pr"; "63"; "--flip"; "--apply" ] |> ok
+        Assert.True(o.Flip)
+        Assert.True(o.Apply)
+
+    [<Fact>]
     let ``#614 --partial with no value is rejected — a partial fix must SAY why`` () =
         let e = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial" ] |> rejected
         Assert.Contains("--partial", e)
@@ -866,6 +872,7 @@ module OptionsTests =
           // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
           // the five (`reap`, `overlap`, `room open`, `followup`, `flush`) already pinned `Text` by hand.
           "whoami", Text
+          "self-host", Text
           "next", Text
           "reap", Text
           "landable", Text

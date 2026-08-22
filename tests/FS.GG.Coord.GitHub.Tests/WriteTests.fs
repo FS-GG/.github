@@ -2000,6 +2000,247 @@ let ``a follow-up disposition is a durable issue comment, not a worker mailbox m
     | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
     | Error e -> failwith $"the disposition must be recorded on the owed issue — got %A{e}"
 
+[<Fact>]
+let ``delivery completion receipt appends once and refuses contradictory authority`` () =
+    let completionFacts: FS.GG.Coord.Delivery.CompletionFacts =
+        { HeadSha = "head-a"
+          Merged = true
+          MergeReachable = true
+          IssueClosed = true
+          BoardDone = false
+          ClaimReleased = false
+          PendingWrites = 0
+          CleanupEligible = false
+          ObligationsDeclared = true
+          Obligations = [] }
+    let mint mergeSha completedAt =
+        FS.GG.Coord.Delivery.createCompletionReceipt
+            aRef.Canonical
+            99
+            mergeSha
+            completedAt
+            "freshness"
+            "action"
+            completionFacts
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let first = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:00:00Z"))
+    let retry = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:01:00Z"))
+    let contradiction = mint "merge-b" (System.DateTimeOffset.Parse("2026-08-22T15:02:00Z"))
+    let mutable stored: string option = None
+    let mutable posts = 0
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "GET" ->
+                match stored with
+                | None -> ok "[]"
+                | Some body -> ok (comments [ markerWithExactBody 950 body ])
+            | "POST" ->
+                posts <- posts + 1
+                match request.Body with
+                | Json payload ->
+                    use document = System.Text.Json.JsonDocument.Parse payload
+                    stored <- Some(document.RootElement.GetProperty("body").GetString())
+                | _ -> failwith "completion receipt POST carried no JSON body"
+                ok "{\"id\":950}"
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), deliveryCompletionReceipt transport aRef first)
+    Assert.Equal(Ok (), deliveryCompletionReceipt transport aRef retry)
+    Assert.Equal(1, posts)
+    match deliveryCompletionReceipt transport aRef contradiction with
+    | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
+    | other -> failwithf "expected contradictory receipt refusal, got %A" other
+    Assert.Equal(1, posts)
+
+[<Fact>]
+let ``completion correction receipt appends once and refuses a changed safe destination`` () =
+    let mint destination observedAt =
+        FS.GG.Coord.Delivery.createCompletionCorrectionReceipt aRef.Canonical destination observedAt
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let first = mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
+    let retry = mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:01:00Z"))
+    let contradiction = mint BoardStatus.Blocked (System.DateTimeOffset.Parse("2026-08-22T16:02:00Z"))
+    let mutable stored: string option = None
+    let mutable posts = 0
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "GET" ->
+                match stored with
+                | None -> ok "[]"
+                | Some body -> ok (comments [ markerWithExactBody 951 body ])
+            | "POST" ->
+                posts <- posts + 1
+                match request.Body with
+                | Json payload ->
+                    use document = System.Text.Json.JsonDocument.Parse payload
+                    stored <- Some(document.RootElement.GetProperty("body").GetString())
+                | _ -> failwith "correction receipt POST carried no JSON body"
+                ok "{\"id\":951}"
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef first)
+    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef retry)
+    Assert.Equal(1, posts)
+    match completionCorrectionReceipt transport aRef contradiction with
+    | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
+    | other -> failwithf "expected contradictory correction refusal, got %A" other
+    Assert.Equal(1, posts)
+
+[<Fact>]
+let ``legacy done evidence can be corrected but cannot block typed migration`` () =
+    let receipt =
+        FS.GG.Coord.Delivery.createCompletionCorrectionReceipt
+            aRef.Canonical
+            BoardStatus.InReview
+            (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let legacy = "<!-- fsgg:done-receipt v=1 -->\nverified"
+    let mutable correction: string option = None
+    let mutable posts = 0
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "GET" ->
+                let bodies =
+                    match correction with
+                    | None -> [ markerWithExactBody 950 legacy ]
+                    | Some body -> [ markerWithExactBody 950 legacy; markerWithExactBody 951 body ]
+                ok (comments bodies)
+            | "POST" ->
+                posts <- posts + 1
+                match request.Body with
+                | Json payload ->
+                    use document = System.Text.Json.JsonDocument.Parse payload
+                    correction <- Some(document.RootElement.GetProperty("body").GetString())
+                | _ -> failwith "correction receipt POST carried no JSON body"
+                ok "{\"id\":951}"
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef receipt)
+    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef receipt)
+    Assert.Equal(1, posts)
+
+[<Fact>]
+let ``self-host bootstrap authority appends once and refuses contradiction`` () =
+    let evidence: FS.GG.Coord.SelfHost.Evidence =
+        { Build = "build"; Unit = "unit"; FocusedProductionRoute = "route"; Provenance = "provenance"; Inversion = "inversion" }
+    let acceptance: FS.GG.Coord.SelfHost.HostAcceptance =
+        { Actor = "host/ron000"; AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z") }
+    let mint action =
+        FS.GG.Coord.SelfHost.createReceipt "base" "head" (String.replicate 64 "a") "version" "refusal" (String.replicate 64 "c")
+            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase evidence "decision" action acceptance
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let receipt = mint "action"
+    let mutable stored: string option = None
+    let mutable posts = 0
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "GET" ->
+                match stored with None -> ok "[]" | Some body -> ok (comments [ markerWithExactBody 960 body ])
+            | "POST" ->
+                posts <- posts + 1
+                match request.Body with
+                | Json payload ->
+                    use document = System.Text.Json.JsonDocument.Parse payload
+                    stored <- Some(document.RootElement.GetProperty("body").GetString())
+                | _ -> failwith "self-host receipt POST carried no JSON body"
+                ok "{\"id\":960}"
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), selfHostBootstrapReceipt transport aRef receipt)
+    Assert.Equal(Ok (), selfHostBootstrapReceipt transport aRef receipt)
+    Assert.Equal(1, posts)
+    match selfHostBootstrapReceipt transport aRef (mint "different-action") with
+    | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
+    | other -> failwithf "expected contradictory self-host refusal, got %A" other
+
+[<Fact>]
+let ``self-host replay appends once only after matching durable bootstrap`` () =
+    let evidence: FS.GG.Coord.SelfHost.Evidence =
+        { Build = "build"; Unit = "unit"; FocusedProductionRoute = "route"; Provenance = "provenance"; Inversion = "inversion" }
+    let bootstrap =
+        FS.GG.Coord.SelfHost.createReceipt "base" "head" (String.replicate 64 "a") "version" "refusal" (String.replicate 64 "c")
+            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase evidence "decision" "action"
+            { Actor = "host/ron000"; AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z") }
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let replay =
+        FS.GG.Coord.SelfHost.createReplayReceipt bootstrap bootstrap.SnapshotSha256
+            { DecisionKey = "decision"; ActionKey = "action" }
+            (System.DateTimeOffset.Parse("2026-08-22T19:00:00Z"))
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let mutable bodies = [ FS.GG.Coord.SelfHost.encodeReceipt bootstrap ]
+    let mutable posts = 0
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "GET" -> ok (comments (bodies |> List.mapi (fun index body -> markerWithExactBody (970 + index) body)))
+            | "POST" ->
+                posts <- posts + 1
+                match request.Body with
+                | Json payload ->
+                    use document = System.Text.Json.JsonDocument.Parse payload
+                    bodies <- bodies @ [ document.RootElement.GetProperty("body").GetString() ]
+                | _ -> failwith "self-host replay POST carried no JSON body"
+                ok "{\"id\":971}"
+            | method -> failwithf "unexpected method %s" method)
+    Assert.Equal(Ok (), selfHostReplayReceipt transport aRef replay)
+    Assert.Equal(Ok (), selfHostReplayReceipt transport aRef replay)
+    Assert.Equal(1, posts)
+
+    let withoutBootstrap = Fake.Recorder(fun request -> if request.Method = "GET" then ok "[]" else failwith "unexpected write")
+    match selfHostReplayReceipt withoutBootstrap aRef replay with
+    | Error(Malformed(_, reason)) -> Assert.Contains("without durable bootstrap", reason)
+    | other -> failwithf "expected missing-bootstrap refusal, got %A" other
+
+[<Fact>]
+let ``reopenIssue requires fresh OPEN state and recovers a lost PATCH response`` () =
+    let mutable state = "closed"
+    let mutable loseResponse = false
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "PATCH" ->
+                state <- "open"
+                if loseResponse then Error(Transport "response lost") else ok "{}"
+            | "GET" -> ok ($"{{\"state\":\"%s{state}\"}}")
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), reopenIssue transport aRef)
+    state <- "closed"
+    loseResponse <- true
+    Assert.Equal(Ok (), reopenIssue transport aRef)
+
+    let unverified =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "PATCH" -> ok "{}"
+            | "GET" -> ok "{\"state\":\"closed\"}"
+            | method -> failwithf "unexpected method %s" method)
+    match reopenIssue unverified aRef with
+    | Error(Malformed(_, reason)) -> Assert.Contains("still CLOSED", reason)
+    | other -> failwithf "expected fresh-state refusal, got %A" other
+
+[<Fact>]
+let ``closeIssueCompleted requires fresh CLOSED state`` () =
+    let mutable state = "open"
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method with
+            | "PATCH" ->
+                match request.Body with
+                | Json payload ->
+                    Assert.Contains("\"state_reason\":\"completed\"", payload)
+                    state <- "closed"
+                | _ -> failwith "issue close carried no JSON body"
+                ok "{}"
+            | "GET" -> ok ($"{{\"state\":\"%s{state}\"}}")
+            | method -> failwithf "unexpected method %s" method)
+
+    Assert.Equal(Ok (), closeIssueCompleted transport aRef)
+
 // ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
 
 let private staleMarker =

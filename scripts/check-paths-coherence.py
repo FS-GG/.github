@@ -818,6 +818,28 @@ def main(argv: list[str]) -> int:
                 f"and a silent skip is how a coherence gate fails open (#266). Refusing to guess."
             )
 
+        # An unfiltered trigger facing a filtered sibling is a deliberate divergence only when a
+        # signed marker says why. This is distinct from a genuinely one-sided workflow: both events
+        # exist, but one must report for every change while the other remains path-sensitive.
+        reason = allow_divergence(text, where)
+        if ("pull_request" in on and "push" in on
+                and ((pr_raw is None) != (push_raw is None)) and reason is not None):
+            pairs_seen += 1
+            if reason == UNSIGNED:
+                findings.append(
+                    f"{where}: carries `# paths-coherence: allow-divergence` with NO reason. "
+                    "An unfiltered/filtered trigger split must record why it is intentional."
+                )
+            elif reason:
+                allowed += 1
+                print(f"  allow {where:<43} one trigger is intentionally unfiltered: {reason}")
+            else:
+                findings.append(
+                    f"{where}: one of `pull_request`/`push` is unfiltered while the other declares "
+                    "`paths:`. Sign the intentional split with `# paths-coherence: allow-divergence — <reason>`."
+                )
+            continue
+
         # One-sided is a deliberate shape (`build-config-propagate.yml` is push-only,
         # `reusable-job-id-coherence.yml` is PR-only) and is not this gate's business.
         if pr_raw is None or push_raw is None:
@@ -876,8 +898,8 @@ def main(argv: list[str]) -> int:
     # printing green about nothing.
     if pairs_seen == 0:
         raise GateError(
-            "audited every workflow and found NO workflow declaring both `pull_request.paths` and "
-            "`push.paths`. This repo HAS them, so the trigger reader is broken — examining nothing "
+            "audited every workflow and found NO comparable or signed-divergent `pull_request`/`push` "
+            "trigger pair. This repo HAS them, so the trigger reader is broken — examining nothing "
             "is a failure to audit, not a clean audit (#266)."
         )
 

@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="3cfc38f4-9a4d-4177-8559-45287a20af51" name="@c2756152e150 2026-08-22 19:02:57" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-22T19:02:57.5496397+02:00" queuing="2026-08-22T19:02:57.5496397+02:00" start="2026-08-22T19:02:57.1171329+02:00" finish="2026-08-22T19:02:57.5534337+02:00" />
+  <TestSettings name="default" id="f159e598-101d-4fc4-bb56-fe287b6d11d7">
+    <Deployment runDeploymentRoot="_c2756152e150_2026-08-22_19_02_57" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1d704567-2790-4ffe-b874-07738c054d1b" testId="fe6dc15f-42ed-8cfd-dc58-0971b27814eb" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.production producers agree with every command union case exactly once" computerName="c2756152e150" duration="00:00:00.0014055" startTime="2026-08-22T19:02:57.4848577+02:00" endTime="2026-08-22T19:02:57.4856190+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1d704567-2790-4ffe-b874-07738c054d1b" />
+    <UnitTestResult executionId="83d579e2-3cb6-4e31-a9b6-587dfe4eb7d8" testId="cdd9de5b-6bcb-fb4e-463a-1082b97883fd" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.production inventory rejects a parsed command with no registered producer" computerName="c2756152e150" duration="00:00:00.0049375" startTime="2026-08-22T19:02:57.4847823+02:00" endTime="2026-08-22T19:02:57.4847976+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="83d579e2-3cb6-4e31-a9b6-587dfe4eb7d8" />
+    <UnitTestResult executionId="1ffc30f5-5154-40e0-9ab1-0270c1788dab" testId="1e6fc537-6357-730c-4d0f-30e84116e65a" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.BoardOps registers each owned command exactly once" computerName="c2756152e150" duration="00:00:00.0000987" startTime="2026-08-22T19:02:57.4860670+02:00" endTime="2026-08-22T19:02:57.4861354+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1ffc30f5-5154-40e0-9ab1-0270c1788dab" />
+    <UnitTestResult executionId="16a871cc-76ab-4cd9-8a34-90e22956d7cc" testId="d74e683b-2d93-f8db-3df4-868914ae0cb5" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects an unexpected handler" computerName="c2756152e150" duration="00:00:00.0497686" startTime="2026-08-22T19:02:57.4256893+02:00" endTime="2026-08-22T19:02:57.4785516+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="16a871cc-76ab-4cd9-8a34-90e22956d7cc" />
+    <UnitTestResult executionId="1189502e-a15a-4559-8e1a-ed331908bf52" testId="e0261f3b-f31f-98ed-7399-306364d15d22" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects a duplicate handler" computerName="c2756152e150" duration="00:00:00.0007318" startTime="2026-08-22T19:02:57.4844589+02:00" endTime="2026-08-22T19:02:57.4844828+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1189502e-a15a-4559-8e1a-ed331908bf52" />
+    <UnitTestResult executionId="d50d9d2e-8694-4e3a-b58f-9eb3c0aea2d9" testId="049de469-81d3-6d27-5389-8a0d1352d989" testName="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects a missing handler" computerName="c2756152e150" duration="00:00:00.0003761" startTime="2026-08-22T19:02:57.4856707+02:00" endTime="2026-08-22T19:02:57.4860180+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d50d9d2e-8694-4e3a-b58f-9eb3c0aea2d9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects a missing handler" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="049de469-81d3-6d27-5389-8a0d1352d989">
+      <Execution id="d50d9d2e-8694-4e3a-b58f-9eb3c0aea2d9" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="registration validation rejects a missing handler" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects an unexpected handler" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="d74e683b-2d93-f8db-3df4-868914ae0cb5">
+      <Execution id="16a871cc-76ab-4cd9-8a34-90e22956d7cc" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="registration validation rejects an unexpected handler" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.production inventory rejects a parsed command with no registered producer" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="cdd9de5b-6bcb-fb4e-463a-1082b97883fd">
+      <Execution id="83d579e2-3cb6-4e31-a9b6-587dfe4eb7d8" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="production inventory rejects a parsed command with no registered producer" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.BoardOps registers each owned command exactly once" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="1e6fc537-6357-730c-4d0f-30e84116e65a">
+      <Execution id="1ffc30f5-5154-40e0-9ab1-0270c1788dab" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="BoardOps registers each owned command exactly once" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.production producers agree with every command union case exactly once" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="fe6dc15f-42ed-8cfd-dc58-0971b27814eb">
+      <Execution id="1d704567-2790-4ffe-b874-07738c054d1b" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="production producers agree with every command union case exactly once" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests.registration validation rejects a duplicate handler" storage="/home/developer/projects/.github/tests/fs.gg.coord.cli.boardops.tests/bin/release/net10.0/fs.gg.coord.cli.boardops.tests.dll" id="e0261f3b-f31f-98ed-7399-306364d15d22">
+      <Execution id="1189502e-a15a-4559-8e1a-ed331908bf52" />
+      <TestMethod codeBase="/home/developer/projects/.github/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.BoardOps.Tests.HandlerRegistrationTests" name="registration validation rejects a duplicate handler" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="fe6dc15f-42ed-8cfd-dc58-0971b27814eb" executionId="1d704567-2790-4ffe-b874-07738c054d1b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cdd9de5b-6bcb-fb4e-463a-1082b97883fd" executionId="83d579e2-3cb6-4e31-a9b6-587dfe4eb7d8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e6fc537-6357-730c-4d0f-30e84116e65a" executionId="1ffc30f5-5154-40e0-9ab1-0270c1788dab" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d74e683b-2d93-f8db-3df4-868914ae0cb5" executionId="16a871cc-76ab-4cd9-8a34-90e22956d7cc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e0261f3b-f31f-98ed-7399-306364d15d22" executionId="1189502e-a15a-4559-8e1a-ed331908bf52" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="049de469-81d3-6d27-5389-8a0d1352d989" executionId="d50d9d2e-8694-4e3a-b58f-9eb3c0aea2d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.10)
+[xUnit.net 00:00:00.06]   Discovering: FS.GG.Coord.Cli.BoardOps.Tests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coord.Cli.BoardOps.Tests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coord.Cli.BoardOps.Tests
+[xUnit.net 00:00:00.18]   Finished:    FS.GG.Coord.Cli.BoardOps.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

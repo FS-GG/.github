@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "coordination-change-risk-mitigation",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 39,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 39
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

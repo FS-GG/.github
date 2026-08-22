@@ -5,6 +5,7 @@ module Options =
     type Command =
         | Decide
         | DeliveryCmd
+        | SelfHostCmd
         /// .github#2175: inspect the resumable review/repair protocol (`FS.GG.Coord.Review`) —
         /// live against `<ref> --pr N`, or from a supplied `--snapshot`; the typed surface `pnext-item`
         /// and the #2135 event projection consume.
@@ -94,6 +95,22 @@ module Options =
         /// refused. This is the bucket that carried the #1523 defect: 20 verbs advertised `--json` and
         /// printed prose regardless.
         | TextOnly
+
+    type HandlerOwner =
+        | KernelProgram
+        | BoardOps
+
+    type MutationKind =
+        | ReadOnly
+        | WritesRemoteState
+
+    type CommandDescriptor =
+        { Command: Command
+          Verb: string
+          Render: RenderSupport
+          Mutation: MutationKind
+          HandlerOwner: HandlerOwner
+          Documented: bool }
 
     type Options =
         { Command: Command
@@ -390,7 +407,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              head you MEAN to gate, for a caller that just force-pushed (the
                                              PR object lags). Neither can green; both are pending (#737)
 
-  delivery <ref> [--pr N] [--apply] [--json|--text]
+  delivery <ref> [--pr N] [--flip] [--apply] [--json|--text]
                                              re-read one claimed item's delivery facts and emit its sole
                                              freshness-bound action. WRITES ON PLAIN `--pr N` TOO
                                              (.github#2488), not only under `--apply`: whenever the caller
@@ -398,8 +415,19 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              merged, this PATCHes the PR body's `fsgg:pr-authorization`
                                              marker current — a runtime-state-gated write no flag turns
                                              off, distinct from --apply's SEPARATE, larger effect
-                                             (guarded landing: a real merge or the `Complete` transition)
+                                             (guarded landing: a real merge or the `Complete` transition).
+                                             --flip performs the terminal parent roll-up after typed receipt
+                                             creation and the issue/board completion projections
   delivery --snapshot FILE [--json|--text]   the pure, IO-free form — see DECISION above
+  self-host verify <receipt> <candidate> [--text]
+                                             stable shared verifier for a candidate-engine receipt;
+  self-host mint <proposal> <candidate> <snapshot> <output>
+                                             bind candidate bytes/version, snapshot, evidence and host acceptance
+  self-host replay <receipt> <snapshot> <decision> <action>
+                                             post-merge shared replay agreement (read-only, text)
+  self-host record <ref> <receipt>            append verified authority to its accountable item thread
+  self-host replay-record <ref> <receipt> <snapshot> <decision> <action>
+                                             append shared replay agreement to the same item thread
 
   claim  <ref> [--worker W] [--force]        take the lock; --json emits a fresh marker/Status receipt.
          [--refuse-overlap] [--json]         --force STEALS: it takes an item another worker holds RIGHT
@@ -483,8 +511,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              executor stalls one receiver's queue, and a grant held across
                                              an item's lifetime would serialise the whole fleet on one
                                              receiver. Refuses unless we are the live winner
-  done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up (add
-               [--partial "why"]             --partial "why" if this child does NOT complete its parent, #614)
+  done   <ref> [--flip] [--pr N]             replay a matching typed completion receipt; it cannot mint
+               [--partial "why"]             authority. --flip rolls the parent up (add --partial "why" if
+                                             this child does NOT complete its parent, #614)
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
                [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
 
@@ -565,139 +594,78 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
-    /// Which stdout projections each command HAS — see `RenderSupport`. Derived by tracing every
-    /// `opts.Render` read in `Client.fs`/`Program.fs` to the handler that reaches it, exactly as `scopeOf`
-    /// below was derived, and NOT from the usage prose.
-    ///
-    /// The `Both` default of each row is the mode that command renders in TODAY with no flag. It is not a
-    /// preference and it is not adjustable in passing: `#1517` shipped `widen` honouring `opts.Render`
-    /// while its parse arm still inherited the module default of `Json`, which would have flipped the BARE
-    /// `widen` — the form every recipe runs — from its human receipt to a JSON object. Changing a `Both`
-    /// default here changes what an existing caller's un-flagged invocation prints.
-    let renderSupport (c: Command) : RenderSupport =
-        match c with
-        // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
-        | Decide -> Both Json // Program.fs `decide`
-        | DeliveryCmd -> Both Json // Program.fs `delivery`
-        | ReviewCmd -> Both Json // Program.fs `review` (ReviewApplication)
-        | DriverCmd -> Both Json // Program.fs `driver`
-        | CycleCmd -> Both Json // Program.fs `CycleLedgerApplication`
-        | LanesView -> Both Json // Program.fs `lanes`
-        | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
-        | BatchCmd -> Both Json // Client.fs `batch`
-        | Ready -> Both Json // Client.fs `ready`
-        // Client.fs `reconcile` — and `--apply --json` is a REAL combination (.github#1541), which is the
-        // statement this row now has to carry, because the `parse` funnel used to contradict it.
-        //
-        // #1429 (897b83d, a skills refactor whose subject said nothing about the options surface) added a
-        // `validate` arm refusing `--apply` with `--json` on this verb. That was a WORKAROUND for a
-        // handler defect, never a contract, and the thing it removed was the machine projection of the
-        // org's one MUTATING reconciliation verb: a driver applying a reconciliation could not learn which
-        // writes landed and which QUEUED against an exhausted budget except by scraping `applied`/`queued`
-        // prose off stdout. A queued write is not lost — `flush` replays it — but nothing replays it ON ITS
-        // OWN, so a caller that never learns the write deferred is a caller that never runs `flush`. The
-        // refusal's own remedy ("inspect the JSON dry run, then apply in human-readable mode") is two
-        // passes over a board that can change between them, and the second is the unreadable one.
-        //
-        // WHAT MADE IT LIFTABLE. Until PR #1537 the `--apply` phase printed its per-write outcome to
-        // stdout PAST a document that had already ended, so opening the gate would have shipped an
-        // unparseable stream the moment it opened. #1537 moved the outcome INTO the document
-        // (`field`/`value`/`outcome`/`error`), put the deferred-write remedy on stderr, and stopped the
-        // `reap` child's stdout leaking in. The handler was correct first; only the gate remained.
-        //
-        // AND THIS ROW IS WHY THERE WAS NOTHING ELSE TO CHANGE. `Both` puts `reconcile` in `jsonReaders`,
-        // so `--json` has been in its scoped flag set — and therefore in the emitted `command-contract`
-        // row and the `--help` usage line (`reconcile [--repo NAME] [--apply] [--json]`) — the whole time
-        // the parser was refusing it. `Text` stays the bare default; nothing about `--apply` changes it.
-        | Reconcile -> Both Text
-        // `who`, `budget` and `inbox` share one polarity, and it is the mirror of `ready`/`batch`: the
-        // human table is what an operator or a worker reads, and `--json` opts into the machine contract
-        // (case 20/25's rows, `pendingBoardWrites` — #862).
-        | Who -> Both Text
-        | Budget -> Both Text
-        | Claim -> Both Text
-        // `adopt` produces no stdout of its own — it delegates to `claim`, passing `opts` through, so
-        // `claim`'s receipt is its receipt.
-        //
-        // `take` delegated the same way and INHERITED the row rather than earning it: the one arm it owns,
-        // the empty queue, printed prose regardless of `Render`, so `take --json` was honoured only when it
-        // actually claimed something. `.github#1525` closed that in `Client.fs` — the empty arm now emits
-        // its own `kind:"none"` receipt — so the row is true of BOTH arms rather than of one, and this
-        // comment records a caveat that was real and is now discharged, not one still standing.
-        | Adopt -> Both Text
-        | Take -> Both Text
-        // `op-lock acquire` EXISTS to be read by a machine: its stdout is the broker's input tuple —
-        // `grant`, `opkey`, `item`, `generation`, `receiver`, `op` — and the caller that consumes it is a
-        // shell composing `gh workflow run fsgg-dispatch-broker.yml -f grant=… -f opkey=…`. A text
-        // projection is kept as the default for the operator reading it by hand, which is the same polarity
-        // `who` and `budget` chose. `release` is `Both` for symmetry, and because a caller that scripted the
-        // acquire will script the release from the same harness.
-        | OpLockAcquire -> Both Text
-        | OpLockRelease -> Both Text
-        | Widen -> Both Text // both reach the shared `updateTouchSet` (#1517)
-        | SetPaths -> Both Text
-        | Inbox -> Both Text
-        | Predicate -> Both Text
-        | DiffAudit -> JsonOnly
-        | LintCmd -> Both Text
-        // A critic reading this to answer `.github#2456`'s body-edit provenance question wants the
-        // per-edit facts (`editedAt`, `editor`) machine-readable — same polarity as `who`/`budget`: a
-        // human table by default, `--json` opts into the structured document (.github#2477).
-        | BodyEdits -> Both Text
-        | GraphQlOps -> JsonOnly
+    // Phase-1 typed authority. Stable metadata is authored once here; parser arms remain explicit
+    // because their arguments and validation differ, while behavior tests parse every descriptor verb.
+    let commandCatalogue: CommandDescriptor list =
+        let row command verb render mutation owner =
+            { Command = command
+              Verb = verb
+              Render = render
+              Mutation = mutation
+              HandlerOwner = owner
+              Documented = true }
 
-        // ---- JSON ONLY: stdout is a machine document whatever the flag says ----------------------------
-        // `scan` DOES match on `opts.Render` (`Program.fs`), and both arms print the same document —
-        // deliberately, because the snapshot IS the contract and `scan | decide` must keep working. So the
-        // match decides nothing on stdout, and `--text` was a no-op rather than a rendering: there is no
-        // human projection of a snapshot to ask for. The PIPELINE is unaffected either way (`scan` bare and
-        // `scan --text` printed identical bytes); what is refused is only the flag that never did anything.
-        //
-        // The now-unreachable `Text` arm and its comment live in `Program.fs`, which is outside this item's
-        // touch-set. Filed as a follow-up rather than reached into.
-        | Scan -> JsonOnly
-        | CommandContractCmd -> JsonOnly
-        | IntakeCmd -> JsonOnly
-        // .github#2737: the success document and the refusal document are both JSON on stdout; the
-        // per-field findings a finder actually reads go to stderr, so there is no text projection.
-        | PacketCmd -> JsonOnly
-        | RouteCmd -> JsonOnly
-        | BoardCmd -> JsonOnly
-        | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
+        [ row Decide "decide" (Both Json) ReadOnly KernelProgram
+          row DeliveryCmd "delivery" (Both Json) WritesRemoteState KernelProgram
+          row SelfHostCmd "self-host" TextOnly WritesRemoteState KernelProgram
+          row ReviewCmd "review" (Both Json) WritesRemoteState KernelProgram
+          row DriverCmd "driver" (Both Json) ReadOnly KernelProgram
+          row CycleCmd "cycle" (Both Json) ReadOnly KernelProgram
+          row Scan "scan" JsonOnly ReadOnly KernelProgram
+          row LanesView "lanes" (Both Json) ReadOnly KernelProgram
+          row Facts "facts" (Both Json) ReadOnly KernelProgram
+          row CommandContractCmd "command-contract" JsonOnly ReadOnly KernelProgram
+          row IntakeCmd "intake" JsonOnly WritesRemoteState BoardOps
+          row PacketCmd "packet" JsonOnly ReadOnly KernelProgram
+          row RouteCmd "delivery-route" JsonOnly WritesRemoteState KernelProgram
+          row WhoAmI "whoami" TextOnly ReadOnly KernelProgram
+          row Budget "budget" (Both Text) ReadOnly KernelProgram
+          row Next "next" TextOnly WritesRemoteState KernelProgram
+          row BatchCmd "batch" (Both Json) ReadOnly KernelProgram
+          row Ready "ready" (Both Json) ReadOnly KernelProgram
+          row Reconcile "reconcile" (Both Text) WritesRemoteState KernelProgram
+          row Who "who" (Both Text) ReadOnly KernelProgram
+          row Reap "reap" TextOnly WritesRemoteState KernelProgram
+          row Claim "claim" (Both Text) WritesRemoteState KernelProgram
+          row Adopt "adopt" (Both Text) WritesRemoteState KernelProgram
+          row Landable "landable" TextOnly ReadOnly KernelProgram
+          row Take "take" (Both Text) WritesRemoteState KernelProgram
+          row Release "release" TextOnly WritesRemoteState KernelProgram
+          row Heartbeat "heartbeat" TextOnly WritesRemoteState KernelProgram
+          row SetField "set-field" TextOnly WritesRemoteState BoardOps
+          row Child "child" TextOnly WritesRemoteState BoardOps
+          row Widen "widen" (Both Text) WritesRemoteState KernelProgram
+          row SetPaths "set-paths" (Both Text) WritesRemoteState KernelProgram
+          row Overlap "overlap" TextOnly ReadOnly KernelProgram
+          row Say "say" TextOnly WritesRemoteState BoardOps
+          row Inbox "inbox" (Both Text) ReadOnly BoardOps
+          row DoneCmd "done" TextOnly WritesRemoteState KernelProgram
+          row VerifyPaths "verify-paths" TextOnly ReadOnly KernelProgram
+          row Bootstrap "bootstrap" TextOnly ReadOnly BoardOps
+          row BoardCmd "board" JsonOnly ReadOnly BoardOps
+          row FieldId "field-id" TextOnly ReadOnly BoardOps
+          row OptionId "option-id" TextOnly ReadOnly BoardOps
+          row ItemId "item-id" TextOnly ReadOnly BoardOps
+          row BodyEdits "body-edits" (Both Text) ReadOnly BoardOps
+          row GraphQlOps "graphql" JsonOnly WritesRemoteState KernelProgram
+          row Add "add" TextOnly WritesRemoteState BoardOps
+          row Flush "flush" TextOnly WritesRemoteState BoardOps
+          row LintCmd "lint" (Both Text) ReadOnly KernelProgram
+          row Issues "issues" JsonOnly ReadOnly BoardOps
+          row Followup "followup" TextOnly ReadOnly KernelProgram
+          row Predicate "predicate" (Both Text) ReadOnly KernelProgram
+          row DiffAudit "diff-audit" JsonOnly ReadOnly KernelProgram
+          row RoomOpen "room open" TextOnly WritesRemoteState BoardOps
+          row CommentCmd "comment" (Both Json) WritesRemoteState BoardOps
+          row OpLockAcquire "op-lock acquire" (Both Text) WritesRemoteState KernelProgram
+          row OpLockRelease "op-lock release" (Both Text) WritesRemoteState KernelProgram
+          row Help "--help" TextOnly ReadOnly KernelProgram
+          row Version "--version" TextOnly ReadOnly KernelProgram ]
 
-        // ---- TEXT ONLY: prose, an id, or one verdict word — there is no machine projection to ask for ---
-        // THIS IS THE #1523 BUCKET. Every row here advertised `--json` on all 40 commands and printed the
-        // same prose with it as without. Two are load-bearing for the fleet and say why refusal beats
-        // "make the handler honour it": `whoami --mint` prints `export FSGG_WORKER=…` for `eval`, and
-        // `done` prints the `FSGG-DONE` stamp every driver greps. A JSON projection nobody consumes, on
-        // either of those, is a fleet outage bought for nothing.
-        | WhoAmI -> TextOnly
-        | Next -> TextOnly
-        // `reap` reports what it WOULD collect; the destructive collect is gated behind `--apply`, so the
-        // bare form is a DRY RUN and the thing an operator reads before deciding is prose.
-        | Reap -> TextOnly
-        | Landable -> TextOnly // one verdict word; the decision is the exit code
-        | Release -> TextOnly
-        | Heartbeat -> TextOnly
-        | SetField -> TextOnly
-        | Child -> TextOnly
-        | Overlap -> TextOnly
-        | Say -> TextOnly
-        | RoomOpen -> TextOnly
-        | CommentCmd -> Both Json
-        | DoneCmd -> TextOnly
-        | VerifyPaths -> TextOnly
-        | Followup -> TextOnly
-        | Bootstrap -> TextOnly
-        | FieldId -> TextOnly // a bare id
-        | OptionId -> TextOnly
-        | ItemId -> TextOnly
-        | Add -> TextOnly
-        // `flush` REPLAYS by default (the opposite polarity to `reap --apply`, see `DryRun`), and what it
-        // prints is a report an operator reads after the `EX_RATE` back-off.
-        | Flush -> TextOnly
-        | Help -> TextOnly
-        | Version -> TextOnly
+    let renderSupport (command: Command) =
+        commandCatalogue
+        |> List.find (fun descriptor -> descriptor.Command = command)
+        |> _.Render
 
     /// The render mode a BARE invocation of a command is left at — derived from the same declaration that
     /// decides whether the flag may be given at all, so the two can no longer disagree.
@@ -865,7 +833,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FTo -> Only [ Say ]
         | FMessage -> Only [ Say ]
         | FEvidence -> Only [ DoneCmd ]
-        | FFlip -> Only [ DoneCmd ]
+        | FFlip -> Only [ DeliveryCmd; DoneCmd ]
         | FPartial -> Only [ DoneCmd ]
         | FPr -> Only [ DeliveryCmd; ReviewCmd; DoneCmd; VerifyPaths ]
         | FIssue -> Only [ VerifyPaths ]
@@ -1054,22 +1022,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// through the same helper and was absent; `room` and `reconcile` were absent; and `bootstrap`, believed
     /// to create the project, is a pair of GraphQL QUERIES that adding would have refused for nothing.
     ///
-    /// TOTAL, WITH NO WILDCARD ARM, AND THAT IS THE STRUCTURAL PART. This project sets
-    /// `TreatWarningsAsErrors`, so FS0025 (incomplete match) is a BUILD ERROR — the same property
-    /// `renderSupport` and `scopeOf` already buy for the renderers and the flag surface. A verb added to the
-    /// `Command` union does not default to `Reads`; it does not compile. A `| _ -> Reads` arm added here
-    /// would silently give that guarantee back, which is the single most damaging edit this file accepts.
+    /// The base read/write fact now comes from the exhaustive `commandCatalogue`. Only the six genuinely
+    /// conditional commands remain here, because their argv/runtime gate is richer than the catalogue's
+    /// conservative `WritesRemoteState`. Catalogue closure makes a new union case without a descriptor red;
+    /// this function then derives `Reads` or `Writes` without another per-command inventory.
     ///
-    /// WHAT IT IS AND IS NOT DERIVED FROM, stated plainly because the honest limit matters more than the
-    /// claim. The GATE — which flag turns a conditional write on — is typed and cross-checked: it is a
-    /// `Flag`, spelled through `scopedFlags`, and `CommandSurfaceTests` asserts `scopeOf` really gives that
-    /// flag to that command. The BASE read/write split is not derivable here at all: it is a property of
-    /// `Client.fs` control flow, `Options.fs` compiles BEFORE `Client.fs` and cannot reference it, and a
-    /// text analysis over-approximates badly (advice strings in `who` and `lint` name `claim`, `reap` and
-    /// `done`). So the rows below are a person's reading of `Client.fs`, held total by the compiler and
-    /// carrying their evidence in the comment beside them. That is strictly better than a bash string with
-    /// nothing comparing it to anything — it is not the same thing as proof, and the follow-on that would
-    /// make it executable (drive every verb at a fake GitHub and fail on any mutating request) is filed.
+    /// Conditional gates stay typed and cross-checked against the accepted flag surface. `GraphQlOps`,
+    /// `DeliveryCmd`, and `Next` depend on subcommand or runtime facts argv alone cannot fully express;
+    /// `Reap`, `Reconcile`, and `Flush` name their explicit flag polarity.
     ///
     /// DELIBERATELY NOT READ AT RUN TIME BY THE SHIM, and the issue that asked for this field said so first.
     /// The engine that would answer "am I stale?" is the stale one; an engine built before this field
@@ -1099,120 +1059,25 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         /// Some invocations mutate it and some do not; the gate says which.
         | WritesIf of WriteGate
 
-    let private writeSurface (c: Command) : WriteSurface =
-        match c with
-        // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
-        | Decide -> Reads
-        // M4 adds `review record`, which posts the next sealed v2 decision. Classified conservatively
-        // like `delivery-route`: the read-only inspect spelling does not make the verb safe on a stale
-        // engine when another argv shape is explicitly an evidence writer.
-        | ReviewCmd -> Writes
-        | DriverCmd -> Reads
-        | CycleCmd -> Reads
-        | LanesView -> Reads
-        | Facts -> Reads
-        | CommandContractCmd -> Reads
-        | IntakeCmd -> Writes // `intake apply` creates/reuses and projects the receipt-bound issue
-        | PacketCmd -> Reads // .github#2737: decides over a local file; no board, no network, no post
-        | RouteCmd -> Writes // `record` appends the validated durable decision receipt
+    let private descriptor command =
+        commandCatalogue |> List.find (fun row -> row.Command = command)
 
-        // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
-        | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
-        | Followup -> Reads // the #1063 queue is a FILE, which is the whole reason it survives EX_RATE
-        | Predicate -> Reads // ADR-0050 oracle: registry + producer manifests off disk
-        | DiffAudit -> Reads // immutable git-object inspection; no board or network write
-
-        // ---- READ THE BOARD — GraphQL/REST QUERIES, plus a per-user cache file -------------------------
-        | Scan -> Reads // POSTs to `graphql`, which is how a GraphQL READ is spelled
-        | BatchCmd -> Reads // `next` uncapped; makes NO chore offer, which is what separates the two
-        | Ready -> Reads
-        | Who -> Reads
-        | Budget -> Reads
-        | Landable -> Reads
-        | Overlap -> Reads
-        | VerifyPaths -> Reads
-        | LintCmd -> Reads
-        | Issues -> Reads
-        | Inbox -> Reads // the cursor it advances is `Cache.putInboxCursor` — per-worker, local
-        | Bootstrap -> Reads // `Board.bootstrap`: two GraphQL queries, then day-cached
-        | BoardCmd -> Reads
-        | FieldId -> Reads
-        | OptionId -> Reads
-        | ItemId -> Reads
-        | BodyEdits -> Reads // one `userContentEdits` GraphQL query, budget-attributed like every other read
+    let private writeSurface (command: Command) : WriteSurface =
+        match command with
         | GraphQlOps -> WritesIf(NotOnArgv "archive-items mutates; every other subcommand is a typed read")
-
-        // ---- WRITE THE BOARD, EVERY INVOCATION ---------------------------------------------------------
-        | Claim -> Writes // POSTs the `fsgg:claim` marker comment and writes Status
-        | Take -> Writes // schedules, then delegates to `claim`
-        | Adopt -> Writes // transfers a claim, also via `claim`
-        | Release -> Writes
-        | Heartbeat -> Writes
-        | Add -> Writes // idempotent — `AlreadyOnBoard` skips the mutation, which is state, not argv
-        | SetField -> Writes
-        | Child -> Writes // idempotent the same way; an existing sub-issue is not POSTed twice
-        | Say -> Writes // no lock required, and every invocation POSTs
-        // Up to FIVE independent writes: board Status, the `--flip` ancestor roll-up (which also CLOSES
-        // issues over REST), the room close, its own marker release (#533) — and the #733 chore offer, the
-        // SECOND `Chores.offer` site after `next`. None of that changes the row; it is why the row is here.
-        | DoneCmd -> Writes
-        | RoomOpen -> Writes // `Writes.createRoom` + a `Rooms: #room` back-reference onto each named item
-        | CommentCmd -> Writes // POSTs or PATCHes one explicit comment, then verifies an authoritative re-read
-        // BOTH WRITE, EVERY INVOCATION, AND NEITHER WRITES THE PROJECT BOARD — which is why the row needs
-        // saying rather than assuming. The subject is an off-board, closed `[op-lock]` issue, so `who` and
-        // `reap` never see it (ADR-0041's own note about the chore lock, on a third subject). But the write
-        // is the same `Writes.claimScoped` POST/DELETE the item CAS makes, against the shared fleet's
-        // GitHub state, so a STALE engine must be refused it exactly as it is refused `claim` — the
-        // property `scripts/fsgg-coord-guards.sh` enforces and `tests/coord-engine-parity/shim.sh` §3b
-        // holds in bijection with this table. `WritesIf` would be wrong in both arms: there is no flag and
-        // no argv shape under which either of these is a read.
-        | OpLockAcquire -> Writes // POSTs the `fsgg:claim` grant marker onto the receiver's op-lock issue
-        | OpLockRelease -> Writes // DELETEs that marker
-        // Both reach the same `Writes.widen` PATCH through the same `updateTouchSet` helper. `set-paths`
-        // being the RECOVERY verb is exactly why its absence from the shim's list mattered (#1528).
-        | Widen -> Writes
-        | SetPaths -> Writes
-
-        // ---- WRITE UNDER A CONDITION -------------------------------------------------------------------
-        | Reap -> WritesIf(OnlyWhenGiven FApply)
+        | Reap
         | Reconcile -> WritesIf(OnlyWhenGiven FApply)
-        // NOT `OnlyWhenGiven FApply` (.github#2488 round-1 repair — this used to say that, and after
-        // `Client.ensureAuthorization` dropped its own `--apply` gate the claim went false: a BARE
-        // `delivery <ref> --pr N`, no flag at all, now PATCHes the PR body's `fsgg:pr-authorization`
-        // marker whenever the caller holds the item's live claim and the named PR has not yet merged.
-        // `--apply` still gates the SEPARATE, larger `GuardedLand`/`Complete` mutation
-        // (`Client.fs`'s `delivery` command handler) — but a consumer trusting `OnlyWhenGiven FApply`
-        // here would wrongly read a bare status call as non-mutating, which is exactly the "trust this
-        // field" property (#1534) this type exists to protect. `NotOnArgv` is the precise fit, not a
-        // fallback: its own doc above already describes exactly this shape ("the condition is not on
-        // argv AT ALL... a person's reading of `Client.fs`, held total by the compiler") — WHETHER this
-        // command writes now turns on runtime state (a live claim held by the calling worker, the PR's
-        // merged status) that no argv parse can see, precisely what that case was written for.
         | DeliveryCmd ->
             WritesIf(
                 NotOnArgv
-                    "PATCHes the PR body's fsgg:pr-authorization marker on ANY --pr N invocation, apply \
-                     or not, whenever the caller holds the referenced item's live claim and the PR has \
-                     not yet merged — a runtime fact, not a flag; --apply additionally gates the \
-                     separate GuardedLand/Complete transition"
+                    "PATCHes the PR authorization marker from runtime claim and merge state; --apply additionally gates landing"
             )
-        // AND THIS ROW IS NOT THE SHIM'S ROW — read before wiring the #1534 follow-on gate. The shim puts
-        // `flush` in BOARD_WRITES (unconditional) and this says `conditional`, and BOTH are right about
-        // different questions: the shim's two write sets are REFUSED IDENTICALLY under staleness, so its
-        // split records "is this flag-dependent?" for the reader, while this records "could this invocation
-        // mutate?" for a consumer. A gate asserting `BOARD_WRITES == {always}` set-for-set therefore reds on
-        // `flush` over no defect at all. The sound assertion is over the UNION —
-        // `BOARD_WRITES ∪ BOARD_WRITES_CONDITIONAL == {always} ∪ {conditional}` and
-        // `BOARD_READS == {never}` — which is exactly the fact the guard acts on.
         | Flush -> WritesIf(UnlessGiven FDryRun)
-        | Next ->
-            WritesIf(
-                NotOnArgv "after printing its answer it makes the #733 chore offer, which POSTs a claim marker"
-            )
-
-        // ---- NOT VERBS — reached by flag, and excluded from the emitted contract entirely ---------------
-        | Help -> Reads
-        | Version -> Reads
+        | Next -> WritesIf(NotOnArgv "after printing its answer it may post the chore offer")
+        | _ ->
+            match (descriptor command).Mutation with
+            | ReadOnly -> Reads
+            | WritesRemoteState -> Writes
 
     /// The flags actually GIVEN, with the spelling to name in a refusal. A flag whose field has a
     /// non-optional default and no record of having been given (`LeaseMinutes`) cannot appear: "given" and
@@ -1275,84 +1140,48 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.RenderGiven.Contains Text then FText ]
         |> List.map (fun flag -> flag, spellingOf flag)
 
-    /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
-    /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
-    let commandName (c: Command) : string =
-        match c with
-        | Decide -> "decide"
-        | DeliveryCmd -> "delivery"
-        | ReviewCmd -> "review"
-        | DriverCmd -> "driver"
-        | CycleCmd -> "cycle"
-        | Scan -> "scan"
-        | LanesView -> "lanes"
-        | Facts -> "facts"
-        | CommandContractCmd -> "command-contract"
-        | IntakeCmd -> "intake"
-        | PacketCmd -> "packet"
-        | RouteCmd -> "delivery-route"
-        | WhoAmI -> "whoami"
-        | Budget -> "budget"
-        | Next -> "next"
-        | BatchCmd -> "batch"
-        | Ready -> "ready"
-        | Reconcile -> "reconcile"
-        | Who -> "who"
-        | Reap -> "reap"
-        | Claim -> "claim"
-        | Adopt -> "adopt"
-        | Landable -> "landable"
-        | Take -> "take"
-        | Release -> "release"
-        | Heartbeat -> "heartbeat"
-        | SetField -> "set-field"
-        | Child -> "child"
-        | Widen -> "widen"
-        | SetPaths -> "set-paths"
-        | Overlap -> "overlap"
-        | Say -> "say"
-        | Inbox -> "inbox"
-        | DoneCmd -> "done"
-        | VerifyPaths -> "verify-paths"
-        | Bootstrap -> "bootstrap"
-        | BoardCmd -> "board"
-        | FieldId -> "field-id"
-        | OptionId -> "option-id"
-        | ItemId -> "item-id"
-        | BodyEdits -> "body-edits"
-        | GraphQlOps -> "graphql"
-        | Add -> "add"
-        | Flush -> "flush"
-        | LintCmd -> "lint"
-        | Issues -> "issues"
-        | Followup -> "followup"
-        | Predicate -> "predicate"
-        | DiffAudit -> "diff-audit"
-        | RoomOpen -> "room open"
-        | CommentCmd -> "comment"
-        // TWO WORDS, and the first is the one that carries the guard. `tests/coord-engine-parity/shim.sh`
-        // §3b projects this surface through `awk '{print $1}'` because the shim dispatches on `$1`, so both
-        // rows below classify as the single token `op-lock` — the same arrangement `room open` already has.
-        | OpLockAcquire -> "op-lock acquire"
-        | OpLockRelease -> "op-lock release"
-        | Help -> "--help"
-        | Version -> "--version"
+    let commandName (command: Command) =
+        commandCatalogue
+        |> List.find (fun descriptor -> descriptor.Command = command)
+        |> _.Verb
+
+    let validateCommandCatalogue (expectedCommands: Command list) (descriptors: CommandDescriptor list) =
+        let duplicateCommands =
+            descriptors
+            |> List.groupBy _.Command
+            |> List.choose (fun (command, rows) -> if rows.Length > 1 then Some command else None)
+
+        let duplicateVerbs =
+            descriptors
+            |> List.groupBy _.Verb
+            |> List.choose (fun (verb, rows) -> if rows.Length > 1 then Some verb else None)
+
+        let expected = expectedCommands |> Set.ofList
+        let actual = descriptors |> List.map _.Command |> Set.ofList
+        let missing = Set.difference expected actual |> Set.toList
+        let unexpected = Set.difference actual expected |> Set.toList
+        let blankVerbs = descriptors |> List.filter (fun row -> System.String.IsNullOrWhiteSpace row.Verb) |> List.map _.Command
+        let undocumented = descriptors |> List.filter (fun row -> not row.Documented) |> List.map _.Command
+
+        let errors =
+            [ if not duplicateCommands.IsEmpty then yield $"duplicate command descriptors: %A{duplicateCommands}"
+              if not duplicateVerbs.IsEmpty then yield $"duplicate command verbs: %A{duplicateVerbs}"
+              if not missing.IsEmpty then yield $"missing command descriptors: %A{missing}"
+              if not unexpected.IsEmpty then yield $"unexpected command descriptors: %A{unexpected}"
+              if not blankVerbs.IsEmpty then yield $"blank command verbs: %A{blankVerbs}"
+              if not undocumented.IsEmpty then yield $"undocumented commands: %A{undocumented}" ]
+
+        if errors.IsEmpty then Ok() else Error errors
 
     let renderCommandContract () =
         let commands =
-            Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
-            |> Array.choose (fun case ->
-                if case.GetFields().Length <> 0 then
-                    None
-                else
-                    let command =
-                        Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Command
-
-                    match command with
-                    | Help
-                    | Version -> None
-                    | _ -> Some command)
-            |> Array.sortBy commandName
+            commandCatalogue
+            |> List.choose (fun descriptor ->
+                match descriptor.Command with
+                | Help
+                | Version -> None
+                | _ -> Some descriptor)
+            |> List.sortBy _.Verb
 
         use stream = new System.IO.MemoryStream()
         use writer =
@@ -1365,9 +1194,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         writer.WriteString("schema", "fsgg.coord.commands/1")
         writer.WriteStartArray("commands")
 
-        for command in commands do
+        for descriptor in commands do
+            let command = descriptor.Command
             writer.WriteStartObject()
-            writer.WriteString("name", commandName command)
+            writer.WriteString("name", descriptor.Verb)
             writer.WriteStartArray("flags")
 
             let flags =
@@ -1415,10 +1245,15 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             // supported document, the gate exits 0, and the fixture goes red asserting the opposite of
             // what it means.
             let writes, gate =
-                match writeSurface command with
-                | Writes -> "always", None
-                | Reads -> "never", None
-                | WritesIf gate -> "conditional", Some gate
+                match descriptor.Mutation, writeSurface command with
+                | WritesRemoteState, Writes -> "always", None
+                | ReadOnly, Reads -> "never", None
+                | WritesRemoteState, WritesIf gate -> "conditional", Some gate
+                | catalogue, behavior ->
+                    failwith (
+                        $"command catalogue mutation classification disagrees for %s{descriptor.Verb}: "
+                        + $"catalogue=%A{catalogue}, behavior=%A{behavior}"
+                    )
 
             writer.WriteString("writes", writes)
 
@@ -2100,6 +1935,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
         | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
+        | "self-host" :: rest -> flags (start { defaults with Command = SelfHostCmd }) rest
         | "review" :: rest -> flags (start { defaults with Command = ReviewCmd }) rest
         | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
         | "cycle" :: rest -> flags (start { defaults with Command = CycleCmd }) rest

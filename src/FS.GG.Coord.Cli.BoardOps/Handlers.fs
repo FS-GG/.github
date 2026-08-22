@@ -2048,23 +2048,22 @@ module Handlers =
     // scheduling and mutation boundaries.
 
     let handlers =
-        HandlerRegistration.handlers
-            { Add = addCmd
-              Flush = flushCmd
-              SetField = setField
-              Child = child
-              BodyEdits = bodyEditsCmd
-              FieldId = fieldId
-              OptionId = optionId
-              ItemId = itemIdCmd
-              Board = fun ctx _ -> boardCmd ctx
-              Bootstrap = bootstrapCmd
-              Issues = issues
-              Intake = intakeCmd
-              Say = say
-              Inbox = inbox
-              RoomOpen = roomOpen
-              Comment = commentCmd }
+        [ Add, addCmd
+          Flush, flushCmd
+          SetField, setField
+          Child, child
+          BodyEdits, bodyEditsCmd
+          FieldId, fieldId
+          OptionId, optionId
+          ItemId, itemIdCmd
+          BoardCmd, fun ctx _ -> boardCmd ctx
+          Bootstrap, bootstrapCmd
+          Issues, issues
+          IntakeCmd, intakeCmd
+          Say, say
+          Inbox, inbox
+          RoomOpen, roomOpen
+          CommentCmd, commentCmd ]
 
     // Program-level registrations are also a BoardOps-family product. Intake validation is the one
     // tokenless BoardOps route: it parses the draft and validates paths against the local checkout,

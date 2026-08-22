@@ -19,6 +19,7 @@ module Options =
     type Command =
         | Decide
         | DeliveryCmd
+        | SelfHostCmd
         /// .github#2175: inspect the resumable review/repair protocol (`FS.GG.Coord.Review`) —
         /// live against `<ref> --pr N`, or from a supplied `--snapshot`; the typed surface `pnext-item`
         /// and the #2135 event projection consume.
@@ -170,6 +171,22 @@ module Options =
         | JsonOnly
         /// stdout is ALWAYS human text: `--text` is kept, `--json` is refused. The #1523 bucket.
         | TextOnly
+
+    type HandlerOwner =
+        | KernelProgram
+        | BoardOps
+
+    type MutationKind =
+        | ReadOnly
+        | WritesRemoteState
+
+    type CommandDescriptor =
+        { Command: Command
+          Verb: string
+          Render: RenderSupport
+          Mutation: MutationKind
+          HandlerOwner: HandlerOwner
+          Documented: bool }
 
     /// Every nullary command case, derived from the union rather than maintained as a second list.
     val allCommands: Command list
@@ -335,7 +352,18 @@ module Options =
     /// Which stdout projections a command HAS. Derived by tracing every `opts.Render` read in
     /// `Client.fs`/`Program.fs` to the handler that reaches it — NOT from the usage prose, which
     /// under-advertised four of the fourteen honouring commands while `scopeOf` over-advertised twenty.
-    val renderSupport: c: Command -> RenderSupport
+    val renderSupport: command: Command -> RenderSupport
+
+    /// One descriptor for every nullary command. During phase-1 coexistence it closes declarative
+    /// projections over the existing parser/render/write behavior and owns handler-family assignment.
+    val commandCatalogue: CommandDescriptor list
+
+    /// Structural closure for catalogue consumers. Reports every duplicate, missing, unexpected,
+    /// blank, or undocumented row together so a command addition gets one actionable failure.
+    val validateCommandCatalogue:
+        expectedCommands: Command list ->
+        descriptors: CommandDescriptor list ->
+        Result<unit, string list>
 
     /// A `--repo` token → the `RepoScope.Scope` board rows resolve to: a registry short-id maps
     /// (`sdd` → `FS.GG.SDD`), an `owner/repo` keeps its repo part, a literal name passes through, and
@@ -395,7 +423,7 @@ module Options =
     ///
     /// Public since #2418, which keys the GraphQL spend ledger by it. Attribution must name the command
     /// an operator actually typed, so this stays the one spelling rather than a second table beside it.
-    val commandName: c: Command -> string
+    val commandName: command: Command -> string
 
     /// The parser's accepted command/flag surface, emitted from the same `scopeOf` table that enforces
     /// the residue rule. This is machine input; documentation validators must not scrape `usage`.

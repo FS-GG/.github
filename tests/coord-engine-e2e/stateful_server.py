@@ -41,23 +41,25 @@ ISSUES = {
     43: {"body": "Another item.\n\nPaths: src/Other/**", "state": "OPEN", "status": "Ready"},
     99: {"body": "A parent epic.\n\nPaths: none", "state": "OPEN", "status": "In progress"},
     44: {"body": "A verify-paths subject.\n\nPaths: src/Verify/**", "state": "OPEN", "status": "In progress"},
-    # #733 — a `.github` item that is CLOSED while its board column still says Ready. That is
-    # CLOSED-ISSUE-NOT-DONE: a real chore, derived (never stored), and the one this fixture offers.
+    # A `.github` item carrying only legacy completion evidence. The change-risk boundary must not
+    # treat this closed/Ready mismatch as terminal authority or offer it as a completion chore.
     50: {"body": "A closed .github item the board still calls Ready.\n\nPaths: src/X/**",
          "state": "CLOSED", "status": "Ready", "repo": ".github"},
     # #733 — the item whose `done` triggers the AfterDone offer. In `.github`, so its offer resolves a lock.
     51: {"body": "A finished .github item.\n\nPaths: src/Y/**", "state": "CLOSED", "status": "In review",
          "repo": ".github"},
-    # #1087 — a chore in a RECEIVER (FS.GG.SDD, the default repo): CLOSED while the board still says Ready.
-    # Before #1087 the SDD offer was refused for want of a lock; now SDD#518 exists and this drains. This is
-    # the row that proves the rollout — a receiver conscripts a caller, which .github used to do alone.
+    # A receiver item with legacy completion evidence. Reconciliation reopens it and projects In review;
+    # it is no longer a CLOSED-ISSUE-NOT-DONE chore because no typed delivery receipt authorizes completion.
     45: {"body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
          "state": "CLOSED", "status": "Ready"},
-    # .github#2157 — the closed #45 dependency has cleared, but this row is still projected as
+    # .github#2157 — the closed off-board #48 dependency has cleared, but this row is still projected as
     # Blocked.  Reconcile must make the coupled Status=Ready / Blocked by='' repair as one batch,
-    # then prove BOTH values on a fresh scan.
+    # then prove BOTH values on a fresh scan. Keeping the dependency off-board isolates this reducer
+    # fixture from #45's independent premature-completion correction transaction.
+    48: {"body": "A completed off-board dependency.\n\nPaths: src/Dependency/**",
+         "state": "CLOSED", "status": "Done", "off_board": True},
     47: {"body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
-         "state": "OPEN", "status": "Blocked", "blocked_by": "FS-GG/FS.GG.SDD#45"},
+         "state": "OPEN", "status": "Blocked", "blocked_by": "FS-GG/FS.GG.SDD#48"},
     # #1087 — the free-refusal control: an UNROSTERED repo (no chore lock at all). All seven FS-GG repos now
     # have one, so the honest "no lock" case is a repo `choreLockRef` does not know. `done` here stamps and
     # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
@@ -497,6 +499,8 @@ def graphql(query: str, variables: dict):
                         ISSUES[n]["status"] = "Done"
                     elif "opt_wip" in value or "opt_wip" in inline_options:
                         ISSUES[n]["status"] = "In progress"
+                    elif "opt_review" in value or "opt_review" in inline_options:
+                        ISSUES[n]["status"] = "In review"
                     elif "opt_ready" in value or "opt_ready" in inline_options:
                         ISSUES[n]["status"] = "Ready"
                     elif "opt_backlog" in value or "opt_backlog" in inline_options:
@@ -701,6 +705,8 @@ class Handler(BaseHTTPRequestHandler):
                     ISSUES[n]["body"] = body["body"]
                 if n in ISSUES and body.get("state") == "closed":
                     ISSUES[n]["state"] = "CLOSED"
+                if n in ISSUES and body.get("state") == "open":
+                    ISSUES[n]["state"] = "OPEN"
             return self._send(200, {"number": n})
 
         self._send(500, {"message": f"fixture: unhandled PATCH {path}"})
@@ -885,7 +891,7 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 ISSUES[47]["off_board"] = False
                 ISSUES[47]["status"] = "Blocked"
-                ISSUES[47]["blocked_by"] = "FS-GG/FS.GG.SDD#45"
+                ISSUES[47]["blocked_by"] = "FS-GG/FS.GG.SDD#48"
                 RECONCILE_47_PARTIAL[0] = 0
                 RECONCILE_47_MISSING[0] = 0
             return self._send(200, {"number": 47, "status": "Blocked", "blockedBy": ISSUES[47]["blocked_by"]})
