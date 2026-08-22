@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "69e1a04e67bc3339aebff00a2f992126379cecc39af6f5c51193856247c2ca0b"
+        "value": "44969cfd8153e5b96bd7e7b858fecb741b9c7be81392a3fa182a3021c442ad12"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,7 +19,7 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "527a14bcd46ffa462c47bd7c51b466c3f4842b4492e2ba6a49374a06a06ad6b6"
+    "value": "fb0a84fbca8c9c7050e75fb3e851bd709cd1c4bcfc8a1d309d5a95ad1a38c8c8"
   },
   "commands": [
     {
@@ -96,10 +96,11 @@
       "id": "T008",
       "title": "Record verification evidence VO-001",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T008 (done) covering PC-001, PD-001, VO-001.",
+      "purpose": "Carry out lifecycle task T008 (done) covering PC-001, PD-001, PD-004, VO-001.",
       "relatedIds": [
         "PC-001",
         "PD-001",
+        "PD-004",
         "VO-001"
       ]
     },
@@ -121,6 +122,26 @@
       "relatedIds": [
         "GV-001",
         "PD-001"
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "Implement requirement FR-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T011 (done) covering AC-001, FR-004, PD-004.",
+      "relatedIds": [
+        "AC-001",
+        "FR-004",
+        "PD-004"
+      ]
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T012 (done) covering DEC-004.",
+      "relatedIds": [
+        "DEC-004"
       ]
     }
   ],
@@ -144,7 +165,7 @@
     {
       "id": "fsharp",
       "title": "fsharp",
-      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006, T007.",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006, T007, T011, T012.",
       "relatedIds": [
         "T001",
         "T002",
@@ -152,20 +173,24 @@
         "T004",
         "T005",
         "T006",
-        "T007"
+        "T007",
+        "T011",
+        "T012"
       ]
     },
     {
       "id": "implementation",
       "title": "implementation",
-      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006.",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006, T011, T012.",
       "relatedIds": [
         "T001",
         "T002",
         "T003",
         "T004",
         "T005",
-        "T006"
+        "T006",
+        "T011",
+        "T012"
       ]
     },
     {
@@ -195,5 +220,16 @@
       "kind": "skills"
     }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "id": "agents.staleGeneratedGuidance",
+      "severity": "warning",
+      "artifact": "readiness/2723-fence-arming-premise-rot/agent-commands/claude/guidance.json",
+      "message": "Generated agent guidance for target \u0027claude\u0027 no longer matches the current normalized work model.",
+      "correction": "Regenerate agent guidance so the generated view matches the current work model.",
+      "relatedIds": [
+        "claude"
+      ]
+    }
+  ]
 }

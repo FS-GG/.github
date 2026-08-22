@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2723-fence-arming-premise-rot/ship.json",
-      "digest": "sha256:e9ef9c2f1df122af4f74ba659d4d80bed1db4b0ee24c265a7e42f834be63491c",
+      "digest": "sha256:ba34bf7bbe151ed1ff10ce0b7da7fa4413f9fdb455676d262fbe748fa4fa9db4",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2723-fence-arming-premise-rot/verify.json",
-      "digest": "sha256:29af17b887f11ab1e5277e1abf171b1704dbf115a8091b8db9f2a043ee02dacc",
+      "digest": "sha256:217ef3b674e410efcc32d5ead646169d800781a316342d4c7a2cf5e3517ef829",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2723-fence-arming-premise-rot/work-model.json",
-      "digest": "sha256:68391d56619cdd6ba31c7c02269b3593f2b3dd1a78a0e8e027f3b57432c0bfcc",
+      "digest": "sha256:4a8811be4effb653f2a661cce9b4857735e1ae6d414e772a97c7ddc3dfa15d78",
       "schemaVersion": 1
     }
   ],
@@ -73,6 +73,16 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV011",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "evidence:EV012",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
         "state": "real",
         "rationale": null
@@ -121,6 +131,16 @@
         "id": "task:T010",
         "state": "real",
         "rationale": null
+      },
+      {
+        "id": "task:T011",
+        "state": "real",
+        "rationale": null
+      },
+      {
+        "id": "task:T012",
+        "state": "real",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -163,6 +183,14 @@
       {
         "dependent": "evidence:EV010",
         "dependency": "task:T010"
+      },
+      {
+        "dependent": "evidence:EV011",
+        "dependency": "task:T011"
+      },
+      {
+        "dependent": "evidence:EV012",
+        "dependency": "task:T012"
       },
       {
         "dependent": "task:T001",
@@ -230,6 +258,18 @@
       },
       {
         "dependent": "task:T010",
+        "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T011",
+        "dependency": "evidence:EV011"
+      },
+      {
+        "dependent": "task:T012",
+        "dependency": "evidence:EV012"
+      },
+      {
+        "dependent": "task:T012",
         "dependency": "task:T001"
       }
     ]

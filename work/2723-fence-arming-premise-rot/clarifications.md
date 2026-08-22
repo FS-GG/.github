@@ -20,20 +20,25 @@ publicOrToolFacingImpact: true
   independently reviewed and merged?
 
 ## Answers
-- A-001: The producer exists only in `FS-GG/.github`, where the exact context is `claim-fence`.
-  Receiver repositories are not targets unless they independently contain and report that producer.
+- A-001: Two producers are in scope. `FS-GG/.github` reports `claim-fence`; the shared
+  `kit-materialize.yml` called by each `receives: coordination-kit` repository reports
+  `materialize / receiver-validate`. The seven receivers are `FS.GG.SDD`, `FS.GG.Rendering`,
+  `FS.GG.Governance`, `FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, and `FS.GG.Net`.
   Merge-queue enablement remains a separate per-repository decision and is not performed here.
 - A-002: No. The repository change first lands its reviewed procedure and evidence. The
   branch-protection apply is a declared post-merge obligation, keeping the fence observe-only
   throughout implementation review.
 
 ## Decisions
-- DEC-001: Arm only repositories for which the exact context is both observed on a real pull request
-  and statically producible; do not derive a fleet target from the coordination-kit receiver roster.
+- DEC-001: After both producers fail closed and authorization preconditions pass, activate
+  `claim-fence` on the hub first, verify it, then activate `materialize / receiver-validate` on each
+  of the seven coordination-kit receivers with per-repository dry run and read-back.
 - DEC-002: Record `merge queue disabled; accepted stale-green residual` for `.github` rather than
   silently enabling a queue that changes how every pull request merges.
 - DEC-003: Declare the administrative arming write as a post-merge obligation and verify the exact
   required-context set by read-back after applying it.
+- DEC-004: Treat missing, stale, unreadable, malformed, and unclassified authorization as red in the
+  producer itself. Branch protection remains unchanged while the live authorization census is dirty.
 
 ## Accepted Deferrals
 No accepted deferrals recorded.

@@ -16,51 +16,55 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2723-fence-arming-premise-rot/spec.md sha256:29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf schemaVersion:1
-- clarifications: work/2723-fence-arming-premise-rot/clarifications.md sha256:d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842 schemaVersion:1
-- checklist: work/2723-fence-arming-premise-rot/checklist.md sha256:102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9 schemaVersion:1
+- spec: work/2723-fence-arming-premise-rot/spec.md sha256:76b2fa86eb896809b8b8f0108ee9c93efa2974df176d1df5b01f5551b143bdd4 schemaVersion:1
+- clarifications: work/2723-fence-arming-premise-rot/clarifications.md sha256:c86f6e45846039d4590b652082a793649e1bff93f24e7f5f7ce61ebec93c121c schemaVersion:1
+- checklist: work/2723-fence-arming-premise-rot/checklist.md sha256:ac8a50ff51a092f043c4722238acf1bd5784daa38eab80535100df7e5a286a62 schemaVersion:1
 
 ## Plan Scope
 - Work item 2723-fence-arming-premise-rot is planned from the current specification, clarification, and checklist facts.
-- Requirement count: 3.
-- Clarification decision count: 3.
-- Checklist result count: 3.
+- Requirement count: 4.
+- Clarification decision count: 4.
+- Checklist result count: 4.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Establish a measurement packet for `.github/main`: identify
-  the exact `claim-fence` check run on an immutable pull-request head, run the static producer
-  verifier against that checkout, prove the observe-only interval exceeds 120 minutes, enumerate all
-  open `item/<n>-*` pull requests and validate their authorization markers, and record the explicit
-  no-merge-queue decision. Keep every API census paginated and bind its result to immutable SHAs.
+- PD-001 [AC-001] [FR-001] complete: Make the hub `claim-fence` job consume the captured gate exit
+  after rendering its diagnostic and make the shared `receiver-validate` job exit its captured code.
+  Treat exit 0 as the only green; known refusal/no-verdict codes and unclassified codes fail closed.
+  Keep branch-protection activation separate and ordered hub first, then seven receivers.
 - PD-002 [AC-001] [FR-002] complete: Add an arming section to
-  `docs/coordination/reusable-workflow-contract.md` that records each precondition, the hub-first dry
-  run, the post-merge apply obligation, the accepted stale-green residual, and the neuter-then-disarm
-  rollback order. The administrative write remains outside the implementation PR and occurs only from
-  the landed procedure.
+  `docs/coordination/reusable-workflow-contract.md` that records both exact context names, the hub-first
+  then seven-receiver dry-run/apply/read-back order, the currently failed authorization census, the
+  post-merge obligation, accepted stale-green residual, and rollback order. No administrative write
+  occurs while the precondition is false.
 - PD-003 [AC-001] [FR-003] complete: Replace the obsolete `scripts/repos.sh` claim that no org
   credential can apply with the measured current boundary: the dispatch App installation can mint an
   `administration:write` token, while an Actions `GITHUB_TOKEN` still cannot request that permission.
+- PD-004 [AC-001] [FR-004] complete: Execute both real workflow steps across positive, finding,
+  retryable/permanent no-verdict, and unclassified results. Invert each consumer by replacing the
+  failing exit with success and require the focused fixture to catch that fail-open mutant.
 
 ## Contract Impact
 - PC-001 [PD-001] operator contract: `scripts/repos.sh require-context` keeps its command syntax and
-  add-only/read-back behavior; only its credential guidance changes. The reusable-workflow contract
-  gains the durable operating record for arming `claim-fence` on `.github/main`.
+  add-only/read-back behavior; only its credential guidance changes. The workflow contract gains the
+  durable operating record for `claim-fence` on the hub and `materialize / receiver-validate` on all
+  seven `coordination-kit` receivers.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Run `bash tests/repos-registry/run.sh`, invert the edited
-  credential premise so the focused assertion reds, and re-run after restoring it. Validate every
-  live precondition with paginated GitHub API reads, a static `check-required-contexts.py` invocation,
-  and exact required-context read-back in dry-run mode. The post-merge obligation repeats dry-run,
-  applies only to `.github`, and verifies the exact after-set.
+- VO-001 [PD-001] [PD-004] [PC-001] semanticTest: Run `tests/claim-fence/run.sh`,
+  `tests/receiver-validate/run.sh`, and `tests/repos-registry/run.sh`; require explicit positive,
+  negative, no-verdict, unclassified, and fail-open mutation evidence. Validate the SDD package,
+  provenance, declared paths, and CI. The post-merge obligation repeats the live census, dry-runs,
+  applies to the hub first and then each receiver, and verifies every exact after-set.
 
 ## Performance Intent
 No performance intent is declared for this work item.
 
 ## Migration Posture
-- PM-001 [PC-001] additiveExternalState: The reviewed PR changes no branch protection. After merge,
-  the live claim holder executes the documented add-only apply for `.github/main`; rollback first
-  neuters the producer, then removes the classic context with explicit confirmation and checks both
-  classic protection and rulesets.
+- PM-001 [PC-001] additiveExternalState: The reviewed PR changes no branch protection. After merge and
+  only after a clean authorization census, the live claim holder executes the documented add-only
+  apply for `.github/main`, verifies it, then applies receiver contexts one at a time. Rollback removes
+  receiver requirements in reverse order, removes the hub requirement, and only then may neutralize
+  either producer; every step reads both classic protection and rulesets.
 
 ## Generated View Impact
 - GV-001 [PD-001] workModel: `readiness/2723-fence-arming-premise-rot/work-model.json` and

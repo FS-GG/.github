@@ -730,10 +730,11 @@ jobs:
   #   subject         `item/<n>-*` branches carrying NO marker at all — `.github#1858`'s own shape,
   #                   live, in the very repository the incident reached.
   #
-  # THE FOUR-FIELD FORM IS DELIBERATE AND IS NOT A NARROWING. `scripts/check-claim-fence.py` requires
-  # SIX (`v item gen opkey grant head`) because §6.3 checks 4 and 5 need the election; nothing writes
-  # those two fields today, which is why that gate is observe-only and says so. This job grades the
-  # form the production path actually emits — checks 1, 2, 3 and 6 of §6.3, the same slice
+  # THE FOUR-FIELD REQUIRED SUBSET IS DELIBERATE AND IS NOT A NARROWING OF THE PRODUCER.
+  # `scripts/check-claim-fence.py` requires SIX (`v item gen opkey grant head`) because §6.3 checks 4
+  # and 5 need the election, and the current producer writes all six. This receiver job grades the
+  # four fields it can verify after the short-lived grant is released — checks 1, 2, 3 and 6 of §6.3,
+  # the same slice
   # `coherence.yml`'s already-armed `claim-generation` grades in the hub — so its findings are about
   # pull requests rather than about a field nobody writes. It also accepts a marker that carries the
   # future `opkey=`/`grant=` fields, which is `authorizationMarker`'s own stated forward-compatibility
@@ -756,15 +757,14 @@ jobs:
   # hard constraint above forbids. This boundary is REPORTED, not silently absorbed.
   #
   # ============================================================================================
-  # OBSERVE-ONLY, AND #1508
+  # FAIL-CLOSED PRODUCER, ACTIVATION DEFERRED, AND #1508
   # ============================================================================================
   #
-  # §9.1 step 1: "Land the producer in observe-only. The fence workflow reports `success`
-  # unconditionally and writes its real verdict to the job summary. Required in ZERO repositories."
-  # That is exactly where `kit-bump-shape` and `kit-bump-mechanical` above already sit, and arming is
-  # slice 8's job (`.github#2723`), never a workflow file's. Concretely: the verdict step's LAST
-  # statement is `exit 0`, and the real code is published as its `verdict` output. Arming this before
-  # a producer has been observed reporting is the measured outage `#1713` was founded on.
+  # §9.1 separates a fail-closed producer from branch-protection activation. Slice 8 (`.github#2723`)
+  # now makes this producer consume its real verdict: the verdict step's LAST statement is
+  # `exit "$rc"`. Requiring `materialize / receiver-validate` in the seven receivers remains a
+  # later administrative operation after the hub is activated and the authorization census is clean.
+  # This ordering preserves the measured lesson behind #1713 without leaving the producer toothless.
   #
   # `if: github.event_name == 'pull_request'` IS A TAUTOLOGY OVER THE EVENT THIS JOB REPORTS ABOUT,
   # carried for the same reason and with the same property as `bump-shape` and `bump-mechanical`
@@ -793,7 +793,7 @@ jobs:
   # That is what makes the credential argument safe to hold rather than something to be right about:
   # a repository turned private, a rate limit, or an outage produces code 2/3 with the reason named,
   # not a green. §9.1 step 2 — "observe it REPORT on a real pull request" — is the step that measures
-  # this in production, and observe-only is what makes that measurement free.
+  # this in production before branch protection consumes the context.
   #
   # THE VERDICT CONTRACT IS THE ORG'S SHARED ONE, `scripts/lib/gate.py`'s `ExitCode`: 0 OK — the ONLY
   # green code — 1 FINDING, 2 NO-VERDICT (retryable), 3 NO-VERDICT (permanent). It is restated inline
@@ -1277,8 +1277,8 @@ jobs:
               lines.append(extra)
               lines.append("")
           lines.append(
-              "This context is OBSERVE-ONLY (design §9.1 step 1) and is required in no repository, so "
-              "this verdict blocks no merge. It reports; it gates nothing."
+              "This producer fails closed (design §9.1): only verdict 0 exits successfully. Branch "
+              "protection activation remains a separate, authorization-gated operation."
           )
           # THE ANNOTATION IS EMITTED BEFORE THE SUMMARY IS WRITTEN, and the order is deliberate. The
           # annotation is the one place the reason ALWAYS reaches a reader; the summary write touches
@@ -1311,18 +1311,15 @@ jobs:
           sys.exit(code)
           PY
           # THE REAL VERDICT, PUBLISHED. `$rc` is the script's own exit status, captured above and
-          # written here before the observe-only `exit 0` below neutralises it — so the code a reader
+          # written here before the fail-closed exit below consumes it — so the code a reader
           # (and `tests/receiver-validate/run.sh`) sees is the one the rule actually reached, not a
           # rendering of it.
           printf 'verdict=%s\n' "$rc" >> "$GITHUB_OUTPUT"
-          # OBSERVE-ONLY IS A HARD BOUNDARY, NOT A SOFT START (design §9.1 step 1, and slice 4's
-          # `fsgg-claim-fence.yml` header). ARMING IS SLICE 8's JOB (`.github#2723`). This job runs in
-          # SEVEN repositories it does not own, so a verdict that failed here would red pull requests
-          # across the fleet on the first push — before anyone has watched the context report once,
-          # which is precisely what §9.1 step 2 exists to do first. `tests/receiver-validate/run.sh`
-          # asserts this line structurally AND by execution, in both directions: a mutated copy that
-          # propagates the finding must be CAUGHT, or the boundary is a promise rather than a test.
-          exit 0
+          # FAIL CLOSED IN THE PRODUCER; ACTIVATE SEPARATELY. The seven receiver repositories do not
+          # require this context until slice 8's hub-first authorization preconditions pass, but once
+          # activated a missing, stale, unreadable, malformed, or unclassified authorization must be
+          # red. `tests/receiver-validate/run.sh` asserts and inverts this exact consumed exit status.
+          exit "$rc"
 
   materialize:
     name: Materialize the kit from its pin

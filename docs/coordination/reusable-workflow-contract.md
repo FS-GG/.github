@@ -406,17 +406,22 @@ FS.GG.Net's real caller and **this repository's own** `kit-materialize.yml`, and
 either job is caught by name. That is stronger than a dry run — it needs no credential, and it fails
 on the pull request that would break it rather than on the nightly sweep afterwards.
 
-### Arming record: `claim-fence` on `.github/main`
+### Arming record: hub `claim-fence`, then seven receiver validation contexts
 
 This is the durable slice-8 packet for the GitHub-native executor fence ([#2723](https://github.com/FS-GG/.github/issues/2723)).
 It records the decision and the evidence; it does not pretend a blocked administrative write happened.
 
-1. **Producer landed and observed for more than one claim-lease window.** The exact context is
+1. **Both producers are fail-closed before branch protection consumes them.** The hub context is
    `claim-fence`, produced directly by `.github/workflows/fsgg-claim-fence.yml` on this repository (it
-   is not a nested reusable-workflow context). The earliest complete workflow census entry is run
+   is not a nested reusable-workflow context). Its final `id: enforce` step exits zero only for gate
+   verdict 0; findings, retryable/permanent no-verdicts, and unclassified exits are red. Each
+   `receives: coordination-kit` caller also reports `materialize / receiver-validate`; the shared
+   callee now exits its captured verdict instead of publishing a refusal and returning success.
+   `tests/claim-fence/run.sh` and `tests/receiver-validate/run.sh` execute and invert those consumers.
+   Historical observation evidence remains useful: the earliest complete hub census entry is run
    [31969788185](https://github.com/FS-GG/.github/actions/runs/31969788185), which reported a successful
    `claim-fence` check on immutable head `0a0d6b052490b26fc6cbab8cf2619bfaae9ab809` at
-   `2026-08-16T20:11:03Z`. A six-page, 597-run census at `2026-08-22T09:18:30Z` put the observe-only
+   `2026-08-16T20:11:03Z`; a six-page, 597-run census at `2026-08-22T09:18:30Z` put the reporting
    interval beyond five days, comfortably above the 120-minute default lease.
 2. **Static producibility passes.** Against this checkout and an offline classic-protection payload
    requiring only `claim-fence`, `scripts/check-required-contexts.py` reported `ok   claim-fence` and
@@ -430,30 +435,36 @@ It records the decision and the evidence; it does not pretend a blocked administ
    was `[]` on 2026-08-22. Enabling a queue changes how every pull request merges and remains a separate
    repository decision. Arming without it still refuses ungrounded executors, while accepting the
    stale-green residual above; this is deliberate, not an assertion that AC1's strongest form is met.
-5. **Apply is a post-merge obligation and is presently blocked.** A complete open-pull-request census
-   on 2026-08-22 found three `item/<n>-*` pull requests: [#2821](https://github.com/FS-GG/.github/pull/2821)
-   and [#2818](https://github.com/FS-GG/.github/pull/2818) had no authorization marker, while
+5. **Apply is a post-merge obligation and is presently blocked.** The repair-round census on
+   2026-08-22 found open `item/<n>-*` pull requests including [#2824](https://github.com/FS-GG/.github/pull/2824),
+   [#2825](https://github.com/FS-GG/.github/pull/2825), and [#2818](https://github.com/FS-GG/.github/pull/2818)
+   without a current authorization marker, while
    [#2809](https://github.com/FS-GG/.github/pull/2809)'s marker named head `2fb051d9…` rather than its
    current `ff04546b…`. Therefore the zero-unmarked-in-flight precondition is false and **nothing is
    armed by this change**. After this document lands, the claim holder must repeat the complete census;
-   only when it is empty (or every item PR carries a current marker) may it run the hub-only dry run and
-   apply:
+   only when it is empty (or every item PR carries a current marker) may it run the hub dry run/apply,
+   verify that exact after-set, and then repeat the receiver dry run/apply one repository at a time:
 
    ```sh
    scripts/repos.sh require-context --context claim-fence --receives labels --only FS-GG/.github
    scripts/repos.sh require-context --context claim-fence --receives labels --only FS-GG/.github --apply
+   scripts/repos.sh require-context --context 'materialize / receiver-validate' --receives coordination-kit
+   scripts/repos.sh require-context --context 'materialize / receiver-validate' --receives coordination-kit --apply
    ```
 
-   The recorded dry run on 2026-08-22 selected exactly `FS-GG/.github`, read the seven-context before
-   set, and reported `1 would-add, 0 unchanged, 0 failed`. The apply is complete only when its built-in
-   read-back reports `claim-fence` in the exact after-set. The separately measured dispatch App
+   The receiver command selects exactly `FS.GG.SDD`, `FS.GG.Rendering`, `FS.GG.Governance`,
+   `FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, and `FS.GG.Net` from the registry. Automation must
+   stop on the first failed dry run or read-back; it must not treat a partial fan-out as completion.
+   The apply is complete only when built-in read-back reports the hub context first and the receiver
+   context in every exact receiver after-set. The separately measured dispatch App
    installation grant includes `administration: write`; a workflow `GITHUB_TOKEN` still cannot hold
    that permission.
 
-Rollback preserves a reporting context before it weakens protection: first set the producer back to
-observe-only/non-binding behavior, then run `unrequire-context` with the exact confirmation, and finally
-read both classic protection and rulesets. Never delete or silence the producer before removing a
-required context: a missing required check is a permanent wait, not a red verdict.
+Rollback reverses the activation order: remove the receiver requirements one at a time with exact
+confirmation/read-back, remove the hub requirement, and only then change or remove either producer.
+Read both classic protection and rulesets after every operation. Never delete, silence, or make a
+producer pass-open while its context is required: a missing context is a permanent wait and a false
+green is an authorization bypass.
 
 ## The on-demand materialize, and why one still never writes `main`
 

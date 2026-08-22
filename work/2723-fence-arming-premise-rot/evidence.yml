@@ -11,27 +11,27 @@ sourceAnalysis: readiness/2723-fence-arming-premise-rot/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2723-fence-arming-premise-rot/analysis.json
-    digest: ece93425673043c5c48a2a0b60e9a43de52e917c991da213d1752ca319c46afe
+    digest: bd4ebbc0283788b039271ca9d9a78d747e58780981f443404d99d7ba9f81c650
     schemaVersion: 1
   - label: checklist
     path: work/2723-fence-arming-premise-rot/checklist.md
-    digest: 102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9
+    digest: ac8a50ff51a092f043c4722238acf1bd5784daa38eab80535100df7e5a286a62
     schemaVersion: 1
   - label: clarifications
     path: work/2723-fence-arming-premise-rot/clarifications.md
-    digest: d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842
+    digest: c86f6e45846039d4590b652082a793649e1bff93f24e7f5f7ce61ebec93c121c
     schemaVersion: 1
   - label: plan
     path: work/2723-fence-arming-premise-rot/plan.md
-    digest: 0eb6e6700f912065c2986475dde1fa59d2a7eb9ff58dcb660285061018212877
+    digest: 1fa66fc0a40b98af4e98ad299e4d2091ac1c2c63a772d3aaa28db9999c9c0b8e
     schemaVersion: 1
   - label: spec
     path: work/2723-fence-arming-premise-rot/spec.md
-    digest: 29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf
+    digest: 76b2fa86eb896809b8b8f0108ee9c93efa2974df176d1df5b01f5551b143bdd4
     schemaVersion: 1
   - label: tasks
     path: work/2723-fence-arming-premise-rot/tasks.yml
-    digest: 476b7455c315389f9701220eeac136770247ed15c187ab2d7191224a7a2991c7
+    digest: 85df72be9578a96e18ecbb2278175b2552dd0f7998905a0f6063740fb06f47cb
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
@@ -297,12 +297,70 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2723-fence-arming-premise-rot/test-results/focused.xml
-      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 2
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/fsgg-claim-fence.yml", ".github/workflows/kit-materialize.yml", tests/claim-fence/run.sh, tests/receiver-validate/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/claim-fence/run.sh
+      - kind: verification
+        path: tests/receiver-validate/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Hub 108/0 and receiver 74/0 fixtures execute positive, refusal, no-verdict, unclassified, and fail-open inversion legs."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/fsgg-claim-fence.yml", ".github/workflows/kit-materialize.yml", docs/coordination/reusable-workflow-contract.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/claim-fence/run.sh
+      - kind: verification
+        path: tests/receiver-validate/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:2b0cd13542ae92ef08b2e10f3221da03452ec61e24ad853b5b7a7201bd2f1b9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Both producers fail closed; live dry runs report one hub and seven receiver contexts would be added, while the dirty authorization census blocks every apply."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

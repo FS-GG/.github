@@ -14,12 +14,12 @@ For public-impact F# work, author or update the compiled `.fsi` signature before
 - Related: T010
 
 ## fsharp — fsharp
-- Capability: Required by tasks: T001, T002, T003, T004, T005, T006, T007.
-- Related: T001, T002, T003, T004, T005, T006, T007
+- Capability: Required by tasks: T001, T002, T003, T004, T005, T006, T007, T011, T012.
+- Related: T001, T002, T003, T004, T005, T006, T007, T011, T012
 
 ## implementation — implementation
-- Capability: Required by tasks: T001, T002, T003, T004, T005, T006.
-- Related: T001, T002, T003, T004, T005, T006
+- Capability: Required by tasks: T001, T002, T003, T004, T005, T006, T011, T012.
+- Related: T001, T002, T003, T004, T005, T006, T011, T012
 
 ## readiness-evidence — readiness-evidence
 - Capability: Required by tasks: T008.

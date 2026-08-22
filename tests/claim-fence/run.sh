@@ -34,7 +34,7 @@
 #     `fsgg:claim` marker), which is the point: those are the confusable strings that actually exist
 #     on real items, not ones invented to be easy to reject.
 #
-# Section K asserts the OBSERVE-ONLY boundary structurally over the workflow file itself, and does it
+# Section K asserts the fail-closed boundary structurally over the workflow file itself, and does it
 # in both directions too: a mutated copy that enforces its verdict must be caught, or the assertion
 # is another absence that a broken check would satisfy.
 set -euo pipefail
@@ -636,8 +636,8 @@ printf '<!-- fsgg:merge-election v=1 opkey=%s item=%s gen=%s receiver=%s op=merg
 gate "$W" --repo "$REPO" --head-ref "$BRANCH" --head-sha "$HEAD" --body "$B_WINNER"
 assert "J5 an election a year old is still the election — it has no lease (design §4.2)" 0 "OK"
 
-echo "=== K. The OBSERVE-ONLY boundary, asked of the parsed document ========================="
-# This is slice 4's hard boundary: arming is slice 8's job (.github#2723, design §9.1).
+echo "=== K. The fail-closed boundary, asked of the parsed document =========================="
+# Slice 8 makes the producer fail closed while keeping branch-protection activation separate.
 #
 # ROUND-1 REPAIR (critic teal-79dd on #2740). The first version of this section parsed the workflow and
 # then ASKED THE PARSED DOCUMENT FOR A SPELLING: it searched the raw text for `^\s*exit\s+([0-9]+)`.
@@ -668,9 +668,10 @@ echo "=== K. The OBSERVE-ONLY boundary, asked of the parsed document ===========
 #      block replaces the workflow-level block entirely — so the check reads the value that actually
 #      governs the token rather than a key that may be inert.
 #
-#   3. DOES THIS WORKFLOW ARM?  Not asked of the text at all. Every step's `run:` is EXECUTED with the
-#      gate stubbed to return each verdict in turn, under BOTH shells GitHub can give a step that
-#      declares none, and the real exit status observed.
+#   3. DOES THIS WORKFLOW FAIL CLOSED? Not asked of the text at all. Every step's `run:` is EXECUTED
+#      with the gate stubbed to return each verdict in turn. Exactly one `id: enforce` step must exit
+#      zero for verdict 0 and non-zero for every substantive, no-verdict, and unclassified result;
+#      all diagnostic steps must still render without becoming an accidental second gate.
 #
 #   4. WHAT IS THE MEASUREMENT ALLOWED TO ASSUME?  An ALLOWLIST of the `${{ }}` expressions this
 #      harness knows how to resolve. Anything else is NOT MEASURED and is reported as a violation —
@@ -900,6 +901,7 @@ def main():
 
         # ---- Structural pass, once per step: keys, uses, and what the harness may assume --------
         measurable = []
+        enforcement = []
         for index, step in enumerate(job.get("steps") or []):
             if not isinstance(step, dict):
                 problems.append(f"job `{job_id}` step {index} is not a mapping")
@@ -938,8 +940,16 @@ def main():
                 )
                 continue
             measurable.append((index, step))
+            if step.get("id") == "enforce":
+                enforcement.append((index, step))
 
-        # ---- Question 3: does this workflow arm? (executed, never matched) ----------------------
+        if len(enforcement) != 1:
+            problems.append(
+                f"job `{job_id}` has {len(enforcement)} `id: enforce` steps, not exactly one — the "
+                "captured verdict must have one auditable consumer"
+            )
+
+        # ---- Question 3: does this workflow fail closed? (executed, never matched) --------------
         box = build_sandbox(ROOT)
         try:
             for gate_exit in GATE_EXITS:
@@ -948,13 +958,21 @@ def main():
                     for label, shell in SHELLS:
                         for index, step in measurable:
                             status = run_step(box, step, gate_exit, event, shell)
-                            if status not in (None, 0):
+                            is_enforcement = step.get("id") == "enforce"
+                            expected_failure = gate_exit != "0"
+                            if is_enforcement and ((status == 0) == expected_failure):
+                                problems.append(
+                                    f"job `{job_id}` enforcement step {index} EXITS {status} when the "
+                                    f"gate returns {gate_exit} on a {event} event under {label} — only "
+                                    "verdict 0 may pass; findings, no-verdicts, and unclassified codes "
+                                    "must fail closed. Measured by EXECUTING the step, not matching text."
+                                )
+                            elif not is_enforcement and status not in (None, 0):
                                 problems.append(
                                     f"job `{job_id}` step {index} "
                                     f"({step.get('name') or step.get('uses')}) EXITS {status} when the "
-                                    f"gate returns {gate_exit} on a {event} event under {label} — this "
-                                    "producer is OBSERVE-ONLY (design 9.1 step 1), so its verdict must "
-                                    "never fail the job; arming is slice 8 (.github#2723). Measured by "
+                                    f"gate returns {gate_exit} on a {event} event under {label} — only "
+                                    "the named enforcement step may consume the verdict. Measured by "
                                     "EXECUTING the step, not by matching its text."
                                 )
         finally:
@@ -973,9 +991,9 @@ flow_check() {  # <workflow-file> -> one line per violation
 
 VIOL="$(flow_check "$FLOW")"
 if [ -z "$VIOL" ]; then
-  ok "K1 unfiltered, read-only by effective permission, and incapable of failing on a verdict"
+  ok "K1 unfiltered, read-only by effective permission, and fail-closed on every non-OK verdict"
 else
-  bad "K1 unfiltered, read-only by effective permission, and incapable of failing on a verdict" "$VIOL"
+  bad "K1 unfiltered, read-only by effective permission, and fail-closed on every non-OK verdict" "$VIOL"
 fi
 
 # ------------------------------------------------------------------------------------------------
@@ -995,7 +1013,8 @@ FLOW, OUT, PROBE = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(FLOW, encoding="utf-8").read()
 os.makedirs(OUT, exist_ok=True)
 
-ARMS = "OBSERVE-ONLY"
+ARMS = "only the named enforcement step"
+FAILS_OPEN = "must fail closed"
 FILTER = "carries filter key(s)"
 PERMS = "EFFECTIVE permissions"
 UNRESOLVED = "NOT MEASURED"
@@ -1003,13 +1022,12 @@ TOPKEY = "unexpected top-level key(s)"
 
 EVALUATE_TAIL = '          echo "rc=$rc" >> "$GITHUB_OUTPUT"\n'
 FINDING_WARNING = (
-    '          echo "::warning title=fsgg-claim-fence: finding (observe-only)::The merge fence would '
-    'refuse this head. See the job summary for which of design §6.3\'s checks failed. Nothing is '
-    'blocked: this context is not armed."\n'
+    '          echo "::error title=fsgg-claim-fence: finding::The merge fence refuses this head. See '
+    'the job summary for which of design §6.3\'s checks failed."\n'
 )
 INCONCLUSIVE_WARNING = (
-    '          echo "::warning title=fsgg-claim-fence: inconclusive (observe-only)::The gate exited '
-    'with a code this workflow does not classify. Nothing is blocked: this context is not armed."\n'
+    '          echo "::error title=fsgg-claim-fence: inconclusive::The gate exited with an unclassified '
+    'code; the fence fails closed."\n'
 )
 INCONCLUSIVE_ENV = "          RC: ${{ steps.fence.outputs.rc }}\n"
 
@@ -1064,9 +1082,9 @@ MUTANTS = [
     ("R16 pointing the fixture step at another path is caught, with no special case for it",
      lambda t: t.replace("        run: bash tests/claim-fence/run.sh\n",
                          "        run: bash tests/claim-generation/run.sh\n", 1), ARMS),
-    ("R17 arming the OK step — the one verdict a reader would never think to check",
-     lambda t: t.replace('            echo "### fsgg-claim-fence: OK (observe-only)"\n',
-                         '            echo "### fsgg-claim-fence: OK (observe-only)"\n            exit 3\n', 1), ARMS),
+    ("R17 failing the OK report step creates an accidental second gate",
+     lambda t: t.replace('            echo "### fsgg-claim-fence: OK"\n',
+                         '            echo "### fsgg-claim-fence: OK"\n            exit 3\n', 1), ARMS),
     # --- the two round-2 escapes this section expresses as a violation ---------------------------
     ("R18 F2a: `${{ ... != '0' }}` in env plus a plain string test arms it, with no `exit` in the run",
      lambda t: t.replace(
@@ -1083,6 +1101,9 @@ MUTANTS = [
      lambda t: t.replace("      - uses: actions/checkout@v7\n",
                          f"      - uses: actions/checkout@v7\n      - name: probe\n        run: ': > scripts/{PROBE}'\n", 1),
      "__PROBE__"),
+    ("R21 replacing the consumed verdict with success makes the required context fail open",
+     lambda t: t.replace('            1|2|3) exit "$RC" ;;\n',
+                         '            1|2|3) exit 0 ;;\n', 1), FAILS_OPEN),
 ]
 
 index = []
@@ -1257,7 +1278,7 @@ derive_check() {  # <script> -> prints one line per corpus failure; silence is a
   for n in 1 2 3 4 5 6; do
     run_finding "$script" "check-claim-fence: [check$n] a fixture verdict, deliberately naming none in prose."
     if [ "$FRC" != 0 ]; then
-      echo "the step EXITED $FRC on a [check$n] verdict — this producer is observe-only and must not"
+      echo "the diagnostic step EXITED $FRC on a [check$n] verdict — reporting must complete before enforcement"
       continue
     fi
     case "$FHEAD" in
@@ -1290,8 +1311,8 @@ case "$FHEAD" in
   *) bad "L3 a verdict naming no check yields a NAMED \`unnamed\` heading, not a blank one" "heading was: ${FHEAD:-<empty>}" ;;
 esac
 [ "$FRC" = 0 ] \
-  && ok "L4 …and it still exits 0, so the observe-only boundary holds on the unparseable verdict too" \
-  || bad "L4 …and it still exits 0, so the observe-only boundary holds on the unparseable verdict too" "rc=$FRC"
+  && ok "L4 …and the report step exits 0, so diagnostics render before the separate fail-closed consumer" \
+  || bad "L4 …and the report step exits 0 before the separate fail-closed consumer" "rc=$FRC"
 
 # ---- MUTATIONS: the two ways this derivation can regress, each applied and each required to red ----
 # Both mutations assert they CHANGED the script first. A mutation that silently matched nothing would

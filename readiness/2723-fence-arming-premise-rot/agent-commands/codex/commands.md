@@ -40,8 +40,8 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 
 ## T008 — Record verification evidence VO-001
 - Stage: specify
-- Purpose: Carry out lifecycle task T008 (done) covering PC-001, PD-001, VO-001.
-- Related: PC-001, PD-001, VO-001
+- Purpose: Carry out lifecycle task T008 (done) covering PC-001, PD-001, PD-004, VO-001.
+- Related: PC-001, PD-001, PD-004, VO-001
 
 ## T009 — Handle migration posture PM-001
 - Stage: specify
@@ -52,3 +52,13 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Stage: specify
 - Purpose: Carry out lifecycle task T010 (done) covering GV-001, PD-001.
 - Related: GV-001, PD-001
+
+## T011 — Implement requirement FR-004
+- Stage: specify
+- Purpose: Carry out lifecycle task T011 (done) covering AC-001, FR-004, PD-004.
+- Related: AC-001, FR-004, PD-004
+
+## T012 — Implement clarification decision DEC-004
+- Stage: specify
+- Purpose: Carry out lifecycle task T012 (done) covering DEC-004.
+- Related: DEC-004

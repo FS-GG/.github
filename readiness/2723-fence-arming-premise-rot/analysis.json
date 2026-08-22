@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "69e1a04e67bc3339aebff00a2f992126379cecc39af6f5c51193856247c2ca0b"
+        "value": "44969cfd8153e5b96bd7e7b858fecb741b9c7be81392a3fa182a3021c442ad12"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9"
+        "value": "ac8a50ff51a092f043c4722238acf1bd5784daa38eab80535100df7e5a286a62"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842"
+        "value": "c86f6e45846039d4590b652082a793649e1bff93f24e7f5f7ce61ebec93c121c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "0eb6e6700f912065c2986475dde1fa59d2a7eb9ff58dcb660285061018212877"
+        "value": "1fa66fc0a40b98af4e98ad299e4d2091ac1c2c63a772d3aaa28db9999c9c0b8e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf"
+        "value": "76b2fa86eb896809b8b8f0108ee9c93efa2974df176d1df5b01f5551b143bdd4"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "476b7455c315389f9701220eeac136770247ed15c187ab2d7191224a7a2991c7"
+        "value": "85df72be9578a96e18ecbb2278175b2552dd0f7998905a0f6063740fb06f47cb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -161,6 +161,16 @@
     {
       "id": "AR007",
       "sourcePath": "work/2723-fence-arming-premise-rot/clarifications.md",
+      "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
+      "sourceId": "DEC-004",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2723-fence-arming-premise-rot/clarifications.md",
       "targetPath": "work/2723-fence-arming-premise-rot/plan.md",
       "sourceId": null,
       "targetId": null,
@@ -169,7 +179,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR008",
+      "id": "AR009",
       "sourcePath": "work/2723-fence-arming-premise-rot/clarifications.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": null,
@@ -179,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR010",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "PC-001",
@@ -189,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR011",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "GV-001",
@@ -199,7 +209,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR012",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "PM-001",
@@ -209,7 +219,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR013",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "PD-001",
@@ -219,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR014",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "PD-002",
@@ -229,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR015",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "PD-003",
@@ -239,7 +249,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR016",
+      "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
+      "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": null,
@@ -249,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR018",
       "sourcePath": "work/2723-fence-arming-premise-rot/plan.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "VO-001",
@@ -259,7 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR019",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "AC-001",
@@ -269,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR020",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/checklist.md",
       "sourceId": null,
@@ -279,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR021",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/plan.md",
       "sourceId": null,
@@ -289,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR022",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "FR-001",
@@ -299,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR023",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "FR-002",
@@ -309,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR024",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "FR-003",
@@ -319,7 +339,17 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR025",
+      "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
+      "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/clarifications.md",
       "sourceId": null,
@@ -329,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR027",
       "sourcePath": "work/2723-fence-arming-premise-rot/spec.md",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": null,
@@ -339,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR028",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T004",
@@ -349,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR029",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T005",
@@ -359,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR030",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T006",
@@ -369,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR031",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T007",
@@ -379,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR032",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T008",
@@ -389,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR033",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T009",
@@ -399,10 +429,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR034",
       "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
       "sourceId": "T010",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/2723-fence-arming-premise-rot/tasks.yml",
+      "targetPath": "work/2723-fence-arming-premise-rot/tasks.yml",
+      "sourceId": "T012",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -411,7 +451,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 31,
+    "readyCount": 35,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

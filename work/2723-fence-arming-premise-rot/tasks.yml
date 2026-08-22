@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2723-fence-arming-premise-rot/spec.md
-    digest: 29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf
+    digest: 76b2fa86eb896809b8b8f0108ee9c93efa2974df176d1df5b01f5551b143bdd4
     schemaVersion: 1
   - label: clarifications
     path: work/2723-fence-arming-premise-rot/clarifications.md
-    digest: d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842
+    digest: c86f6e45846039d4590b652082a793649e1bff93f24e7f5f7ce61ebec93c121c
     schemaVersion: 1
   - label: checklist
     path: work/2723-fence-arming-premise-rot/checklist.md
-    digest: 102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9
+    digest: ac8a50ff51a092f043c4722238acf1bd5784daa38eab80535100df7e5a286a62
     schemaVersion: 1
   - label: plan
     path: work/2723-fence-arming-premise-rot/plan.md
-    digest: 0eb6e6700f912065c2986475dde1fa59d2a7eb9ff58dcb660285061018212877
+    digest: 1fa66fc0a40b98af4e98ad299e4d2091ac1c2c63a772d3aaa28db9999c9c0b8e
     schemaVersion: 1
 tasks:
   - id: T001
@@ -105,7 +105,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PD-001, VO-001]
+    sourceIds: [PC-001, PD-001, PD-004, VO-001]
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV008]
   - id: T009
@@ -128,6 +128,26 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV010]
+  - id: T011
+    title: Implement requirement FR-004
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Implement clarification decision DEC-004
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV012]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

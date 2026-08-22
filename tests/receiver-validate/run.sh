@@ -311,15 +311,15 @@ out_value() { sed -n "s/^$1=//p" "$WORK/step_output" | tail -1; }
 # verdict <name> <expected-code> <reason-pattern> [VAR=VALUE ...]
 #
 # Asserts THREE things at once, and all three are load-bearing:
-#   1. the STEP exits 0 — observe-only, in every arm including the refusals;
+#   1. the STEP exit is the expected verdict — only OK is green and every refusal fails closed;
 #   2. the PUBLISHED verdict is the expected code — the rule's own real exit status;
 #   3. the output SAYS WHY — a code with no reason is the vacuous-failure defect.
 verdict() {
   local name="$1" want="$2" pat="$3"; shift 3
   reset_world
   local rc; rc="$(run_validate "$VALIDATE" "$@")"
-  if [ "$rc" != 0 ]; then
-    bad "$name" "$(printf 'the STEP exited %s — observe-only is broken, this would red seven receivers\n%s' "$rc" "$(cat "$WORK/out")")"; return
+  if [ "$rc" != "$want" ]; then
+    bad "$name" "$(printf 'expected step exit %s, got %s — the consumed verdict drifted\n%s' "$want" "$rc" "$(cat "$WORK/out")")"; return
   fi
   local got; got="$(out_value verdict)"
   if [ "$got" != "$want" ]; then
@@ -331,7 +331,7 @@ verdict() {
 
 # mutate <old> <new> [first|last] -> a copy of the extracted script with one regression applied
 #
-# `last` EXISTS BECAUSE OF A REAL BUG THIS FIXTURE HIT. D2 mutates the observe-only `exit 0`, and the
+# `last` EXISTS BECAUSE OF A REAL BUG THIS FIXTURE HIT. D2 mutates the fail-closed `exit "$rc"`, and the
 # FIRST occurrence of that text in the script is inside the comment that explains it — so a
 # first-match mutation edited prose, the mutant behaved identically, and the leg reported that the
 # boundary could not be inverted when in fact it had never been touched. A mutation that silently
@@ -415,9 +415,9 @@ PY
   && ok "A6  the rule's real exit status is captured and published as the step's verdict output" \
   || bad "A6  the run: block no longer publishes verdict=\$rc — the real code would be unobservable"
 
-[ "$(m "['run_last_statement']")" = "exit 0" ] \
-  && ok "A7  the verdict step's last statement is 'exit 0' — observe-only (design §9.1 step 1); arming is slice 8's job" \
-  || bad "A7  the verdict step no longer ends in 'exit 0'" "got: $(m "['run_last_statement']")"
+[ "$(m "['run_last_statement']")" = 'exit "$rc"' ] \
+  && ok "A7  the verdict step's last statement is 'exit \"\$rc\"' — the producer fails closed; activation is separate" \
+  || bad "A7  the verdict step no longer consumes its captured verdict" "got: $(m "['run_last_statement']")"
 
 [ "$(m "['step_uses']")" = "[]" ] \
   && ok "A8  the job takes no checkout and uses no action — a job that runs on any PR, a fork head included, handles no credential and materialises no untrusted file" \
@@ -658,7 +658,7 @@ echo "-- C12: the item carries comments but no claim marker: RELEASED, and that 
 reset_world
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" '[{"id":1,"kind":"other"},{"id":2,"kind":"other"}]'
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'tenancy that has ended' "$WORK/out"; then
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'tenancy that has ended' "$WORK/out"; then
   ok "C12 an item with comments but no fsgg:claim marker is RELEASED — a FINDING"
 else
   bad "C12 an item with comments but no fsgg:claim marker is RELEASED — a FINDING" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -668,7 +668,7 @@ echo "-- C13: every lease lapsed: EXPIRED IS NOT EVICTED (.github#2656) --"
 reset_world
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" "[{\"id\":$GEN,\"kind\":\"claim\",\"age\":100000,\"lease\":10,\"worker\":\"curlew-d56f\"}]"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'EXPIRED lease, not an eviction' "$WORK/out"; then
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'EXPIRED lease, not an eviction' "$WORK/out"; then
   ok "C13 an expired lease is reported as expiry, not as a lost race"
 else
   bad "C13 an expired lease is reported as expiry, not as a lost race" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -687,7 +687,7 @@ echo "-- C14: ZERO comments is a NO-VERDICT, never the finding 'nobody holds thi
 reset_world
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" '[]'
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 3 ] && grep -q 'wrong subject' "$WORK/out"; then
+if [ "$rc" = 3 ] && [ "$(out_value verdict)" = 3 ] && grep -q 'wrong subject' "$WORK/out"; then
   ok "C14 an empty comment list is a NO-VERDICT (3), not a FINDING"
 else
   bad "C14 an empty comment list is a NO-VERDICT (3), not a FINDING" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -700,7 +700,7 @@ echo "-- C16: an item this token cannot find at all is a NO-VERDICT, not an uncl
 reset_world
 rm -f "$WORK/stub/FS-GG__.github__issues__2721.json"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 2 ] && grep -q 'could not read' "$WORK/out"; then
+if [ "$rc" = 2 ] && [ "$(out_value verdict)" = 2 ] && grep -q 'could not read' "$WORK/out"; then
   ok "C16 a 404 on the item is a NO-VERDICT — 'a 404 and an empty issue are the same bytes'"
 else
   bad "C16 a 404 on the item is a NO-VERDICT" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -710,7 +710,7 @@ echo "-- C17: an unparseable marker refuses the WHOLE scan (Reads.fs:283, :473-4
 reset_world
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" "[{\"id\":$GEN,\"kind\":\"claim\",\"age\":60,\"lease\":120,\"worker\":\"curlew-d56f\"},{\"id\":99,\"kind\":\"claim-badtime\"}]"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 3 ] && grep -q 'promotes the next candidate to winner' "$WORK/out"; then
+if [ "$rc" = 3 ] && [ "$(out_value verdict)" = 3 ] && grep -q 'promotes the next candidate to winner' "$WORK/out"; then
   ok "C17 an unreadable claim marker refuses the whole scan rather than being dropped"
 else
   bad "C17 an unreadable claim marker refuses the whole scan" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -720,7 +720,7 @@ echo "-- C18: a marker with no readable id refuses the whole scan too --"
 reset_world
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" "[{\"id\":$GEN,\"kind\":\"claim\",\"age\":60,\"lease\":120},{\"id\":98,\"kind\":\"claim-noid\"}]"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 3 ]; then
+if [ "$rc" = 3 ] && [ "$(out_value verdict)" = 3 ]; then
   ok "C18 a claim marker with no readable id refuses the whole scan"
 else
   bad "C18 a claim marker with no readable id refuses the whole scan" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -744,7 +744,7 @@ write_comments "$ITEM_REPO" "$ITEM_NUMBER" \
   "[{\"id\":$GEN,\"kind\":\"claim\",\"age\":60,\"lease\":120,\"worker\":\"curlew-d56f\"},
     {\"id\":11,\"kind\":\"claim\",\"age\":60,\"lease\":120,\"worker\":\"rival-0001\"}]"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q "rival-0001" "$WORK/out"; then
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ] && grep -q "rival-0001" "$WORK/out"; then
   ok "C20 a lower live marker wins and the loser is refused BY NAME — the two-executors case"
 else
   bad "C20 a lower live marker wins and the loser is refused BY NAME" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -756,7 +756,7 @@ reset_world
 # fallback it would be live. The gate must read the marker, not the fallback.
 write_comments "$ITEM_REPO" "$ITEM_NUMBER" "[{\"id\":$GEN,\"kind\":\"claim\",\"age\":2400,\"lease\":10,\"worker\":\"curlew-d56f\"}]"
 rc="$(run_validate "$VALIDATE")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'EXPIRED lease' "$WORK/out"; then
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'EXPIRED lease' "$WORK/out"; then
   ok "C21 staleness is measured against the lease THAT marker declares, not against a fleet default"
 else
   bad "C21 staleness is measured against the marker's own lease=" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -788,7 +788,7 @@ echo "-- C23: a 5000-digit item number does not crash the rule (CPython refuses 
 BIG="$(python3 -c "print('9'*5000)")"
 reset_world
 rc="$(run_validate "$VALIDATE" PR_BODY="$(marker "FS-GG/.github#$BIG")")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'server-assigned\|owner/repo#N' "$WORK/out"; then
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ] && grep -q 'server-assigned\|owner/repo#N' "$WORK/out"; then
   ok "C23 an absurdly long item number is reported as MALFORMED, not published as a bare verdict"
 else
   bad "C23 an absurdly long item number is reported as MALFORMED" "$(printf 'step %s verdict %q\n%s' "$rc" "$(out_value verdict)" "$(cat "$WORK/out")")"
@@ -816,29 +816,27 @@ else
 fi
 
 echo
-echo "== D. observe-only, proven by EXECUTION and inverted =="
+echo "== D. fail-closed enforcement, proven by EXECUTION and inverted =="
 
-# D1 is already implied by every leg above (each asserts step exit 0), but it is stated once
-# explicitly on the arm that matters — a real FINDING — so a reader can see the boundary tested
-# rather than inferred.
+# D1 is already implied by every refusal leg above, but it is stated explicitly on the missing-marker
+# arm so a reader can see the consumed failure rather than infer it from the published output.
 reset_world
 rc="$(run_validate "$VALIDATE" PR_BODY="no marker here")"
-if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ]; then
-  ok "D1  a real FINDING still exits the step 0 while publishing verdict=1 — it reports, it gates nothing"
+if [ "$rc" = 1 ] && [ "$(out_value verdict)" = 1 ]; then
+  ok "D1  a missing authorization exits the step 1 and publishes verdict=1 — the producer fails closed"
 else
-  bad "D1  a real FINDING still exits the step 0 while publishing verdict=1" "step $rc verdict $(out_value verdict)"
+  bad "D1  a missing authorization must exit the step 1 and publish verdict=1" "step $rc verdict $(out_value verdict)"
 fi
 
-# D2 — THE INVERSION. Arming this file (rather than slice 8's branch-protection edit) would red pull
-# requests in SEVEN repositories this repo does not own, on the first push, before anyone has watched
-# the context report once. If that mutation survived, the observe-only boundary would be a promise.
-MUT="$(mutate 'exit 0' 'exit $rc' last)"
+# D2 — THE INVERSION. Neutralise the consumed verdict while leaving the published output intact. If
+# that mutation survived, branch protection would read green while the diagnostic claimed refusal.
+MUT="$(mutate 'exit "$rc"' 'exit 0' last)"
 reset_world
 rc="$(run_validate "$MUT" PR_BODY="no marker here")"
-if [ "$rc" != 0 ]; then
-  ok "D2  MUTATION: propagating the verdict (exit \$rc) makes the step FAIL — so D1 is a real assertion, not a tautology"
+if [ "$rc" = 0 ] && [ "$(out_value verdict)" = 1 ]; then
+  ok "D2  MUTATION: neutralising the consumed verdict makes a published FINDING pass — so D1 detects fail-open behavior"
 else
-  bad "D2  MUTATION: propagating the verdict must make the step fail, but it exited 0" "$(cat "$WORK/out")"
+  bad "D2  MUTATION: neutralising the consumed verdict must expose a green step with verdict=1" "$(cat "$WORK/out")"
 fi
 
 # D3 — REVIEW ROUND 1's DEFECT, RECONSTRUCTED EXACTLY. Revert BOTH repairs — the id-length guard, so
@@ -1113,22 +1111,21 @@ fi
 # `try:`/`with` block copied out of the WORKFLOW — carrying the workflow's 14-space indentation, where
 # the EXTRACTED script has 4, because YAML strips the block scalar's own indent. The mutation silently
 # did not apply and this leg reported that the guard could not be inverted. Same class as the
-# wrong-subject sweep and the comment-line `exit 0`: a mutation that quietly misses.
+# wrong-subject sweep and the comment-line exit text: a mutation that quietly misses.
 MUT="$(mutate 'except OSError as why:' 'except ZeroDivisionError as why:')"
 : > "$WORK/out"
+set +e
 env -i PATH="$STUB:/usr/bin:/bin" HOME="$HOME" GH_STUB_DIR="$WORK/stub" \
     GITHUB_OUTPUT="$WORK/step_output" GITHUB_STEP_SUMMARY="$WORK/no-such-dir/summary.md" \
     PR_BODY="$(marker)" PR_HEAD="$HEAD" PR_BRANCH="item/2721-receiver-validate" \
     PR_NUMBER=99 SELF_REPO="FS-GG/FS.GG.Net" GH_TOKEN="stub-token" \
     bash "$MUT" >"$WORK/out" 2>&1
 h3rc=$?
-# THE ASSERTION IS ON THE PUBLISHED VERDICT, NOT ON THE STEP'S EXIT — observe-only pins that at 0 by
-# design, which is exactly why the round-1 defect was publishable in the first place. An earlier draft
-# of this leg asserted the step exit and reported that the guard could not be inverted while the
-# traceback was sitting in the captured output.
+set -e
+# The wrapper publishes the crash as verdict 1 and the fail-closed step must consume the same code.
 h3got="$(out_value verdict)"
-if [ "$h3rc" = 0 ] && [ "$h3got" = 1 ] && grep -q 'Traceback' "$WORK/out"; then
-  ok "H3  MUTATION: unguarding the summary write publishes verdict=1 (FINDING) for a pull request the rule had already graded OK — so H2 is a real assertion"
+if [ "$h3rc" = 1 ] && [ "$h3got" = 1 ] && grep -q 'Traceback' "$WORK/out"; then
+  ok "H3  MUTATION: unguarding the summary write publishes and consumes verdict=1 for a pull request the rule had already graded OK — so H2 is a real assertion"
 else
   bad "H3  MUTATION: unguarding the summary write must publish an unearned verdict=1" "$(printf 'step %s verdict %q\n%s' "$h3rc" "$h3got" "$(cat "$WORK/out")")"
 fi
