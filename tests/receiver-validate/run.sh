@@ -18,7 +18,7 @@
 # own marker and then asserts the gate reads it proves only that the fixture and the gate agree.
 #
 # So section F below is the leg that matters most here, and it is not optional decoration: it parses
-# the PRODUCER — `authorizationMarker` in `src/FS.GG.Coord.Cli/Client.fs` — and asserts, IN BOTH
+# the PRODUCER — `authorizationMarker` in Lifecycle's `LiveHandlers.fs` — and asserts, IN BOTH
 # DIRECTIONS, that the field set this gate requires is exactly the field set the production path
 # emits. A producer that stops writing a field this gate demands reds here, and a gate that starts
 # demanding a field no producer writes reds here too. That is the check neither slice 2 nor slice 3
@@ -53,7 +53,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 WF="$REPO_ROOT/.github/workflows/kit-materialize.yml"
 SELFTEST_WF="$REPO_ROOT/.github/workflows/fsgg-receiver-validate-selftest.yml"
-CLIENT_FS="$REPO_ROOT/src/FS.GG.Coord.Cli/Client.fs"
+CLIENT_FS="$REPO_ROOT/src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
 WRITES_FS="$REPO_ROOT/src/FS.GG.Coord.GitHub/Writes.fs"
 GATE_PY="$REPO_ROOT/scripts/lib/gate.py"
 
@@ -110,7 +110,7 @@ run = step["run"]
 def trigger_block(doc):
     return doc.get("on", doc.get(True)) or {}
 
-# THE PRODUCER'S OWN FIELD SET, parsed from `authorizationMarker` in Client.fs rather than restated.
+# THE PRODUCER'S OWN FIELD SET, parsed from `authorizationMarker` in LiveHandlers.fs rather than restated.
 # This is the anti-inert-reader leg's input.
 with open(client_path, encoding="utf-8") as fh:
     client_src = fh.read()
@@ -432,9 +432,9 @@ PY
   || bad "A10 nothing in CI runs this fixture — every leg below would be decorative"
 
 # THE `paths:` FILTER IS PART OF THE GATE, NOT PACKAGING. The subject is a job inside
-# kit-materialize.yml plus the producer in Client.fs; a filter that misses either means a change to
+# kit-materialize.yml plus the producer in LiveHandlers.fs; a filter that misses either means a change to
 # them lands with this fixture never running.
-for entry in ".github/workflows/kit-materialize.yml" "tests/receiver-validate/**" "src/FS.GG.Coord.Cli/Client.fs"; do
+for entry in ".github/workflows/kit-materialize.yml" "tests/receiver-validate/**" "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"; do
   if python3 -c "import json,sys;sys.exit(0 if '$entry' in json.load(open('$META'))['selftest_pr_paths'] else 1)"; then
     ok "A11 the selftest's pull_request paths: cover $entry"
   else
@@ -904,10 +904,10 @@ Closes #2721"
 corpus_leg "E3  a marker with extra whitespace after <!-- is read"    0 "<!--   fsgg:pr-authorization v=1 item=$ITEM gen=$GEN head=$HEAD -->"
 corpus_leg "E4  a MULTI-LINE marker is read (the design doc's own spelling spans lines)" 0 "<!-- fsgg:pr-authorization v=1 item=$ITEM
      gen=$GEN head=$HEAD -->"
-# Client.fs's own doc comment: "The gate silently accepts (never rejects on) any ADDITIONAL
+# LiveHandlers.fs's own doc comment: "The gate silently accepts (never rejects on) any ADDITIONAL
 # key=value pair, so this stays forward-compatible with a future opkey=/grant= without either side
 # having to change first." Slice 3's successor must not be redded by this gate for adding them.
-corpus_leg "E5  a marker carrying the FUTURE opkey=/grant= fields is still read (Client.fs's stated forward-compatibility)" 0 \
+corpus_leg "E5  a marker carrying the FUTURE opkey=/grant= fields is still read (LiveHandlers.fs's stated forward-compatibility)" 0 \
   "<!-- fsgg:pr-authorization v=1 item=$ITEM gen=$GEN opkey=$(printf '0%.0s' $(seq 1 64)) grant=4242424242 head=$HEAD -->"
 
 # ---- MUST NOT MATCH: lookalikes that would make this gate grade the wrong thing ----
@@ -966,11 +966,11 @@ echo "== F. THE PRODUCER IS REAL — the leg slices 2 and 3 did not have =="
 
 # A fixture that builds its own marker and then asserts the gate reads it proves only that the
 # fixture and the gate agree. This section asks the PRODUCTION PATH instead, parsed from source:
-# `authorizationMarker` in Client.fs is the exact body `delivery <ref> --pr N` PATCHes into the PR
+# `authorizationMarker` in LiveHandlers.fs is the exact body `delivery <ref> --pr N` PATCHes into the PR
 # (`pnext-item` §6, `.github#2488`), and it is the only thing in the documented flow that writes one.
 [ "$(m "['producer_found']")" = "True" ] \
-  && ok "F1  the producer exists: Client.fs carries an authorizationMarker composing the marker this gate grades" \
-  || bad "F1  Client.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is exactly how slices 2 and 3 landed inert"
+  && ok "F1  the producer exists: LiveHandlers.fs carries an authorizationMarker composing the marker this gate grades" \
+  || bad "F1  LiveHandlers.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is exactly how slices 2 and 3 landed inert"
 
 # BOTH DIRECTIONS, AND THE RELATION IS CONTAINMENT RATHER THAN EQUALITY (.github#2395).
 #
@@ -1013,7 +1013,7 @@ required_subset "$META" \
 # A containment test that survived a producer regression would be #266's shape rebuilt inside the very
 # fixture written to close it, so this measures the escape rather than promising it cannot happen.
 # The mutation is applied to the PARSED FACTS — the same `producer_fields` list F2 reads — because
-# that is the exact input whose corruption the leg above must catch; mutating Client.fs on disk would
+# that is the exact input whose corruption the leg above must catch; mutating LiveHandlers.fs on disk would
 # additionally test the regex, which sections above already own.
 F2MUT="$WORK/meta-producer-regressed.json"
 python3 - "$META" "$F2MUT" <<'PY'

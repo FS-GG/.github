@@ -44,8 +44,8 @@
 #
 #   * The first half is now false as a fact. `.github#2395` (slice 3) has since landed BOTH halves:
 #     `delivery` posts a `fsgg:merge-election` marker and then writes a SIX-field authorization
-#     grounded on it (`src/FS.GG.Coord.Cli/Client.fs`'s `authorizationMarker`,
-#     `src/FS.GG.Coord.Cli/DeliveryApplication.fs`'s `electionMarker`).
+#     grounded on it (`src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs`'s `authorizationMarker`,
+#     `src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs`'s `electionMarker`).
 #   * The second half was NEVER true, and that is the part worth keeping a note about. Check 4 was not
 #     *finding no election*; it was never EVALUATED. `scripts/check-claim-fence.py`'s
 #     `REQUIRED_AUTH_FIELDS` names six fields and the pre-#2395 producer composed four, so the
