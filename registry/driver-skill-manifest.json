@@ -310,7 +310,7 @@
       "id": "board-analyst",
       "scope": "operator",
       "sha256": "17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe",
-      "tree-sha256": "6fe4ed1c849e1215f395c5e35046fa9721579cdf8b92125ac69a2fbd6500464f",
+      "tree-sha256": "bfb2f8e3bfa51c94810a5894d239ef4a1afdef1b545433919edcdb4fcf6c5dd8",
       "files": [
         {
           "path": "SKILL.md",
@@ -329,7 +329,7 @@
         },
         {
           "path": "references/the-bar.md",
-          "sha256": "8a0be0733d131d1d2cad758b636861347c97c1a60c47b5b1d0c37a71dfa7ff88",
+          "sha256": "6f6981b5a4b8798fe0359dbd0bec1fb1f6a98f5542b6da54b6e68efd4460c5a5",
           "executable": false
         }
       ],

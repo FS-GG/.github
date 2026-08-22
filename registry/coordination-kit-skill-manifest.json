@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "66f6ed6756c51b259b02f7f070afac78db77a865861a373ce76fd90ef1d54a78",
+      "tree-sha256": "b3bfbae182a239daa664a0dddbd82cc364259ebfd173cafad98f869182014076",
       "files": [
         {
           "path": "SKILL.md",
@@ -18,7 +18,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "173b1e49615f4f2f9164b79e6b6ea472d1ec39d798520e284306f81f992c36cf",
+          "sha256": "9fdd58ac68000634bc142cee0e8db3df6500c066b32ce4742c1844d95e7012ab",
           "executable": false
         },
         {
@@ -41,7 +41,7 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "057b0632ca5ed15c871e05af6216456209e7aa96cd4a6919719f2ceef6100860",
+      "tree-sha256": "7348ca0437d9ed5dbba07ce9b8b5ac1bb2459af7207204c341edc778e434af04",
       "files": [
         {
           "path": "SKILL.md",
@@ -65,7 +65,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "629c767cfb0f51191230dbafae3c2affd78a2c89b39a66971ede4c17907fca0a",
+          "sha256": "caee8be9719ce47fee9f13e029eb1602f431c77864b7cf5d7b69be320a01b312",
           "executable": false
         },
         {
