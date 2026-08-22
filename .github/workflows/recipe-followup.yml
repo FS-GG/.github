@@ -32,7 +32,9 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
-      - "src/FS.GG.Coord.Cli/Followups.fs"
+      - "src/FS.GG.Coord.Cli/Program.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/Followups.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
       - ".github/workflows/**"
   push:
     branches: [main]
@@ -43,7 +45,9 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
-      - "src/FS.GG.Coord.Cli/Followups.fs"
+      - "src/FS.GG.Coord.Cli/Program.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/Followups.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
       - ".github/workflows/**"
   workflow_dispatch:
 
@@ -81,7 +85,7 @@ jobs:
           # Audit is a GitHub-backed fleet reconciliation; the normal queue verbs deliberately stay
           # local so a worker can drain its promise while the board budget is exhausted. Pin BOTH arms:
           # accepting either handler alone would make one documented followup verb unreachable.
-          grep -qE '\|[[:space:]]*Ok[[:space:]]+Followups\.Audit[[:space:]]*->[[:space:]]*Client\.followupAudit' src/FS.GG.Coord.Cli/Program.fs \
-            || { echo "::error::'followup audit' is not dispatched to Client.followupAudit in Program.fs."; exit 1; }
+          grep -qE '\|[[:space:]]*Ok[[:space:]]+Followups\.Audit[[:space:]]*->[[:space:]]*live[[:space:]]+FS\.GG\.Coord\.Cli\.Lifecycle\.LiveHandlers\.followupAudit' src/FS.GG.Coord.Cli/Program.fs \
+            || { echo "::error::'followup audit' is not dispatched to Lifecycle.LiveHandlers.followupAudit in Program.fs."; exit 1; }
           grep -qE '\|[[:space:]]*_[[:space:]]*->[[:space:]]*Followups\.run' src/FS.GG.Coord.Cli/Program.fs \
             || { echo "::error::normal followup verbs are not dispatched to Followups.run in Program.fs."; exit 1; }

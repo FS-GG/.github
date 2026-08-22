@@ -226,11 +226,7 @@ module LiveHandlers =
         digestWarn: (unit -> unit) ->
         ctx: Kernel.Context -> opts: Options.Options -> int
 
-    val withFollowupAuditContextForTest:
-      ctx: Kernel.Context -> f: (unit -> 'a) -> 'a
-
     val followupAudit:
-      context: (unit -> Result<Kernel.Context * System.IDisposable, int>) ->
-        opts: Options.Options -> int
+      ctx: Kernel.Context -> opts: Options.Options -> int
 
     val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int

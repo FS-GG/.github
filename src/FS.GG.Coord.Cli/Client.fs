@@ -177,7 +177,7 @@ module Client =
 
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
-    let private scanAndDecide (ctx: Context) (opts: Options) (intent: Cache.ReadIntent) =
+    let scanAndDecide (ctx: Context) (opts: Options) (intent: Cache.ReadIntent) =
         Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
         |> Result.bind (fun board -> Scan.board ctx.Transport intent ctx.Owner ctx.Title board.Number)
         |> Result.bind (fun rows ->
@@ -1954,7 +1954,7 @@ module Client =
     /// happened, the column is set, the claim is dropped. A board read that fails, a budget that is gone, an
     /// engine that cannot parse its own snapshot: none of them may touch a verdict this function already
     /// printed. The offer is a courtesy appended to finished work, so it is allowed to do exactly nothing.
-    let private offerChoreAfterDone (ctx: Context) (opts: Options) (ref: Ref) : unit =
+    let offerChoreAfterDone (ctx: Context) (opts: Options) (ref: Ref) : unit =
         // IS THERE A LOCK AT ALL? — asked FIRST, and asked HERE rather than left to `Chores.offer`, which
         // asks it as its own step 1 "because it is a pure string match that spends nothing".
         //
@@ -7575,7 +7575,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// to them.
     let roomOpen (ctx: Context) (opts: Options) : int = Handlers.roomOpen ctx opts
 
-    let private generatedPaths (root: string) : Set<string> =
+    let generatedPaths (root: string) : Set<string> =
         let script = Path.Combine(root, "scripts", "generated-paths")
 
         if not (File.Exists script) then
@@ -8854,7 +8854,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             eprint "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
             ExitError
 
-    let run (boardOpsHandlers: Map<Options.Command, HandlerRegistration.Handler>) (opts: Options) : int =
+    let executeWithContext (handler: Context -> Options -> int) (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
         // `scopedRepo`, which drops the owner — so reading `opts.Repo` after it would launder a non-FS-GG
@@ -8907,47 +8907,35 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 { ctx with
                     DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
 
-            match Map.tryFind opts.Command boardOpsHandlers with
-            | Some handler -> handler ctx opts
-            | None ->
-                match opts.Command with
-                | Next -> next ctx opts
-                | BatchCmd -> batch ctx opts
-                | DriverCmd -> driver ctx opts
-                | DeliveryCmd ->
-                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
-                        (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd offerChoreAfterDone)
-                        deliveryPathsVerified
-                        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
-                        scanAndDecide
-                        ctx
-                        opts
-                | ReviewCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review ctx opts
-                | Ready -> ready ctx opts
-                | Reconcile -> reconcile ctx opts
-                | Who -> who ctx opts
-                | Reap -> reap ctx opts
-                | Budget -> budget ctx opts
-                | Claim -> claim ctx opts
-                | Adopt -> adopt ctx opts
-                | Landable -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.landable ctx opts
-                | Take -> take ctx opts
-                | Release -> release ctx opts
-                | Heartbeat -> heartbeat ctx opts
-                | Widen -> widen ctx opts
-                | SetPaths -> setPaths ctx opts
-                | Overlap -> overlapCmd ctx opts
-                | OpLockAcquire -> opLockAcquire ctx opts
-                | OpLockRelease -> opLockRelease ctx opts
-                | DoneCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd offerChoreAfterDone ctx opts
-                | VerifyPaths ->
-                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
-                        generatedPaths
-                        KitDigest.kitRoot
-                        KitDigest.digestWarn
-                        ctx
-                        opts
-                | GraphQlOps -> graphQlOps ctx opts
-                | LintCmd -> lint ctx opts
-                | RouteCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd ctx opts
-                | other -> failwith $"Client.run received a non-IO command: %A{other}"
+            handler ctx opts
+
+    let run (boardOpsHandlers: Map<Options.Command, HandlerRegistration.Handler>) (opts: Options) : int =
+        executeWithContext
+            (fun ctx opts ->
+                match Map.tryFind opts.Command boardOpsHandlers with
+                | Some handler -> handler ctx opts
+                | None ->
+                    match opts.Command with
+                    | Next -> next ctx opts
+                    | BatchCmd -> batch ctx opts
+                    | DriverCmd -> driver ctx opts
+                    | Ready -> ready ctx opts
+                    | Reconcile -> reconcile ctx opts
+                    | Who -> who ctx opts
+                    | Reap -> reap ctx opts
+                    | Budget -> budget ctx opts
+                    | Claim -> claim ctx opts
+                    | Adopt -> adopt ctx opts
+                    | Take -> take ctx opts
+                    | Release -> release ctx opts
+                    | Heartbeat -> heartbeat ctx opts
+                    | Widen -> widen ctx opts
+                    | SetPaths -> setPaths ctx opts
+                    | Overlap -> overlapCmd ctx opts
+                    | OpLockAcquire -> opLockAcquire ctx opts
+                    | OpLockRelease -> opLockRelease ctx opts
+                    | GraphQlOps -> graphQlOps ctx opts
+                    | LintCmd -> lint ctx opts
+                    | other -> failwith $"Client.run received a non-IO command: %A{other}"
+            )
+            opts

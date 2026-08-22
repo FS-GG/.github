@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2727-lifecycle-extraction/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2727-lifecycle-extraction/analysis.json
-    digest: 2a50c7b3f264aeacf2fe2f846d4801971e86c968350ab640fba6c7e298f37508
+    digest: 8996985353b4e96f65258ef21bc56f32628401bbb2a488478ed37a93893cf80f
     schemaVersion: 1
   - label: checklist
     path: work/2727-lifecycle-extraction/checklist.md
@@ -51,8 +51,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -76,8 +76,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -101,8 +101,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -126,8 +126,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -151,8 +151,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -176,8 +176,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -201,8 +201,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -226,8 +226,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -251,8 +251,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -276,8 +276,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:7871a3b8d8a486c93ceaaecfb06379997c98f6649fb10674af111d47100c42fd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129

@@ -340,10 +340,6 @@ let private legacyHandler (opts: Options) =
     | DriverCmd -> runClient opts
     | CycleCmd -> CycleLedgerApplication.run opts
     | WhoAmI -> Client.whoami opts
-    | Followup ->
-        match Followups.parse opts.Args with
-        | Ok Followups.Audit -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit Client.context opts
-        | _ -> Followups.run opts
     | Predicate -> Client.predicate opts
     | DiffAudit -> SemanticDiffApplication.run opts
     | Next
@@ -373,14 +369,39 @@ let private legacyHandler (opts: Options) =
 let private boardOpsProgramRegistrations = Handlers.programHandlers runClient
 
 let private lifecycleProgramRegistrations =
+    let live handler = Client.executeWithContext handler
+
     FS.GG.Coord.Cli.Lifecycle.Handlers.handlers
-        { Delivery = legacyHandler
-          Review = legacyHandler
-          Route = legacyHandler
-          Landable = legacyHandler
-          Done = legacyHandler
-          VerifyPaths = legacyHandler
-          Followup = legacyHandler }
+        { Delivery =
+            fun opts ->
+                if opts.SnapshotFile.IsSome then
+                    DeliveryApplication.run opts
+                else
+                    live
+                        (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
+                            (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd Client.offerChoreAfterDone)
+                            Client.deliveryPathsVerified
+                            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
+                            Client.scanAndDecide)
+                        opts
+          Review =
+            fun opts ->
+                if opts.SnapshotFile.IsSome then ReviewApplication.run opts
+                else live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review opts
+          Route = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd
+          Landable = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.landable
+          Done = live (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd Client.offerChoreAfterDone)
+          VerifyPaths =
+            live
+                (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
+                    Client.generatedPaths
+                    KitDigest.kitRoot
+                    KitDigest.digestWarn)
+          Followup =
+            fun opts ->
+                match Followups.parse opts.Args with
+                | Ok Followups.Audit -> live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit opts
+                | _ -> Followups.run opts }
 
 let private lifecycleHandlers =
     FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.validate

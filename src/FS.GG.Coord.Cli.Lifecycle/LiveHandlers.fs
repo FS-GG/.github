@@ -2218,27 +2218,7 @@ module LiveHandlers =
     /// `followup audit` is intentionally a read-only reconciliation PREVIEW. A queue's mtime is a
     /// candidate selector, not evidence that its worker died: each queued issue is re-read from GitHub,
     /// then its marker scan is required to be complete before we say it has no live claim.
-    // The application fixture supplies the same typed context every other Client handler receives. The
-    // override is scoped and restored even when its assertion throws; production never installs one.
-    let mutable private followupAuditContextOverride: (Context * IDisposable) option = None
-
-    let withFollowupAuditContextForTest (ctx: Context) (f: unit -> 'a) : 'a =
-        let prior = followupAuditContextOverride
-        followupAuditContextOverride <- Some(ctx, { new IDisposable with member _.Dispose() = () })
-
-        try f ()
-        finally followupAuditContextOverride <- prior
-
-    let followupAudit (context: unit -> Result<Context * IDisposable, int>) (opts: Options) : int =
-        let supplied =
-            match followupAuditContextOverride with
-            | Some value -> Ok value
-            | None -> context ()
-
-        match supplied with
-        | Error code -> code
-        | Ok(ctx, disposable) ->
-            use _ = disposable
+    let followupAudit (ctx: Context) (opts: Options) : int =
             let local = Followups.audit DateTimeOffset.UtcNow
             let mutable failed = not (List.isEmpty local.Unreadable)
 

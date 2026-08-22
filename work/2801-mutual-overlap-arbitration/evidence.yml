@@ -53,7 +53,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -80,7 +80,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -107,7 +107,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -134,7 +134,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -161,7 +161,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -188,7 +188,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -215,7 +215,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -242,7 +242,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -269,7 +269,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -296,7 +296,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -323,7 +323,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -350,7 +350,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -377,7 +377,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -404,7 +404,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -431,7 +431,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -458,7 +458,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -485,7 +485,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -512,7 +512,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -539,7 +539,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -566,7 +566,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -593,7 +593,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -620,7 +620,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -647,7 +647,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -674,7 +674,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -701,7 +701,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -728,7 +728,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -755,7 +755,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -782,7 +782,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -809,7 +809,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.trx
+      source: readiness/2801-mutual-overlap-arbitration/claim-overlap.xml
       digest: "sha256:660ab9fbbbc0c4e7dced35feddc66e746c2e7c5ae0fe786ec04fc06e58147ffd"
       digestContract: exact-bytes-v1
       outcome: passed
