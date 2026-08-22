@@ -48,7 +48,7 @@ module DeliveryApplicationTests =
     let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =
         let malformed =
             [ review 10L "https://reviews/initial" "<!-- fsgg:review-decision/v2 -->\n{}" ]
-        let parsed, problem = Client.deliveryReviewEvidence true malformed
+        let parsed, problem = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true malformed
         let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
 
         match Delivery.inspect facts with
@@ -64,7 +64,7 @@ module DeliveryApplicationTests =
             StructuredFixtures.acceptedReviewComments
                 "FS-GG/.github#2131/pr/2174" (String.replicate 40 "a") "kestrel-1"
             |> List.map (fun (id, url, body) -> review id url body)
-        let parsed, problem = Client.deliveryReviewEvidence true chain
+        let parsed, problem = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true chain
         let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
 
         match Delivery.inspect facts with
@@ -507,7 +507,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.Contains("meant to declare", reason)
             Assert.Contains("code sample", reason)
 
-    // Round-1 review repair (.github#2264 PR #2271): `Client.outstandingObligations` is the extracted,
+    // Round-1 review repair (.github#2264 PR #2271): `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations` is the extracted,
     // directly-testable core of `reconcile`'s lifecycle fold, which previously scanned live PR comments
     // with bulk, unanchored `.Contains` — a comment quoting ANOTHER obligation's receipt marker in prose
     // made `Outstanding` compute `false` while a genuine obligation was still open. These tests reproduce
@@ -523,25 +523,25 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
               // Quotes `b`'s receipt shape in prose, in the org's ordinary reviewer-comment style — never
               // its own comment's entire body, so the anchored parser cannot mistake it for a real receipt.
               commentBody 4L "https://example.test/4" "For context, `b`'s receipt will look like:\n`<!-- fsgg:delivery-receipt id=b head=head-a evidence=https://example.test/b -->`\nonce it lands." ]
-        Assert.True(Client.outstandingObligations (Ok "head-a") (Ok comments))
+        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok comments))
 
     [<Fact>]
     let ``#2264 round 1: every obligation genuinely receipted clears Outstanding`` () =
         let comments : Reads.CommentBody list =
             [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
               commentBody 2L "https://example.test/2" "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->" ]
-        Assert.False(Client.outstandingObligations (Ok "head-a") (Ok comments))
+        Assert.False(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok comments))
 
     [<Fact>]
     let ``#2264 round 1: an unreadable head or comment thread fails closed as Outstanding`` () =
-        Assert.True(Client.outstandingObligations (Error(Errors.NotFound "no head")) (Ok []))
-        Assert.True(Client.outstandingObligations (Ok "head-a") (Error(Errors.NotFound "no comments")))
+        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Error(Errors.NotFound "no head")) (Ok []))
+        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Error(Errors.NotFound "no comments")))
 
     [<Fact>]
     let ``#2264 round 1: a malformed or stale declaration fails closed as Outstanding`` () =
         let staleHead : Reads.CommentBody list =
             [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=old-head -->" ]
-        Assert.True(Client.outstandingObligations (Ok "head-a") (Ok staleHead))
+        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok staleHead))
 
     [<Fact>]
     let ``#2216 stale declaration identifies its comment and append-proof repair`` () =
@@ -726,7 +726,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#2395 authorizationMarker renders all six fields the fence requires, in the gate's order`` () =
         let marker =
-            Client.authorizationMarker
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker
                 "FS-GG/.github#2395"
                 "5267541214"
                 expectedOpKey
@@ -738,36 +738,36 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         )
 
     let private authMarker gen head =
-        Client.authorizationMarker "FS-GG/.github#2395" gen expectedOpKey "5309319124" head
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" gen expectedOpKey "5309319124" head
 
     [<Fact>]
     let ``#2395 a body with no marker at all is rebound, not left missing`` () =
         let body = "Implements the thing.\n\nCloses #2395"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
-        | Client.AuthorizationRebound updated ->
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.Contains("Closes #2395", updated)
-        | Client.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
 
     [<Fact>]
     let ``#2395 a marker bound to a superseded head is rebound to the current one, not left stale`` () =
         let body = "Implements the thing.\n\n" + authMarker "5267541214" "head-old"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
-        | Client.AuthorizationRebound updated ->
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-new", updated)
             Assert.DoesNotContain("head-old", updated)
-        | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
 
     [<Fact>]
     let ``#2395 a marker naming a superseded GRANT is rebound, not left grounded in a lost election`` () =
         let stale =
-            Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319000" "head-a"
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319000" "head-a"
         let body = "Implements the thing.\n\n" + stale
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
-        | Client.AuthorizationRebound updated ->
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.DoesNotContain("5309319000", updated)
-        | Client.AuthorizationCurrent -> failwith "expected a rebind: the marker named a different election"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the marker named a different election"
 
     // THE MIGRATION, AS A TEST RATHER THAN A PROMISE. Every pull request open when this landed carries
     // the FOUR-field marker the row's first landing wrote. Nothing rebinds it but this rule: a marker
@@ -778,35 +778,35 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     let ``#2395 a legacy FOUR-field marker is replaced in place by the six-field one, never left beside it`` () =
         let legacy = "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=head-a -->"
         let body = $"Implements the thing.\n\n{legacy}"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
-        | Client.AuthorizationRebound updated ->
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             let occurrences =
                 System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
             Assert.Equal(1, occurrences)
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.DoesNotContain(legacy, updated)
-        | Client.AuthorizationCurrent -> failwith "expected a rebind: a four-field marker is not the six-field one"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: a four-field marker is not the six-field one"
 
     [<Fact>]
     let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
         let stale = authMarker "111" "head-old"
         let alsoStale = authMarker "222" "head-older"
         let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
-        | Client.AuthorizationRebound updated ->
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             let occurrences =
                 System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
             Assert.Equal(1, occurrences)
             Assert.Contains(authMarker "5267541214" "head-new", updated)
-        | Client.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
 
     [<Fact>]
     let ``#2395 a body already carrying exactly the desired marker is reported current, not rewritten`` () =
         let desired = authMarker "5267541214" "head-current"
         let body = $"Implements the thing.\n\n{desired}"
-        match Client.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-current" with
-        | Client.AuthorizationCurrent -> ()
-        | Client.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-current" with
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> ()
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated
 
     // -------------------------------------------------------------------------------------------
     // The election marker, pure
@@ -882,10 +882,10 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     //
     // Everything above drives pure functions — real coverage of the DECISIONS, but none of it proves
     // the LIVE path reaches the transport with the right method, path, order and body.
-    // `Client.electionGrounding` and `Client.ensureAuthorization` are that wiring, and the cases
+    // `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.electionGrounding` and `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization` are that wiring, and the cases
     // below drive them directly against a `Fake.Recorder` — the same "reuse the internal seam instead
     // of restating the whole `delivery` command's board-scan/PR-facts machinery" idiom
-    // `AuthorizedMarkerTests.fs` already uses for `Client.authorizedMarker`.
+    // `AuthorizedMarkerTests.fs` already uses for `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker`.
 
     let private jsonBody (body: string) : string =
         System.Text.Json.JsonSerializer.Serialize {| body = body |}
@@ -982,7 +982,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing.\n\nCloses #2395"
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             // The election is APPENDED before the authorization is written, and that order is the
@@ -1000,7 +1000,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.Contains("pr=9001 -->", electionBody)
 
             let body = Assert.Single w.PatchedBodies
-            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" head, body)
+            Assert.Contains(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" head, body)
             Assert.Contains("Closes #2395", body)
 
     [<Fact>]
@@ -1014,7 +1014,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Error(Errors.NotFound "a second election must never be posted for the same opkey and pull request"))
                 "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             Assert.Empty w.PostedBodies
@@ -1036,7 +1036,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Error(Errors.NotFound "no election should be posted when this target already owns one"))
                 "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             let body = Assert.Single w.PatchedBodies
@@ -1054,7 +1054,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (okResponse (commentListing [ 5309319100L, anElection 9002 ])) (okResponse """{"id":5309319124}""") "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             Assert.Single w.PostedBodies |> ignore
@@ -1072,7 +1072,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this read"))) (okResponse """{"id":1}""") "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Ok() -> failwith "expected a refusal: the elections could not be read, so nothing grounds an authorization"
         | Error _ ->
             Assert.Empty w.PatchedBodies
@@ -1085,7 +1085,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (okResponse (commentListing [])) (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this write"))) "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
         | Ok() -> failwith "expected a refusal: no election was obtained, so no grant exists to name"
         | Error _ -> Assert.Empty w.PatchedBodies
 
@@ -1099,7 +1099,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             ensureAuthorizationTransport (fun req ->
                 Error(Errors.NotFound $"a compose refusal must precede the transport, got %s{req.Method} %s{req.Path}"))
 
-        match Client.electionGrounding (ensureAuthorizationContext transport) ensureAuthorizationTarget "released" 9001 with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.electionGrounding (ensureAuthorizationContext transport) ensureAuthorizationTarget "released" 9001 with
         | Ok grounding -> failwithf "expected a refusal for the released sentinel, got %A" grounding
         | Error e ->
             let rendered = $"%A{e}"
@@ -1118,11 +1118,11 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing."
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) plainHead false with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) plainHead false with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             let body = Assert.Single w.PatchedBodies
-            Assert.Contains(Client.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" plainHead, body)
+            Assert.Contains(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" plainHead, body)
 
     // A genuinely still-live no-op: a merged PR's body is never rewritten — nothing further needs
     // authorizing once landing has already happened. Now stronger than before: it also proves the
@@ -1132,6 +1132,6 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             ensureAuthorizationTransport (fun req -> Error(Errors.NotFound $"expected zero requests once merged, got %s{req.Method} %s{req.Path}"))
 
-        match Client.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" true with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" true with
         | Error e -> failwithf "expected ensureAuthorization to succeed as a no-op, got %A" e
         | Ok() -> ()

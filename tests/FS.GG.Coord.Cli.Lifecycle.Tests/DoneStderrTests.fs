@@ -14,7 +14,7 @@ open FS.GG.Coord.Cli
 /// offer set the precedent this codebase already keeps for "a candidate existed but was not chosen"
 /// (`tests/coord-engine-e2e/writes.sh:456-462`). `DoneTests` (`FS.GG.Coord.GitHub.Tests`) pins the pure
 /// `Done.render`/`renderReceipt`/`passedOverForeignNote` split; THIS file is the thing those tests cannot
-/// be — the actual process boundary `Client.doneCmd` writes across, exercised end to end through a fake
+/// be — the actual process boundary `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ())` writes across, exercised end to end through a fake
 /// transport, the same technique `LandableNotOpenTests`/`ForceStealTests` already use for a full-command
 /// round trip in this test project.
 module DoneStderrTests =
@@ -141,7 +141,7 @@ module DoneStderrTests =
           DefaultRepo = Some ".github"
           ChoreLocks = [] }
 
-    /// Drive `Client.doneCmd` end to end, capturing stdout and stderr SEPARATELY — the two streams
+    /// Drive `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ())` end to end, capturing stdout and stderr SEPARATELY — the two streams
     /// `.github#2444` is about — against a throwaway cache/queue root, same licence as
     /// `LandableNotOpenTests.runLandable`/`ForceStealTests.runClaim`: `AssemblyInfo.fs` disables
     /// cross-class parallelism, so pointing the process-global `FSGG_COORD_CACHE` somewhere private per
@@ -167,7 +167,7 @@ module DoneStderrTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = Client.doneCmd context opts
+            let code = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ()) context opts
             Console.Out.Flush()
             Console.Error.Flush()
             code, capturedOut.ToString(), capturedErr.ToString()

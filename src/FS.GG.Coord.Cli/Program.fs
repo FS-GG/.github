@@ -372,6 +372,24 @@ let private legacyHandler (opts: Options) =
 
 let private boardOpsProgramRegistrations = Handlers.programHandlers runClient
 
+let private lifecycleProgramRegistrations =
+    FS.GG.Coord.Cli.Lifecycle.Handlers.handlers
+        { Delivery = legacyHandler
+          Review = legacyHandler
+          Route = legacyHandler
+          Landable = legacyHandler
+          Done = legacyHandler
+          VerifyPaths = legacyHandler
+          Followup = legacyHandler }
+
+let private lifecycleHandlers =
+    FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.validate
+        FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.commands
+        lifecycleProgramRegistrations
+    |> function
+        | Ok table -> table |> Map.toList
+        | Error errors -> failwith ("invalid Lifecycle handler registration: " + String.concat "; " errors)
+
 /// The production-owned legacy inventory. This is deliberately explicit and independent of
 /// `Options.allCommands`: validation must detect a newly parsed command that no production family
 /// registered, rather than auto-registering it through the same reflected inventory used as oracle.
@@ -380,17 +398,13 @@ let private legacyCommands =
       Version
       Scan
       Decide
-      DeliveryCmd
-      ReviewCmd
       LanesView
       Facts
       CommandContractCmd
       PacketCmd
-      RouteCmd
       DriverCmd
       CycleCmd
       WhoAmI
-      Followup
       Predicate
       DiffAudit
       Next
@@ -402,15 +416,12 @@ let private legacyCommands =
       Budget
       Claim
       Adopt
-      Landable
       Take
       Release
       Heartbeat
       Widen
       SetPaths
       Overlap
-      DoneCmd
-      VerifyPaths
       GraphQlOps
       LintCmd
       OpLockAcquire
@@ -420,7 +431,7 @@ let private legacyProgramRegistrations = legacyCommands |> List.map (fun command
 
 /// The production composition subject used by the producer-agreement test. Each family contributes
 /// registrations; the reflection-derived command inventory remains the independent expected set.
-let commandRegistrations = boardOpsProgramRegistrations @ legacyProgramRegistrations
+let commandRegistrations = boardOpsProgramRegistrations @ lifecycleHandlers @ legacyProgramRegistrations
 
 let private commandHandlers =
     match HandlerRegistration.validate Options.allCommands commandRegistrations with

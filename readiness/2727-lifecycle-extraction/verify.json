@@ -1,0 +1,685 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2727-lifecycle-extraction",
+  "stage": "verify",
+  "status": "verificationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2727-lifecycle-extraction/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "415212434e71f2d83b9e8b35b19dd05c4c56a333dea41e43fa4c0949ff83496b"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2727-lifecycle-extraction/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "83289efb28ed80b8e0333ca2473c1a0722fbb1ef02b29039dbc6520d2eb07b3a"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "95a511c008395d6c2407dab420abda41d9a0c9689de8fed2bd5ce043082939a8"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ae096e67e6ad9f57aaa43f97461dd4aeb6714afb4d4eba58ec4997d6a94ff3d1"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "03a62da3dc86681a6370c990cfc4f1d99b80beb9dea2097eb26d4ea0bb638228"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "91f7a9265af0bee9d07909390ca1e86cbd6e5dfe7dfb0efe07171bcc9c01dabc"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "84ee474b1c2e9f970ec9e6dc02d0e02f8e11abe2b735f0f3ba7a1f26beefb5f4"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2727-lifecycle-extraction/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7de97218a4d3369d10b72871897328a0ac4bf167bdbef67d80c39876f1d2c847"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "implementationReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "implementationReady"
+      },
+      {
+        "stage": "checklist",
+        "status": "current"
+      },
+      {
+        "stage": "clarify",
+        "status": "current"
+      },
+      {
+        "stage": "evidence",
+        "status": "evidenceReady"
+      },
+      {
+        "stage": "plan",
+        "status": "current"
+      },
+      {
+        "stage": "specify",
+        "status": "current"
+      },
+      {
+        "stage": "tasks",
+        "status": "current"
+      }
+    ]
+  },
+  "taskGraph": {
+    "taskCount": 10,
+    "dependencyCount": 9,
+    "dependenciesValid": true,
+    "statusesValid": true,
+    "findingIds": []
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedSourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001",
+        "PD-002",
+        "PD-003"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedSourceIds": [
+        "PC-002",
+        "PD-002"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedSourceIds": [
+        "PC-003",
+        "PD-003"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV006",
+      "obligationId": "EV006",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV006"
+      ],
+      "affectedTaskIds": [
+        "T006"
+      ],
+      "affectedSourceIds": [
+        "PC-002",
+        "PD-002",
+        "VO-002"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV007",
+      "obligationId": "EV007",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV007"
+      ],
+      "affectedTaskIds": [
+        "T007"
+      ],
+      "affectedSourceIds": [
+        "PC-003",
+        "PD-003",
+        "VO-003"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV008",
+      "obligationId": "EV008",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV008"
+      ],
+      "affectedTaskIds": [
+        "T008"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-003",
+        "VO-004"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV009",
+      "obligationId": "EV009",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV009"
+      ],
+      "affectedTaskIds": [
+        "T009"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV010",
+      "obligationId": "EV010",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV010"
+      ],
+      "affectedTaskIds": [
+        "T010"
+      ],
+      "affectedSourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "testDispositions": [
+    {
+      "id": "TD-EV001",
+      "obligationId": "EV001",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedRequirementIds": [
+        "FR-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV002",
+      "obligationId": "EV002",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV003",
+      "obligationId": "EV003",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV004",
+      "obligationId": "EV004",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV005",
+      "obligationId": "EV005",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV006",
+      "obligationId": "EV006",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV006"
+      ],
+      "affectedTaskIds": [
+        "T006"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV007",
+      "obligationId": "EV007",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV007"
+      ],
+      "affectedTaskIds": [
+        "T007"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV008",
+      "obligationId": "EV008",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV008"
+      ],
+      "affectedTaskIds": [
+        "T008"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV009",
+      "obligationId": "EV009",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV009"
+      ],
+      "affectedTaskIds": [
+        "T009"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV010",
+      "obligationId": "EV010",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV010"
+      ],
+      "affectedTaskIds": [
+        "T010"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "skillVisibility": [
+    {
+      "skill": "automated-tests",
+      "requiringTaskIds": [
+        "T005",
+        "T006",
+        "T007",
+        "T008"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "deterministic-json",
+      "requiringTaskIds": [
+        "T010"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "fsharp",
+      "requiringTaskIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "implementation",
+      "requiringTaskIds": [
+        "T001"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "readiness-evidence",
+      "requiringTaskIds": [
+        "T005",
+        "T006",
+        "T007",
+        "T008"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "schema-versioning",
+      "requiringTaskIds": [
+        "T009"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2727-lifecycle-extraction/analysis.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2727-lifecycle-extraction/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "verificationReady",
+  "nextAction": {
+    "actionId": "verify.next.ship",
+    "command": null,
+    "reason": "Verification readiness is current and ready for ship."
+  }
+}
