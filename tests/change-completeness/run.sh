@@ -36,7 +36,7 @@ done
 grep -Fq 'needs: change-completeness' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'expensive engine job depends on change-completeness' \
   || bad 'engine job can start before change-completeness'
-if sed -n '/^  pull_request:/,/^  push:/p' "$ROOT/.github/workflows/coord-engine.yml" | rg -q 'paths:'; then
+if sed -n '/^  pull_request:/,/^  push:/p' "$ROOT/.github/workflows/coord-engine.yml" | grep -q 'paths:'; then
   bad 'required change-completeness context is path-filtered'
 else
   ok 'required change-completeness context reports on every pull-request head'

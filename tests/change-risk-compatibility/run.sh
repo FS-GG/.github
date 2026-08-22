@@ -6,7 +6,7 @@ pass=0
 fail=0
 ok() { pass=$((pass + 1)); printf 'PASS  %s\n' "$1"; }
 bad() { fail=$((fail + 1)); printf 'FAIL  %s\n' "$1" >&2; }
-has() { rg -q "$2" "$ROOT/$1" && ok "$3" || bad "$3"; }
+has() { grep -Eq "$2" "$ROOT/$1" && ok "$3" || bad "$3"; }
 
 # Expand-and-contract: the new authority is live while predecessor inputs still have an explicit,
 # fail-closed interpretation instead of disappearing between slices.
