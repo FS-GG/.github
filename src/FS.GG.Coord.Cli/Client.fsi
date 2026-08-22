@@ -36,14 +36,14 @@ namespace FS.GG.Coord.Cli
     ///     that baseline; Lifecycle now owns the delivery/review/route/verify/followup command family and
     ///     `Program.fs` reaches Client only for the residual composition seams.
 ///
-/// So this module's real external contract is four functions wide. Everything else exported below is a
-/// testability seam, and each one marks a place where a unit of behaviour is welded to a file that
-/// cannot be constructed in a test — which is the same force that produced the three mutable cells. The
-/// consumer-by-consumer table is in the pull request that added this file.
+/// So this module's command contract is four functions wide. Everything else exported below is either a
+/// testability seam or an explicit production-composition dependency; none is a command dispatcher. Each
+/// marks a place where behaviour remains welded to Client while its owning family is registered outside it.
+/// The consumer-by-consumer table is in the pull request that added this file.
 ///
-    /// `.github#2727` removes the reachable `completeDelivery` forward-reference failure by making the
-    /// completion step an explicit Lifecycle handler dependency. The follow-up audit override moved with
-    /// its command. `generatedPathCollector` remains a separate residual scheduling concern.
+    /// `.github#2727` makes completion, scan, generated-path collection, and the shared context boundary
+    /// explicit Lifecycle composition dependencies. The family owns dispatch; Client supplies only the
+    /// residual operations that have not yet moved.
 module Client =
 
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
@@ -281,6 +281,24 @@ module Client =
     /// additionally supply the current route-qualified SDD-package authority.
     val deliveryPathsVerified:
       touchSet: FS.GG.Coord.Types.TouchSet -> files: string list -> bool
+
+    /// Run one family-owned live handler through the client's shared context, repo-defaulting, and
+    /// bare-reference boundary. Command families register the handler itself; this seam supplies IO only.
+    val executeWithContext:
+      handler: (Kernel.Context -> Options.Options -> int) -> opts: Options.Options -> int
+
+    /// Explicit dependencies of the Lifecycle delivery/verify handlers. They are exposed so Program can
+    /// compose the family handlers directly instead of routing those commands back through `Client.run`.
+    val scanAndDecide:
+      ctx: Kernel.Context ->
+        opts: Options.Options ->
+        intent: FS.GG.Coord.GitHub.Cache.ReadIntent ->
+        Result<FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
+
+    val offerChoreAfterDone:
+      ctx: Kernel.Context -> opts: Options.Options -> ref: FS.GG.Coord.Types.Ref -> unit
+
+    val generatedPaths: root: string -> Set<string>
 
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).

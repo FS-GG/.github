@@ -8,13 +8,18 @@ core_out="$(mktemp)"
 cli_out="$(mktemp)"
 trap 'rm -f "$core_out" "$cli_out"' EXIT
 
-dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore \
+dotnet build tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore >/dev/null
+dotnet build tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --no-restore >/dev/null
+
+dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-build \
   --filter 'FullyQualifiedName~StructuredDecisionTests' >"$core_out"
-dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --no-restore \
+dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --no-build \
   --filter 'FullyQualifiedName~DeliveryRouteCliTests|FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests' >"$cli_out"
 
 grep -q 'Failed:     0' "$core_out"
 grep -q 'Failed:     0' "$cli_out"
+grep -Eq 'Total:[[:space:]]+[1-9][0-9]*' "$core_out"
+grep -Eq 'Total:[[:space:]]+[1-9][0-9]*' "$cli_out"
 
 required_tests=(
   'M4 route authorization is bound'
@@ -34,10 +39,26 @@ required_tests=(
   'M6 typed human park authorizes Blocked without prose authority'
 )
 for name in "${required_tests[@]}"; do
-  grep -Fq "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs
+  grep -Fq "$name" tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs tests/FS.GG.Coord.Core.Tests/LifecycleProjectionTests.fs tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
 done
 
 grep -Fq 'LifecycleProjection.isHumanPark watermark.Intent' src/FS.GG.Coord.Cli/Client.fs
+
+# Lifecycle owns the live dispatch table itself. A command arm in Client.run, or a registration that
+# points back through legacyHandler/runClient, would preserve the monolith while making inventory tests
+# look green. Pin both sides of the cutover against the production composition subject.
+if grep -Eq '^[[:space:]]*\|[[:space:]]*(DeliveryCmd|ReviewCmd|Landable|DoneCmd|VerifyPaths|RouteCmd)[[:space:]]*->' src/FS.GG.Coord.Cli/Client.fs; then
+  echo 'Lifecycle dispatch arm remains in Client.fs' >&2
+  exit 1
+fi
+lifecycle_composition="$(sed -n '/let private lifecycleProgramRegistrations =/,/let private lifecycleHandlers =/p' src/FS.GG.Coord.Cli/Program.fs)"
+if grep -Eq 'legacyHandler|runClient' <<<"$lifecycle_composition"; then
+  echo 'Lifecycle production registrations bounce through the legacy Client dispatcher' >&2
+  exit 1
+fi
+for handler in delivery review deliveryRouteCmd landable doneCmd verifyPaths followupAudit; do
+  grep -Fq "LiveHandlers.$handler" <<<"$lifecycle_composition"
+done
 
 retired_symbols='DeliveryRouteApplication\.decode([^S]|$)|RouteReadClassification|classifyRoute|toLegacyReceipt|projectStructuredReview|normalizeStructuredReviews|EvidenceClassification|FSGG_COORD_LIFECYCLE_PROJECTION'
 if grep -Enr --include='*.fs' --include='*.fsi' "$retired_symbols" src; then

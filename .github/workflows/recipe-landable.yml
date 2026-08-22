@@ -30,7 +30,8 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
-      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.Cli/Program.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
       # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
       # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
       # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
@@ -45,7 +46,8 @@ on:
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli.Kernel/Options.fs"
-      - "src/FS.GG.Coord.Cli/Client.fs"
+      - "src/FS.GG.Coord.Cli/Program.fs"
+      - "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
       # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
       # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
       # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
@@ -89,5 +91,5 @@ jobs:
           grep -qE '"landable"[[:space:]]*::[[:space:]]*rest' src/FS.GG.Coord.Cli.Kernel/Options.fs \
             && grep -qE 'Command[[:space:]]*=[[:space:]]*Landable' src/FS.GG.Coord.Cli.Kernel/Options.fs \
             || { echo "::error::src/FS.GG.Coord.Cli.Kernel/Options.fs does not route the 'landable' subcommand token to Command = Landable, but every recipe tells workers to call it."; exit 1; }
-          grep -qE '\|[[:space:]]*Landable[[:space:]]*->[[:space:]]*landable' src/FS.GG.Coord.Cli/Client.fs \
-            || { echo "::error::'landable' is not dispatched to a handler in src/FS.GG.Coord.Cli/Client.fs."; exit 1; }
+          grep -qE 'Landable[[:space:]]*=[[:space:]]*live[[:space:]]+FS\.GG\.Coord\.Cli\.Lifecycle\.LiveHandlers\.landable' src/FS.GG.Coord.Cli/Program.fs \
+            || { echo "::error::'landable' is not registered to Lifecycle.LiveHandlers.landable in src/FS.GG.Coord.Cli/Program.fs."; exit 1; }

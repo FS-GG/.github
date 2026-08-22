@@ -1063,8 +1063,9 @@ module ApplicationServiceTests =
             Console.SetError captured
 
             let code =
-                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.withFollowupAuditContextForTest (context transport) (fun () ->
-                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit Client.context (options [ "followup"; "audit"; "--apply" ]))
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit
+                    (context transport)
+                    (options [ "followup"; "audit"; "--apply" ])
 
             Assert.Equal(0, code)
             Assert.False(File.Exists queue, "the claimed open ref is already resurfaced; its abandoned queue must clear")
@@ -1091,8 +1092,9 @@ module ApplicationServiceTests =
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
 
             let code =
-                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.withFollowupAuditContextForTest (context transport) (fun () ->
-                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit Client.context (options [ "followup"; "audit"; "--apply" ]))
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit
+                    (context transport)
+                    (options [ "followup"; "audit"; "--apply" ])
 
             Assert.Equal(3, code)
             Assert.Equal(bytes, File.ReadAllText queue)
