@@ -138,3 +138,92 @@ module StructuredFixtures =
         let confirmation = { confirmationDraft with Digest = StructuredDecision.reviewDigest confirmationDraft }
         [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
           2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson confirmation ]
+
+    let ordinaryRoundThreePassCommentsWithInitialVerdict subject terminalHead critic initialVerdict =
+        let head round = String.replicate 40 (string round)
+        let initialDraft: StructuredDecision.ReviewRecord =
+            { Schema = StructuredDecision.ReviewSchema
+              Subject = subject
+              Revision = 1
+              PreviousDigest = None
+              HeadSha = head 0
+              ClaimGeneration = None
+              BaseSha = None
+              Critic = critic
+              Verdict = initialVerdict
+              AcceptedExceptions = []
+              RouteApplicability = "not-meaningful"
+              RouteEvidence = [ "fixture has no runtime route comparison" ]
+              PolicyVersion = StructuredDecision.PolicyVersion
+              Kind = StructuredDecision.Initial
+              Round = 0
+              InitialReview = None
+              PrecedingReview = None
+              DiffAuditRequired = false
+              DiffAuditReceipts = []
+              Succession = None
+              Timestamp = "2026-08-22T00:00:00Z"
+              Digest = "" }
+        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+        let next revision previous round reviewedHead preceding verdict =
+            let draft =
+                { initial with
+                    Revision = revision
+                    PreviousDigest = Some previous
+                    HeadSha = reviewedHead
+                    Verdict = verdict
+                    Kind = StructuredDecision.Confirmation
+                    Round = round
+                    InitialReview = Some "https://reviews/1"
+                    PrecedingReview = Some preceding
+                    Digest = "" }
+            { draft with Digest = StructuredDecision.reviewDigest draft }
+        let round1 = next 2 initial.Digest 1 (head 1) "https://reviews/1" StructuredDecision.ChangesRequired
+        let round2 = next 3 round1.Digest 2 (head 2) "https://reviews/2" StructuredDecision.ChangesRequired
+        let round3 = next 4 round2.Digest 3 terminalHead "https://reviews/3" StructuredDecision.Pass
+        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round1
+          3L, "https://reviews/3", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round2
+          4L, "https://reviews/4", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round3 ]
+
+    let ordinaryRoundThreePassComments subject terminalHead critic =
+        ordinaryRoundThreePassCommentsWithInitialVerdict
+            subject terminalHead critic StructuredDecision.ChangesRequired
+
+    let ordinaryRoundThreePassCommentsWithRetiredGeneration subject terminalHead critic =
+        let marker = "<!-- fsgg:review-decision/v2 -->"
+        let seal (record: StructuredDecision.ReviewRecord) =
+            let draft = { record with Digest = "" }
+            { draft with Digest = StructuredDecision.reviewDigest draft }
+        let live = ordinaryRoundThreePassComments subject terminalHead critic
+        let liveRecords =
+            live
+            |> List.map (fun (_, _, body) ->
+                Driver.decodeStructuredReview (body.Substring(marker.Length).Trim())
+                |> function Ok record -> record | Error error -> failwith error)
+        let retiredInitial =
+            seal
+                { liveRecords.Head with
+                    Revision = 1
+                    PreviousDigest = None
+                    HeadSha = String.replicate 40 "a"
+                    Verdict = StructuredDecision.Pass }
+        let retiredAcceptance =
+            seal
+                { retiredInitial with
+                    Revision = 2
+                    PreviousDigest = Some retiredInitial.Digest
+                    Kind = StructuredDecision.Acceptance
+                    Verdict = StructuredDecision.Accepted
+                    InitialReview = Some "https://reviews/retired/1"
+                    PrecedingReview = Some "https://reviews/retired/1" }
+        let rebuilt, _ =
+            List.mapFold (fun previousDigest (id, url, _, (record: StructuredDecision.ReviewRecord)) ->
+                let rewritten =
+                    seal { record with Revision = int id; PreviousDigest = Some previousDigest }
+                (id, url, marker + "\n" + reviewJson rewritten), rewritten.Digest)
+                retiredAcceptance.Digest
+                (List.map2 (fun (id, url, _) record -> id + 2L, url, (), record) live liveRecords)
+        [ 1L, "https://reviews/retired/1", marker + "\n" + reviewJson retiredInitial
+          2L, "https://reviews/retired/2", marker + "\n" + reviewJson retiredAcceptance
+          yield! rebuilt ]

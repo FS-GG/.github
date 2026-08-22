@@ -140,3 +140,75 @@ module ReviewApplicationTests =
         Assert.NotEqual(0, wrongCode)
         Assert.Contains("\"verdict\":\"noVerdict\"", wrongOutput)
         Assert.Contains("expected generation", wrongOutput)
+
+    [<Fact>]
+    let pass_at_completed_round_three_turnover_enters_exhaustion_only_for_settled_red_checks () =
+        let reviewComments =
+            StructuredFixtures.ordinaryRoundThreePassComments subject head "critic-1"
+            |> List.map (fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment))
+        let binding: Review.Binding =
+            { ItemRef = "FS-GG/.github#2175"
+              Pr = 42
+              HeadSha = head
+              ClaimGeneration = "new-claim"
+              ImplementerIdentity = "worker-1"
+              Phase = Review.Ordinary
+              Round = 1 }
+        let waitReceipt: ReviewWait.WaitReceipt =
+            { Item = binding.ItemRef
+              ClaimGeneration = "old-claim"
+              ReviewGeneration = ReviewWait.generationToken head ReviewWait.RepairConfirmation 3
+              Kind = ReviewWait.RepairConfirmation
+              EnteredAt = DateTimeOffset.Parse "2026-08-22T00:00:00Z"
+              ExpiresAt = DateTimeOffset.Parse "2026-08-22T04:00:00Z"
+              EvidenceRef = "https://reviews/4" }
+        let completed = ReviewWait.Completed(waitReceipt, "https://reviews/4")
+        let facts checks: Review.Facts =
+            { Comments = reviewComments
+              Checks = checks
+              RepairPhaseGranted = None
+              RepairRouteAvailable = true
+              DiffAuditTrusted = None }
+
+        let redCode, redOutput, redError = renderWithWait binding (facts Types.PrRed) completed
+        Assert.Equal(0, redCode)
+        Assert.Contains("\"state\":\"ordinaryExhaustion\"", redOutput)
+        Assert.Contains("\"action\":\"park\"", redOutput)
+        Assert.Contains("\"waitStatus\":\"ordinaryExhaustion\"", redOutput)
+        Assert.Empty redError
+
+        let pendingCode, pendingOutput, pendingError = renderWithWait binding (facts Types.PrPending) completed
+        Assert.Equal(0, pendingCode)
+        Assert.Contains("\"state\":\"passedAwaitingChecks\"", pendingOutput)
+        Assert.Contains("\"action\":\"awaitChecks\"", pendingOutput)
+        Assert.Empty pendingError
+
+        let greenCode, greenOutput, greenError = renderWithWait binding (facts Types.PrGreen) completed
+        Assert.Equal(0, greenCode)
+        Assert.Contains("\"state\":\"awaitingHostAcceptance\"", greenOutput)
+        Assert.Contains("\"action\":\"requestHostAcceptance\"", greenOutput)
+        Assert.Empty greenError
+
+        let preRoundPassComments =
+            StructuredFixtures.ordinaryRoundThreePassCommentsWithInitialVerdict
+                subject head "critic-1" StructuredDecision.Pass
+            |> List.map (fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment))
+        let prePassFacts = { (facts Types.PrRed) with Comments = preRoundPassComments }
+        let prePassCode, prePassOutput, prePassError =
+            renderWithWait binding prePassFacts completed
+        Assert.Equal(0, prePassCode)
+        Assert.DoesNotContain("\"state\":\"ordinaryExhaustion\"", prePassOutput)
+        Assert.DoesNotContain("\"waitStatus\":\"ordinaryExhaustion\"", prePassOutput)
+        Assert.Empty prePassError
+
+        let retiredComments =
+            StructuredFixtures.ordinaryRoundThreePassCommentsWithRetiredGeneration
+                subject head "critic-1"
+            |> List.map (fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment))
+        let retiredFacts = { (facts Types.PrRed) with Comments = retiredComments }
+        let retiredCode, retiredOutput, retiredError =
+            renderWithWait binding retiredFacts completed
+        Assert.Equal(0, retiredCode)
+        Assert.Contains("\"state\":\"ordinaryExhaustion\"", retiredOutput)
+        Assert.Contains("\"waitStatus\":\"ordinaryExhaustion\"", retiredOutput)
+        Assert.Empty retiredError

@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from route_decision_fixture import route_comment
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 LOCK = threading.Lock()
 
@@ -984,13 +985,45 @@ class Handler(BaseHTTPRequestHandler):
                 "fsgg.coord.review-decision/v2" in comment.get("body", "")
                 for comment in COMMENTS.get(pr, [])
             )
-            head_sha = "b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40
+            head_sha = "d" * 40 if pr == 43 else ("b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40)
             issue_number = 50 if pr in (502, 503) else 44
-            return self._send(200, {
+            response = {
                 "number": pr,
                 "head": {"ref": f"item/{issue_number}-the-work", "sha": head_sha},
                 "base": {"ref": "main", "sha": "9" * 40},
-            })
+            }
+            if pr == 43:
+                response.update({
+                    "mergeable": True,
+                    "mergeable_state": "unstable",
+                    "state": "open",
+                    "merged": False,
+                })
+            return self._send(200, response)
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/actions/runs$", path)
+        if m:
+            head_sha = parse_qs(urlsplit(self.path).query).get("head_sha", [""])[0]
+            runs = []
+            if head_sha == "d" * 40:
+                runs = [{
+                    "path": ".github/workflows/coherence.yml",
+                    "event": "pull_request",
+                    "head_branch": "item/43-the-work",
+                    "pull_requests": [{"number": 43}],
+                    "run_number": 2819,
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "check_suite_id": 2819,
+                }]
+                return self._send(200, {"total_count": len(runs), "workflow_runs": runs})
+            return self._send(500, {"message": "fixture: workflow runs unreadable outside pass-red subject"})
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/commits/([0-9a-f]+)/check-runs$", path)
+        if m:
+            if m.group(1) == "d" * 40:
+                return self._send(200, {"total_count": 0, "check_runs": []})
+            return self._send(500, {"message": "fixture: check runs unreadable outside pass-red subject"})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/git/ref/heads/main$", path)
         if m:
