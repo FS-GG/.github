@@ -328,6 +328,34 @@ def test_all_closed_successor_claim_contradicting_raw_projection_fails():
             raise AssertionError("an all-closed successor derivation cannot match the committed open-state table")
 
 
+def test_m6_health_cycles_compose_every_active_measure():
+    source = module.read_fixture(FIXTURE)
+    reading = module.report(source, roadmap=ROADMAP.read_text())
+    measures = json.loads(json.dumps(reading["measures"]))
+    issue_flow = next(measure for measure in measures if measure["id"] == "issue-flow")
+    issue_flow["verdict"] = "met"
+    issue_flow["value"] = [
+        {"start": f"period-{index}", "end": f"period-{index + 1}", "opened": 1, "closed": 2}
+        for index in range(3)
+    ]
+    all_closed_source = json.loads(json.dumps(source))
+    for record in all_closed_source["_issueRecords"]:
+        if record["number"] in {266, 2691}:
+            record["closedAt"] = "2026-08-22T12:00:00Z"
+    m6 = module.derive_milestone_scores(all_closed_source, measures)[6]
+    assert m6["predicates"][0]["verdict"] == "violated"
+    assert m6["predicates"][1]["verdict"] == "met"
+    assert m6["verdict"] == "violated"
+
+    all_met = json.loads(json.dumps(measures))
+    for measure in all_met:
+        if measure["verdict"] != "retired":
+            measure["verdict"] = "met"
+    assert module.health_cycles_predicate(all_met)["verdict"] == "met"
+    next(measure for measure in all_met if measure["id"] == "complete-reads")["verdict"] = "unverified"
+    assert module.health_cycles_predicate(all_met)["verdict"] == "unverified"
+
+
 def test_m6_named_successor_census():
     source = module.read_fixture(FIXTURE)
     m6 = module.report(source)["milestoneScores"][6]
@@ -365,6 +393,7 @@ def main():
     test_every_typed_table_field_is_validated()
     test_legacy_verdict_inputs_and_co_mutations_fail_closed()
     test_all_closed_successor_claim_contradicting_raw_projection_fails()
+    test_m6_health_cycles_compose_every_active_measure()
     test_m6_named_successor_census()
     test_freeze_decision_records_authority()
     test_retirement_is_explicit_in_document()

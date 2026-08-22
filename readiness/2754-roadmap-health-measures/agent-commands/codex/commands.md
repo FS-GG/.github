@@ -27,4 +27,3 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Stage: specify
 - Purpose: Carry out lifecycle task T005 (done) covering AC-005, FR-005, PD-005, VO-005.
 - Related: AC-005, FR-005, PD-005, VO-005
-

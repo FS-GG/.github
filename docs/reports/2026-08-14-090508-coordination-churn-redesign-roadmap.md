@@ -727,7 +727,7 @@ gap, evidence reference, or expected checkbox makes the reporter fail closed.
 | M3 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2691#issuecomment-5307831243"],"exitPredicate":"One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes","gap":"A typed ambiguous-release incident contradicts coherent resumable release.","id":"coherent-release","verdict":"violated"}] |
 | M4 | unverified | false | [{"evidence":["missing-source:effective-decision-census"],"exitPredicate":"Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision","gap":"No complete effective-decision census source is bound to the window.","id":"structured-decisions","verdict":"unverified"}] |
 | M5 | violated | false | [{"evidence":["cb33188c","8813c463"],"exitPredicate":"Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss","gap":"Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.","id":"artifact-decline","verdict":"violated"}] |
-| M6 | violated | false | [{"evidence":["83/64","146/151","78/86"],"exitPredicate":"Three consecutive operating cycles meet the health measures below","gap":"The first weekly period has more opened than closed issues.","id":"healthy-cycles","verdict":"violated"},{"evidence":["https://github.com/FS-GG/.github/issues/266:open","https://github.com/FS-GG/.github/issues/2752:closed","https://github.com/FS-GG/.github/issues/2691:open"],"exitPredicate":"No same-class successor issue remains open","gap":"The bounded successor census contains open issues.","id":"no-open-successor","verdict":"violated"}] |
+| M6 | violated | false | [{"evidence":["issue-flow:violated","scheduling-intent:violated","complete-reads:violated","release-coherence:violated","artifact-trend:violated","evidence-growth:met","issue-flow-periods:83/64,146/151,78/86"],"exitPredicate":"Three consecutive operating cycles meet the health measures below","gap":"At least one active health measure is violated; the three-cycle composite is not met.","id":"healthy-cycles","verdict":"violated"},{"evidence":["https://github.com/FS-GG/.github/issues/266:open","https://github.com/FS-GG/.github/issues/2752:closed","https://github.com/FS-GG/.github/issues/2691:open"],"exitPredicate":"No same-class successor issue remains open","gap":"The bounded successor census contains open issues.","id":"no-open-successor","verdict":"violated"}] |
 <!-- /roadmap-health-milestone-scores:v1 -->
 
 All seven boxes remain `[ ]` because every corresponding score is `violated` or `unverified`; none is
@@ -751,7 +751,10 @@ and exact Git objects, then requires the table above and all seven roadmap check
 exactly. M0 and M4 remain deterministically unverified because no raw completeness census is bound;
 there is no boolean verdict input. M6 derives `.github#266` open, `.github#2752` closed, and
 `.github#2691` open directly from those issues' `closedAt` fields in the digest-bound 1,210-record
-snapshot. This is a score from the reading, not a claim that the milestone deliverables were undone.
+snapshot. Its three-cycle predicate is the precedence-ordered composite of every active measure:
+any violation is `violated`, otherwise any unknown is `unverified`, and only six `met` verdicts
+(including issue flow's three exact periods) produce `met`. This is a score from the reading, not a
+claim that the milestone deliverables were undone.
 
 Freeze decision state: **approved** by the operator on **2026-08-17**, recorded for that actor by board
 analyst `avocet-bb9a` in `.github#2754` comment `5317248936`. It remains in force until the seven

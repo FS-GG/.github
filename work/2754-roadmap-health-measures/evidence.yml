@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:082b5dacb3211bc5e7e06777f989da5a20c7ff746daafdeeb81c9f6368ca807e"
+      digest: "sha256:92d5b3c08738b5d9408b0041487a13a4760b431fc82a8123b90ff61da913ebd5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 14
+      passed: 15
       failed: 0
       skipped: 0
     notes: [Observed test_complete_inventory_and_production_route derives all seven values from raw records and exact Git objects through direct and CLI routes.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:082b5dacb3211bc5e7e06777f989da5a20c7ff746daafdeeb81c9f6368ca807e"
+      digest: "sha256:92d5b3c08738b5d9408b0041487a13a4760b431fc82a8123b90ff61da913ebd5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 14
+      passed: 15
       failed: 0
       skipped: 0
     notes: [Observed test_milestone_exit_table_is_checkbox_authority parses the production-validated roadmap table and exact emitted M0-M6 predicate/verdict/gap/evidence/checkbox relation; test_roadmap_score_table_mutations_fail_in_production_cli and test_every_typed_table_field_is_validated prove every table field and checkbox red on drift; legacy boolean/string authority and co-mutations are rejected.]
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:082b5dacb3211bc5e7e06777f989da5a20c7ff746daafdeeb81c9f6368ca807e"
+      digest: "sha256:92d5b3c08738b5d9408b0041487a13a4760b431fc82a8123b90ff61da913ebd5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 14
+      passed: 15
       failed: 0
       skipped: 0
-    notes: [Observed test_m6_named_successor_census derives all three named successor states from closedAt in the digest-bound raw census; test_all_closed_successor_claim_contradicting_raw_projection_fails proves an asserted all-closed projection red.]
+    notes: [Observed test_m6_named_successor_census derives all three named successor states from closedAt in the digest-bound raw census; test_m6_health_cycles_compose_every_active_measure proves issue-flow plus successors cannot mask other active violations and proves the all-met/unverified precedence controls; test_all_closed_successor_claim_contradicting_raw_projection_fails proves an asserted all-closed projection red.]
   - id: EV004
     kind: verification
     subject:
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:082b5dacb3211bc5e7e06777f989da5a20c7ff746daafdeeb81c9f6368ca807e"
+      digest: "sha256:92d5b3c08738b5d9408b0041487a13a4760b431fc82a8123b90ff61da913ebd5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 14
+      passed: 15
       failed: 0
       skipped: 0
     notes: [Observed test_freeze_decision_records_authority directly verifies freeze state/date/actor/lift authority; incident/census mutations protect accountable evidence inputs.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:082b5dacb3211bc5e7e06777f989da5a20c7ff746daafdeeb81c9f6368ca807e"
+      digest: "sha256:92d5b3c08738b5d9408b0041487a13a4760b431fc82a8123b90ff61da913ebd5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 14
+      passed: 15
       failed: 0
       skipped: 0
     notes: [Observed test_retirement_is_explicit_in_document directly verifies retirement actor/date/state/reason; the incomplete-census test proves undefined evidence stays unverified.]

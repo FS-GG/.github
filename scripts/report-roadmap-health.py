@@ -45,8 +45,9 @@ MILESTONE_GAPS = {
     ("structured-decisions", "unverified"): "No complete effective-decision census source is bound to the window.",
     ("artifact-decline", "violated"): "Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.",
     ("artifact-decline", "unverified"): "Known counters declined, but the independent policy-implementation count is unverified.",
-    ("healthy-cycles", "violated"): "The first weekly period has more opened than closed issues.",
-    ("healthy-cycles", "met"): "All three exact weekly periods closed more issues than they opened.",
+    ("healthy-cycles", "violated"): "At least one active health measure is violated; the three-cycle composite is not met.",
+    ("healthy-cycles", "unverified"): "No active health measure is violated, but at least one remains unverified.",
+    ("healthy-cycles", "met"): "Every active health measure is met, including three consecutive issue-flow periods.",
     ("no-open-successor", "violated"): "The bounded successor census contains open issues.",
     ("no-open-successor", "met"): "The bounded successor census contains no open issues.",
 }
@@ -246,6 +247,26 @@ def milestone_score(identifier: str, predicates: list[dict]) -> dict:
     return {"id": identifier, "predicates": predicates, "verdict": verdict, "checkboxExpected": verdict == "met"}
 
 
+def health_cycles_predicate(measures: list[dict]) -> dict:
+    active = [measure for measure in measures if measure["verdict"] != "retired"]
+    expected_active = [identifier for identifier in IDS if identifier != "behaviourless-repairs"]
+    if [measure["id"] for measure in active] != expected_active:
+        fail("M6 health-cycle composite must contain every active non-retired health measure exactly once")
+    if any(measure["verdict"] not in {"met", "violated", "unverified"} for measure in active):
+        fail("active health measures require met, violated, or unverified verdicts")
+    issue_periods = active[0].get("value")
+    if not isinstance(issue_periods, list) or len(issue_periods) != 3:
+        fail("M6 health-cycle composite requires three derived issue-flow periods")
+    verdict = (
+        "violated" if any(measure["verdict"] == "violated" for measure in active)
+        else "unverified" if any(measure["verdict"] == "unverified" for measure in active)
+        else "met"
+    )
+    evidence = [f"{measure['id']}:{measure['verdict']}" for measure in active]
+    evidence.append("issue-flow-periods:" + ",".join(f"{period['opened']}/{period['closed']}" for period in issue_periods))
+    return milestone_predicate("healthy-cycles", "Three consecutive operating cycles meet the health measures below", verdict, evidence)
+
+
 def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
     by_id = {measure["id"]: measure for measure in measures}
     successor_numbers = (266, 2752, 2691)
@@ -257,7 +278,6 @@ def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
         }
         for number in successor_numbers
     ]
-    issue_periods = by_id["issue-flow"]["value"]
     def incident_evidence(identifier: str) -> list[str]:
         value = by_id[identifier].get("value")
         if isinstance(value, list):
@@ -287,7 +307,7 @@ def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
             milestone_predicate("artifact-decline", "Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss", by_id["artifact-trend"]["verdict"], [data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
         ]),
         milestone_score("M6", [
-            milestone_predicate("healthy-cycles", "Three consecutive operating cycles meet the health measures below", by_id["issue-flow"]["verdict"], [f"{period['opened']}/{period['closed']}" for period in issue_periods]),
+            health_cycles_predicate(measures),
             milestone_predicate("no-open-successor", "No same-class successor issue remains open", "violated" if any(item["state"] == "open" for item in successors) else "met", [f"{item['ref']}:{item['state']}" for item in successors]),
         ]),
     ]
