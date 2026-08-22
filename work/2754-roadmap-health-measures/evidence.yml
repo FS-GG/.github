@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7a10f8e6ec63b7cf6d05ba1f2d9d974c52a9f14a5f74f7acb605b091493f5f5f"
+      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Focused test passed locally on 2026-08-22.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7a10f8e6ec63b7cf6d05ba1f2d9d974c52a9f14a5f74f7acb605b091493f5f5f"
+      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [The report documents the complete inventory and explicit unverified states.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7a10f8e6ec63b7cf6d05ba1f2d9d974c52a9f14a5f74f7acb605b091493f5f5f"
+      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Focused test passed locally on 2026-08-22.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7a10f8e6ec63b7cf6d05ba1f2d9d974c52a9f14a5f74f7acb605b091493f5f5f"
+      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [The JSON contract retains unverified as an explicit verdict.]
@@ -162,12 +162,14 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2754-roadmap-health-measures/roadmap-health-tests.junit.xml
-      digest: "sha256:7a10f8e6ec63b7cf6d05ba1f2d9d974c52a9f14a5f74f7acb605b091493f5f5f"
+      digest: "sha256:7c902107776c6d7dc56cff60f0f2ef1329618395f881e851596fa7773cfeac17"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Analysis was regenerated after the authored plan.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
+  - "Observed-run truth: EV001-EV005 are bound to the runner-produced roadmap-health-tests.junit.xml; verify/ship must report five observed and zero self-attested obligations."
+  - "Repository normalization: FS.GG.SDD CLI 1.2.0 ship is readiness-ready but reports coherent=false and re-adds the forbidden ship-verdict sourcesDigest. After generation, scripts/check-ship-verdict-provenance.py --fix removes that unverifiable field under .github#2208; this known producer gap is not represented as coherent generation."

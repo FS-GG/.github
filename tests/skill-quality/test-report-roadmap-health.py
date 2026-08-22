@@ -65,16 +65,35 @@ def test_weekly_window_mutation():
         ),
         "period",
     )
+    invalid_fixture(
+        source,
+        lambda item: item.update(
+            {"window": {"start": "2026-07-01T00:00:00Z", "end": "2026-07-22T00:00:00Z"}}
+        ),
+        "root window",
+    )
 
 
 def test_typed_measure_mutations():
     source = module.read_fixture(FIXTURE)
     for mutate in (
         lambda item: item["measures"].pop("release-coherence"),
-        lambda item: item["measures"]["scheduling-intent"].update({"reversed": "true"}),
+        lambda item: item["measures"].update({"scheduling-intent": {"reversed": True}}),
+        lambda item: item["measures"].update({"complete-reads": {"verdict": "violated"}}),
+        lambda item: item["measures"]["release-coherence"].update({"incidents": "known incident"}),
         lambda item: item["measures"]["artifact-trend"].update({"current": {"checks": 53}}),
     ):
         invalid_fixture(source, mutate)
+
+
+def test_incident_measure_requires_complete_census_for_met():
+    source = module.read_fixture(FIXTURE)
+    incomplete = json.loads(json.dumps(source))
+    incomplete["measures"]["scheduling-intent"]["incidents"] = []
+    assert module.report(incomplete)["measures"][2]["verdict"] == "unverified"
+    complete = json.loads(json.dumps(incomplete))
+    complete["measures"]["scheduling-intent"]["census"]["complete"] = True
+    assert module.report(complete)["measures"][2]["verdict"] == "met"
 
 
 def test_integer_fields_reject_python_booleans():
@@ -95,6 +114,7 @@ def main():
     test_three_period_success()
     test_weekly_window_mutation()
     test_typed_measure_mutations()
+    test_incident_measure_requires_complete_census_for_met()
     test_integer_fields_reject_python_booleans()
     print("report-roadmap-health: typed seven-measure derivation and invalid windows hold")
 

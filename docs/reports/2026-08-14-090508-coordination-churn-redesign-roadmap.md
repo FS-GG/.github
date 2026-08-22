@@ -687,13 +687,38 @@ established the following:
 
 | measure | verdict | observation |
 |---|---|---|
-| issue flow | violated | three contiguous periods include 168 opened / 158 closed |
+| issue flow | violated | three contiguous periods are 83/64, 146/151, and 78/86 opened/closed; the first period fails |
 | behaviourless repairs | retired | 2026-08-22 operator-delegated retirement: no authoritative classifier exists |
 | scheduling intent | violated | #2691 records a reversed deliberate park |
 | complete reads | violated | #2735 records a later partial-read discovery |
 | release coherence | violated | the release packet records a green push publishing nothing |
-| artifact trend | violated | 49 checks / 100 workflows became 53 / 115 |
-| evidence growth | met | exact historical boundary `cb33188c..8813c463`: -19,694 generated against +2,745 implementation lines |
+| artifact trend | violated | policy implementations stayed 1 → 1 while 49 checks / 100 workflows became 53 / 115 |
+| evidence growth | met | exact historical boundary `cb33188c..8813c463`: -19,694 generated against +2,745 implementation-and-test lines |
+
+The issue-flow census is independently reproducible. At `2026-08-22T21:08:23Z`, the query
+`gh issue list --repo FS-GG/.github --state all --limit 1500 --json number,createdAt,closedAt`
+returned 1,210 issues. Bucketing `createdAt` and non-null `closedAt` into the three half-open UTC
+windows `[2026-08-01,08)`, `[2026-08-08,15)`, and `[2026-08-15,22)` produced the counts above. The
+fixture records the repository, exact query, observation time, result count, and half-open-window
+method. Its policy-implementation count uses the reproducible top-level `scripts/*policy*.py` census:
+one implementation at each boundary (`check-policy-checker-inventory.py` at `cb33188c`,
+`policy-runner.py` at `8813c463`).
+
+Each milestone checkbox is traceable to its own exit predicate, rather than inferred from whether its
+deliverables landed:
+
+| milestone | score | exact exit gap at this reading |
+|---|---|---|
+| M0 | unverified | “Main has no standing red checks” and “open repair PRs are mergeable or explicitly superseded” lack a complete required-check/open-repair census bound to this window. |
+| M1 | violated | “explicit Backlog and human parks survive” is contradicted by the typed `.github#2691` scheduling-reversal incident. |
+| M2 | violated | “incomplete reads cannot be returned as success” is contradicted by the typed `.github#2735` partial-read incident. |
+| M3 | violated | “one full coherent-set release reaches both feeds without manual recovery” is contradicted by `.github#2691` packet `5307831243`, where a green push published nothing and recovery was required. |
+| M4 | unverified | “every effective decision is bound to structured inputs and a revision” has no complete effective-decision census for this window. |
+| M5 | violated | “checker/workflow count and duplicated policy decline” fails: policy implementations are flat at 1, checks grow 49 → 53, and workflows grow 100 → 115. |
+| M6 | violated | Three healthy cycles fail on issue flow (83 opened / 64 closed in the first period), and the successor clause fails because `.github#266` remains open; `.github#2691` remains unverified as a complete same-class census. |
+
+All seven boxes remain `[ ]` because every corresponding score is `violated` or `unverified`; none is
+cleared merely because its deliverables shipped.
 
 Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves that the complete
 seven-measure inventory is emitted and that the production CLI agrees with the direct parser route.
@@ -707,11 +732,11 @@ The receiver-yield dependency is consumed as evidence, not treated as a green he
 prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
 while leaving the roadmap's rate-and-integrity measures unproven.
 
-M0 through M5 remain unchecked because their respective exit predicates do not all hold at this reading.
-M6 is also unchecked: the three-cycle predicate is false and its successor clause is
-false while `.github#266` remains open; `.github#2752` is closed and the pending register on `.github#2691` is
-unverified as a complete same-class census. This is a score from the reading, not a claim that the
-milestone deliverables were undone.
+The per-milestone table above is the checkbox authority: it names the exact violated or unverified
+predicate for M0 through M5. M6 additionally fails both the three-cycle predicate and its successor
+clause while `.github#266` remains open; `.github#2752` is closed and the pending register on
+`.github#2691` is unverified as a complete same-class census. This is a score from the reading, not a
+claim that the milestone deliverables were undone.
 
 The approved temporary freeze is in force from 2026-08-17 until the seven measures are both derived
 and green. It freezes new check scripts, workflows, skills, registers, and process/contract rows; it

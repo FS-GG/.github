@@ -30,6 +30,15 @@ def read_fixture(path: Path) -> dict:
     window = data.get("window", {})
     if not isinstance(window.get("start"), str) or not isinstance(window.get("end"), str) or utc(window["start"]) >= utc(window["end"]):
         fail("window must have ordered start and end")
+    boundary = data.get("sourceBoundary")
+    if (
+        not isinstance(boundary, dict)
+        or set(boundary) != {"repository", "query", "asOf", "method", "resultCount"}
+        or not all(isinstance(boundary.get(key), str) and boundary[key] for key in ("repository", "query", "asOf", "method"))
+        or utc(boundary["asOf"]) < utc(window["end"])
+    ):
+        fail("sourceBoundary must identify a complete repository query observed after the window")
+    integer(boundary.get("resultCount"), "sourceBoundary.resultCount")
     measures = data.get("measures")
     if not isinstance(measures, dict) or set(measures) != set(IDS):
         fail("fixture must contain exactly the seven typed measure inputs")
@@ -41,6 +50,8 @@ def read_fixture(path: Path) -> dict:
             fail("issue-flow periods must be ordered typed rows")
     if any(periods[index]["end"] != periods[index + 1]["start"] for index in range(len(periods) - 1)):
         fail("issue-flow periods must be contiguous")
+    if window["start"] != periods[0]["start"] or window["end"] != periods[-1]["end"]:
+        fail("root window must exactly match the issue-flow period boundary")
     return data
 
 def row(identifier: str, verdict: str, reason: str, value=None) -> dict:
@@ -59,19 +70,45 @@ def report(data: dict) -> dict:
     periods = measures["issue-flow"]["periods"]
     issue = row("issue-flow", "met" if len(periods) >= 3 and all(p["opened"] < p["closed"] for p in periods[-3:]) else ("violated" if len(periods) >= 3 else "unverified"), "Derived from ordered contiguous period rows.", periods)
     retired = row("behaviourless-repairs", "retired", "Retired 2026-08-22 by operator-delegated host: no authoritative behaviour-changing classifier exists.")
-    def binary(identifier: str, key: str, label: str) -> dict:
-        value = measures[identifier].get(key)
-        if value is not None and not isinstance(value, bool):
-            fail(f"{identifier}.{key} must be boolean")
-        return row(identifier, "unverified", f"No typed {label} evidence in this reading.") if value is None else row(identifier, "violated" if value else "met", f"Derived from typed {label} input.", value)
+    def incident_measure(identifier: str, label: str) -> dict:
+        value = measures[identifier]
+        if not isinstance(value, dict) or set(value) != {"incidents", "census"}:
+            fail(f"{identifier} must contain typed incidents and census")
+        incidents, census = value["incidents"], value["census"]
+        if not isinstance(incidents, list) or not isinstance(census, dict):
+            fail(f"{identifier} incidents/census must be typed")
+        if (
+            set(census) != {"complete", "asOf", "method"}
+            or not isinstance(census.get("complete"), bool)
+            or not isinstance(census.get("asOf"), str)
+            or not isinstance(census.get("method"), str)
+            or not census["method"]
+            or utc(census["asOf"]) < utc(data["window"]["end"])
+        ):
+            fail(f"{identifier}.census must be a typed post-window census")
+        for incident in incidents:
+            if (
+                not isinstance(incident, dict)
+                or set(incident) != {"ref", "date"}
+                or not isinstance(incident.get("ref"), str)
+                or not incident["ref"]
+                or not isinstance(incident.get("date"), str)
+                or not (utc(data["window"]["start"]) <= utc(incident["date"]) < utc(data["window"]["end"]))
+            ):
+                fail(f"{identifier} incidents require durable refs and dates inside the window")
+        if incidents:
+            return row(identifier, "violated", f"Derived from {len(incidents)} typed {label} incident(s).", incidents)
+        if census["complete"]:
+            return row(identifier, "met", f"Derived from a complete typed {label} census.", census)
+        return row(identifier, "unverified", f"No incident is recorded, but the typed {label} census is incomplete.", census)
     inventory = measures["artifact-trend"]
     baseline, current = inventory.get("baseline"), inventory.get("current")
     if not isinstance(baseline, dict) or not isinstance(current, dict):
         artifact = row("artifact-trend", "unverified", "No typed baseline/current inventory.")
-    elif not all(isinstance(scope.get(key), int) and not isinstance(scope.get(key), bool) for scope in (baseline, current) for key in ("checks", "workflows")):
-        fail("artifact-trend baseline/current maps require integer checks and workflows")
+    elif not all(isinstance(scope.get(key), int) and not isinstance(scope.get(key), bool) for scope in (baseline, current) for key in ("policyImplementations", "checks", "workflows")):
+        fail("artifact-trend baseline/current maps require integer policy implementations, checks, and workflows")
     else:
-        artifact = row("artifact-trend", "met" if current["checks"] < baseline["checks"] and current["workflows"] < baseline["workflows"] else "violated", "Derived from typed baseline/current inventory.", [baseline, current])
+        artifact = row("artifact-trend", "met" if all(current[key] < baseline[key] for key in ("policyImplementations", "checks", "workflows")) else "violated", "Derived from all three typed baseline/current inventories.", [baseline, current])
     growth = measures["evidence-growth"]
     generated = growth.get("generatedLines")
     implementation_and_test = growth.get("implementationAndTestLines")
@@ -89,7 +126,7 @@ def report(data: dict) -> dict:
             f"Derived at {growth.get('baseline')}..{growth.get('head')}.",
             growth,
         )
-    return {"schema": "fsgg.coord.roadmap-health/v1", "window": data["window"], "sourceBoundary": data.get("sourceBoundary"), "measures": [issue, retired, binary("scheduling-intent", "reversed", "scheduling reversal"), binary("complete-reads", "partialDiscovered", "partial-read incident"), binary("release-coherence", "ambiguous", "ambiguous release"), artifact, evidence]}
+    return {"schema": "fsgg.coord.roadmap-health/v1", "window": data["window"], "sourceBoundary": data["sourceBoundary"], "measures": [issue, retired, incident_measure("scheduling-intent", "scheduling reversal"), incident_measure("complete-reads", "partial-read"), incident_measure("release-coherence", "ambiguous release"), artifact, evidence]}
 
 def main() -> int:
     parser = argparse.ArgumentParser()
