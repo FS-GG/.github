@@ -1,0 +1,136 @@
+schemaVersion: 1
+work:
+  id: 2723-fence-arming-premise-rot
+  title: "Fence Arming Premise Rot"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2723-fence-arming-premise-rot/spec.md
+  sourceClarifications: work/2723-fence-arming-premise-rot/clarifications.md
+  sourceChecklist: work/2723-fence-arming-premise-rot/checklist.md
+  sourcePlan: work/2723-fence-arming-premise-rot/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2723-fence-arming-premise-rot/spec.md
+    digest: 29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2723-fence-arming-premise-rot/clarifications.md
+    digest: d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842
+    schemaVersion: 1
+  - label: checklist
+    path: work/2723-fence-arming-premise-rot/checklist.md
+    digest: 102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9
+    schemaVersion: 1
+  - label: plan
+    path: work/2723-fence-arming-premise-rot/plan.md
+    digest: 0eb6e6700f912065c2986475dde1fa59d2a7eb9ff58dcb660285061018212877
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV010]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2723-fence-arming-premise-rot."

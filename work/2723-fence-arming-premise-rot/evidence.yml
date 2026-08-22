@@ -1,0 +1,308 @@
+schemaVersion: 1
+workId: 2723-fence-arming-premise-rot
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2723-fence-arming-premise-rot/spec.md
+sourceClarifications: work/2723-fence-arming-premise-rot/clarifications.md
+sourceChecklist: work/2723-fence-arming-premise-rot/checklist.md
+sourcePlan: work/2723-fence-arming-premise-rot/plan.md
+sourceTasks: work/2723-fence-arming-premise-rot/tasks.yml
+sourceAnalysis: readiness/2723-fence-arming-premise-rot/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2723-fence-arming-premise-rot/analysis.json
+    digest: ece93425673043c5c48a2a0b60e9a43de52e917c991da213d1752ca319c46afe
+    schemaVersion: 1
+  - label: checklist
+    path: work/2723-fence-arming-premise-rot/checklist.md
+    digest: 102e2b9535d2ab976eb0229a4f2c72ef9e85c5d494233da28306a6d65d801fa9
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2723-fence-arming-premise-rot/clarifications.md
+    digest: d14483cfd6a8cf8e3c82b47a730cbc158c4e5382b7a63802b901062b84caf842
+    schemaVersion: 1
+  - label: plan
+    path: work/2723-fence-arming-premise-rot/plan.md
+    digest: 0eb6e6700f912065c2986475dde1fa59d2a7eb9ff58dcb660285061018212877
+    schemaVersion: 1
+  - label: spec
+    path: work/2723-fence-arming-premise-rot/spec.md
+    digest: 29f2cb8a7ec153c14b98f7c1bc63db3b2b1b72dfa71d3c98409659fa8473abdf
+    schemaVersion: 1
+  - label: tasks
+    path: work/2723-fence-arming-premise-rot/tasks.yml
+    digest: 476b7455c315389f9701220eeac136770247ed15c187ab2d7191224a7a2991c7
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [docs/coordination/reusable-workflow-contract.md, scripts/repos.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2723-fence-arming-premise-rot/test-results/focused.xml
+      digest: "sha256:06a977740605f2e60f8dbd9c95452d0e30f070cc44d132084396fe5cc70f7090"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["Focused shell fixtures and live arming measurements passed; administrative apply remains a declared post-merge obligation until the in-flight marker census clears."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

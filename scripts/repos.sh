@@ -482,18 +482,17 @@ cmd_kit() {
 # removes from the classic store, and a ruleset may still require the context afterwards. Under-
 # promising is the safe direction for a removal.
 #
-# CREDENTIAL, MEASURED 2026-07-28, AND THIS IS NOT AUTOMATION YET. Reading protection needs
+# CREDENTIAL, RE-MEASURED 2026-08-22, AND THIS IS NOT A WORKFLOW TOKEN. Reading protection needs
 # `administration: read`; writing needs `administration: write`. NEITHER is a valid `permissions:`
 # scope for a workflow's GITHUB_TOKEN — declaring one is a startup validation error that produces no
-# check run at all (#478's blind spot, hit for real by #1575). The org dispatch App holds
-# `administration: READ` (the #574 org grant, 2026-07-17) and that is what
-# required-context-coherence.yml mints. **No credential in this org can run the APPLY path today**:
-# raising the App's grant to `administration: write` is an org-owner action, not a change in this
-# repo. So this ships as an OPERATOR tool driven by a `GH_TOKEN` that carries the scope (an App token
-# minted from a raised grant, or a human PAT with admin on the target repos), and it says so when the
-# token cannot: a 403 on the write is reported as "this token lacks administration: write on <repo>",
-# never as a generic outage. The DRY RUN needs only `administration: read`, so it is runnable from the
-# existing App grant today and is the half that can be automated now.
+# check run at all (#478's blind spot, hit for real by #1575). The org dispatch App installation now
+# holds `administration: write` (the #1712 grant), so a repository-scoped installation token minted
+# from that App CAN run the apply path; required-context-coherence.yml keeps minting only the narrower
+# `administration: read` token its audit needs. This remains an OPERATOR tool driven by a `GH_TOKEN`
+# that carries the scope (that installation token, or a human PAT with admin on the target repos), and
+# it says so when the token cannot: a 403 on the write is reported as "this token lacks
+# administration: write on <repo>", never as a generic outage. The DRY RUN needs only
+# `administration: read`, so it remains available to the narrower audit credential.
 #
 # DRY RUN BY DEFAULT, READ BACK ALWAYS, FAIL CLOSED ON PARTIAL APPLICATION. Nothing is written without
 # `--apply`. After every write the contexts are RE-READ and compared against the exact expected set —

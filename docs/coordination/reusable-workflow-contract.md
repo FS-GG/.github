@@ -406,6 +406,55 @@ FS.GG.Net's real caller and **this repository's own** `kit-materialize.yml`, and
 either job is caught by name. That is stronger than a dry run — it needs no credential, and it fails
 on the pull request that would break it rather than on the nightly sweep afterwards.
 
+### Arming record: `claim-fence` on `.github/main`
+
+This is the durable slice-8 packet for the GitHub-native executor fence ([#2723](https://github.com/FS-GG/.github/issues/2723)).
+It records the decision and the evidence; it does not pretend a blocked administrative write happened.
+
+1. **Producer landed and observed for more than one claim-lease window.** The exact context is
+   `claim-fence`, produced directly by `.github/workflows/fsgg-claim-fence.yml` on this repository (it
+   is not a nested reusable-workflow context). The earliest complete workflow census entry is run
+   [31969788185](https://github.com/FS-GG/.github/actions/runs/31969788185), which reported a successful
+   `claim-fence` check on immutable head `0a0d6b052490b26fc6cbab8cf2619bfaae9ab809` at
+   `2026-08-16T20:11:03Z`. A six-page, 597-run census at `2026-08-22T09:18:30Z` put the observe-only
+   interval beyond five days, comfortably above the 120-minute default lease.
+2. **Static producibility passes.** Against this checkout and an offline classic-protection payload
+   requiring only `claim-fence`, `scripts/check-required-contexts.py` reported `ok   claim-fence` and
+   one audited context among 20 contexts reported on every pull request. The workflow has no `paths:`
+   filter and decides applicability inside the job, so unrelated pull requests receive a real check.
+3. **The verdict has a bounded moving input.** The pull-request head and declared claim generation are
+   immutable inputs; the live claim may move, and a mismatch is the intended red result. The accepted
+   residual is the design's stale-green window when no merge queue re-evaluates that result at merge
+   time.
+4. **Merge-queue decision: do not enable it in this slice.** The live `rules/branches/main` response
+   was `[]` on 2026-08-22. Enabling a queue changes how every pull request merges and remains a separate
+   repository decision. Arming without it still refuses ungrounded executors, while accepting the
+   stale-green residual above; this is deliberate, not an assertion that AC1's strongest form is met.
+5. **Apply is a post-merge obligation and is presently blocked.** A complete open-pull-request census
+   on 2026-08-22 found three `item/<n>-*` pull requests: [#2821](https://github.com/FS-GG/.github/pull/2821)
+   and [#2818](https://github.com/FS-GG/.github/pull/2818) had no authorization marker, while
+   [#2809](https://github.com/FS-GG/.github/pull/2809)'s marker named head `2fb051d9…` rather than its
+   current `ff04546b…`. Therefore the zero-unmarked-in-flight precondition is false and **nothing is
+   armed by this change**. After this document lands, the claim holder must repeat the complete census;
+   only when it is empty (or every item PR carries a current marker) may it run the hub-only dry run and
+   apply:
+
+   ```sh
+   scripts/repos.sh require-context --context claim-fence --receives labels --only FS-GG/.github
+   scripts/repos.sh require-context --context claim-fence --receives labels --only FS-GG/.github --apply
+   ```
+
+   The recorded dry run on 2026-08-22 selected exactly `FS-GG/.github`, read the seven-context before
+   set, and reported `1 would-add, 0 unchanged, 0 failed`. The apply is complete only when its built-in
+   read-back reports `claim-fence` in the exact after-set. The separately measured dispatch App
+   installation grant includes `administration: write`; a workflow `GITHUB_TOKEN` still cannot hold
+   that permission.
+
+Rollback preserves a reporting context before it weakens protection: first set the producer back to
+observe-only/non-binding behavior, then run `unrequire-context` with the exact confirmation, and finally
+read both classic protection and rulesets. Never delete or silence the producer before removing a
+required context: a missing required check is a permanent wait, not a red verdict.
+
 ## The on-demand materialize, and why one still never writes `main`
 
 > **DECISION ([#1845](https://github.com/FS-GG/.github/issues/1845), 2026-07-28). A materialize can be
