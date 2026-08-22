@@ -137,21 +137,12 @@ classes:
     kind: template-payload
     provider: fs-gg-ui
     evidence: FS.GG.Rendering/.template.config/template.json
-    tracked-by: FS-GG/FS.GG.Rendering#1240
+    tracked-by: FS-GG/FS.GG.Rendering#1261
     note: >-
-      THE THIRD INSTANCE, AND THE REASON THIS FILE EXISTS (.github#2380 → #2545). All 18 rows are
-      emitted correctly by the `fs-gg-ui` `dotnet new` template — `fs-gg-feedback-report`'s entry
-      carries no `condition` key at all, deliberately, since Rendering#434. A product scaffolded
-      through ANY OTHER provider never restores that template, so the class reaches those trees
-      through nothing: `EHotwagner/S.I.R.` (`providerName: fable-game`) received 42 driver paths, 16
-      process skills, 2 game-skill paths, and ZERO Rendering-owned product skills. Only
-      `fs-gg-feedback-report`'s absence is DETECTABLE there, because `always` is the sole predicate
-      that evaluates true on a tree carrying no `profile` parameter — that is a fact about
-      detectability, not about intent, and all 18 rows are in scope of the missing channel.
-      .github#2545 chose Route B: FS.GG.Rendering publishes `FS.GG.Rendering.Skills` (#1240) and
-      FS.GG.SDD embeds it as a fourth enrollment channel (FS.GG.SDD#864), mirroring
-      `FS.GG.Game.Skills` exactly. This entry flips to `delivered` under .github#2639, together with
-      the `rendering-skills` contract row that cannot be written until the package is on the feed.
+      FS.GG.Rendering.Skills 0.1.0 establishes the owner → SDD contract, but its schema-v1
+      manifest records only SKILL.md bodies. The public SDD materializer therefore fails closed for
+      declared script sidecars. Until Rendering#1261 publishes a schema-v2 manifest and a direct
+      non-rendering scaffold proves every sidecar, this class remains limited to fs-gg-ui payloads.
 
   # ---------------------------------------------------------------------------------------------
   - owner: fs-gg-templates

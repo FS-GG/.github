@@ -19,6 +19,21 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-23** — **`rendering-skills` records the Rendering → SDD contract while delivery remains provider-scoped; stale feed projections reconciled**
+  (rendering; [.github#2639](https://github.com/FS-GG/.github/issues/2639),
+  [Rendering#1240](https://github.com/FS-GG/FS.GG.Rendering/issues/1240),
+  [Rendering#1261](https://github.com/FS-GG/FS.GG.Rendering/issues/1261),
+  [SDD#864](https://github.com/FS-GG/FS.GG.SDD/issues/864)): records
+  `FS.GG.Rendering.Skills` `0.1.0` as a package-bearing Rendering → SDD contract and maps it in
+  the shared feed-coherence/autofix subject set. Its schema-v1 manifest cannot declare the required
+  script sidecars, so direct public SDD materialization fails closed and the `fs-gg-rendering` /
+  `product` declaration remains `fs-gg-ui`-only provider-scoped until Rendering#1261 publishes the
+  schema-v2 patch and a non-rendering scaffold proves the complete payload. The same fresh feed read
+  found `FS.GG.UI.Template` 0.27.0 (Rendering PR #1258, tag
+  `fs-gg-ui-template/v0.27.0` at `b8e60c317a3b64f259c4aaf462910041c40426e5`) and the published
+  `.github` coherent set 0.73.1 (source `7f8987966db71da62ab0f29fa6ee6f5064b00327`); their registry
+  projections are reconciled in this change rather than leaving main knowingly red.
+
 - **2026-08-22** — **coherent set `github:0.71.0` published and registry reconciled; poisoned `0.70.0` preserved**
   (github; [.github#2813](https://github.com/FS-GG/.github/issues/2813),
   [source PR #2814](https://github.com/FS-GG/.github/pull/2814),
