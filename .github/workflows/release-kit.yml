@@ -364,6 +364,9 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+        # After promotion the journal asset is immutable. The shared adapter then validates the
+        # existing exact journal read-only, so an exact-source replay can continue to dashboard
+        # delivery instead of aborting on an asset-clobber HTTP 422 (.github#2820).
         run: bash scripts/release-saga-ci.sh failure FS.GG.Kit "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # ─────────────────────────────────────────────────────────────────────────────────────────

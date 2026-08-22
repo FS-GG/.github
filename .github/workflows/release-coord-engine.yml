@@ -294,6 +294,9 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+        # After promotion the journal asset is immutable. The shared adapter validates that exact
+        # journal read-only, preserving reachability of the receiver dashboard step on replay
+        # instead of attempting an asset clobber that GitHub rejects (.github#2820).
         run: bash scripts/release-saga-ci.sh failure FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
 
       # ─────────────────────────────────────────────────────────────────────────────────────────

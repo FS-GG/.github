@@ -252,12 +252,26 @@ for name, package in subjects.items():
         'case "$DISPATCH_SOURCE_SHA" in',
     )
     assert any(check in text for check in exact_sha_checks), name
+    if package in ("FS.GG.Coord.Cli", "FS.GG.Kit"):
+        failure = text.find(f"release-saga-ci.sh failure {package}")
+        token = text.find("id: tick-token", failure)
+        delivery = text.find(f"dashboard-tick.py --package {package}", token)
+        readback = text.find('case "$rc" in', delivery)
+        assert 0 <= failure < token < delivery < readback, (name, failure, token, delivery, readback)
 adapter = (root / "scripts/release-saga-ci.sh").read_text()
 assert "github_base | sed 's:/*$::'" in adapter
 assert "printf '%s/%s/%s/%s.%s.nupkg'" in adapter
 assert 'lastFailure.feed == "nuget"' in adapter
 assert "never issue a blind duplicate push" in adapter
 assert adapter.count('[ "$observed" = true ] ||') == 2
+for token in ("--json isImmutable", "immutable release journal read back and verified", "assert-identity", "assert-artifacts"):
+    assert token in adapter, token
+immutable = adapter.find('true)')
+immutable_download = adapter.find('gh release download', immutable)
+immutable_upload = adapter.find('gh release upload', immutable)
+assert immutable >= 0 and immutable_download > immutable and immutable_upload < 0, (
+    immutable, immutable_download, immutable_upload
+)
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
@@ -290,6 +304,112 @@ assert '[ "${#journals[@]}" -eq 3 ]' not in promote
 assert "release-saga-promote-release.sh" in promote
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
+
+# An exact-source retry after promotion sees an immutable GitHub release. The old adapter attempted
+# `release upload --clobber` here, received HTTP 422, and prevented the later dashboard step in both
+# package workflows from running. Exercise the production adapter against a fake `gh` that makes any
+# such mutation red while serving the exact immutable journal for read-back.
+IMMUTABLE="$WORK/immutable-journal-recovery"
+mkdir -p "$IMMUTABLE/artifacts/packages" "$IMMUTABLE/remote" "$IMMUTABLE/bin" "$IMMUTABLE/runner"
+cp "$WORK/artifacts/"*.nupkg "$IMMUTABLE/artifacts/packages/"
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$IMMUTABLE/artifacts/packages" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$IMMUTABLE/artifacts/packages/release-manifest.json"
+python3 "$TOOL" preflight --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" --feed both
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  cp "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+    "$IMMUTABLE/artifacts/packages/journal-$package.json"
+done
+immutable_observed=()
+for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+  immutable_observed+=(--observed "$package=$IMMUTABLE/artifacts/packages/$package.9.8.7.nupkg")
+done
+python3 "$TOOL" record-observed --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+  --feed github "${immutable_observed[@]}" --detail "immutable recovery fixture org observation"
+python3 "$TOOL" record-observed --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+  --feed nuget "${immutable_observed[@]}" --detail "immutable recovery fixture public observation"
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  cp "$IMMUTABLE/artifacts/packages/release-manifest.json" "$IMMUTABLE/remote/journal-$package.json"
+done
+cat > "$IMMUTABLE/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_GH_CALLS"
+case "$1 $2" in
+  "release view")
+    printf '%s\n' true
+    ;;
+  "release download")
+    target=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --dir ]; then shift; target="$1"; break; fi
+      shift
+    done
+    [ -n "$target" ]
+    mkdir -p "$target"
+    cp "$FAKE_REMOTE_JOURNAL" "$target/journal-$FAKE_PACKAGE.json"
+    ;;
+  "release upload")
+    echo "HTTP 422: release is immutable" >&2
+    exit 22
+    ;;
+  *) echo "unexpected fake gh call: $*" >&2; exit 2 ;;
+esac
+SH
+chmod +x "$IMMUTABLE/bin/gh"
+: > "$IMMUTABLE/calls.log"
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  printf '%s\n' nuget > "$IMMUTABLE/runner/release-saga-stage"
+  for replay in 1 2; do
+    (
+      cd "$IMMUTABLE"
+      PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+        GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID="$replay" \
+        FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE="$package" \
+        FAKE_REMOTE_JOURNAL="$IMMUTABLE/remote/journal-$package.json" \
+        bash "$ROOT/scripts/release-saga-ci.sh" failure "$package" 9.8.7 \
+          0123456789012345678901234567890123456789
+    )
+  done
+done
+if grep -Eq '^release (upload|edit|delete)' "$IMMUTABLE/calls.log"; then
+  echo "expected immutable journal recovery to perform no release mutation" >&2
+  cat "$IMMUTABLE/calls.log" >&2
+  exit 1
+fi
+[ "$(grep -c '^release view ' "$IMMUTABLE/calls.log")" -eq 4 ]
+[ "$(grep -c '^release download ' "$IMMUTABLE/calls.log")" -eq 4 ]
+
+# Unreadable and wrong-identity remote journals fail closed rather than grading immutability as
+# success. These are the non-answer and wrong-subject controls for the read-back gate.
+: > "$IMMUTABLE/missing.json"
+if (
+  cd "$IMMUTABLE"
+  PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+    GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID=missing \
+    FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE=FS.GG.Kit \
+    FAKE_REMOTE_JOURNAL="$IMMUTABLE/missing.json" \
+    bash "$ROOT/scripts/release-saga-ci.sh" failure FS.GG.Kit 9.8.7 \
+      0123456789012345678901234567890123456789
+); then
+  echo "expected unreadable immutable journal to fail closed" >&2; exit 1
+fi
+jq '.descriptor.sourceSha = "ffffffffffffffffffffffffffffffffffffffff"' \
+  "$IMMUTABLE/remote/journal-FS.GG.Kit.json" > "$IMMUTABLE/wrong-source.json"
+if (
+  cd "$IMMUTABLE"
+  PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+    GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID=wrong \
+    FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE=FS.GG.Kit \
+    FAKE_REMOTE_JOURNAL="$IMMUTABLE/wrong-source.json" \
+    bash "$ROOT/scripts/release-saga-ci.sh" failure FS.GG.Kit 9.8.7 \
+      0123456789012345678901234567890123456789
+); then
+  echo "expected wrong-identity immutable journal to fail closed" >&2; exit 1
+fi
+echo "immutable release journal recovery: kit and engine replays read back exact state without mutation"
 
 # Once GitHub publishes a release, repository immutable-release enforcement activates. A queued
 # observer must compare the already-published content and return success; it may not try to clobber

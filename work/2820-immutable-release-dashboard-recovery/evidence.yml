@@ -1,0 +1,361 @@
+schemaVersion: 1
+workId: 2820-immutable-release-dashboard-recovery
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2820-immutable-release-dashboard-recovery/spec.md
+sourceClarifications: work/2820-immutable-release-dashboard-recovery/clarifications.md
+sourceChecklist: work/2820-immutable-release-dashboard-recovery/checklist.md
+sourcePlan: work/2820-immutable-release-dashboard-recovery/plan.md
+sourceTasks: work/2820-immutable-release-dashboard-recovery/tasks.yml
+sourceAnalysis: readiness/2820-immutable-release-dashboard-recovery/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2820-immutable-release-dashboard-recovery/analysis.json
+    digest: 3ff94877bbd78721034f20a9a161f443c4a43402c55d97b33c593ad9d3af5e05
+    schemaVersion: 1
+  - label: checklist
+    path: work/2820-immutable-release-dashboard-recovery/checklist.md
+    digest: 9dd0d2a934ed8b7977f89221b68a95fbef8edcf1188ca6236eefce4da20d93c5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2820-immutable-release-dashboard-recovery/clarifications.md
+    digest: eae894e4ce2eaff625e2834ced6259d166c45ef9b6f7a82bc675fe1f666e4c54
+    schemaVersion: 1
+  - label: plan
+    path: work/2820-immutable-release-dashboard-recovery/plan.md
+    digest: 339280068e071c89baf4cf2ce7337e96d209a66ad4073df106213da435e8c855
+    schemaVersion: 1
+  - label: spec
+    path: work/2820-immutable-release-dashboard-recovery/spec.md
+    digest: 7604f0eb811bbbac8190e44f46c72f9897d0ce1bdf1e8f23fa688949b91fc423
+    schemaVersion: 1
+  - label: tasks
+    path: work/2820-immutable-release-dashboard-recovery/tasks.yml
+    digest: 16188447c5534c79c7cab0226ff2e043b91c1c393406a845e00926213c16e08a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003]
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV014]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV015]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV017]
+    artifacts: [".github/workflows/release-coord-engine.yml", ".github/workflows/release-kit.yml", ".github/workflows/release-saga-promote.yml", scripts/release-saga-ci.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Focused release-saga and dashboard-tick suites passed; the derived 38-suite gate passed 37 after provisioning pinned shellcheck", with only an origin/main historical-TRX baseline failure outside this item.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
