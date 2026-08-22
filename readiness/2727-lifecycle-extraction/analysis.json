@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2727-lifecycle-extraction/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ab74ae03cb9d58e5b8efd009caf91791c0f066b5611c590ba475a9c06bdf8d16"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2727-lifecycle-extraction/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "f28dafc34f3381897031de142a7379f2a089840521f54c56227389d01febd70f"
+        "value": "91f7a9265af0bee9d07909390ca1e86cbd6e5dfe7dfb0efe07171bcc9c01dabc"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "39c196cbcc55845007c8da5847396ba7b834940d0b814957d99de28536b51735"
+        "value": "7de97218a4d3369d10b72871897328a0ac4bf167bdbef67d80c39876f1d2c847"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -152,6 +162,26 @@
       "id": "AR007",
       "sourcePath": "work/2727-lifecycle-extraction/plan.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "PC-002",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "PC-003",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "GV-001",
       "targetId": null,
       "relationship": "generatedViewDisposition",
@@ -159,7 +189,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR008",
+      "id": "AR010",
       "sourcePath": "work/2727-lifecycle-extraction/plan.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "PM-001",
@@ -169,7 +199,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR009",
+      "id": "AR011",
       "sourcePath": "work/2727-lifecycle-extraction/plan.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "PD-001",
@@ -179,7 +209,27 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR010",
+      "id": "AR012",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
       "sourcePath": "work/2727-lifecycle-extraction/plan.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": null,
@@ -189,7 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR011",
+      "id": "AR015",
       "sourcePath": "work/2727-lifecycle-extraction/plan.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "VO-001",
@@ -199,7 +249,37 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR012",
+      "id": "AR016",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2727-lifecycle-extraction/plan.md",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "AC-001",
@@ -209,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR013",
+      "id": "AR020",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/checklist.md",
       "sourceId": null,
@@ -219,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR014",
+      "id": "AR021",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/plan.md",
       "sourceId": null,
@@ -229,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR022",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "FR-001",
@@ -239,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
+      "id": "AR023",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/clarifications.md",
       "sourceId": null,
@@ -249,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR017",
+      "id": "AR024",
       "sourcePath": "work/2727-lifecycle-extraction/spec.md",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": null,
@@ -259,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR025",
       "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "T002",
@@ -269,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR026",
       "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "T003",
@@ -279,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR027",
       "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "T004",
@@ -289,10 +369,60 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR028",
       "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
       "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceId": "T005",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "T006",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "T007",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/2727-lifecycle-extraction/tasks.yml",
+      "targetPath": "work/2727-lifecycle-extraction/tasks.yml",
+      "sourceId": "T010",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -301,7 +431,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 21,
+    "readyCount": 33,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
@@ -316,7 +446,7 @@
     {
       "path": "readiness/2727-lifecycle-extraction/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

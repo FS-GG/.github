@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2727-lifecycle-extraction/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2727-lifecycle-extraction/analysis.json
-    digest: 415212434e71f2d83b9e8b35b19dd05c4c56a333dea41e43fa4c0949ff83496b
+    digest: 2a50c7b3f264aeacf2fe2f846d4801971e86c968350ab640fba6c7e298f37508
     schemaVersion: 1
   - label: checklist
     path: work/2727-lifecycle-extraction/checklist.md
@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -77,7 +77,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -102,7 +102,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -127,7 +127,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -152,7 +152,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -177,7 +177,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -202,7 +202,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -227,7 +227,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -252,7 +252,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129
@@ -277,7 +277,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2727-lifecycle-extraction/lifecycle.trx
-      digest: "sha256:a13890e332e9cd87ba39603782f502a20cada21a88fada9c9e53451ec81bb224"
+      digest: "sha256:27a69038c22de32422000345bcf7093b0f2c13d368a4f7c5f6b6ab0e9ccec5f3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 129

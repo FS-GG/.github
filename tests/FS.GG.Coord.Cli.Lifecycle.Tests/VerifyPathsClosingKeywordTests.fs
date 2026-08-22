@@ -8,6 +8,7 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.Lifecycle
 
 /// `verify-paths` catching a closing keyword next to the board's OWN `<repo>#<n>` shorthand — end to
 /// end, through the real command (.github#2107).
@@ -17,7 +18,7 @@ open FS.GG.Coord.Cli
 /// A SHELL, and the exit code is the whole point: the defect this item exists to close is that the
 /// PR's body silently fails to link, so a worker's own pre-merge self-check must go RED on it, not stay
 /// quiet the way a bare `FSGG-PATHS OK` would. Same idiom as `LandableNotOpenTests` (#1680): only
-/// driving `Client.verifyPaths` can assert that.
+/// driving `LiveHandlers.verifyPaths` can assert that.
 module VerifyPathsClosingKeywordTests =
 
     /// Routes on path suffix: `pulls/{n}` (serves BOTH `prHeadRef` and the new `prBody` — they read the
@@ -52,7 +53,7 @@ module VerifyPathsClosingKeywordTests =
           DefaultRepo = Some ".github"
           ChoreLocks = [] }
 
-    /// Drive `Client.verifyPaths` and capture (exit code, stdout) — same cache-isolation licence as
+    /// Drive `LiveHandlers.verifyPaths` and capture (exit code, stdout) — same cache-isolation licence as
     /// `LandableNotOpenTests.runLandable`.
     let private runVerifyPaths (transport: Fake.Recorder) (args: string list) : int * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-2107-" + Guid.NewGuid().ToString "n")
@@ -70,7 +71,13 @@ module VerifyPathsClosingKeywordTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = Client.verifyPaths (context transport) opts
+            let code =
+                LiveHandlers.verifyPaths
+                    (fun _ -> Set.singleton "registry/repos.lock")
+                    (fun () -> Some ".")
+                    ignore
+                    (context transport)
+                    opts
             Console.Out.Flush()
             code, captured.ToString()
         finally

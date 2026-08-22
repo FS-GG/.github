@@ -199,3 +199,38 @@ module LiveHandlers =
     val doneCmd:
       offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
         ctx: Kernel.Context -> opts: Options.Options -> int
+
+    val sddReadinessEvidenceErrors: workId: string -> raw: string -> string list
+
+    val sddEvidenceErrors: receipt: FS.GG.Coord.DeliveryRoute.Receipt -> string list
+
+    val readDeliveryRouteComments:
+      ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        FS.GG.Coord.GitHub.Errors.IoResult<string list>
+
+    val routeEvidence:
+      subject: string -> comments: string list -> FS.GG.Coord.DeliveryRoute.Verdict
+
+    val readDeliveryRouteVerdict:
+      ctx: Kernel.Context -> target: FS.GG.Coord.Types.Ref -> FS.GG.Coord.DeliveryRoute.Verdict
+
+    val requireCurrentDeliveryRoute:
+      ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
+
+    val verifyPaths:
+      generatedPaths: (string -> Set<string>) ->
+        kitRoot: (unit -> string option) ->
+        digestWarn: (unit -> unit) ->
+        ctx: Kernel.Context -> opts: Options.Options -> int
+
+    val withFollowupAuditContextForTest:
+      ctx: Kernel.Context -> f: (unit -> 'a) -> 'a
+
+    val followupAudit:
+      context: (unit -> Result<Kernel.Context * System.IDisposable, int>) ->
+        opts: Options.Options -> int
+
+    val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int
