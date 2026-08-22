@@ -60,9 +60,75 @@ module Done =
         | ParentLeftOpen of Ref * reasons: string list
         | NoParent
 
-    let hasReceipt (comments: string list) =
-        comments
-        |> List.exists (fun body -> body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
+    type ReceiptState =
+        | NoReceipt
+        | LegacyReceipt
+        | VerifiedCompletionReceipt of FS.GG.Coord.Delivery.DeliveryCompletionReceipt
+        | InvalidCompletionReceipt of errors: string list
+
+    type CompletionCorrectionState =
+        | NoCompletionCorrection
+        | VerifiedCompletionCorrection of FS.GG.Coord.Delivery.CompletionCorrectionReceipt
+        | InvalidCompletionCorrection of errors: string list
+
+    let receiptState (comments: string list) =
+        let legacy =
+            comments
+            |> List.exists (fun body ->
+                body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
+        let typed =
+            comments
+            |> List.filter (fun body ->
+                body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
+            |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionReceipt
+        let errors = typed |> List.choose (function Error error -> Some error | _ -> None) |> List.collect id
+        let receipts = typed |> List.choose (function Ok (Some receipt) -> Some receipt | _ -> None)
+        match errors, receipts with
+        | _ :: _, _ -> InvalidCompletionReceipt errors
+        | [], [ receipt ] -> VerifiedCompletionReceipt receipt
+        | [], _ :: _ :: _ -> InvalidCompletionReceipt [ "more than one delivery completion receipt exists" ]
+        | [], [] when legacy -> LegacyReceipt
+        | [], [] -> NoReceipt
+
+    let hasReceipt comments =
+        match receiptState comments with
+        | VerifiedCompletionReceipt _ -> true
+        | LegacyReceipt
+        | NoReceipt
+        | InvalidCompletionReceipt _ -> false
+
+    let receiptStateFor (ref: Ref) comments =
+        match receiptState comments with
+        | VerifiedCompletionReceipt receipt when receipt.Item <> ref.Canonical ->
+            InvalidCompletionReceipt
+                [ $"delivery completion receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'" ]
+        | state -> state
+
+    let hasReceiptFor ref comments =
+        match receiptStateFor ref comments with
+        | VerifiedCompletionReceipt _ -> true
+        | LegacyReceipt
+        | NoReceipt
+        | InvalidCompletionReceipt _ -> false
+
+    let completionCorrectionStateFor (ref: Ref) (comments: string list) =
+        let parsed =
+            comments
+            |> List.filter (fun body ->
+                body.StartsWith(FS.GG.Coord.Delivery.CompletionCorrectionMarker, StringComparison.Ordinal))
+            |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionCorrectionReceipt
+        let errors = parsed |> List.choose (function Error error -> Some error | _ -> None) |> List.collect id
+        let receipts = parsed |> List.choose (function Ok (Some receipt) -> Some receipt | _ -> None)
+        match errors, receipts with
+        | _ :: _, _ -> InvalidCompletionCorrection errors
+        | [], [ receipt ] when receipt.Item = ref.Canonical -> VerifiedCompletionCorrection receipt
+        | [], [ receipt ] ->
+            InvalidCompletionCorrection
+                [ $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'" ]
+        | [], _ :: _ :: _ -> InvalidCompletionCorrection [ "more than one completion correction receipt exists" ]
+        | [], [] -> NoCompletionCorrection
+
+    let selfHostReplayState comments = FS.GG.Coord.SelfHost.replayState comments
 
     // ---- THE PRECONDITIONS, PURE -------------------------------------------------------------------
 

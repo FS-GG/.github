@@ -14,64 +14,15 @@
 # discovers nothing exits 0, so the non-vacuity step asserts a floor of tests actually ran. A green gate
 # over an untested fail-open surface is the exact bug this engine exists to end.
 #
-# The build config is in the trigger list, and BOTH halves of it are (#609): the root
-# Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props, which is what sets RestoreLockedMode
-# and the ADR-0032 lock-hash fix behind this job's locked restore. An edit to the org-shared file
-# changes this build, so it must be able to re-run this gate.
+# The PR trigger is deliberately unfiltered so the required change-completeness context always reports.
+# Its impact classifier retains the old path-sensitive boundary for the expensive engine job, including
+# both build-config halves: root Directory.Build.props and its dist/dotnet import.
 name: coord-engine
 
 on:
+  # No PR path filter: `change-completeness` is a required predecessor and must report on every head.
+  # The expensive engine job retains path-sensitive execution through the gate's typed impact output.
   pull_request:
-    paths:
-      - "src/FS.GG.Coord.Cli/**"
-      # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
-      # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
-      # workflow would not start on such a change and would be green by absence (#266) — which is
-      # exactly what `scripts/check-paths-coherence.py` rule (b) refuses.
-      - "src/FS.GG.Coord.Cli.Kernel/**"
-      - "src/FS.GG.Coord.Cli.BoardOps/**"
-      - "src/FS.GG.Coord.Core/**"
-      - "src/FS.GG.Coord.GitHub/**"
-      - "tests/FS.GG.Coord.Cli.Tests/**"
-      # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
-      # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
-      # the CLI suite would report green over a kernel change it never executed.
-      - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
-      - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
-      - "tests/FS.GG.Coord.Core.Tests/**"
-      - "tests/m6-decision-cutover/**"
-      # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
-      # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
-      # the delivery-marker leading-line boundary; `DeliveryApplicationTests` grades the ENGINE
-      # against it and `tests/kit-published-coherence/run.sh` grades the PYTHON gate against the
-      # same verdicts. Without this path a PR that moved the Python limit and edited the corpus to
-      # match would never start this workflow, so the F# half would stay silent on precisely the
-      # coordinated one-sided edit the corpus exists to catch — a gate keyed on `paths:` is
-      # selectively silent, and quietest on the additive variants (.github#2551).
-      - "tests/delivery-leading-line/**"
-      - "tests/coord-engine-e2e/**"
-      - "tests/coord-engine-parity/**"
-      - "tests/coord-engine-mutation/**"
-      - "tests/coord-engine-replay/**"
-      - "tests/review-critic-succession-wire/**"
-      - "scripts/fsgg-coord"
-      # THE GUARD MODULE, AND ITS ABSENCE HERE WAS A HOLE (.github#2581). `.github#1586` moved the verb
-      # partition and both guards out of `scripts/fsgg-coord` into `scripts/fsgg-coord-guards.sh` —
-      # and this filter did not follow them. `tests/coord-engine-parity/shim.sh` §3b lifts the three
-      # verb sets out of THAT file and grades their bijection against the engine's own
-      # `command-contract`, and §3c drives every one of them against a stale fixture; so the suites
-      # whose entire subject is that file were started by no path when it changed, on either trigger.
-      # A gate keyed on `paths:` is selectively silent, and quietest on exactly the edits it is for
-      # (.github#2551). Measured: `grep -rn "fsgg-coord-guards" .github/workflows/` returned nothing.
-      - "scripts/fsgg-coord-guards.sh"
-      - "scripts/record-board-fixture.py"
-      - "scripts/read-trx-count.py"
-      - "tests/ci-runtime-optimization/**"
-      - "Directory.Build.props"
-      - "dist/dotnet/Directory.Build.props"
-      - "Directory.Packages.props"
-      - "global.json"
-      - ".github/workflows/coord-engine.yml"
   push:
     branches: [main]
     paths:
@@ -114,6 +65,9 @@ on:
       - "scripts/record-board-fixture.py"
       - "scripts/read-trx-count.py"
       - "tests/ci-runtime-optimization/**"
+      - "tests/change-completeness/**"
+      - "tests/change-risk-compatibility/**"
+      - "scripts/change-completeness"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -129,7 +83,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  change-completeness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      engine_changed: ${{ steps.gate.outputs.engine_changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - name: Run bounded structural and focused production-route checks
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          base="$EVENT_BASE"
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then base="$(git rev-parse HEAD^)"; fi
+          body_arg=()
+          if [ "$EVENT_NAME" = pull_request ]; then
+            printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+            body_arg=(--pr-body "$RUNNER_TEMP/pr-body.md")
+          fi
+          scripts/change-completeness --base "$base" --head "$EVENT_HEAD" \
+            --github-output "$GITHUB_OUTPUT" "${body_arg[@]}"
+      - name: Prove the gate wiring and named structural families
+        run: bash tests/change-completeness/run.sh
+      - name: Prove every authority slice retains parity and an effective inversion
+        run: bash tests/change-risk-compatibility/run.sh
+
   engine:
+    needs: change-completeness
+    if: github.event_name != 'pull_request' || needs.change-completeness.outputs.engine_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

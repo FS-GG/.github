@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 SCHEMA = "fsgg.release-saga/1"
+RECEIVER_SCHEMA = "fsgg.release-receiver-receipt/1"
 FEEDS = ("github", "nuget")
 CONTENT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 SOURCE_SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -544,6 +545,108 @@ def command_promote(args: argparse.Namespace) -> None:
     print("stable channel promoted")
 
 
+def receiver_identity(data: dict, package_id: str, receiver: str) -> dict[str, str]:
+    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", receiver) is None:
+        raise ValueError(f"receiver is not an owner/repository name: {receiver}")
+    packages = package_map(data)
+    if package_id not in packages:
+        raise ValueError(f"receiver receipt names unknown package: {package_id}")
+    for feed in FEEDS:
+        row = data["state"]["feeds"][feed]["packages"][package_id]
+        if row["state"] != "verified":
+            raise ValueError(f"receiver receipt refused; {feed}/{package_id} is not verified")
+    package = packages[package_id]
+    delivery_id = hashlib.sha256(
+        canonical([data["contentId"], package_id, receiver])
+    ).hexdigest()
+    return {
+        "contentId": data["contentId"],
+        "packageId": package_id,
+        "version": data["descriptor"]["version"],
+        "sourceSha": data["descriptor"]["sourceSha"],
+        "artifactSha256": package["artifact"]["sha256"],
+        "receiver": receiver,
+        "deliveryId": delivery_id,
+    }
+
+
+def verify_receiver_receipt(data: dict, receipt: dict) -> tuple[str, str]:
+    if receipt.get("schema") != RECEIVER_SCHEMA:
+        raise ValueError("receiver receipt has an unknown schema")
+    identity = receiver_identity(data, receipt.get("packageId", ""), receipt.get("receiver", ""))
+    for key, expected in identity.items():
+        if receipt.get(key) != expected:
+            raise ValueError(f"receiver receipt {key} does not match its journal-bound identity")
+    if receipt.get("outcome") != "verified":
+        raise ValueError("receiver receipt outcome is not verified")
+    observed_at = receipt.get("observedAt")
+    if not isinstance(observed_at, str):
+        raise ValueError("receiver receipt observedAt is missing")
+    try:
+        dt.datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("receiver receipt observedAt is malformed") from error
+    unsigned = {key: value for key, value in receipt.items() if key != "digest"}
+    expected_digest = "sha256:" + hashlib.sha256(canonical(unsigned)).hexdigest()
+    if receipt.get("digest") != expected_digest:
+        raise ValueError("receiver receipt digest does not match its bound fields")
+    return identity["packageId"], identity["receiver"]
+
+
+def command_receiver_receipt(args: argparse.Namespace) -> None:
+    manifest_path = pathlib.Path(args.manifest).resolve()
+    data = load(manifest_path)
+    assert_bound(manifest_path, data)
+    identity = receiver_identity(data, args.package, args.receiver)
+    unsigned = {
+        "schema": RECEIVER_SCHEMA,
+        **identity,
+        "outcome": "verified",
+        "observedAt": now(),
+        "detail": args.detail,
+    }
+    receipt = {**unsigned, "digest": "sha256:" + hashlib.sha256(canonical(unsigned)).hexdigest()}
+    output = pathlib.Path(args.output).resolve()
+    if output.exists():
+        existing = json.loads(output.read_text(encoding="utf-8"))
+        verify_receiver_receipt(data, existing)
+        if any(existing.get(key) != receipt.get(key) for key in identity) or existing.get("detail") != args.detail:
+            raise ValueError("append-only receiver receipt path already contains contradictory evidence")
+        print(existing["deliveryId"])
+        return
+    write_atomic(output, receipt)
+    print(receipt["deliveryId"])
+
+
+def command_verify_receivers(args: argparse.Namespace) -> None:
+    manifest_path = pathlib.Path(args.manifest).resolve()
+    data = load(manifest_path)
+    assert_bound(manifest_path, data)
+    expected: set[tuple[str, str]] = set()
+    for value in args.expected:
+        package_id, separator, receiver = value.partition("=")
+        if not separator:
+            raise ValueError("--expected must be PACKAGE=OWNER/REPOSITORY")
+        receiver_identity(data, package_id, receiver)
+        expected.add((package_id, receiver))
+    if not expected:
+        raise ValueError("receiver declaration is empty")
+    found: dict[tuple[str, str], dict] = {}
+    for value in args.receipt:
+        receipt = json.loads(pathlib.Path(value).read_text(encoding="utf-8"))
+        key = verify_receiver_receipt(data, receipt)
+        if key in found and found[key] != receipt:
+            raise ValueError(f"contradictory receiver receipts exist for {key[0]}={key[1]}")
+        found[key] = receipt
+    missing = expected - set(found)
+    unexpected = set(found) - expected
+    if missing:
+        raise ValueError("missing receiver receipts: " + ", ".join(f"{p}={r}" for p, r in sorted(missing)))
+    if unexpected:
+        raise ValueError("undeclared receiver receipts: " + ", ".join(f"{p}={r}" for p, r in sorted(unexpected)))
+    print(f"verified {len(found)} journal-bound receiver receipt(s)")
+
+
 def parser() -> argparse.ArgumentParser:
     top = argparse.ArgumentParser()
     commands = top.add_subparsers(dest="command", required=True)
@@ -580,6 +683,15 @@ def parser() -> argparse.ArgumentParser:
     promote = commands.add_parser("promote")
     promote.add_argument("--manifest", required=True); promote.add_argument("--channel-output")
     promote.add_argument("--previous-channel"); promote.set_defaults(run=command_promote)
+    receiver = commands.add_parser("receiver-receipt")
+    receiver.add_argument("--manifest", required=True); receiver.add_argument("--package", required=True)
+    receiver.add_argument("--receiver", required=True); receiver.add_argument("--detail", required=True)
+    receiver.add_argument("--output", required=True); receiver.set_defaults(run=command_receiver_receipt)
+    verify_receivers = commands.add_parser("verify-receivers")
+    verify_receivers.add_argument("--manifest", required=True)
+    verify_receivers.add_argument("--expected", action="append", required=True)
+    verify_receivers.add_argument("--receipt", action="append", required=True)
+    verify_receivers.set_defaults(run=command_verify_receivers)
     return top
 
 

@@ -697,9 +697,42 @@ module Writes =
     /// evidence for a driver that later audits an abandoned queue.
     val followupDisposition: transport: IGitHubTransport -> ref: Ref -> worker: WorkerId -> text: string -> IoResult<unit>
 
-    /// Posts the immutable receipt that says a `done` precondition check succeeded.  The status column is
-    /// deliberately not used as that evidence: reconciliation may repair or defer that projection later.
-    val doneReceipt: transport: IGitHubTransport -> ref: Ref -> receipt: string -> IoResult<unit>
+    /// Append a digest-verified delivery completion receipt before mutable terminal projections.
+    val deliveryCompletionReceipt:
+        transport: IGitHubTransport ->
+        ref: Ref ->
+        receipt: FS.GG.Coord.Delivery.DeliveryCompletionReceipt ->
+            IoResult<unit>
+
+    /// Append stable-verifier-approved candidate-engine authority once on its accountable item thread.
+    val selfHostBootstrapReceipt:
+        transport: IGitHubTransport ->
+        ref: Ref ->
+        receipt: FS.GG.Coord.SelfHost.SelfHostBootstrapReceipt ->
+            IoResult<unit>
+
+    /// Append post-merge shared-engine agreement bound to the one durable bootstrap authority.
+    val selfHostReplayReceipt:
+        transport: IGitHubTransport ->
+        ref: Ref ->
+        receipt: FS.GG.Coord.SelfHost.SelfHostReplayReceipt ->
+            IoResult<unit>
+
+    /// Append the subject-bound premature-closure correction authority once. Retries with the same safe
+    /// destination are idempotent; malformed, duplicate, or contradictory evidence fails closed.
+    val completionCorrectionReceipt:
+        transport: IGitHubTransport ->
+        ref: Ref ->
+        receipt: FS.GG.Coord.Delivery.CompletionCorrectionReceipt ->
+            IoResult<unit>
+
+    /// Reopen an issue and require a fresh authoritative OPEN read. A lost PATCH response is recovered
+    /// when readback proves the requested state; an acknowledgement without readback is never success.
+    val reopenIssue: transport: IGitHubTransport -> ref: Ref -> IoResult<unit>
+
+    /// Close an issue as completed and require fresh authoritative CLOSED state. Used only after the
+    /// typed completion authority is durable when recovering a prior premature-closure correction.
+    val closeIssueCompleted: transport: IGitHubTransport -> ref: Ref -> IoResult<unit>
 
     /// Appends a verified lifecycle ordering receipt to an item.
     val lifecycleWatermark: transport: IGitHubTransport -> ref: Ref -> marker: string -> IoResult<unit>

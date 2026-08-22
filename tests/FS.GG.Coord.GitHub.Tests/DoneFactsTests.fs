@@ -70,7 +70,75 @@ let private noSubs = """{"totalCount":0,"nodes":[]}"""
 let ``#2264 only the immutable done receipt is terminal lifecycle evidence`` () =
     Assert.False(hasReceipt [])
     Assert.False(hasReceipt [ "issue closed"; "<!-- fsgg:done-receipt v=2 -->" ])
-    Assert.True(hasReceipt [ "<!-- fsgg:done-receipt v=1 -->\nverified" ])
+    Assert.False(hasReceipt [ "<!-- fsgg:done-receipt v=1 -->\nverified" ])
+
+[<Fact>]
+let ``typed delivery completion receipt is accepted only after digest verification`` () =
+    let facts: FS.GG.Coord.Delivery.CompletionFacts =
+        { HeadSha = "head"
+          Merged = true
+          MergeReachable = true
+          IssueClosed = true
+          BoardDone = false
+          ClaimReleased = false
+          PendingWrites = 0
+          CleanupEligible = false
+          ObligationsDeclared = true
+          Obligations = [] }
+    let signed =
+        FS.GG.Coord.Delivery.createCompletionReceipt
+            "FS-GG/.github#1"
+            2
+            "merge-sha"
+            (System.DateTimeOffset.Parse("2026-08-22T15:00:00Z"))
+            "freshness"
+            "action"
+            facts
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let encoded = FS.GG.Coord.Delivery.encodeCompletionReceipt signed
+    Assert.True(hasReceipt [ encoded ])
+    Assert.False(hasReceipt [ encoded.Replace("merge-sha", "tampered-merge") ])
+    match receiptState [ encoded ] with
+    | VerifiedCompletionReceipt actual -> Assert.Equal(signed, actual)
+    | other -> failwithf "expected verified typed receipt, got %A" other
+    let anotherRef = { Owner = "FS-GG"; Repo = ".github"; Number = 99 }
+    match receiptStateFor anotherRef [ encoded ] with
+    | InvalidCompletionReceipt errors -> Assert.Contains("does not match", String.concat "; " errors)
+    | other -> failwithf "expected item-binding refusal, got %A" other
+    Assert.False(hasReceiptFor anotherRef [ encoded ])
+    match receiptState [ encoded; encoded ] with
+    | InvalidCompletionReceipt errors -> Assert.Contains("more than one", String.concat "; " errors)
+    | other -> failwithf "expected duplicate receipt refusal, got %A" other
+    match receiptState [ encoded.Replace("merge-sha", "tampered-merge") ] with
+    | InvalidCompletionReceipt errors -> Assert.Contains("digest", String.concat "; " errors)
+    | other -> failwithf "expected digest-invalid receipt, got %A" other
+    Assert.Equal(LegacyReceipt, receiptState [ "<!-- fsgg:done-receipt v=1 -->\nverified" ])
+    Assert.Equal(NoReceipt, receiptState [ "ordinary comment" ])
+
+[<Fact>]
+let ``completion correction evidence is subject-bound unique and digest-verified`` () =
+    let signed =
+        FS.GG.Coord.Delivery.createCompletionCorrectionReceipt
+            ref.Canonical
+            BoardStatus.InReview
+            (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
+        |> Result.defaultWith (String.concat "; " >> failwith)
+    let encoded = FS.GG.Coord.Delivery.encodeCompletionCorrectionReceipt signed
+
+    Assert.Equal(VerifiedCompletionCorrection signed, completionCorrectionStateFor ref [ encoded ])
+    Assert.Equal(NoCompletionCorrection, completionCorrectionStateFor ref [ "ordinary comment" ])
+
+    match completionCorrectionStateFor { ref with Number = 351 } [ encoded ] with
+    | InvalidCompletionCorrection errors -> Assert.Contains("does not match", String.concat "; " errors)
+    | other -> failwithf "expected subject mismatch, got %A" other
+
+    match completionCorrectionStateFor ref [ encoded; encoded ] with
+    | InvalidCompletionCorrection errors -> Assert.Contains("more than one", String.concat "; " errors)
+    | other -> failwithf "expected duplicate refusal, got %A" other
+
+    match completionCorrectionStateFor ref [ encoded.Replace("In review", "Blocked") ] with
+    | InvalidCompletionCorrection errors -> Assert.Contains("digest", String.concat "; " errors)
+    | other -> failwithf "expected digest refusal, got %A" other
 
 // ---- the closing act ----------------------------------------------------------------------------------
 

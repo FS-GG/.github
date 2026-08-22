@@ -6,59 +6,10 @@ open FS.GG.Coord.Cli.Kernel
 module HandlerRegistration =
     type Handler = Context -> Options.Options -> int
 
-    type Implementations =
-        { Add: Handler
-          Flush: Handler
-          SetField: Handler
-          Child: Handler
-          BodyEdits: Handler
-          FieldId: Handler
-          OptionId: Handler
-          ItemId: Handler
-          Board: Handler
-          Bootstrap: Handler
-          Issues: Handler
-          Intake: Handler
-          Say: Handler
-          Inbox: Handler
-          RoomOpen: Handler
-          Comment: Handler }
-
     let commands =
-        [ Options.Add
-          Options.Flush
-          Options.SetField
-          Options.Child
-          Options.BodyEdits
-          Options.FieldId
-          Options.OptionId
-          Options.ItemId
-          Options.BoardCmd
-          Options.Bootstrap
-          Options.Issues
-          Options.IntakeCmd
-          Options.Say
-          Options.Inbox
-          Options.RoomOpen
-          Options.CommentCmd ]
-
-    let handlers implementations =
-        [ Options.Add, implementations.Add
-          Options.Flush, implementations.Flush
-          Options.SetField, implementations.SetField
-          Options.Child, implementations.Child
-          Options.BodyEdits, implementations.BodyEdits
-          Options.FieldId, implementations.FieldId
-          Options.OptionId, implementations.OptionId
-          Options.ItemId, implementations.ItemId
-          Options.BoardCmd, implementations.Board
-          Options.Bootstrap, implementations.Bootstrap
-          Options.Issues, implementations.Issues
-          Options.IntakeCmd, implementations.Intake
-          Options.Say, implementations.Say
-          Options.Inbox, implementations.Inbox
-          Options.RoomOpen, implementations.RoomOpen
-          Options.CommentCmd, implementations.Comment ]
+        Options.commandCatalogue
+        |> List.choose (fun descriptor ->
+            if descriptor.HandlerOwner = Options.BoardOps then Some descriptor.Command else None)
 
     let validate<'handler>
         (allCommands: Options.Command list)

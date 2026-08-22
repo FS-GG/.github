@@ -13,9 +13,19 @@ module Chore =
             | Quick -> "quick"
             | Involved -> "involved"
 
+    type CompletionCorrectionStatus =
+        | CorrectionInReview
+        | CorrectionBlocked
+
+    let completionCorrectionStatus = function
+        | CorrectionInReview -> InReview
+        | CorrectionBlocked -> Blocked
+
     type ChoreKind =
         | StaleClaim of holder: WorkerId
         | LifecycleProjectionLag of destination: BoardStatus
+        | PrematureCompletion of destination: CompletionCorrectionStatus
+        | CompletionProjection
         | ClassProjectionLag of declared: ItemClass
         | KindProjectionLag of declared: ItemKind
 
@@ -23,6 +33,8 @@ module Chore =
             match this with
             | StaleClaim _ -> "STALE-CLAIM"
             | LifecycleProjectionLag _ -> "LIFECYCLE-PROJECTION-LAG"
+            | PrematureCompletion _ -> "PREMATURE-COMPLETION"
+            | CompletionProjection -> "COMPLETION-PROJECTION-LAG"
             | ClassProjectionLag _ -> "CLASS-PROJECTION-LAG"
             | KindProjectionLag _ -> "KIND-PROJECTION-LAG"
 
@@ -30,6 +42,8 @@ module Chore =
             match this with
             | StaleClaim _ -> None
             | LifecycleProjectionLag destination -> Some("Status", statusWireName destination)
+            | PrematureCompletion destination -> Some("Status", destination |> completionCorrectionStatus |> statusWireName)
+            | CompletionProjection -> Some("Status", statusWireName Done)
             | ClassProjectionLag declared -> Some("Class", itemClassWireName declared)
             // IN CORE, beside its sibling, never in `Client.fs` — the field mapping lives here precisely
             // so the write target and the vocabulary are one decision (`Client.fs`'s own note at the
@@ -50,6 +64,10 @@ module Chore =
                 $"%s{subject.Short}: %s{holder.Value}'s lease has lapsed and the item has no open `item/` PR — collect the marker and restore the column it overwrote."
             | LifecycleProjectionLag destination ->
                 $"%s{subject.Short}: fresh lifecycle facts project Status=%s{statusWireName destination}; repair the stale board projection."
+            | PrematureCompletion destination ->
+                $"%s{subject.Short}: the issue closed without authoritative completion evidence; preserve a correction receipt and restore the nonterminal Status=%s{destination |> completionCorrectionStatus |> statusWireName}."
+            | CompletionProjection ->
+                $"%s{subject.Short}: authoritative completion evidence exists; repair issue closure and Status=Done from that receipt."
             | ClassProjectionLag declared ->
                 $"%s{subject.Short}: the item's own text declares `Class: %s{itemClassWireName declared}` but the board's Class column does not say so — set Class to %s{itemClassWireName declared}."
             | KindProjectionLag declared ->
@@ -118,12 +136,24 @@ module Chore =
         if item.Status = destination || destination = NoStatus then None
         else Some(Chore(item.Ref, LifecycleProjectionLag destination, Quick))
 
+    let prematureCompletion (item: Item) destination =
+        match destination with
+        | InReview -> Some(Chore(item.Ref, PrematureCompletion CorrectionInReview, Quick))
+        | Blocked -> Some(Chore(item.Ref, PrematureCompletion CorrectionBlocked, Quick))
+        | _ -> None
+
+    let completionProjection (item: Item) =
+        if item.State = Closed && item.Status = Done then None
+        else Some(Chore(item.Ref, CompletionProjection, Quick))
+
     let private rank (chore: Chore) =
         match chore.Kind with
         | StaleClaim _ -> 0
-        | LifecycleProjectionLag _ -> 1
-        | ClassProjectionLag _ -> 2
-        | KindProjectionLag _ -> 3
+        | PrematureCompletion _ -> 1
+        | CompletionProjection -> 2
+        | LifecycleProjectionLag _ -> 3
+        | ClassProjectionLag _ -> 4
+        | KindProjectionLag _ -> 5
 
     let offerIncluding (at: SafePoint) (lifecycle: Chore list) =
         derive at.Items @ lifecycle

@@ -96,6 +96,42 @@ module ReviewHeadDivergenceTests =
     let private ordinaryRoundThreeChain terminalVerdict =
         ordinaryRoundThreeChainWithPrefix StructuredDecision.ChangesRequired terminalVerdict
 
+    let private boundedOrdinaryChain initialVerdict terminalVerdict round head =
+        let firstHead = if round = 0 then head else String.replicate 40 "0"
+        let first = initial initialVerdict firstHead
+        let comments = ResizeArray [ StructuredDecisionTests.reviewComment 1L first ]
+        let mutable previous = first
+        for currentRound in 1..round do
+            let verdict =
+                if currentRound = round then terminalVerdict
+                else StructuredDecision.ChangesRequired
+            let currentHead = if currentRound = round then head else String.replicate 40 (string currentRound)
+            let current =
+                following
+                    (currentRound + 1)
+                    previous.Digest
+                    StructuredDecision.Confirmation
+                    verdict
+                    currentRound
+                    currentHead
+                    $"https://review/%d{currentRound}"
+            comments.Add(StructuredDecisionTests.reviewComment (int64 (currentRound + 1)) current)
+            previous <- current
+        comments |> Seq.toList
+
+    let private exhaustionWait claimGeneration head : ReviewWait.WaitReceipt =
+        { Item = "FS-GG/.github#2819"
+          ClaimGeneration = claimGeneration
+          ReviewGeneration =
+            ReviewWait.generationToken
+                head
+                ReviewWait.RepairConfirmation
+                Protocol.reviewPolicy.MaxAutomatedRepairRounds
+          Kind = ReviewWait.RepairConfirmation
+          EnteredAt = DateTimeOffset.Parse("2026-08-22T10:00:00Z")
+          ExpiresAt = DateTimeOffset.Parse("2026-08-22T11:00:00Z")
+          EvidenceRef = "https://review/4" }
+
     let private withRetiredAcceptedGeneration (liveComments: Driver.ReviewComment list) =
         let retiredHead = String.replicate 40 "c"
         let retiredInitial = initial StructuredDecision.Pass retiredHead
@@ -143,6 +179,161 @@ module ReviewHeadDivergenceTests =
         Assert.False(Review.isOrdinaryExhaustionTerminal movedHead Types.PrRed pass)
 
     [<Fact>]
+    let ``complete ordinary exhaustion decision owns checks wait generation and claim turnover`` () =
+        let receipt: ReviewWait.WaitReceipt =
+            { Item = "FS-GG/.github#2819"
+              ClaimGeneration = "old-claim"
+              ReviewGeneration =
+                ReviewWait.generationToken
+                    reviewedHead
+                    ReviewWait.RepairConfirmation
+                    Protocol.reviewPolicy.MaxAutomatedRepairRounds
+              Kind = ReviewWait.RepairConfirmation
+              EnteredAt = DateTimeOffset.Parse("2026-08-22T10:00:00Z")
+              ExpiresAt = DateTimeOffset.Parse("2026-08-22T11:00:00Z")
+              EvidenceRef = "https://review/4" }
+
+        let decide checks claim waitState =
+            Review.decideOrdinaryExhaustion
+                { Phase = Review.Ordinary
+                  HeadSha = reviewedHead
+                  CurrentClaimGeneration = claim
+                  Checks = checks
+                  Comments = ordinaryRoundThreeChain StructuredDecision.Pass
+                  WaitState = waitState }
+
+        Assert.Equal(Review.OrdinaryExhaustionDecision.AwaitChecks, decide Types.PrPending "new-claim" (Some(ReviewWait.Completed(receipt, receipt.EvidenceRef))))
+        Assert.Equal(Review.OrdinaryExhaustionDecision.HostAcceptanceEligible, decide Types.PrGreen "new-claim" (Some(ReviewWait.Completed(receipt, receipt.EvidenceRef))))
+        Assert.Equal(Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion, decide Types.PrRed "new-claim" (Some(ReviewWait.Completed(receipt, receipt.EvidenceRef))))
+
+        match decide Types.PrRed "old-claim" (Some(ReviewWait.Completed(receipt, receipt.EvidenceRef))) with
+        | Review.OrdinaryExhaustionDecision.NotExhausted reason -> Assert.Contains("prior claim generation", reason)
+        | other -> failwithf "same-claim wait was admitted as %A" other
+
+    [<Fact>]
+    let ``bounded ordinary exhaustion model keeps reducer projection and writer admission identical`` () =
+        let oldClaim = "old-claim"
+        let receipt = exhaustionWait oldClaim reviewedHead
+        let waitStates =
+            [ "waiting", ReviewWait.Waiting receipt
+              "completed", ReviewWait.Completed(receipt, receipt.EvidenceRef)
+              "cancelled", ReviewWait.Cancelled(receipt, "https://cancel")
+              "expired", ReviewWait.Recoverable(receipt, "expired")
+              "malformed", ReviewWait.Invalid [ "malformed wait" ] ]
+        let claims = [ "same", oldClaim; "renewed", "renewed-claim"; "fresh", "fresh-claim" ]
+        let checks = [ Types.PrPending; Types.PrGreen; Types.PrRed; Types.PrUnknown ]
+        let verdicts =
+            [ StructuredDecision.Pass
+              StructuredDecision.ChangesRequired
+              StructuredDecision.Accepted ]
+        let original = verdictOf Review.Ordinary reviewedHead (ordinaryChain ()) Types.PrPending
+        let projectionFacts = facts (ordinaryRoundThreeChain StructuredDecision.ChangesRequired) Types.PrRed
+        let decisionClass = function
+            | Review.OrdinaryExhaustionDecision.NotExhausted _ -> "notExhausted"
+            | Review.OrdinaryExhaustionDecision.AwaitChecks -> "awaitChecks"
+            | Review.OrdinaryExhaustionDecision.HostAcceptanceEligible -> "hostAcceptanceEligible"
+            | Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion -> "completed"
+
+        let mutable histories = 0
+        for initialVerdict in verdicts do
+            for terminalVerdict in verdicts do
+                for round in 0..(Protocol.reviewPolicy.MaxAutomatedRepairRounds + 1) do
+                    for check in checks do
+                        for matchingHead in [ true; false ] do
+                            for waitName, waitState in waitStates do
+                                for claimName, currentClaim in claims do
+                                    histories <- histories + 1
+                                    let currentHead = if matchingHead then reviewedHead else movedHead
+                                    let comments =
+                                        boundedOrdinaryChain initialVerdict terminalVerdict round reviewedHead
+                                    let decision =
+                                        Review.decideOrdinaryExhaustion
+                                            { Phase = Review.Ordinary
+                                              HeadSha = currentHead
+                                              CurrentClaimGeneration = currentClaim
+                                              Checks = check
+                                              Comments = comments
+                                              WaitState = Some waitState }
+
+                                    let exactShape =
+                                        initialVerdict = StructuredDecision.ChangesRequired
+                                        && terminalVerdict = StructuredDecision.Pass
+                                        && round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                        && matchingHead
+                                    let terminalChanges =
+                                        initialVerdict = StructuredDecision.ChangesRequired
+                                        && terminalVerdict = StructuredDecision.ChangesRequired
+                                        && round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                        && matchingHead
+                                    let terminal = terminalChanges || (exactShape && check = Types.PrRed)
+                                    let expected =
+                                        if terminal && waitName = "completed" && currentClaim <> oldClaim then "completed"
+                                        elif exactShape && check = Types.PrPending then "awaitChecks"
+                                        elif exactShape && check = Types.PrGreen then "hostAcceptanceEligible"
+                                        else "notExhausted"
+
+                                    let context =
+                                        $"initial=%A{initialVerdict}; terminal=%A{terminalVerdict}; round=%d{round}; checks=%A{check}; matchingHead=%b{matchingHead}; wait=%s{waitName}; claim=%s{claimName}"
+                                    Assert.True(decisionClass decision = expected, context)
+
+                                    let writerAdmission =
+                                        decision = Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
+                                    Assert.Equal((expected = "completed"), writerAdmission)
+
+                                    let projected =
+                                        Review.projectOrdinaryExhaustion
+                                            decision
+                                            (binding Review.Ordinary reviewedHead)
+                                            projectionFacts
+                                            original
+                                    Assert.Equal(
+                                        (expected = "completed"),
+                                        (projected.State = Review.OrdinaryExhaustion)
+                                    )
+
+        Assert.Equal(5400, histories)
+
+    [<Fact>]
+    let ``ordinary exhaustion mutation controls kill head check wait claim and consumer forks`` () =
+        let receipt = exhaustionWait "old-claim" reviewedHead
+        let completed = ReviewWait.Completed(receipt, receipt.EvidenceRef)
+        let chain = ordinaryRoundThreeChain StructuredDecision.Pass
+        let decide head checks claim waitState =
+            Review.decideOrdinaryExhaustion
+                { Phase = Review.Ordinary
+                  HeadSha = head
+                  CurrentClaimGeneration = claim
+                  Checks = checks
+                  Comments = chain
+                  WaitState = Some waitState }
+
+        let authoritative = decide reviewedHead Types.PrRed "fresh-claim" completed
+        Assert.Equal(Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion, authoritative)
+
+        // Each right-hand decision is the answer a one-clause mutant would substitute. If the named
+        // production clause disappears, the pair converges and this control turns red.
+        Assert.NotEqual(authoritative, decide movedHead Types.PrRed "fresh-claim" completed)
+        Assert.NotEqual(authoritative, decide reviewedHead Types.PrPending "fresh-claim" completed)
+        Assert.NotEqual(authoritative, decide reviewedHead Types.PrRed "fresh-claim" (ReviewWait.Waiting receipt))
+        Assert.NotEqual(authoritative, decide reviewedHead Types.PrRed "old-claim" completed)
+
+        let original = verdictOf Review.Ordinary reviewedHead (ordinaryChain ()) Types.PrPending
+        let projectionFacts = facts chain Types.PrRed
+        let admitted =
+            Review.projectOrdinaryExhaustion
+                authoritative
+                (binding Review.Ordinary reviewedHead)
+                projectionFacts
+                original
+        let forked =
+            Review.projectOrdinaryExhaustion
+                (Review.OrdinaryExhaustionDecision.NotExhausted "mutant consumer fork")
+                (binding Review.Ordinary reviewedHead)
+                projectionFacts
+                original
+        Assert.NotEqual(admitted.State, forked.State)
+
+    [<Fact>]
     let ``2819 pre-round pass refuses both shared predicate and exhaustion projection`` () =
         let comments =
             ordinaryRoundThreeChainWithPrefix StructuredDecision.Pass StructuredDecision.Pass
@@ -150,7 +341,8 @@ module ReviewHeadDivergenceTests =
 
         let original = verdictOf Review.Ordinary reviewedHead comments Types.PrRed
         let projected =
-            Review.projectCompletedOrdinaryExhaustion
+            Review.projectOrdinaryExhaustion
+                (Review.OrdinaryExhaustionDecision.NotExhausted "pre-round pass")
                 (binding Review.Ordinary reviewedHead)
                 (facts comments Types.PrRed)
                 original
@@ -169,7 +361,8 @@ module ReviewHeadDivergenceTests =
 
         let original = verdictOf Review.Ordinary reviewedHead comments Types.PrRed
         let projected =
-            Review.projectCompletedOrdinaryExhaustion
+            Review.projectOrdinaryExhaustion
+                Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
                 (binding Review.Ordinary reviewedHead)
                 (facts comments Types.PrRed)
                 original

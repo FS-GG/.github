@@ -18,6 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SelfHostTests.fs" />
     <Compile Include="TypesTests.fs" />
     <Compile Include="RepoScopeTests.fs" />
     <Compile Include="MarkdownTests.fs" />

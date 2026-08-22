@@ -145,6 +145,36 @@ python3 "$TOOL" record-observed --manifest "$WORK/manifest.json" --feed nuget \
   --observed "FS.GG.Coord.Cli=$WORK/nuget/FS.GG.Coord.Cli.9.8.7.nupkg" \
   --observed "FS.GG.Kit=$WORK/nuget/FS.GG.Kit.9.8.7.nupkg" \
   --observed "FS.GG.Drivers=$WORK/nuget/FS.GG.Drivers.9.8.7.nupkg" --detail "fixture public-feed observation"
+
+mkdir -p "$WORK/receiver-receipts"
+python3 "$TOOL" receiver-receipt --manifest "$WORK/manifest.json" --package FS.GG.Kit \
+  --receiver FS-GG/FS.GG.SDD --detail "dashboard delivery verified" \
+  --output "$WORK/receiver-receipts/kit-sdd.json" >/dev/null
+# Exact retry is idempotent and never replaces the append-only receipt.
+cp "$WORK/receiver-receipts/kit-sdd.json" "$WORK/receiver-receipts/kit-sdd.before.json"
+python3 "$TOOL" receiver-receipt --manifest "$WORK/manifest.json" --package FS.GG.Kit \
+  --receiver FS-GG/FS.GG.SDD --detail "dashboard delivery verified" \
+  --output "$WORK/receiver-receipts/kit-sdd.json" >/dev/null
+cmp "$WORK/receiver-receipts/kit-sdd.before.json" "$WORK/receiver-receipts/kit-sdd.json"
+python3 "$TOOL" receiver-receipt --manifest "$WORK/manifest.json" --package FS.GG.Coord.Cli \
+  --receiver FS-GG/FS.GG.SDD --detail "dashboard delivery verified" \
+  --output "$WORK/receiver-receipts/engine-sdd.json" >/dev/null
+python3 "$TOOL" verify-receivers --manifest "$WORK/manifest.json" \
+  --expected FS.GG.Kit=FS-GG/FS.GG.SDD --expected FS.GG.Coord.Cli=FS-GG/FS.GG.SDD \
+  --receipt "$WORK/receiver-receipts/kit-sdd.json" \
+  --receipt "$WORK/receiver-receipts/engine-sdd.json" >/dev/null
+if python3 "$TOOL" verify-receivers --manifest "$WORK/manifest.json" \
+  --expected FS.GG.Kit=FS-GG/FS.GG.SDD \
+  --receipt "$WORK/receiver-receipts/engine-sdd.json" >/dev/null 2>&1; then
+  echo "expected missing and undeclared receiver receipts to fail closed" >&2; exit 1
+fi
+jq '.sourceSha = "ffffffffffffffffffffffffffffffffffffffff"' \
+  "$WORK/receiver-receipts/kit-sdd.json" > "$WORK/receiver-receipts/tampered.json"
+if python3 "$TOOL" verify-receivers --manifest "$WORK/manifest.json" \
+  --expected FS.GG.Kit=FS-GG/FS.GG.SDD \
+  --receipt "$WORK/receiver-receipts/tampered.json" >/dev/null 2>&1; then
+  echo "expected receiver receipt identity tampering to fail closed" >&2; exit 1
+fi
 python3 "$TOOL" promote --manifest "$WORK/manifest.json" --previous-channel "$WORK/previous-stable.json" \
   --channel-output "$WORK/stable.json"
 # A queued observer after the first successful publication sees the current release as latest. The
@@ -294,7 +324,7 @@ assert "release-saga.py assert-reusable" in prepare, "reuse branch no longer ask
 assert "jq -r .contentId /tmp/prior" not in prepare, "reuse branch compares contentId again (.github#2664)"
 assert 'cmp "/tmp/prior/' not in prepare, "reuse branch compares raw archive bytes again (.github#2664)"
 promote = (root / ".github/workflows/release-saga-promote.yml").read_text()
-for token in ("assert-identity", "merge-journals", "record-observed", "stable-channel.json", "--draft=false"):
+for token in ("assert-identity", "merge-journals", "verify-receivers", "receiver-receipts-", "record-observed", "stable-channel.json", "--draft=false"):
     assert token in promote or token in (root / "scripts/release-saga-promote-release.sh").read_text(), token
 for token in ("source_sha=", 'refs/tags/$tag^{}', "head -1 | sed 's:/*$::'", '"${github_base}/${lower}'):
     assert token in promote, token
@@ -302,6 +332,11 @@ assert 'journal_count=$((journal_count + 1))' in promote
 assert '[ "$journal_count" -eq 3 ]' in promote
 assert '[ "${#journals[@]}" -eq 3 ]' not in promote
 assert "release-saga-promote-release.sh" in promote
+for workflow in ("release-kit.yml", "release-coord-engine.yml"):
+    delivery = (root / ".github/workflows" / workflow).read_text()
+    assert "--journal artifacts/packages/journal-" in delivery, workflow
+    assert "--receipt-dir artifacts/receiver-receipts" in delivery, workflow
+    assert "actions/upload-artifact@v6" in delivery, workflow
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
 

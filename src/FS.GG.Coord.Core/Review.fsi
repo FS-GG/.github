@@ -185,6 +185,22 @@ module Review =
           /// into `ActionKey`, which already covers the head and comments it is derived from.
           RetiredChains: Driver.ChainRetirement list }
 
+    /// Complete live facts for deciding whether ordinary round-three may cross claim turnover.
+    type OrdinaryExhaustionFacts =
+        { Phase: Phase
+          HeadSha: string
+          CurrentClaimGeneration: string
+          Checks: PrState
+          Comments: Driver.ReviewComment list
+          WaitState: ReviewWait.State option }
+
+    [<RequireQualifiedAccess>]
+    type OrdinaryExhaustionDecision =
+        | NotExhausted of reason: string
+        | AwaitChecks
+        | HostAcceptanceEligible
+        | CompletedOrdinaryExhaustion
+
     /// Hash the complete binding the verdict is bound to. Any field in `Binding` changing — including
     /// `HeadSha` — changes this token and invalidates a prior verdict (acceptance 4/9).
     val freshnessToken: Binding -> string
@@ -196,10 +212,13 @@ module Review =
     val isOrdinaryExhaustionTerminal:
         headSha: string -> checks: PrState -> comments: Driver.ReviewComment list -> bool
 
-    /// Rebuild a live verdict as ordinary exhaustion after the adapter has independently established
-    /// completed-wait and claim-turnover evidence. Returns the original verdict when the shared
-    /// terminal-set predicate is not met.
-    val projectCompletedOrdinaryExhaustion: Binding -> Facts -> Verdict -> Verdict
+    /// One complete authority for terminal ledger shape, check settlement, exact review generation,
+    /// completed wait, and claim turnover. Projections and writers consume this decision unchanged.
+    val decideOrdinaryExhaustion: OrdinaryExhaustionFacts -> OrdinaryExhaustionDecision
+
+    /// Project a live verdict from the complete ordinary-exhaustion decision without re-testing any
+    /// underlying fact. Returns the original verdict unless the decision is completed exhaustion.
+    val projectOrdinaryExhaustion: OrdinaryExhaustionDecision -> Binding -> Facts -> Verdict -> Verdict
 
     /// Inspect live facts into exactly one typed state and next action, or a fail-closed list of
     /// reasons (acceptance 2). Never returns a permissive/absent-review state for unreadable or

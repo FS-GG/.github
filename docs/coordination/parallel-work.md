@@ -656,13 +656,13 @@ told its claim was collected, and a worker whose touch-set was invaded is told b
 ### 5. Finish — the earned done-stamp
 
 ```sh
-scripts/fsgg-coord done <issue> --flip     # green FSGG-DONE only after PR merged AND Status=Done
+scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply --json  # typed completion receipt before Done
 scripts/fsgg-coord child <parent> <issue>  # link a filed issue as a sub-issue of its epic
 ```
 
 Same stamp and epic roll-up as cross-repo.
 
-**The claim's lifetime is the WORK's lifetime.** `done --flip` drops the marker
+**The claim's lifetime is the WORK's lifetime.** receipt-gated `delivery --apply --flip` drops the marker
 ([#533](https://github.com/FS-GG/.github/issues/533)); an expired lease whose `item/<n>-*` PR is
 still open does **not** release the item ([#581](https://github.com/FS-GG/.github/issues/581)); and a
 worker holds **at most one item** ([#516](https://github.com/FS-GG/.github/issues/516)).
@@ -874,7 +874,7 @@ scripts/fsgg-coord take --repo <r>            # pick + claim the next SCHEDULABL
 git fetch origin                              # NOTHING else does — the base is otherwise the PAST (§2)
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)
 # ...implement; `heartbeat` if it runs long; `say`/`inbox` if work touches...
-scripts/fsgg-coord done <issue> --flip        # earn the stamp
+scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply --json  # earn the typed receipt and stamp
 scripts/fsgg-coord release <issue>            # ...or hand it back
 ```
 
@@ -882,8 +882,9 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 
 - **Sequencing** — the Coordination board's `Blocked by` and sub-issues (ADR-0001). Overlap
   detection just decides *which* items get a dependency edge.
-- **Finishing** — `fsgg-coord done <issue> --flip`: the green `FSGG-DONE` stamp earned only after the
-  PR is merged **and** the board is `Done`, with automatic epic roll-up — which refuses to fire over
+- **Finishing** — `fsgg-coord delivery <issue> --pr <pr> --flip --apply --json`: the typed completion
+  receipt and green `FSGG-DONE` stamp earned only after the exact PR merge and declared obligations are
+  verified, followed by the board's `Done` projection and automatic epic roll-up — which refuses to fire over
   an epic whose body declares a child the sub-issue graph lacks. `fsgg-coord child <parent> <issue>`
   is what puts a child *in* that graph; nothing else does.
 - **The GraphQL budget discipline.** Everything in this protocol is **REST** (a separate 5,000

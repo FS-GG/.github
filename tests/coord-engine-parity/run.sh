@@ -678,7 +678,7 @@ else
 fi
 kill "$S585" 2>/dev/null; rm -f "$S585_OUT"
 
-# ---- COMPLETED ITEM DROPS ITS LOCK (case 32): #533 — `done --flip` releases the worker's own claim ---
+# ---- LEGACY COMPLETION IS NONTERMINAL: #533's lock is retained until typed delivery authority exists ---
 #
 # `done --flip` verified the merge, set Status Done, and rolled the epic up — and, before #533, never
 # touched the CLAIM MARKER. `release` was the only path that dropped it, and `release` REWRITES Status, so
@@ -692,45 +692,39 @@ kill "$S585" 2>/dev/null; rm -f "$S585_OUT"
 # no dependency) — the machine fact this slice turns on is "is the claim marker still there after done?".
 dclaims() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/42/comments").read().decode())' "$1" 2>/dev/null; }
 
-# 1. vole-533 stamps #42 (closed by merged PR #7) and DROPS its OWN marker — a finished item stops
-#    reserving its files. The stamp is still earned; the lock is gone.
+# `done` is now a compatibility/replay surface: it cannot mint the completion receipt introduced by the
+# typed delivery lifecycle. Even an otherwise valid merged-PR world must therefore remain nonterminal,
+# retain its claim, and direct the caller to `delivery --apply`.
 D1_OUT="$(mktemp)"; DONE_HOLDER=vole-533 python3 "$HERE/done_server.py" >"$D1_OUT" 2>/dev/null & DP1=$!
 dp1=""; for _ in $(seq 1 50); do dp1="$(head -n1 "$D1_OUT" 2>/dev/null)"; [ -n "$dp1" ] && break; sleep 0.1; done
 rm -f "$D1_OUT"
 if [ -n "$dp1" ]; then
   d1="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp1" FSGG_COORD_CACHE="$(mktemp -d)" \
     "$ENGINE" "done" 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"; d1rc=$?
-  [ "$d1rc" -eq 0 ] && printf '%s' "$d1" | grep -q 'FSGG-DONE   FS.GG.SDD#42' \
-    && ok "#533: the stamp is still earned (green, FSGG-DONE) — dropping the lock does not touch the verdict" \
-    || bad "#533: done --flip stamps the item green" "rc=$d1rc: $d1"
-  # The machine fact: after `done`, the claim marker is GONE. A live marker's `Paths:` keep reserving.
+  [ "$d1rc" -ne 0 ] && printf '%s' "$d1" | grep -q 'standalone done cannot mint completion authority' \
+    && ok "completion boundary: standalone done remains nonterminal and names typed delivery authority" \
+    || bad "completion boundary: standalone done must refuse terminal projection" "rc=$d1rc: $d1"
   printf '%s' "$(dclaims "$dp1")" | grep -q 'worker=vole-533' \
-    && bad "#533: a finished item must NOT keep its claim — the marker is still live after done" "$(dclaims "$dp1")" \
-    || ok "#533: done --flip DROPS the worker's own claim — the finished item stops reserving its files"
+    && ok "completion boundary: refusal RETAINS the worker's claim until delivery completes" \
+    || bad "completion boundary: legacy refusal must not drop the live claim" "$(dclaims "$dp1")"
   kill "$DP1" 2>/dev/null
 else
   bad "#533 fixture (own marker) bound a port"
 fi
 
-# 2. It drops ONLY OUR OWN marker. Deleting another worker's claim is `reap`'s job, and it is destructive
-#    — `done` must not do it silently just because the item is finished. Here other-999 holds #42; vole-533
-#    stamps it Done, and the guarantee is structural: a `Held` is obtainable only by confirming the live
-#    winner is US (verifyHeld), so `release` here CANNOT touch a marker that is not ours. FRESH server.
+# A stranger's marker is retained for the same reason, and the legacy call still cannot project Done.
 D2_OUT="$(mktemp)"; DONE_HOLDER=other-999 python3 "$HERE/done_server.py" >"$D2_OUT" 2>/dev/null & DP2=$!
 dp2=""; for _ in $(seq 1 50); do dp2="$(head -n1 "$D2_OUT" 2>/dev/null)"; [ -n "$dp2" ] && break; sleep 0.1; done
 rm -f "$D2_OUT"
 if [ -n "$dp2" ]; then
   d2="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp2" FSGG_COORD_CACHE="$(mktemp -d)" \
-    "$ENGINE" "done" 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"
+    "$ENGINE" "done" 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"; d2rc=$?
   printf '%s' "$(dclaims "$dp2")" | grep -q 'worker=other-999' \
     && ok "#533: ...but it must NOT delete a claim that is not ours — other-999's marker is left intact" \
     || bad "#533: done deleted a stranger's claim" "$(dclaims "$dp2")"
-  printf '%s' "$d2" | grep -q 'still holds its claim' \
-    && ok "#533: ...it says so instead — names the other holder, drops only your own lock" \
-    || bad "#533: done names the claim it left" "$d2"
-  printf '%s' "$d2" | grep -qi 'reap' \
-    && ok "#533: ...and points at reap — the destructive path a stranger's claim actually needs" \
-    || bad "#533: done points at reap for another's claim" "$d2"
+  [ "$d2rc" -ne 0 ] && printf '%s' "$d2" | grep -q 'standalone done cannot mint completion authority' \
+    && ok "completion boundary: another holder cannot make legacy done terminal either" \
+    || bad "completion boundary: legacy done must refuse before holder-specific terminal effects" "rc=$d2rc: $d2"
   kill "$DP2" 2>/dev/null
 else
   bad "#533 fixture (stranger's marker) bound a port"
@@ -3025,7 +3019,13 @@ if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
 fi
 
 # ==================================================================================================
-# case 14 (no-touch-set-and-done) — the `done --flip` EPIC ROLLUP (#235/#583/#325/#346). Stamping a child
+# RETIRED TERMINAL-DONE CORPUS. These fixtures predate the typed delivery-completion receipt and cannot
+# answer the additional delivery snapshot queries. Keeping their old terminal assertions active would
+# certify the forbidden inversion: standalone `done` minting completion authority. The live compatibility
+# assertion now sits in the #533 block above (non-zero, explicit remedy, zero claim deletion); typed merge,
+# provenance, evidence, completion, and parent-rollup behavior is covered by the focused delivery suites.
+if false; then
+# case 14 (no-touch-set-and-done) — the former `done --flip` EPIC ROLLUP (#235/#583/#325/#346). Stamping a child
 # with --flip climbs to its parent and rolls it up ONLY when genuinely finished: HOLDS while a sibling is
 # open (#235/#583), FLIPS when every child is Done + closed, REFUSES when the epic BODY declares a child
 # the sub-issue graph does not contain (#325) — the EpicBody/subIssues check landed for lint, now reused —
@@ -3242,6 +3242,7 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
 
   kill "$DP_SRV" 2>/dev/null
 fi
+fi # retired standalone-done terminal corpus
 
 # case 34 (xrepo-touchset-353) — the `overlap` command (#353). `Paths:` tokens are repo-relative, so a
 # touch-set comparison is only meaningful WITHIN a repo. `overlap` scopes to ONE repo: a same-named token in

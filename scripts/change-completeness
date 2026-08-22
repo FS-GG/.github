@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASE=""
+HEAD="HEAD"
+PATHS_FILE=""
+PR_BODY=""
+OUTPUT_FILE=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --base) BASE="${2:?--base needs a revision}"; shift 2 ;;
+    --head) HEAD="${2:?--head needs a revision}"; shift 2 ;;
+    --paths-file) PATHS_FILE="${2:?--paths-file needs a path}"; shift 2 ;;
+    --pr-body) PR_BODY="${2:?--pr-body needs a path}"; shift 2 ;;
+    --github-output) OUTPUT_FILE="${2:?--github-output needs a path}"; shift 2 ;;
+    *) echo "change-completeness: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+PATHS="$WORK/paths"
+
+if [ -n "$PATHS_FILE" ]; then
+  cp "$PATHS_FILE" "$PATHS"
+else
+  [ -n "$BASE" ] || { echo "change-completeness: --base is required when --paths-file is absent" >&2; exit 2; }
+  git -C "$ROOT" cat-file -e "$BASE^{commit}" 2>/dev/null \
+    || { echo "change-completeness: base revision is unavailable: $BASE" >&2; exit 1; }
+  git -C "$ROOT" cat-file -e "$HEAD^{commit}" 2>/dev/null \
+    || { echo "change-completeness: head revision is unavailable: $HEAD" >&2; exit 1; }
+  git -C "$ROOT" diff --name-only --find-renames "$BASE" "$HEAD" >"$PATHS"
+fi
+
+engine_changed=false
+if rg -q '^(src/FS\.GG\.Coord\.|tests/FS\.GG\.Coord\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|ci-runtime-optimization|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
+  engine_changed=true
+fi
+[ -z "$OUTPUT_FILE" ] || printf 'engine_changed=%s\n' "$engine_changed" >>"$OUTPUT_FILE"
+
+stage() { printf '\nchange-completeness: %s\n' "$1"; }
+
+stage "closing-keyword and commit-message contract"
+if [ -n "$PR_BODY" ]; then
+  [ -f "$PR_BODY" ] || { echo "change-completeness: PR body file is unavailable" >&2; exit 1; }
+  git -C "$ROOT" log --format=%B "$BASE".."$HEAD" >"$WORK/commits.txt"
+  [ -s "$WORK/commits.txt" ] || { echo "change-completeness: commit-message subject is empty" >&2; exit 1; }
+  python3 "$ROOT/scripts/check-closing-keywords.py" --body "$PR_BODY" --commits "$WORK/commits.txt"
+else
+  echo "change-completeness: non-PR invocation; no PR body subject"
+fi
+
+stage "SDD ship-verdict provenance"
+python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
+
+if [ "$engine_changed" = true ]; then
+  stage "locked restore and affected-engine compile"
+  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" --locked-mode
+  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" --locked-mode
+  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" --locked-mode
+
+  stage "command catalogue, parser, render, write-ness, contract, and help closure"
+  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" \
+    -c Release --no-restore --filter FullyQualifiedName~CommandSurfaceTests
+
+  stage "handler ownership and production registration"
+  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" \
+    -c Release --no-restore --filter FullyQualifiedName~HandlerRegistrationTests
+
+  stage "delivery, review, declared-path, and focused production-route parity"
+  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" -c Release --no-restore \
+    --filter 'FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests|FullyQualifiedName~VerifyPaths'
+else
+  stage "affected-engine checks omitted: no engine decision boundary changed"
+fi
+
+echo "change-completeness: PASS"

@@ -2,6 +2,7 @@ namespace FS.GG.Coord
 
 /// Pure, fail-closed lifecycle decisions for a single claimed coordination item.
 module Delivery =
+    open Types
     /// The durable stage established by the facts currently available for an item.
     ///
     /// `ReviewActive` and `Landable` divide the post-handoff window on ONE question, and .github#2575
@@ -121,6 +122,103 @@ module Delivery =
           ObligationsDeclared: bool
           Obligations: Obligation list
           ParkedReason: string option }
+
+    /// Complete facts for deciding whether a merged delivery must verify an obligation, project
+    /// completion, refuse, or may proceed to cleanup.
+    type CompletionFacts =
+        { HeadSha: string
+          Merged: bool
+          MergeReachable: bool
+          IssueClosed: bool
+          BoardDone: bool
+          ClaimReleased: bool
+          PendingWrites: int
+          CleanupEligible: bool
+          ObligationsDeclared: bool
+          Obligations: Obligation list }
+
+    [<RequireQualifiedAccess>]
+    type CompletionDecision =
+        | NotMerged
+        | Refused of reason: string
+        | VerifyOutstandingObligation of name: string
+        | ProjectCompletion
+        | CleanupCompletedDelivery
+
+    type VerifiedObligationReceipt =
+        { Id: string
+          Kind: string
+          Evidence: string
+          HeadSha: string }
+
+    /// Durable authority written before issue, board, claim, and cleanup projections.
+    type DeliveryCompletionReceipt =
+        { Item: string
+          PullRequest: int
+          MergeSha: string
+          MergeReachable: bool
+          ObligationReceipts: VerifiedObligationReceipt list
+          PendingBoardWrites: int
+          FreshnessToken: string
+          ActionKey: string
+          CompletedAt: System.DateTimeOffset
+          Digest: string }
+
+    /// Durable nonterminal authority emitted after premature closure is observed. This receipt never
+    /// authorizes Done; it preserves the safe correction across the issue reopen it requests.
+    type CompletionCorrectionReceipt =
+        { Item: string
+          Destination: BoardStatus
+          ObservedAt: System.DateTimeOffset
+          Digest: string }
+
+    [<Literal>]
+    val CompletionReceiptMarker: string = "<!-- fsgg:delivery-completion/v1 -->"
+
+    [<Literal>]
+    val CompletionCorrectionMarker: string = "<!-- fsgg:completion-correction/v1 -->"
+
+    /// Select only the completion facts from the wider delivery snapshot.
+    val completionFacts: Snapshot -> CompletionFacts
+
+    /// One completion authority shared by lifecycle projection and live writer admission.
+    val decideCompletion: CompletionFacts -> CompletionDecision
+
+    /// Mint a digest-bound receipt only for the exact transition currently eligible to project completion.
+    val createCompletionReceipt:
+        item: string ->
+        pullRequest: int ->
+        mergeSha: string ->
+        completedAt: System.DateTimeOffset ->
+        freshnessToken: string ->
+        actionKey: string ->
+        facts: CompletionFacts ->
+            Result<DeliveryCompletionReceipt, string list>
+
+    /// Recompute every structural and digest invariant without consulting mutable projections.
+    val verifyCompletionReceipt: DeliveryCompletionReceipt -> Result<unit, string list>
+
+    /// Stable append-only marker plus deterministic JSON payload.
+    val encodeCompletionReceipt: DeliveryCompletionReceipt -> string
+
+    /// Ignore unrelated comments, parse matching markers, and reject malformed or digest-invalid receipts.
+    val tryDecodeCompletionReceipt: body: string -> Result<DeliveryCompletionReceipt option, string list>
+
+    /// Mint only a safe nonterminal correction (`In review` or `Blocked`).
+    val createCompletionCorrectionReceipt:
+        item: string ->
+        destination: BoardStatus ->
+        observedAt: System.DateTimeOffset ->
+            Result<CompletionCorrectionReceipt, string list>
+
+    /// Reject unsafe destinations, incomplete identity, or changed signed facts.
+    val verifyCompletionCorrectionReceipt: CompletionCorrectionReceipt -> Result<unit, string list>
+
+    /// Stable append-only marker plus deterministic JSON payload.
+    val encodeCompletionCorrectionReceipt: CompletionCorrectionReceipt -> string
+
+    /// Ignore unrelated comments and fail closed on malformed or digest-invalid correction evidence.
+    val tryDecodeCompletionCorrectionReceipt: body: string -> Result<CompletionCorrectionReceipt option, string list>
 
     /// The one action a worker or host may take next. Judgement remains outside this union.
     type Action =

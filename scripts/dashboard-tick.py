@@ -407,6 +407,45 @@ def annotate(level: str, message: str) -> None:
     print(f"::{level}::dashboard-tick: {message}")
 
 
+def receiver_receipt(
+    journal: str | None,
+    receipt_dir: str | None,
+    package: str,
+    version: str,
+    repo: str,
+    dashboard: int,
+    outcome: str,
+) -> tuple[bool, str]:
+    if journal is None and receipt_dir is None:
+        return True, ""
+    if journal is None or receipt_dir is None:
+        return False, "--journal and --receipt-dir must be supplied together"
+    target_dir = Path(receipt_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", f"{package}-{repo}")
+    output = target_dir / f"receiver-{safe}.json"
+    tool = Path(__file__).resolve().with_name("release-saga.py")
+    command = [
+        sys.executable,
+        str(tool),
+        "receiver-receipt",
+        "--manifest",
+        journal,
+        "--package",
+        package,
+        "--receiver",
+        repo,
+        "--detail",
+        f"Dependency Dashboard #{dashboard}: {outcome}",
+        "--output",
+        str(output),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True)
+    if completed.returncode != 0:
+        return False, completed.stderr.strip() or "receiver receipt command failed without a diagnostic"
+    return True, ""
+
+
 def run_probe(registry: str | None) -> int:
     reached, undetermined, refused = [], [], []
     for repo in receivers(registry):
@@ -445,7 +484,14 @@ def run_probe(registry: str | None) -> int:
     return 0
 
 
-def run_tick(package: str, version: str, registry: str | None, dry_run: bool) -> int:
+def run_tick(
+    package: str,
+    version: str,
+    registry: str | None,
+    dry_run: bool,
+    journal: str | None,
+    receipt_dir: str | None,
+) -> int:
     rows = receivers(registry)
     print(f"telling {len(rows)} receiver(s) about {package} {version}\n")
 
@@ -487,6 +533,13 @@ def run_tick(package: str, version: str, registry: str | None, dry_run: bool) ->
             annotate("warning", f"{repo}#{number}: {note}")
             continue
         if outcome == "already-offered":
+            recorded, detail = receiver_receipt(
+                journal, receipt_dir, package, version, repo, number, outcome
+            )
+            if not recorded:
+                findings.append(f"{repo}#{number}: {detail}")
+                annotate("error", f"{repo}#{number}: receiver receipt refused: {detail}")
+                continue
             reached += 1
             print(f"  no-op        {repo}#{number}: {note}")
             continue
@@ -504,6 +557,13 @@ def run_tick(package: str, version: str, registry: str | None, dry_run: bool) ->
         if state != "ok":
             findings.append(f"{repo}#{number}: {detail}")
             annotate("error", f"{repo}#{number}: {detail}")
+            continue
+        recorded, detail = receiver_receipt(
+            journal, receipt_dir, package, version, repo, number, outcome
+        )
+        if not recorded:
+            findings.append(f"{repo}#{number}: {detail}")
+            annotate("error", f"{repo}#{number}: receiver receipt refused: {detail}")
             continue
         reached += 1
         print(f"  ticked       {repo}#{number}: {note}\n               {line.strip()}")
@@ -541,6 +601,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--registry", help="override registry/repos.yml (the fixture uses this)")
     parser.add_argument("--probe", action="store_true", help="read-only credential/reach assertion")
     parser.add_argument("--dry-run", action="store_true", help="decide and report; write nothing")
+    parser.add_argument("--journal", help="verified release journal that binds receiver receipts")
+    parser.add_argument("--receipt-dir", help="append-only receipt output directory outside release assets")
     args = parser.parse_args(argv)
 
     try:
@@ -550,7 +612,14 @@ def main(argv: list[str]) -> int:
             return run_probe(args.registry)
         if not args.package or not args.version:
             raise Permanent("--package and --version are both required unless --probe is given")
-        return run_tick(args.package, args.version, args.registry, args.dry_run)
+        return run_tick(
+            args.package,
+            args.version,
+            args.registry,
+            args.dry_run,
+            args.journal,
+            args.receipt_dir,
+        )
     except Permanent as error:
         annotate("error", f"no verdict (permanent): {error}")
         return 3

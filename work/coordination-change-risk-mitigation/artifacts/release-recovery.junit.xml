@@ -1,0 +1,45 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[sha256:894ce4cdb21032a935fe89e11932070c6a60ad21197f70e9df3d3a2dac5f42b5
+preflight passed: github,nuget
+manifest release/version/source/policy identity verified
+recorded 1 observation(s); github=partial
+failure journaled for github/FS.GG.Kit
+recorded 2 observation(s); github=verified
+recorded 3 observation(s); nuget=verified
+stable channel promoted
+stable channel already promoted to these bytes
+merged 1 durable journal(s)
+merged 1 durable journal(s)
+production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired
+sha256:34b2eaa1c7d03d42c54845cf43bdc53c715382f56cd614fbf9d136897f461148
+preflight passed: github,nuget
+recorded 3 observation(s); github=verified
+recorded 3 observation(s); nuget=verified
+failure journaled for nuget/FS.GG.Coord.Cli
+manifest release/version/source/policy identity verified
+manifest-bound artifact hashes verified
+immutable release journal read back and verified for FS.GG.Coord.Cli 9.8.7
+failure journaled for nuget/FS.GG.Coord.Cli
+manifest release/version/source/policy identity verified
+manifest-bound artifact hashes verified
+immutable release journal read back and verified for FS.GG.Coord.Cli 9.8.7
+failure journaled for nuget/FS.GG.Kit
+manifest release/version/source/policy identity verified
+manifest-bound artifact hashes verified
+immutable release journal read back and verified for FS.GG.Kit 9.8.7
+failure journaled for nuget/FS.GG.Kit
+manifest release/version/source/policy identity verified
+manifest-bound artifact hashes verified
+immutable release journal read back and verified for FS.GG.Kit 9.8.7
+failure journaled for nuget/FS.GG.Kit
+release-saga: Expecting value: line 1 column 1 (char 0)
+failure journaled for nuget/FS.GG.Kit
+release-saga: manifest descriptor drift: contentId does not match immutable descriptor
+immutable release journal recovery: kit and engine replays read back exact state without mutation
+sha256:34b2eaa1c7d03d42c54845cf43bdc53c715382f56cd614fbf9d136897f461148
+preflight passed: github,nuget
+failure journaled for nuget/FS.GG.Kit
+mutable release journal recovery: production upload --clobber control and removal inversion passed
+Immutable release coherent-set/v9.8.7 already contains the identical content and channel receipt; promotion is idempotent.
+stored release is reusable: 3 package(s) are payload-identical to the re-packed inputs
+release saga: live predecessor authority, forced recovery, byte drift, draft reuse, and forward promotion passed
+]]></system-out></testcase></testsuite>

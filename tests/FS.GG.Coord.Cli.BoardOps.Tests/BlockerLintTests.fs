@@ -74,8 +74,10 @@ module BlockerLintTests =
         Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
-        Assert.Equal(1, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
+        Assert.Equal(3, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
+        Assert.Contains("PrematureCompletion destination -> Some(\"Status\", destination |> completionCorrectionStatus |> statusWireName)", chore)
+        Assert.Contains("CompletionProjection -> Some(\"Status\", statusWireName Done)", chore)
         for retired in [ "StatusNotBlocked"; "BlockerCleared"; "ClosedIssueNotDone"; "ClaimStatusLag"; "ClaimReviewLag" ] do
             Assert.DoesNotContain(retired, chore)
 

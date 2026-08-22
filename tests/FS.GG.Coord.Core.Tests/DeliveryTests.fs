@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Tests
 
+open System
 open Xunit
 open FS.GG.Coord
 
@@ -125,6 +126,293 @@ module DeliveryTests =
                 MergeReachable = true
                 IssueClosed = false }
         transition Delivery.MergedAwaitingObligations Delivery.Complete (Delivery.inspect awaitingStamp)
+
+    [<Fact>]
+    let ``complete delivery decision owns obligations reachability projections and cleanup`` () =
+        let completed =
+            { snapshot "head-a" with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true }
+
+        let decide facts = facts |> Delivery.completionFacts |> Delivery.decideCompletion
+        Assert.Equal(Delivery.CompletionDecision.NotMerged, decide (snapshot "head-a"))
+
+        let pendingObligation =
+            { completed with
+                Obligations =
+                    [ { Id = "nuget"
+                        Kind = "publication"
+                        Evidence = None
+                        HeadSha = "head-a"
+                        Verified = false } ] }
+        Assert.Equal(
+            Delivery.CompletionDecision.VerifyOutstandingObligation "nuget",
+            decide pendingObligation
+        )
+        transition
+            Delivery.MergedAwaitingObligations
+            (Delivery.VerifyObligation "nuget")
+            (Delivery.inspect pendingObligation)
+
+        let unreachable = { completed with MergeReachable = false }
+        Assert.Equal(
+            Delivery.CompletionDecision.Refused "merged pull request is not reachable from the default branch",
+            decide unreachable
+        )
+
+        for incomplete in
+            [ { completed with IssueClosed = false; CleanupEligible = false }
+              { completed with BoardDone = false; CleanupEligible = false }
+              { completed with ClaimReleased = false; CleanupEligible = false }
+              { completed with PendingWrites = 1; CleanupEligible = false } ] do
+            Assert.Equal(Delivery.CompletionDecision.ProjectCompletion, decide incomplete)
+            transition Delivery.MergedAwaitingObligations Delivery.Complete (Delivery.inspect incomplete)
+
+        let cleanupIneligible = { completed with CleanupEligible = false }
+        Assert.Equal(
+            Delivery.CompletionDecision.Refused "cleanup is not eligible before completion",
+            decide cleanupIneligible
+        )
+        Assert.Equal(Delivery.CompletionDecision.CleanupCompletedDelivery, decide completed)
+        transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect completed)
+
+    [<Fact>]
+    let ``bounded delivery completion model keeps reducer projection and writer admission identical`` () =
+        let obligation id head evidence verified : Delivery.Obligation =
+            { Id = id
+              Kind = "publication"
+              Evidence = evidence
+              HeadSha = head
+              Verified = verified }
+        let obligationCases =
+            [ "absent", false, []
+              "outstanding", true, [ obligation "kit" "head-a" None false ]
+              "verified", true, [ obligation "kit" "head-a" (Some "https://receipt") true ]
+              "stale", true, [ obligation "kit" "old-head" (Some "https://receipt") true ]
+              "contradictory", true,
+                  [ obligation "kit" "head-a" None false
+                    obligation "kit" "head-a" (Some "https://receipt") true ] ]
+        let decisionClass = function
+            | Delivery.CompletionDecision.NotMerged -> "notMerged"
+            | Delivery.CompletionDecision.Refused _ -> "refused"
+            | Delivery.CompletionDecision.VerifyOutstandingObligation _ -> "verify"
+            | Delivery.CompletionDecision.ProjectCompletion -> "project"
+            | Delivery.CompletionDecision.CleanupCompletedDelivery -> "cleanup"
+        let reducerClass = function
+            | Delivery.Next transition when transition.Action = Delivery.Complete -> "project"
+            | Delivery.Next transition when transition.Action = Delivery.CleanupWorktree -> "cleanup"
+            | Delivery.Next transition ->
+                match transition.Action with
+                | Delivery.VerifyObligation _ -> "verify"
+                | _ -> "unexpected"
+            | Delivery.NoVerdict _ -> "refused"
+
+        let mutable histories = 0
+        for obligationCase, declared, obligations in obligationCases do
+            for reachable in [ false; true ] do
+                for issueClosed in [ false; true ] do
+                    for boardDone in [ false; true ] do
+                        for claimReleased in [ false; true ] do
+                            for pendingWrites in [ 0; 1 ] do
+                                for cleanupEligible in [ false; true ] do
+                                    histories <- histories + 1
+                                    let candidate =
+                                        { snapshot "head-a" with
+                                            Merged = true
+                                            MergeReachable = reachable
+                                            IssueClosed = issueClosed
+                                            BoardDone = boardDone
+                                            ClaimReleased = claimReleased
+                                            PendingWrites = pendingWrites
+                                            CleanupEligible = cleanupEligible
+                                            ObligationsDeclared = declared
+                                            Obligations = obligations }
+                                    let decision =
+                                        candidate |> Delivery.completionFacts |> Delivery.decideCompletion
+                                    let expected =
+                                        match obligationCase with
+                                        | "absent"
+                                        | "stale"
+                                        | "contradictory" -> "refused"
+                                        | "outstanding" -> "verify"
+                                        | _ when not reachable -> "refused"
+                                        | _ when not issueClosed || not boardDone || not claimReleased || pendingWrites <> 0 ->
+                                            "project"
+                                        | _ when not cleanupEligible -> "refused"
+                                        | _ -> "cleanup"
+                                    let context =
+                                        $"obligations=%s{obligationCase}; reachable=%b{reachable}; issueClosed=%b{issueClosed}; boardDone=%b{boardDone}; claimReleased=%b{claimReleased}; pending=%d{pendingWrites}; cleanup=%b{cleanupEligible}"
+                                    Assert.True(decisionClass decision = expected, context)
+                                    Assert.True(reducerClass (Delivery.inspect candidate) = expected, context)
+                                    Assert.Equal(
+                                        (expected = "project"),
+                                        (decision = Delivery.CompletionDecision.ProjectCompletion)
+                                    )
+
+        Assert.Equal(320, histories)
+
+    [<Fact>]
+    let ``delivery completion mutation controls kill obligation head evidence and projection forks`` () =
+        let obligation id head evidence verified : Delivery.Obligation =
+            { Id = id
+              Kind = "publication"
+              Evidence = evidence
+              HeadSha = head
+              Verified = verified }
+        let terminal =
+            { snapshot "head-a" with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true
+                Obligations = [ obligation "kit" "head-a" (Some "https://receipt") true ] }
+        let decide facts = facts |> Delivery.completionFacts |> Delivery.decideCompletion
+        let authoritative = decide terminal
+        Assert.Equal(Delivery.CompletionDecision.CleanupCompletedDelivery, authoritative)
+
+        Assert.NotEqual(
+            authoritative,
+            decide { terminal with Obligations = [ obligation "kit" "old-head" (Some "https://receipt") true ] }
+        )
+        Assert.NotEqual(
+            authoritative,
+            decide { terminal with Obligations = [ obligation "kit" "head-a" None true ] }
+        )
+        Assert.NotEqual(
+            authoritative,
+            decide
+                { terminal with
+                    Obligations =
+                        [ obligation "kit" "head-a" None false
+                          obligation "kit" "head-a" (Some "https://receipt") true ] }
+        )
+        Assert.NotEqual(authoritative, decide { terminal with BoardDone = false; CleanupEligible = false })
+
+        let forked =
+            { terminal with BoardDone = false; CleanupEligible = false }
+            |> Delivery.inspect
+        let action = function
+            | Delivery.Next transition -> Some transition.Action
+            | Delivery.NoVerdict _ -> None
+        Assert.NotEqual(action (Delivery.inspect terminal), action forked)
+
+    [<Fact>]
+    let ``delivery completion receipt binds merge obligations pending writes and transition identity`` () =
+        let verified id evidence : Delivery.Obligation =
+            { Id = id
+              Kind = "publication"
+              Evidence = Some evidence
+              HeadSha = "head-a"
+              Verified = true }
+        let candidate =
+            { snapshot "head-a" with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = false
+                ClaimReleased = false
+                PendingWrites = 0
+                CleanupEligible = false
+                Obligations =
+                    [ verified "kit" "https://receipt/kit"
+                      verified "tool" "https://receipt/tool" ] }
+        let transition =
+            match Delivery.inspect candidate with
+            | Delivery.Next value when value.Action = Delivery.Complete -> value
+            | other -> failwithf "expected completion projection, got %A" other
+        let completedAt = DateTimeOffset.Parse("2026-08-22T15:00:00Z")
+        let receipt =
+            Delivery.createCompletionReceipt
+                candidate.Freshness.ItemRef
+                candidate.Freshness.PullRequest.Value
+                "merge-sha"
+                completedAt
+                transition.FreshnessToken
+                transition.ActionKey
+                (Delivery.completionFacts candidate)
+            |> Result.defaultWith (String.concat "; " >> failwith)
+
+        Assert.Equal("merge-sha", receipt.MergeSha)
+        Assert.Equal(2, receipt.ObligationReceipts.Length)
+        Assert.NotEmpty(receipt.Digest)
+        Assert.Equal(Ok (), Delivery.verifyCompletionReceipt receipt)
+        let encoded = Delivery.encodeCompletionReceipt receipt
+        Assert.StartsWith(Delivery.CompletionReceiptMarker, encoded)
+        Assert.Equal(Ok(Some receipt), Delivery.tryDecodeCompletionReceipt encoded)
+        Assert.Equal(Ok None, Delivery.tryDecodeCompletionReceipt "ordinary comment")
+
+        for tampered in
+            [ { receipt with MergeSha = "different-merge" }
+              { receipt with PendingBoardWrites = 1 }
+              { receipt with FreshnessToken = "different-transition" }
+              { receipt with
+                    ObligationReceipts =
+                        { receipt.ObligationReceipts.Head with Evidence = "different-evidence" }
+                        :: receipt.ObligationReceipts.Tail } ] do
+            match Delivery.verifyCompletionReceipt tampered with
+            | Error _ -> ()
+            | Ok () -> failwithf "tampered completion receipt verified: %A" tampered
+
+        let outstanding =
+            { candidate with
+                Obligations =
+                    [ { Id = "kit"
+                        Kind = "publication"
+                        Evidence = None
+                        HeadSha = "head-a"
+                        Verified = false } ] }
+        Assert.True(
+            Delivery.createCompletionReceipt
+                candidate.Freshness.ItemRef
+                candidate.Freshness.PullRequest.Value
+                "merge-sha"
+                completedAt
+                transition.FreshnessToken
+                transition.ActionKey
+                (Delivery.completionFacts outstanding)
+            |> Result.isError
+        )
+
+    [<Fact>]
+    let ``completion correction receipt preserves only a safe nonterminal destination`` () =
+        let observedAt = DateTimeOffset.Parse("2026-08-22T16:00:00Z")
+
+        for destination in [ Types.BoardStatus.InReview; Types.BoardStatus.Blocked ] do
+            let receipt =
+                Delivery.createCompletionCorrectionReceipt "FS-GG/.github#2131" destination observedAt
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal(Ok (), Delivery.verifyCompletionCorrectionReceipt receipt)
+            let encoded = Delivery.encodeCompletionCorrectionReceipt receipt
+            Assert.StartsWith(Delivery.CompletionCorrectionMarker, encoded)
+            Assert.Equal(Ok(Some receipt), Delivery.tryDecodeCompletionCorrectionReceipt encoded)
+
+            match Delivery.verifyCompletionCorrectionReceipt { receipt with Item = "other/item#1" } with
+            | Error errors -> Assert.Contains("completion correction receipt digest does not match its facts", errors)
+            | Ok () -> failwith "a correction receipt with a changed subject verified"
+
+        for unsafe in
+            [ Types.BoardStatus.Backlog
+              Types.BoardStatus.Ready
+              Types.BoardStatus.InProgress
+              Types.BoardStatus.Done
+              Types.BoardStatus.NoStatus ] do
+            Assert.True(
+                Delivery.createCompletionCorrectionReceipt "FS-GG/.github#2131" unsafe observedAt
+                |> Result.isError,
+                $"unsafe correction destination verified: %A{unsafe}"
+            )
+
+        Assert.Equal(Ok None, Delivery.tryDecodeCompletionCorrectionReceipt "ordinary comment")
+        let malformed = Delivery.CompletionCorrectionMarker + Environment.NewLine + "{}"
+        Assert.True(Delivery.tryDecodeCompletionCorrectionReceipt malformed |> Result.isError)
 
     [<Fact>]
     let ``#2131 cleanup is refused before every done fact agrees`` () =

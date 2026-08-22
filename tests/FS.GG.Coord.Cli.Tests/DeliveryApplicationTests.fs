@@ -10,6 +10,10 @@ open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 
 module DeliveryApplicationTests =
+    let rec private repoRoot dir =
+        if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
+        else repoRoot (Directory.GetParent(dir).FullName)
+
     let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
     let comment body = commentWithId 1L body
 
@@ -43,6 +47,39 @@ module DeliveryApplicationTests =
           ParkedReason = None }
 
     let review id url body : Driver.ReviewComment = { Id = id; Url = url; Body = body }
+
+    [<Fact>]
+    let ``completion writer consumes the shared decision instead of rebuilding admission`` () =
+        let root = repoRoot (Directory.GetCurrentDirectory())
+        let writer = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Cli/Client.fs"))
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(writer, "Delivery\\.decideCompletion\\b").Count)
+        Assert.Equal(
+            1,
+            System.Text.RegularExpressions.Regex.Matches(
+                writer,
+                "Delivery\\.CompletionDecision\\.ProjectCompletion"
+            ).Count
+        )
+
+        let doneStart = writer.IndexOf("let private runDone", StringComparison.Ordinal)
+        let doneEnd = writer.IndexOf("let doneCmd", doneStart, StringComparison.Ordinal)
+        let doneWriter = writer.Substring(doneStart, doneEnd - doneStart)
+        let selfHostReplay = doneWriter.IndexOf("Done.selfHostReplayState", StringComparison.Ordinal)
+        let createReceipt = doneWriter.IndexOf("Delivery.createCompletionReceipt", StringComparison.Ordinal)
+        let receipt = doneWriter.IndexOf("Writes.deliveryCompletionReceipt", StringComparison.Ordinal)
+        let issueClose = doneWriter.IndexOf("Writes.closeIssueCompleted", receipt, StringComparison.Ordinal)
+        let boardDone = doneWriter.IndexOf("Board.boardWrite", issueClose, StringComparison.Ordinal)
+        let claimRelease = doneWriter.IndexOf("Writes.release", boardDone, StringComparison.Ordinal)
+        Assert.True(receipt >= 0, "delivery completion receipt writer is not wired")
+        Assert.True(selfHostReplay >= 0, "delivery completion does not inspect durable self-host replay")
+        Assert.True(createReceipt > selfHostReplay, "completion authority can be minted before self-host replay agrees")
+        Assert.True(issueClose > receipt, "a corrected issue is closed before the completion receipt")
+        Assert.True(boardDone > receipt, "Status=Done is projected before the completion receipt")
+        Assert.True(claimRelease > boardDone, "the claim is released before the receipt and board projection")
+        Assert.Contains("Delivery.advance", doneWriter)
+        Assert.Contains("Delivery.createCompletionReceipt", doneWriter)
+        Assert.DoesNotContain("Writes.doneReceipt", doneWriter)
+        Assert.DoesNotContain("fsgg:done-receipt v=1", doneWriter)
 
     [<Fact>]
     let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =

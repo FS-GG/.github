@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "workId": "coordination-change-risk-mitigation",
+  "capturedAt": "2026-08-22",
+  "sourceHead": "e31132dec1a93a260a76916c6807ed630c7cba17",
+  "sample": {
+    "enginePullRequests": 4,
+    "incidentCount": 5,
+    "minimumMonthlyEnginePullRequests": 20
+  },
+  "commandAddition": {
+    "incident": ".github#2753",
+    "mergeCommit": "484f23fff1d113581c3c4c8410b76479420d9a79",
+    "authoredInventoryLocations": 12,
+    "locations": [
+      "Options.Command union case",
+      "Options help row",
+      "Options.renderSupport arm",
+      "Options.writeDisposition arm",
+      "Options verb arm",
+      "HandlerRegistration.Implementations field",
+      "HandlerRegistration.commands row",
+      "HandlerRegistration.handlers row",
+      "CommandSurfaceTests command row",
+      "OptionsTests bare-render row",
+      "HandlerRegistrationTests implementation field",
+      "ApplicationServiceTests dispatch arm"
+    ],
+    "targetReductionPercent": 50
+  },
+  "observedIncidents": [
+    {
+      "item": ".github#2753",
+      "mergeCommit": "484f23fff1d113581c3c4c8410b76479420d9a79",
+      "class": "command metadata and handler registration amplification"
+    },
+    {
+      "item": ".github#2773",
+      "mergeCommit": "a6adfe306b98acc19b3920414efb47d75f4f4333",
+      "class": "delivery and verify-paths classifier divergence"
+    },
+    {
+      "item": ".github#2819",
+      "mergeCommit": "e31132dec1a93a260a76916c6807ed630c7cba17",
+      "class": "review projection and escalation-writer divergence"
+    },
+    {
+      "item": ".github#2820",
+      "mergeCommit": "340cbfa3aad6768b0fb34a6ae8ad717a15e45242",
+      "class": "immutable release recovery attempted asset mutation"
+    },
+    {
+      "item": ".github#643",
+      "mergeCommit": "6f916e42",
+      "class": "narrative closing keyword projected premature completion"
+    }
+  ],
+  "monthlyMetrics": [
+    "median authored inventory locations per command addition",
+    "median time to first actionable CI failure",
+    "percentage of critic findings that are structural completeness omissions",
+    "review rounds consumed before a semantically reviewable head",
+    "projection and writer divergence incidents",
+    "items corrected from premature Done",
+    "self-host transitions with a complete bootstrap receipt",
+    "releases requiring manual journal or receiver-state intervention"
+  ],
+  "invariantTargets": {
+    "projectionWriterDivergences": 0,
+    "prematureDoneStates": 0,
+    "unreceiptedSelfHostWrites": 0
+  }
+}
