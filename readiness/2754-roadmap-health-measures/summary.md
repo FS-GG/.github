@@ -3,9 +3,9 @@
      sources:
        - readiness/2754-roadmap-health-measures/agent-commands/claude/guidance.json  digest:7427fe772ad441feeb85af8df1fe69fffa7b0b7016507c015f2abbeaad1deebf  schema:1(current)
        - readiness/2754-roadmap-health-measures/agent-commands/codex/guidance.json  digest:49c7681a2e55e8c220ffffd62108bef621e562efc6f2a6d3821667ad7ae3c2dc  schema:1(current)
-       - readiness/2754-roadmap-health-measures/analysis.json  digest:706d3d822e10b7dc488e7cc5ec4a9e30ba0ee0403b0f98aa2879577e50651ffc  schema:1(current)
-       - readiness/2754-roadmap-health-measures/ship.json  digest:1e38da9076a8ab12c58bf8beee8cb246c88d97842a2f3884bae915bba02d3e5e  schema:1(current)
-       - readiness/2754-roadmap-health-measures/verify.json  digest:ecd9e79d8ec30888ea88ecc9c36aa021959d8fdd1d0661aaa1b7e39b6a163258  schema:1(current)
+       - readiness/2754-roadmap-health-measures/analysis.json  digest:b156e1e86b4aef53fc13d2d61aefa119d0247f23c72c411f3e0b3fcbb6c5ab3a  schema:1(current)
+       - readiness/2754-roadmap-health-measures/ship.json  digest:64f7c2b6bfe056c1e8d299d0801b76880e7131e94edfafc4329f4dae24ce5dea  schema:1(current)
+       - readiness/2754-roadmap-health-measures/verify.json  digest:9a2910deda09945dd1a8d5fec1e5977952b2e704729e80e7692894d5e52209e9  schema:1(current)
        - readiness/2754-roadmap-health-measures/work-model.json  digest:a2085c8524131faaa19d559941105fdc796a63d93aa600e8ba880be124453a4d  schema:1(current)
      outputDigest: 33f10512b85f95947d33aa67ab70a9f2c2bf7dd44f194b16526c2faaa1e1798c -->
 

@@ -1,113 +1,71 @@
 #!/usr/bin/env python3
-"""Emit a complete, explicit reading of the churn-roadmap health measures.
-
-The report intentionally distinguishes a measured false result from a result for
-which this repository has no authoritative, machine-readable input.  The latter
-is emitted as ``unverified``; it is never silently omitted or guessed.
-"""
-
+"""Derive the seven roadmap-health results from one typed historical reading."""
 from __future__ import annotations
-
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
-
-MEASURES = (
-    ("issue-flow", "Issue creation stays below closure for three consecutive periods."),
-    ("behaviourless-repairs", "Fewer than 10% of repair commits change only statements or projections."),
-    ("scheduling-intent", "Reconciliation does not reverse deliberate scheduling intent."),
-    ("complete-reads", "No successful read is later discovered to have been partial."),
-    ("release-coherence", "Releases complete coherently or remain visibly resumable."),
-    ("artifact-trend", "Independent policy implementations, checks, and workflows trend down."),
-    ("evidence-growth", "Generated evidence grows more slowly than implementation and tests."),
-)
-
+IDS = ("issue-flow", "behaviourless-repairs", "scheduling-intent", "complete-reads", "release-coherence", "artifact-trend", "evidence-growth")
 
 def fail(message: str) -> None:
     raise ValueError(message)
-
 
 def read_fixture(path: Path) -> dict:
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as error:
-        fail(f"cannot read churn fixture {path}: {error}")
-    if data.get("schema") != "fsgg.coord.churn-reading/v1":
-        fail("fixture schema must be fsgg.coord.churn-reading/v1")
-    if not isinstance(data.get("rowsOpened"), int) or not isinstance(data.get("rowsClosed"), int):
-        fail("fixture must contain integer rowsOpened and rowsClosed")
-    window = data.get("window")
-    if not isinstance(window, dict) or not all(isinstance(window.get(key), str) for key in ("start", "end")):
-        fail("fixture window must contain string start and end")
+        fail(f"cannot read health fixture {path}: {error}")
+    if data.get("schema") != "fsgg.coord.roadmap-health-input/v1":
+        fail("fixture schema must be fsgg.coord.roadmap-health-input/v1")
+    window = data.get("window", {})
+    if not isinstance(window.get("start"), str) or not isinstance(window.get("end"), str) or window["start"] >= window["end"]:
+        fail("window must have ordered start and end")
+    measures = data.get("measures")
+    if not isinstance(measures, dict) or set(measures) != set(IDS):
+        fail("fixture must contain exactly the seven typed measure inputs")
+    periods = measures["issue-flow"].get("periods")
+    if not isinstance(periods, list) or not periods:
+        fail("issue-flow periods are required")
+    for period in periods:
+        if not isinstance(period.get("start"), str) or not isinstance(period.get("end"), str) or period["start"] >= period["end"] or not isinstance(period.get("opened"), int) or not isinstance(period.get("closed"), int):
+            fail("issue-flow periods must be ordered typed rows")
+    if any(periods[index]["end"] != periods[index + 1]["start"] for index in range(len(periods) - 1)):
+        fail("issue-flow periods must be contiguous")
     return data
 
+def row(identifier: str, verdict: str, reason: str, value=None) -> dict:
+    result = {"id": identifier, "verdict": verdict, "reason": reason}
+    if value is not None:
+        result["value"] = value
+    return result
 
-def git_lines(repo: Path, base: str, paths: tuple[str, ...]) -> int | None:
-    command = ["git", "-C", str(repo), "diff", "--numstat", f"{base}..HEAD", "--", *paths]
-    completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    if completed.returncode:
-        return None
-    total = 0
-    for line in completed.stdout.splitlines():
-        added, removed, *_ = line.split("\t")
-        if added.isdigit():
-            total += int(added) + int(removed)
-    return total
-
-
-def report(fixture: dict, repo: Path, baseline: str | None) -> dict:
-    opened, closed = fixture["rowsOpened"], fixture["rowsClosed"]
-    # A single fixture is an observed period, not evidence for the roadmap's
-    # three-consecutive-period predicate.
-    issue_verdict = "unverified"
-    evidence = {"fixture": str(fixture["window"]["start"]) + ".." + str(fixture["window"]["end"])}
-    entries = [
-        {"id": "issue-flow", "verdict": issue_verdict,
-         "value": {"opened": opened, "closed": closed},
-         "reason": "One period is insufficient to establish the required three consecutive periods; its observed net is %d." % (opened - closed)},
-        {"id": "behaviourless-repairs", "verdict": "unverified",
-         "reason": "No authoritative classifier binds a repair commit to behaviour-changing evidence."},
-        {"id": "scheduling-intent", "verdict": "unverified",
-         "reason": "No complete durable census binds every reconciliation result to deliberate intent."},
-        {"id": "complete-reads", "verdict": "unverified",
-         "reason": "Later discoveries of partial reads are incident evidence, not a complete historical census."},
-        {"id": "release-coherence", "verdict": "unverified",
-         "reason": "No authoritative release ledger classifies every channel state for this window."},
-        {"id": "artifact-trend", "verdict": "unverified",
-         "reason": "A baseline is required to compare the independent check and workflow corpus."},
-        {"id": "evidence-growth", "verdict": "unverified",
-         "reason": "A baseline is required to compare generated evidence with implementation and tests."},
-    ]
-    if baseline:
-        generated = git_lines(repo, baseline, ("work", "readiness"))
-        implementation = git_lines(repo, baseline, ("src", "tests"))
-        if generated is not None and implementation is not None:
-            entries[-1] = {"id": "evidence-growth", "verdict": "met" if generated < implementation else "violated",
-                           "value": {"generatedLines": generated, "implementationAndTestLines": implementation},
-                           "reason": f"Measured with git diff --numstat {baseline}..HEAD."}
-    if [entry["id"] for entry in entries] != [identifier for identifier, _ in MEASURES]:
-        raise AssertionError("health-measure inventory drifted")
-    return {"schema": "fsgg.coord.roadmap-health/v1", "window": fixture["window"], "evidence": evidence,
-            "measures": entries}
-
+def report(data: dict) -> dict:
+    measures = data["measures"]
+    periods = measures["issue-flow"]["periods"]
+    issue = row("issue-flow", "met" if len(periods) >= 3 and all(p["opened"] < p["closed"] for p in periods[-3:]) else ("violated" if len(periods) >= 3 else "unverified"), "Derived from ordered contiguous period rows.", periods)
+    retired = row("behaviourless-repairs", "retired", "Retired 2026-08-22 by operator-delegated host: no authoritative behaviour-changing classifier exists.")
+    def binary(identifier: str, key: str, label: str) -> dict:
+        value = measures[identifier].get(key)
+        return row(identifier, "unverified", f"No typed {label} evidence in this reading.") if value is None else row(identifier, "violated" if value else "met", f"Derived from typed {label} input.", value)
+    inventory = measures["artifact-trend"]
+    baseline, current = inventory.get("baseline"), inventory.get("current")
+    artifact = row("artifact-trend", "unverified", "No typed baseline/current inventory.") if not isinstance(baseline, dict) or not isinstance(current, dict) else row("artifact-trend", "met" if current["checks"] < baseline["checks"] and current["workflows"] < baseline["workflows"] else "violated", "Derived from typed baseline/current inventory.", [baseline, current])
+    growth = measures["evidence-growth"]
+    evidence = row("evidence-growth", "unverified", "No single typed git boundary.") if not isinstance(growth.get("generatedLines"), int) or not isinstance(growth.get("implementationLines"), int) else row("evidence-growth", "met" if growth["generatedLines"] < growth["implementationLines"] else "violated", f"Derived at {growth.get('baseline')}..{growth.get('head')}.", growth)
+    return {"schema": "fsgg.coord.roadmap-health/v1", "window": data["window"], "sourceBoundary": data.get("sourceBoundary"), "measures": [issue, retired, binary("scheduling-intent", "reversed", "scheduling reversal"), binary("complete-reads", "partialDiscovered", "partial-read incident"), binary("release-coherence", "ambiguous", "ambiguous release"), artifact, evidence]}
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=Path, required=True)
-    parser.add_argument("--repo", type=Path, default=Path("."))
-    parser.add_argument("--baseline")
     parser.add_argument("--format", choices=("json",), default="json")
     args = parser.parse_args()
     try:
-        print(json.dumps(report(read_fixture(args.fixture), args.repo, args.baseline), indent=2, sort_keys=True))
+        print(json.dumps(report(read_fixture(args.fixture)), indent=2, sort_keys=True))
     except ValueError as error:
         print(f"report-roadmap-health: {error}", file=sys.stderr)
         return 2
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

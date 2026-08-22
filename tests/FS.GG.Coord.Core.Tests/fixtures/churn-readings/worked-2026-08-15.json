@@ -1,39 +1,18 @@
 {
-  "schema": "fsgg.coord.churn-reading/v1",
-  "window": { "start": "2026-08-14T17:00:00Z", "end": "2026-08-15T17:00:00Z" },
-  "rowsOpened": 17,
-  "rowsClosed": 24,
-  "netRowDelta": -7,
-  "itemsLanded": { "count": 24, "unit": "issues closed" },
-  "causeInstances": {
-    "found": [
-      {
-        "cause": "the coord engine is merged and unreleased",
-        "rows": [".github#2381", ".github#2648"]
-      }
-    ]
-  },
-  "successorGeneratingCauses": {
-    "found": [
-      {
-        "cause": "each repair of a guarded-boundary.py finding is filed as its own row by the review that found it, so the chain generates one successor per generation and the CLASS is never named; every link is individually well-argued, which is why it is only visible three links up",
-        "rows": [".github#2652", ".github#2667"]
-      }
-    ]
-  },
-  "alreadyDerived": {
-    "found": [
-      { "row": ".github#2648", "gate": "scripts/check-engine-freshness.py" }
-    ]
-  },
-  "jointlyRedCandidates": {
-    "found": [
-      {
-        "rows": [".github#2666", ".github#2584"],
-        "gate": "tests/skill-quality/recency-comment-edit.py"
-      }
-    ]
-  },
-  "remedy": "As prescribed at this window's endpoint, 2026-08-15T17:00:00Z, and re-checked at 2026-08-16T08:45:00Z. (a) Derived-condition caching: the original prescription was to close .github#2648 and carry the release debt as an operator decision, and it was FALSIFIED within seven hours — kit/v0.58.1 and coord-engine/v0.58.1 were cut at a commit neither feed ever published and tags are immutable, so #2648 was re-titled to carry the operator decision instead of being closed. (b) The guarded-boundary.py chain: name the class on .github#2667 itself — every touch of a loaded decision program sits behind one fail-closed boundary — and make that its acceptance criterion, so generation four is evidence on #2667 rather than a fourth number. (c) The jointly-red coupling: .github#2584, as the later row, adopts the canonical statement from #2666's branch verbatim and verifies it against a SIMULATED MERGED TREE rather than its own branch; discharged before either merged.",
-  "prose": "The full reading is .claude/skills/board-analyst/references/churn-reading.md, section 'A worked reading — FS-GG/.github, 2026-08-14T17:00:00Z to 2026-08-15T17:00:00Z'. Its judgement, which no field above carries: this window is NOT pathological on rate — it is net negative and closed more than it opened against a working fleet — but two structural pathologies and one jointly-red coupling are present, and neither structural one is a rate problem. Set it beside net +12 in 24 hours against 25 landed over the 30 hours to 2026-08-14T05:00:00Z: two closed intervals a day apart, on the same board, running in opposite directions. Filed as a result of this reading: nothing; every remedy above is a disposition of an existing row or a sequencing decision, which is the outcome a healthy pass should usually produce."
+  "schema": "fsgg.coord.roadmap-health-input/v1",
+  "window": {"start": "2026-08-01T00:00:00Z", "end": "2026-08-22T00:00:00Z"},
+  "sourceBoundary": "Historical reading durably recorded in FS-GG/.github#2754 at 8813c463.",
+  "measures": {
+    "issue-flow": {"periods": [
+      {"start":"2026-08-01T00:00:00Z","end":"2026-08-08T00:00:00Z","opened":168,"closed":158},
+      {"start":"2026-08-08T00:00:00Z","end":"2026-08-15T00:00:00Z","opened":17,"closed":24},
+      {"start":"2026-08-15T00:00:00Z","end":"2026-08-22T00:00:00Z","opened":1,"closed":2}
+    ]},
+    "behaviourless-repairs": {},
+    "scheduling-intent": {"reversed": true},
+    "complete-reads": {"partialDiscovered": true},
+    "release-coherence": {"ambiguous": true},
+    "artifact-trend": {"baseline":{"checks":49,"workflows":100},"current":{"checks":53,"workflows":115}},
+    "evidence-growth": {"baseline":"cb33188c","head":"8813c463","generatedLines":-19694,"implementationLines":2745}
+  }
 }

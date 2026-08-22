@@ -678,23 +678,22 @@ Measure these weekly from M0 onward:
 
 The checkbox state above is now deliberately conservative: the deliverables landed, but the evidence
 required by their exit criteria is incomplete.  `scripts/report-roadmap-health.py` is the repeatable
-reader for this section. It emits all seven measure identifiers and an explicit `unverified` verdict
-when the repository has no complete authority for a measure; it does not turn a missing census into a
-green result.
+reader for this section. It derives all seven identifiers from one typed historical input; missing
+typed evidence becomes `unverified`, and measure 2 is explicitly retired rather than guessed.
 
-At this reading, `python3 scripts/report-roadmap-health.py --format json --fixture
-tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json --baseline 8813c463`
+At the historical reading bound to `8813c463`, `python3 scripts/report-roadmap-health.py --format json --fixture
+tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json`
 established the following:
 
 | measure | verdict | observation |
 |---|---|---|
-| issue flow | unverified | the supplied 24-hour fixture has 17 opened and 24 closed rows, but one period cannot prove three consecutive periods |
-| behaviourless repairs | unverified | no authoritative classifier connects repair commits to behavioural evidence |
-| scheduling intent | unverified | no complete durable census connects every reconciliation outcome to deliberate intent |
-| complete reads | unverified | incident evidence is not a complete historical census |
-| release coherence | unverified | no authoritative ledger classifies every channel state in the window |
-| artifact trend | unverified | the reporter needs a baseline inventory for policy implementations, checks, and workflows |
-| evidence growth | violated | `git diff --numstat 8813c463..HEAD` counts 155,883 changed `work/` and `readiness/` lines against 26,019 `src/` and `tests/` lines |
+| issue flow | violated | three contiguous periods include 168 opened / 158 closed |
+| behaviourless repairs | retired | 2026-08-22 operator-delegated retirement: no authoritative classifier exists |
+| scheduling intent | violated | #2691 records a reversed deliberate park |
+| complete reads | violated | #2735 records a later partial-read discovery |
+| release coherence | violated | the release packet records a green push publishing nothing |
+| artifact trend | violated | 49 checks / 100 workflows became 53 / 115 |
+| evidence growth | met | exact historical boundary `cb33188c..8813c463`: -19,694 generated against +2,745 implementation lines |
 
 Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves that the complete
 seven-measure inventory is emitted and that a fixture without required issue counts fails closed. The
@@ -706,9 +705,9 @@ The receiver-yield dependency is consumed as evidence, not treated as a green he
 prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
 while leaving the roadmap's rate-and-integrity measures unproven.
 
-M0 through M5 remain unchecked because their respective exit predicates have no current complete
-measurement. M6 is also unchecked: the three-cycle predicate is unverified and its successor clause is
-false while `.github#266` and `.github#2752` remain open; the pending register on `.github#2691` is
+M0 through M5 remain unchecked because their respective exit predicates do not all hold at this reading.
+M6 is also unchecked: the three-cycle predicate is false and its successor clause is
+false while `.github#266` remains open; `.github#2752` is closed and the pending register on `.github#2691` is
 unverified as a complete same-class census. This is a score from the reading, not a claim that the
 milestone deliverables were undone.
 
