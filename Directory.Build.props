@@ -440,8 +440,9 @@
        self-hosting, bounded change-completeness gates, and receiver release recovery. Packed skills
        adopt the terminal delivery-apply route and stop treating standalone `done` as completion.
        Receiver-visible behavior changes additively; no package, command, or member identity is removed. -->
+  <!-- 0.73.0 -> 0.73.1: mandatory post-merge package refresh for the ship-ready #2830 squash. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.73.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.73.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
