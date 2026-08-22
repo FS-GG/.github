@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2773-delivery-path-classifier/ship.json",
-      "digest": "sha256:e754359ddab4610a045277b9827513e928f2b05db76d552f7dc23763f4ce28ec",
+      "digest": "sha256:833ba63044532d7dd7862e870e2f81bae367c9834ffdca289eb908d64abcff31",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2773-delivery-path-classifier/verify.json",
-      "digest": "sha256:453fe40a2734970bbef25781a58004701b365944827018d03452fe35c6fd30d8",
+      "digest": "sha256:d40d5f5cb688c7fae2ee4fd9803dea8ec0cbadc9bf040350f1d9533cfe149cf8",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2773-delivery-path-classifier/work-model.json",
-      "digest": "sha256:53628324a3cafa90a474fb985e170ea4ce6aa3c10a9bba511b5b5dda3a954f5c",
+      "digest": "sha256:c9f1fb17cbb8457b41651a8b15194dddd5d84f1468448aaa2c6473f37d94408e",
       "schemaVersion": 1
     }
   ],
