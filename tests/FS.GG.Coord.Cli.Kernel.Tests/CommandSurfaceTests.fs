@@ -100,6 +100,11 @@ module CommandSurfaceTests =
           "predicate", Predicate
           "diff-audit", DiffAudit
 
+          // `.github#2753`: the verified file-backed comment writer is part of the typed IO surface.
+          // Keeping it in this inventory makes both dispatch and write-ness coverage fail if the command
+          // is added to the DU without an emitted contract row.
+          "comment", CommentCmd
+
           // Coordination rooms (ADR-0051, #1215). The ONE two-word verb — a `room` namespace so
           // `room close`/`room list` have a home; the dispatch check below splits on whitespace for it.
           "room open", RoomOpen
