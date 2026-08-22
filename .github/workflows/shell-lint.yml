@@ -88,43 +88,53 @@ jobs:
   #
   # Its headline leg is the hole this gate had while it was being WRITTEN — an extension-only sweep
   # finds 47 of 51 files and silently skips `scripts/fsgg-coord`, which is to say it skips the exact
-  # file #648 was filed about, and reports green. The fixture's last legs run the gate against the
-  # SHIPPED tree and assert the kit is in the subject, so "passes on synthetic repos while the real
-  # shell rots" is not a state this job can reach.
+  # file #648 was filed about, and reports green. The fixture owns synthetic sensitivity and subject
+  # discovery. The independent `lint` job below exclusively owns the SHIPPED-tree verdict, avoiding
+  # two full shellcheck passes over identical bytes.
   fixture:
     name: "Fixture: the gate can say NO, and its subject includes the kit"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify whether this diff changes the synthetic fixture contract
+        id: impact
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 scripts/ci-gate-impact.py shell-fixture --base "$BASE_SHA" --head "$HEAD_SHA"
 
       # Warm this, and scripts/install-shellcheck.sh below never touches the network at all (#2501) —
       # see that script's own header, and the shared rationale in this file's own top-of-file comment.
       - name: Restore cached shellcheck tarball
+        if: ${{ steps.impact.outputs.run == 'true' }}
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/shellcheck-cache
           key: shellcheck-${{ env.SHELLCHECK_VERSION }}-${{ env.SHELLCHECK_SHA256 }}
 
       - name: Acquire shellcheck (pinned + checksum-verified)
+        if: ${{ steps.impact.outputs.run == 'true' }}
         run: |
           set -euo pipefail
           bin="$(bash scripts/install-shellcheck.sh "$SHELLCHECK_VERSION" "$SHELLCHECK_SHA256" "$RUNNER_TEMP/shellcheck-cache")"
           echo "SHELLCHECK=$bin" >> "$GITHUB_ENV"
 
       - name: Run the shell-lint fixture (no network)
+        if: ${{ steps.impact.outputs.run == 'true' }}
         run: bash tests/shell-lint/run.sh
 
-  # DELIBERATELY NOT `needs: fixture` (.github#2414). `fixture`'s own last leg ("this repo's own
-  # shell must be clean") re-runs `scripts/lint-shell.sh` against THIS repo's live tree as part of
-  # ITS self-test — so a real finding in this tree fails `fixture` for the same cause `lint` exists
-  # to report. With a `needs:` edge, that failure cascades: `fixture` shows `fail`, and `lint` — the
-  # job actually named for the whole-repo verdict, and the one a reader glances at — shows
-  # `skipping`, not `fail`. That is exactly how a real SC2034 in
-  # `tests/reconcile-concurrency-scope/run.sh` shipped on `main` visibly (`#2391`'s checks showed
-  # `fixture: fail` / `lint: skipping`) and unblocked, because neither job is a required context
-  # either. Running `lint` unconditionally, in parallel, means a real defect now produces its OWN
-  # independent `fail` here — not a same-cause downgrade to `skipping` riding on `fixture`'s verdict.
+      - name: Record measured omission for an unrelated diff
+        if: ${{ steps.impact.outputs.run == 'false' }}
+        run: |
+          echo "shell-lint fixture: omitted — ${{ steps.impact.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # DELIBERATELY NOT `needs: fixture` (.github#2414). Live-tree correctness and synthetic gate
+  # sensitivity are independent verdicts. `lint` always runs and is the sole authority over the
+  # repository's current shell; a conditional fixture can neither skip nor downgrade that verdict.
   lint:
     name: "Lint every shell file in the repo (pinned shellcheck)"
     runs-on: ubuntu-latest

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "ci-runtime-optimization",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 30,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 30
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

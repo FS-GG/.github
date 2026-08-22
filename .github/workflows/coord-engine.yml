@@ -65,6 +65,8 @@ on:
       # (.github#2551). Measured: `grep -rn "fsgg-coord-guards" .github/workflows/` returned nothing.
       - "scripts/fsgg-coord-guards.sh"
       - "scripts/record-board-fixture.py"
+      - "scripts/read-trx-count.py"
+      - "tests/ci-runtime-optimization/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -110,6 +112,8 @@ on:
       # a change it never gated on the pull request that introduced it, or the reverse.
       - "scripts/fsgg-coord-guards.sh"
       - "scripts/record-board-fixture.py"
+      - "scripts/read-trx-count.py"
+      - "tests/ci-runtime-optimization/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -157,6 +161,9 @@ jobs:
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Assert optimized CI scheduling remains fail-closed and non-vacuous
+        run: bash tests/ci-runtime-optimization/run.sh
 
       - name: Assert M6 structured-decision retirement and replacement coverage
         run: bash tests/m6-decision-cutover/run.sh
@@ -259,22 +266,13 @@ jobs:
         run: bash tests/review-critic-succession-wire/run.sh
 
       - name: Test — the wire contract, and the residue rule
-        run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
+        run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=cli.trx" --results-directory "$RUNNER_TEMP/coord-engine/cli"
 
       - name: Test — BoardOps handlers and production registration agreement
-        run: dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --logger "console;verbosity=normal"
+        run: dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=boardops.trx" --results-directory "$RUNNER_TEMP/coord-engine/boardops"
 
       - name: Non-vacuity — the BoardOps run must have executed tests
-        run: |
-          set -euo pipefail
-          out="$(dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --no-build -c Release 2>&1)"
-          printf '%s\n' "$out"
-          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
-          if [ "${passed:-0}" -lt 5 ]; then
-            echo "::error title=coord-engine: the BoardOps suite audited nothing::Only ${passed:-0} tests ran."
-            exit 1
-          fi
-          echo "coord-engine (BoardOps): $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/boardops/boardops.trx" --minimum 5 --label "coord-engine (BoardOps)" --summary-file "$GITHUB_STEP_SUMMARY"
 
       # THE KERNEL SUITE IS A SEPARATE ASSEMBLY, AND THAT IS WHY IT NEEDS ITS OWN TWO STEPS (.github#2725).
       # `dotnet test` on the CLI suite discovers exactly the tests in `FS.GG.Coord.Cli.Tests.dll`, and the
@@ -283,33 +281,15 @@ jobs:
       # 179 assertions stop running while every step below still reported green, which is #266 in the exact
       # form this repository keeps meeting it.
       - name: Test — the kernel's argument grammar, identity, and ref parsing
-        run: dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj -c Release --logger "console;verbosity=normal"
+        run: dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=kernel.trx" --results-directory "$RUNNER_TEMP/coord-engine/kernel"
 
       # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A runner that discovers nothing exits 0, so
       # the count is read and floored rather than the exit code trusted. The floor is deliberately well
       # under the 179 that run today: it is a vacuity guard, not a census, and a census would red on every
       # honest test deletion.
       - name: Non-vacuity — the kernel run must have executed tests
-        run: |
-          set -euo pipefail
-          out="$(dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-build -c Release 2>&1)"
-          printf '%s\n' "$out"
-          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
-          if [ "${passed:-0}" -lt 20 ]; then
-            echo "::error title=coord-engine: the kernel suite audited nothing::Only ${passed:-0} tests ran. The kernel is what every command family will depend on; a green gate over an unexecuted suite is the bug this engine exists to end (#266)."
-            exit 1
-          fi
-          echo "coord-engine (kernel): $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/kernel/kernel.trx" --minimum 20 --label "coord-engine (kernel)" --summary-file "$GITHUB_STEP_SUMMARY"
 
       # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A runner that discovers nothing exits 0.
       - name: Non-vacuity — the run must have executed tests
-        run: |
-          set -euo pipefail
-          out="$(dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --no-build -c Release 2>&1)"
-          printf '%s\n' "$out"
-          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
-          if [ "${passed:-0}" -lt 20 ]; then
-            echo "::error title=coord-engine: the suite audited nothing::Only ${passed:-0} tests ran. The codec is a fail-open surface and these are the assertions that hold it shut; a green gate over an untested one is the bug this engine exists to end (#266)."
-            exit 1
-          fi
-          echo "coord-engine: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/cli/cli.trx" --minimum 20 --label "coord-engine" --summary-file "$GITHUB_STEP_SUMMARY"

@@ -228,16 +228,10 @@ run_gate "$d"
   || bad ".github#2689: SC2251 must be scoped to errexit" "rc=$RC
 $OUT"
 
-# ---- 7. THE REAL TREE. Without this, every leg above is synthetic. --------------------------------
-run_gate "$REPO_ROOT"
-[ "$RC" = 0 ] \
-  && ok "the SHIPPED tree is clean at severity 'warning' ($(cd "$REPO_ROOT" && bash "$GATE" --list | wc -l | tr -d ' ') files)" \
-  || bad "this repo's own shell must be clean" "rc=$RC
-$OUT"
-
-# ...and the real tree's subject includes the kit itself: see Leg 9g below, which reuses ONE captured
-# `--list` for this assertion AND the workflow-embedded one rather than paying for a second ~15s
-# extraction pass over the real tree.
+# ---- 7. LIVE-TREE AUTHORITY LIVES IN THE WORKFLOW'S `lint` JOB. -----------------------------------
+# This fixture proves synthetic sensitivity and subject discovery. It deliberately does not invoke
+# the checker over `$REPO_ROOT`: doing so duplicated the dedicated live job's complete pass. Leg 9g
+# still reads one captured `--list` to prove the extensionless kit and workflow shell remain subjects.
 
 # ---- 8. THE KIT'S SOURCES MUST BE FOLLOWABLE FROM ANY CWD (.github#1718). -------------------------
 #      `scripts/skill-view` is a kit-materialized file: registry/repos.yml ships it, and its two
