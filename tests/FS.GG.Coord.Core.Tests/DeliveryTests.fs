@@ -491,7 +491,7 @@ module DeliveryTests =
         Assert.False(Delivery.pathsVerified results)
 
     [<Fact>]
-    let ``#2773 a known exemption can admit without laundering the other unread authority`` () =
+    let ``#2773 an unread authority overrides a known exemption for an uncovered path`` () =
         let results =
             Delivery.classifyPaths
                 (Types.Declared [ Types.Matchable "src/Declared.fs" ])
@@ -501,6 +501,7 @@ module DeliveryTests =
 
         let result = Assert.Single results
 
-        Assert.Equal(Delivery.MandatorySddPath, result.Admission)
+        Assert.Equal(Delivery.UnknownPath, result.Admission)
+        Assert.Contains("generator timed out", result.Reason)
         Assert.True(result.AuthorityRevisions = [ "delivery-route:def" ])
-        Assert.True(Delivery.pathsVerified results)
+        Assert.False(Delivery.pathsVerified results)

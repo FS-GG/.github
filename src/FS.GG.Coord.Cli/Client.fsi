@@ -288,6 +288,17 @@ module Client =
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     val driver: ctx: Kernel.Context -> opts: Options.Options -> int
 
+    /// Identifies the two production path-verdict call sites without duplicating admission policy.
+    type PathVerdictProjection =
+        | DeliveryReceiptProjection
+        | VerifyPathsProjection
+
+    /// Project classified paths through the one shared authorization rule. Both live `delivery` and
+    /// `verify-paths` call this function with their corresponding projection tag.
+    val projectPathVerdict:
+      projection: PathVerdictProjection ->
+      classifications: FS.GG.Coord.Delivery.PathClassification list -> bool
+
     /// Compatibility projection over the shared typed path classifier. Live delivery and `verify-paths`
     /// additionally supply the current route-qualified SDD-package authority.
     val deliveryPathsVerified:

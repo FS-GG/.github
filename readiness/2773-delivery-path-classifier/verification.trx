@@ -1,57 +1,63 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TestRun id="7c01eab5-9b2f-4526-be3f-6ef4a3c8332c" name="@c2756152e150 2026-08-22 11:31:18" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
-  <Times creation="2026-08-22T11:31:18.3640671+02:00" queuing="2026-08-22T11:31:18.3640672+02:00" start="2026-08-22T11:31:17.9868030+02:00" finish="2026-08-22T11:31:18.7306773+02:00" />
-  <TestSettings name="default" id="39ef20b8-a511-4888-a88b-b6ba9f3df862">
-    <Deployment runDeploymentRoot="_c2756152e150_2026-08-22_11_31_18" />
+<TestRun id="bbcceeca-eeeb-4e50-89de-3cb66251ec1a" name="@c2756152e150 2026-08-22 11:59:08" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-22T11:59:08.4501211+02:00" queuing="2026-08-22T11:59:08.4501212+02:00" start="2026-08-22T11:59:08.0492063+02:00" finish="2026-08-22T11:59:08.8221253+02:00" />
+  <TestSettings name="default" id="d1cff23c-219a-4ac6-994c-7c75da0290d3">
+    <Deployment runDeploymentRoot="_c2756152e150_2026-08-22_11_59_08" />
   </TestSettings>
   <Results>
-    <UnitTestResult executionId="31753d74-d95a-4872-8bab-2fe2f8bbfc0c" testId="8be37a00-360b-f885-551c-0b1b4abbd537" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 an unread authority makes an uncovered path Unknown rather than admitted" computerName="c2756152e150" duration="00:00:00.0007852" startTime="2026-08-22T11:31:18.3116303+02:00" endTime="2026-08-22T11:31:18.3116391+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="31753d74-d95a-4872-8bab-2fe2f8bbfc0c" />
-    <UnitTestResult executionId="b2094991-0dda-4ba7-b2cf-56be455d23db" testId="339b10d5-0a8b-01a8-5ac6-16cf0a108f39" testName="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--text&quot;)" computerName="c2756152e150" duration="00:00:00.0572825" startTime="2026-08-22T11:31:18.6416668+02:00" endTime="2026-08-22T11:31:18.7021414+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2094991-0dda-4ba7-b2cf-56be455d23db" />
-    <UnitTestResult executionId="b239edad-61d4-42f4-abde-bbe936b5c602" testId="5641a159-ad6a-64f9-5b1d-85890fb8c015" testName="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--json&quot;)" computerName="c2756152e150" duration="00:00:00.0046702" startTime="2026-08-22T11:31:18.7080393+02:00" endTime="2026-08-22T11:31:18.7080644+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b239edad-61d4-42f4-abde-bbe936b5c602" />
-    <UnitTestResult executionId="9a1d7f9c-95b8-41cc-b030-51644e25b420" testId="eb393f08-7337-dbe3-ae21-058dfb0eef81" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 a known exemption can admit without laundering the other unread authority" computerName="c2756152e150" duration="00:00:00.0079992" startTime="2026-08-22T11:31:18.2949636+02:00" endTime="2026-08-22T11:31:18.3058801+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9a1d7f9c-95b8-41cc-b030-51644e25b420" />
-    <UnitTestResult executionId="8948e39d-9693-46f3-b155-e36fd04f8d8d" testId="cc0575be-441a-2074-cedf-a83447f0ea71" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 one classifier enumerates every path admission with authority revisions" computerName="c2756152e150" duration="00:00:00.0043879" startTime="2026-08-22T11:31:18.3113231+02:00" endTime="2026-08-22T11:31:18.3113433+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8948e39d-9693-46f3-b155-e36fd04f8d8d" />
+    <UnitTestResult executionId="c5ff0362-bccf-4b52-981b-4adf8b602b02" testId="8be37a00-360b-f885-551c-0b1b4abbd537" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 an unread authority makes an uncovered path Unknown rather than admitted" computerName="c2756152e150" duration="00:00:00.0011758" startTime="2026-08-22T11:59:08.3974670+02:00" endTime="2026-08-22T11:59:08.3974898+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5ff0362-bccf-4b52-981b-4adf8b602b02" />
+    <UnitTestResult executionId="42225025-9661-4775-bf1d-e5edf91cfcc7" testId="cc0575be-441a-2074-cedf-a83447f0ea71" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 one classifier enumerates every path admission with authority revisions" computerName="c2756152e150" duration="00:00:00.0120477" startTime="2026-08-22T11:59:08.3767650+02:00" endTime="2026-08-22T11:59:08.3918809+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="42225025-9661-4775-bf1d-e5edf91cfcc7" />
+    <UnitTestResult executionId="ec7e0da2-49e3-4040-b01b-37c638ee3f31" testId="84f3ef80-6b8f-2990-3aca-d147653227e5" testName="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 delivery and verify-paths project every admission case identically" computerName="c2756152e150" duration="00:00:00.0022223" startTime="2026-08-22T11:59:08.7995311+02:00" endTime="2026-08-22T11:59:08.7995409+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec7e0da2-49e3-4040-b01b-37c638ee3f31" />
+    <UnitTestResult executionId="984b6226-4c23-4f08-bd8b-5f0d56528a70" testId="339b10d5-0a8b-01a8-5ac6-16cf0a108f39" testName="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--text&quot;)" computerName="c2756152e150" duration="00:00:00.0584231" startTime="2026-08-22T11:59:08.7319421+02:00" endTime="2026-08-22T11:59:08.7934580+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="984b6226-4c23-4f08-bd8b-5f0d56528a70" />
+    <UnitTestResult executionId="8fd4fe75-b7a9-4f87-a46a-bcd9c4a75067" testId="5641a159-ad6a-64f9-5b1d-85890fb8c015" testName="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--json&quot;)" computerName="c2756152e150" duration="00:00:00.0036011" startTime="2026-08-22T11:59:08.7988866+02:00" endTime="2026-08-22T11:59:08.7989387+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8fd4fe75-b7a9-4f87-a46a-bcd9c4a75067" />
+    <UnitTestResult executionId="fa1ff753-4c78-46f5-b658-c0ecfcab92b3" testId="28fbdac8-9998-0424-046d-f7687183d6d6" testName="FS.GG.Coord.Tests.DeliveryTests.#2773 an unread authority overrides a known exemption for an uncovered path" computerName="c2756152e150" duration="00:00:00.0000922" startTime="2026-08-22T11:59:08.3977636+02:00" endTime="2026-08-22T11:59:08.3977725+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fa1ff753-4c78-46f5-b658-c0ecfcab92b3" />
   </Results>
   <TestDefinitions>
     <UnitTest name="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--text&quot;)" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.cli.tests/bin/release/net10.0/fs.gg.coord.cli.tests.dll" id="339b10d5-0a8b-01a8-5ac6-16cf0a108f39">
-      <Execution id="b2094991-0dda-4ba7-b2cf-56be455d23db" />
+      <Execution id="984b6226-4c23-4f08-bd8b-5f0d56528a70" />
       <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Cli.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests" name="#2773 repairReviewHandoff renders its concrete problem" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.DeliveryTests.#2773 an unread authority overrides a known exemption for an uncovered path" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="28fbdac8-9998-0424-046d-f7687183d6d6">
+      <Execution id="fa1ff753-4c78-46f5-b658-c0ecfcab92b3" />
+      <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.DeliveryTests" name="#2773 an unread authority overrides a known exemption for an uncovered path" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 delivery and verify-paths project every admission case identically" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.cli.tests/bin/release/net10.0/fs.gg.coord.cli.tests.dll" id="84f3ef80-6b8f-2990-3aca-d147653227e5">
+      <Execution id="ec7e0da2-49e3-4040-b01b-37c638ee3f31" />
+      <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Cli.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests" name="#2773 delivery and verify-paths project every admission case identically" />
     </UnitTest>
     <UnitTest name="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests.#2773 repairReviewHandoff renders its concrete problem(format: &quot;--json&quot;)" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.cli.tests/bin/release/net10.0/fs.gg.coord.cli.tests.dll" id="5641a159-ad6a-64f9-5b1d-85890fb8c015">
-      <Execution id="b239edad-61d4-42f4-abde-bbe936b5c602" />
+      <Execution id="8fd4fe75-b7a9-4f87-a46a-bcd9c4a75067" />
       <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Cli.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Cli.Tests.DeliveryApplicationTests" name="#2773 repairReviewHandoff renders its concrete problem" />
     </UnitTest>
-    <UnitTest name="FS.GG.Coord.Tests.DeliveryTests.#2773 a known exemption can admit without laundering the other unread authority" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="eb393f08-7337-dbe3-ae21-058dfb0eef81">
-      <Execution id="9a1d7f9c-95b8-41cc-b030-51644e25b420" />
-      <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.DeliveryTests" name="#2773 a known exemption can admit without laundering the other unread authority" />
-    </UnitTest>
     <UnitTest name="FS.GG.Coord.Tests.DeliveryTests.#2773 one classifier enumerates every path admission with authority revisions" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="cc0575be-441a-2074-cedf-a83447f0ea71">
-      <Execution id="8948e39d-9693-46f3-b155-e36fd04f8d8d" />
+      <Execution id="42225025-9661-4775-bf1d-e5edf91cfcc7" />
       <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.DeliveryTests" name="#2773 one classifier enumerates every path admission with authority revisions" />
     </UnitTest>
     <UnitTest name="FS.GG.Coord.Tests.DeliveryTests.#2773 an unread authority makes an uncovered path Unknown rather than admitted" storage="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="8be37a00-360b-f885-551c-0b1b4abbd537">
-      <Execution id="31753d74-d95a-4872-8bab-2fe2f8bbfc0c" />
+      <Execution id="c5ff0362-bccf-4b52-981b-4adf8b602b02" />
       <TestMethod codeBase="/home/developer/fsgg-driver/worktrees/2773-finch-7368/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.DeliveryTests" name="#2773 an unread authority makes an uncovered path Unknown rather than admitted" />
     </UnitTest>
   </TestDefinitions>
   <TestEntries>
-    <TestEntry testId="8be37a00-360b-f885-551c-0b1b4abbd537" executionId="31753d74-d95a-4872-8bab-2fe2f8bbfc0c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
-    <TestEntry testId="339b10d5-0a8b-01a8-5ac6-16cf0a108f39" executionId="b2094991-0dda-4ba7-b2cf-56be455d23db" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
-    <TestEntry testId="5641a159-ad6a-64f9-5b1d-85890fb8c015" executionId="b239edad-61d4-42f4-abde-bbe936b5c602" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
-    <TestEntry testId="eb393f08-7337-dbe3-ae21-058dfb0eef81" executionId="9a1d7f9c-95b8-41cc-b030-51644e25b420" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
-    <TestEntry testId="cc0575be-441a-2074-cedf-a83447f0ea71" executionId="8948e39d-9693-46f3-b155-e36fd04f8d8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8be37a00-360b-f885-551c-0b1b4abbd537" executionId="c5ff0362-bccf-4b52-981b-4adf8b602b02" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cc0575be-441a-2074-cedf-a83447f0ea71" executionId="42225025-9661-4775-bf1d-e5edf91cfcc7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="84f3ef80-6b8f-2990-3aca-d147653227e5" executionId="ec7e0da2-49e3-4040-b01b-37c638ee3f31" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="339b10d5-0a8b-01a8-5ac6-16cf0a108f39" executionId="984b6226-4c23-4f08-bd8b-5f0d56528a70" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5641a159-ad6a-64f9-5b1d-85890fb8c015" executionId="8fd4fe75-b7a9-4f87-a46a-bcd9c4a75067" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="28fbdac8-9998-0424-046d-f7687183d6d6" executionId="fa1ff753-4c78-46f5-b658-c0ecfcab92b3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
   </TestEntries>
   <TestLists>
     <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
     <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
   </TestLists>
   <ResultSummary outcome="Completed">
-    <Counters total="5" executed="5" passed="5" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
     <Output>
       <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.10)
 [xUnit.net 00:00:00.05]   Discovering: FS.GG.Coord.Core.Tests
-[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coord.Core.Tests
-[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coord.Core.Tests
-[xUnit.net 00:00:00.14]   Finished:    FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:00.11]   Discovered:  FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:00.12]   Starting:    FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:00.16]   Finished:    FS.GG.Coord.Core.Tests
 [xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.10)
 [xUnit.net 00:00:00.06]   Discovering: FS.GG.Coord.Cli.Tests
 [xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coord.Cli.Tests

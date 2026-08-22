@@ -90,6 +90,13 @@ module Delivery =
                   Admission = DeclaredPath
                   Reason = "covered by the authored touch set"
                   AuthorityRevisions = [] }
+            elif not (List.isEmpty unknowns) then
+                { Path = file
+                  Admission = UnknownPath
+                  Reason = String.concat "; " unknowns
+                  AuthorityRevisions =
+                    [ match generated with AuthorityKnown(revision, _) -> yield revision | _ -> ()
+                      match sddPackage with AuthorityKnown(revision, _) -> yield revision | _ -> () ] }
             else
                 match knownSdd file, knownGenerated file with
                 | Some revision, _ ->
@@ -102,13 +109,6 @@ module Delivery =
                       Admission = GeneratedPath
                       Reason = "generated, CI-gated artifact"
                       AuthorityRevisions = [ revision ] }
-                | None, None when not (List.isEmpty unknowns) ->
-                    { Path = file
-                      Admission = UnknownPath
-                      Reason = String.concat "; " unknowns
-                      AuthorityRevisions =
-                        [ match generated with AuthorityKnown(revision, _) -> yield revision | _ -> ()
-                          match sddPackage with AuthorityKnown(revision, _) -> yield revision | _ -> () ] }
                 | None, None ->
                     { Path = file
                       Admission = UndeclaredAuthoredPath

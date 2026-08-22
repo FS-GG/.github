@@ -56,10 +56,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Typed classifier path-case coverage and verdict inversion evidence.]
@@ -85,10 +85,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Mandatory SDD package admission coverage and mutation evidence.]
@@ -114,13 +114,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
-    notes: ["Unknown and undeclared paths remain fail-closed; inversion produced two red tests."]
+    notes: ["Unknown authority now overrides known exemptions for every uncovered path; bypassing that guard produced two red tests, while admitting UnknownPath and UndeclaredAuthoredPath produced three red tests."]
   - id: EV004
     kind: verification
     subject:
@@ -143,10 +143,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: ["JSON and text repairReviewHandoff diagnostics passed; suppression mutation made both red."]
@@ -172,10 +172,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Public FSI classifier surface compiled in Release with zero warnings and errors.]
@@ -201,13 +201,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
-    notes: ["Combined exact focused Core and CLI run passed all five #2773 tests."]
+    notes: ["Combined exact focused Core and CLI run passed all six #2773 tests; forcing the verify-paths projection to diverge from delivery produced one red parity test."]
   - id: EV007
     kind: verification
     subject:
@@ -230,10 +230,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: ["Existing stage and action tokens remain unchanged; focused rendering contract passed."]
@@ -259,10 +259,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2773-delivery-path-classifier/verification.trx
-      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digest: "sha256:c58f1a63e37b187c53bbc38b0fe2ba2e099acfd8c25e4f0063950027a3018177"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 6
       failed: 0
       skipped: 0
     notes: [Generated work-model and analysis views were refreshed by the lifecycle tool.]

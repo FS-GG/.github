@@ -98,6 +98,36 @@ module DeliveryApplicationTests =
         Assert.Contains("declared paths are not verified", rendered)
 
     [<Fact>]
+    let ``#2773 delivery and verify-paths project every admission case identically`` () =
+        let expected =
+            function
+            | Delivery.DeclaredPath
+            | Delivery.GeneratedPath
+            | Delivery.MandatorySddPath -> true
+            | Delivery.UndeclaredAuthoredPath
+            | Delivery.UnknownPath -> false
+
+        let admissions =
+            [ Delivery.DeclaredPath
+              Delivery.GeneratedPath
+              Delivery.MandatorySddPath
+              Delivery.UndeclaredAuthoredPath
+              Delivery.UnknownPath ]
+
+        for admission in admissions do
+            let classification: Delivery.PathClassification =
+                { Path = $"fixture/%A{admission}"
+                  Admission = admission
+                  Reason = "fixture"
+                  AuthorityRevisions = [] }
+
+            let delivery = Client.projectPathVerdict Client.DeliveryReceiptProjection [ classification ]
+            let verifyPaths = Client.projectPathVerdict Client.VerifyPathsProjection [ classification ]
+
+            Assert.Equal(expected admission, delivery)
+            Assert.Equal(delivery, verifyPaths)
+
+    [<Fact>]
     let ``#2131 non-empty obligation receipt is head-bound and verifies only its declared id`` () =
         let comments =
             [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"

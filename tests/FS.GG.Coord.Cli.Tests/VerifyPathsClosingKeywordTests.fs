@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Text.Json
 open Xunit
 open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
@@ -23,8 +24,19 @@ module VerifyPathsClosingKeywordTests =
     /// same endpoint), `pulls/{n}/files`, and `issues/{n}`. Refuses anything else, so an unexpected read
     /// fails loud rather than serving a body it was never given.
     let private serving (prBody: string) (issueBody: string) (files: string) =
+        let lightweightReceipt =
+            StructuredFixtures.routeComment
+                "FS-GG/.github#42"
+                (Some FS.GG.Coord.DeliveryRoute.Lightweight)
+                "fixture-host"
+                None
+
+        let comments = $"""[{{"body":%s{JsonSerializer.Serialize lightweightReceipt}}}]"""
+
         Fake.Recorder(fun (req: Request) ->
-            if req.Path.EndsWith "pulls/900/files" then
+            if req.Path.EndsWith "issues/42/comments" then
+                Ok { Status = 200; Body = comments; ETag = None; NextLink = None; Headers = Map.empty }
+            elif req.Path.EndsWith "pulls/900/files" then
                 Ok { Status = 200; Body = files; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/900" then
                 Ok { Status = 200; Body = prBody; ETag = None; NextLink = None; Headers = Map.empty }

@@ -1380,8 +1380,17 @@ module Client =
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
 
-    let private pathsAdmitted (classifications: Delivery.PathClassification list) =
-        Delivery.pathsVerified classifications
+    type PathVerdictProjection =
+        | DeliveryReceiptProjection
+        | VerifyPathsProjection
+
+    // Both production callers enter one projection. The tag makes their two call sites explicit to
+    // the parity gate without owning any admission policy: the exhaustive Core classifier and
+    // `Delivery.pathsVerified` remain the only definitions of which classes authorize.
+    let projectPathVerdict projection (classifications: Delivery.PathClassification list) =
+        match projection with
+        | DeliveryReceiptProjection
+        | VerifyPathsProjection -> Delivery.pathsVerified classifications
 
     /// Compatibility seam for existing pure callers. Live delivery and `verify-paths` use
     /// `deliveryPathClassifier`, which additionally supplies the current route-qualified SDD authority.
@@ -1393,7 +1402,7 @@ module Client =
             | None -> Delivery.AuthorityUnknown "kit root is unavailable"
 
         Delivery.classifyPaths touchSet generated (Delivery.AuthorityKnown("delivery-route:not-applicable", [])) files
-        |> pathsAdmitted
+        |> projectPathVerdict DeliveryReceiptProjection
 
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
@@ -1806,7 +1815,7 @@ module Client =
                                     let linkageCanonical = closing |> Option.exists ((=) target)
                                     let pathsVerified =
                                         deliveryPathClassifier ctx target candidate.Item.TouchSet files
-                                        |> pathsAdmitted
+                                        |> projectPathVerdict DeliveryReceiptProjection
                                     let reviewComments =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -9899,7 +9908,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     for f in sddPackage do
                                         printfn "    %s" f
 
-                            if pathsAdmitted classifications then
+                            if projectPathVerdict VerifyPathsProjection classifications then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
                                 reportRegenerated ()
                                 reportSddPackage ()
