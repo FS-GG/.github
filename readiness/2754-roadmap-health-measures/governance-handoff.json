@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.1.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.2.0",
   "workId": "2754-roadmap-health-measures",
   "sources": [
     {
       "path": "readiness/2754-roadmap-health-measures/ship.json",
-      "digest": "sha256:64f7c2b6bfe056c1e8d299d0801b76880e7131e94edfafc4329f4dae24ce5dea",
+      "digest": "sha256:efe9e3dac66ac801c24408ca263e44d2d9a4b30e4fdba9fb62507ee09ac79110",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2754-roadmap-health-measures/verify.json",
-      "digest": "sha256:9a2910deda09945dd1a8d5fec1e5977952b2e704729e80e7692894d5e52209e9",
+      "digest": "sha256:88b8886c7beb5d469e3c2a5726b512854956952615c67be752abb9d883333354",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2754-roadmap-health-measures/work-model.json",
-      "digest": "sha256:a2085c8524131faaa19d559941105fdc796a63d93aa600e8ba880be124453a4d",
+      "digest": "sha256:4d488473f80dd0c8a9374ed6be461a8ad5efb0e7b02aa39da366b0d3bae6250e",
       "schemaVersion": 1
     }
   ],

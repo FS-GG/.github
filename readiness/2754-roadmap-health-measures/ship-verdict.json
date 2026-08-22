@@ -4,7 +4,7 @@
   "workId": "2754-roadmap-health-measures",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.0",
   "verificationReadiness": {
     "status": "verificationReady",
     "evidenceSupportedCount": 5,

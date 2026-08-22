@@ -4,7 +4,7 @@
   "workId": "2754-roadmap-health-measures",
   "stage": "verify",
   "status": "verificationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "b156e1e86b4aef53fc13d2d61aefa119d0247f23c72c411f3e0b3fcbb6c5ab3a"
+        "value": "c25a52888e879b202caa693898bd6a0d39613f4b9c46d96c5994794b36fbbef9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "a2085c8524131faaa19d559941105fdc796a63d93aa600e8ba880be124453a4d"
+        "value": "4d488473f80dd0c8a9374ed6be461a8ad5efb0e7b02aa39da366b0d3bae6250e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "7a36efc9236724b07babec3737303ff0bc46f472a4db999846623ba7f66823ee"
+        "value": "7ffef6155333e14749bf75c351e0d15c6699a13a9da0a58a205124c153136eef"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

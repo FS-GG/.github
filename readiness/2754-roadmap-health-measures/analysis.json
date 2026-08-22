@@ -4,7 +4,7 @@
   "workId": "2754-roadmap-health-measures",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "a2085c8524131faaa19d559941105fdc796a63d93aa600e8ba880be124453a4d"
+        "value": "4d488473f80dd0c8a9374ed6be461a8ad5efb0e7b02aa39da366b0d3bae6250e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
