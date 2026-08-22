@@ -6,15 +6,20 @@ cd "$ROOT"
 
 core_out="$(mktemp)"
 cli_out="$(mktemp)"
-trap 'rm -f "$core_out" "$cli_out"' EXIT
+artifacts="$(mktemp -d)"
+trap 'rm -f "$core_out" "$cli_out"; rm -rf "$artifacts"' EXIT
 
-dotnet build tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore >/dev/null
-dotnet build tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --no-restore >/dev/null
+dotnet build tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release -p:RestoreLockedMode=true --artifacts-path "$artifacts" >/dev/null
+dotnet build tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release -p:RestoreLockedMode=true --artifacts-path "$artifacts" >/dev/null
+# DeliveryApplicationTests deliberately locates the shared cross-language corpus by walking upward
+# from its assembly. Preserve that non-vacuous subject inside the redirected artifact tree.
+mkdir -p "$artifacts/tests/delivery-leading-line"
+cp tests/delivery-leading-line/corpus.json "$artifacts/tests/delivery-leading-line/corpus.json"
 
 dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-build \
-  --filter 'FullyQualifiedName~StructuredDecisionTests' >"$core_out"
+  --artifacts-path "$artifacts" --filter 'FullyQualifiedName~StructuredDecisionTests' >"$core_out"
 dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --no-build \
-  --filter 'FullyQualifiedName~DeliveryRouteCliTests|FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests' >"$cli_out"
+  --artifacts-path "$artifacts" --filter 'FullyQualifiedName~DeliveryRouteCliTests|FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests' >"$cli_out"
 
 grep -q 'Failed:     0' "$core_out"
 grep -q 'Failed:     0' "$cli_out"

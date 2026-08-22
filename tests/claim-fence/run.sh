@@ -1512,8 +1512,8 @@ echo "=== M. THE PRODUCERS ARE REAL — field sets pinned, and check 4 REACHABLE
 # gate that STARTS requiring a field no producer writes — and M6/M7 apply exactly those two mutations
 # in exactly those two directions. M4 measures that the extra-field case is LIVE today, so the choice
 # of containment is a measurement rather than a preference.
-CLIENT_FS="$ROOT/src/FS.GG.Coord.Cli/Client.fs"
-DELIVERY_FS="$ROOT/src/FS.GG.Coord.Cli/DeliveryApplication.fs"
+CLIENT_FS="$ROOT/src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
+DELIVERY_FS="$ROOT/src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs"
 
 cat > "$WORK/fieldsets.py" <<'FIELDPY'
 """Emit {gate: {...}, producer: {...}} as JSON: what this gate REQUIRES and what production WRITES.
@@ -1577,8 +1577,8 @@ f() {
 }
 
 [ "$(f "['auth_body']")" != "None" ] && [ "$(f "['auth_fields']" len)" -gt 0 ] \
-  && ok "M1 the AUTHORIZATION producer exists: Client.fs carries an \`authorizationMarker\` this gate can be pinned to" \
-  || bad "M1 Client.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is how slice 3 landed inert"
+  && ok "M1 the AUTHORIZATION producer exists: LiveHandlers.fs carries an \`authorizationMarker\` this gate can be pinned to" \
+  || bad "M1 LiveHandlers.fs has NO authorizationMarker — this gate reads a marker nothing writes, which is how slice 3 landed inert"
 
 [ "$(f "['election_body']")" != "None" ] && [ "$(f "['election_fields']" len)" -gt 0 ] \
   && ok "M2 the ELECTION producer exists: DeliveryApplication.fs carries an \`electionMarker\` — check 4 has a subject" \
@@ -1694,7 +1694,7 @@ PY
 # substitution would kill the run before the summary line, turning "M3 and M10 red" into a truncated
 # transcript with no verdict at all. Every construction below is therefore status-checked and
 # converted into a NAMED `bad`, which is the same discipline `assert` applies to the gate's own
-# output. Measured: removing `grant=` from `Client.fs` aborted this fixture before it was fixed.
+# output. Measured: removing `grant=` from `LiveHandlers.fs` aborted this fixture before it was fixed.
 build_body() {  # <template> <opkey> <grant> -> BODY_FILE, or empty on a construction failure
   local tpl="$1" key="$2" grant="$3" text
   BODY_ERR=""
