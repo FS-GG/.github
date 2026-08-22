@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2754-roadmap-health-measures
+  title: "Derive and score roadmap health measures"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2754-roadmap-health-measures/spec.md
+  sourceClarifications: work/2754-roadmap-health-measures/clarifications.md
+  sourceChecklist: work/2754-roadmap-health-measures/checklist.md
+  sourcePlan: work/2754-roadmap-health-measures/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2754-roadmap-health-measures/spec.md
+    digest: 4e1da5cfb7600341fa821e471ccb0b685dce86ebe28b418e1915f0a7305f4fce
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2754-roadmap-health-measures/clarifications.md
+    digest: 80e63e71e184eeada45e5398839a4c8e20a2a369e0ea3df3ab48c8721872bf20
+    schemaVersion: 1
+  - label: checklist
+    path: work/2754-roadmap-health-measures/checklist.md
+    digest: 1a98af9896858d654759f7ae94b16c0cfdbbad9e1c98e175d05b0a91ae414336
+    schemaVersion: 1
+  - label: plan
+    path: work/2754-roadmap-health-measures/plan.md
+    digest: 5c5cc000ee7aa07bfcc445104211949d4dc6ea5331bf4da903de2fc194c92368
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement the complete roadmap-health reporter
+    status: done
+    owner: plover-8477
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Document the reporter contract and reading
+    status: done
+    owner: plover-8477
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Run the focused complete-inventory test
+    status: done
+    owner: plover-8477
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: []
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Preserve additive and explicit-unverified compatibility
+    status: done
+    owner: plover-8477
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: []
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh SDD readiness views
+    status: done
+    owner: plover-8477
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2754-roadmap-health-measures."

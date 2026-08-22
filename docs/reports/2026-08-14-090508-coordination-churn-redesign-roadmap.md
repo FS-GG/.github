@@ -184,37 +184,37 @@ The goal is not less evidence. It is fewer independently mutable descriptions of
 
 Durations are sequencing estimates, not calendar commitments. Each milestone has an exit condition that prevents an incomplete migration from becoming another permanent compatibility layer.
 
-- [x] **M0 — stabilize**
+- [ ] **M0 — stabilize**
   - Target: 0–2 days
   - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
   - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
 
-- [x] **M1 — intent/status split**
+- [ ] **M1 — intent/status split**
   - Target: Days 3–7
   - Deliverables: Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks
   - Exit criteria: Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch
 
-- [x] **M2 — complete-read boundary**
+- [ ] **M2 — complete-read boundary**
   - Target: Week 1
   - Deliverables: Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests
   - Exit criteria: No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success
 
-- [x] **M3 — release saga**
+- [ ] **M3 — release saga**
   - Target: Week 2
   - Deliverables: Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion
   - Exit criteria: One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes
 
-- [x] **M4 — structured decisions**
+- [ ] **M4 — structured decisions**
   - Target: Weeks 2–3
   - Deliverables: Add route and review revision records; dual-read legacy evidence; migrate active items
   - Exit criteria: Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision
 
-- [x] **M5 — evidence and CI consolidation**
+- [ ] **M5 — evidence and CI consolidation**
   - Target: Weeks 3–4
   - Deliverables: Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery
   - Exit criteria: Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss
 
-- [x] **M6 — retire compatibility paths**
+- [ ] **M6 — retire compatibility paths**
   - Target: After 3 stable cycles
   - Deliverables: Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations
   - Exit criteria: Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open
@@ -673,6 +673,50 @@ Measure these weekly from M0 onward:
 - releases either complete coherently or remain visibly resumable, with no ambiguous channel state;
 - the number of independent policy implementations, check scripts, and workflows trends down;
 - checked-in generated evidence grows more slowly than core implementation and tests.
+
+### Health-measure reading — 2026-08-22
+
+The checkbox state above is now deliberately conservative: the deliverables landed, but the evidence
+required by their exit criteria is incomplete.  `scripts/report-roadmap-health.py` is the repeatable
+reader for this section. It derives all seven identifiers from one typed historical input; missing
+typed evidence becomes `unverified`, and measure 2 is explicitly retired rather than guessed.
+
+At the historical reading bound to `8813c463`, `python3 scripts/report-roadmap-health.py --format json --fixture
+tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json`
+established the following:
+
+| measure | verdict | observation |
+|---|---|---|
+| issue flow | violated | three contiguous periods include 168 opened / 158 closed |
+| behaviourless repairs | retired | 2026-08-22 operator-delegated retirement: no authoritative classifier exists |
+| scheduling intent | violated | #2691 records a reversed deliberate park |
+| complete reads | violated | #2735 records a later partial-read discovery |
+| release coherence | violated | the release packet records a green push publishing nothing |
+| artifact trend | violated | 49 checks / 100 workflows became 53 / 115 |
+| evidence growth | met | exact historical boundary `cb33188c..8813c463`: -19,694 generated against +2,745 implementation lines |
+
+Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves that the complete
+seven-measure inventory is emitted and that the production CLI agrees with the direct parser route.
+Its controlled mutations remove a required measure, break weekly period continuity, supply a
+non-boolean binary field, omit an inventory counter, and put Python booleans into each class of integer
+field (issue counts, artifact counts, and both evidence-growth counters); every mutation fails closed.
+The committed fixture is the known-present positive control used for the reported result.
+
+The receiver-yield dependency is consumed as evidence, not treated as a green health measure: the
+2026-08-20 report records 186 accepted kit transitions across all seven receivers but explicitly leaves
+prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
+while leaving the roadmap's rate-and-integrity measures unproven.
+
+M0 through M5 remain unchecked because their respective exit predicates do not all hold at this reading.
+M6 is also unchecked: the three-cycle predicate is false and its successor clause is
+false while `.github#266` remains open; `.github#2752` is closed and the pending register on `.github#2691` is
+unverified as a complete same-class census. This is a score from the reading, not a claim that the
+milestone deliverables were undone.
+
+The approved temporary freeze is in force from 2026-08-17 until the seven measures are both derived
+and green. It freezes new check scripts, workflows, skills, registers, and process/contract rows; it
+does not freeze repairs to existing surfaces or this measurement work. The operator decision is
+recorded on `.github#2754` comment `5317248936`.
 
 ## Sequencing and risk control
 
