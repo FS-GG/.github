@@ -65,7 +65,8 @@ module BlockerLintTests =
         let root = repoRoot (Directory.GetCurrentDirectory())
         let source =
             [ "src/FS.GG.Coord.Cli/Client.fs"
-              "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs" ]
+              "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
+              "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs" ]
             |> List.map (fun path -> File.ReadAllText(Path.Combine(root, path)))
             |> String.concat "\n"
         let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))

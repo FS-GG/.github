@@ -11,7 +11,7 @@ open FS.GG.Coord.Cli
 /// item's own `item/<n>-*` PR is still open, exactly the proof of life `Schedulability.HeldByLiveWork`
 /// already trusts for the scheduling question (#581).
 ///
-/// `Client.authorizedMarker` is the shared repair both `review` and `delivery` route through. It is
+/// `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker` is the shared repair both `review` and `delivery` route through. It is
 /// tested directly, against a stub `liveness` THUNK, rather than through a live-transport fixture: the
 /// function is deliberately transport-agnostic (the thunk is the one seam), so driving it here exercises
 /// the exact decision `review`/`delivery` make without restating GitHub's `pulls`/`matching-refs`
@@ -41,7 +41,7 @@ module AuthorizedMarkerTests =
     [<Fact>]
     let ``a live marker authorizes without consulting liveness at all`` () =
         let m = marker 1L "heron-b71" 0
-        match Client.authorizedMarker leaseMinutes [ m ] mustNotBeCalled with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ m ] mustNotBeCalled with
         | Ok(Some found) -> Assert.Equal(m, found)
         | other -> failwith $"a live marker must authorize on its own; got %A{other}"
 
@@ -51,7 +51,7 @@ module AuthorizedMarkerTests =
         let stale = marker 1L "smew-1ae8" 8000
         let liveness () = Ok(LeaseExpiredPrOpen 2370)
 
-        match Client.authorizedMarker leaseMinutes [ stale ] liveness with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] liveness with
         | Ok(Some found) -> Assert.Equal(stale, found)
         | other -> failwith $"an expired lease with an open item PR must still authorize; got %A{other}"
 
@@ -61,7 +61,7 @@ module AuthorizedMarkerTests =
         let stale = marker 1L "ghost-000" 8000
         let liveness () = Ok LeaseExpiredNoPr
 
-        match Client.authorizedMarker leaseMinutes [ stale ] liveness with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] liveness with
         | Ok None -> ()
         | other -> failwith $"an expired lease with no open PR must not authorize; got %A{other}"
 
@@ -70,7 +70,7 @@ module AuthorizedMarkerTests =
         let stale = marker 1L "ghost-000" 8000
         let liveness () = Ok LeaseExpiredBranchPushed
 
-        match Client.authorizedMarker leaseMinutes [ stale ] liveness with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] liveness with
         | Ok None -> ()
         | other -> failwith $"a pushed-branch-only claim must not authorize; got %A{other}"
 
@@ -80,12 +80,12 @@ module AuthorizedMarkerTests =
         let boom = Errors.Malformed("FS-GG/.github#2378", "fixture: the PR probe failed")
         let liveness () = Error boom
 
-        match Client.authorizedMarker leaseMinutes [ stale ] (fun () -> liveness ()) with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] (fun () -> liveness ()) with
         | Error e -> Assert.Equal(boom, e)
         | other -> failwith $"a failed liveness read must propagate as an Error, not a verdict; got %A{other}"
 
     [<Fact>]
     let ``no markers at all authorizes nobody, and never asks about liveness`` () =
-        match Client.authorizedMarker leaseMinutes [] mustNotBeCalled with
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [] mustNotBeCalled with
         | Ok None -> ()
         | other -> failwith $"an empty marker list must authorize nobody; got %A{other}"

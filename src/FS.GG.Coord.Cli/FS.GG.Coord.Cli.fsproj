@@ -416,14 +416,8 @@ the standing safety advisories carry forward.
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="DeliveryApplication.fsi" />
-    <Compile Include="DeliveryApplication.fs" />
-    <Compile Include="ReviewApplication.fsi" />
-    <Compile Include="ReviewApplication.fs" />
     <Compile Include="CycleLedgerApplication.fsi" />
     <Compile Include="CycleLedgerApplication.fs" />
-    <Compile Include="FollowupAudit.fsi" />
-    <Compile Include="FollowupAudit.fs" />
     <Compile Include="Chores.fsi" />
     <Compile Include="Chores.fs" />
     <Compile Include="ReadyApplication.fsi" />
@@ -435,8 +429,6 @@ the standing safety advisories carry forward.
     <!-- AFTER `Client.fs`, deliberately: the follow-up queue reuses `parseRefIn` and the exit constants
          rather than growing a second answer to "what is a ref?" or "what does an empty look exit?" (#485).
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->
-    <Compile Include="Followups.fsi" />
-    <Compile Include="Followups.fs" />
     <!-- PacketApplication (.github#2737) is the finder's pre-flight over one
          fsgg.coord.finding-packet/v1 document. It opens no Client seam and takes no lock: the pure
          decode and validation are FS.GG.Coord.FindingPacket's, and this module owns only the file
@@ -476,6 +468,7 @@ the standing safety advisories carry forward.
          of them editing THIS file to reach the shared base. -->
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

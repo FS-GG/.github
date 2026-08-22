@@ -10,10 +10,18 @@
   <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/Snapshot.fsi" Link="Snapshot.fsi" />
     <Compile Include="../FS.GG.Coord.Cli/Snapshot.fs" Link="Snapshot.fs" />
-    <Compile Include="../FS.GG.Coord.Cli/KitDigest.fsi" Link="KitDigest.fsi" />
-    <Compile Include="../FS.GG.Coord.Cli/KitDigest.fs" Link="KitDigest.fs" />
-    <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fsi" Link="IntakeApplication.fsi" />
-    <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fs" Link="IntakeApplication.fs" />
+    <Compile Include="DeliveryApplication.fsi" />
+    <Compile Include="DeliveryApplication.fs" />
+    <Compile Include="ReviewApplication.fsi" />
+    <Compile Include="ReviewApplication.fs" />
+    <Compile Include="DeliveryRouteApplication.fsi" />
+    <Compile Include="DeliveryRouteApplication.fs" />
+    <Compile Include="FollowupAudit.fsi" />
+    <Compile Include="FollowupAudit.fs" />
+    <Compile Include="Followups.fsi" />
+    <Compile Include="Followups.fs" />
+    <Compile Include="LiveHandlers.fsi" />
+    <Compile Include="LiveHandlers.fs" />
     <Compile Include="HandlerRegistration.fsi" />
     <Compile Include="HandlerRegistration.fs" />
     <Compile Include="Handlers.fsi" />
@@ -21,7 +29,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
-    <ProjectReference Include="../FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
   </ItemGroup>

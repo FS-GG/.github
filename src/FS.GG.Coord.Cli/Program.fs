@@ -1,7 +1,6 @@
 module FS.GG.Coord.Cli.Program
 
 open System
-open System.Diagnostics
 open System.IO
 open System.Reflection
 open FS.GG.Coord
@@ -311,153 +310,6 @@ let private decide (opts: Options) =
         | Red _ -> ExitRed
         | NoVerdict _ -> ExitNoVerdict
 
-let private selfHost (opts: Options) =
-    let readReceipt path =
-        try
-            File.ReadAllText path
-            |> SelfHost.tryDecodeReceipt
-            |> Result.bind (function
-                | Some receipt -> Ok receipt
-                | None -> Error [ "file does not contain a self-host bootstrap receipt" ])
-        with ex -> Error [ $"could not read self-host receipt '%s{path}': %s{ex.Message}" ]
-
-    let refuse errors =
-        eprint ("fsgg-coord-engine: self-host refused: " + String.concat "; " errors)
-        ExitRed
-
-    let gitValue repo arguments =
-        let start = ProcessStartInfo("git")
-        start.WorkingDirectory <- repo
-        start.UseShellExecute <- false
-        start.RedirectStandardOutput <- true
-        start.RedirectStandardError <- true
-        for argument in arguments do start.ArgumentList.Add argument
-        use git = Process.Start start
-        let value = git.StandardOutput.ReadToEnd().Trim()
-        git.WaitForExit()
-        if git.ExitCode = 0 && not (String.IsNullOrWhiteSpace value) then Some value else None
-
-    match opts.Args with
-    | [ "mint"; proposalPath; candidatePath; snapshotPath; outputPath ] ->
-        try
-            use proposal = System.Text.Json.JsonDocument.Parse(File.ReadAllText proposalPath)
-            let root = proposal.RootElement
-            let text (name: string) (element: System.Text.Json.JsonElement) = element.GetProperty(name).GetString()
-            let reason =
-                match text "reason" root with
-                | "new-schema-case" -> Ok SelfHost.BootstrapReason.NewSchemaCase
-                | "relocated-decision-boundary" -> Ok SelfHost.BootstrapReason.RelocatedDecisionBoundary
-                | value -> Error [ $"unknown self-host bootstrap reason '%s{value}'" ]
-            match reason with
-            | Error errors -> refuse errors
-            | Ok reason ->
-                let evidence = root.GetProperty "evidence"
-                let host = root.GetProperty "hostAcceptance"
-                use candidateStream = File.OpenRead candidatePath
-                use snapshotStream = File.OpenRead snapshotPath
-                let candidateHash = Security.Cryptography.SHA256.HashData candidateStream |> Convert.ToHexString |> _.ToLowerInvariant()
-                let snapshotHash = Security.Cryptography.SHA256.HashData snapshotStream |> Convert.ToHexString |> _.ToLowerInvariant()
-                let start = ProcessStartInfo(candidatePath)
-                start.UseShellExecute <- false
-                start.RedirectStandardOutput <- true
-                start.RedirectStandardError <- true
-                start.ArgumentList.Add "--version"
-                use candidate = Process.Start start
-                let version = candidate.StandardOutput.ReadToEnd().Trim()
-                candidate.WaitForExit()
-                if candidate.ExitCode <> 0 then refuse [ "candidate engine could not report its version" ]
-                else
-                    SelfHost.createReceipt
-                        (text "baseSha" root)
-                        (text "candidateHeadSha" root)
-                        candidateHash
-                        version
-                        (text "sharedRefusal" root)
-                        snapshotHash
-                        reason
-                        { Build = text "build" evidence
-                          Unit = text "unit" evidence
-                          FocusedProductionRoute = text "focusedProductionRoute" evidence
-                          Provenance = text "provenance" evidence
-                          Inversion = text "inversion" evidence }
-                        (text "candidateDecisionKey" root)
-                        (text "candidateActionKey" root)
-                        { Actor = text "actor" host
-                          AcceptedAt = host.GetProperty("acceptedAt").GetDateTimeOffset() }
-                    |> function
-                        | Error errors -> refuse errors
-                        | Ok receipt ->
-                            File.WriteAllText(outputPath, SelfHost.encodeReceipt receipt)
-                            printfn "SELF-HOST-RECEIPT %s" receipt.Digest
-                            ExitGreen
-        with ex -> refuse [ "could not mint self-host receipt: " + ex.Message ]
-    | "verify" :: receiptPath :: candidatePath :: repoPaths when List.length repoPaths <= 1 ->
-        match readReceipt receiptPath with
-        | Error errors -> refuse errors
-        | Ok receipt ->
-            try
-                use stream = File.OpenRead candidatePath
-                let actual = Security.Cryptography.SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
-                if actual <> receipt.CandidateBinarySha256.ToLowerInvariant() then
-                    refuse [ "candidate binary SHA-256 does not match the bootstrap receipt" ]
-                else
-                    let start = ProcessStartInfo(candidatePath)
-                    start.UseShellExecute <- false
-                    start.RedirectStandardOutput <- true
-                    start.RedirectStandardError <- true
-                    start.ArgumentList.Add "--version"
-                    use candidate = Process.Start start
-                    let reportedVersion = candidate.StandardOutput.ReadToEnd().Trim()
-                    candidate.WaitForExit()
-                    if candidate.ExitCode <> 0 then
-                        refuse [ "candidate engine could not report its version" ]
-                    elif reportedVersion <> receipt.CandidateVersion then
-                        refuse
-                            [ $"candidate reported version '%s{reportedVersion}', not receipt version '%s{receipt.CandidateVersion}'" ]
-                    else
-                        let gitErrors =
-                            match repoPaths with
-                            | [] -> []
-                            | [ repo ] ->
-                                [ match gitValue repo [ "rev-parse"; "HEAD" ] with
-                                  | Some head when head = receipt.CandidateHeadSha -> ()
-                                  | Some head -> yield $"candidate checkout HEAD '%s{head}' does not match receipt head '%s{receipt.CandidateHeadSha}'"
-                                  | None -> yield "candidate checkout HEAD could not be read"
-                                  let baseValue =
-                                      gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/main" ]
-                                      |> Option.orElseWith (fun () -> gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/master" ])
-                                  match baseValue with
-                                  | Some actual when actual = receipt.BaseSha -> ()
-                                  | Some actual -> yield $"candidate checkout base '%s{actual}' does not match receipt base '%s{receipt.BaseSha}'"
-                                  | None -> yield "candidate checkout base could not be established" ]
-                            | _ -> []
-                        match gitErrors, SelfHost.authorizeWrite receipt with
-                        | _ :: _, _ -> refuse gitErrors
-                        | [], Error errors -> refuse errors
-                        | [], Ok () ->
-                            printfn "SELF-HOST-AUTHORIZED %s %s" receipt.CandidateHeadSha receipt.Digest
-                            ExitGreen
-            with ex -> refuse [ $"could not hash candidate binary '%s{candidatePath}': %s{ex.Message}" ]
-    | [ "replay"; receiptPath; snapshotPath; decisionKey; actionKey ] ->
-        match readReceipt receiptPath with
-        | Error errors -> refuse errors
-        | Ok receipt ->
-            try
-                use stream = File.OpenRead snapshotPath
-                let actual = Security.Cryptography.SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
-                if actual <> receipt.SnapshotSha256.ToLowerInvariant() then
-                    refuse [ "replay snapshot SHA-256 does not match the bootstrap receipt" ]
-                else
-                    match SelfHost.verifyReplay receipt { DecisionKey = decisionKey; ActionKey = actionKey } with
-                    | Error errors -> refuse errors
-                    | Ok () ->
-                        printfn "SELF-HOST-REPLAY-AGREES %s" receipt.Digest
-                        ExitGreen
-            with ex -> refuse [ $"could not hash replay snapshot '%s{snapshotPath}': %s{ex.Message}" ]
-    | _ ->
-        eprint "fsgg-coord-engine: self-host needs `mint <proposal> <candidate> <snapshot> <output>`, `verify <receipt> <candidate> [repo]`, or `replay <receipt> <snapshot> <decision-key> <action-key>`."
-        ExitError
-
 let private legacyHandler (opts: Options) =
     match opts.Command with
     | Help ->
@@ -476,8 +328,6 @@ let private legacyHandler (opts: Options) =
     | Decide -> decide opts
     | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
     | DeliveryCmd -> runClient opts
-    | SelfHostCmd when opts.Args |> List.tryHead |> Option.exists (fun value -> value = "record" || value = "replay-record") -> runClient opts
-    | SelfHostCmd -> selfHost opts
     | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
     | ReviewCmd -> runClient opts
     | LanesView -> lanes opts
@@ -522,6 +372,24 @@ let private legacyHandler (opts: Options) =
 
 let private boardOpsProgramRegistrations = Handlers.programHandlers runClient
 
+let private lifecycleProgramRegistrations =
+    FS.GG.Coord.Cli.Lifecycle.Handlers.handlers
+        { Delivery = legacyHandler
+          Review = legacyHandler
+          Route = legacyHandler
+          Landable = legacyHandler
+          Done = legacyHandler
+          VerifyPaths = legacyHandler
+          Followup = legacyHandler }
+
+let private lifecycleHandlers =
+    FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.validate
+        FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.commands
+        lifecycleProgramRegistrations
+    |> function
+        | Ok table -> table |> Map.toList
+        | Error errors -> failwith ("invalid Lifecycle handler registration: " + String.concat "; " errors)
+
 /// The production-owned legacy inventory. This is deliberately explicit and independent of
 /// `Options.allCommands`: validation must detect a newly parsed command that no production family
 /// registered, rather than auto-registering it through the same reflected inventory used as oracle.
@@ -530,18 +398,13 @@ let private legacyCommands =
       Version
       Scan
       Decide
-      DeliveryCmd
-      SelfHostCmd
-      ReviewCmd
       LanesView
       Facts
       CommandContractCmd
       PacketCmd
-      RouteCmd
       DriverCmd
       CycleCmd
       WhoAmI
-      Followup
       Predicate
       DiffAudit
       Next
@@ -553,15 +416,12 @@ let private legacyCommands =
       Budget
       Claim
       Adopt
-      Landable
       Take
       Release
       Heartbeat
       Widen
       SetPaths
       Overlap
-      DoneCmd
-      VerifyPaths
       GraphQlOps
       LintCmd
       OpLockAcquire
@@ -571,7 +431,7 @@ let private legacyProgramRegistrations = legacyCommands |> List.map (fun command
 
 /// The production composition subject used by the producer-agreement test. Each family contributes
 /// registrations; the reflection-derived command inventory remains the independent expected set.
-let commandRegistrations = boardOpsProgramRegistrations @ legacyProgramRegistrations
+let commandRegistrations = boardOpsProgramRegistrations @ lifecycleHandlers @ legacyProgramRegistrations
 
 let private commandHandlers =
     match HandlerRegistration.validate Options.allCommands commandRegistrations with
