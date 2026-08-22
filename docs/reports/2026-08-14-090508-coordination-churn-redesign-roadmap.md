@@ -714,15 +714,21 @@ method resolves both commits, uses `git ls-tree -r --name-only` for the two file
 Each milestone checkbox is traceable to its own exit predicate, rather than inferred from whether its
 deliverables landed:
 
-| milestone | score | exact exit gap at this reading |
-|---|---|---|
-| M0 | unverified | “Main has no standing red checks” and “open repair PRs are mergeable or explicitly superseded” lack a complete required-check/open-repair census bound to this window. |
-| M1 | violated | “explicit Backlog and human parks survive” is contradicted by the typed `.github#2691` scheduling-reversal incident. |
-| M2 | violated | “incomplete reads cannot be returned as success” is contradicted by the typed `.github#2735` partial-read incident. |
-| M3 | violated | “one full coherent-set release reaches both feeds without manual recovery” is contradicted by `.github#2691` packet `5307831243`, where a green push published nothing and recovery was required. |
-| M4 | unverified | “every effective decision is bound to structured inputs and a revision” has no complete effective-decision census for this window. |
-| M5 | violated | “checker/workflow count and duplicated policy decline” fails: all `scripts/check-*` files grow 49 → 54 and all workflow files grow 100 → 115; the independent-policy-implementation predicate remains unverified. |
-| M6 | violated | Three healthy cycles fail on issue flow (83 opened / 64 closed in the first period). The named successor census is also not clear: `.github#266` is open, its fifth-mechanism successor `.github#2752` is closed, and the `.github#2691` finding-packet register remains open, so the successor clause is not satisfied. |
+The following machine-readable table is the exact production-validated projection of the derived
+`milestoneScores`. Each predicates cell is canonical JSON; changing any id, verdict, exit predicate,
+gap, evidence reference, or expected checkbox makes the reporter fail closed.
+
+<!-- roadmap-health-milestone-scores:v1 -->
+| milestone | verdict | checkboxExpected | predicates |
+|---|---|---|---|
+| M0 | unverified | false | [{"evidence":["missing-source:required-check-census"],"exitPredicate":"Main has no standing red checks","gap":"No complete required-check census source is bound to the window.","id":"main-green","verdict":"unverified"},{"evidence":["missing-source:open-repair-census"],"exitPredicate":"Open repair PRs are mergeable or explicitly superseded","gap":"No complete open-repair census source is bound to the window.","id":"repairs-settled","verdict":"unverified"},{"evidence":["70402786f75ad66ba9e9e4abbdcca1863d3a02030b097981f3ba352771c6b8bd","cb33188c","8813c463"],"exitPredicate":"Baseline is reproducible","gap":"Raw issue census and exact Git objects reproduce the baseline.","id":"baseline-reproducible","verdict":"met"}] |
+| M1 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2691#issuecomment-5309171168"],"exitPredicate":"Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch","gap":"A typed scheduling-reversal incident contradicts survival of deliberate parks.","id":"reconciliation-intent","verdict":"violated"}] |
+| M2 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2735"],"exitPredicate":"No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success","gap":"A typed partial-read incident contradicts the complete-read boundary.","id":"complete-read-boundary","verdict":"violated"}] |
+| M3 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2691#issuecomment-5307831243"],"exitPredicate":"One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes","gap":"A typed ambiguous-release incident contradicts coherent resumable release.","id":"coherent-release","verdict":"violated"}] |
+| M4 | unverified | false | [{"evidence":["missing-source:effective-decision-census"],"exitPredicate":"Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision","gap":"No complete effective-decision census source is bound to the window.","id":"structured-decisions","verdict":"unverified"}] |
+| M5 | violated | false | [{"evidence":["cb33188c","8813c463"],"exitPredicate":"Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss","gap":"Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.","id":"artifact-decline","verdict":"violated"}] |
+| M6 | violated | false | [{"evidence":["83/64","146/151","78/86"],"exitPredicate":"Three consecutive operating cycles meet the health measures below","gap":"The first weekly period has more opened than closed issues.","id":"healthy-cycles","verdict":"violated"},{"evidence":["https://github.com/FS-GG/.github/issues/266:open","https://github.com/FS-GG/.github/issues/2752:closed","https://github.com/FS-GG/.github/issues/2691:open"],"exitPredicate":"No same-class successor issue remains open","gap":"The bounded successor census contains open issues.","id":"no-open-successor","verdict":"violated"}] |
+<!-- /roadmap-health-milestone-scores:v1 -->
 
 All seven boxes remain `[ ]` because every corresponding score is `violated` or `unverified`; none is
 cleared merely because its deliverables shipped.
@@ -740,11 +746,12 @@ The receiver-yield dependency is consumed as evidence, not treated as a green he
 prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
 while leaving the roadmap's rate-and-integrity measures unproven.
 
-The reporter's typed `milestoneScores` array is the checkbox authority; the table above is its human
-projection. It names the exact violated or unverified predicate for M0 through M5. M6 additionally
-fails both the three-cycle predicate and its successor clause while `.github#266` remains open;
-`.github#2752` is closed and `.github#2691` remains open. This is a score from the reading, not a claim
-that the milestone deliverables were undone.
+The reporter derives its typed `milestoneScores` array from the raw issue census, incident records,
+and exact Git objects, then requires the table above and all seven roadmap checkboxes to match it
+exactly. M0 and M4 remain deterministically unverified because no raw completeness census is bound;
+there is no boolean verdict input. M6 derives `.github#266` open, `.github#2752` closed, and
+`.github#2691` open directly from those issues' `closedAt` fields in the digest-bound 1,210-record
+snapshot. This is a score from the reading, not a claim that the milestone deliverables were undone.
 
 Freeze decision state: **approved** by the operator on **2026-08-17**, recorded for that actor by board
 analyst `avocet-bb9a` in `.github#2754` comment `5317248936`. It remains in force until the seven

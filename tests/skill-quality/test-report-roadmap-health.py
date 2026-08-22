@@ -73,6 +73,20 @@ def invalid_census(mutate, expected="", preserve_digest=False):
             raise AssertionError("malformed raw census must fail closed")
 
 
+def invalid_roadmap(mutate, expected="milestone"):
+    roadmap = mutate(ROADMAP.read_text())
+    with tempfile.TemporaryDirectory() as directory:
+        bad = Path(directory) / "roadmap.md"
+        bad.write_text(roadmap)
+        completed = subprocess.run(
+            ["python3", str(SCRIPT), "--fixture", str(FIXTURE), "--repo", str(ROOT), "--roadmap", str(bad)],
+            text=True,
+            capture_output=True,
+        )
+        assert completed.returncode == 2
+        assert expected in completed.stderr
+
+
 def test_complete_inventory_and_production_route():
     ensure_historical_git_objects()
     source = module.read_fixture(FIXTURE)
@@ -125,6 +139,7 @@ def test_raw_census_digest_and_record_semantics_are_rejected():
     invalid_census(lambda item: item["records"][0].update({"closedAt": "2020-01-01T00:00:00Z"}), "semantics")
     invalid_census(lambda item: item["records"][0].update({"createdAt": "2026-09-01T00:00:00Z"}), "semantics")
     invalid_census(lambda item: item["records"][0].update({"opened": -1}), "exactly")
+    invalid_census(lambda item: item["records"].__setitem__(slice(None), [record for record in item["records"] if record["number"] != 266]), "successor inventory")
 
 
 def test_incident_and_census_bypasses_are_rejected():
@@ -177,9 +192,16 @@ def test_milestone_exit_table_is_checkbox_authority():
         "id": "main-green",
         "exitPredicate": "Main has no standing red checks",
         "verdict": "unverified",
-        "gap": "No complete required-check census is bound to the window.",
-        "evidence": ["milestoneEvidence.M0.mainChecksCensusComplete"],
+        "gap": "No complete required-check census source is bound to the window.",
+        "evidence": ["missing-source:required-check-census"],
     }
+    try:
+        module.milestone_predicate("main-green", "Main has no standing red checks", "met", ["missing-source:required-check-census"])
+    except ValueError as error:
+        assert "cannot derive milestone gap" in str(error)
+    else:
+        raise AssertionError("a verdict cannot independently select a contradictory gap")
+    assert module.parse_milestone_table(ROADMAP.read_text()) == scores
 
 
 def test_milestone_authority_mutations_fail_closed():
@@ -201,6 +223,109 @@ def test_milestone_authority_mutations_fail_closed():
     rejected(lambda scores: scores.pop(3))
     rejected(lambda scores: scores.__setitem__(3, json.loads(json.dumps(scores[2]))))
     rejected(lambda scores: scores[6].update({"verdict": "met", "checkboxExpected": True}))
+
+
+def test_roadmap_score_table_mutations_fail_in_production_cli():
+    invalid_roadmap(lambda text: text.replace("| M0 | unverified | false |", "| M0 | met | true |", 1))
+    invalid_roadmap(lambda text: text.replace("No complete required-check census source is bound to the window.", "", 1))
+    invalid_roadmap(lambda text: text.replace('"id":"complete-read-boundary"', '"id":"wrong-predicate"', 1))
+    invalid_roadmap(lambda text: text.replace("| M4 | unverified | false |", "| M4 | violated | false |", 1))
+    invalid_roadmap(lambda text: text.replace("https://github.com/FS-GG/.github/issues/266:open", "https://github.com/FS-GG/.github/issues/266:closed", 1))
+    invalid_roadmap(lambda text: text.replace("- [ ] **M2", "- [x] **M2", 1), "checkbox")
+
+    def m0_met_without_gap(text):
+        return text.replace("| M0 | unverified | false |", "| M0 | met | true |", 1).replace(
+            '"gap":"No complete required-check census source is bound to the window.","id":"main-green","verdict":"unverified"',
+            '"gap":"","id":"main-green","verdict":"met"',
+            1,
+        )
+
+    invalid_roadmap(m0_met_without_gap)
+
+
+def test_every_typed_table_field_is_validated():
+    source = module.read_fixture(FIXTURE)
+    scores = module.report(source, roadmap=ROADMAP.read_text())["milestoneScores"]
+
+    def rejected(mutated):
+        roadmap = module.MILESTONE_TABLE.sub(module.render_milestone_table(mutated), ROADMAP.read_text())
+        try:
+            module.report(source, ROOT, roadmap)
+        except ValueError as error:
+            assert "milestone" in str(error)
+        else:
+            raise AssertionError("every typed roadmap table field must be validated")
+
+    for score_index, score in enumerate(scores):
+        for field, value in (("id", score["id"] + "x"), ("verdict", "met"), ("checkboxExpected", not score["checkboxExpected"])):
+            mutated = json.loads(json.dumps(scores))
+            mutated[score_index][field] = value
+            rejected(mutated)
+        for predicate_index, predicate in enumerate(score["predicates"]):
+            for field, value in (
+                ("id", predicate["id"] + "x"),
+                ("exitPredicate", predicate["exitPredicate"] + " wrong"),
+                ("verdict", "met" if predicate["verdict"] != "met" else "violated"),
+                ("gap", predicate["gap"] + " wrong"),
+                ("evidence", predicate["evidence"] + ["wrong"]),
+            ):
+                mutated = json.loads(json.dumps(scores))
+                mutated[score_index]["predicates"][predicate_index][field] = value
+                rejected(mutated)
+
+
+def test_legacy_verdict_inputs_and_co_mutations_fail_closed():
+    source = module.read_fixture(FIXTURE)
+    legacy = {
+        "M0": {"mainChecksCensusComplete": True, "openRepairCensusComplete": True},
+        "M4": {"effectiveDecisionCensusComplete": True},
+        "M6": {
+            "asOf": source["sourceBoundary"]["asOf"],
+            "successors": [
+                {"ref": f"https://github.com/FS-GG/.github/issues/{number}", "state": "closed"}
+                for number in (266, 2752, 2691)
+            ],
+        },
+    }
+    invalid_fixture(source, lambda item: item.update({"milestoneEvidence": legacy}), "verdict inputs are forbidden")
+
+    # Co-mutating an asserted boolean authority and its checkbox still fails at the raw-input boundary.
+    mutated = json.loads(FIXTURE.read_text())
+    mutated["milestoneEvidence"] = legacy
+    with tempfile.TemporaryDirectory() as directory:
+        fixture = Path(directory) / "fixture.json"
+        roadmap = Path(directory) / "roadmap.md"
+        fixture.write_text(json.dumps(mutated))
+        roadmap.write_text(ROADMAP.read_text().replace("- [ ] **M0", "- [x] **M0", 1))
+        completed = subprocess.run(
+            ["python3", str(SCRIPT), "--fixture", str(fixture), "--repo", str(ROOT), "--roadmap", str(roadmap)],
+            text=True,
+            capture_output=True,
+        )
+        assert completed.returncode == 2
+        assert "verdict inputs are forbidden" in completed.stderr
+
+
+def test_all_closed_successor_claim_contradicting_raw_projection_fails():
+    source = json.loads(FIXTURE.read_text())
+    snapshot = json.loads(ISSUES.read_text())
+    for record in snapshot["records"]:
+        if record["number"] in {266, 2691}:
+            record["closedAt"] = "2026-08-22T12:00:00Z"
+    source["sourceBoundary"]["snapshotPath"] = "issues.json"
+    source["sourceBoundary"]["recordsSha256"] = module.canonical_sha256(snapshot["records"])
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "issues.json").write_text(json.dumps(snapshot))
+        fixture = root / "fixture.json"
+        fixture.write_text(json.dumps(source))
+        loaded = module.read_fixture(fixture, root)
+        try:
+            module.report(loaded, ROOT, ROADMAP.read_text())
+        except ValueError as error:
+            assert "milestone score table" in str(error)
+        else:
+            raise AssertionError("an all-closed successor derivation cannot match the committed open-state table")
 
 
 def test_m6_named_successor_census():
@@ -236,6 +361,10 @@ def main():
     test_incident_measure_requires_complete_census_for_met()
     test_milestone_exit_table_is_checkbox_authority()
     test_milestone_authority_mutations_fail_closed()
+    test_roadmap_score_table_mutations_fail_in_production_cli()
+    test_every_typed_table_field_is_validated()
+    test_legacy_verdict_inputs_and_co_mutations_fail_closed()
+    test_all_closed_successor_claim_contradicting_raw_projection_fails()
     test_m6_named_successor_census()
     test_freeze_decision_records_authority()
     test_retirement_is_explicit_in_document()

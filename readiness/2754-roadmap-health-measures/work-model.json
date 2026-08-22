@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "9a4431b44b3f53206043967720cc4223fc92946bd1e2d3231a01cc4646aba270"
+        "value": "bdc96e02b202fc0ffe0343404d2f6270a7e6a53638dd7c5ddb0caf115be09529"
       }
     },
     {
@@ -565,7 +565,7 @@
           "path": "work/2754-roadmap-health-measures/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "9a4431b44b3f53206043967720cc4223fc92946bd1e2d3231a01cc4646aba270"
+            "value": "bdc96e02b202fc0ffe0343404d2f6270a7e6a53638dd7c5ddb0caf115be09529"
           },
           "schemaVersion": 1
         },
@@ -596,7 +596,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "9a869d621b96dce5780032fe0b966428cf6ad449d1d12c25a44546dceb47acb6"
+        "value": "615eacf7a051f17dfdc284f2bcde1e518e564be5145971f04177f544db32e9a0"
       },
       "currency": "current"
     }

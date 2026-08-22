@@ -25,6 +25,31 @@ ROADMAP = ROOT / "docs/reports/2026-08-14-090508-coordination-churn-redesign-roa
 DURABLE_REF = re.compile(
     r"https://github\.com/[^/]+/[^/]+/(?:issues/[1-9][0-9]*(?:#issuecomment-[1-9][0-9]*)?|actions/runs/[1-9][0-9]*|releases/tag/[^/#?]+)"
 )
+MILESTONE_TABLE = re.compile(
+    r"<!-- roadmap-health-milestone-scores:v1 -->\n(.*?)\n<!-- /roadmap-health-milestone-scores:v1 -->",
+    re.DOTALL,
+)
+MILESTONE_GAPS = {
+    ("main-green", "unverified"): "No complete required-check census source is bound to the window.",
+    ("repairs-settled", "unverified"): "No complete open-repair census source is bound to the window.",
+    ("baseline-reproducible", "met"): "Raw issue census and exact Git objects reproduce the baseline.",
+    ("reconciliation-intent", "violated"): "A typed scheduling-reversal incident contradicts survival of deliberate parks.",
+    ("reconciliation-intent", "met"): "A complete typed scheduling-reversal census contains no incidents.",
+    ("reconciliation-intent", "unverified"): "No scheduling-reversal incident is recorded, but the census is incomplete.",
+    ("complete-read-boundary", "violated"): "A typed partial-read incident contradicts the complete-read boundary.",
+    ("complete-read-boundary", "met"): "A complete typed partial-read census contains no incidents.",
+    ("complete-read-boundary", "unverified"): "No partial-read incident is recorded, but the census is incomplete.",
+    ("coherent-release", "violated"): "A typed ambiguous-release incident contradicts coherent resumable release.",
+    ("coherent-release", "met"): "A complete typed ambiguous-release census contains no incidents.",
+    ("coherent-release", "unverified"): "No ambiguous-release incident is recorded, but the census is incomplete.",
+    ("structured-decisions", "unverified"): "No complete effective-decision census source is bound to the window.",
+    ("artifact-decline", "violated"): "Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.",
+    ("artifact-decline", "unverified"): "Known counters declined, but the independent policy-implementation count is unverified.",
+    ("healthy-cycles", "violated"): "The first weekly period has more opened than closed issues.",
+    ("healthy-cycles", "met"): "All three exact weekly periods closed more issues than they opened.",
+    ("no-open-successor", "violated"): "The bounded successor census contains open issues.",
+    ("no-open-successor", "met"): "The bounded successor census contains no open issues.",
+}
 
 
 def fail(message: str) -> None:
@@ -122,31 +147,11 @@ def read_fixture(path: Path, repository: Path = ROOT) -> dict:
     git_boundary = data.get("gitBoundary")
     if not isinstance(git_boundary, dict) or set(git_boundary) != {"base", "head"}:
         fail("gitBoundary must contain exact base and head revisions")
-    milestone = data.get("milestoneEvidence")
-    if (
-        not isinstance(milestone, dict)
-        or set(milestone) != {"M0", "M4", "M6"}
-        or set(milestone["M0"]) != {"mainChecksCensusComplete", "openRepairCensusComplete"}
-        or not all(isinstance(value, bool) for value in milestone["M0"].values())
-        or set(milestone["M4"]) != {"effectiveDecisionCensusComplete"}
-        or not isinstance(milestone["M4"]["effectiveDecisionCensusComplete"], bool)
-        or set(milestone["M6"]) != {"asOf", "successors"}
-        or utc(milestone["M6"]["asOf"]) < utc(window["end"])
-        or not isinstance(milestone["M6"]["successors"], list)
-    ):
-        fail("milestoneEvidence must contain typed M0, M4, and M6 authority")
-    successors = milestone["M6"]["successors"]
-    expected_successors = {
-        "https://github.com/FS-GG/.github/issues/266",
-        "https://github.com/FS-GG/.github/issues/2752",
-        "https://github.com/FS-GG/.github/issues/2691",
-    }
-    if (
-        len(successors) != 3
-        or not all(isinstance(item, dict) and set(item) == {"ref", "state"} and item["state"] in {"open", "closed"} for item in successors)
-        or {item["ref"] for item in successors} != expected_successors
-    ):
-        fail("M6 successor census must contain exactly #266, #2752, and #2691 with typed states")
+    if "milestoneEvidence" in data:
+        fail("milestoneEvidence verdict inputs are forbidden; milestone states derive from raw evidence")
+    successor_numbers = {266, 2752, 2691}
+    if {record["number"] for record in records if record["number"] in successor_numbers} != successor_numbers:
+        fail("raw issue census must contain exactly the named M6 successor inventory #266, #2752, and #2691")
     data["_issueRecords"] = records
     return data
 
@@ -229,8 +234,10 @@ def incident_measure(data: dict, identifier: str, label: str) -> dict:
     return row(identifier, "unverified", f"Incident register is empty, but the typed {label} census is incomplete.", census)
 
 
-def milestone_predicate(identifier: str, text: str, verdict: str, gap: str, evidence: list[str]) -> dict:
-    return {"id": identifier, "exitPredicate": text, "verdict": verdict, "gap": gap, "evidence": evidence}
+def milestone_predicate(identifier: str, text: str, verdict: str, evidence: list[str]) -> dict:
+    if not evidence or (identifier, verdict) not in MILESTONE_GAPS:
+        fail(f"cannot derive milestone gap for {identifier}/{verdict} without typed evidence")
+    return {"id": identifier, "exitPredicate": text, "verdict": verdict, "gap": MILESTONE_GAPS[(identifier, verdict)], "evidence": evidence}
 
 
 def milestone_score(identifier: str, predicates: list[dict]) -> dict:
@@ -241,9 +248,15 @@ def milestone_score(identifier: str, predicates: list[dict]) -> dict:
 
 def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
     by_id = {measure["id"]: measure for measure in measures}
-    m0 = data["milestoneEvidence"]["M0"]
-    m4 = data["milestoneEvidence"]["M4"]
-    successors = data["milestoneEvidence"]["M6"]["successors"]
+    successor_numbers = (266, 2752, 2691)
+    issue_records = {record["number"]: record for record in data["_issueRecords"]}
+    successors = [
+        {
+            "ref": f"https://github.com/FS-GG/.github/issues/{number}",
+            "state": "open" if issue_records[number]["closedAt"] is None else "closed",
+        }
+        for number in successor_numbers
+    ]
     issue_periods = by_id["issue-flow"]["value"]
     def incident_evidence(identifier: str) -> list[str]:
         value = by_id[identifier].get("value")
@@ -254,30 +267,67 @@ def derive_milestone_scores(data: dict, measures: list[dict]) -> list[dict]:
         return []
     return [
         milestone_score("M0", [
-            milestone_predicate("main-green", "Main has no standing red checks", "met" if m0["mainChecksCensusComplete"] else "unverified", "No complete required-check census is bound to the window.", ["milestoneEvidence.M0.mainChecksCensusComplete"]),
-            milestone_predicate("repairs-settled", "Open repair PRs are mergeable or explicitly superseded", "met" if m0["openRepairCensusComplete"] else "unverified", "No complete open-repair census is bound to the window.", ["milestoneEvidence.M0.openRepairCensusComplete"]),
-            milestone_predicate("baseline-reproducible", "Baseline is reproducible", "met", "Raw issue census and exact Git objects reproduce the baseline.", [data["sourceBoundary"]["recordsSha256"], data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
+            milestone_predicate("main-green", "Main has no standing red checks", "unverified", ["missing-source:required-check-census"]),
+            milestone_predicate("repairs-settled", "Open repair PRs are mergeable or explicitly superseded", "unverified", ["missing-source:open-repair-census"]),
+            milestone_predicate("baseline-reproducible", "Baseline is reproducible", "met", [data["sourceBoundary"]["recordsSha256"], data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
         ]),
         milestone_score("M1", [
-            milestone_predicate("reconciliation-intent", "Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch", by_id["scheduling-intent"]["verdict"], "A typed scheduling-reversal incident contradicts survival of deliberate parks.", incident_evidence("scheduling-intent")),
+            milestone_predicate("reconciliation-intent", "Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch", by_id["scheduling-intent"]["verdict"], incident_evidence("scheduling-intent")),
         ]),
         milestone_score("M2", [
-            milestone_predicate("complete-read-boundary", "No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success", by_id["complete-reads"]["verdict"], "A typed partial-read incident contradicts the complete-read boundary.", incident_evidence("complete-reads")),
+            milestone_predicate("complete-read-boundary", "No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success", by_id["complete-reads"]["verdict"], incident_evidence("complete-reads")),
         ]),
         milestone_score("M3", [
-            milestone_predicate("coherent-release", "One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes", by_id["release-coherence"]["verdict"], "A typed ambiguous-release incident contradicts coherent resumable release.", incident_evidence("release-coherence")),
+            milestone_predicate("coherent-release", "One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes", by_id["release-coherence"]["verdict"], incident_evidence("release-coherence")),
         ]),
         milestone_score("M4", [
-            milestone_predicate("structured-decisions", "Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision", "met" if m4["effectiveDecisionCensusComplete"] else "unverified", "No complete effective-decision census is bound to the window.", ["milestoneEvidence.M4.effectiveDecisionCensusComplete"]),
+            milestone_predicate("structured-decisions", "Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision", "unverified", ["missing-source:effective-decision-census"]),
         ]),
         milestone_score("M5", [
-            milestone_predicate("artifact-decline", "Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss", by_id["artifact-trend"]["verdict"], "Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.", [data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
+            milestone_predicate("artifact-decline", "Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss", by_id["artifact-trend"]["verdict"], [data["gitBoundary"]["base"], data["gitBoundary"]["head"]]),
         ]),
         milestone_score("M6", [
-            milestone_predicate("healthy-cycles", "Three consecutive operating cycles meet the health measures below", by_id["issue-flow"]["verdict"], "The first weekly period has more opened than closed issues.", [f"{period['opened']}/{period['closed']}" for period in issue_periods]),
-            milestone_predicate("no-open-successor", "No same-class successor issue remains open", "violated" if any(item["state"] == "open" for item in successors) else "met", "The bounded successor census contains open issues.", [f"{item['ref']}:{item['state']}" for item in successors]),
+            milestone_predicate("healthy-cycles", "Three consecutive operating cycles meet the health measures below", by_id["issue-flow"]["verdict"], [f"{period['opened']}/{period['closed']}" for period in issue_periods]),
+            milestone_predicate("no-open-successor", "No same-class successor issue remains open", "violated" if any(item["state"] == "open" for item in successors) else "met", [f"{item['ref']}:{item['state']}" for item in successors]),
         ]),
     ]
+
+
+def parse_milestone_table(roadmap: str) -> list[dict]:
+    match = MILESTONE_TABLE.search(roadmap)
+    if match is None:
+        fail("roadmap must contain the typed milestone score table block")
+    lines = match.group(1).splitlines()
+    if lines[:2] != [
+        "| milestone | verdict | checkboxExpected | predicates |",
+        "|---|---|---|---|",
+    ] or len(lines) != 9:
+        fail("roadmap milestone score table must have the exact v1 header and seven rows")
+    parsed = []
+    for line in lines[2:]:
+        cells = [cell.strip() for cell in line.split("|")[1:-1]]
+        if len(cells) != 4 or cells[2] not in {"true", "false"}:
+            fail("roadmap milestone score table row is malformed")
+        try:
+            predicates = json.loads(cells[3].replace("&vert;", "|"))
+        except json.JSONDecodeError:
+            fail("roadmap milestone score predicates must be canonical JSON")
+        parsed.append({"id": cells[0], "verdict": cells[1], "checkboxExpected": cells[2] == "true", "predicates": predicates})
+    return parsed
+
+
+def render_milestone_table(scores: list[dict]) -> str:
+    lines = [
+        "<!-- roadmap-health-milestone-scores:v1 -->",
+        "| milestone | verdict | checkboxExpected | predicates |",
+        "|---|---|---|---|",
+    ]
+    for score in scores:
+        predicates = json.dumps(score["predicates"], sort_keys=True, separators=(",", ":")).replace("|", "&vert;")
+        checkbox = str(score["checkboxExpected"]).lower()
+        lines.append(f"| {score['id']} | {score['verdict']} | {checkbox} | {predicates} |")
+    lines.append("<!-- /roadmap-health-milestone-scores:v1 -->")
+    return "\n".join(lines)
 
 
 def validate_milestone_scores(scores: object, expected: list[dict], roadmap: str) -> None:
@@ -285,6 +335,8 @@ def validate_milestone_scores(scores: object, expected: list[dict], roadmap: str
         fail("milestoneScores must contain exactly ordered unique M0-M6 entries")
     if scores != expected:
         fail("milestoneScores do not match the derived predicate verdict, gap, or evidence authority")
+    if parse_milestone_table(roadmap) != scores or MILESTONE_TABLE.sub(render_milestone_table(scores), roadmap) != roadmap:
+        fail("roadmap milestone score table does not exactly match derived milestoneScores")
     checkbox_rows = re.findall(r"^- \[([ xX])\] \*\*(M[0-6]) —", roadmap, re.MULTILINE)
     if len(checkbox_rows) != 7 or [identifier for _, identifier in checkbox_rows] != [f"M{index}" for index in range(7)]:
         fail("roadmap must contain exactly ordered unique M0-M6 checkboxes")
