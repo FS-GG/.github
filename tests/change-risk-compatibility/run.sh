@@ -17,11 +17,11 @@ has src/FS.GG.Coord.Cli.Kernel/Options.fs 'commandCatalogue' 'catalogue metadata
 
 # Every compatibility slice has both a green parity artifact and a source inversion that can red.
 for artifact in \
-  command-catalogue-kernel.trx \
-  lifecycle-model-core.trx \
-  completion-receipts-core.trx \
-  self-host-core.trx \
-  change-completeness-kernel.trx \
+  command-catalogue-kernel.test-report.xml \
+  lifecycle-model-core.test-report.xml \
+  completion-receipts-core.test-report.xml \
+  self-host-core.test-report.xml \
+  change-completeness-kernel.test-report.xml \
   release-recovery.junit.xml; do
   report="$ROOT/work/coordination-change-risk-mitigation/artifacts/$artifact"
   if [ -s "$report" ] && python3 - "$report" <<'PY'

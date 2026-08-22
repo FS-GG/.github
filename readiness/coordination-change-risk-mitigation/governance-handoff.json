@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/coordination-change-risk-mitigation/ship.json",
-      "digest": "sha256:1747d6a533aa3a772e5ddae3bc2c1b5bb02db4df1b78c0017e505c35a916cf53",
+      "digest": "sha256:ef57bc17656734d353105dc68a57f6fc497a91ece8064f9937b1697b0c23ac63",
       "schemaVersion": 1
     },
     {
       "path": "readiness/coordination-change-risk-mitigation/verify.json",
-      "digest": "sha256:1ab5a6bd111e2003ce4d1f8bdb5dcdbb60c8f25ee80c7c483605609635fa205e",
+      "digest": "sha256:9ca2c9c9c99cac74059830225637843350237ad87a8b4d30e8c5806287f282bb",
       "schemaVersion": 1
     },
     {
       "path": "readiness/coordination-change-risk-mitigation/work-model.json",
-      "digest": "sha256:6de16c2b4b9e38b8cc04935247254b6122f2374359d74ebd6267f3e461b047fb",
+      "digest": "sha256:2b4fcd016b7de64a639bccfacefd4fdafc4c185879c1c04421c72466c187aba8",
       "schemaVersion": 1
     }
   ],

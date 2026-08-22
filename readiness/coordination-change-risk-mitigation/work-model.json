@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bff14280b82169d2e8f35c27b2b1a9c3ec0c4629f5f9b8763fdbae71fd52fdf5"
+        "value": "4f56b80be2007d2e7048e262eb370fdda44619d11da81e75d319e8ac948b45f3"
       }
     },
     {
@@ -1401,8 +1401,8 @@
         "FR-001"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx",
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1428,8 +1428,8 @@
         "FR-002"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.trx",
-        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.trx"
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1455,11 +1455,11 @@
         "FR-003"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.trx",
-        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.trx",
-        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.trx",
-        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.trx",
-        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1485,11 +1485,11 @@
         "FR-004"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/self-host-boardops.trx",
-        "work/coordination-change-risk-mitigation/artifacts/self-host-cli.trx",
-        "work/coordination-change-risk-mitigation/artifacts/self-host-core.trx",
-        "work/coordination-change-risk-mitigation/artifacts/self-host-github.trx",
-        "work/coordination-change-risk-mitigation/artifacts/self-host-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/self-host-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-github.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/self-host-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1515,9 +1515,9 @@
         "FR-005"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.trx",
-        "work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.trx",
-        "work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.test-report.xml",
+        "work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1543,7 +1543,7 @@
         "FR-006"
       ],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.trx"
+        "work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1646,7 +1646,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1766,7 +1766,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1958,7 +1958,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2174,7 +2174,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2318,7 +2318,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx"
+        "work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2411,7 +2411,7 @@
           "path": "work/coordination-change-risk-mitigation/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "bff14280b82169d2e8f35c27b2b1a9c3ec0c4629f5f9b8763fdbae71fd52fdf5"
+            "value": "4f56b80be2007d2e7048e262eb370fdda44619d11da81e75d319e8ac948b45f3"
           },
           "schemaVersion": 1
         },
@@ -2442,7 +2442,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "465649bd15de5eccc55c765c342e50085f8bbefab2657ab5fcf52b68c15578ef"
+        "value": "13c832bd909b456434d193bc713829f24830cf8aa55b7e0326628fcd00765ed5"
       },
       "currency": "current"
     }

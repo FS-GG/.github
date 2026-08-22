@@ -772,7 +772,7 @@
         "FR-001"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -798,7 +798,7 @@
         "FR-002"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -824,7 +824,7 @@
         "FR-003"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -850,7 +850,7 @@
         "FR-004"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -876,7 +876,7 @@
         "FR-005"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -902,7 +902,7 @@
         "FR-006"
       ],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -926,7 +926,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -950,7 +950,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -974,7 +974,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -998,7 +998,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1022,7 +1022,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1046,7 +1046,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1070,7 +1070,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1094,7 +1094,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1118,7 +1118,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1142,7 +1142,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1166,7 +1166,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2819-pass-red-exhaustion-writer/artifacts/verification.trx"
+        "work/2819-pass-red-exhaustion-writer/artifacts/verification.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,

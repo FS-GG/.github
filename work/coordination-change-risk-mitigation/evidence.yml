@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: [CR-001]
     planDecisionRefs: [PD-002]
     obligationRefs: [EV001]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx, work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Kernel.Tests/CommandSurfaceTests.fs
@@ -55,7 +55,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
       digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -75,7 +75,7 @@ evidence:
     checklistResultRefs: [CR-002]
     planDecisionRefs: [PD-003]
     obligationRefs: [EV002]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.trx, work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/ReviewHeadDivergenceTests.fs
@@ -88,7 +88,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.trx
+      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-decisions-core.test-report.xml
       digest: "sha256:579d54e97fc5f26857d1d087ea69482705e67f2068bfd96ade57eda1a319c495"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -108,7 +108,7 @@ evidence:
     checklistResultRefs: [CR-003]
     planDecisionRefs: [PD-004]
     obligationRefs: [EV003]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.trx, work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.trx, work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.trx, work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.trx, work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/completion-receipts-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-github.test-report.xml, work/coordination-change-risk-mitigation/artifacts/completion-receipts-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
@@ -125,7 +125,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.trx
+      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml
       digest: "sha256:3d90a24f97bb0c9a574e14e7100e8302c666ee2923a01c1b13a5c5d816a6dfee"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -145,7 +145,7 @@ evidence:
     checklistResultRefs: [CR-004]
     planDecisionRefs: [PD-005]
     obligationRefs: [EV004]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/self-host-boardops.trx, work/coordination-change-risk-mitigation/artifacts/self-host-cli.trx, work/coordination-change-risk-mitigation/artifacts/self-host-core.trx, work/coordination-change-risk-mitigation/artifacts/self-host-github.trx, work/coordination-change-risk-mitigation/artifacts/self-host-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/self-host-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-github.test-report.xml, work/coordination-change-risk-mitigation/artifacts/self-host-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/SelfHostTests.fs
@@ -160,7 +160,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/self-host-core.trx
+      source: work/coordination-change-risk-mitigation/artifacts/self-host-core.test-report.xml
       digest: "sha256:5026567d0924243cf5a8415897eaa66a6bb824c442cdb0d0f1030803749f1be3"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -180,7 +180,7 @@ evidence:
     checklistResultRefs: [CR-005]
     planDecisionRefs: [PD-006]
     obligationRefs: [EV005]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.trx, work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.trx, work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/change-completeness-boardops.test-report.xml, work/coordination-change-risk-mitigation/artifacts/change-completeness-cli.test-report.xml, work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: scripts/change-completeness
@@ -195,7 +195,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.trx
+      source: work/coordination-change-risk-mitigation/artifacts/change-completeness-kernel.test-report.xml
       digest: "sha256:870bbc9da9262fba8e06f4f54e0bed87ff0a495bf108ff608282aebb87c86874"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -215,7 +215,7 @@ evidence:
     checklistResultRefs: [CR-006]
     planDecisionRefs: [PD-007]
     obligationRefs: [EV006]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/ReviewHeadDivergenceTests.fs
@@ -224,7 +224,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.trx
+      source: work/coordination-change-risk-mitigation/artifacts/lifecycle-model-core.test-report.xml
       digest: "sha256:adcbc94b741dfb0b24294e007707c98be7ae770fece40446263146427caefe48"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -293,7 +293,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -321,7 +321,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.trx
+      source: work/coordination-change-risk-mitigation/artifacts/completion-receipts-core.test-report.xml
       digest: "sha256:3d90a24f97bb0c9a574e14e7100e8302c666ee2923a01c1b13a5c5d816a6dfee"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -341,7 +341,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV010]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs
@@ -350,7 +350,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
       digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -432,7 +432,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -459,7 +459,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -478,7 +478,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV015]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli.Kernel/Options.fsi
@@ -487,7 +487,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
       digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -515,7 +515,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -542,7 +542,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -569,7 +569,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -596,7 +596,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -623,7 +623,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -650,7 +650,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -677,7 +677,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -696,14 +696,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV023]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Kernel.Tests/CommandSurfaceTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
       digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -731,7 +731,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -758,7 +758,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -785,7 +785,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -812,7 +812,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -839,7 +839,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -866,7 +866,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -893,7 +893,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -920,7 +920,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -939,14 +939,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV032]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-boardops.test-report.xml
       digest: "sha256:6a27c6dc53f7a067cdd3fd4d55cbb5d5140f888c7f8fc518f423de024a75238f"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -974,7 +974,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -1001,7 +1001,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -1028,7 +1028,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -1055,7 +1055,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -1082,7 +1082,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -1101,14 +1101,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV038]
-    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx]
+    artifacts: [work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coord.Cli.Kernel/Options.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.trx
+      source: work/coordination-change-risk-mitigation/artifacts/command-catalogue-kernel.test-report.xml
       digest: "sha256:e7466626f850f7f84423420b31f05fa4ef5952f485dd7a3c0db01dec7d6b71b1"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -1136,7 +1136,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/coordination-change-risk-mitigation/artifacts/compatibility-slices.junit.xml
-      digest: "sha256:220aac99e620e54b765316d38b0c2b1d9a18a343c2f4274291d488b0c99254f4"
+      digest: "sha256:09ec614d35e04b265e8c19d0c2338c2ef16fabf02ae75d9455de9ffec61fad90"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1

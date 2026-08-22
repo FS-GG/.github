@@ -2,11 +2,11 @@
 PASS  candidate read-only verify/replay remains available without write authority
 PASS  the predecessor promotion command remains available
 PASS  catalogue metadata remains centralized after coexistence
-PASS  observed green compatibility evidence: command-catalogue-kernel.trx
-PASS  observed green compatibility evidence: lifecycle-model-core.trx
-PASS  observed green compatibility evidence: completion-receipts-core.trx
-PASS  observed green compatibility evidence: self-host-core.trx
-PASS  observed green compatibility evidence: change-completeness-kernel.trx
+PASS  observed green compatibility evidence: command-catalogue-kernel.test-report.xml
+PASS  observed green compatibility evidence: lifecycle-model-core.test-report.xml
+PASS  observed green compatibility evidence: completion-receipts-core.test-report.xml
+PASS  observed green compatibility evidence: self-host-core.test-report.xml
+PASS  observed green compatibility evidence: change-completeness-kernel.test-report.xml
 PASS  observed green compatibility evidence: release-recovery.junit.xml
 PASS  catalogue slice retains an effective omission inversion
 PASS  lifecycle slice retains decision-boundary mutations
