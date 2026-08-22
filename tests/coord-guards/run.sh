@@ -254,8 +254,8 @@ RECOVER_OUT="$( cd "$BEHIND/wt" && FSGG_COORD_ENGINE_BIN="$MYENGINE" "$SHIM" hea
 RECOVER_RC=$?
 RECOVER_ERR_TXT="$(cat "$RECOVER_ERR")"
 if [ "$RECOVER_RC" -eq 69 ] \
-   && printf '%s' "$RECOVER_ERR_TXT" | grep -q 'FSGG_SELF_HOST_RECEIPT' \
-   && ! printf '%s' "$RECOVER_OUT" | grep -q 'MY CURRENT ENGINE RAN'; then
+   && grep -q 'FSGG_SELF_HOST_RECEIPT' <<<"$RECOVER_ERR_TXT" \
+   && ! grep -q 'MY CURRENT ENGINE RAN' <<<"$RECOVER_OUT"; then
   ok "an opaque explicit engine cannot write without typed self-host authority"
 else
   bad "an opaque explicit engine must fail closed before a write" "rc=$RECOVER_RC out=$RECOVER_OUT err=$RECOVER_ERR_TXT"
@@ -282,7 +282,7 @@ AUTHORIZED_OUT="$(cd "$BEHIND/wt" && \
   "$SHIM" heartbeat "$FIXREF" 2>/dev/null)"
 AUTHORIZED_RC=$?
 if [ "$AUTHORIZED_RC" -eq 0 ] \
-   && printf '%s' "$AUTHORIZED_OUT" | grep -q 'MY CURRENT ENGINE RAN: heartbeat' \
+   && grep -q 'MY CURRENT ENGINE RAN: heartbeat' <<<"$AUTHORIZED_OUT" \
    && grep -q '^self-host verify ' "$SELF_HOST_LOG"; then
   ok "a distinct stable verifier authorizes the exact candidate before its write argv runs"
 else
@@ -488,8 +488,8 @@ fi
 CE="$REPO_ROOT/.github/workflows/coord-engine.yml"
 pr_trigger="$(sed -n '/^  pull_request:/,/^  push:/p' "$CE")"
 push_trigger="$(sed -n '/^  push:/,/^  workflow_dispatch:/p' "$CE")"
-if ! printf '%s' "$pr_trigger" | grep -q 'paths:' \
-   && printf '%s' "$push_trigger" | grep -q '"scripts/fsgg-coord-guards.sh"' \
+if ! grep -q 'paths:' <<<"$pr_trigger" \
+   && grep -q '"scripts/fsgg-coord-guards.sh"' <<<"$push_trigger" \
    && grep -q 'fsgg-coord-guards\\\.sh' "$REPO_ROOT/scripts/change-completeness"; then
   ok "coord-engine.yml runs change-completeness on every PR, while push filtering and the impact classifier both select the guard module"
 else

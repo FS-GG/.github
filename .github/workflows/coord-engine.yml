@@ -22,6 +22,7 @@ name: coord-engine
 on:
   # No PR path filter: `change-completeness` is a required predecessor and must report on every head.
   # The expensive engine job retains path-sensitive execution through the gate's typed impact output.
+  # paths-coherence: allow-divergence — the required PR context is intentionally universal; push remains path-sensitive and the classifier gates the expensive successor.
   pull_request:
   push:
     branches: [main]
