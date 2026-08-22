@@ -200,9 +200,9 @@ module Delivery =
           CompletedAt: DateTimeOffset
           Digest: string }
 
-    /// Durable evidence that reconciliation observed premature issue closure before authoritative
-    /// completion. It is deliberately not a completion receipt: it can only hold the item in a safe
-    /// nonterminal projection while the delivery transaction finishes.
+    // Durable evidence that reconciliation observed premature issue closure before authoritative
+    // completion. The public contract is documented in Delivery.fsi; implementation-side XML comments
+    // would be discarded when a sibling signature exists.
     type CompletionCorrectionReceipt =
         { Item: string
           Destination: BoardStatus
