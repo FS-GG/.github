@@ -488,6 +488,18 @@ module Client =
     // that one fail-closed collector instead of acquiring a second, weaker list of generated paths.
     let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
 
+    // Bound beside the authoritative generated-path and delivery-route readers below. The live
+    // delivery adapter occurs earlier in this module, so this forward binding is the single seam that
+    // lets it and `verifyPaths` consume the identical classifier and authority derivation.
+    let mutable private deliveryPathClassifier:
+        Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list =
+        fun _ _ touchSet files ->
+            Delivery.classifyPaths
+                touchSet
+                (Delivery.AuthorityUnknown "generated-path authority is not initialized")
+                (Delivery.AuthorityUnknown "sdd-package authority is not initialized")
+                files
+
     let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
@@ -1368,22 +1380,20 @@ module Client =
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
 
-    /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
-    /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
-    /// make this false (and block landing); it cannot turn an undeclared authored file into a pass.
+    let private pathsAdmitted (classifications: Delivery.PathClassification list) =
+        Delivery.pathsVerified classifications
+
+    /// Compatibility seam for existing pure callers. Live delivery and `verify-paths` use
+    /// `deliveryPathClassifier`, which additionally supplies the current route-qualified SDD authority.
+    /// This projection still consumes the one Core classifier; it carries no exemption list of its own.
     let deliveryPathsVerified (touchSet: TouchSet) (files: string list) =
         let generated =
             match KitDigest.kitRoot () with
-            | Some root -> generatedPathCollector root
-            | None -> Set.empty
+            | Some root -> Delivery.AuthorityKnown("generated-paths:compatibility", generatedPathCollector root)
+            | None -> Delivery.AuthorityUnknown "kit root is unavailable"
 
-        match touchSet with
-        | Declared tokens ->
-            files
-            |> List.forall (fun file ->
-                (tokens |> List.exists (fun token -> TouchSet.covers token file))
-                || Set.contains file generated)
-        | _ -> false
+        Delivery.classifyPaths touchSet generated (Delivery.AuthorityKnown("delivery-route:not-applicable", [])) files
+        |> pathsAdmitted
 
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
@@ -1794,7 +1804,9 @@ module Client =
                                         |> deliveryReviewEvidence (landable = PrGreen)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
-                                    let pathsVerified = deliveryPathsVerified candidate.Item.TouchSet files
+                                    let pathsVerified =
+                                        deliveryPathClassifier ctx target candidate.Item.TouchSet files
+                                        |> pathsAdmitted
                                     let reviewComments =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -9407,11 +9419,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// behaviour and remove the only pointer to the cause: the artifact reappears under `undeclared`, the
     /// worker is told to go look at the generator, and nothing says which one. A mute fail-closed is
     /// #266's shape one level down — right verdict, unreadable reason.
-    let private generatedPaths (root: string) : Set<string> =
+    let private generatedPathsResult (root: string) : Result<Set<string>, string> =
         let script = Path.Combine(root, "scripts", "generated-paths")
 
+        let failed reason =
+            eprint $"fsgg-coord-engine: %s{reason} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+            Error reason
+
         if not (File.Exists script) then
-            Set.empty
+            failed $"scripts/generated-paths does not exist under %s{root}"
         else
             try
                 let psi = ProcessStartInfo(script)
@@ -9475,10 +9491,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 if not (p.WaitForExit timeoutMs) then
                     (try p.Kill true with _ -> ())
 
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
-
-                    Set.empty
+                    failed $"scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed"
                 else
 
                 // The child is gone; this second, unbounded wait is the documented way to let the async
@@ -9487,20 +9500,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 let out = lock sync (fun () -> stdout.ToString())
 
                 if p.ExitCode <> 0 then
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
-
-                    Set.empty
+                    failed $"scripts/generated-paths exited %d{p.ExitCode}"
                 else
                     out.Split('\n')
                     |> Array.map (fun l -> l.Trim())
                     |> Array.filter (fun l -> l <> "")
                     |> Set.ofArray
+                    |> Ok
             with ex ->
-                eprint
-                    $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+                failed $"could not run scripts/generated-paths (%s{ex.Message})"
 
-                Set.empty
+    let private generatedPaths (root: string) : Set<string> =
+        generatedPathsResult root |> Result.defaultValue Set.empty
 
     do generatedPathCollector <- generatedPaths
 
@@ -9526,25 +9537,71 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// yields the empty list — "I could not ask what this route obliges" and "this route obliges nothing"
     /// are opposite facts (#266) — and the reason goes to stderr rather than being swallowed, for the same
     /// reason `generatedPaths` forwards its child's stderr: a mute fail-closed leaves the right verdict and
-    /// removes the only pointer to its cause. It takes the body the caller ALREADY read and one complete,
-    /// paginated REST ledger read, with no second `issueBody`.
-    let private sddPackageTokens (ctx: Context) (issue: Ref) (body: string) : PathToken list =
-        let nothingSubtracted (why: string) =
+    /// removes the only pointer to its cause. It takes one complete, paginated REST ledger read and no
+    /// second issue-body read.
+    let private sddPackageAuthority (ctx: Context) (issue: Ref) : Delivery.PathAuthority<PathToken list> =
+        let unknown (why: string) =
             eprint
                 $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
 
-            []
+            Delivery.AuthorityUnknown why
 
         match readDeliveryRouteComments ctx issue with
-        | Error e -> nothingSubtracted (Errors.explain e)
+        | Error e -> unknown (Errors.explain e)
         | Ok comments ->
             match routeEvidence issue.Canonical comments with
             // A `lightweight` route reaches here too and answers the empty list from
             // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
             // nothing we failed to read and nothing to warn about.
-            | DeliveryRoute.Current receipt -> DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
+            | DeliveryRoute.Current receipt ->
+                Delivery.AuthorityKnown(
+                    $"delivery-route:%s{receipt.SubjectRevision}",
+                    DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
+                )
             | DeliveryRoute.Stale reasons
-            | DeliveryRoute.Unreadable reasons -> nothingSubtracted (String.concat "; " reasons)
+            | DeliveryRoute.Unreadable reasons -> unknown (String.concat "; " reasons)
+
+    let private generatedPathAuthority (issue: Ref) : Delivery.PathAuthority<Set<string>> =
+        let unknown reason =
+            eprint $"fsgg-coord-engine: could not establish generated-path authority (%s{reason}) — NOTHING is subtracted, so generated paths will be reported as drift below."
+            Delivery.AuthorityUnknown reason
+
+        match gitRemoteRepo () with
+        | Some slug when not (String.Equals(slug, $"%s{issue.Owner}/%s{issue.Repo}", StringComparison.OrdinalIgnoreCase)) ->
+            unknown $"checkout %s{slug} is not the subject repository %s{issue.Owner}/%s{issue.Repo}"
+        | None -> unknown "the checkout repository could not be read"
+        | Some _ ->
+            match KitDigest.kitRoot () with
+            | None -> unknown "the kit root could not be read"
+            | Some root ->
+                match generatedPathsResult root with
+                | Error reason -> Delivery.AuthorityUnknown reason
+                | Ok paths ->
+                    let revision =
+                        paths
+                        |> Set.toList
+                        |> List.sort
+                        |> String.concat "\n"
+                        |> Encoding.UTF8.GetBytes
+                        |> SHA256.HashData
+                        |> Convert.ToHexString
+                        |> _.ToLowerInvariant()
+
+                    Delivery.AuthorityKnown($"generated-paths:%s{revision}", paths)
+
+    // One authority derivation and one typed classifier for both path-verdict callers. The preliminary
+    // pass is also through `Delivery.classifyPaths`: it avoids authority IO only when every file is
+    // already declared, while leaving no second implementation of coverage or exemption order.
+    let private classifyDeliveryPaths (ctx: Context) (issue: Ref) (touchSet: TouchSet) (files: string list) =
+        let unread = Delivery.AuthorityUnknown "authority read deferred because every path may already be declared"
+        let preliminary = Delivery.classifyPaths touchSet unread unread files
+
+        if preliminary |> List.forall (fun c -> c.Admission = Delivery.DeclaredPath) then
+            preliminary
+        else
+            Delivery.classifyPaths touchSet (generatedPathAuthority issue) (sddPackageAuthority ctx issue) files
+
+    do deliveryPathClassifier <- classifyDeliveryPaths
 
     // ---- verify-paths ----------------------------------------------------------------------------------
 
@@ -9764,9 +9821,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         match Reads.prFiles ctx.Transport owner repo pr with
                         | Error e -> fail e
                         | Ok files ->
-                            let drift =
-                                files
-                                |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+                            let classifications = deliveryPathClassifier ctx issue (Declared tokens) files
 
                             // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
                             // by the letter of the touch-set and are not a finding — §1 forbids declaring
@@ -9791,40 +9846,22 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
                             // subtracted … so it will be reported as drift below") is FALSE on a PR with no
                             // drift — the same sentence in the same sticky comment on the same green PR.
-                            // Both subtractions therefore hang off one `List.isEmpty drift` gate rather
-                            // than two, so neither can be re-armed on the happy path by accident.
-                            let sddPackage, regenerated, undeclared =
-                                if List.isEmpty drift then
-                                    [], [], []
-                                else
+                            // Both authorities therefore hang off the classifier's one preliminary
+                            // all-declared verdict, so neither can be re-armed on the happy path by accident.
+                            let pathsWith admission =
+                                classifications
+                                |> List.choose (fun classification ->
+                                    if classification.Admission = admission then Some classification.Path else None)
 
-                                // SUBTRACTED FIRST, and the order is not arbitrary: an SDD package file is
-                                // never a generated, CI-gated artifact, so the two sets are disjoint in
-                                // practice — but partitioning the sdd bucket out first means a file can
-                                // only ever land in ONE reported bucket, and a reader is never asked to
-                                // reconcile the same path appearing twice under two different reasons.
-                                let sddPackage, rest =
-                                    let tokens = sddPackageTokens ctx issue body
-                                    drift |> List.partition (fun f -> tokens |> List.exists (fun t -> TouchSet.covers t f))
-
-                                let subtractable =
-                                    let checkoutIsSubject =
-                                        match gitRemoteRepo () with
-                                        | Some slug ->
-                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
-                                        | None -> false
-
-                                    if not checkoutIsSubject then
-                                        Set.empty
-                                    else
-                                        match KitDigest.kitRoot () with
-                                        | Some root -> generatedPaths root
-                                        | None -> Set.empty
-
-                                let regenerated, undeclared =
-                                    rest |> List.partition (fun f -> Set.contains f subtractable)
-
-                                sddPackage, regenerated, undeclared
+                            let sddPackage = pathsWith Delivery.MandatorySddPath
+                            let regenerated = pathsWith Delivery.GeneratedPath
+                            let undeclared =
+                                classifications
+                                |> List.choose (fun classification ->
+                                    match classification.Admission with
+                                    | Delivery.UndeclaredAuthoredPath
+                                    | Delivery.UnknownPath -> Some classification.Path
+                                    | _ -> None)
 
                             // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
                             // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
@@ -9862,7 +9899,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     for f in sddPackage do
                                         printfn "    %s" f
 
-                            if List.isEmpty undeclared then
+                            if pathsAdmitted classifications then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
                                 reportRegenerated ()
                                 reportSddPackage ()

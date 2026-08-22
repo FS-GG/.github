@@ -1,0 +1,270 @@
+schemaVersion: 1
+workId: 2773-delivery-path-classifier
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2773-delivery-path-classifier/spec.md
+sourceClarifications: work/2773-delivery-path-classifier/clarifications.md
+sourceChecklist: work/2773-delivery-path-classifier/checklist.md
+sourcePlan: work/2773-delivery-path-classifier/plan.md
+sourceTasks: work/2773-delivery-path-classifier/tasks.yml
+sourceAnalysis: readiness/2773-delivery-path-classifier/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2773-delivery-path-classifier/analysis.json
+    digest: 006babcf19139562b6a7f026926fbdc5198de64da8432cd5254112deffcbbbc3
+    schemaVersion: 1
+  - label: checklist
+    path: work/2773-delivery-path-classifier/checklist.md
+    digest: a0286291454cb124fbc9cee58d4f5d32c891fccedbf5048e8ed198bc65fa8ed7
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2773-delivery-path-classifier/clarifications.md
+    digest: 5f62f5c1b45065ef658d4f89bc20bba49d7d3546798a5bacbecd91b13e2add74
+    schemaVersion: 1
+  - label: plan
+    path: work/2773-delivery-path-classifier/plan.md
+    digest: bd8818607e7e69ea56cc08441f686f7e2d4d4c623314c69c17fc586ad067a2d0
+    schemaVersion: 1
+  - label: spec
+    path: work/2773-delivery-path-classifier/spec.md
+    digest: 9c500b20152bb501322a2963af83f5c2083e3b740883bdfc36efcaf7f8596577
+    schemaVersion: 1
+  - label: tasks
+    path: work/2773-delivery-path-classifier/tasks.yml
+    digest: 141ffe99a19a4d30acf1dcea72a4c03f54f79bad6894849305ac0009a1f5ecc5
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: [Typed classifier path-case coverage and verdict inversion evidence.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: [Mandatory SDD package admission coverage and mutation evidence.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: ["Unknown and undeclared paths remain fail-closed; inversion produced two red tests."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: ["JSON and text repairReviewHandoff diagnostics passed; suppression mutation made both red."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: [Public FSI classifier surface compiled in Release with zero warnings and errors.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: ["Combined exact focused Core and CLI run passed all five #2773 tests."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: ["Existing stage and action tokens remain unchanged; focused rendering contract passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2773-delivery-path-classifier/verification.trx
+      digest: "sha256:1cc976cff45bfe79c8653b7900cba77d9c0592357501d7c33c5886fc2724ca2c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 5
+      failed: 0
+      skipped: 0
+    notes: [Generated work-model and analysis views were refreshed by the lifecycle tool.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

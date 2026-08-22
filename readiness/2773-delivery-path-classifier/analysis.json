@@ -1,0 +1,412 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2773-delivery-path-classifier",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2773-delivery-path-classifier/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "a0286291454cb124fbc9cee58d4f5d32c891fccedbf5048e8ed198bc65fa8ed7"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2773-delivery-path-classifier/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "5f62f5c1b45065ef658d4f89bc20bba49d7d3546798a5bacbecd91b13e2add74"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2773-delivery-path-classifier/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "bd8818607e7e69ea56cc08441f686f7e2d4d4c623314c69c17fc586ad067a2d0"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2773-delivery-path-classifier/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9c500b20152bb501322a2963af83f5c2083e3b740883bdfc36efcaf7f8596577"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2773-delivery-path-classifier/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "141ffe99a19a4d30acf1dcea72a4c03f54f79bad6894849305ac0009a1f5ecc5"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/2773-delivery-path-classifier/checklist.md",
+      "targetPath": "work/2773-delivery-path-classifier/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/2773-delivery-path-classifier/checklist.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/2773-delivery-path-classifier/clarifications.md",
+      "targetPath": "work/2773-delivery-path-classifier/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/2773-delivery-path-classifier/clarifications.md",
+      "targetPath": "work/2773-delivery-path-classifier/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/2773-delivery-path-classifier/clarifications.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2773-delivery-path-classifier/plan.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2773-delivery-path-classifier/spec.md",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2773-delivery-path-classifier/tasks.yml",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "T005",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/2773-delivery-path-classifier/tasks.yml",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "T006",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2773-delivery-path-classifier/tasks.yml",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "T007",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/2773-delivery-path-classifier/tasks.yml",
+      "targetPath": "work/2773-delivery-path-classifier/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 27,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/2773-delivery-path-classifier/work-model.json",
+      "kind": "workModel",
+      "currency": "missing",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

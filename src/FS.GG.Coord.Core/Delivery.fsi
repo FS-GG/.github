@@ -56,6 +56,36 @@ module Delivery =
         | Undeclared
         | Unread of reason: string
 
+    /// A revision-bound authority input, or an explicit unread result.
+    type PathAuthority<'value> =
+        | AuthorityKnown of revision: string * value: 'value
+        | AuthorityUnknown of reason: string
+
+    /// The exhaustive path-admission vocabulary shared by delivery and `verify-paths`.
+    type PathAdmission =
+        | DeclaredPath
+        | GeneratedPath
+        | MandatorySddPath
+        | UndeclaredAuthoredPath
+        | UnknownPath
+
+    type PathClassification =
+        { Path: string
+          Admission: PathAdmission
+          Reason: string
+          AuthorityRevisions: string list }
+
+    /// Classify changed paths once for every delivery-path consumer. Unknown authority never authorizes.
+    val classifyPaths:
+        touchSet: Types.TouchSet ->
+        generated: PathAuthority<Set<string>> ->
+        sddPackage: PathAuthority<Types.PathToken list> ->
+        files: string list ->
+            PathClassification list
+
+    /// Project classifications to the shared delivery/verify-paths admission verdict.
+    val pathsVerified: classifications: PathClassification list -> bool
+
     /// Facts which must stay identical between inspection and a following mutating transition.
     type Freshness =
         { ItemRef: string

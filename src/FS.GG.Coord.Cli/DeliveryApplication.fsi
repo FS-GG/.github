@@ -23,7 +23,8 @@ module DeliveryApplication =
           BaseSha: string
           Result: 'result }
 
-    /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter.
+    /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter. Actions
+    /// carrying a problem preserve it in JSON and text rather than reducing it to the action token.
     val render: Options.Options -> FS.GG.Coord.Delivery.Snapshot -> int
 
     /// Parse only exact, head-bound v1 delivery obligation declarations and receipts from PR comments.

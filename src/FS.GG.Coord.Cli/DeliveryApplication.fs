@@ -557,6 +557,13 @@ module DeliveryApplication =
         | Delivery.CleanupWorktree -> "cleanupWorktree"
         | Delivery.RouteFollowUp _ -> "routeFollowUp"
 
+    let private actionProblem (value: Delivery.Action) =
+        match value with
+        | Delivery.RepairReviewHandoff reason
+        | Delivery.RefreshReview reason
+        | Delivery.RouteFollowUp reason -> Some reason
+        | _ -> None
+
     let render opts facts =
         match Delivery.inspect facts with
         | Delivery.NoVerdict reason ->
@@ -567,8 +574,11 @@ module DeliveryApplication =
         | Delivery.Next transition ->
             match opts.Render with
             | Json ->
-                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery/1"; verdict = "next"; stage = stage transition.Stage; action = action transition.Action; freshnessToken = transition.FreshnessToken; actionKey = transition.ActionKey |})
-            | Text -> printfn "%s — %s" (stage transition.Stage) (action transition.Action)
+                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery/1"; verdict = "next"; stage = stage transition.Stage; action = action transition.Action; problem = actionProblem transition.Action; freshnessToken = transition.FreshnessToken; actionKey = transition.ActionKey |})
+            | Text ->
+                match actionProblem transition.Action with
+                | Some problem -> printfn "%s — %s: %s" (stage transition.Stage) (action transition.Action) problem
+                | None -> printfn "%s — %s" (stage transition.Stage) (action transition.Action)
             ExitCode.toInt ExitCode.Green
 
     let run opts =

@@ -288,9 +288,8 @@ module Client =
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     val driver: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
-    /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
-    /// make this false (and block landing); it cannot turn an undeclared authored file into a pass.
+    /// Compatibility projection over the shared typed path classifier. Live delivery and `verify-paths`
+    /// additionally supply the current route-qualified SDD-package authority.
     val deliveryPathsVerified:
       touchSet: FS.GG.Coord.Types.TouchSet -> files: string list -> bool
 

@@ -71,6 +71,32 @@ module DeliveryApplicationTests =
         | Delivery.Next transition -> Assert.Equal(Delivery.GuardedLand, transition.Action)
         | Delivery.NoVerdict reason -> failwith reason
 
+    let private renderDelivery format facts =
+        let opts =
+            match Options.parse [ "delivery"; "--snapshot"; "unused.json"; format ] with
+            | Ok parsed -> parsed
+            | Error error -> failwith error
+
+        let original = Console.Out
+        use output = new StringWriter()
+        Console.SetOut output
+        try
+            let code = DeliveryApplication.render opts facts
+            code, output.ToString()
+        finally
+            Console.SetOut original
+
+    [<Theory>]
+    [<InlineData("--json")>]
+    [<InlineData("--text")>]
+    let ``#2773 repairReviewHandoff renders its concrete problem`` format =
+        let facts = { guardedLandingFacts "claim-generation-a" with PathsVerified = false }
+        let code, rendered = renderDelivery format facts
+
+        Assert.Equal(0, code)
+        Assert.Contains("repairReviewHandoff", rendered)
+        Assert.Contains("declared paths are not verified", rendered)
+
     [<Fact>]
     let ``#2131 non-empty obligation receipt is head-bound and verifies only its declared id`` () =
         let comments =

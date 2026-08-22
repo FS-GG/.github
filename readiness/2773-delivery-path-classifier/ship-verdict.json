@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2773-delivery-path-classifier",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "e8c581d6a74b06f3572ab33d1430bd9a6b4d03f3752afeaae7f69f663b50df02"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 8,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 8
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}
