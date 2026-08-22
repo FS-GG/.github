@@ -4182,6 +4182,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
           // `NotFound` back and the read refuses at `Errors.exitCode NotFound` — 1, the same code the
           // four lock verbs above land on for the same reason: the fixture has no answer for this call.
           Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1
+          // `.github#2753`: an incomplete comment mutation request is refused before transport. Its
+          // JSON projection keeps the diagnostic on stderr and stdout empty at exit 1.
+          Options.CommentCmd, [ "comment"; "--json" ], 1
           // .github#2737. `packet validate` opens no transport seam at all, so it is driven here
           // against a path that does not exist: the refusing arm must still put ONE document on
           // stdout, with the per-field reading on stderr.
@@ -4296,6 +4299,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.SetPaths -> Client.setPaths ctx opts
                 | Options.ReviewCmd -> Client.review ctx opts
                 | Options.BodyEdits -> Handlers.bodyEditsCmd ctx opts
+                | Options.CommentCmd -> Handlers.commentCmd ctx opts
                 | Options.PacketCmd -> PacketApplication.run opts
                 | Options.OpLockAcquire -> Client.opLockAcquire ctx opts
                 | Options.OpLockRelease -> Client.opLockRelease ctx opts
