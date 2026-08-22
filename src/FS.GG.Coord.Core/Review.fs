@@ -170,6 +170,75 @@ module Review =
         | Ordinary -> Protocol.reviewPolicy.MaxAutomatedRepairRounds
         | Repair -> Protocol.reviewPolicy.RepairPhaseMaxRounds
 
+    /// The complete terminal-chain predicate shared by the read-side projection and the live
+    /// escalation writer. Ordinary exhaustion requires an initial plus rounds one and two that all
+    /// requested changes; a pre-round pass cannot be reclassified as exhaustion merely because a
+    /// later round-three verdict is terminal. A round-three `changes-required` record is terminal
+    /// regardless of check state. A round-three `pass` joins that set only after exact-head checks
+    /// settle red: pending checks still have a reason to wait, while green checks remain eligible for
+    /// host acceptance.
+    let isOrdinaryExhaustionTerminal headSha checks comments =
+        let phaseFacts = Driver.reviewPhaseFacts comments
+        let marker = "<!-- fsgg:review-decision/v2 -->"
+        let reviewRecords =
+            comments
+            |> List.sortBy _.Id
+            |> List.choose (fun comment ->
+                if comment.Body.StartsWith(marker + "\n", StringComparison.Ordinal) then
+                    Driver.decodeStructuredReview (comment.Body.Substring(marker.Length).Trim())
+                    |> Result.toOption
+                else
+                    None)
+            |> List.filter (fun record ->
+                record.Kind = StructuredDecision.Initial
+                || record.Kind = StructuredDecision.Confirmation)
+        let precedingChangesRequired =
+            match reviewRecords with
+            | initial :: roundOne :: roundTwo :: _ ->
+                initial.Kind = StructuredDecision.Initial
+                && initial.Round = 0
+                && roundOne.Kind = StructuredDecision.Confirmation
+                && roundOne.Round = 1
+                && roundTwo.Kind = StructuredDecision.Confirmation
+                && roundTwo.Round = 2
+                && [ initial; roundOne; roundTwo ]
+                   |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
+            | _ -> false
+
+        precedingChangesRequired
+        && phaseFacts.ConfirmationCount = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        && phaseFacts.LatestReviewedHeadSha = Some headSha
+        &&
+            match phaseFacts.LatestVerdict, checks with
+            | Some "changes-required", _ -> true
+            | Some "pass", PrRed -> true
+            | _ -> false
+
+    let private ordinaryExhaustionOutcome (facts: Facts) =
+        match facts.RepairPhaseGranted with
+        | Some receipt -> RepairPhaseSetup, EnterRepairPhase receipt
+        | None ->
+            if facts.RepairRouteAvailable then
+                let reason =
+                    "the ordinary review chain is exhausted; the host must mint the one permitted "
+                    + "fresh repair phase (new claim, branch/PR, implementer, critic) and re-inspect "
+                    + "with a repair-phase receipt supplied"
+                OrdinaryExhaustion, Park reason
+            else
+                let reason = "the ordinary review chain is exhausted and no repair route is available"
+                TerminalHumanPark reason, Park reason
+
+    /// Re-project a verdict after the live adapter has established the completed-wait and claim-
+    /// turnover facts that pure `inspect` cannot observe. The terminal-set decision itself remains
+    /// here, beside `classify`, and rebuilding through `makeVerdict` keeps the action key consistent.
+    let projectCompletedOrdinaryExhaustion binding facts verdict =
+        if binding.Phase = Ordinary
+           && isOrdinaryExhaustionTerminal binding.HeadSha facts.Checks facts.Comments then
+            let state, action = ordinaryExhaustionOutcome facts
+            makeVerdict binding verdict.RetiredChains state action
+        else
+            verdict
+
     // A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
     // one route shares (`fsgg-critic-normal`, or any future `fsgg-critic-<route>`) rather than a
     // minted, distinguishing identity (.github#2451). The SAME RULE as the exported
@@ -650,18 +719,7 @@ module Review =
                 if not phaseFacts.InitialPresent then
                     AwaitingInitialReview, DispatchCritic
                 elif exhausted then
-                    match facts.RepairPhaseGranted with
-                    | Some receipt -> RepairPhaseSetup, EnterRepairPhase receipt
-                    | None ->
-                        if facts.RepairRouteAvailable then
-                            let reason =
-                                "the ordinary review chain is exhausted; the host must mint the one permitted "
-                                + "fresh repair phase (new claim, branch/PR, implementer, critic) and re-inspect "
-                                + "with a repair-phase receipt supplied"
-                            OrdinaryExhaustion, Park reason
-                        else
-                            let reason = "the ordinary review chain is exhausted and no repair route is available"
-                            TerminalHumanPark reason, Park reason
+                    ordinaryExhaustionOutcome facts
                 elif phaseFacts.AcceptancePresent then
                     acceptanceOutcome binding facts live
                 else

@@ -189,6 +189,18 @@ module Review =
     /// `HeadSha` — changes this token and invalidates a prior verdict (acceptance 4/9).
     val freshnessToken: Binding -> string
 
+    /// True only for an initial plus rounds one and two that all requested changes followed by the
+    /// exact terminal verdict set that may cross ordinary round-three claim turnover:
+    /// `changes-required`, or `pass` whose exact-head checks have settled red. A pre-round pass and
+    /// pending or green terminal pass verdicts remain outside exhaustion.
+    val isOrdinaryExhaustionTerminal:
+        headSha: string -> checks: PrState -> comments: Driver.ReviewComment list -> bool
+
+    /// Rebuild a live verdict as ordinary exhaustion after the adapter has independently established
+    /// completed-wait and claim-turnover evidence. Returns the original verdict when the shared
+    /// terminal-set predicate is not met.
+    val projectCompletedOrdinaryExhaustion: Binding -> Facts -> Verdict -> Verdict
+
     /// Inspect live facts into exactly one typed state and next action, or a fail-closed list of
     /// reasons (acceptance 2). Never returns a permissive/absent-review state for unreadable or
     /// contradictory facts. Fails closed before any state classification when the critic identity

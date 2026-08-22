@@ -138,3 +138,54 @@ module StructuredFixtures =
         let confirmation = { confirmationDraft with Digest = StructuredDecision.reviewDigest confirmationDraft }
         [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
           2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson confirmation ]
+
+    let ordinaryRoundThreePassCommentsWithInitialVerdict subject terminalHead critic initialVerdict =
+        let head round = String.replicate 40 (string round)
+        let initialDraft: StructuredDecision.ReviewRecord =
+            { Schema = StructuredDecision.ReviewSchema
+              Subject = subject
+              Revision = 1
+              PreviousDigest = None
+              HeadSha = head 0
+              ClaimGeneration = None
+              BaseSha = None
+              Critic = critic
+              Verdict = initialVerdict
+              AcceptedExceptions = []
+              RouteApplicability = "not-meaningful"
+              RouteEvidence = [ "fixture has no runtime route comparison" ]
+              PolicyVersion = StructuredDecision.PolicyVersion
+              Kind = StructuredDecision.Initial
+              Round = 0
+              InitialReview = None
+              PrecedingReview = None
+              DiffAuditRequired = false
+              DiffAuditReceipts = []
+              Succession = None
+              Timestamp = "2026-08-22T00:00:00Z"
+              Digest = "" }
+        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+        let next revision previous round reviewedHead preceding verdict =
+            let draft =
+                { initial with
+                    Revision = revision
+                    PreviousDigest = Some previous
+                    HeadSha = reviewedHead
+                    Verdict = verdict
+                    Kind = StructuredDecision.Confirmation
+                    Round = round
+                    InitialReview = Some "https://reviews/1"
+                    PrecedingReview = Some preceding
+                    Digest = "" }
+            { draft with Digest = StructuredDecision.reviewDigest draft }
+        let round1 = next 2 initial.Digest 1 (head 1) "https://reviews/1" StructuredDecision.ChangesRequired
+        let round2 = next 3 round1.Digest 2 (head 2) "https://reviews/2" StructuredDecision.ChangesRequired
+        let round3 = next 4 round2.Digest 3 terminalHead "https://reviews/3" StructuredDecision.Pass
+        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round1
+          3L, "https://reviews/3", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round2
+          4L, "https://reviews/4", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round3 ]
+
+    let ordinaryRoundThreePassComments subject terminalHead critic =
+        ordinaryRoundThreePassCommentsWithInitialVerdict
+            subject terminalHead critic StructuredDecision.ChangesRequired

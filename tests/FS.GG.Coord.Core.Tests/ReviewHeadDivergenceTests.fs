@@ -74,6 +74,54 @@ module ReviewHeadDivergenceTests =
         [ StructuredDecisionTests.reviewComment 1L first
           StructuredDecisionTests.reviewComment 2L pass ]
 
+    let private ordinaryRoundThreeChainWithPrefix initialVerdict terminalVerdict =
+        let head0 = String.replicate 40 "0"
+        let head1 = String.replicate 40 "1"
+        let head2 = String.replicate 40 "2"
+        let first = initial initialVerdict head0
+        let round1 =
+            following 2 first.Digest StructuredDecision.Confirmation StructuredDecision.ChangesRequired 1
+                head1 "https://review/1"
+        let round2 =
+            following 3 round1.Digest StructuredDecision.Confirmation StructuredDecision.ChangesRequired 2
+                head2 "https://review/2"
+        let round3 =
+            following 4 round2.Digest StructuredDecision.Confirmation terminalVerdict 3
+                reviewedHead "https://review/3"
+        [ StructuredDecisionTests.reviewComment 1L first
+          StructuredDecisionTests.reviewComment 2L round1
+          StructuredDecisionTests.reviewComment 3L round2
+          StructuredDecisionTests.reviewComment 4L round3 ]
+
+    let private ordinaryRoundThreeChain terminalVerdict =
+        ordinaryRoundThreeChainWithPrefix StructuredDecision.ChangesRequired terminalVerdict
+
+    [<Fact>]
+    let ``2819 shared ordinary exhaustion terminal set admits pass only after checks settle red`` () =
+        let pass = ordinaryRoundThreeChain StructuredDecision.Pass
+        Assert.False(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrPending pass)
+        Assert.False(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrGreen pass)
+        Assert.True(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrRed pass)
+
+        let changesRequired = ordinaryRoundThreeChain StructuredDecision.ChangesRequired
+        Assert.True(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrPending changesRequired)
+
+        Assert.False(Review.isOrdinaryExhaustionTerminal movedHead Types.PrRed pass)
+
+    [<Fact>]
+    let ``2819 pre-round pass refuses both shared predicate and exhaustion projection`` () =
+        let comments =
+            ordinaryRoundThreeChainWithPrefix StructuredDecision.Pass StructuredDecision.Pass
+        Assert.False(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrRed comments)
+
+        let original = verdictOf Review.Ordinary reviewedHead comments Types.PrRed
+        let projected =
+            Review.projectCompletedOrdinaryExhaustion
+                (binding Review.Ordinary reviewedHead)
+                (facts comments Types.PrRed)
+                original
+        Assert.NotEqual(Review.OrdinaryExhaustion, projected.State)
+
     /// The REPAIR-phase chain. `RepairPhasePresent` is what puts `classify` down the repair branch, and
     /// the ledger requires a repair-phase record to carry `changes-required`; the round-1 confirmation
     /// then supplies the `pass` whose head the binding has moved off.

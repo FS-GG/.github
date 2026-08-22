@@ -300,17 +300,16 @@ module ReviewApplication =
            evidenceRef = receipt.EvidenceRef |}
 
     let private isCompletedOrdinaryExhaustion (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
-        let phaseFacts = Driver.reviewPhaseFacts facts.Comments
         match binding.Phase, waitState with
         | Review.Ordinary, Some (ReviewWait.Completed (receipt, _)) ->
             receipt.Kind = ReviewWait.RepairConfirmation
             && receipt.ClaimGeneration <> binding.ClaimGeneration
-            && phaseFacts.ConfirmationCount = Protocol.reviewPolicy.MaxAutomatedRepairRounds
             && receipt.ReviewGeneration =
                 ReviewWait.generationToken
                     binding.HeadSha
                     ReviewWait.RepairConfirmation
                     Protocol.reviewPolicy.MaxAutomatedRepairRounds
+            && Review.isOrdinaryExhaustionTerminal binding.HeadSha facts.Checks facts.Comments
         | _ -> false
 
     let private hasRecordedRepairPhaseEntry (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State option) =
@@ -330,10 +329,6 @@ module ReviewApplication =
             Error
                 [ "the structured ordinary-exhaustion escalation is recorded; enter the fresh repair phase "
                   + "instead of dispatching, resuming, accepting, or manufacturing ordinary round four on the exhausted pull request" ]
-        | _ when isCompletedOrdinaryExhaustion binding facts waitState ->
-            Error
-                [ "the ordinary review chain is exhausted after its completed round-three wait; "
-                  + "record exactly one structured escalation for repair-phase entry — never dispatch or resume ordinary round four" ]
         | None, _ -> Ok () // offline snapshots predate the live durable-wait projection
         | Some (ReviewWait.Invalid errors), _ -> Error errors
         | Some (ReviewWait.Recoverable (_, reason)), _ -> Error [ reason ]
@@ -377,6 +372,11 @@ module ReviewApplication =
             | Text -> reasons |> List.iter (fun reason -> eprint $"UNDETERMINED — %s{reason}")
             ExitCode.toInt ExitCode.NoVerdict
         | Ok verdict ->
+            let verdict =
+                if isCompletedOrdinaryExhaustion binding facts waitState then
+                    Review.projectCompletedOrdinaryExhaustion binding facts verdict
+                else
+                    verdict
             let waitStatus, waitReceipt, waitReason = waitProjection waitState
             let waitStatus =
                 if hasRecordedRepairPhaseEntry binding facts waitState then Some "repairPhaseEntry"

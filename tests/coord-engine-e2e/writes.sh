@@ -507,9 +507,10 @@ fi
 rm -f "$review_wait_draft"
 
 # .github#2797: the ordinary round-three wait is durable evidence even after its owning claim is
-# released. Reproduce the live S.I.R. sequence on an isolated fixture PR: initial + confirmations
-# 1/2/3 all changes-required, exact round-three wait completed, old claim deleted, legacy exhaustion
-# recorded, and a fresh claim made current. Only one structured escalation may cross that boundary.
+# released. Reproduce PR #2818's live sequence on an isolated fixture PR: initial + confirmations 1/2
+# are changes-required, confirmation 3 is an immutable pass, its exact wait is completed, the required
+# check settles red, the old claim is deleted, legacy exhaustion is recorded, and a fresh claim becomes
+# current. Only one structured escalation may cross that boundary.
 turnover_draft="$(mktemp)"
 turnover_wait="$(mktemp)"
 turnover_comment_ids=()
@@ -519,7 +520,7 @@ turnover_heads=(
   "1111111111111111111111111111111111111111"
   "2222222222222222222222222222222222222222"
   "3333333333333333333333333333333333333333"
-  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  "dddddddddddddddddddddddddddddddddddddddd"
 )
 turnover_head="${turnover_heads[3]}"
 turnover_critic="critic-turnover-2797"
@@ -614,6 +615,7 @@ patch_turnover_comment() {
 }
 
 turnover_initial_url=""; turnover_preceding_url=""; turnover_previous_digest=""
+turnover_initial_id=""; turnover_initial_body=""; turnover_round_one_id=""; turnover_round_one_body=""
 turnover_round_two_id=""; turnover_round_two_body=""; turnover_round_three_id=""; turnover_round_three_body=""
 for turnover_round in 0 1 2 3; do
   turnover_round_head="${turnover_heads[$turnover_round]}"
@@ -622,17 +624,25 @@ for turnover_round in 0 1 2 3; do
   else
     turnover_kind="confirmation"; turnover_generation="$turnover_round_head:repair-confirmation:$turnover_round"
   fi
+  turnover_verdict="changes-required"
+  [ "$turnover_round" -eq 3 ] && turnover_verdict="pass"
   write_turnover_wait enter "$turnover_generation" ""
   turnover_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 43 --json 2>&1)"; turnover_wait_rc=$?
   turnover_wait_id="$(printf '%s' "$turnover_wait_out" | jq -r '.commentId // empty')"
   [ -n "$turnover_wait_id" ] && turnover_comment_ids+=("$turnover_wait_id")
-  write_turnover_draft "$turnover_kind" "$turnover_round" "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "$turnover_round_head"
+  write_turnover_draft "$turnover_kind" "$turnover_round" "$turnover_previous_digest" "$turnover_initial_url" "$turnover_preceding_url" "$turnover_round_head" "FS-GG/FS.GG.SDD#43/pr/43" "$turnover_verdict"
   turnover_record_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_record_rc=$?
   turnover_record_id="$(printf '%s' "$turnover_record_out" | jq -r '.commentId // empty')"
   turnover_record_url="$(printf '%s' "$turnover_record_out" | jq -r '.commentUrl // empty')"
   turnover_previous_digest="$(printf '%s' "$turnover_record_out" | jq -r '.digest // empty')"
   [ -n "$turnover_record_id" ] && turnover_comment_ids+=("$turnover_record_id")
-  if [ "$turnover_round" -eq 2 ]; then
+  if [ "$turnover_round" -eq 0 ]; then
+    turnover_initial_id="$turnover_record_id"
+    turnover_initial_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "$turnover_record_id" '.[] | select(.id == $id) | .body')"
+  elif [ "$turnover_round" -eq 1 ]; then
+    turnover_round_one_id="$turnover_record_id"
+    turnover_round_one_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "$turnover_record_id" '.[] | select(.id == $id) | .body')"
+  elif [ "$turnover_round" -eq 2 ]; then
     turnover_round_two_id="$turnover_record_id"
     turnover_round_two_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "$turnover_record_id" '.[] | select(.id == $id) | .body')"
   elif [ "$turnover_round" -eq 3 ]; then
@@ -721,6 +731,32 @@ turnover_bad_backlink_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_dra
 turnover_bad_backlink_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
 patch_turnover_comment "$turnover_legacy_id" "$turnover_legacy_body"
 
+# A digest-valid pre-round pass used to split the two consumers: projection saw only the terminal
+# round/check state and reported ordinary exhaustion, while the live escalation writer separately
+# rejected the prefix. Re-seal the whole chain so both production routes must refuse for the shared
+# prefix predicate, then restore the exact control bytes.
+turnover_prepass_initial="$(rewrite_turnover_record "$turnover_initial_body" verdict pass)"
+turnover_prepass_initial_digest="$(printf '%s' "$turnover_prepass_initial" | sed '1d' | jq -r '.digest')"
+turnover_prepass_one="$(rewrite_turnover_record "$turnover_round_one_body" previousDigest "$turnover_prepass_initial_digest")"
+turnover_prepass_one_digest="$(printf '%s' "$turnover_prepass_one" | sed '1d' | jq -r '.digest')"
+turnover_prepass_two="$(rewrite_turnover_record "$turnover_round_two_body" previousDigest "$turnover_prepass_one_digest")"
+turnover_prepass_two_digest="$(printf '%s' "$turnover_prepass_two" | sed '1d' | jq -r '.digest')"
+turnover_prepass_three="$(rewrite_turnover_record "$turnover_round_three_body" previousDigest "$turnover_prepass_two_digest")"
+turnover_prepass_three_digest="$(printf '%s' "$turnover_prepass_three" | sed '1d' | jq -r '.digest')"
+patch_turnover_comment "$turnover_initial_id" "$turnover_prepass_initial"
+patch_turnover_comment "$turnover_round_one_id" "$turnover_prepass_one"
+patch_turnover_comment "$turnover_round_two_id" "$turnover_prepass_two"
+patch_turnover_comment "$turnover_round_three_id" "$turnover_prepass_three"
+turnover_prepass_projection="$($ENGINE review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_prepass_projection_rc=$?
+write_turnover_draft escalation 3 "$turnover_prepass_three_digest" "$turnover_initial_url" "$turnover_preceding_url"
+turnover_prepass_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+turnover_prepass_writer="$($ENGINE review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json 2>&1)"; turnover_prepass_writer_rc=$?
+turnover_prepass_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
+patch_turnover_comment "$turnover_initial_id" "$turnover_initial_body"
+patch_turnover_comment "$turnover_round_one_id" "$turnover_round_one_body"
+patch_turnover_comment "$turnover_round_two_id" "$turnover_round_two_body"
+patch_turnover_comment "$turnover_round_three_id" "$turnover_round_three_body"
+
 turnover_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_projection_rc=$?
 
 # Every identity/binding mutation is exercised before the valid escalation exists, so refusal
@@ -767,8 +803,11 @@ if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_
    && [[ "$turnover_noncontiguous_out" == *"confirmation round must be contiguous within its generation"* ]] \
    && [ "$turnover_bad_backlink_rc" -ne 0 ] && [ "$turnover_bad_backlink_before" = "$turnover_bad_backlink_after" ] \
    && [[ "$turnover_bad_backlink_out" == *"legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"* ]] \
-   && [ "$turnover_projection_rc" -ne 0 ] \
-   && printf '%s' "$turnover_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "ordinaryExhaustion" and (.reasons[0] | contains("never dispatch or resume ordinary round four"))' >/dev/null \
+   && [ "$turnover_prepass_projection_rc" -eq 0 ] \
+   && ! printf '%s' "$turnover_prepass_projection" | jq -e '.state == "ordinaryExhaustion" or .waitStatus == "ordinaryExhaustion"' >/dev/null \
+   && [ "$turnover_prepass_writer_rc" -ne 0 ] && [ "$turnover_prepass_before" = "$turnover_prepass_after" ] \
+   && [ "$turnover_projection_rc" -eq 0 ] \
+   && printf '%s' "$turnover_projection" | jq -e '.verdict == "next" and .state == "ordinaryExhaustion" and .action == "park" and .waitStatus == "ordinaryExhaustion"' >/dev/null \
    && [ "$turnover_wrong_item_rc" -ne 0 ] && [ "$turnover_wrong_pr_rc" -ne 0 ] \
    && [ "$turnover_wrong_pr_before" = "$turnover_wrong_pr_after" ] && [ "$turnover_wrong_head_rc" -ne 0 ] \
    && [ "$turnover_wrong_round_rc" -ne 0 ] && [ "$turnover_wrong_digest_rc" -ne 0 ] \
@@ -780,10 +819,10 @@ if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_
    && [ "$turnover_duplicate_rc" -ne 0 ] && [ "$turnover_duplicate_before" = "$turnover_duplicate_after" ] \
    && [ "$turnover_round4_rc" -ne 0 ] && [ "$turnover_round4_after" = "$turnover_duplicate_after" ] \
    && [ "$turnover_acceptance_rc" -ne 0 ] && [ "$turnover_acceptance_after" = "$turnover_duplicate_after" ]; then
-  ok ".github#2797: exactly one structured escalation crosses completed round-three wait claim turnover and every mutation refuses before write"
+  ok ".github#2819: one structured escalation crosses immutable round-three pass + settled-red claim turnover and every mutation refuses before write"
 else
-  bad ".github#2797: exhausted-claim turnover must authorize escalation only" \
-    "missing=$turnover_missing_legacy_rc:$turnover_before->$turnover_after nonfresh=$turnover_nonfresh_rc:$turnover_nonfresh_before->$turnover_nonfresh_after malformed=$turnover_malformed_rc:$turnover_malformed_before->$turnover_malformed_after noncontiguous=$turnover_noncontiguous_rc:$turnover_noncontiguous_before->$turnover_noncontiguous_after:$turnover_noncontiguous_out backlink=$turnover_bad_backlink_rc:$turnover_bad_backlink_before->$turnover_bad_backlink_after:$turnover_bad_backlink_out projection=$turnover_projection_rc:$turnover_projection mutations=item:$turnover_wrong_item_rc,pr:$turnover_wrong_pr_rc:$turnover_wrong_pr_before->$turnover_wrong_pr_after,head:$turnover_wrong_head_rc,round:$turnover_wrong_round_rc,digest:$turnover_wrong_digest_rc:$turnover_mutation_before->$turnover_mutation_after valid=$turnover_valid_rc:$turnover_valid_before->$turnover_valid_after:$turnover_valid_out repair=$turnover_repair_projection_rc:$turnover_repair_projection duplicate=$turnover_duplicate_rc:$turnover_duplicate_before->$turnover_duplicate_after round4=$turnover_round4_rc:$turnover_round4_after acceptance=$turnover_acceptance_rc:$turnover_acceptance_after"
+  bad ".github#2819: pass-red exhausted-claim turnover must authorize escalation only" \
+    "missing=$turnover_missing_legacy_rc:$turnover_before->$turnover_after nonfresh=$turnover_nonfresh_rc:$turnover_nonfresh_before->$turnover_nonfresh_after malformed=$turnover_malformed_rc:$turnover_malformed_before->$turnover_malformed_after noncontiguous=$turnover_noncontiguous_rc:$turnover_noncontiguous_before->$turnover_noncontiguous_after:$turnover_noncontiguous_out backlink=$turnover_bad_backlink_rc:$turnover_bad_backlink_before->$turnover_bad_backlink_after:$turnover_bad_backlink_out prepass=projection:$turnover_prepass_projection_rc:$turnover_prepass_projection,writer:$turnover_prepass_writer_rc:$turnover_prepass_before->$turnover_prepass_after:$turnover_prepass_writer projection=$turnover_projection_rc:$turnover_projection mutations=item:$turnover_wrong_item_rc,pr:$turnover_wrong_pr_rc:$turnover_wrong_pr_before->$turnover_wrong_pr_after,head:$turnover_wrong_head_rc,round:$turnover_wrong_round_rc,digest:$turnover_wrong_digest_rc:$turnover_mutation_before->$turnover_mutation_after valid=$turnover_valid_rc:$turnover_valid_before->$turnover_valid_after:$turnover_valid_out repair=$turnover_repair_projection_rc:$turnover_repair_projection duplicate=$turnover_duplicate_rc:$turnover_duplicate_before->$turnover_duplicate_after round4=$turnover_round4_rc:$turnover_round4_after acceptance=$turnover_acceptance_rc:$turnover_acceptance_after"
 fi
 
 for turnover_id in "${turnover_comment_ids[@]}"; do

@@ -2267,9 +2267,17 @@ module Client =
                             // historical head to equal the terminal draft therefore rejects the ordinary
                             // multi-round shape. Terminal authority remains exact below: round three, the
                             // escalation draft, completed wait, legacy marker, and live PR all bind one head.
-                            let unresolved =
-                                [ initial; roundOne; roundTwo; roundThree ]
-                                |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
+                            let reviewComments =
+                                ordered
+                                |> List.map (fun comment ->
+                                    ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                            let terminalChecks =
+                                if roundThree.Verdict = StructuredDecision.Pass then
+                                    Reads.prLandable ctx.Transport target.Owner target.Repo pr
+                                else
+                                    Types.PrUnknown
+                            let terminalVerdict =
+                                Review.isOrdinaryExhaustionTerminal draft.HeadSha terminalChecks reviewComments
                             let legacyBody = legacy.Body
                             let legacyMatches =
                                 legacyMarkerCount = 1
@@ -2303,7 +2311,8 @@ module Client =
                             | Ok liveHead when liveHead <> draft.HeadSha ->
                                 Error($"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}")
                             | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires exactly initial plus confirmation rounds 1, 2, and 3"
-                            | Ok _ when not unresolved -> Error "ordinary exhaustion requires a changes-required verdict through confirmation round 3"
+                            | Ok _ when not terminalVerdict ->
+                                Error "ordinary exhaustion requires changes-required through round 2 and either round-3 changes-required or an exact-head round-3 pass with settled red checks"
                             | Ok _ when not legacyMatches -> Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
                             | Ok _ when not exactDraft -> Error "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
                             | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim ordinary round-3 generation"
