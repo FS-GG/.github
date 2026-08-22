@@ -252,12 +252,26 @@ for name, package in subjects.items():
         'case "$DISPATCH_SOURCE_SHA" in',
     )
     assert any(check in text for check in exact_sha_checks), name
+    if package in ("FS.GG.Coord.Cli", "FS.GG.Kit"):
+        failure = text.find(f"release-saga-ci.sh failure {package}")
+        token = text.find("id: tick-token", failure)
+        delivery = text.find(f"dashboard-tick.py --package {package}", token)
+        readback = text.find('case "$rc" in', delivery)
+        assert 0 <= failure < token < delivery < readback, (name, failure, token, delivery, readback)
 adapter = (root / "scripts/release-saga-ci.sh").read_text()
 assert "github_base | sed 's:/*$::'" in adapter
 assert "printf '%s/%s/%s/%s.%s.nupkg'" in adapter
 assert 'lastFailure.feed == "nuget"' in adapter
 assert "never issue a blind duplicate push" in adapter
 assert adapter.count('[ "$observed" = true ] ||') == 2
+for token in ("--json isImmutable", "immutable release journal read back and verified", "assert-identity", "assert-artifacts"):
+    assert token in adapter, token
+immutable = adapter.find('true)')
+immutable_download = adapter.find('gh release download', immutable)
+immutable_upload = adapter.find('gh release upload', immutable)
+assert immutable >= 0 and immutable_download > immutable and immutable_upload < 0, (
+    immutable, immutable_download, immutable_upload
+)
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
@@ -290,6 +304,169 @@ assert '[ "${#journals[@]}" -eq 3 ]' not in promote
 assert "release-saga-promote-release.sh" in promote
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
+
+# An exact-source retry after promotion sees an immutable GitHub release. The old adapter attempted
+# `release upload --clobber` here, received HTTP 422, and prevented the later dashboard step in both
+# package workflows from running. Exercise the production adapter against a fake `gh` that makes any
+# such mutation red while serving the exact immutable journal for read-back.
+IMMUTABLE="$WORK/immutable-journal-recovery"
+mkdir -p "$IMMUTABLE/artifacts/packages" "$IMMUTABLE/remote" "$IMMUTABLE/bin" "$IMMUTABLE/runner"
+cp "$WORK/artifacts/"*.nupkg "$IMMUTABLE/artifacts/packages/"
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$IMMUTABLE/artifacts/packages" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$IMMUTABLE/artifacts/packages/release-manifest.json"
+python3 "$TOOL" preflight --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" --feed both
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  cp "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+    "$IMMUTABLE/artifacts/packages/journal-$package.json"
+done
+immutable_observed=()
+for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+  immutable_observed+=(--observed "$package=$IMMUTABLE/artifacts/packages/$package.9.8.7.nupkg")
+done
+python3 "$TOOL" record-observed --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+  --feed github "${immutable_observed[@]}" --detail "immutable recovery fixture org observation"
+python3 "$TOOL" record-observed --manifest "$IMMUTABLE/artifacts/packages/release-manifest.json" \
+  --feed nuget "${immutable_observed[@]}" --detail "immutable recovery fixture public observation"
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  cp "$IMMUTABLE/artifacts/packages/release-manifest.json" "$IMMUTABLE/remote/journal-$package.json"
+done
+cat > "$IMMUTABLE/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_GH_CALLS"
+case "$1 $2" in
+  "release view")
+    printf '%s\n' "${FAKE_RELEASE_IMMUTABLE:-true}"
+    ;;
+  "release download")
+    target=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --dir ]; then shift; target="$1"; break; fi
+      shift
+    done
+    [ -n "$target" ]
+    mkdir -p "$target"
+    cp "$FAKE_REMOTE_JOURNAL" "$target/journal-$FAKE_PACKAGE.json"
+    ;;
+  "release upload")
+    if [ "${FAKE_RELEASE_IMMUTABLE:-true}" = false ]; then
+      case " $* " in
+        *" --clobber "*"/journal-$FAKE_PACKAGE.json "*) ;;
+        *) echo "mutable journal upload must clobber the exact package journal: $*" >&2; exit 2 ;;
+      esac
+    else
+      echo "HTTP 422: release is immutable" >&2
+      exit 22
+    fi
+    ;;
+  *) echo "unexpected fake gh call: $*" >&2; exit 2 ;;
+esac
+SH
+chmod +x "$IMMUTABLE/bin/gh"
+: > "$IMMUTABLE/calls.log"
+for package in FS.GG.Coord.Cli FS.GG.Kit; do
+  printf '%s\n' nuget > "$IMMUTABLE/runner/release-saga-stage"
+  for replay in 1 2; do
+    (
+      cd "$IMMUTABLE"
+      PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+        GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID="$replay" \
+        FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE="$package" \
+        FAKE_REMOTE_JOURNAL="$IMMUTABLE/remote/journal-$package.json" \
+        bash "$ROOT/scripts/release-saga-ci.sh" failure "$package" 9.8.7 \
+          0123456789012345678901234567890123456789
+    )
+  done
+done
+if grep -Eq '^release (upload|edit|delete)' "$IMMUTABLE/calls.log"; then
+  echo "expected immutable journal recovery to perform no release mutation" >&2
+  cat "$IMMUTABLE/calls.log" >&2
+  exit 1
+fi
+[ "$(grep -c '^release view ' "$IMMUTABLE/calls.log")" -eq 4 ]
+[ "$(grep -c '^release download ' "$IMMUTABLE/calls.log")" -eq 4 ]
+
+# Unreadable and wrong-identity remote journals fail closed rather than grading immutability as
+# success. These are the non-answer and wrong-subject controls for the read-back gate.
+: > "$IMMUTABLE/missing.json"
+if (
+  cd "$IMMUTABLE"
+  PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+    GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID=missing \
+    FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE=FS.GG.Kit \
+    FAKE_REMOTE_JOURNAL="$IMMUTABLE/missing.json" \
+    bash "$ROOT/scripts/release-saga-ci.sh" failure FS.GG.Kit 9.8.7 \
+      0123456789012345678901234567890123456789
+); then
+  echo "expected unreadable immutable journal to fail closed" >&2; exit 1
+fi
+jq '.descriptor.sourceSha = "ffffffffffffffffffffffffffffffffffffffff"' \
+  "$IMMUTABLE/remote/journal-FS.GG.Kit.json" > "$IMMUTABLE/wrong-source.json"
+if (
+  cd "$IMMUTABLE"
+  PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+    GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID=wrong \
+    FAKE_GH_CALLS="$IMMUTABLE/calls.log" FAKE_PACKAGE=FS.GG.Kit \
+    FAKE_REMOTE_JOURNAL="$IMMUTABLE/wrong-source.json" \
+    bash "$ROOT/scripts/release-saga-ci.sh" failure FS.GG.Kit 9.8.7 \
+      0123456789012345678901234567890123456789
+); then
+  echo "expected wrong-identity immutable journal to fail closed" >&2; exit 1
+fi
+echo "immutable release journal recovery: kit and engine replays read back exact state without mutation"
+
+# The other side of the production boundary is contractual too: while a release is mutable, each
+# journal update must replace the package's prior asset. Execute the real failure adapter and require
+# its exact `upload --clobber` call. Then delete that call from a review-only adapter copy and prove
+# the same production-shaped gate goes red; this keeps the mutable arm from becoming decorative.
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$IMMUTABLE/artifacts/packages" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json"
+python3 "$TOOL" preflight --manifest "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json" --feed both
+mutable_upload_gate() {
+  local adapter="$1" calls="$2" run_id="$3"
+  : > "$calls"
+  cp "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json" \
+    "$IMMUTABLE/artifacts/packages/journal-FS.GG.Kit.json"
+  (
+    cd "$IMMUTABLE"
+    PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+      GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID="$run_id" \
+      FAKE_RELEASE_IMMUTABLE=false FAKE_GH_CALLS="$calls" FAKE_PACKAGE=FS.GG.Kit \
+      FAKE_REMOTE_JOURNAL="$IMMUTABLE/remote/journal-FS.GG.Kit.json" \
+      bash "$adapter" failure FS.GG.Kit 9.8.7 0123456789012345678901234567890123456789
+  )
+  if ! grep -Eq '^release upload coherent-set/v9\.8\.7 .*--clobber .*journal-FS\.GG\.Kit\.json$' "$calls"; then
+    echo "expected mutable recovery to upload --clobber the exact package journal" >&2
+    return 1
+  fi
+}
+
+mutable_upload_gate "$ROOT/scripts/release-saga-ci.sh" "$IMMUTABLE/mutable-calls.log" mutable-control
+MUTABLE_MUTANT_ROOT="$IMMUTABLE/mutable-mutant-root"
+mkdir -p "$MUTABLE_MUTANT_ROOT/scripts"
+cp "$TOOL" "$MUTABLE_MUTANT_ROOT/scripts/release-saga.py"
+MUTABLE_MUTANT="$MUTABLE_MUTANT_ROOT/scripts/release-saga-ci.sh"
+sed '/^[[:space:]]*gh release upload .*--clobber .*"$journal"/d' \
+  "$ROOT/scripts/release-saga-ci.sh" > "$MUTABLE_MUTANT"
+mutable_mutant_rc=0
+mutable_mutant_output="$(mutable_upload_gate \
+  "$MUTABLE_MUTANT" "$IMMUTABLE/mutable-mutant-calls.log" mutable-mutant 2>&1)" \
+  || mutable_mutant_rc=$?
+if [ "$mutable_mutant_rc" -eq 0 ]; then
+  echo "expected mutable upload-removal inversion to red the production-shaped gate" >&2
+  exit 1
+fi
+case "$mutable_mutant_output" in
+  *"expected mutable recovery to upload --clobber the exact package journal"*) ;;
+  *) echo "mutable upload-removal inversion failed for the wrong reason: $mutable_mutant_output" >&2; exit 1 ;;
+esac
+echo "mutable release journal recovery: production upload --clobber control and removal inversion passed"
 
 # Once GitHub publishes a release, repository immutable-release enforcement activates. A queued
 # observer must compare the already-published content and return success; it may not try to clobber

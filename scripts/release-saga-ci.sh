@@ -34,7 +34,47 @@ download() {
 }
 
 upload_journal() {
-  gh release upload "$release_tag" --repo "$GITHUB_REPOSITORY" --clobber "$journal"
+  local immutable prior remote_journal
+  immutable="$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" \
+    --json isImmutable --jq '.isImmutable')"
+  case "$immutable" in
+    false)
+      gh release upload "$release_tag" --repo "$GITHUB_REPOSITORY" --clobber "$journal"
+      ;;
+    true)
+      # Promotion makes release assets immutable. An exact-source replay must therefore read and
+      # validate the already-persisted package journal rather than trying an impossible clobber that
+      # aborts the workflow before receiver dashboard delivery. Keep the temporary manifest beside
+      # the prepared artifacts so release-saga.py resolves its descriptor-relative package paths
+      # against the same bytes as the current run.
+      prior="$(mktemp -d "${RUNNER_TEMP:-/tmp}/immutable-release-journal.XXXXXX")"
+      remote_journal="$(mktemp "$(dirname "$manifest")/.immutable-journal.XXXXXX.json")"
+      if ! gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+        --pattern "journal-$package.json" --dir "$prior"; then
+        rm -rf "$prior"; rm -f "$remote_journal"; return 1
+      fi
+      if ! cp "$prior/journal-$package.json" "$remote_journal"; then
+        rm -rf "$prior"; rm -f "$remote_journal"; return 1
+      fi
+      rm -rf "$prior"
+      if ! python3 "$tool" assert-identity --manifest "$remote_journal" \
+        --release-id "github:$version" --version "$version" --source-sha "$source_sha" \
+        --policy-version release-saga/1 \
+        || ! python3 "$tool" assert-artifacts --manifest "$remote_journal" \
+        || ! jq -e --arg package "$package" '
+          .state.feeds.github.packages[$package].state == "verified" and
+          .state.feeds.nuget.packages[$package].state == "verified"
+        ' "$remote_journal" >/dev/null; then
+        rm -f "$remote_journal"; return 1
+      fi
+      rm -f "$remote_journal"
+      echo "immutable release journal read back and verified for $package $version"
+      ;;
+    *)
+      echo "release $release_tag returned unreadable isImmutable=$immutable" >&2
+      return 1
+      ;;
+  esac
 }
 
 case "$command" in

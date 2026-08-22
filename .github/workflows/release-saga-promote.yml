@@ -2,7 +2,9 @@ name: release-saga-promote
 
 # Every successful package workflow asks this observer to reconcile durable external state. Earlier
 # runs may truthfully remain red/partial. The final one promotes the draft only after both feeds serve
-# the complete payload-identical set. No package is pushed here and no release is re-packed here.
+# the complete payload-identical set. Promotion is the immutable-asset boundary: subsequent exact-source
+# package retries read back their already-persisted journals and never rewrite them (.github#2820).
+# No package is pushed here and no release is re-packed here.
 on:
   workflow_run:
     workflows: [release-coord-engine, release-kit, release-drivers]
