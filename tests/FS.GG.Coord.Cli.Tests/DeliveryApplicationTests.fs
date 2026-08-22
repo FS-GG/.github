@@ -71,6 +71,62 @@ module DeliveryApplicationTests =
         | Delivery.Next transition -> Assert.Equal(Delivery.GuardedLand, transition.Action)
         | Delivery.NoVerdict reason -> failwith reason
 
+    let private renderDelivery format facts =
+        let opts =
+            match Options.parse [ "delivery"; "--snapshot"; "unused.json"; format ] with
+            | Ok parsed -> parsed
+            | Error error -> failwith error
+
+        let original = Console.Out
+        use output = new StringWriter()
+        Console.SetOut output
+        try
+            let code = DeliveryApplication.render opts facts
+            code, output.ToString()
+        finally
+            Console.SetOut original
+
+    [<Theory>]
+    [<InlineData("--json")>]
+    [<InlineData("--text")>]
+    let ``#2773 repairReviewHandoff renders its concrete problem`` format =
+        let facts = { guardedLandingFacts "claim-generation-a" with PathsVerified = false }
+        let code, rendered = renderDelivery format facts
+
+        Assert.Equal(0, code)
+        Assert.Contains("repairReviewHandoff", rendered)
+        Assert.Contains("declared paths are not verified", rendered)
+
+    [<Fact>]
+    let ``#2773 delivery and verify-paths project every admission case identically`` () =
+        let expected =
+            function
+            | Delivery.DeclaredPath
+            | Delivery.GeneratedPath
+            | Delivery.MandatorySddPath -> true
+            | Delivery.UndeclaredAuthoredPath
+            | Delivery.UnknownPath -> false
+
+        let admissions =
+            [ Delivery.DeclaredPath
+              Delivery.GeneratedPath
+              Delivery.MandatorySddPath
+              Delivery.UndeclaredAuthoredPath
+              Delivery.UnknownPath ]
+
+        for admission in admissions do
+            let classification: Delivery.PathClassification =
+                { Path = $"fixture/%A{admission}"
+                  Admission = admission
+                  Reason = "fixture"
+                  AuthorityRevisions = [] }
+
+            let delivery = Client.projectPathVerdict Client.DeliveryReceiptProjection [ classification ]
+            let verifyPaths = Client.projectPathVerdict Client.VerifyPathsProjection [ classification ]
+
+            Assert.Equal(expected admission, delivery)
+            Assert.Equal(delivery, verifyPaths)
+
     [<Fact>]
     let ``#2131 non-empty obligation receipt is head-bound and verifies only its declared id`` () =
         let comments =

@@ -29,6 +29,105 @@ module Delivery =
         | Undeclared
         | Unread of reason: string
 
+    // One authority input to the shared path-admissibility classifier. A caller that could not read
+    // an input supplies `AuthorityUnknown`; it never substitutes an empty inventory for an unread one.
+    type PathAuthority<'value> =
+        | AuthorityKnown of revision: string * value: 'value
+        | AuthorityUnknown of reason: string
+
+    // The exhaustive admission vocabulary shared by `verify-paths` and live delivery.
+    type PathAdmission =
+        | DeclaredPath
+        | GeneratedPath
+        | MandatorySddPath
+        | UndeclaredAuthoredPath
+        | UnknownPath
+
+    type PathClassification =
+        { Path: string
+          Admission: PathAdmission
+          Reason: string
+          // Immutable revisions of the non-touch-set authorities consulted for this answer.
+          AuthorityRevisions: string list }
+
+    // Classify every changed path from one closed definition. Declared coverage wins without reading
+    // exemption authorities. For uncovered paths, either known exemption may admit the path; only a
+    // complete pair of negative authority readings can conclude `UndeclaredAuthoredPath`.
+    let classifyPaths
+        (touchSet: Types.TouchSet)
+        (generated: PathAuthority<Set<string>>)
+        (sddPackage: PathAuthority<Types.PathToken list>)
+        (files: string list)
+        : PathClassification list =
+        let coveredByDeclared file =
+            match touchSet with
+            | Types.Declared tokens -> tokens |> List.exists (fun token -> TouchSet.covers token file)
+            | Types.DeclaredChore -> true
+            | _ -> false
+
+        let knownGenerated file =
+            match generated with
+            | AuthorityKnown(revision, paths) when Set.contains file paths -> Some revision
+            | _ -> None
+
+        let knownSdd file =
+            match sddPackage with
+            | AuthorityKnown(revision, tokens) when tokens |> List.exists (fun token -> TouchSet.covers token file) -> Some revision
+            | _ -> None
+
+        let unknowns =
+            [ match generated with
+              | AuthorityUnknown reason -> yield $"generated-path authority: %s{reason}"
+              | AuthorityKnown _ -> ()
+              match sddPackage with
+              | AuthorityUnknown reason -> yield $"sdd-package authority: %s{reason}"
+              | AuthorityKnown _ -> () ]
+
+        files
+        |> List.map (fun file ->
+            if coveredByDeclared file then
+                { Path = file
+                  Admission = DeclaredPath
+                  Reason = "covered by the authored touch set"
+                  AuthorityRevisions = [] }
+            elif not (List.isEmpty unknowns) then
+                { Path = file
+                  Admission = UnknownPath
+                  Reason = String.concat "; " unknowns
+                  AuthorityRevisions =
+                    [ match generated with AuthorityKnown(revision, _) -> yield revision | _ -> ()
+                      match sddPackage with AuthorityKnown(revision, _) -> yield revision | _ -> () ] }
+            else
+                match knownSdd file, knownGenerated file with
+                | Some revision, _ ->
+                    { Path = file
+                      Admission = MandatorySddPath
+                      Reason = "mandatory output of the current sdd-required delivery route"
+                      AuthorityRevisions = [ revision ] }
+                | None, Some revision ->
+                    { Path = file
+                      Admission = GeneratedPath
+                      Reason = "generated, CI-gated artifact"
+                      AuthorityRevisions = [ revision ] }
+                | None, None ->
+                    { Path = file
+                      Admission = UndeclaredAuthoredPath
+                      Reason = "not covered by the authored touch set or an authoritative exemption"
+                      AuthorityRevisions =
+                        [ match generated with AuthorityKnown(revision, _) -> yield revision | _ -> ()
+                          match sddPackage with AuthorityKnown(revision, _) -> yield revision | _ -> () ] })
+
+    // The one admission projection consumed by both command callers. Unknown is deliberately a refusal.
+    let pathsVerified (classifications: PathClassification list) =
+        classifications
+        |> List.forall (fun classification ->
+            match classification.Admission with
+            | DeclaredPath
+            | GeneratedPath
+            | MandatorySddPath -> true
+            | UndeclaredAuthoredPath
+            | UnknownPath -> false)
+
     type Freshness =
         { ItemRef: string
           ClaimGeneration: string

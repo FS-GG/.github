@@ -965,7 +965,7 @@ class Handler(BaseHTTPRequestHandler):
             # at a stub agree about what the subtractable set contains.
             # PR #502: regenerated ONLY          → OK, with the artifact reported as expected.
             # PR #503: regenerated + real drift  → DRIFT naming ONLY docs/x.md as reviewable.
-            files = [{"filename": "src/Verify/Foo.fs"}]
+            files = [{"filename": "src/X/Foo.fs"}] if pr in (502, 503) else [{"filename": "src/Verify/Foo.fs"}]
             if pr == 501:
                 files.append({"filename": "docs/x.md"})
             if pr in (502, 503):
@@ -985,9 +985,10 @@ class Handler(BaseHTTPRequestHandler):
                 for comment in COMMENTS.get(pr, [])
             )
             head_sha = "b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40
+            issue_number = 50 if pr in (502, 503) else 44
             return self._send(200, {
                 "number": pr,
-                "head": {"ref": "item/44-the-work", "sha": head_sha},
+                "head": {"ref": f"item/{issue_number}-the-work", "sha": head_sha},
                 "base": {"ref": "main", "sha": "9" * 40},
             })
 

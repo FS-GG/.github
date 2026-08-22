@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 2773-delivery-path-classifier
+  title: "Single authoritative delivery path classifier"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2773-delivery-path-classifier/spec.md
+  sourceClarifications: work/2773-delivery-path-classifier/clarifications.md
+  sourceChecklist: work/2773-delivery-path-classifier/checklist.md
+  sourcePlan: work/2773-delivery-path-classifier/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2773-delivery-path-classifier/spec.md
+    digest: 9c500b20152bb501322a2963af83f5c2083e3b740883bdfc36efcaf7f8596577
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2773-delivery-path-classifier/clarifications.md
+    digest: 5f62f5c1b45065ef658d4f89bc20bba49d7d3546798a5bacbecd91b13e2add74
+    schemaVersion: 1
+  - label: checklist
+    path: work/2773-delivery-path-classifier/checklist.md
+    digest: a0286291454cb124fbc9cee58d4f5d32c891fccedbf5048e8ed198bc65fa8ed7
+    schemaVersion: 1
+  - label: plan
+    path: work/2773-delivery-path-classifier/plan.md
+    digest: bd8818607e7e69ea56cc08441f686f7e2d4d4c623314c69c17fc586ad067a2d0
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2773-delivery-path-classifier."

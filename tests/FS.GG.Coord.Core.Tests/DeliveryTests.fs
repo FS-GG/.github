@@ -448,3 +448,60 @@ module DeliveryTests =
         | Delivery.Next { Stage = Delivery.ReviewActive; Action = Delivery.RefreshReview reason } ->
             Assert.Contains("round ceiling exceeded", reason)
         | result -> failwithf "expected the repair-phase ceiling of 10 to be enforced, got %A" result
+
+    [<Fact>]
+    let ``#2773 one classifier enumerates every path admission with authority revisions`` () =
+        let results =
+            Delivery.classifyPaths
+                (Types.Declared [ Types.Matchable "src/Declared.fs" ])
+                (Delivery.AuthorityKnown("generated-paths:abc", Set.ofList [ "registry/generated.json" ]))
+                (Delivery.AuthorityKnown("delivery-route:def", [ Types.Matchable "work/2773-delivery-path-classifier" ]))
+                [ "src/Declared.fs"
+                  "registry/generated.json"
+                  "work/2773-delivery-path-classifier/spec.md"
+                  "src/Undeclared.fs" ]
+
+        let admission path = results |> List.find (fun result -> result.Path = path)
+        Assert.Equal(Delivery.DeclaredPath, (admission "src/Declared.fs").Admission)
+        Assert.Equal(Delivery.GeneratedPath, (admission "registry/generated.json").Admission)
+        Assert.True((admission "registry/generated.json").AuthorityRevisions = [ "generated-paths:abc" ])
+        Assert.Equal(Delivery.MandatorySddPath, (admission "work/2773-delivery-path-classifier/spec.md").Admission)
+        Assert.True((admission "work/2773-delivery-path-classifier/spec.md").AuthorityRevisions = [ "delivery-route:def" ])
+        Assert.Equal(Delivery.UndeclaredAuthoredPath, (admission "src/Undeclared.fs").Admission)
+        let undeclaredRevisions = (admission "src/Undeclared.fs").AuthorityRevisions |> Set.ofList
+        Assert.Equal(2, Set.count undeclaredRevisions)
+        Assert.Contains("generated-paths:abc", undeclaredRevisions)
+        Assert.Contains("delivery-route:def", undeclaredRevisions)
+        Assert.True(results |> List.take 3 |> Delivery.pathsVerified)
+        Assert.False(Delivery.pathsVerified results)
+
+    [<Fact>]
+    let ``#2773 an unread authority makes an uncovered path Unknown rather than admitted`` () =
+        let results =
+            Delivery.classifyPaths
+                (Types.Declared [ Types.Matchable "src/Declared.fs" ])
+                (Delivery.AuthorityUnknown "generator timed out")
+                (Delivery.AuthorityKnown("delivery-route:def", []))
+                [ "src/Undeclared.fs" ]
+
+        let result = Assert.Single results
+
+        Assert.Equal(Delivery.UnknownPath, result.Admission)
+        Assert.Contains("generator timed out", result.Reason)
+        Assert.False(Delivery.pathsVerified results)
+
+    [<Fact>]
+    let ``#2773 an unread authority overrides a known exemption for an uncovered path`` () =
+        let results =
+            Delivery.classifyPaths
+                (Types.Declared [ Types.Matchable "src/Declared.fs" ])
+                (Delivery.AuthorityUnknown "generator timed out")
+                (Delivery.AuthorityKnown("delivery-route:def", [ Types.Matchable "readiness/2773-delivery-path-classifier" ]))
+                [ "readiness/2773-delivery-path-classifier/analysis.json" ]
+
+        let result = Assert.Single results
+
+        Assert.Equal(Delivery.UnknownPath, result.Admission)
+        Assert.Contains("generator timed out", result.Reason)
+        Assert.True(result.AuthorityRevisions = [ "delivery-route:def" ])
+        Assert.False(Delivery.pathsVerified results)
