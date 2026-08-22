@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2753-comment-mutation-verb/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2753-comment-mutation-verb/analysis.json
-    digest: 744359ae4e73fe5f99c3866d0d436c5131f14f85acd9bd25ac0436fdd5c9d665
+    digest: dc129a03d5d0f961ca6e247fd327bbf9e37a53261b19c932d5bc09ad747fc5b5
     schemaVersion: 1
   - label: checklist
     path: work/2753-comment-mutation-verb/checklist.md

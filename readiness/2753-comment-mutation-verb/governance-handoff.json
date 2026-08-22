@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2753-comment-mutation-verb/ship.json",
-      "digest": "sha256:05e0c05defe6c0522a1f1265385e8342fa90b24b671f555c0ab45382c5e18228",
+      "digest": "sha256:f0419f6b5245a336fe3c388d1c0537be728bb5baa9e6ac7218555c96225cc660",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2753-comment-mutation-verb/verify.json",
-      "digest": "sha256:ee35035661b0fa4310c21569c3b1d2679969c0a77b3528b6fa586b8360179803",
+      "digest": "sha256:2835e6a51d4e6ebdfa976bf32f78dcb40a8a057f151111d789445176b09da9e0",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2753-comment-mutation-verb/work-model.json",
-      "digest": "sha256:17ffefe5f769c6ed35b820c730e70df08de7a408d48ce975ad5edcda57c0fe9e",
+      "digest": "sha256:241f4db11eed464fe3602426d7f0ecdd33498511b1f615f77d2978dedc22c441",
       "schemaVersion": 1
     }
   ],

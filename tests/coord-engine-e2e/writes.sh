@@ -92,7 +92,7 @@ comment_amend_rc=$?
 comment_mutations="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
 comment_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r --argjson id "${comment_id:-0}" '.[] | select(.id == $id) | .body')"
 if [ "$comment_create_rc" -eq 0 ] && [ -n "$comment_id" ] && [ "$comment_before" = 'owner-thread-original' ] &&
-   [ "$comment_amend_rc" -ne 0 ] && printf '%s' "$comment_amend_out" | grep -q 'refusing before PATCH' &&
+   [ "$comment_amend_rc" -ne 0 ] && grep -q 'refusing before PATCH' <<<"$comment_amend_out" &&
    [ "$(printf '%s' "$comment_mutations" | jq -r '.count')" -eq 0 ] && [ "$comment_after" = "$comment_before" ]; then
   ok "#2753: comment amend refuses a cross-thread id before PATCH with zero mutation"
 else
