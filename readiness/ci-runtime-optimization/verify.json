@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "viewVersion": "1.0",
-  "workId": "2801-mutual-overlap-arbitration",
+  "workId": "ci-runtime-optimization",
   "stage": "verify",
   "status": "verificationReady",
   "generator": "FS.GG.SDD.Artifacts/1.1.0",
@@ -37,81 +37,81 @@
       "schemaStatus": "current"
     },
     {
-      "path": "readiness/2801-mutual-overlap-arbitration/analysis.json",
+      "path": "readiness/ci-runtime-optimization/analysis.json",
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "c9d550bbf735ec5183d74c195c4e262fcf10a742e7345b49d0bfb8829911ea22"
+        "value": "ebf3e89e84c6beb5b54e3f025abb3dfc2edb06b41e2f7da730df2e42d3560e9e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
+      "path": "readiness/ci-runtime-optimization/work-model.json",
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "5e2f49b875c2be80486ba5121478f5b302fce2b99b126df54a999144b423d28a"
+        "value": "18e9773a5b1f670ed239f6f392e2f139fb53be1afd0ae4ee50f709cbeb581d22"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/checklist.md",
+      "path": "work/ci-runtime-optimization/checklist.md",
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "ccfeb3e86c4300a094c4d3ea100f3bb57c1a5e8381296b3407d722583d48529c"
+        "value": "30005a433204f86bb76e9f3e9130197dc72cdef0fa35b2b8aaeea0cc32e6817f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/clarifications.md",
+      "path": "work/ci-runtime-optimization/clarifications.md",
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "2b176f372fc1dc74393613799f7a8a0e61fc5fb62ea71b4d5e611d303f148da0"
+        "value": "37fee34ae29c19b1381633353cbffd009ef1ccb282c3725d4d68c7d01073d0d9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/evidence.yml",
+      "path": "work/ci-runtime-optimization/evidence.yml",
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "54b5dadb892760a72df65b47f921340657f5df7cbb9802c5279430f228c27e11"
+        "value": "2932dc25d7d5d823e9428f24eb26c13e230dcf503ab97ae826247a5115735f4f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/plan.md",
+      "path": "work/ci-runtime-optimization/plan.md",
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "0d5d60de20094c223d0f05dd56d797e3aace1857f9c987ed838044ad79662862"
+        "value": "b2d0dc311e06fd8ea0cf5c98e3bb41620d0b2a93d3b5658edefb2203c7e3269b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/spec.md",
+      "path": "work/ci-runtime-optimization/spec.md",
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "cd06975eb08f678c5d438ce38cfecada1d98114dc80849eddc69f09c4e028523"
+        "value": "8c33e01d7ce3f1d41758c6ed435ffd26c3dd6730981ce5855736f4705de6f5b9"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
     },
     {
-      "path": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "path": "work/ci-runtime-optimization/tasks.yml",
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "1d43dba89fef7d36c3011af673cf5357e7d40d744c22b799d71e35802c4248e4"
+        "value": "eb1aa26177994a0ed0deb3c2370f2e06489ba520d9a8ebf27cacf3ac6186c40f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,8 +151,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 29,
-    "dependencyCount": 18,
+    "taskCount": 30,
+    "dependencyCount": 19,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -174,7 +174,6 @@
       ],
       "affectedSourceIds": [
         "AC-001",
-        "AC-002",
         "FR-001",
         "PD-001"
       ],
@@ -198,7 +197,6 @@
       ],
       "affectedSourceIds": [
         "AC-001",
-        "AC-002",
         "FR-002",
         "PD-002"
       ],
@@ -221,8 +219,9 @@
         "T003"
       ],
       "affectedSourceIds": [
-        "AC-003",
+        "AC-001",
         "FR-003",
+        "PD-002",
         "PD-003"
       ],
       "severity": "ready",
@@ -244,8 +243,9 @@
         "T004"
       ],
       "affectedSourceIds": [
-        "AC-004",
+        "AC-001",
         "FR-004",
+        "PD-003",
         "PD-004"
       ],
       "severity": "ready",
@@ -267,8 +267,9 @@
         "T005"
       ],
       "affectedSourceIds": [
-        "AC-005",
+        "AC-001",
         "FR-005",
+        "PD-004",
         "PD-005"
       ],
       "severity": "ready",
@@ -290,7 +291,7 @@
         "T006"
       ],
       "affectedSourceIds": [
-        "AC-006",
+        "AC-001",
         "FR-006",
         "PD-006"
       ],
@@ -313,12 +314,9 @@
         "T007"
       ],
       "affectedSourceIds": [
-        "AC-003",
-        "AC-004",
-        "AC-005",
-        "AC-006",
-        "AC-007",
+        "AC-001",
         "FR-007",
+        "PD-006",
         "PD-007"
       ],
       "severity": "ready",
@@ -341,14 +339,8 @@
       ],
       "affectedSourceIds": [
         "AC-001",
-        "AC-002",
-        "AC-003",
-        "AC-004",
-        "AC-005",
-        "AC-006",
-        "AC-007",
-        "AC-008",
         "FR-008",
+        "PD-007",
         "PD-008"
       ],
       "severity": "ready",
@@ -370,9 +362,9 @@
         "T009"
       ],
       "affectedSourceIds": [
-        "AC-003",
-        "AC-008",
+        "AC-001",
         "FR-009",
+        "PD-008",
         "PD-009"
       ],
       "severity": "ready",
@@ -394,7 +386,10 @@
         "T010"
       ],
       "affectedSourceIds": [
-        "DEC-001"
+        "AC-001",
+        "FR-010",
+        "PD-009",
+        "PD-010"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -415,7 +410,9 @@
         "T011"
       ],
       "affectedSourceIds": [
-        "DEC-002"
+        "AC-001",
+        "FR-011",
+        "PD-011"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -436,7 +433,9 @@
         "T012"
       ],
       "affectedSourceIds": [
-        "DEC-003"
+        "PC-001",
+        "PD-001",
+        "PD-005"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -457,7 +456,10 @@
         "T013"
       ],
       "affectedSourceIds": [
-        "DEC-004"
+        "PC-001",
+        "PD-001",
+        "PD-005",
+        "VO-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -479,8 +481,8 @@
       ],
       "affectedSourceIds": [
         "PC-001",
-        "PD-001",
-        "PD-004"
+        "PC-002",
+        "PM-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -501,10 +503,9 @@
         "T015"
       ],
       "affectedSourceIds": [
-        "PC-002",
-        "PD-003",
-        "PD-005",
-        "PD-006"
+        "GV-001",
+        "PD-001",
+        "PD-011"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -525,10 +526,7 @@
         "T016"
       ],
       "affectedSourceIds": [
-        "PC-001",
-        "PD-001",
-        "PD-002",
-        "VO-001"
+        "DEC-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -549,10 +547,7 @@
         "T017"
       ],
       "affectedSourceIds": [
-        "PC-001",
-        "PD-003",
-        "PD-004",
-        "VO-002"
+        "DEC-002"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -573,10 +568,7 @@
         "T018"
       ],
       "affectedSourceIds": [
-        "PC-002",
-        "PD-005",
-        "PD-006",
-        "VO-003"
+        "DEC-003"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -597,9 +589,7 @@
         "T019"
       ],
       "affectedSourceIds": [
-        "PC-002",
-        "PD-007",
-        "VO-004"
+        "DEC-004"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -620,8 +610,7 @@
         "T020"
       ],
       "affectedSourceIds": [
-        "PD-008",
-        "VO-005"
+        "DEC-005"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -642,8 +631,10 @@
         "T021"
       ],
       "affectedSourceIds": [
-        "PD-008",
-        "VO-006"
+        "AC-001",
+        "FR-001",
+        "FR-002",
+        "PD-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -664,8 +655,10 @@
         "T022"
       ],
       "affectedSourceIds": [
-        "PD-009",
-        "VO-007"
+        "AC-001",
+        "FR-005",
+        "FR-006",
+        "PD-005"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -686,8 +679,9 @@
         "T023"
       ],
       "affectedSourceIds": [
-        "PC-001",
-        "PM-001"
+        "PC-002",
+        "PD-006",
+        "PD-007"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -708,8 +702,8 @@
         "T024"
       ],
       "affectedSourceIds": [
-        "GV-001",
-        "PD-001"
+        "PC-003",
+        "PD-004"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -730,10 +724,8 @@
         "T025"
       ],
       "affectedSourceIds": [
-        "AC-009",
-        "AC-010",
-        "FR-010",
-        "PD-010"
+        "PD-002",
+        "VO-002"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -754,11 +746,10 @@
         "T026"
       ],
       "affectedSourceIds": [
-        "AC-011",
-        "AC-012",
-        "AC-013",
-        "FR-011",
-        "PD-011"
+        "PC-003",
+        "PD-003",
+        "PD-004",
+        "VO-003"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -779,7 +770,10 @@
         "T027"
       ],
       "affectedSourceIds": [
-        "DEC-005"
+        "PC-002",
+        "PD-006",
+        "PD-007",
+        "VO-004"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -800,9 +794,8 @@
         "T028"
       ],
       "affectedSourceIds": [
-        "PC-003",
-        "PD-010",
-        "PD-011"
+        "PD-008",
+        "VO-005"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -823,10 +816,31 @@
         "T029"
       ],
       "affectedSourceIds": [
-        "PC-003",
+        "PD-009",
         "PD-010",
+        "VO-006"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV030",
+      "obligationId": "EV030",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV030"
+      ],
+      "affectedTaskIds": [
+        "T030"
+      ],
+      "affectedSourceIds": [
         "PD-011",
-        "VO-008"
+        "VO-007"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -1017,7 +1031,9 @@
       "affectedTaskIds": [
         "T010"
       ],
-      "affectedRequirementIds": [],
+      "affectedRequirementIds": [
+        "FR-010"
+      ],
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1034,7 +1050,9 @@
       "affectedTaskIds": [
         "T011"
       ],
-      "affectedRequirementIds": [],
+      "affectedRequirementIds": [
+        "FR-011"
+      ],
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1272,9 +1290,7 @@
       "affectedTaskIds": [
         "T025"
       ],
-      "affectedRequirementIds": [
-        "FR-010"
-      ],
+      "affectedRequirementIds": [],
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1291,9 +1307,7 @@
       "affectedTaskIds": [
         "T026"
       ],
-      "affectedRequirementIds": [
-        "FR-011"
-      ],
+      "affectedRequirementIds": [],
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1348,23 +1362,39 @@
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
+    },
+    {
+      "id": "TD-EV030",
+      "obligationId": "EV030",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV030"
+      ],
+      "affectedTaskIds": [
+        "T030"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "skillVisibility": [
     {
       "skill": "automated-tests",
       "requiringTaskIds": [
-        "T016",
-        "T017",
-        "T018",
-        "T019",
-        "T020",
-        "T021",
-        "T022",
-        "T029"
+        "T013",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1372,10 +1402,10 @@
     {
       "skill": "deterministic-json",
       "requiringTaskIds": [
-        "T024"
+        "T015"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1395,16 +1425,18 @@
         "T010",
         "T011",
         "T012",
-        "T013",
-        "T014",
-        "T015",
-        "T025",
-        "T026",
-        "T027",
-        "T028"
+        "T016",
+        "T017",
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022",
+        "T023",
+        "T024"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1423,14 +1455,16 @@
         "T009",
         "T010",
         "T011",
-        "T012",
-        "T013",
-        "T025",
-        "T026",
-        "T027"
+        "T016",
+        "T017",
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1438,17 +1472,16 @@
     {
       "skill": "readiness-evidence",
       "requiringTaskIds": [
-        "T016",
-        "T017",
-        "T018",
-        "T019",
-        "T020",
-        "T021",
-        "T022",
-        "T029"
+        "T013",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1456,10 +1489,10 @@
     {
       "skill": "schema-versioning",
       "requiringTaskIds": [
-        "T023"
+        "T014"
       ],
       "visibility": "visible",
-      "sourceArtifactPath": "work/2801-mutual-overlap-arbitration/tasks.yml",
+      "sourceArtifactPath": "work/ci-runtime-optimization/tasks.yml",
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
@@ -1467,13 +1500,13 @@
   ],
   "generatedViews": [
     {
-      "path": "readiness/2801-mutual-overlap-arbitration/analysis.json",
+      "path": "readiness/ci-runtime-optimization/analysis.json",
       "kind": "verification",
       "currency": "current",
       "diagnosticIds": []
     },
     {
-      "path": "readiness/2801-mutual-overlap-arbitration/work-model.json",
+      "path": "readiness/ci-runtime-optimization/work-model.json",
       "kind": "workModel",
       "currency": "current",
       "diagnosticIds": []

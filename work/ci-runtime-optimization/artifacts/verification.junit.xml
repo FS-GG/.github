@@ -1,0 +1,22 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS: signature sweep omits an unrelated docs-only change
+PASS: signature sweep runs for source topology
+PASS: signature sweep runs for a new signature sibling
+PASS: signature sweep runs for its mutation harness
+PASS: signature classifier fails closed when revisions are unavailable
+PASS: signature classifier treats a rename out of its subject as affected
+PASS: shell fixture omits an unrelated docs-only change
+PASS: shell fixture runs for its live checker contract
+PASS: shell fixture runs for workflow wiring
+PASS: shell fixture runs for workflow-shell extraction
+PASS: TRX parser accepts one above-floor successful execution
+PASS: TRX parser refuses zero evidence
+PASS: TRX parser refuses below evidence
+PASS: TRX parser refuses failed evidence
+PASS: TRX parser refuses malformed evidence
+PASS: TRX parser refuses duplicate evidence
+PASS: TRX parser refuses missing evidence
+PASS: shell fixture and live-tree verdict are separated
+PASS: coord-engine has no second test execution for non-vacuity
+
+ci-runtime-optimization: 19 passed, 0 failed
+]]></system-out></testcase></testsuite>
