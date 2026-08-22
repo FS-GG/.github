@@ -200,3 +200,15 @@ module ReviewApplicationTests =
         Assert.DoesNotContain("\"state\":\"ordinaryExhaustion\"", prePassOutput)
         Assert.DoesNotContain("\"waitStatus\":\"ordinaryExhaustion\"", prePassOutput)
         Assert.Empty prePassError
+
+        let retiredComments =
+            StructuredFixtures.ordinaryRoundThreePassCommentsWithRetiredGeneration
+                subject head "critic-1"
+            |> List.map (fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment))
+        let retiredFacts = { (facts Types.PrRed) with Comments = retiredComments }
+        let retiredCode, retiredOutput, retiredError =
+            renderWithWait binding retiredFacts completed
+        Assert.Equal(0, retiredCode)
+        Assert.Contains("\"state\":\"ordinaryExhaustion\"", retiredOutput)
+        Assert.Contains("\"waitStatus\":\"ordinaryExhaustion\"", retiredOutput)
+        Assert.Empty retiredError

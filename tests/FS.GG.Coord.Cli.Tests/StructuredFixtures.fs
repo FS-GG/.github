@@ -189,3 +189,41 @@ module StructuredFixtures =
     let ordinaryRoundThreePassComments subject terminalHead critic =
         ordinaryRoundThreePassCommentsWithInitialVerdict
             subject terminalHead critic StructuredDecision.ChangesRequired
+
+    let ordinaryRoundThreePassCommentsWithRetiredGeneration subject terminalHead critic =
+        let marker = "<!-- fsgg:review-decision/v2 -->"
+        let seal (record: StructuredDecision.ReviewRecord) =
+            let draft = { record with Digest = "" }
+            { draft with Digest = StructuredDecision.reviewDigest draft }
+        let live = ordinaryRoundThreePassComments subject terminalHead critic
+        let liveRecords =
+            live
+            |> List.map (fun (_, _, body) ->
+                Driver.decodeStructuredReview (body.Substring(marker.Length).Trim())
+                |> function Ok record -> record | Error error -> failwith error)
+        let retiredInitial =
+            seal
+                { liveRecords.Head with
+                    Revision = 1
+                    PreviousDigest = None
+                    HeadSha = String.replicate 40 "a"
+                    Verdict = StructuredDecision.Pass }
+        let retiredAcceptance =
+            seal
+                { retiredInitial with
+                    Revision = 2
+                    PreviousDigest = Some retiredInitial.Digest
+                    Kind = StructuredDecision.Acceptance
+                    Verdict = StructuredDecision.Accepted
+                    InitialReview = Some "https://reviews/retired/1"
+                    PrecedingReview = Some "https://reviews/retired/1" }
+        let rebuilt, _ =
+            List.mapFold (fun previousDigest (id, url, _, (record: StructuredDecision.ReviewRecord)) ->
+                let rewritten =
+                    seal { record with Revision = int id; PreviousDigest = Some previousDigest }
+                (id, url, marker + "\n" + reviewJson rewritten), rewritten.Digest)
+                retiredAcceptance.Digest
+                (List.map2 (fun (id, url, _) record -> id + 2L, url, (), record) live liveRecords)
+        [ 1L, "https://reviews/retired/1", marker + "\n" + reviewJson retiredInitial
+          2L, "https://reviews/retired/2", marker + "\n" + reviewJson retiredAcceptance
+          yield! rebuilt ]

@@ -170,18 +170,18 @@ module Review =
         | Ordinary -> Protocol.reviewPolicy.MaxAutomatedRepairRounds
         | Repair -> Protocol.reviewPolicy.RepairPhaseMaxRounds
 
-    /// The complete terminal-chain predicate shared by the read-side projection and the live
-    /// escalation writer. Ordinary exhaustion requires an initial plus rounds one and two that all
-    /// requested changes; a pre-round pass cannot be reclassified as exhaustion merely because a
-    /// later round-three verdict is terminal. A round-three `changes-required` record is terminal
-    /// regardless of check state. A round-three `pass` joins that set only after exact-head checks
-    /// settle red: pending checks still have a reason to wait, while green checks remain eligible for
-    /// host acceptance.
+    // The complete terminal-chain predicate shared by the read-side projection and the live
+    // escalation writer. Ordinary exhaustion requires an initial plus rounds one and two that all
+    // requested changes; a pre-round pass cannot be reclassified as exhaustion merely because a
+    // later round-three verdict is terminal. A round-three `changes-required` record is terminal
+    // regardless of check state. A round-three `pass` joins that set only after exact-head checks
+    // settle red: pending checks still have a reason to wait, while green checks remain eligible for
+    // host acceptance.
     let isOrdinaryExhaustionTerminal headSha checks comments =
-        let phaseFacts = Driver.reviewPhaseFacts comments
+        let live = Driver.liveReviewComments headSha comments
         let marker = "<!-- fsgg:review-decision/v2 -->"
         let reviewRecords =
-            comments
+            live.Live
             |> List.sortBy _.Id
             |> List.choose (fun comment ->
                 if comment.Body.StartsWith(marker + "\n", StringComparison.Ordinal) then
@@ -204,14 +204,18 @@ module Review =
                 && [ initial; roundOne; roundTwo ]
                    |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
             | _ -> false
+        let confirmations =
+            reviewRecords
+            |> List.filter (fun record -> record.Kind = StructuredDecision.Confirmation)
+        let latest = reviewRecords |> List.tryLast
 
-        precedingChangesRequired
-        && phaseFacts.ConfirmationCount = Protocol.reviewPolicy.MaxAutomatedRepairRounds
-        && phaseFacts.LatestReviewedHeadSha = Some headSha
+        List.isEmpty live.StructuredErrors
+        && precedingChangesRequired
+        && confirmations.Length = Protocol.reviewPolicy.MaxAutomatedRepairRounds
         &&
-            match phaseFacts.LatestVerdict, checks with
-            | Some "changes-required", _ -> true
-            | Some "pass", PrRed -> true
+            match latest |> Option.map (fun record -> record.HeadSha, record.Verdict), checks with
+            | Some (latestHead, StructuredDecision.ChangesRequired), _ when latestHead = headSha -> true
+            | Some (latestHead, StructuredDecision.Pass), PrRed when latestHead = headSha -> true
             | _ -> false
 
     let private ordinaryExhaustionOutcome (facts: Facts) =
@@ -228,9 +232,9 @@ module Review =
                 let reason = "the ordinary review chain is exhausted and no repair route is available"
                 TerminalHumanPark reason, Park reason
 
-    /// Re-project a verdict after the live adapter has established the completed-wait and claim-
-    /// turnover facts that pure `inspect` cannot observe. The terminal-set decision itself remains
-    /// here, beside `classify`, and rebuilding through `makeVerdict` keeps the action key consistent.
+    // Re-project a verdict after the live adapter has established the completed-wait and claim-
+    // turnover facts that pure `inspect` cannot observe. The terminal-set decision itself remains
+    // here, beside `classify`, and rebuilding through `makeVerdict` keeps the action key consistent.
     let projectCompletedOrdinaryExhaustion binding facts verdict =
         if binding.Phase = Ordinary
            && isOrdinaryExhaustionTerminal binding.HeadSha facts.Checks facts.Comments then

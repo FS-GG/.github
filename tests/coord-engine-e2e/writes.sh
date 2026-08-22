@@ -614,6 +614,32 @@ patch_turnover_comment() {
     "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$id" >/dev/null
 }
 
+# Prepend one structurally accepted generation at a moved-off head. The live generation below must
+# remain the only input to ordinary-exhaustion classification even though ledger validation consumes
+# the complete append-only history.
+turnover_retired_head="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+write_turnover_draft initial 0 "" "" "" "$turnover_retired_head" "FS-GG/FS.GG.SDD#43/pr/43" pass
+turnover_retired_initial_unsealed="<!-- fsgg:review-decision/v2 -->
+$(<"$turnover_draft")"
+turnover_retired_initial_body="$(rewrite_turnover_record "$turnover_retired_initial_unsealed" revision 1)"
+turnover_retired_initial_digest="$(printf '%s' "$turnover_retired_initial_body" | sed '1d' | jq -r '.digest')"
+turnover_retired_initial_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg body "$turnover_retired_initial_body" '{body:$body}')" \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_retired_initial_id")
+turnover_retired_initial_url="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" \
+  | jq -r --argjson id "$turnover_retired_initial_id" '.[] | select(.id == $id) | .html_url')"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_initial_body" kind acceptance)"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_acceptance_body" revision 2)"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_acceptance_body" previousDigest "$turnover_retired_initial_digest")"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_acceptance_body" initialReview "$turnover_retired_initial_url")"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_acceptance_body" precedingReview "$turnover_retired_initial_url")"
+turnover_retired_acceptance_body="$(rewrite_turnover_record "$turnover_retired_acceptance_body" verdict accepted)"
+turnover_retired_acceptance_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg body "$turnover_retired_acceptance_body" '{body:$body}')" \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$turnover_retired_acceptance_id")
+
 turnover_initial_url=""; turnover_preceding_url=""; turnover_previous_digest=""
 turnover_initial_id=""; turnover_initial_body=""; turnover_round_one_id=""; turnover_round_one_body=""
 turnover_round_two_id=""; turnover_round_two_body=""; turnover_round_three_id=""; turnover_round_three_body=""
@@ -673,7 +699,7 @@ turnover_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/
 # Recover the actual confirmation URLs instead of depending on comment-id spacing: structured records
 # are ordered and their URLs are the legacy marker's exact backlinks.
 turnover_confirmation_urls="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" \
-  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | .html_url] | .[1:4] | @tsv')"
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | .html_url] | .[-3:] | @tsv')"
 IFS=$'\t' read -r turnover_confirmation_1 turnover_confirmation_2 turnover_confirmation_3 <<<"$turnover_confirmation_urls"
 turnover_legacy_body="$(jq -n -r --arg h "$turnover_head" --arg i "$turnover_initial_url" --arg c1 "$turnover_confirmation_1" --arg c2 "$turnover_confirmation_2" --arg c3 "$turnover_confirmation_3" --arg critic "$turnover_critic" '
   "<!-- fsgg:independent-review-escalation:v1 -->\nexhausted-head: \($h)\ninitial-review: \($i)\nconfirmation-1: \($c1)\nconfirmation-2: \($c2)\nconfirmation-3: \($c3)\ncritic: \($critic)\nverdict: ordinary-chain-exhausted\n\nFixture exhaustion evidence."')"
@@ -813,7 +839,7 @@ if [ "$turnover_missing_legacy_rc" -ne 0 ] && [ "$turnover_before" = "$turnover_
    && [ "$turnover_wrong_round_rc" -ne 0 ] && [ "$turnover_wrong_digest_rc" -ne 0 ] \
    && [ "$turnover_mutation_before" = "$turnover_mutation_after" ] \
    && [ "$turnover_valid_rc" -eq 0 ] && [ "$turnover_valid_after" -eq $((turnover_valid_before + 1)) ] \
-   && printf '%s' "$turnover_valid_out" | jq -e '.revision == 5 and (.digest | length) == 64' >/dev/null \
+   && printf '%s' "$turnover_valid_out" | jq -e '.revision == 7 and (.digest | length) == 64' >/dev/null \
    && [ "$turnover_repair_projection_rc" -ne 0 ] \
    && printf '%s' "$turnover_repair_projection" | jq -e '.verdict == "noVerdict" and .waitStatus == "repairPhaseEntry" and (.reasons[0] | contains("instead of dispatching, resuming, accepting, or manufacturing ordinary round four"))' >/dev/null \
    && [ "$turnover_duplicate_rc" -ne 0 ] && [ "$turnover_duplicate_before" = "$turnover_duplicate_after" ] \
