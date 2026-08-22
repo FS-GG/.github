@@ -22,7 +22,8 @@ module HandlerRegistrationTests =
           Intake = inert
           Say = inert
           Inbox = inert
-          RoomOpen = inert }
+          RoomOpen = inert
+          Comment = inert }
 
     [<Fact>]
     let ``BoardOps registers each owned command exactly once`` () =

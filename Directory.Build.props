@@ -431,8 +431,12 @@
        content identity into the manifest, and rejects stale/missing/contradictory authority and stale
        draft retries. This is additive release-orchestration behavior. Version 0.70.0 remains a poisoned,
        unpromoted immutable package/tag set; 0.71.0 is its forward-only recovery. -->
+  <!-- 0.71.0 -> 0.72.0 (.github#2753): MINOR on the stable 0.x line. The coordination client adds
+       file-backed create and explicit-id amend comment mutation, authoritative UTF-8 length/SHA-256
+       readback, and per-operation recovery capabilities. Packed skills adopt this verified route in
+       place of raw comment mutation. Additive behavior; no command or package identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.71.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.72.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

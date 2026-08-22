@@ -51,6 +51,26 @@ module Writes =
     val postIssueComment:
         transport: Transport.IGitHubTransport -> ref: FS.GG.Coord.Types.Ref -> body: string -> Errors.IoResult<int64>
 
+    /// Proof that GitHub's complete issue-comment collection contains the exact UTF-8 bytes supplied
+    /// to a create or explicit-id amendment. A successful HTTP response alone is never this receipt.
+    type VerifiedCommentMutation =
+        { CommentId: int64
+          ByteLength: int
+          Sha256: string }
+
+    val createVerifiedComment:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        body: string ->
+            Errors.IoResult<VerifiedCommentMutation>
+
+    val amendVerifiedComment:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        commentId: int64 ->
+        body: string ->
+            Errors.IoResult<VerifiedCommentMutation>
+
     /// Result of an idempotent durable protocol-comment write. Both cases are authoritative: the exact
     /// body was observed in a complete post-write comment census. A response alone is never the receipt.
     type DurableCommentWrite =

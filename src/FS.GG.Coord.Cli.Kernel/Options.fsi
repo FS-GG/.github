@@ -132,6 +132,7 @@ module Options =
         | Predicate
         | DiffAudit
         | RoomOpen
+        | CommentCmd
 
         /// TAKE this receiver's per-receiver operation lock and print the authorization tuple the dispatch
         /// broker demands (executor-fencing design §4.1/§5.2, `.github#2312`). This is the production caller

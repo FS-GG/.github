@@ -130,7 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.71.0 — release preparation binds the live stable predecessor before packing.
+    <PackageReleaseNotes>0.72.0 — verified file-backed comment mutation.
+
+WHAT MOVED, AND WHY IT IS A MINOR. The coordination client adds `comment create` and explicit-id
+`comment amend`, reads the exact comment back from the authoritative paginated collection, verifies
+UTF-8 byte length and SHA-256, preserves unique recovery capabilities after failure, and cleans them
+only after verified success. Packed skills use this typed route instead of raw comment mutation.
+Additive command and safety behavior; no package, command, or member identity is removed (.github#2753).
+
+0.71.0 — release preparation binds the live stable predecessor before packing.
 
 WHAT MOVED, AND WHY IT IS A MINOR. The release saga now validates the latest promoted coherent-set
 receipt and its tag/source identity before build or pack, binds both predecessor version and content ID

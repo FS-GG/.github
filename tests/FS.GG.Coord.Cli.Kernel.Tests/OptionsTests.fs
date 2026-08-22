@@ -849,6 +849,7 @@ module OptionsTests =
           "predicate", Text
           "lint", Text
           "body-edits", Text // .github#2477 — same polarity as who/budget: a human table by default
+          "comment", Json // .github#2753 — a verified mutation receipt is the useful bare projection
 
           // JSON only — stdout is a machine document whatever the flag says. Unchanged.
           "scan", Json

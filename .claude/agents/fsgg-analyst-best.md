@@ -42,8 +42,8 @@ The non-negotiables a dispatcher must not get wrong, each of them a pointer into
   findings comment with its own 2451-code-point declaration, and the `fsgg:review-decision/v2` record
   the whole review contract treats as sole authority survived only because it happened not to be that
   account's most recent comment at that instant (`.github#2666`). To rebind or amend **your own**
-  comment, find it by its marker and PATCH that exact id —
-  `gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -f body=@<file>` — or delete it and post
+  comment, find it by its marker and amend that exact id through the verified file route —
+  `scripts/fsgg-coord comment amend <target-ref> <item-ref> <id> <owned-body-file>` — or delete it and post
   a replacement. Editing by recency is never safe here.
 
 - **Scans are the scarce fleet resource.** One `scan`, for the post-filing lane check, and no more.

@@ -60,6 +60,7 @@ module Options =
         | Predicate
         | DiffAudit
         | RoomOpen
+        | CommentCmd
         | OpLockAcquire
         | OpLockRelease
         | Help
@@ -331,6 +332,9 @@ DECISION (pure — no board, no network):
                                              blocks, and a wedged chain costs more than a duplicate row
   delivery-route <show REF|record REF receipt.json> [--json]
                                              inspect or append a source-bound agent delivery-route receipt
+  comment <create TARGET ITEM FILE|amend TARGET ITEM COMMENT-ID FILE> [--json|--text]
+                                             create or explicitly amend one comment from an owned file,
+                                             then re-read and verify its UTF-8 length and SHA-256 digest
 
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
@@ -680,6 +684,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Overlap -> TextOnly
         | Say -> TextOnly
         | RoomOpen -> TextOnly
+        | CommentCmd -> Both Json
         | DoneCmd -> TextOnly
         | VerifyPaths -> TextOnly
         | Followup -> TextOnly
@@ -1152,6 +1157,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // SECOND `Chores.offer` site after `next`. None of that changes the row; it is why the row is here.
         | DoneCmd -> Writes
         | RoomOpen -> Writes // `Writes.createRoom` + a `Rooms: #room` back-reference onto each named item
+        | CommentCmd -> Writes // POSTs or PATCHes one explicit comment, then verifies an authoritative re-read
         // BOTH WRITE, EVERY INVOCATION, AND NEITHER WRITES THE PROJECT BOARD — which is why the row needs
         // saying rather than assuming. The subject is an off-board, closed `[op-lock]` issue, so `who` and
         // `reap` never see it (ADR-0041's own note about the chore lock, on a third subject). But the write
@@ -1323,6 +1329,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Predicate -> "predicate"
         | DiffAudit -> "diff-audit"
         | RoomOpen -> "room open"
+        | CommentCmd -> "comment"
         // TWO WORDS, and the first is the one that carries the guard. `tests/coord-engine-parity/shim.sh`
         // §3b projects this surface through `awk '{print $1}'` because the shim dispatches on `$1`, so both
         // rows below classify as the single token `op-lock` — the same arrangement `room open` already has.
@@ -2140,6 +2147,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
         | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
         | "diff-audit" :: rest -> flags (start { defaults with Command = DiffAudit }) rest
+        | "comment" :: rest -> flags (start { defaults with Command = CommentCmd }) rest
 
         // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
         // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
