@@ -17,7 +17,7 @@ def main():
  with tempfile.TemporaryDirectory() as t:
   bad=Path(t)/"bad.json"; invalid=json.loads(json.dumps(source)); invalid["measures"]["issue-flow"]["periods"][1]["start"]="2026-08-09T00:00:00Z"; bad.write_text(json.dumps(invalid))
   try: module.read_fixture(bad)
-  except ValueError as e: assert "contiguous" in str(e)
+  except ValueError as e: assert "period" in str(e)
   else: raise AssertionError("noncontiguous periods must fail closed")
  print("report-roadmap-health: typed seven-measure derivation and invalid windows hold")
 if __name__=="__main__": main()

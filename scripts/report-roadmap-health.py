@@ -4,12 +4,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 IDS = ("issue-flow", "behaviourless-repairs", "scheduling-intent", "complete-reads", "release-coherence", "artifact-trend", "evidence-growth")
 
 def fail(message: str) -> None:
     raise ValueError(message)
+
+def utc(value: object) -> datetime:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        fail("timestamps must be RFC3339 UTC")
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        fail("timestamps must be RFC3339 UTC")
 
 def read_fixture(path: Path) -> dict:
     try:
@@ -19,7 +28,7 @@ def read_fixture(path: Path) -> dict:
     if data.get("schema") != "fsgg.coord.roadmap-health-input/v1":
         fail("fixture schema must be fsgg.coord.roadmap-health-input/v1")
     window = data.get("window", {})
-    if not isinstance(window.get("start"), str) or not isinstance(window.get("end"), str) or window["start"] >= window["end"]:
+    if not isinstance(window.get("start"), str) or not isinstance(window.get("end"), str) or utc(window["start"]) >= utc(window["end"]):
         fail("window must have ordered start and end")
     measures = data.get("measures")
     if not isinstance(measures, dict) or set(measures) != set(IDS):
@@ -28,7 +37,7 @@ def read_fixture(path: Path) -> dict:
     if not isinstance(periods, list) or not periods:
         fail("issue-flow periods are required")
     for period in periods:
-        if not isinstance(period.get("start"), str) or not isinstance(period.get("end"), str) or period["start"] >= period["end"] or not isinstance(period.get("opened"), int) or not isinstance(period.get("closed"), int):
+        if not isinstance(period, dict) or not isinstance(period.get("start"), str) or not isinstance(period.get("end"), str) or utc(period["start"]) >= utc(period["end"]) or utc(period["end"]) - utc(period["start"]) != timedelta(days=7) or not isinstance(period.get("opened"), int) or isinstance(period.get("opened"), bool) or not isinstance(period.get("closed"), int) or isinstance(period.get("closed"), bool):
             fail("issue-flow periods must be ordered typed rows")
     if any(periods[index]["end"] != periods[index + 1]["start"] for index in range(len(periods) - 1)):
         fail("issue-flow periods must be contiguous")
