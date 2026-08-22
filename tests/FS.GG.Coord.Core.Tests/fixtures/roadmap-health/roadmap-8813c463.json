@@ -1,0 +1,64 @@
+{
+  "schema": "fsgg.coord.roadmap-health-input/v2",
+  "window": {
+    "start": "2026-08-01T00:00:00Z",
+    "end": "2026-08-22T00:00:00Z"
+  },
+  "sourceBoundary": {
+    "repository": "FS-GG/.github",
+    "query": "gh issue list --repo FS-GG/.github --state all --limit 1500 --json number,createdAt,closedAt",
+    "asOf": "2026-08-22T21:08:23Z",
+    "method": "Complete raw issue census from the named query; reporter validates every record and buckets createdAt/closedAt into half-open UTC windows [start,end).",
+    "snapshotPath": "tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/issues-2026-08-22.json",
+    "recordsSha256": "70402786f75ad66ba9e9e4abbdcca1863d3a02030b097981f3ba352771c6b8bd"
+  },
+  "gitBoundary": {
+    "base": "cb33188c",
+    "head": "8813c463"
+  },
+  "measures": {
+    "issue-flow": {},
+    "behaviourless-repairs": {},
+    "scheduling-intent": {
+      "incidents": [
+        {
+          "ref": "https://github.com/FS-GG/.github/issues/2691#issuecomment-5309171168",
+          "date": "2026-08-16T00:00:00Z"
+        }
+      ],
+      "census": {
+        "complete": false,
+        "asOf": "2026-08-22T21:08:23Z",
+        "method": "Known durable incident register references; not a complete absence census."
+      }
+    },
+    "complete-reads": {
+      "incidents": [
+        {
+          "ref": "https://github.com/FS-GG/.github/issues/2735",
+          "date": "2026-08-16T00:00:00Z"
+        }
+      ],
+      "census": {
+        "complete": false,
+        "asOf": "2026-08-22T21:08:23Z",
+        "method": "Known durable incident references; not a complete absence census."
+      }
+    },
+    "release-coherence": {
+      "incidents": [
+        {
+          "ref": "https://github.com/FS-GG/.github/issues/2691#issuecomment-5307831243",
+          "date": "2026-08-16T00:00:00Z"
+        }
+      ],
+      "census": {
+        "complete": false,
+        "asOf": "2026-08-22T21:08:23Z",
+        "method": "Known durable release incident register references; not a complete absence census."
+      }
+    },
+    "artifact-trend": {},
+    "evidence-growth": {}
+  }
+}

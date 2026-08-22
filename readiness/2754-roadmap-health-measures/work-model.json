@@ -1,0 +1,606 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2754-roadmap-health-measures",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "80e63e71e184eeada45e5398839a4c8e20a2a369e0ea3df3ab48c8721872bf20"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "f515b24e34195ffc8213ed9759a8e5a7bf4d7cc328687e86da74f19dce440057"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858"
+      }
+    },
+    {
+      "path": "work/2754-roadmap-health-measures/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2754-roadmap-health-measures",
+    "title": "Derive and score roadmap health measures",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "A deterministic command shall emit all seven named measures for a stated window, derive issue flow from a canonical-digest-bound raw issue census, derive repository trends from resolvable exact Git objects, validate typed incidents/censuses, and never omit an unverified result. (Stories: US-001; Acceptance: AC-001)",
+      "text": "A deterministic command shall emit all seven named measures for a stated window, derive issue flow from a canonical-digest-bound raw issue census, derive repository trends from resolvable exact Git objects, validate typed incidents/censuses, and never omit an unverified result. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 35,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "The roadmap shall score M0\u2013M6 from each milestone\u0027s exit predicate rather than deliverable completion, naming every violated or unverified predicate. (Stories: US-001; Acceptance: AC-002)",
+      "text": "The roadmap shall score M0\u2013M6 from each milestone\u0027s exit predicate rather than deliverable completion, naming every violated or unverified predicate. (Stories: US-001; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "M6 shall combine three consecutive health cycles with an explicit successor census covering \u0060.github#266\u0060, \u0060.github#2752\u0060, and \u0060.github#2691\u0060. (Stories: US-001; Acceptance: AC-003)",
+      "text": "M6 shall combine three consecutive health cycles with an explicit successor census covering \u0060.github#266\u0060, \u0060.github#2752\u0060, and \u0060.github#2691\u0060. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "The immediate-action freeze decision shall record its actor, date, approved/refused/superseded state, scope, and lift condition. (Stories: US-001; Acceptance: AC-004)",
+      "text": "The immediate-action freeze decision shall record its actor, date, approved/refused/superseded state, scope, and lift condition. (Stories: US-001; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Measure retirement shall be explicit in the document and record actor, date, retired state, and reason. (Stories: US-001; Acceptance: AC-005)",
+      "text": "Measure retirement shall be explicit in the document and record actor, date, retired state, and reason. (Stories: US-001; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2754-roadmap-health-measures/spec.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Derive seven measures from raw evidence",
+      "status": "done",
+      "owner": "osprey-d90d",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "GV-001",
+        "PC-001",
+        "PD-001",
+        "PM-001",
+        "VO-001"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Score M0-M6 from exact exit predicates",
+      "status": "done",
+      "owner": "osprey-d90d",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002",
+        "VO-002"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Evaluate M6 health cycles and successor census",
+      "status": "done",
+      "owner": "osprey-d90d",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003",
+        "VO-003"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Record the attributable freeze decision",
+      "status": "done",
+      "owner": "osprey-d90d",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004",
+        "VO-004"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Retire undefined measure in the roadmap",
+      "status": "done",
+      "owner": "osprey-d90d",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005",
+        "VO-005"
+      ],
+      "requiredSkills": [],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2754-roadmap-health-measures/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "scripts/report-roadmap-health.py",
+        "tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/issues-2026-08-22.json",
+        "tests/skill-quality/test-report-roadmap-health.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2754-roadmap-health-measures/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2754-roadmap-health-measures/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md",
+        "tests/skill-quality/test-report-roadmap-health.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2754-roadmap-health-measures/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2754-roadmap-health-measures/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "docs/reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2754-roadmap-health-measures/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2754-roadmap-health-measures/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.2.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "f7b3f0284ef25dd08c63eb29702998b788d893720f60d070840034142b8d1ce2"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "80e63e71e184eeada45e5398839a4c8e20a2a369e0ea3df3ab48c8721872bf20"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "f515b24e34195ffc8213ed9759a8e5a7bf4d7cc328687e86da74f19dce440057"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe2847b83a1acdc18e408b581e03448dcd521746a659379d5813bde5d6431b11"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "f27f5767ba4782cb660dba250017be2e23c445f1dccfdbcd3f3ba93d87f1e858"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2754-roadmap-health-measures/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ad45f86894710ee63cdc9da10cb49526bf48923a586deec93b2fd9194c3fd94a"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "2bbbcdebf64c8bf48e5739bce2f9bf776dc739542192e8146c1db9682d7f964a"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

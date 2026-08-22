@@ -184,37 +184,37 @@ The goal is not less evidence. It is fewer independently mutable descriptions of
 
 Durations are sequencing estimates, not calendar commitments. Each milestone has an exit condition that prevents an incomplete migration from becoming another permanent compatibility layer.
 
-- [x] **M0 — stabilize**
+- [ ] **M0 — stabilize**
   - Target: 0–2 days
   - Deliverables: Land bounded release, feed-coherence, project-audit, engine-pin, and claim-auth repairs; triage lint; pause new process features; capture replay fixtures and baseline metrics
   - Exit criteria: Main has no standing red checks; open repair PRs are mergeable or explicitly superseded; baseline is reproducible
 
-- [x] **M1 — intent/status split**
+- [ ] **M1 — intent/status split**
   - Target: Days 3–7
   - Deliverables: Add `SchedulingIntent`; implement pure reducer; shadow old/new projections; migrate deliberate parks
   - Exit criteria: Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch
 
-- [x] **M2 — complete-read boundary**
+- [ ] **M2 — complete-read boundary**
   - Target: Week 1
   - Deliverables: Add typed GraphQL adapter and generic connection draining; migrate all production readers; add fault-injection tests
   - Exit criteria: No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success
 
-- [x] **M3 — release saga**
+- [ ] **M3 — release saga**
   - Target: Week 2
   - Deliverables: Add release manifest; pack once; validate exact artifacts; add resumable orchestration and coherent-channel promotion
   - Exit criteria: One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes
 
-- [x] **M4 — structured decisions**
+- [ ] **M4 — structured decisions**
   - Target: Weeks 2–3
   - Deliverables: Add route and review revision records; dual-read legacy evidence; migrate active items
   - Exit criteria: Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision
 
-- [x] **M5 — evidence and CI consolidation**
+- [ ] **M5 — evidence and CI consolidation**
   - Target: Weeks 3–4
   - Deliverables: Introduce compact evidence manifests and artifact retention; generate skill projections; consolidate policy runners and subject discovery
   - Exit criteria: Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss
 
-- [x] **M6 — retire compatibility paths**
+- [ ] **M6 — retire compatibility paths**
   - Target: After 3 stable cycles
   - Deliverables: Remove old reducer, raw GraphQL helpers, legacy body hashes, and superseded release paths; document operations
   - Exit criteria: Three consecutive operating cycles meet the health measures below; no same-class successor issue remains open
@@ -673,6 +673,93 @@ Measure these weekly from M0 onward:
 - releases either complete coherently or remain visibly resumable, with no ambiguous channel state;
 - the number of independent policy implementations, check scripts, and workflows trends down;
 - checked-in generated evidence grows more slowly than core implementation and tests.
+
+### Health-measure reading — 2026-08-22
+
+The checkbox state above is now deliberately conservative: the deliverables landed, but the evidence
+required by their exit criteria is incomplete. `scripts/report-roadmap-health.py` is the repeatable
+reader for this section. It derives issue flow from a digest-bound raw issue snapshot and the two
+repository trends from exact Git objects; asserted period, artifact, or line-count summaries are not
+accepted. Its additive `milestoneScores` output is the typed M0–M6 authority: every entry carries the
+exact exit predicate(s), derived verdict, named gap and evidence, and expected checkbox state. The
+reporter parses this document's seven milestone checkboxes and refuses any mapping that differs from
+those typed scores. Missing typed evidence becomes `unverified`. Measure 2 is retired in this document by the
+operator-delegated host, effective 2026-08-22, with state `retired`: no authoritative
+behaviour-changing classifier exists, so the measure is not guessed or silently omitted.
+
+At the historical reading bound to `8813c463`, `python3 scripts/report-roadmap-health.py --format json --fixture
+tests/FS.GG.Coord.Core.Tests/fixtures/roadmap-health/roadmap-8813c463.json`
+established the following:
+
+| measure | verdict | observation |
+|---|---|---|
+| issue flow | violated | three contiguous periods are 83/64, 146/151, and 78/86 opened/closed; the first period fails |
+| behaviourless repairs | retired | 2026-08-22 operator-delegated retirement: no authoritative classifier exists |
+| scheduling intent | violated | #2691 records a reversed deliberate park |
+| complete reads | violated | #2735 records a later partial-read discovery |
+| release coherence | violated | the release packet records a green push publishing nothing |
+| artifact trend | violated | all `scripts/check-*` files grew 49 → 54 and all `.github/workflows` files grew 100 → 115; independent policy-implementation count is unverified because no authoritative enumerator exists |
+| evidence growth | met | exact historical boundary `cb33188c..8813c463`: `work/` + `readiness/` net -19,694 against `src/` + `tests/` net +1,972 |
+
+The issue-flow census is independently reproducible. At `2026-08-22T21:08:23Z`, the query
+`gh issue list --repo FS-GG/.github --state all --limit 1500 --json number,createdAt,closedAt`
+returned 1,210 issues. The committed typed snapshot stores every raw `number`, `createdAt`, and
+`closedAt` record; `sourceBoundary.recordsSha256`
+`70402786f75ad66ba9e9e4abbdcca1863d3a02030b097981f3ba352771c6b8bd` binds their canonical JSON.
+The reporter validates that digest and every record before bucketing timestamps into the three
+half-open UTC windows `[2026-08-01,08)`, `[2026-08-08,15)`, and `[2026-08-15,22)`. The exact Git
+method resolves both commits, uses `git ls-tree -r --name-only` for the two file censuses, and uses
+`git diff --numstat` with `net = additions - deletions` for `work/ readiness/` and `src/ tests/`.
+
+Each milestone checkbox is traceable to its own exit predicate, rather than inferred from whether its
+deliverables landed:
+
+The following machine-readable table is the exact production-validated projection of the derived
+`milestoneScores`. Each predicates cell is canonical JSON; changing any id, verdict, exit predicate,
+gap, evidence reference, or expected checkbox makes the reporter fail closed.
+
+<!-- roadmap-health-milestone-scores:v1 -->
+| milestone | verdict | checkboxExpected | predicates |
+|---|---|---|---|
+| M0 | unverified | false | [{"evidence":["missing-source:required-check-census"],"exitPredicate":"Main has no standing red checks","gap":"No complete required-check census source is bound to the window.","id":"main-green","verdict":"unverified"},{"evidence":["missing-source:open-repair-census"],"exitPredicate":"Open repair PRs are mergeable or explicitly superseded","gap":"No complete open-repair census source is bound to the window.","id":"repairs-settled","verdict":"unverified"},{"evidence":["70402786f75ad66ba9e9e4abbdcca1863d3a02030b097981f3ba352771c6b8bd","cb33188c","8813c463"],"exitPredicate":"Baseline is reproducible","gap":"Raw issue census and exact Git objects reproduce the baseline.","id":"baseline-reproducible","verdict":"met"}] |
+| M1 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2691#issuecomment-5309171168"],"exitPredicate":"Reconciliation is idempotent; explicit Backlog and human parks survive; replay differences are explained; rollback is a projection switch","gap":"A typed scheduling-reversal incident contradicts survival of deliberate parks.","id":"reconciliation-intent","verdict":"violated"}] |
+| M2 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2735"],"exitPredicate":"No production call site handles raw GraphQL envelopes; incomplete reads cannot be returned as success","gap":"A typed partial-read incident contradicts the complete-read boundary.","id":"complete-read-boundary","verdict":"violated"}] |
+| M3 | violated | false | [{"evidence":["https://github.com/FS-GG/.github/issues/2691#issuecomment-5307831243"],"exitPredicate":"One full coherent-set release reaches both feeds without manual recovery; forced mid-publish failure resumes safely with identical hashes","gap":"A typed ambiguous-release incident contradicts coherent resumable release.","id":"coherent-release","verdict":"violated"}] |
+| M4 | unverified | false | [{"evidence":["missing-source:effective-decision-census"],"exitPredicate":"Body-only edits neither grant nor revoke machine authorization; every effective decision is bound to structured inputs and a revision","gap":"No complete effective-decision census source is bound to the window.","id":"structured-decisions","verdict":"unverified"}] |
+| M5 | violated | false | [{"evidence":["cb33188c","8813c463"],"exitPredicate":"Material policy has one source; bulky evidence leaves Git; checker/workflow count and duplicated policy decline without coverage loss","gap":"Exact Git-derived check and workflow counts rose; independent policy-implementation count is unverified.","id":"artifact-decline","verdict":"violated"}] |
+| M6 | violated | false | [{"evidence":["issue-flow:violated","scheduling-intent:violated","complete-reads:violated","release-coherence:violated","artifact-trend:violated","evidence-growth:met","issue-flow-periods:83/64,146/151,78/86"],"exitPredicate":"Three consecutive operating cycles meet the health measures below","gap":"At least one active health measure is violated; the three-cycle composite is not met.","id":"healthy-cycles","verdict":"violated"},{"evidence":["https://github.com/FS-GG/.github/issues/266:open","https://github.com/FS-GG/.github/issues/2752:closed","https://github.com/FS-GG/.github/issues/2691:open"],"exitPredicate":"No same-class successor issue remains open","gap":"The bounded successor census contains open issues.","id":"no-open-successor","verdict":"violated"}] |
+<!-- /roadmap-health-milestone-scores:v1 -->
+
+All seven boxes remain `[ ]` because every corresponding score is `violated` or `unverified`; none is
+cleared merely because its deliverables shipped.
+
+Verification: `python3 tests/skill-quality/test-report-roadmap-health.py` proves that the complete
+seven-measure inventory is emitted and that the production CLI agrees with the direct parser route.
+Its controlled mutations corrupt the raw-record digest; duplicate, zero, and boolean issue numbers;
+null, invalid, future, and closed-before-created timestamps; attempted period/artifact/line-count
+summaries; empty, placeholder, malformed, and out-of-window incident evidence; negative census fields;
+non-boolean completeness; and empty, null, or unresolvable Git boundaries. Every bypass fails closed.
+The committed raw snapshot and exact Git objects are the positive controls used for the reported result.
+
+The receiver-yield dependency is consumed as evidence, not treated as a green health measure: the
+2026-08-20 report records 186 accepted kit transitions across all seven receivers but explicitly leaves
+prevention and escaped-incident yield unverified. It therefore confirms that receiver delivery happened
+while leaving the roadmap's rate-and-integrity measures unproven.
+
+The reporter derives its typed `milestoneScores` array from the raw issue census, incident records,
+and exact Git objects, then requires the table above and all seven roadmap checkboxes to match it
+exactly. M0 and M4 remain deterministically unverified because no raw completeness census is bound;
+there is no boolean verdict input. M6 derives `.github#266` open, `.github#2752` closed, and
+`.github#2691` open directly from those issues' `closedAt` fields in the digest-bound 1,210-record
+snapshot. Its three-cycle predicate is the precedence-ordered composite of every active measure:
+any violation is `violated`, otherwise any unknown is `unverified`, and only six `met` verdicts
+(including issue flow's three exact periods) produce `met`. This is a score from the reading, not a
+claim that the milestone deliverables were undone.
+
+Freeze decision state: **approved** by the operator on **2026-08-17**, recorded for that actor by board
+analyst `avocet-bb9a` in `.github#2754` comment `5317248936`. It remains in force until the seven
+measures are both derived and green. It freezes new check scripts, workflows, skills, registers, and
+process/contract rows; it does not freeze repairs to existing surfaces or this measurement work.
 
 ## Sequencing and risk control
 

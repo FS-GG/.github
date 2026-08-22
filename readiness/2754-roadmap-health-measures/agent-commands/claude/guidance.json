@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2754-roadmap-health-measures",
+  "targetId": "claude",
+  "generator": "FS.GG.SDD.Artifacts/1.2.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/2754-roadmap-health-measures/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ee5d151a4cada6ea2af81243e54ebe9503a6c5cfdd4dc33a12b44381a1b45319"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "ec1e6b55c6ed2de75acdbf3f4783b3f4b997bd51729995018116467d062bc362"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Derive seven measures from raw evidence",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, GV-001, PC-001, PD-001, PM-001, VO-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "GV-001",
+        "PC-001",
+        "PD-001",
+        "PM-001",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Score M0-M6 from exact exit predicates",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-002, FR-002, PD-002, VO-002.",
+      "relatedIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002",
+        "VO-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Evaluate M6 health cycles and successor census",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering AC-003, FR-003, PD-003, VO-003.",
+      "relatedIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003",
+        "VO-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Record the attributable freeze decision",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering AC-004, FR-004, PD-004, VO-004.",
+      "relatedIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004",
+        "VO-004"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Retire undefined measure in the roadmap",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (done) covering AC-005, FR-005, PD-005, VO-005.",
+      "relatedIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005",
+        "VO-005"
+      ]
+    }
+  ],
+  "skills": [],
+  "renderedFiles": [
+    {
+      "path": "readiness/2754-roadmap-health-measures/agent-commands/claude/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/2754-roadmap-health-measures/agent-commands/claude/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": [
+    {
+      "id": "agents.staleGeneratedGuidance",
+      "severity": "warning",
+      "artifact": "readiness/2754-roadmap-health-measures/agent-commands/claude/guidance.json",
+      "message": "Generated agent guidance for target \u0027claude\u0027 no longer matches the current normalized work model.",
+      "correction": "Regenerate agent guidance so the generated view matches the current work model.",
+      "relatedIds": [
+        "claude"
+      ]
+    }
+  ]
+}
