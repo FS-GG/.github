@@ -130,7 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.0 — resumable intake projection with canonical board-field values.
+    <PackageReleaseNotes>0.75.1 — spent merge elections refuse replacement delivery before review.
+
+WHAT MOVED, AND WHY IT IS A PATCH. Delivery now selects the hosted claim fence's lowest same-opkey
+election before validating its recorded operation tuple, and refuses a replacement before any write
+when that winner belongs to another pull request or records mismatched facts. The packed Kit documents
+the same early preflight and clean claim-turnover recovery. This repairs lifecycle enforcement and its
+operator guidance without removing a package, command, or public member identity (.github#2893).
+
+0.75.0 — resumable intake projection with canonical board-field values.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Intake validation and application now canonicalize the documented
 severity vocabulary before board-field validation and external writes. Failed legacy receipt or intent
