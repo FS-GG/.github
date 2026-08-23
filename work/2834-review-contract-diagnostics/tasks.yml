@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 2834-review-contract-diagnostics
+  title: "Actionable and honest review contract diagnostics"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2834-review-contract-diagnostics/spec.md
+  sourceClarifications: work/2834-review-contract-diagnostics/clarifications.md
+  sourceChecklist: work/2834-review-contract-diagnostics/checklist.md
+  sourcePlan: work/2834-review-contract-diagnostics/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2834-review-contract-diagnostics/spec.md
+    digest: 0a61a9d58ae4f4e6c58db4d9381998ae80f05584928b547dbaf83742651d0cd7
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2834-review-contract-diagnostics/clarifications.md
+    digest: 6be3dc88e527fa6003d3aad7cdf0020c6d7ba06160b9aed05d7c7f1c829cb8f4
+    schemaVersion: 1
+  - label: checklist
+    path: work/2834-review-contract-diagnostics/checklist.md
+    digest: 8d09ea5547ff1ab8c4bb2fb192f53886e560d051ae06dd063a3d2971740a11eb
+    schemaVersion: 1
+  - label: plan
+    path: work/2834-review-contract-diagnostics/plan.md
+    digest: a4e2bbf30c7bd73aad46447d20c4247efa5a1fea44ab3e869b854e71dc373a9c
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2834-review-contract-diagnostics."

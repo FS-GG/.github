@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 2834-review-contract-diagnostics
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2834-review-contract-diagnostics/spec.md
+sourceClarifications: work/2834-review-contract-diagnostics/clarifications.md
+sourceChecklist: work/2834-review-contract-diagnostics/checklist.md
+sourcePlan: work/2834-review-contract-diagnostics/plan.md
+sourceTasks: work/2834-review-contract-diagnostics/tasks.yml
+sourceAnalysis: readiness/2834-review-contract-diagnostics/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2834-review-contract-diagnostics/analysis.json
+    digest: 02d8f7c5e9a6d6386f89ea5acf01b724e3395354e77e36c29eb6fc9cb2dbf69e
+    schemaVersion: 1
+  - label: checklist
+    path: work/2834-review-contract-diagnostics/checklist.md
+    digest: 8d09ea5547ff1ab8c4bb2fb192f53886e560d051ae06dd063a3d2971740a11eb
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2834-review-contract-diagnostics/clarifications.md
+    digest: 6be3dc88e527fa6003d3aad7cdf0020c6d7ba06160b9aed05d7c7f1c829cb8f4
+    schemaVersion: 1
+  - label: plan
+    path: work/2834-review-contract-diagnostics/plan.md
+    digest: a4e2bbf30c7bd73aad46447d20c4247efa5a1fea44ab3e869b854e71dc373a9c
+    schemaVersion: 1
+  - label: spec
+    path: work/2834-review-contract-diagnostics/spec.md
+    digest: 0a61a9d58ae4f4e6c58db4d9381998ae80f05584928b547dbaf83742651d0cd7
+    schemaVersion: 1
+  - label: tasks
+    path: work/2834-review-contract-diagnostics/tasks.yml
+    digest: 8a594b38bad68925bf4e4a4fb4fe43710dcd47949aa61431c378e59e1cb4bd42
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV005]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV006]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: ["Core exact-count mutation produced one expected failing test; lifecycle command-name mutation produced one expected failing test; both sources were restored before the recorded green run."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/StructuredDecisionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2834-review-contract-diagnostics/artifacts/verification.test-report.xml
+      digest: "sha256:340ed79d2aa9cb94d47118c12f010d377f282cd7515ff91ae276ee018cb1d502"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 922
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
