@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
     notes: ["Focused intake transaction suite passed; canonicalization mutation failed the named #2835 control."]
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
-    notes: ["Focused intake transaction suite passed; partial-state output names the existing issue and retry route."]
+    notes: ["Focused intake transaction suite passed; create-then-receipt-persist failure names the created issue, prescribes same-id recovery, and the retry completes projection without a second create POST. A generic-diagnostic mutation made the named control fail."]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
-    notes: [Focused intake transaction suite passed legacy receipt and intent recovery with zero second create POST.]
+    notes: [Focused intake transaction suite passed production-shaped legacy receipt and intent recovery through board add and field projection with zero second create POST. Removing compatible legacy digests made both named controls fail.]
   - id: EV004
     kind: verification
     subject:
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
     notes: [Focused intake transaction suite and executed coord-engine intake route passed.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
     notes: [Canonical and legacy receipt contracts compile and pass focused regression coverage.]
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
-    notes: ["29 focused tests passed; subject-breaking canonicalization mutation produced one expected failure."]
+    notes: ["32 focused tests passed; canonicalization, legacy-digest compatibility, and issue-bound partial-diagnostic mutations each produced discriminating failures before restoration."]
   - id: EV007
     kind: verification
     subject:
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
     notes: [Legacy cache schema is unchanged and bounded compatibility tests passed.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
-      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digest: "sha256:99abe2e8e3db489b491e0328fa3f28454fcefbef06f0553ada4af36e23830402"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 29
+      passed: 32
       failed: 0
       skipped: 0
     notes: [SDD generated views refreshed through implementationReady analysis.]

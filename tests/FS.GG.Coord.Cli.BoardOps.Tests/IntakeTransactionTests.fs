@@ -618,6 +618,112 @@ module IntakeTransactionTests =
             Assert.Equal(Kernel.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
 
+    let private successfulProjectionWorld duplicateCandidates =
+        let creates = ref 0
+        let added = ref 0
+        let writes = ref 0
+        let boardAdded = ref false
+        let projectedStatus: string option ref = ref None
+        let projectedClass: string option ref = ref None
+        let projectedSeverity: string option ref = ref None
+        let world = Fake.Recorder(fun req ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "repos/FS-GG/.github/issues" -> ok duplicateCandidates
+            | "POST", "repos/FS-GG/.github/issues" -> creates.Value <- creates.Value + 1; ok "{\"number\":77}"
+            | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(doc, _) when doc.Contains "projectsV2" ->
+                    ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                | Query(doc, _) when doc.Contains "fields(first" ->
+                    ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                    let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
+                    let value =
+                        match field with
+                        | Some "Status" -> projectedStatus.Value
+                        | Some "Class" -> projectedClass.Value
+                        | Some "Severity" -> projectedSeverity.Value
+                        | _ -> None
+                    let node = value |> Option.map (fun projected -> $"{{\"name\":{JsonSerializer.Serialize projected}}}") |> Option.defaultValue "null"
+                    ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
+                | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                    let field = projectedStatus.Value |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}") |> Option.defaultValue "null"
+                    ok $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
+                | Query(doc, _) when doc.Contains "projectItems(first" ->
+                    let nodes = if boardAdded.Value then "[{\"id\":\"PI\",\"project\":{\"number\":1}}]" else "[]"
+                    ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}")
+                | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> added.Value <- added.Value + 1; boardAdded.Value <- true; ok "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" ->
+                    writes.Value <- writes.Value + 1
+                    projectedStatus.Value <- Some "Backlog"
+                    projectedClass.Value <- Some "hardening"
+                    projectedSeverity.Value <- Some "High"
+                    ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                | _ -> Error(NotFound "unrecognised board request")
+            | _ -> Error(NotFound "unrecognised request"))
+        world, creates, added, writes
+
+    [<Theory>]
+    [<InlineData("receipt")>]
+    [<InlineData("intent")>]
+    let ``#2835 a corrected legacy draft completes production-shaped projection without another create`` recovery =
+        withCache <| fun cache ->
+            let canonicalPath = Path.Combine(cache, "corrected.json")
+            let correctedJson = severityDraft "High"
+            File.WriteAllText(canonicalPath, correctedJson)
+            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+            let legacy = { canonical with Severity = Some "high" }
+            let legacyDigest = IntakeReceipt.digest legacy
+            let duplicateCandidates =
+                if recovery = "receipt" then
+                    Cache.putIntakeReceipt
+                        { IntakeReceipt.Receipt.DraftId = canonical.Id; Owner = canonical.Owner
+                          Repository = canonical.Repository; IssueNumber = 77; DraftDigest = legacyDigest }
+                    |> Result.defaultWith failwith
+                    "[]"
+                else
+                    Cache.putIntakeIntent
+                        { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
+                          Repository = canonical.Repository; DraftDigest = legacyDigest }
+                    |> Result.defaultWith failwith
+                    let legacyMarker = $"<!-- fsgg:intake:v1 id=%s{canonical.Id} digest=%s{legacyDigest} -->"
+                    $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize legacyMarker}}}]"
+            let world, creates, added, writes = successfulProjectionWorld duplicateCandidates
+            let code = invokeDraft cache correctedJson world
+            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal(0, creates.Value)
+            Assert.Equal(1, added.Value)
+            Assert.Equal(1, writes.Value)
+
+    [<Fact>]
+    let ``#2835 receipt persistence failure names the created issue and same-id recovery completes`` () =
+        withCache <| fun cache ->
+            let receiptPath = Path.Combine(cache, "intake-tx-2134.json")
+            Directory.CreateDirectory receiptPath |> ignore
+            let mutable initialCreates = 0
+            let first = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "POST", "repos/FS-GG/.github/issues" -> initialCreates <- initialCreates + 1; ok "{\"number\":77}"
+                | _ -> Error(NotFound "unexpected request before receipt persistence"))
+            let firstCode, firstError = invokeDraftWithError cache draft first
+            Assert.Equal(Kernel.ExitError, firstCode)
+            Assert.Equal(1, initialCreates)
+            Assert.Contains("issue FS-GG/.github#77 was created", firstError)
+            Assert.Contains("same id to recover", firstError)
+
+            Directory.Delete receiptPath
+            let marker = draftMarker cache
+            let duplicate = $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize marker}}}]"
+            let world, creates, added, writes = successfulProjectionWorld duplicate
+            let retryCode = invoke cache world
+            if retryCode <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal(0, creates.Value)
+            Assert.Equal(1, added.Value)
+            Assert.Equal(1, writes.Value)
+
     [<Theory>]
     [<InlineData(false)>]
     [<InlineData(true)>]
