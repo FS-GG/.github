@@ -139,6 +139,8 @@ EOF
 # Additive v2 shape: the legacy sha256 remains for old readers while new readers close over the
 # complete directory, including reference bytes and executable mode.
 V2_MANIFEST="$WORK/manifest-v2.json"
+V2_OPTIONAL_MODE_MANIFEST="$WORK/manifest-v2-optional-mode.json"
+V2_TRUE_MODE_MANIFEST="$WORK/manifest-v2-true-mode.json"
 alpha_skill="$(sha256sum "$GOOD/.claude/skills/alpha/SKILL.md" | cut -d' ' -f1)"
 alpha_ref="$(sha256sum "$GOOD/.claude/skills/alpha/references/notes.md" | cut -d' ' -f1)"
 beta_skill="$(sha256sum "$GOOD/.claude/skills/beta/SKILL.md" | cut -d' ' -f1)"
@@ -155,6 +157,9 @@ cat > "$V2_MANIFEST" <<EOF
   ] }
 ] }
 EOF
+jq 'del(.skills[].files[].executable)' "$V2_MANIFEST" > "$V2_OPTIONAL_MODE_MANIFEST"
+jq '(.skills[].files[] | select(.path == "references/notes.md").executable) = true' \
+  "$V2_MANIFEST" > "$V2_TRUE_MODE_MANIFEST"
 
 # The canonical digest must equal raw `sha256sum SKILL.md` FOR THIS FIXTURE — the producers' shipped
 # algorithm (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
@@ -222,6 +227,11 @@ expect_pass "coherent union (content-equality only)" "$GOOD"
 # --- 2. coherent union WITH manifest (incl. declared-but-absent 'omega') → PASS ---
 expect_pass "coherent union (+ superset-catalog manifest)" "$GOOD" --manifest "$MANIFEST"
 expect_pass "coherent union (+ v2 whole-directory manifest)" "$GOOD" --manifest "$V2_MANIFEST"
+expect_pass "v2 manifest: omitted executable makes no mode assertion" "$GOOD" --manifest "$V2_OPTIONAL_MODE_MANIFEST"
+
+EXPLICIT_TRUE="$WORK/explicit-true-mode"; build_good "$EXPLICIT_TRUE"
+for r in $ROOTS; do chmod a+x "$EXPLICIT_TRUE/$r/alpha/references/notes.md" "$EXPLICIT_TRUE/$r/beta/references/notes.md"; done
+expect_pass "v2 manifest: explicit true executable mode is enforced and can match" "$EXPLICIT_TRUE" --manifest "$V2_TRUE_MODE_MANIFEST"
 
 # --- 3. divergent bytes: one root's skill body differs → FAIL ---
 DIV="$WORK/divergent"; build_good "$DIV"
@@ -241,7 +251,11 @@ expect_fail "v2 manifest: missing declared reference in every root" drifted "$MI
 
 STALE_MODE="$WORK/stale-mode"; build_good "$STALE_MODE"
 for r in $ROOTS; do chmod a+x "$STALE_MODE/$r/alpha/references/notes.md"; done
-expect_fail "v2 manifest: stale executable mode in every root" drifted "$STALE_MODE" --manifest "$V2_MANIFEST"
+expect_fail "v2 manifest: explicit false rejects an executable file" drifted "$STALE_MODE" --manifest "$V2_MANIFEST"
+
+STALE_TRUE_MODE="$WORK/stale-true-mode"; cp -R "$EXPLICIT_TRUE" "$STALE_TRUE_MODE"
+for r in $ROOTS; do chmod a-x "$STALE_TRUE_MODE/$r/alpha/references/notes.md"; done
+expect_fail "v2 manifest: explicit true rejects a non-executable file" drifted "$STALE_TRUE_MODE" --manifest "$V2_TRUE_MODE_MANIFEST"
 
 EXTRA_FILE="$WORK/extra-file"; build_good "$EXTRA_FILE"
 for r in $ROOTS; do printf 'undeclared\n' > "$EXTRA_FILE/$r/alpha/extra.txt"; done
