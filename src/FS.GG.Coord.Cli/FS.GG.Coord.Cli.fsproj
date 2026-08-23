@@ -130,7 +130,16 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.74.0 — atomic dependency projection, typed lifecycle completion, and actionable review refusals.
+    <PackageReleaseNotes>0.75.0 — resumable intake projection with canonical board-field values.
+
+WHAT MOVED, AND WHY IT IS A MINOR. Intake validation and application now canonicalize the documented
+severity vocabulary before board-field validation and external writes. Failed legacy receipt or intent
+transactions resume through complete board projection under the same filing id, and a failure after issue
+creation preserves an issue-bound recovery diagnostic instead of hiding the visible partial artifact.
+The packed Kit now documents the board's canonical severity vocabulary. These are additive repaired
+receiver-visible behaviors; no package, command, or public member identity is removed (.github#2835).
+
+0.74.0 — atomic dependency projection, typed lifecycle completion, and actionable review refusals.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Ready promotion now treats the dependency column as authoritative,
 refuses non-atomic projections, and fences the final write boundary against stale dependency facts.
