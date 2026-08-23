@@ -56,10 +56,23 @@ module IntakeApplication =
                 match strings, paths, disposition, optional with
                 | [ Ok schema; Ok id; Ok owner; Ok repository; Ok title; Ok observed; Ok rootCause; Ok acceptance; Ok verification; Ok className; Ok status ], Ok paths, Ok disposition,
                   [ Ok phase; Ok severity; Ok blockedBy; Ok blockedOn; Ok backlogReason; Ok judgementQuestion ] ->
-                    let draft: Intake.Draft =
-                        { Schema = schema; Id = id; Owner = owner; Repository = repository; Title = title; Observed = observed; RootCause = rootCause; Acceptance = acceptance; Verification = verification; Paths = paths; Class = className; Status = status; Disposition = Some disposition
-                          Phase = phase; Severity = severity; BlockedBy = blockedBy; BlockedOn = blockedOn; BacklogReason = backlogReason; JudgementQuestion = judgementQuestion }
-                    Ok draft
+                    let severity =
+                        severity
+                        |> Option.map (fun value ->
+                            match Types.severityOfWireName value with
+                            | Some parsed -> Ok(Types.severityWireName parsed)
+                            | None -> Error "must be Critical, High, Medium, Low or Unset")
+                        |> function
+                            | None -> Ok None
+                            | Some(Ok value) -> Ok(Some value)
+                            | Some(Error detail) -> Error $"severity {detail}"
+                    match severity with
+                    | Error detail -> Error detail
+                    | Ok severity ->
+                        let draft: Intake.Draft =
+                            { Schema = schema; Id = id; Owner = owner; Repository = repository; Title = title; Observed = observed; RootCause = rootCause; Acceptance = acceptance; Verification = verification; Paths = paths; Class = className; Status = status; Disposition = Some disposition
+                              Phase = phase; Severity = severity; BlockedBy = blockedBy; BlockedOn = blockedOn; BacklogReason = backlogReason; JudgementQuestion = judgementQuestion }
+                        Ok draft
                 | _ ->
                     let failures = strings |> List.choose (function Error e -> Some e | _ -> None)
                     let failures = match paths with Error e -> failures @ [ e ] | _ -> failures

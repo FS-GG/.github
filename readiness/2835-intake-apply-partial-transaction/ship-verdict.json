@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2835-intake-apply-partial-transaction",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "e5d614171e2a2999e7fa2f5790b78604a0aa1f7cc524bd85106e4b138478b77a"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 8,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 8
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

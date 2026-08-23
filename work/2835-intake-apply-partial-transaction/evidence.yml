@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 2835-intake-apply-partial-transaction
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2835-intake-apply-partial-transaction/spec.md
+sourceClarifications: work/2835-intake-apply-partial-transaction/clarifications.md
+sourceChecklist: work/2835-intake-apply-partial-transaction/checklist.md
+sourcePlan: work/2835-intake-apply-partial-transaction/plan.md
+sourceTasks: work/2835-intake-apply-partial-transaction/tasks.yml
+sourceAnalysis: readiness/2835-intake-apply-partial-transaction/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2835-intake-apply-partial-transaction/analysis.json
+    digest: 7e79f3a4aaef0ef5bde4097a0914705747b5c215c33712b9e923ee22c98fb3ba
+    schemaVersion: 1
+  - label: checklist
+    path: work/2835-intake-apply-partial-transaction/checklist.md
+    digest: 2f308f70e8191c296a16b3878e0a4b2237a8050f8fd71a4bda6a89a8caca6a37
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2835-intake-apply-partial-transaction/clarifications.md
+    digest: e52c01538a34b141a0c799072f780f7129fc3f1c3462323f095e665e88a4df6c
+    schemaVersion: 1
+  - label: plan
+    path: work/2835-intake-apply-partial-transaction/plan.md
+    digest: 85d04306b27280b3df93dc909b58b7e5d6d2e130467fe0c86f174ade7ffc9314
+    schemaVersion: 1
+  - label: spec
+    path: work/2835-intake-apply-partial-transaction/spec.md
+    digest: 0021a464fb25fd5e711aa53c61761c85abea148fcc6389fd35f289b99f9a3282
+    schemaVersion: 1
+  - label: tasks
+    path: work/2835-intake-apply-partial-transaction/tasks.yml
+    digest: f7d9970204fd604446829d74d5f7c6977ff9691740b82db8ad910813c4f5a909
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: ["Focused intake transaction suite passed; canonicalization mutation failed the named #2835 control."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: ["Focused intake transaction suite passed; partial-state output names the existing issue and retry route."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: [Focused intake transaction suite passed legacy receipt and intent recovery with zero second create POST.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: [Focused intake transaction suite and executed coord-engine intake route passed.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: [Canonical and legacy receipt contracts compile and pass focused regression coverage.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: ["29 focused tests passed; subject-breaking canonicalization mutation produced one expected failure."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: [Legacy cache schema is unchanged and bounded compatibility tests passed.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2835-intake-apply-partial-transaction/artifacts/verification.test-report.xml
+      digest: "sha256:846ad302ff61fb6d69eefe43d9d5238319354ef8a1db36b2f8d8a45e66843023"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 29
+      failed: 0
+      skipped: 0
+    notes: [SDD generated views refreshed through implementationReady analysis.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

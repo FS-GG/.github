@@ -60,6 +60,9 @@ module IntakeTransactionTests =
         | Ok parsed -> IntakeReceipt.marker parsed
         | Error error -> failwith error
 
+    let private severityDraft value =
+        draft.Replace("\"disposition\":\"create\"", $"\"severity\":\"%s{value}\",\"disposition\":\"create\"")
+
     let private lightweightRouteComment subject =
         let draft: StructuredDecision.RouteRecord =
             { Schema = StructuredDecision.RouteSchema
@@ -112,6 +115,76 @@ module IntakeTransactionTests =
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
         Environment.SetEnvironmentVariable("FSGG_WORKER", "intake-test")
         try action cache finally Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous); Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker); Directory.Delete(cache, true)
+
+    [<Fact>]
+    let ``#2835 lowercase severity decodes to the exact board option and unknown values refuse`` () =
+        withCache <| fun cache ->
+            let lowerPath = Path.Combine(cache, "lower.json")
+            File.WriteAllText(lowerPath, severityDraft "high")
+            let lower = IntakeApplication.readDraft lowerPath |> Result.defaultWith failwith
+            Assert.Equal(Some "High", lower.Severity)
+            Assert.True(Intake.validate lower |> Result.isOk)
+
+            let unknownPath = Path.Combine(cache, "unknown.json")
+            File.WriteAllText(unknownPath, severityDraft "urgent")
+            match IntakeApplication.readDraft unknownPath with
+            | Error detail -> Assert.Contains("Critical, High, Medium, Low or Unset", detail)
+            | Ok parsed -> failwithf "unknown severity unexpectedly decoded: %A" parsed.Severity
+
+    [<Fact>]
+    let ``#2835 a corrected severity resumes a legacy receipt and reports the existing issue`` () =
+        withCache <| fun cache ->
+            let canonicalPath = Path.Combine(cache, "canonical.json")
+            File.WriteAllText(canonicalPath, severityDraft "High")
+            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+            let legacy = { canonical with Severity = Some "high" }
+            Cache.putIntakeReceipt
+                { IntakeReceipt.Receipt.DraftId = canonical.Id
+                  Owner = canonical.Owner
+                  Repository = canonical.Repository
+                  IssueNumber = 77
+                  DraftDigest = IntakeReceipt.digest legacy }
+            |> Result.defaultWith failwith
+
+            let mutable creates = 0
+            let world = Fake.Recorder(fun req ->
+                if req.Method = "POST" && req.Path.EndsWith "/issues" then creates <- creates + 1
+                Error(NotFound "stop after legacy receipt recovery"))
+            let code, error = invokeDraftWithError cache (severityDraft "High") world
+            Assert.Equal(Kernel.ExitError, code)
+            Assert.Equal(0, creates)
+            Assert.Contains("issue FS-GG/.github#77 already exists", error)
+            Assert.Contains("same id to resume without another issue-create POST", error)
+
+    [<Fact>]
+    let ``#2835 a corrected severity also resumes the create-before-receipt legacy intent`` () =
+        withCache <| fun cache ->
+            let canonicalPath = Path.Combine(cache, "canonical-intent.json")
+            File.WriteAllText(canonicalPath, severityDraft "High")
+            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+            let legacy = { canonical with Severity = Some "high" }
+            let legacyDigest = IntakeReceipt.digest legacy
+            Cache.putIntakeIntent
+                { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
+                  Repository = canonical.Repository; DraftDigest = legacyDigest }
+            |> Result.defaultWith failwith
+            let legacyMarker = $"<!-- fsgg:intake:v1 id=%s{canonical.Id} digest=%s{legacyDigest} -->"
+            let mutable creates = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" ->
+                    ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize legacyMarker}}}]")
+                | "POST", path when path.EndsWith "/issues" ->
+                    creates <- creates + 1
+                    Error(NotFound "legacy intent must not create again")
+                | _ -> Error(NotFound "stop after legacy intent recovery"))
+            Assert.Equal(Kernel.ExitError, invokeDraft cache (severityDraft "High") world)
+            Assert.Equal(0, creates)
+            match Cache.getIntakeReceipt canonical.Id with
+            | Ok(Some receipt) ->
+                Assert.Equal(77, receipt.IssueNumber)
+                Assert.Equal(IntakeReceipt.digest canonical, receipt.DraftDigest)
+            | other -> failwithf "legacy intent did not converge to a canonical receipt: %A" other
 
     [<Theory>]
     [<InlineData(null, false)>]
