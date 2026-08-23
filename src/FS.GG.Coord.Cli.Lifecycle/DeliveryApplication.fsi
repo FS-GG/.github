@@ -60,14 +60,9 @@ module DeliveryApplication =
     /// Deliberately narrower than the fence's candidate set, which is keyed on the opkey alone.
     val electionsOwnedBy: opkey: string -> pr: int -> elections: Election list -> Election list
 
-    /// The lowest election admitted by the fence's complete operation tuple, if one exists.
-    val winningElection:
-        opkey: string ->
-        item: string ->
-        gen: string ->
-        receiver: string ->
-        elections: Election list ->
-            Election option
+    /// The lowest election bearing this operation key, before validating its recorded tuple — the
+    /// same order used by the hosted claim fence.
+    val winningElection: opkey: string -> elections: Election list -> Election option
 
     /// Consume the inspected receipt and require the current winning claim generation before a merge.
     val authorizeGuardedLanding:
