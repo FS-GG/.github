@@ -5,6 +5,8 @@ namespace FS.GG.Coord
 module IntakeReceipt =
     type Receipt = { DraftId: string; Owner: string; Repository: string; IssueNumber: int; DraftDigest: string }
     val digest: Intake.Draft -> string
+    /// Current canonical digest plus the bounded pre-#2835 lowercase-severity representation.
+    val compatibleDigests: Intake.Draft -> string list
 
     /// Durable provenance embedded in the created issue. A title is human text and cannot identify the
     /// result of a crashed transaction; this content-bound marker can.

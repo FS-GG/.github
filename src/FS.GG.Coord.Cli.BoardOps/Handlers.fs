@@ -1936,13 +1936,15 @@ module Handlers =
                                 |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                                 |> Result.bind (function
                                     | None -> Ok None
-                                    | Some stored when stored.Owner = draft.Owner && stored.Repository = draft.Repository && stored.DraftDigest = digest -> Ok(Some stored)
+                                    | Some stored when stored.Owner = draft.Owner && stored.Repository = draft.Repository && (IntakeReceipt.compatibleDigests draft |> List.contains stored.DraftDigest) -> Ok(Some stored)
                                     | Some _ -> Error(Errors.Malformed(draft.Id, "intake intent does not match this draft")))
                             intent |> Result.bind (fun intent ->
                               Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
                               |> Result.bind (fun candidates ->
                                 let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
-                                let provenance = IntakeReceipt.marker draft
+                                let provenanceMarkers =
+                                    IntakeReceipt.compatibleDigests draft
+                                    |> List.map (fun compatibleDigest -> $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{compatibleDigest} -->")
                                 let persist number =
                                     let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
                                     Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
@@ -1951,7 +1953,7 @@ module Handlers =
                                 | Some Intake.Reuse, [ c ], _ -> persist c.Number
                                 | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
                                 | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
-                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest && c.Body.Contains(provenance, StringComparison.Ordinal) -> persist c.Number
+                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest && (provenanceMarkers |> List.exists (fun marker -> c.Body.Contains(marker, StringComparison.Ordinal))) -> persist c.Number
                                 | Some Intake.Create, _ :: _, _ ->
                                     Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
                                 | Some Intake.Create, [], _ ->
@@ -1959,7 +1961,12 @@ module Handlers =
                                     Cache.putIntakeIntent intent
                                     |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                                     |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
-                                    |> Result.bind (fun created -> persist created.Number)
+                                    |> Result.bind (fun created ->
+                                        match persist created.Number with
+                                        | Ok issue -> Ok issue
+                                        | Error error ->
+                                            eprint $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{created.Canonical} was created, but its receipt could not be persisted. Retry this draft with the same id to recover the provenance-bound issue without another issue-create POST."
+                                            Error error)
                                 | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
                     let receiptTransaction () = dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
                     let receiptResult =
@@ -1969,6 +1976,11 @@ module Handlers =
                     match receiptResult with
                     | Error e -> fail e
                     | Ok issue ->
+                        let reportPartial () =
+                            eprint $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{issue.Canonical} already exists; board projection is incomplete. Retry this corrected draft with the same id to resume without another issue-create POST."
+                        let failProjection e =
+                            reportPartial ()
+                            fail e
                         let preProjectionReadyGuard =
                             if draft.Status <> "Ready" then Ok()
                             else
@@ -1991,10 +2003,10 @@ module Handlers =
                                         | DeliveryRoute.Unreadable reasons ->
                                             Error(Errors.Malformed(draft.Id, "Ready is refused until a current delivery-route receipt exists: " + String.concat "; " reasons)))
                         match preProjectionReadyGuard, Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
-                        | Error e, _, _, _ -> fail e
-                        | _, Error e, _, _ -> fail e
-                        | _, _, Error e, _ -> fail e
-                        | _, _, _, Error code -> code
+                        | Error e, _, _, _ -> failProjection e
+                        | _, Error e, _, _ -> failProjection e
+                        | _, _, Error e, _ -> failProjection e
+                        | _, _, _, Error code -> reportPartial (); code
                         | Ok(), Ok issueState, Ok board, Ok w ->
                             // ADR-0045: the Projects-v2 column is the dependency edge's sole authority.
                             // Body prose is a projection written by intake and is deliberately absent
@@ -2055,7 +2067,7 @@ module Handlers =
                                                         ))))
 
                             match readyGuard with
-                            | Error e -> fail e
+                            | Error e -> failProjection e
                             | Ok initialDependencyObservation ->
                                 // Intake's validated draft carries the dependency/sentinel and createIntake
                                 // persists it in the issue body. The atomic batch below establishes Status and
@@ -2065,7 +2077,7 @@ module Handlers =
                                 | Error code -> code
                                 | Ok() ->
                                     match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
-                                    | Error e -> fail e
+                                    | Error e -> failProjection e
                                     | Ok _ ->
                                         let writes =
                                             [ yield "Status", Board.Set draft.Status
@@ -2106,11 +2118,13 @@ module Handlers =
                                                     writes
                                                     w.Id)
                                         with
-                                        | Error e -> fail e
+                                        | Error e -> failProjection e
                                         | Ok Board.Deferred ->
+                                            reportPartial ()
                                             eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."
                                             Errors.ExRate
                                         | Ok Board.NotOnBoard ->
+                                            reportPartial ()
                                             eprint "fsgg-coord-engine: intake add did not produce a readable board item."
                                             ExitError
                                         | Ok Board.Written ->
@@ -2137,12 +2151,12 @@ module Handlers =
                                                             else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))
                                                 ) (Ok())
                                             match readback with
-                                            | Error e -> fail e
+                                            | Error e -> failProjection e
                                             | Ok() ->
                                                 let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
                                                 let fields = writes |> List.map fst |> JsonSerializer.Serialize
                                                 match Cache.pending () with
-                                                | Error e -> fail e
+                                                | Error e -> failProjection e
                                                 | Ok pending ->
                                                     let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
                                                     let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"

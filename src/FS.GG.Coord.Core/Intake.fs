@@ -17,6 +17,14 @@ module Intake =
 
     type Finding = { Field: string; Detail: string }
 
+    let private canonicalSeverity value =
+        [ "Critical"; "High"; "Medium"; "Low"; "Unset" ]
+        |> List.tryFind (fun candidate ->
+            System.String.Equals(candidate, value, System.StringComparison.OrdinalIgnoreCase))
+        |> function
+            | Some severity -> Ok severity
+            | None -> Error "must be Critical, High, Medium, Low or Unset"
+
     let private required field value =
         if System.String.IsNullOrWhiteSpace value then Some { Field = field; Detail = "is required" } else None
 
@@ -39,6 +47,13 @@ module Intake =
                     yield { Field = "id"; Detail = "must contain only letters, digits, '-', '_' or '.'" }
                 if draft.Paths |> List.exists (validPath >> not) then
                     yield { Field = "paths"; Detail = "must be relative repository paths without empty, '.' or '..' segments" }
+                match draft.Severity with
+                | Some value ->
+                    match canonicalSeverity value with
+                    | Ok canonical when canonical = value -> ()
+                    | Ok canonical -> yield { Field = "severity"; Detail = $"must use canonical board value '{canonical}'" }
+                    | Error detail -> yield { Field = "severity"; Detail = detail }
+                | None -> ()
                 match draft.Disposition with
                 | None -> yield { Field = "disposition"; Detail = "must explicitly be create or reuse" }
                 | Some _ -> ()
