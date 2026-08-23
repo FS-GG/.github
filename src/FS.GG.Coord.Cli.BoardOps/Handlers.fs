@@ -16,9 +16,9 @@ module Handlers =
     open FS.GG.Coord.Cli.Render
     open FS.GG.Coord.Cli.Kernel
 
-    /// The Ready decision over ADR-0045's sole dependency-edge authority. Body prose is intentionally
-    /// absent from this function's inputs: `Blocked by:` is a human-readable projection, not a fact a
-    /// mutation may consume.
+    // The Ready decision over ADR-0045's sole dependency-edge authority. Body prose is intentionally
+    // absent from this function's inputs: `Blocked by:` is a human-readable projection, not a fact a
+    // mutation may consume. The public contract lives in Handlers.fsi.
     let readyDependencyVerdict (blockedByColumn: string option) : string option =
         match blockedByColumn with
         | Some raw when not (String.IsNullOrWhiteSpace raw) ->

@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2738-one-dependency-edge/ship.json",
-      "digest": "sha256:e2a0766a0bdaf18e63a3bb0d831a612d314b27e0182bd2eb9ccbc6a6ecad38f6",
+      "digest": "sha256:3cd64530c5330e9419462fb9c7aab70c4a36bee435878ad8dde6f1cee2fadc35",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2738-one-dependency-edge/verify.json",
-      "digest": "sha256:7311a209e9a69878c82649de6ac730f0e307eefc0794fe1712f3d65ecd3549d8",
+      "digest": "sha256:650bdb379a8d9316fe716115adf8d27f4fbb3330ccd30783519d12616c0eca2d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2738-one-dependency-edge/work-model.json",
-      "digest": "sha256:4d480b7c8417bce4e78dcadd0704eb27a356f708f259ecba2b50307dd598ff95",
+      "digest": "sha256:3a20ac02304c5f907fa7e5764199059db65d46e556151dc2ebd61f6892d2c5b3",
       "schemaVersion": 1
     }
   ],
