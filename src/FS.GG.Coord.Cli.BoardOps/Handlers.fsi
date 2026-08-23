@@ -4,6 +4,16 @@ open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.Kernel
 
 module Handlers =
+
+    /// Decide Ready eligibility from ADR-0045's sole dependency-edge authority.
+    val readyDependencyVerdict: blockedByColumn: string option -> string option
+
+    /// True when the Projects-v2 item revision changed between decision and mutation.
+    val readyDependencyStale:
+        before: FS.GG.Coord.GitHub.Board.BlockedByObservation option ->
+        after: FS.GG.Coord.GitHub.Board.BlockedByObservation option ->
+            bool
+
     [<Sealed>]
     type CommentCapability =
         member Path: string

@@ -80,6 +80,11 @@ module Board =
 
           Fields: Map<string, Field> }
 
+    /// A dependency-edge value bound to the Projects-v2 item revision that produced it.
+    type BlockedByObservation =
+        { Value: string option
+          Revision: string option }
+
     /// A write to one field.
     ///
     /// **`Clear` IS A DIFFERENT MUTATION, NOT AN EMPTY `Set`.** This is a type because it was a trap:
@@ -242,6 +247,15 @@ module Board =
         number: int ->
             IoResult<string option>
 
+    /// Fresh dependency-edge observation including the Projects-v2 item revision.
+    val itemBlockedByObservation:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<BlockedByObservation>
+
     /// Fresh resolver read for one projected single-select or text field.
     val itemFieldValue:
         transport: Transport.IGitHubTransport ->
@@ -319,12 +333,19 @@ module Board =
     /// intact — with one addition the transport forces: a batch can land HALF-WAY. A `Partial` (some aliases
     /// took effect) is NEVER queued, because replaying the document would rewrite what already landed; it
     /// surfaces as `Error(Partial …)` for the caller to render field-by-field.
+    ///
+    /// `expectedBlockedBy` requests a revision-conditional dependency write. The boundary re-reads both
+    /// Projects item revision and field value; a mismatch fails stale with zero writes. Even when they
+    /// match, GitHub Projects v2 supplies no compare-and-set input, so the batch fails closed with an
+    /// unsupported mutation-authority diagnostic and zero writes. Conditional batches are never deferred.
+    /// A Ready transition therefore needs an explicit board-write authority or a CAS-capable broker.
     val boardWriteBatch:
         transport: IGitHubTransport ->
         board: BoardMap ->
         owner: string ->
         repo: string ->
         number: int ->
+        expectedBlockedBy: BlockedByObservation option ->
         writes: (string * FieldWrite) list ->
         worker: string ->
             IoResult<WriteOutcome>

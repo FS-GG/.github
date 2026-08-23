@@ -1,0 +1,136 @@
+schemaVersion: 1
+work:
+  id: 2738-one-dependency-edge
+  title: "One typed dependency edge authority"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2738-one-dependency-edge/spec.md
+  sourceClarifications: work/2738-one-dependency-edge/clarifications.md
+  sourceChecklist: work/2738-one-dependency-edge/checklist.md
+  sourcePlan: work/2738-one-dependency-edge/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2738-one-dependency-edge/spec.md
+    digest: 2148b8e35ab40872e7d38d39ea6dc6b9abf1eb4c8671558525e9aa9f4dff7390
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2738-one-dependency-edge/clarifications.md
+    digest: b4897f5f7b564a781516861329a865ed3899e11b980ac3fa413f684f3168fe93
+    schemaVersion: 1
+  - label: checklist
+    path: work/2738-one-dependency-edge/checklist.md
+    digest: f047ef3f5b64b9a52e725915df847d312f5de90b2f3b6306a82a5aca3a11c7bb
+    schemaVersion: 1
+  - label: plan
+    path: work/2738-one-dependency-edge/plan.md
+    digest: 684510ec9586d528be4399ee31f51b3dfa2cc40bf9b39d0a8539af198619b269
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-002, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-001, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-001, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Update contract surface PC-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Handle migration posture PM-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Refresh generated view impact GV-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV010]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2738-one-dependency-edge."

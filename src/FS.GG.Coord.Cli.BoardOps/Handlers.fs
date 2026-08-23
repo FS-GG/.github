@@ -1,7 +1,6 @@
 namespace FS.GG.Coord.Cli.BoardOps
 
 module Handlers =
-
     open System
     open System.Diagnostics
     open System.IO
@@ -16,6 +15,23 @@ module Handlers =
     open FS.GG.Coord.Cli.Options
     open FS.GG.Coord.Cli.Render
     open FS.GG.Coord.Cli.Kernel
+
+    // The Ready decision over ADR-0045's sole dependency-edge authority. Body prose is intentionally
+    // absent from this function's inputs: `Blocked by:` is a human-readable projection, not a fact a
+    // mutation may consume. The public contract lives in Handlers.fsi.
+    let readyDependencyVerdict (blockedByColumn: string option) : string option =
+        match blockedByColumn with
+        | Some raw when not (String.IsNullOrWhiteSpace raw) ->
+            Some "Ready is refused while the live Blocked by column carries a dependency"
+        | _ -> None
+
+    let readyDependencyStale
+        (before: Board.BlockedByObservation option)
+        (after: Board.BlockedByObservation option)
+        : bool =
+        match before, after with
+        | Some earlier, Some current -> earlier.Revision <> current.Revision
+        | _ -> false
 
     [<Literal>]
     let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
@@ -554,7 +570,7 @@ module Handlers =
                                 | field, Board.Clear -> $"%s{field}=<cleared>"
                             | _ -> alias
 
-                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number writes w.Id with
+                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number None writes w.Id with
                         // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
                         // landed; reporting nothing happened would be a lie, and reporting success is the bug
                         // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
@@ -1958,10 +1974,16 @@ module Handlers =
                             else
                                 Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number
                                 |> Result.bind (fun body ->
-                                    if body.Contains("Blocked by:", StringComparison.OrdinalIgnoreCase)
-                                       || body.Contains("Blocked on: human/", StringComparison.OrdinalIgnoreCase)
-                                       || body.Contains("Judgement question:", StringComparison.OrdinalIgnoreCase) then
-                                        Error(Errors.Malformed(draft.Id, "Ready is refused while the reused/live issue still declares a dependency or human choice"))
+                                    if
+                                        body.Contains("Blocked on: human/", StringComparison.OrdinalIgnoreCase)
+                                        || body.Contains("Judgement question:", StringComparison.OrdinalIgnoreCase)
+                                    then
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                "Ready is refused while the reused/live issue still declares a human choice"
+                                            )
+                                        )
                                     else
                                         match readDeliveryRouteVerdict ctx issue with
                                         | DeliveryRoute.Current _ -> Ok()
@@ -1974,70 +1996,158 @@ module Handlers =
                         | _, _, Error e, _ -> fail e
                         | _, _, _, Error code -> code
                         | Ok(), Ok issueState, Ok board, Ok w ->
-                            let readyGuard =
-                                if draft.Status <> "Ready" then Ok()
-                                elif issueState = IssueState.Closed then Error(Errors.Malformed(draft.Id, "Ready is refused for a closed issue"))
+                            // ADR-0045: the Projects-v2 column is the dependency edge's sole authority.
+                            // Body prose is a projection written by intake and is deliberately absent
+                            // from this decision. Re-read at the mutation boundary below too: if another
+                            // actor installs an edge after this observation, the Ready projection is
+                            // refused rather than applying an earlier answer.
+                            let dependencyObservationNow () =
+                                if draft.Status <> "Ready" then
+                                    Ok None
                                 else
-                                    Reads.markerScan ctx.Transport issue.Owner issue.Repo issue.Number
-                                    |> Result.bind (Reads.requireCompleteMarkerScan issue.Canonical)
-                                    |> Result.bind (fun markers ->
-                                        if not (List.isEmpty markers) then Error(Errors.Malformed(draft.Id, "Ready is refused while a claim is live"))
-                                        else Reads.prAlive ctx.Transport issue.Owner issue.Repo issue.Number
-                                             |> Result.bind (function
-                                                 | Types.LeaseExpiredNoPr -> Ok()
-                                                 | Types.LivenessUnknown -> Error(Errors.Malformed(draft.Id, "Ready eligibility could not verify implementation PR/branch absence"))
-                                                 | _ -> Error(Errors.Malformed(draft.Id, "Ready is refused while an implementation PR or branch is live"))))
+                                    Board.itemBlockedByObservation
+                                        ctx.Transport
+                                        board
+                                        issue.Owner
+                                        issue.Repo
+                                        issue.Number
+                                    |> Result.bind (fun observation ->
+                                        readyDependencyVerdict observation.Value
+                                        |> function
+                                            | Some detail -> Error(Errors.Malformed(draft.Id, detail))
+                                            | None -> Ok(Some observation))
+
+                            let readyGuard =
+                                if draft.Status <> "Ready" then
+                                    Ok None
+                                elif issueState = IssueState.Closed then
+                                    Error(Errors.Malformed(draft.Id, "Ready is refused for a closed issue"))
+                                else
+                                    dependencyObservationNow ()
+                                    |> Result.bind (fun observation ->
+                                        Reads.markerScan ctx.Transport issue.Owner issue.Repo issue.Number
+                                        |> Result.bind (Reads.requireCompleteMarkerScan issue.Canonical)
+                                        |> Result.bind (fun markers ->
+                                            if not (List.isEmpty markers) then
+                                                Error(
+                                                    Errors.Malformed(
+                                                        draft.Id,
+                                                        "Ready is refused while a claim is live"
+                                                    )
+                                                )
+                                            else
+                                                Reads.prAlive ctx.Transport issue.Owner issue.Repo issue.Number
+                                                |> Result.bind (function
+                                                    | Types.LeaseExpiredNoPr -> Ok observation
+                                                    | Types.LivenessUnknown ->
+                                                        Error(
+                                                            Errors.Malformed(
+                                                                draft.Id,
+                                                                "Ready eligibility could not verify implementation PR/branch absence"
+                                                            )
+                                                        )
+                                                    | _ ->
+                                                        Error(
+                                                            Errors.Malformed(
+                                                                draft.Id,
+                                                                "Ready is refused while an implementation PR or branch is live"
+                                                            )
+                                                        ))))
+
                             match readyGuard with
                             | Error e -> fail e
-                            | Ok() ->
-                            // Intake's validated draft carries the dependency/sentinel and createIntake
-                            // persists it in the issue body. The atomic batch below establishes Status and
-                            // Blocked by together; the legacy single-write preflight cannot require the
-                            // not-yet-written board field without making coherent creation unreachable.
-                            match (Ok(): Result<unit, int>) with
-                            | Error code -> code
-                            | Ok() ->
-                                match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
-                                | Error e -> fail e
-                                | Ok _ ->
-                                    let writes =
-                                        [ yield "Status", Board.Set draft.Status
-                                          yield "Class", Board.Set draft.Class
-                                          match draft.Phase with Some value -> yield "Phase", Board.Set value | None -> ()
-                                          match draft.Severity with Some value -> yield "Severity", Board.Set value | None -> ()
-                                          match draft.BlockedBy with Some value -> yield "Blocked by", Board.Set value | None -> () ]
-                                    match Board.boardWriteBatch ctx.Transport board issue.Owner issue.Repo issue.Number writes w.Id with
+                            | Ok initialDependencyObservation ->
+                                // Intake's validated draft carries the dependency/sentinel and createIntake
+                                // persists it in the issue body. The atomic batch below establishes Status and
+                                // Blocked by together; the legacy single-write preflight cannot require the
+                                // not-yet-written board field without making coherent creation unreachable.
+                                match (Ok(): Result<unit, int>) with
+                                | Error code -> code
+                                | Ok() ->
+                                    match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
                                     | Error e -> fail e
-                                    | Ok Board.Deferred -> eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."; Errors.ExRate
-                                    | Ok Board.NotOnBoard -> eprint "fsgg-coord-engine: intake add did not produce a readable board item."; ExitError
-                                    | Ok Board.Written ->
-                                        for field, write in writes do
-                                            let value = match write with Board.Set value -> value | Board.Clear -> ""
-                                            let queued: Cache.Deferred =
-                                                { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
-                                                  Board = Some(board.Owner, board.Title) }
-                                            Cache.dropPending queued
-                                        let readback =
-                                            writes
-                                            |> List.fold (fun state (field, write) ->
-                                                state |> Result.bind (fun () ->
-                                                    let expected = match write with Board.Set value -> Some value | Board.Clear -> None
-                                                    Board.itemFieldValue ctx.Transport board issue.Owner issue.Repo issue.Number field
-                                                    |> Result.bind (fun actual ->
-                                                        if actual = expected then Ok()
-                                                        else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))) (Ok())
-                                        match readback with
+                                    | Ok _ ->
+                                        let writes =
+                                            [ yield "Status", Board.Set draft.Status
+                                              yield "Class", Board.Set draft.Class
+                                              match draft.Phase with
+                                              | Some value -> yield "Phase", Board.Set value
+                                              | None -> ()
+                                              match draft.Severity with
+                                              | Some value -> yield "Severity", Board.Set value
+                                              | None -> ()
+                                              match draft.BlockedBy with
+                                              | Some value -> yield "Blocked by", Board.Set value
+                                              | None -> () ]
+
+                                        let dependencyFresh =
+                                            dependencyObservationNow ()
+                                            |> Result.bind (fun current ->
+                                                if readyDependencyStale initialDependencyObservation current then
+                                                    Error(
+                                                        Errors.Malformed(
+                                                            draft.Id,
+                                                            "Stale dependency-edge observation: the board revision changed before the Ready mutation; re-derive and retry"
+                                                        )
+                                                    )
+                                                else
+                                                    Ok current)
+
+                                        match
+                                            dependencyFresh
+                                            |> Result.bind (fun expectedBlockedBy ->
+                                                Board.boardWriteBatch
+                                                    ctx.Transport
+                                                    board
+                                                    issue.Owner
+                                                    issue.Repo
+                                                    issue.Number
+                                                    expectedBlockedBy
+                                                    writes
+                                                    w.Id)
+                                        with
                                         | Error e -> fail e
-                                        | Ok() ->
-                                            let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
-                                            let fields = writes |> List.map fst |> JsonSerializer.Serialize
-                                            match Cache.pending () with
+                                        | Ok Board.Deferred ->
+                                            eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."
+                                            Errors.ExRate
+                                        | Ok Board.NotOnBoard ->
+                                            eprint "fsgg-coord-engine: intake add did not produce a readable board item."
+                                            ExitError
+                                        | Ok Board.Written ->
+                                            for field, write in writes do
+                                                let value =
+                                                    match write with
+                                                    | Board.Set value -> value
+                                                    | Board.Clear -> ""
+                                                let queued: Cache.Deferred =
+                                                    { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
+                                                      Board = Some(board.Owner, board.Title) }
+                                                Cache.dropPending queued
+                                            let readback =
+                                                writes
+                                                |> List.fold (fun state (field, write) ->
+                                                    state |> Result.bind (fun () ->
+                                                        let expected =
+                                                            match write with
+                                                            | Board.Set value -> Some value
+                                                            | Board.Clear -> None
+                                                        Board.itemFieldValue ctx.Transport board issue.Owner issue.Repo issue.Number field
+                                                        |> Result.bind (fun actual ->
+                                                            if actual = expected then Ok()
+                                                            else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))
+                                                ) (Ok())
+                                            match readback with
                                             | Error e -> fail e
-                                            | Ok pending ->
-                                                let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
-                                                let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
-                                                printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
-                                                ExitGreen
+                                            | Ok() ->
+                                                let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
+                                                let fields = writes |> List.map fst |> JsonSerializer.Serialize
+                                                match Cache.pending () with
+                                                | Error e -> fail e
+                                                | Ok pending ->
+                                                    let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
+                                                    let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+                                                    printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
+                                                    ExitGreen
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
 

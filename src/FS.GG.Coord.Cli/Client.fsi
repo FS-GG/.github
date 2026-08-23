@@ -111,23 +111,6 @@ module Client =
       ((FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Blocker list) list ->
          (FS.GG.Coord.Types.Ref * string) list)
 
-    /// The `Blocked by` BODY-VS-FIELD divergence (.github#2079) — the refs a body's `Blocked by:` line(s)
-    /// name that the FIELD does not, both sides canonicalized on `Blockers.canonicalizeBlockedBy`'s terms
-    /// so `#8`, `FS-GG/FS.GG.SDD#8` and the field's own rendering of the same ref compare equal.
-    ///
-    /// `[]` means coherent: the body declares no `Blocked by:` line, or everything it names is already in
-    /// the field. A non-empty result is the `FS.GG.Templates#348` shape — a park whose edge landed in the
-    /// wrong medium, leaving a field that satisfies `BLOCKED-NO-REASON` (it is non-empty) while naming
-    /// refs the reader cannot see. `lint`'s `BLOCKED-BY-INERT` and `reconcile`'s `BLOCKER-CLEARED`
-    /// withholding are the same predicate, asked twice for two different reasons — never two copies.
-    ///
-    /// MODULE-LEVEL, ABOVE `reconcile` (.github#1225-ish): both `reconcile` and `lint` need it, and F#
-    /// compiles top to bottom — a copy inside either command would be the second-copy shape #945/#972
-    /// argue against everywhere else in this file.
-    val blockedByBodyDivergence:
-      owner: string ->
-        repo: string -> fieldRaw: string -> body: string -> string list
-
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
     val classVerdict:

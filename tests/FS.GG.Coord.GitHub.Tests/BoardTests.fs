@@ -531,7 +531,7 @@ let ``#2143 an external-owner batch uses the same canonical cached item as a sin
     let transport =
         serving """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
 
-    match boardWriteBatch transport board "EHotwagner" "rogue3" 96 [ "Status", Set "Ready"; "Blocked by", Clear ] "vole-418" with
+    match boardWriteBatch transport board "EHotwagner" "rogue3" 96 None [ "Status", Set "Ready"; "Blocked by", Clear ] "vole-418" with
     | Ok Written ->
         Assert.Equal(1, transport.GraphQlCalls)
         Assert.True(transport.Logged "itemId: \"PVTI_external96\"")

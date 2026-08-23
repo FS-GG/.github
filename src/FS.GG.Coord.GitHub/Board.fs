@@ -26,6 +26,10 @@ module Board =
           Title: string
           Fields: Map<string, Field> }
 
+    type BlockedByObservation =
+        { Value: string option
+          Revision: string option }
+
     type FieldWrite =
         | Set of value: string
         | Clear
@@ -964,14 +968,144 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
 
-    let itemBlockedBy
+    let private ItemBlockedByObservationDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { updatedAt project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+
+    let private repositoryItemBlockedByObservation
         (transport: IGitHubTransport)
         (board: BoardMap)
         (owner: string)
         (repo: string)
         (number: int)
-        : IoResult<string option> =
+        : IoResult<BlockedByObservation> =
+        let subject = $"%s{owner}/%s{repo}#%d{number} Blocked by observation"
 
+        let request =
+            query
+                ItemBlockedByObservationDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
+
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Ok { Value = None; Revision = None }
+                    else
+                        let projectItems = issue.GetProperty "projectItems"
+
+                        let node =
+                            projectItems.GetProperty("nodes").EnumerateArray()
+                            |> Seq.tryFind (fun n ->
+                                match n.TryGetProperty "project" with
+                                | true, p when p.ValueKind = JsonValueKind.Object ->
+                                    match p.TryGetProperty "number" with
+                                    | true, number when number.ValueKind = JsonValueKind.Number ->
+                                        number.GetInt32() = board.Number
+                                    | _ -> false
+                                | _ -> false)
+
+                        match node with
+                        | None ->
+                            Reads.connectionComplete
+                                subject
+                                "this issue's project-item connection"
+                                ProjectItemsWindow
+                                projectItems
+                            |> Result.map (fun () -> { Value = None; Revision = None })
+                        | Some node ->
+                            match node.TryGetProperty "updatedAt" with
+                            | true, revision when revision.ValueKind = JsonValueKind.String ->
+                                let value =
+                                    match node.TryGetProperty "fieldValueByName" with
+                                    | true, fv when fv.ValueKind = JsonValueKind.Object -> textOfFieldValue fv
+                                    | _ -> None
+
+                                Ok
+                                    { Value = value
+                                      Revision = Some(revision.GetString()) }
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the item-blocked-by observation has no project-item `updatedAt` revision"
+                                    )
+                                )
+                with :? KeyNotFoundException ->
+                    Error(
+                        Malformed(
+                            subject,
+                            "the item-blocked-by observation response is missing `repository.issue.projectItems`"
+                        )
+                    )
+
+    let private ExternalItemBlockedByObservationDoc =
+        "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { updatedAt fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } rateLimit { cost remaining } }"
+
+    let private externalItemBlockedByObservation transport board owner repo number =
+        let subject = $"%s{owner}/%s{repo}#%d{number} Blocked by"
+
+        match itemIdCached transport board owner repo number with
+        | Error e -> Error e
+        | Ok None -> Ok { Value = None; Revision = None }
+        | Ok(Some id) ->
+            let request = query ExternalItemBlockedByObservationDoc [ "itemId", VId id ] subject
+
+            match transport.Send request with
+            | Error e -> Error e
+            | Ok response ->
+                match GraphQl.decode subject response.Body Ok with
+                | Error e -> Error e
+                | Ok data ->
+                    try
+                        let node = data.GetProperty "node"
+
+                        if node.ValueKind = JsonValueKind.Null then
+                            Error(NotFound $"board item %s{id} for %s{subject}")
+                        else
+                            match node.TryGetProperty "updatedAt" with
+                            | true, revision when revision.ValueKind = JsonValueKind.String ->
+                                let value =
+                                    match node.TryGetProperty "fieldValueByName" with
+                                    | true, fv when fv.ValueKind = JsonValueKind.Object -> textOfFieldValue fv
+                                    | true, fv when fv.ValueKind = JsonValueKind.Null -> None
+                                    | _ -> None
+
+                                Ok
+                                    { Value = value
+                                      Revision = Some(revision.GetString()) }
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the external item-blocked-by response has no project-item `updatedAt` revision"
+                                    )
+                                )
+                    with :? KeyNotFoundException ->
+                        Error(Malformed(subject, "the external item-blocked-by response is missing `data.node`"))
+
+    let itemBlockedByObservation
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<BlockedByObservation> =
+
+        if ownedByBoardOwner board owner then
+            repositoryItemBlockedByObservation transport board owner repo number
+        else
+            externalItemBlockedByObservation transport board owner repo number
+
+    let itemBlockedBy transport board owner repo number =
         if ownedByBoardOwner board owner then
             repositoryItemBlockedBy transport board owner repo number
         else
@@ -1317,6 +1451,7 @@ module Board =
         (owner: string)
         (repo: string)
         (number: int)
+        (expectedBlockedBy: BlockedByObservation option)
         (writes: (string * FieldWrite) list)
         (worker: string)
         : IoResult<WriteOutcome> =
@@ -1355,10 +1490,36 @@ module Board =
                 itemIdCached transport board owner repo number
 
         match resolved with
-        | Error e -> if isQueueable e then queueAll e else Error e
+        | Error e -> if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
         | Ok None -> Ok NotOnBoard
         | Ok(Some item) ->
-            match setFieldBatch transport board item writes with
+            let condition =
+                match expectedBlockedBy with
+                | None -> Ok()
+                | Some expected ->
+                    itemBlockedByObservation transport board owner repo number
+                    |> Result.bind (fun observed ->
+                        if observed <> expected then
+                            Error(
+                                Malformed(
+                                    $"%s{owner}/%s{repo}#%d{number} conditional board batch",
+                                    "Stale dependency-edge observation: the Projects item revision or Blocked by edge changed at the board-write boundary; re-derive and retry"
+                                )
+                            )
+                        else
+                            // GitHub Projects v2 exposes `updatedAt`, but its field-value mutation has no
+                            // expected-revision / If-Match input. A read followed by `setFieldBatch` would
+                            // therefore still race an edge installed after this response. Refuse the whole
+                            // conditional document: an explicit/manual write or a future broker with native
+                            // compare-and-set authority must perform the Ready transition.
+                            Error(
+                                Malformed(
+                                    $"%s{owner}/%s{repo}#%d{number} conditional board batch",
+                                    "Stale dependency-edge mutation authority: GitHub Projects v2 cannot atomically compare the observed revision at the field-mutation boundary; Status=Ready was not sent. Re-derive, then use the explicit board-write authority or a CAS-capable broker."
+                                )
+                            ))
+
+            match condition |> Result.bind (fun () -> setFieldBatch transport board item writes) with
             | Ok() ->
                 // FOLD OUR OWN WRITES INTO THE CACHED SCAN, one per field — the same reason the single write
                 // does it (a claim is always followed by a take, and invalidating would send it to a full scan).
@@ -1375,7 +1536,11 @@ module Board =
                          | Clear -> "")
 
                 Ok Written
-            | Error e -> if isQueueable e then queueAll e else Error e
+            | Error e ->
+                // A conditional write may never enter the unconditional replay queue: doing so would
+                // discard the exact revision/edge fence that authorized it and later grant Ready from a
+                // stale decision. The caller retries by re-deriving the observation instead.
+                if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
 
     type FlushOutcome =
         { Queued: int
