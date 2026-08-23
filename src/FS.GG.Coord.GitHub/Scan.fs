@@ -1457,11 +1457,23 @@ module Scan =
         //
         // So scan the in-scope repos' OPEN ISSUES — the SAME paginated, unconditional read `who`/`reap`
         // run (a lock has no hundred-issue limit, and a 304 could serve a `comments: 0` captured before a
-        // marker was posted) — and reserve every LIVE claim on an issue the board did NOT already list.
+        // marker was posted) — and reserve every LIVE claim on an issue the scoped candidate arm did NOT
+        // already read.
         // This is bash's `active_claims` arm B; arm A (the board's In-progress rows) is the candidate loop
         // above, whose claims are already in `inFlight`.
-        let boardRefs =
-            rows |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
+        // .github#2899: THIS SET IS THE PARTITION, so it must describe arm A rather than the whole
+        // unscoped board. `scope` runs before the candidate loop; a board row whose `Repo Scope` is
+        // `cross-repo` therefore does not reach that loop under `--repo .github`, even when its live
+        // claim marker says `pathRepo=.github`. Building this set from `rows` used to suppress that
+        // issue from arm B merely because it appeared somewhere on the board: neither arm read its
+        // marker, `inFlight` lost the reservation, and `batch` admitted overlapping work.
+        //
+        // Open scoped candidates reach the marker read above exactly once. Closed-and-Done candidates
+        // are harmless members: `Reads.openIssues` cannot return them to arm B. Every open issue outside
+        // this set reaches the sweep, whether genuinely off-board or merely outside the requested path-
+        // repository projection. Its marker then decides whether it reserves anything.
+        let candidateRefs =
+            candidates |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
 
         // The repos an off-board claim can live in are the in-scope board's repos (bash derives them the
         // same way). No candidate names a repo → no repo to scan, and no board item means nothing off the
@@ -1479,10 +1491,11 @@ module Scan =
                     for issue in issues do
                         let n = issue.Number
 
-                        // A BOARD ITEM IS NOT OFF THE BOARD: its marker was already read (and reserved, if
-                        // held) by the candidate loop, so re-reading it here would pay the same budget twice
-                        // and risk double-reserving. Only issues the board never listed reach the marker read.
-                        if failure.IsNone && not (boardRefs.Contains(o, r, n)) then
+                        // A SCOPED CANDIDATE IS NOT ARM B: its marker was already read (and reserved, if
+                        // held) by arm A, so re-reading it here would pay the same budget twice and risk
+                        // double-reserving. An on-board row scoped OUT of arm A deliberately reaches this
+                        // read — board membership alone is not evidence that either reservation arm saw it.
+                        if failure.IsNone && not (candidateRefs.Contains(o, r, n)) then
                             let markerSubject = $"%s{o}/%s{r}#%d{n}"
 
                             match
@@ -1499,6 +1512,31 @@ module Scan =
                                 // (expired) age — the starved-queue slice's whole point (#428, case 25).
                                 | None -> ()
                                 | Some m ->
+                                    // .github#2899 repair round 1: `pathRepo=` on the WINNING marker is
+                                    // the reservation scope; the issue repository is only the address
+                                    // from which arm B read the lock. A scoped-out Coordination row can
+                                    // be hosted in `.github` while its claim names another repository,
+                                    // and treating `(o, r)` as both identities invents that reservation
+                                    // in the repository this snapshot is scheduling.
+                                    //
+                                    // Use the established `RepoScope.orFallback` policy: roster aliases
+                                    // resolve canonically; an absent or non-repository (`cross-repo`)
+                                    // marker scope falls back to the issue's hosting repository. Under a
+                                    // scoped scan only a marker whose effective path repository matches
+                                    // the requested repository belongs in this snapshot. An unscoped scan
+                                    // retains every claim and records each under its own effective scope.
+                                    let markerPathRepo =
+                                        m.PathRepo
+                                        |> Option.map RepoScope.resolve
+                                        |> Option.map (RepoScope.orFallback r)
+                                        |> Option.defaultValue r
+
+                                    let belongsToRequestedPathRepo =
+                                        match repo with
+                                        | None -> true
+                                        | Some requested ->
+                                            String.Equals(markerPathRepo, requested, StringComparison.OrdinalIgnoreCase)
+
                                     // The touch-set rides in on the SAME list read (one read, two uses),
                                     // exactly as the board loop reuses the candidate body. A claim declaring
                                     // no touch-set reserves no files — the board loop's own rule (line above).
@@ -1514,19 +1552,22 @@ module Scan =
                                     // `pathsUnreadable` to the wire, `decide` reconstructs
                                     // `TouchSet.Unreadable`, and `Batch.schedule` reds the batch on it.
                                     let reservation =
-                                        match issue.Body with
-                                        | Reads.BodyUnread reason -> Some(RvUnreadable reason)
-                                        | Reads.BodyRead body ->
-                                            match TouchSet.parse body with
-                                            | Declared tokens ->
-                                                tokens
-                                                |> List.map (fun t ->
-                                                    match t with
-                                                    | Matchable s -> s
-                                                    | Unmatchable s -> s)
-                                                |> RvNames
-                                                |> Some
-                                            | _ -> None
+                                        if not belongsToRequestedPathRepo then
+                                            None
+                                        else
+                                            match issue.Body with
+                                            | Reads.BodyUnread reason -> Some(RvUnreadable reason)
+                                            | Reads.BodyRead body ->
+                                                match TouchSet.parse body with
+                                                | Declared tokens ->
+                                                    tokens
+                                                    |> List.map (fun t ->
+                                                        match t with
+                                                        | Matchable s -> s
+                                                        | Unmatchable s -> s)
+                                                    |> RvNames
+                                                    |> Some
+                                                | _ -> None
 
                                     match reservation with
                                     | None -> ()
@@ -1549,7 +1590,7 @@ module Scan =
 
                                         inFlight.Add(
                                             o,
-                                            r,
+                                            markerPathRepo,
                                             rv,
                                             RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds, livePr)
                                         )
