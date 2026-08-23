@@ -232,6 +232,7 @@ expect_pass "v2 manifest: omitted executable makes no mode assertion" "$GOOD" --
 EXPLICIT_TRUE="$WORK/explicit-true-mode"; build_good "$EXPLICIT_TRUE"
 for r in $ROOTS; do chmod a+x "$EXPLICIT_TRUE/$r/alpha/references/notes.md" "$EXPLICIT_TRUE/$r/beta/references/notes.md"; done
 expect_pass "v2 manifest: explicit true executable mode is enforced and can match" "$EXPLICIT_TRUE" --manifest "$V2_TRUE_MODE_MANIFEST"
+expect_pass "v2 manifest: omitted executable makes no assertion for executable files" "$EXPLICIT_TRUE" --manifest "$V2_OPTIONAL_MODE_MANIFEST"
 
 # --- 3. divergent bytes: one root's skill body differs → FAIL ---
 DIV="$WORK/divergent"; build_good "$DIV"
