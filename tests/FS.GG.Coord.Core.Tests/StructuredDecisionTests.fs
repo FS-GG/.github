@@ -152,6 +152,35 @@ module StructuredDecisionTests =
         let shortHead = { shortHead with Digest = StructuredDecision.reviewDigest shortHead }
         Assert.True(StructuredDecision.validateReviewLedger first.Subject [ shortHead ] |> Result.isError)
 
+    [<Fact>]
+    let ``#2834 meaningful route evidence validates the documented ordered four-entry shape`` () =
+        let first = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
+        let meaningful evidence =
+            let draft =
+                { first with
+                    RouteApplicability = "meaningful"
+                    RouteEvidence = evidence
+                    Digest = "" }
+            { draft with Digest = StructuredDecision.reviewDigest draft }
+
+        let cardinalityOnly = meaningful [ "a"; "b"; "c"; "d" ]
+        Assert.Equal(Ok [ cardinalityOnly ], StructuredDecision.validateReviewLedger first.Subject [ cardinalityOnly ])
+
+        let fiveDescriptiveEntries =
+            meaningful
+                [ "built artifact: coord engine"
+                  "executed command: fsgg-coord review"
+                  "compared routes: snapshot and live"
+                  "observed result: equal"
+                  "extra observation" ]
+
+        match StructuredDecision.validateReviewLedger first.Subject [ fiveDescriptiveEntries ] with
+        | Error errors ->
+            Assert.Contains(
+                "meaningful route evidence must contain exactly four ordered entries: built artifact, executed command, compared routes, and observed result",
+                errors)
+        | Ok _ -> failwith "five meaningful-route entries were accepted"
+
     let reviewJson (record: StructuredDecision.ReviewRecord) =
         let kind =
             match record.Kind with

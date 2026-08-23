@@ -1192,7 +1192,7 @@ module LiveHandlers =
                 match Driver.parseReviewComments reviewComments with
                 | Error _ ->
                     [ Reads.Asserted
-                          $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed" ]
+                          $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed; enter the bounded critic queue with `scripts/fsgg-coord review wait`, then append its completed decision with `scripts/fsgg-coord review record`" ]
                 | Ok chain ->
                     let problems = ResizeArray<Reads.Unmet>()
                     match chain.HeadSha with

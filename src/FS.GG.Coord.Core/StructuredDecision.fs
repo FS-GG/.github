@@ -291,7 +291,7 @@ module StructuredDecision =
                   if record.RouteApplicability <> "meaningful" && record.RouteApplicability <> "not-meaningful" then
                       yield "routeApplicability must be meaningful or not-meaningful"
                   if record.RouteApplicability = "meaningful" && List.length record.RouteEvidence <> 4 then
-                      yield "meaningful route evidence must contain built artifact, command, comparison, and result"
+                      yield "meaningful route evidence must contain exactly four ordered entries: built artifact, executed command, compared routes, and observed result"
                   if record.RouteApplicability = "not-meaningful" && List.length record.RouteEvidence <> 1 then
                       yield "not-meaningful route evidence must contain exactly one reason"
                   yield! blank "timestamp" record.Timestamp
