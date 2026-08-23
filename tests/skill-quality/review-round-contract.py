@@ -16,6 +16,22 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def replacement_delivery_problems(main_contract: str) -> list[str]:
+    """Reject the round-3 escape: an unconditional proceed rule covering preflight refusal."""
+    problems = []
+    for literal in (
+        "This proceed-after-report rule does not cover the clean-ledger pre-review preflight",
+        "A spent-election or other permanent preflight refusal is a hard stop before review",
+        "release the spent claim, obtain a fresh claim generation",
+        "Never enter review or merge under the refused generation",
+    ):
+        if literal not in main_contract:
+            problems.append(f"pnext-item replacement refusal boundary is missing: {literal}")
+    if "A failed call is reported, never silently swallowed — and never blocks the merge" in main_contract:
+        problems.append("pnext-item still lets an unconditional failed-delivery proceed rule cover preflight refusal")
+    return problems
+
+
 def main() -> None:
     relative = "pnext-item/references/independent-review.md"
     texts = [read(runtime, relative) for runtime in RUNTIMES]
@@ -147,6 +163,21 @@ def main() -> None:
     require(
         "never after opening the PR" not in main_contract,
         "pnext-item still forbids the clean-ledger replacement preflight after its PR is opened",
+    )
+    problems = replacement_delivery_problems(main_contract)
+    require(not problems, "; ".join(problems))
+
+    # Round-3 negative fixture: restore the exact unconditional proceed wording that survived the
+    # positive-literal gate. The validator must reject it even while every required replacement-fence
+    # sentence remains present, proving this leg checks the contradiction rather than mere presence.
+    unconditional_proceed_fixture = (
+        main_contract
+        + " A failed call is reported, never silently swallowed — and never blocks the merge."
+    )
+    mutation_problems = replacement_delivery_problems(unconditional_proceed_fixture)
+    require(
+        any("unconditional failed-delivery proceed rule" in problem for problem in mutation_problems),
+        "replacement refusal negative fixture survived the contract gate",
     )
 
     print("review-round-contract: structured v2 ledger, digest chain, round bounds, and new-only authority hold")
