@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-08-23** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-08-22** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 3 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-08-20** — RECONCILE (`.github` filing drivers; .github#2736, .github#299/#1200): `p-add` and `padd-item` now prescribe the receipt-bound `fsgg.coord.intake/v1` validate/apply transaction instead of hand-authored issue bodies. Their `sha256` rows are reconciled from `.github`'s regenerated producer manifest; `p-add` remains operator-only and `padd-item` remains a packaged driver. No id, scope, owner, source, predicate, or schema value moved. registry = manifest = bytes.
