@@ -59,6 +59,7 @@ if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" --locked-mode
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" --locked-mode
+  dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" --locked-mode
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" --locked-mode
 
   stage "command catalogue, parser, render, write-ness, contract, and help closure"
@@ -70,8 +71,11 @@ if [ "$engine_changed" = true ]; then
     -c Release --no-restore --filter FullyQualifiedName~HandlerRegistrationTests
 
   stage "delivery, review, declared-path, and focused production-route parity"
-  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" -c Release --no-restore \
-    --filter 'FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests|FullyQualifiedName~VerifyPaths'
+  dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" -c Release --no-restore \
+    --filter 'FullyQualifiedName~DeliveryApplicationTests|FullyQualifiedName~ReviewApplicationTests|FullyQualifiedName~VerifyPaths' \
+    --logger "trx;LogFileName=lifecycle-focus.trx" --results-directory "$WORK/lifecycle-focus"
+  python3 "$ROOT/scripts/read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx" \
+    --minimum 1 --label "change-completeness (Lifecycle focused)"
 else
   stage "affected-engine checks omitted: no engine decision boundary changed"
 fi

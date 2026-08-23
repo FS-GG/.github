@@ -29,7 +29,7 @@
     "diagnostic wording stay engine-side by necessity, and a shape no entry enumerates is not coupled at all.",
     "",
     "CONSUMERS -- each drives its own side's REAL entry point, never the private helper:",
-    "  * F#     tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs",
+    "  * F#     tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs",
     "           -> DeliveryApplication.obligationsFromComments",
     "  * Python tests/kit-published-coherence/run.sh",
     "           -> check-kit-published-coherence.py --obligation-arm -> obligation_declarations",

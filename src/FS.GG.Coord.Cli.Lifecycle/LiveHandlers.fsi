@@ -115,7 +115,7 @@ module LiveHandlers =
     /// POST propagates, and `ensureAuthorization` therefore writes nothing at all — never a
     /// four-field fallback, which is the decorative case design §6.3 names.
     ///
-    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests` drives it directly against a `Fake.Recorder`,
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Lifecycle.Tests` drives it directly against a `Fake.Recorder`,
     /// the same internal-seam idiom `ensureAuthorization` and `authorizedMarker` already use.
     val electionGrounding:
       ctx: Kernel.Context ->
@@ -159,7 +159,7 @@ module LiveHandlers =
     /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
     /// endpoint is the one GitHub documents for it.
     ///
-    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
+    /// Not `private` — `tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs` drives this directly
     /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
     /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
     /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a

@@ -305,6 +305,10 @@ assert immutable >= 0 and immutable_download > immutable and immutable_upload < 
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
+lifecycle_suite = "dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
+assert prepare.count(lifecycle_suite) == 1, "release preparation omits or duplicates Lifecycle tests"
+release_engine = (root / ".github/workflows/release-coord-engine.yml").read_text()
+assert release_engine.count(lifecycle_suite) == 1, "coord-engine release omits or duplicates Lifecycle tests"
 authority = prepare.find("release-saga.py predecessor")
 build = prepare.find("dotnet restore src/FS.GG.Coord.Cli")
 pack = prepare.find("dotnet pack src/FS.GG.Coord.Cli")
