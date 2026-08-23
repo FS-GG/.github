@@ -33,6 +33,17 @@ module IntakeTransactionTests =
         | Ok _ -> ()
         Handlers.intakeCmd (context transport) (options path)
 
+    let private invokeDraftWithError cache json transport =
+        let previous = Console.Error
+        use captured = new StringWriter()
+
+        try
+            Console.SetError captured
+            let code = invokeDraft cache json transport
+            code, captured.ToString()
+        finally
+            Console.SetError previous
+
     let private invoke cache transport = invokeDraft cache draft transport
 
     let private draftDigest cache =
@@ -178,8 +189,73 @@ module IntakeTransactionTests =
                         | _ -> Error(NotFound "Ready must refuse before any other board operation")
                     | _ -> Error(NotFound "unexpected request"))
 
-            Assert.Equal(Kernel.ExitError, invokeDraft cache ready world)
+            let code, error = invokeDraftWithError cache ready world
+            Assert.Equal(Kernel.ExitError, code)
+            Assert.Contains("Ready is refused while the live Blocked by column carries a dependency", error)
             Assert.Equal(1, edgeReads)
+
+    [<Fact>]
+    let ``#2738 intake apply refuses a Projects revision that moves before the Ready mutation`` () =
+        withCache
+        <| fun cache ->
+            let ready =
+                """{"schema":"fsgg.coord.intake/v1","id":"ready-stale-2738","owner":"FS-GG","repository":".github","title":"ready stale","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+
+            let draftPath = Path.Combine(cache, "ready-stale-digest.json")
+            File.WriteAllText(draftPath, ready)
+            let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
+
+            Cache.putIntakeReceipt
+                { IntakeReceipt.Receipt.DraftId = parsed.Id
+                  Owner = parsed.Owner
+                  Repository = parsed.Repository
+                  IssueNumber = 88
+                  DraftDigest = IntakeReceipt.digest parsed }
+            |> Result.defaultWith failwith
+
+            let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
+            let mutable edgeReads = 0
+            let mutable mutationWrites = 0
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/88" ->
+                        ok "{\"number\":88,\"state\":\"open\",\"body\":\"No dependency prose here.\"}"
+                    | "GET", "repos/FS-GG/.github/issues/88/comments" -> ok ($"[{{\"body\":%s{route}}}]")
+                    | "GET", "repos/FS-GG/.github/pulls" -> ok "[]"
+                    | "GET", "repos/FS-GG/.github/git/matching-refs/heads/item/88-" -> ok "[]"
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(document, _) when document.Contains "projectsV2" ->
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":1,"title":"Coordination","id":"PVT"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "fields(first" ->
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"C","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"H","name":"hardening"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                            edgeReads <- edgeReads + 1
+                            let revision = if edgeReads = 1 then "2026-08-23T10:00:00Z" else "2026-08-23T10:01:00Z"
+
+                            ok
+                                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"updatedAt":"%s{revision}","project":{{"number":1}},"fieldValueByName":null}}]}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}}}"""
+                        | Query(document, _) when document.Contains "projectItems(first: 20)" ->
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"id":"PI","project":{"number":1}}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "updateProjectV2ItemFieldValue" ->
+                            mutationWrites <- mutationWrites + 1
+                            Error(NotFound "stale dependency decision reached the board mutation")
+                        | _ -> Error(NotFound "unexpected GraphQL request")
+                    | _ -> Error(NotFound "unexpected request"))
+
+            let code, error = invokeDraftWithError cache ready world
+            Assert.Equal(Kernel.ExitError, code)
+            Assert.True(
+                error.Contains("Stale dependency-edge observation", StringComparison.Ordinal),
+                error + "\n" + String.concat "\n" world.Log
+            )
+            Assert.Equal(2, edgeReads)
+            Assert.Equal(0, mutationWrites)
 
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =
