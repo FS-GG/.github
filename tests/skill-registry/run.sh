@@ -1615,7 +1615,7 @@ out="$(dc "$REAL_REG")"
 [ -z "$out" ] || { echo "FAIL: the shipped declaration is not coherent with the shipped registry"; echo "$out"; exit 1; }
 echo "   ok"
 
-echo "== 69a. the shipped Rendering class stays provider-scoped until its schema-v2 sidecars are materializable =="
+echo "== 69a. the shipped Rendering class is delivered by its schema-v2 owner package =="
 REPO_ROOT="$HERE/../.." python3 - <<'PY'
 import os
 from pathlib import Path
@@ -1626,19 +1626,18 @@ document = yaml.safe_load((root / "registry/skills.delivery-channels.yml").read_
 entry = next((item for item in document["classes"]
               if item.get("owner") == "fs-gg-rendering" and item.get("scope") == "product"), None)
 expected = {
-    "disposition": "provider-scoped",
-    "kind": "template-payload",
-    "provider": "fs-gg-ui",
-    "evidence": "FS.GG.Rendering/.template.config/template.json",
-    "tracked-by": "FS-GG/FS.GG.Rendering#1261",
+    "disposition": "delivered",
+    "kind": "package",
+    "channel": "FS.GG.Rendering.Skills",
+    "evidence": "registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.1.1)",
 }
 if entry is None:
     raise SystemExit("FAIL: the shipped Rendering/product delivery-channel entry is missing")
 for key, value in expected.items():
     if entry.get(key) != value:
         raise SystemExit(f"FAIL: Rendering/product {key} expected {value!r}, got {entry.get(key)!r}")
-if "channel" in entry:
-    raise SystemExit("FAIL: provider-scoped Rendering/product entry claimed an owner package channel")
+if "tracked-by" in entry or "provider" in entry:
+    raise SystemExit("FAIL: delivered Rendering/product entry retained provider-scoped fields")
 PY
 echo "   ok"
 

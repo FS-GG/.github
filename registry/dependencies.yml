@@ -1034,16 +1034,16 @@ contracts:
     surface: "FS.GG.Game.Skills package — the fs-gg-game-fable owner-sourced product skill (Fable lockstep guidance), materialized by SDD's production scaffold materializer for fable-game workspaces (materializes-when: profile in [game, sample-pack] per registry/skills.yml:207)"
     consumers: [sdd]
   - id: rendering-skills
-    version: "0.1.0"
-    # FEED: this is the literal newest stable FS.GG.Rendering.Skills version observed on
-    # nuget.org when #2639 was implemented.  `check-feed-coherence.py` keeps the registry
-    # honest by comparing package-bearing contracts against the live feed on every run.
-    package-version: "0.1.0"
+    version: "0.1.1"
+    # FEED: Rendering#1261's schema-v2 package is the literal newest stable
+    # FS.GG.Rendering.Skills version on both feeds. `check-feed-coherence.py` keeps this
+    # package-bearing contract honest on every run.
+    package-version: "0.1.1"
     owner: rendering
     # ADR-0063: Rendering owns these product-skill bytes and SDD's production scaffold
     # materializer obtains them from the independently versioned owner package, rather than
     # from a frozen copy in a template or generated workspace.
-    surface: "FS.GG.Rendering.Skills package — Rendering-owned product skills, materialized by SDD's production scaffold materializer for every provider"
+    surface: "FS.GG.Rendering.Skills 0.1.1 package — Rendering-owned product skills with schema-v2 per-file digests, materialized by FS.GG.SDD.Cli 1.2.2's production scaffold materializer for every provider"
     consumers: [sdd]
 
 # Hard dependency edges (downstream -> upstream).

@@ -19,16 +19,16 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-08-23** — **`rendering-skills` records the Rendering → SDD contract while delivery remains provider-scoped; stale feed projections reconciled**
+- **2026-08-23** — **`rendering-skills` 0.1.1 completes the universal Rendering product-skill channel; stale feed projections reconciled**
   (rendering; [.github#2639](https://github.com/FS-GG/.github/issues/2639),
   [Rendering#1240](https://github.com/FS-GG/FS.GG.Rendering/issues/1240),
   [Rendering#1261](https://github.com/FS-GG/FS.GG.Rendering/issues/1261),
   [SDD#864](https://github.com/FS-GG/FS.GG.SDD/issues/864)): records
-  `FS.GG.Rendering.Skills` `0.1.0` as a package-bearing Rendering → SDD contract and maps it in
-  the shared feed-coherence/autofix subject set. Its schema-v1 manifest cannot declare the required
-  script sidecars, so direct public SDD materialization fails closed and the `fs-gg-rendering` /
-  `product` declaration remains `fs-gg-ui`-only provider-scoped until Rendering#1261 publishes the
-  schema-v2 patch and a non-rendering scaffold proves the complete payload. The same fresh feed read
+  `FS.GG.Rendering.Skills` `0.1.1` as the package-bearing Rendering → SDD contract and maps it in
+  the shared feed-coherence/autofix subject set. Rendering#1261's schema-v2 per-file manifest and
+  FS.GG.SDD.Cli `1.2.2` now materialize SKILL.md plus the required feedback-report sidecars through
+  a non-rendering scaffold with zero diagnostics, so the `fs-gg-rendering` / `product` declaration
+  moves to the delivered owner package. The same fresh feed read
   found `FS.GG.UI.Template` 0.27.0 (Rendering PR #1258, tag
   `fs-gg-ui-template/v0.27.0` at `b8e60c317a3b64f259c4aaf462910041c40426e5`) and the published
   `.github` coherent set 0.73.1 (source `7f8987966db71da62ab0f29fa6ee6f5064b00327`); their registry
