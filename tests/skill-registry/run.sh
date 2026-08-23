@@ -1615,6 +1615,32 @@ out="$(dc "$REAL_REG")"
 [ -z "$out" ] || { echo "FAIL: the shipped declaration is not coherent with the shipped registry"; echo "$out"; exit 1; }
 echo "   ok"
 
+echo "== 69a. the shipped Rendering class is delivered by its schema-v2 owner package =="
+REPO_ROOT="$HERE/../.." python3 - <<'PY'
+import os
+from pathlib import Path
+import yaml
+
+root = Path(os.environ["REPO_ROOT"])
+document = yaml.safe_load((root / "registry/skills.delivery-channels.yml").read_text())
+entry = next((item for item in document["classes"]
+              if item.get("owner") == "fs-gg-rendering" and item.get("scope") == "product"), None)
+expected = {
+    "disposition": "delivered",
+    "kind": "package",
+    "channel": "FS.GG.Rendering.Skills",
+    "evidence": "registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.1.1)",
+}
+if entry is None:
+    raise SystemExit("FAIL: the shipped Rendering/product delivery-channel entry is missing")
+for key, value in expected.items():
+    if entry.get(key) != value:
+        raise SystemExit(f"FAIL: Rendering/product {key} expected {value!r}, got {entry.get(key)!r}")
+if "tracked-by" in entry or "provider" in entry:
+    raise SystemExit("FAIL: delivered Rendering/product entry retained provider-scoped fields")
+PY
+echo "   ok"
+
 echo "== 70. a class the registry carries and the declaration ignores is a finding, naming its rows =="
 cat > "$CH/skills.yml" <<YAML
 schemaVersion: 1

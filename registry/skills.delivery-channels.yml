@@ -133,25 +133,14 @@ classes:
   # ---------------------------------------------------------------------------------------------
   - owner: fs-gg-rendering
     scope: product
-    disposition: provider-scoped
-    kind: template-payload
-    provider: fs-gg-ui
-    evidence: FS.GG.Rendering/.template.config/template.json
-    tracked-by: FS-GG/FS.GG.Rendering#1240
+    disposition: delivered
+    kind: package
+    channel: FS.GG.Rendering.Skills
+    evidence: registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.1.1)
     note: >-
-      THE THIRD INSTANCE, AND THE REASON THIS FILE EXISTS (.github#2380 → #2545). All 18 rows are
-      emitted correctly by the `fs-gg-ui` `dotnet new` template — `fs-gg-feedback-report`'s entry
-      carries no `condition` key at all, deliberately, since Rendering#434. A product scaffolded
-      through ANY OTHER provider never restores that template, so the class reaches those trees
-      through nothing: `EHotwagner/S.I.R.` (`providerName: fable-game`) received 42 driver paths, 16
-      process skills, 2 game-skill paths, and ZERO Rendering-owned product skills. Only
-      `fs-gg-feedback-report`'s absence is DETECTABLE there, because `always` is the sole predicate
-      that evaluates true on a tree carrying no `profile` parameter — that is a fact about
-      detectability, not about intent, and all 18 rows are in scope of the missing channel.
-      .github#2545 chose Route B: FS.GG.Rendering publishes `FS.GG.Rendering.Skills` (#1240) and
-      FS.GG.SDD embeds it as a fourth enrollment channel (FS.GG.SDD#864), mirroring
-      `FS.GG.Game.Skills` exactly. This entry flips to `delivered` under .github#2639, together with
-      the `rendering-skills` contract row that cannot be written until the package is on the feed.
+      Rendering#1261 published FS.GG.Rendering.Skills 0.1.1 with schema-v2 per-file digests, and
+      SDD 1.2.2 consumes it. A fresh public-tool non-rendering scaffold materializes SKILL.md plus
+      FeedbackReportTool.fs and feedback-tool.fsx in both agent roots with zero diagnostics.
 
   # ---------------------------------------------------------------------------------------------
   - owner: fs-gg-templates

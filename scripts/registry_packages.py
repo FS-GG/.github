@@ -87,6 +87,9 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     # .github#2070: FS.GG.Game's independently-versioned skill-delivery package (owner-sourced
     # fs-gg-game-fable skill, materialized by SDD's production scaffold materializer).
     "game-skills": ["FS.GG.Game.Skills"],
+    # .github#2639: the matching owner-sourced Rendering product-skill package.  Keeping this
+    # in the shared map means feed-coherence detects its drift and feed-autofix can repair it.
+    "rendering-skills": ["FS.GG.Rendering.Skills"],
 }
 
 # The ONE row whose `version` is feed-derived and whose reconcile is bespoke (framework/template-only
