@@ -118,7 +118,10 @@ on:
         type: string
         default: ".claude/skills .agents/skills"
       manifest:
-        description: "Optional path (in the caller's checkout) to a producer skill-manifest JSON; enables the digest cross-check."
+        description: >-
+          Optional path (in the caller's checkout) to a producer skill-manifest JSON; enables the
+          digest cross-check. In schema v2, an omitted per-file executable field makes no mode
+          assertion; explicit true or false remains enforced.
         type: string
         default: ""
       co-tenants:

@@ -32,8 +32,10 @@
 # `Option.isSome`). For every skill present under any root it asserts:
 #   1. present        — the skill directory exists in EVERY configured root (else: partitioned);
 #   2. byte-identical — its bytes are identical across every root it IS PRESENT IN (else: divergent);
-#   3. matches-manifest (only when --manifest is given) — every declared file, digest, and executable
-#      bit matches. Legacy v1 rows that have no `files` retain the SKILL.md-only check.
+#   3. matches-manifest (only when --manifest is given) — every declared file and digest matches.
+#      A schema-v2 file entry asserts its executable bit only when it declares `executable`; omission
+#      means the producer made no mode assertion, while explicit true and false remain enforced.
+#      Legacy v1 rows that have no `files` retain the SKILL.md-only check.
 #      the producer's skill-manifest declares (else: drifted), and every root skill is either
 #      declared by the manifest or matches a --co-tenants pattern (else: dangling).
 #
@@ -915,7 +917,7 @@ while IFS= read -r id; do
         # \x1f here too, for the reason above: `$sha` is empty in a malformed row and a leading
         # TAB would collapse, shifting `$executable` into `file_want`.
         expected_master["$path"]="$sha"$'\x1f'"$executable"
-      done < <(jq -r --arg id "$id" '.skills[] | select(.id == $id) | .files[] | [.path, (.sha256 // ""), (.executable | tostring)] | join("\u001f")' "$MANIFEST")
+      done < <(jq -r --arg id "$id" '.skills[] | select(.id == $id) | .files[] | [.path, (.sha256 // ""), (if has("executable") then (.executable | tostring) else "" end)] | join("\u001f")' "$MANIFEST")
       for mr in "${present_roots[@]}"; do
         # A fresh COPY per root: the walk below `unset`s each path as it matches, so sharing one table
         # would leave it empty by the second root and report every declared file missing there. Asserted
@@ -944,7 +946,7 @@ while IFS= read -r id; do
             echo "::error::[drifted] skill '$id' in root '$mr' file '$path' digest $file_got != manifest $file_want"
             fail=1
             drifted=1
-          elif [ "$exec_got" != "$exec_want" ]; then
+          elif [ -n "$exec_want" ] && [ "$exec_got" != "$exec_want" ]; then
             echo "::error::[drifted] skill '$id' in root '$mr' file '$path' executable=$exec_got != manifest $exec_want"
             fail=1
             drifted=1
