@@ -1961,7 +1961,12 @@ module Handlers =
                                     Cache.putIntakeIntent intent
                                     |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                                     |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
-                                    |> Result.bind (fun created -> persist created.Number)
+                                    |> Result.bind (fun created ->
+                                        match persist created.Number with
+                                        | Ok issue -> Ok issue
+                                        | Error error ->
+                                            eprint $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{created.Canonical} was created, but its receipt could not be persisted. Retry this draft with the same id to recover the provenance-bound issue without another issue-create POST."
+                                            Error error)
                                 | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
                     let receiptTransaction () = dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
                     let receiptResult =

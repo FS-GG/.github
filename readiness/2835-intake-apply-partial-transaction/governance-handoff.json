@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2835-intake-apply-partial-transaction/ship.json",
-      "digest": "sha256:8b75c3bc479714f31f75bfcbea5d11867673ff48ad4c169f01ee848a43acb78e",
+      "digest": "sha256:5982ac2692e4951665535197856db64f1e49b1899040fd328ca88888b8240a6f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2835-intake-apply-partial-transaction/verify.json",
-      "digest": "sha256:85fdd7e8f492303ba417741d4339180888771b8ab49e495dbbdcf527d6b74a47",
+      "digest": "sha256:dc856533ca4d93abd6bb41402080a042efd3072a4186f1b7321921ce2d04b48d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2835-intake-apply-partial-transaction/work-model.json",
-      "digest": "sha256:a789e772b8de0de51bdac575d4ef2fc734fb101e3f259f57e390ab496a311144",
+      "digest": "sha256:78f3d5b8f02793a806b6b332b6a5fe97849bfa6e3fce41eb01978670c824c7d7",
       "schemaVersion": 1
     }
   ],
