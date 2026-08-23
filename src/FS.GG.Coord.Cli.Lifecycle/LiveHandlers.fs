@@ -242,7 +242,19 @@ module LiveHandlers =
                         ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
                     |> DeliveryApplication.electionsFromComments
 
-                match DeliveryApplication.winningElection opkey target.Canonical gen receiver elections with
+                match DeliveryApplication.winningElection opkey elections with
+                | Some winner
+                    when winner.Fields.TryFind "v" <> Some "1"
+                         || winner.Fields.TryFind "item" <> Some target.Canonical
+                         || winner.Fields.TryFind "gen" <> Some gen
+                         || winner.Fields.TryFind "receiver" <> Some receiver
+                         || winner.Fields.TryFind "op" <> Some "merge" ->
+                    Error(
+                        Errors.Malformed(
+                            target.Short,
+                            $"claim generation %s{gen} already has merge election %d{winner.Id} as the lowest marker for operation key %s{opkey}, but that winner does not record the current item, generation, receiver, and merge operation; close this replacement without merging, release the claim, and obtain a fresh claim generation before opening or reviewing another replacement"
+                        )
+                    )
                 | Some winner when winner.Fields.TryFind "pr" <> Some(string pr) ->
                     let winningPr = winner.Fields.TryFind "pr" |> Option.defaultValue "unknown"
                     Error(

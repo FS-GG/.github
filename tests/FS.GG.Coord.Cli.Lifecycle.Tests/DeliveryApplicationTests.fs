@@ -967,7 +967,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         | other -> failwithf "expected exactly the opkey-and-pr match, got %A" other
 
     [<Fact>]
-    let ``#2893 winningElection uses the fence tuple and lowest comment id`` () =
+    let ``#2893 winningElection chooses the lowest opkey candidate before tuple validation`` () =
         let wrongGeneration =
             DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "other-generation" "FS-GG/.github" 8999
 
@@ -979,12 +979,12 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         match
             comments
             |> DeliveryApplication.electionsFromComments
-            |> DeliveryApplication.winningElection expectedOpKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github"
+            |> DeliveryApplication.winningElection expectedOpKey
         with
         | Some election ->
-            Assert.Equal(700L, election.Id)
-            Assert.Equal(Some "9002", election.Fields.TryFind "pr")
-        | None -> failwith "expected the lowest election for the complete fence tuple"
+            Assert.Equal(699L, election.Id)
+            Assert.Equal(Some "other-generation", election.Fields.TryFind "gen")
+        | None -> failwith "expected the hosted fence's lowest opkey candidate"
 
     // -------------------------------------------------------------------------------------------
     // The wired path
@@ -1170,6 +1170,29 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             let rendered = $"%A{e}"
             Assert.Contains("already spent merge election 5309319100 on pull request #9002", rendered)
             Assert.Contains("release the claim", rendered)
+            Assert.Contains("fresh claim generation", rendered)
+            Assert.Empty w.PostedBodies
+            Assert.Empty w.PatchedBodies
+
+    [<Fact>]
+    let ``#2893 a lower opkey winner with a mismatched tuple refuses before a valid higher owned election`` () =
+        let w = world ()
+        let mismatched =
+            DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "other-generation" "FS-GG/.github" 9002
+
+        let transport =
+            scripted
+                w
+                (okResponse (commentListing [ 5309319100L, mismatched; 5309319124L, anElection 9001 ]))
+                (Error(Errors.NotFound "a spent generation must never append another election"))
+                "Implements the thing."
+
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        | Ok() -> failwith "the preflight must not skip the hosted fence's malformed lower winner"
+        | Error e ->
+            let rendered = $"%A{e}"
+            Assert.Contains("merge election 5309319100 as the lowest marker", rendered)
+            Assert.Contains("does not record the current item, generation, receiver, and merge operation", rendered)
             Assert.Contains("fresh claim generation", rendered)
             Assert.Empty w.PostedBodies
             Assert.Empty w.PatchedBodies
