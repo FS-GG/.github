@@ -239,7 +239,7 @@ def project_fields():
                                 "options": [{"id": "opt_hardening", "name": "hardening"}],
                             },
                             {"id": "PVTSSF_phase", "name": "Phase", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_execution", "name": "execution"}]},
-                            {"id": "PVTSSF_severity", "name": "Severity", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_high", "name": "high"}]},
+                            {"id": "PVTSSF_severity", "name": "Severity", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_high", "name": "High"}]},
                             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"},
                         ]
                     }
@@ -512,7 +512,7 @@ def graphql(query: str, variables: dict):
                     if "Phase" not in dropped and ("opt_execution" in value or "opt_execution" in inline_options):
                         ISSUES[n]["phase"] = "execution"
                     if "Severity" not in dropped and ("opt_high" in value or "opt_high" in inline_options):
-                        ISSUES[n]["severity"] = "high"
+                        ISSUES[n]["severity"] = "High"
                     blocked = re.search(r'fieldId:\s*"PVTF_blocked"[^}]*value:\s*\{text:\s*"([^"]+)"', query)
                     if blocked:
                         ISSUES[n]["blocked_by"] = blocked.group(1)
