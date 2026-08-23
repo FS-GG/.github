@@ -668,17 +668,22 @@ sound, but it rewrites another critic's durable evidence, which is what these ru
 Retirement is also a tie-breaker **between** chains and never a re-classification of one — a single
 accepted chain whose head has moved is refused exactly as before.
 
-Before a clean-ledger replacement enters review, run live `delivery <ref> --pr <replacement> --json`
-while the current claim is still held. This is the merge-election preflight as well as the eventual
+Before a clean-ledger replacement enters implementation, create the PR subject the election must bind:
+make one empty provenance commit, push it, and open a draft replacement PR while the current claim is
+still held. Before touching the item's declared paths, run `verify-paths` and live
+`delivery <ref> --pr <replacement> --json`. This is the merge-election preflight as well as the eventual
 authorization write. If the generation's operation key already has a winning election for another PR,
-stop before review: close the replacement without merging, release the claim, obtain a fresh claim
-generation, and only then open the replacement that will carry the fresh chain. An append-only election
-cannot be cleared or superseded by a higher comment id.
+stop before implementation or review: close the replacement without merging, release the claim, obtain
+a fresh claim generation, and only then create the empty-commit PR subject for the replacement that will
+carry the fresh chain. An append-only election cannot be cleared or superseded by a higher comment id.
+The empty commit is only a GitHub PR handle for this preflight; it is not evidence of repair and is not
+the no-op commit forbidden as a substitute for the comment-repair grant.
 
-This is the sole pre-review exception to `pnext-item` §6's post-acceptance placement, not an alternate
-landing route. A clean result may leave an authorization marker on the replacement head, but the live
-decision must still stop at `awaitIndependentReview` or `refreshReview`; it grants no merge authority.
-After the replacement's fresh review and host acceptance complete, the worker reissues the same live
+This is the sole pre-implementation exception to `pnext-item` §6's post-acceptance placement, not an
+alternate landing route. A clean result may leave an authorization marker on the empty replacement
+head, but the live decision must still stop at `awaitIndependentReview` or `refreshReview`; it grants no
+merge authority. Implementation then lands on that already-open draft, staling the early marker as
+designed; the worker refreshes every head-bound declaration before review. After the replacement's fresh review and host acceptance complete, the worker reissues the same live
 `delivery` call at §6's ordinary authorization point before `landable`. That reissue is a zero-cost
 PATCH-skip when the marker remains current and is still required to obtain the landing decision.
 

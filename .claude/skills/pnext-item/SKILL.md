@@ -124,6 +124,19 @@ Create a fresh worktree from current `origin/main`, switch to `item/<number>-<sl
 issue, comments, declared `Paths:`, repository instructions, and relevant tests. Confirm the claim and
 touch-set before editing. Heartbeat during long work.
 
+**A clean-ledger replacement must spend its merge-election check before it spends implementation.**
+Before touching any declared `Paths:`, create the replacement PR handle with one empty provenance commit
+(`git commit --allow-empty -m "chore: open clean-ledger replacement fence"`), push it, and open it as a
+draft PR with the canonical closing link and current-head obligations declaration. Run
+`scripts/fsgg-coord verify-paths`, then run live `delivery <ref> --pr <replacement> --json` while the
+fresh claim is held. `awaitIndependentReview` or `refreshReview` is the expected non-authorizing clean
+result. A spent-election or other permanent refusal stops here: close the draft unmerged, release the
+spent claim, obtain a newer claim generation, and repeat this fence with a new replacement PR. Only a
+clean preflight permits §3 implementation; push that implementation to the already-open draft, refresh
+the head-bound obligations declaration, and never dispatch its critic until the candidate is complete.
+This empty commit creates the PR subject the election binds; it is not the no-op review proxy forbidden
+by `independent-review` and carries no claim that a repair occurred.
+
 ## 3. Implement and verify
 
 Change only the declared paths. If scope must grow, use `widen` before touching it; stop on overlap.
@@ -237,7 +250,8 @@ This is a mechanical cross-check, not a substitute for the qualitative judgement
 critic-generation continuity, durable wait receipts, and repair-phase provenance are read from the live PR by both the worker
 and the critic.
 
-Push the candidate, open its PR, and ask the host to assign a fresh critic agent. Keep the implementing worker and
+Push the candidate and ask the host to assign a fresh critic agent; when §2 already opened a clean-ledger
+replacement draft, update that PR instead of opening another one. Otherwise open the PR here. Keep the implementing worker and
 claim alive, set the item to `In review`, and freshly verify that row while the critic independently
 reviews the exact head SHA. The critic does not edit the
 implementation: it checks requirements, diff, tests, architecture, release obligations, and `Paths:`;
@@ -357,15 +371,13 @@ without its problem text), so identify it from the review chain itself rather th
 chain carrying no review evidence at all reports the distinct `action: awaitIndependentReview` instead.
 
 - **The ordinary authorization point is exactly here — after the host-acceptance marker and all
-  repairs, before `landable`, and never on every push.** The sole pre-review exception is a clean-ledger
-  replacement: after opening that replacement PR but before dispatching its initial critic, follow
-  `independent-review`'s live `delivery` merge-election preflight. That earlier call may write the
-  current-head marker, but it does not authorize a merge: an `awaitIndependentReview` or `refreshReview`
-  answer is the expected stop. If the preflight is clean, complete review and host acceptance, then
-  reissue this same live call at the ordinary authorization point. `rebindAuthorization` makes that
-  reissue a zero-cost no-op PATCH-skip when the marker is already current while the lifecycle decision
-  advances to landing. Outside that named replacement fence, do not call live `delivery` before
-  acceptance; a call made on an earlier head is stale after any later push.
+  repairs, before `landable`, and never on every push.** The sole pre-implementation exception is §2's
+  clean-ledger replacement fence. Its live `delivery` call runs on the empty-commit PR head before any
+  declared path changes and grants no merge authority. After implementation, review, and host acceptance,
+  reissue this same live call at the ordinary authorization point; it refreshes the intentionally stale
+  early marker onto the candidate head while the lifecycle decision advances to landing. Outside that
+  named replacement fence, do not call live `delivery` before acceptance; a call made on an earlier head
+  is stale after any later push.
 - **Only the worker currently holding this item's live claim marker may make this call, and only before
   releasing that claim.** The live form itself refuses otherwise ("no live claim marker can authorize
   delivery") — a fresh critic or a worker after `done --flip` released the claim cannot make it on your
@@ -382,10 +394,10 @@ chain carrying no review evidence at all reports the distinct `action: awaitInde
   the engine's own rollup scores it `Blocking` too, agreeing with branch protection rather than
   contradicting it. Note the failure (to whoever dispatched you, or in the item's own history) and
   proceed to the typed `landable` gate below; only that exact-head green verdict permits the merge.
-  **This proceed-after-report rule does not cover the clean-ledger pre-review preflight.** A
-  spent-election or other permanent preflight refusal is a hard stop before review: close the
+  **This proceed-after-report rule does not cover the clean-ledger pre-implementation preflight.** A
+  spent-election or other permanent preflight refusal is a hard stop before implementation: close the
   replacement PR without merging, release the spent claim, obtain a fresh claim generation, and open a
-  new clean-ledger replacement. Never enter review or merge under the refused generation.
+  new clean-ledger replacement. Never implement, enter review, or merge under the refused generation.
 
 Now wait on the typed `landable` verdict for that exact same head SHA — the marker this call just wrote
 is what lets `claim-generation`, and therefore `landable`, go green. Merge only once `landable` reports

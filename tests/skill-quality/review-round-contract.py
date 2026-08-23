@@ -20,15 +20,44 @@ def replacement_delivery_problems(main_contract: str) -> list[str]:
     """Reject the round-3 escape: an unconditional proceed rule covering preflight refusal."""
     problems = []
     for literal in (
-        "This proceed-after-report rule does not cover the clean-ledger pre-review preflight",
-        "A spent-election or other permanent preflight refusal is a hard stop before review",
+        "This proceed-after-report rule does not cover the clean-ledger pre-implementation preflight",
+        "A spent-election or other permanent preflight refusal is a hard stop before implementation",
         "release the spent claim, obtain a fresh claim generation",
-        "Never enter review or merge under the refused generation",
+        "Never implement, enter review, or merge under the refused generation",
     ):
         if literal not in main_contract:
             problems.append(f"pnext-item replacement refusal boundary is missing: {literal}")
     if "A failed call is reported, never silently swallowed — and never blocks the merge" in main_contract:
         problems.append("pnext-item still lets an unconditional failed-delivery proceed rule cover preflight refusal")
+    return problems
+
+
+def replacement_sequence_problems(main_text: str, replacement_text: str) -> list[str]:
+    """Require the live election fence before the implementation boundary on both binding surfaces."""
+    problems = []
+    main_contract = " ".join(main_text.split())
+    replacement_contract = " ".join(replacement_text.split())
+    for literal in (
+        "A clean-ledger replacement must spend its merge-election check before it spends implementation",
+        "Before touching any declared `Paths:`",
+        'git commit --allow-empty -m "chore: open clean-ledger replacement fence"',
+        "Only a clean preflight permits §3 implementation",
+        "when §2 already opened a clean-ledger replacement draft, update that PR instead of opening another one",
+    ):
+        if literal not in main_contract:
+            problems.append(f"pnext-item pre-implementation sequence is missing: {literal}")
+    for literal in (
+        "Before a clean-ledger replacement enters implementation",
+        "make one empty provenance commit",
+        "Before touching the item's declared paths",
+        "stop before implementation or review",
+        "sole pre-implementation exception",
+    ):
+        if literal not in replacement_contract:
+            problems.append(f"independent-review pre-implementation sequence is missing: {literal}")
+    if "A clean-ledger replacement must spend its merge-election check" in main_text:
+        if main_text.index("A clean-ledger replacement must spend its merge-election check") > main_text.index("## 3. Implement and verify"):
+            problems.append("pnext-item places the clean-ledger fence after implementation begins")
     return problems
 
 
@@ -144,26 +173,28 @@ def main() -> None:
     # .github#2893. The replacement fence is deliberately earlier than ordinary authorization. Both
     # binding surfaces must name that single exception, its non-authorizing stop, and the required
     # post-acceptance reissue; otherwise an operator can obey either document and violate the other.
-    main_contract = " ".join(read(".agents", "pnext-item/SKILL.md").split())
+    main_text = read(".agents", "pnext-item/SKILL.md")
+    main_contract = " ".join(main_text.split())
+    replacement_text = texts[0]
     replacement_contract = contract
     for literal in (
-        "The sole pre-review exception is a clean-ledger replacement",
-        "an `awaitIndependentReview` or `refreshReview` answer is the expected stop",
+        "The sole pre-implementation exception is §2's clean-ledger replacement fence",
+        "grants no merge authority",
         "reissue this same live call at the ordinary authorization point",
         "Outside that named replacement fence, do not call live `delivery` before acceptance",
     ):
         require(literal in main_contract, f"pnext-item delivery ordering is missing: {literal}")
     for literal in (
-        "the sole pre-review exception to `pnext-item` §6's post-acceptance placement",
+        "sole pre-implementation exception to `pnext-item` §6's post-acceptance placement",
         "it grants no merge authority",
         "the worker reissues the same live `delivery` call at §6's ordinary authorization point",
         "still required to obtain the landing decision",
     ):
         require(literal in replacement_contract, f"replacement delivery ordering is missing: {literal}")
-    require(
-        "never after opening the PR" not in main_contract,
-        "pnext-item still forbids the clean-ledger replacement preflight after its PR is opened",
-    )
+    sequence_problems = replacement_sequence_problems(main_text, replacement_text)
+    require(not sequence_problems, "; ".join(sequence_problems))
+    require("Before a clean-ledger replacement enters review" not in replacement_contract,
+            "independent-review still delays the replacement fence until after implementation")
     problems = replacement_delivery_problems(main_contract)
     require(not problems, "; ".join(problems))
 
@@ -178,6 +209,19 @@ def main() -> None:
     require(
         any("unconditional failed-delivery proceed rule" in problem for problem in mutation_problems),
         "replacement refusal negative fixture survived the contract gate",
+    )
+
+    # M2 control: moving the declared-path boundary behind implementation must be rejected even when
+    # every other positive sentence remains present.
+    late_fence_fixture = main_text.replace(
+        "Before touching any declared `Paths:`",
+        "After touching the declared `Paths:`",
+        1,
+    )
+    require(
+        any("pre-implementation sequence is missing" in problem
+            for problem in replacement_sequence_problems(late_fence_fixture, replacement_text)),
+        "replacement pre-implementation ordering mutation survived the contract gate",
     )
 
     print("review-round-contract: structured v2 ledger, digest chain, round bounds, and new-only authority hold")
