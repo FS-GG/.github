@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2738-one-dependency-edge/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2738-one-dependency-edge/analysis.json
-    digest: 2a05809dc3cdf4659119a7149c022a559000d552ca12c6cb1f6409ced1c4417c
+    digest: 91e8fb4254120aeb62a7f1140ea46aa141d819191df75805062e41c494bb6f25
     schemaVersion: 1
   - label: checklist
     path: work/2738-one-dependency-edge/checklist.md
