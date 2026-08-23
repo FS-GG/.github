@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
-"""Case 30 (pr-existence-697) — the `adopt` command: take over an ORPHAN and land it.
+"""Case 30 (pr-existence-697) — the `adopt` command: take over an orphan for guarded delivery.
 
 `reap` refuses a stale claim whose PR is open (#581) and then offers exactly one exit, "close it, then
 reap" — which for a green, mergeable, reviewed PR DESTROYS a worker's finished work. `adopt` lets a worker
-land another worker's orphaned PR through ONE verified command that cannot be talked into landing anything
-else. The GATE is what makes it safe: it lands FINISHED work (green + mergeable) and nothing else.
+continue another worker's orphaned PR through one verified transfer. The gate is what makes it safe: green
+and mergeable is necessary, and an exact-head host-accepted review is necessary independently (#2854).
 
-The world (case 30's #697 seeds, one transport over). FS.GG.SDD, six off-board claims:
+The world (case 30's #697 seeds, one transport over). FS.GG.SDD, eight off-board claims:
 
-    970  stale ghost-970, PR #701 GREEN + MERGEABLE        -> adopt LANDS it (transfers the lock to heron-697)
+    970  stale ghost-970, PR #701 GREEN + HOST-ACCEPTED    -> transfer to heron-697 for typed delivery
     971  stale ghost-971, PR #702 mergeable=false          -> CONFLICTED  -> refuse, lock survives
     972  stale ghost-972, PR #703 mergeable, ZERO checks   -> NOT green (#606) -> refuse, lock survives
     973  FRESH busy-973 (a LIVE claim)                     -> not an orphan -> refuse, lock survives
     974  stale ghost-974, NO open PR                       -> nothing to land -> refuse, lock survives
     975  stale ghost-975, PR #704 mergeable=null then false-> lazy re-read sees CONFLICTED -> refuse, survives
     976  stale ghost-976, PR #705 mergeable, checks RUNNING-> pending -> refuse, lock survives
+    977  stale ghost-977, PR #706 GREEN, changes-required  -> review refusal, lock survives
 
-The transfer reuses `claim`: `adopt 'FS.GG.SDD#970'` POSTs heron-697's marker under the CAS, so after it
+The accepted transfer reuses `claim`: `adopt 'FS.GG.SDD#970'` POSTs heron-697's marker under the CAS, so after it
 the live winner is heron-697 (ghost-970's stale marker is left for reap). #975's PR #704 returns
 `mergeable: null` on the FIRST read and `false` on later reads (GitHub computes mergeability lazily) — the
 engine re-reads and sees the conflict.
 """
 
+import hashlib
 import json
 import re
 import sys
@@ -33,6 +35,9 @@ OWNER = "FS-GG"
 REPO = "FS.GG.SDD"
 RATE = {"cost": 1, "remaining": 4976}
 
+ACCEPTED_HEAD = "a" * 40
+CHANGES_REQUIRED_HEAD = "d" * 40
+
 ISSUES = {
     970: {"title": "Finished, green, and orphaned", "body": "Paths: src/Orphan970"},
     971: {"title": "Orphaned but conflicted", "body": "Paths: src/Orphan971"},
@@ -41,6 +46,7 @@ ISSUES = {
     974: {"title": "Dead, nothing to show for it", "body": "Paths: src/Orphan974"},
     975: {"title": "Mergeability not computed yet", "body": "Paths: src/Orphan975"},
     976: {"title": "Orphaned mid-CI", "body": "Paths: src/Orphan976"},
+    977: {"title": "Green checks, changes required", "body": "Paths: src/Orphan977"},
 }
 
 # (worker, comment_id, hours_since_beat). 3h > 120m lease -> stale; 0h -> fresh -> live.
@@ -52,26 +58,32 @@ MARKERS = {
     974: ("ghost-974", 9740, 3),
     975: ("ghost-975", 9750, 3),
     976: ("ghost-976", 9760, 3),
+    977: ("ghost-977", 9770, 3),
 }
 
 # The open PRs, by number. 703/704 return their mergeable per the lazy/zero-checks worlds.
 PULLS = {
     701: {"number": 701, "state": "open", "mergeable": True,
-          "head": {"ref": "item/970-finished", "sha": "green970"}},
+          "head": {"ref": "item/970-finished", "sha": ACCEPTED_HEAD}},
     702: {"number": 702, "state": "open", "mergeable": False,
           "head": {"ref": "item/971-conflicted", "sha": "c0nflict"}},
     703: {"number": 703, "state": "open", "mergeable": True,
           "head": {"ref": "item/972-no-checks", "sha": "n0checks"}},
     705: {"number": 705, "state": "open", "mergeable": True,
           "head": {"ref": "item/976-running", "sha": "pend976"}},
+    706: {"number": 706, "state": "open", "mergeable": True,
+          "head": {"ref": "item/977-changes-required", "sha": CHANGES_REQUIRED_HEAD}},
 }
 # 974 has no PR; 973 is a live claim (no PR needed). 704 (item/975-lazy) is served specially below.
 LAZY_PR = {"number": 704, "state": "open", "head": {"ref": "item/975-lazy", "sha": "lazysha"}}
 
 RUNS = {
-    "green970": [{"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/970-finished",
+    ACCEPTED_HEAD: [{"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/970-finished",
                   "run_number": 1, "status": "completed", "conclusion": "success", "check_suite_id": 1,
                   "pull_requests": [{"number": 701}]}],
+    CHANGES_REQUIRED_HEAD: [{"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/977-changes-required",
+                            "run_number": 1, "status": "completed", "conclusion": "success", "check_suite_id": 4,
+                            "pull_requests": [{"number": 706}]}],
     "n0checks": [],
     "pend976": [{"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/976-running",
                  "run_number": 1, "status": "completed", "conclusion": "success", "check_suite_id": 2,
@@ -81,8 +93,10 @@ RUNS = {
                  "pull_requests": [{"number": 705}]}],
 }
 CHECKS = {
-    "green970": [{"name": "build", "status": "completed", "conclusion": "success",
+    ACCEPTED_HEAD: [{"name": "build", "status": "completed", "conclusion": "success",
                   "app": {"slug": "github-actions"}, "check_suite": {"id": 1}}],
+    CHANGES_REQUIRED_HEAD: [{"name": "build", "status": "completed", "conclusion": "success",
+                            "app": {"slug": "github-actions"}, "check_suite": {"id": 4}}],
     "n0checks": [],
     "pend976": [{"name": "build", "status": "completed", "conclusion": "success",
                  "app": {"slug": "github-actions"}, "check_suite": {"id": 2}},
@@ -100,8 +114,67 @@ def _iso(hours_ago):
     return (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _frame(value):
+    return f"{len(value.encode('utf-8'))}:{value}"
+
+
+def _seal_review(record):
+    fields = [
+        _frame(record["schema"]), _frame(record["subject"]), str(record["revision"]),
+        _frame(record["previousDigest"] or ""), _frame(record["headSha"]), _frame(record["critic"]),
+        _frame(record["verdict"]), "".join(_frame(x) for x in record["acceptedExceptions"]),
+        _frame(record["routeApplicability"]), "".join(_frame(x) for x in record["routeEvidence"]),
+        _frame(record["policyVersion"]), _frame(record["kind"]), str(record["round"]),
+        _frame(record["initialReview"] or ""), _frame(record["precedingReview"] or ""),
+        str(record["diffAuditRequired"]), "".join(_frame(x) for x in record["diffAuditReceipts"]),
+        _frame(record["timestamp"]),
+    ]
+    if record["claimGeneration"] is not None or record["baseSha"] is not None:
+        fields.extend([_frame(record["claimGeneration"] or ""), _frame(record["baseSha"] or "")])
+    record["digest"] = hashlib.sha256("|".join(fields).encode()).hexdigest()
+    return record
+
+
+def _initial_review(item, pr, head, critic, verdict):
+    return _seal_review({
+        "schema": "fsgg.coord.review-decision/v2", "subject": f"FS-GG/FS.GG.SDD#{item}/pr/{pr}",
+        "revision": 1, "previousDigest": None, "headSha": head, "claimGeneration": None,
+        "baseSha": None, "critic": critic, "verdict": verdict, "acceptedExceptions": [],
+        "routeApplicability": "not-meaningful",
+        "routeEvidence": ["fixture has no meaningful runtime-route comparison"],
+        "policyVersion": "structured-decisions/1", "kind": "initial", "round": 0,
+        "initialReview": None, "precedingReview": None, "diffAuditRequired": False,
+        "diffAuditReceipts": [], "succession": None, "repairPhaseReceipt": None,
+        "timestamp": "2026-08-23T18:00:00Z", "digest": "",
+    })
+
+
+def _review_comment(cid, url, record):
+    return {"id": cid, "body": "<!-- fsgg:review-decision/v2 -->\n" + json.dumps(record, separators=(",", ":")),
+            "html_url": url, "user": {"login": "EHotwagner"},
+            "created_at": record["timestamp"], "updated_at": record["timestamp"]}
+
+
+_accepted_initial_url = "https://fixture.invalid/reviews/970/1"
+_accepted_initial = _initial_review(970, 701, ACCEPTED_HEAD, "heron-critic-970", "pass")
+_accepted = dict(_accepted_initial)
+_accepted.update({
+    "revision": 2, "previousDigest": _accepted_initial["digest"], "claimGeneration": "9700",
+    "baseSha": "c" * 40, "verdict": "accepted", "kind": "acceptance",
+    "initialReview": _accepted_initial_url, "precedingReview": _accepted_initial_url,
+    "timestamp": "2026-08-23T18:01:00Z", "digest": "",
+})
+_seal_review(_accepted)
+_changes_required = _initial_review(977, 706, CHANGES_REQUIRED_HEAD, "swift-critic-977", "changes-required")
+REVIEW_COMMENTS = {
+    701: [_review_comment(70101, _accepted_initial_url, _accepted_initial),
+          _review_comment(70102, "https://fixture.invalid/reviews/970/2", _accepted)],
+    706: [_review_comment(70601, "https://fixture.invalid/reviews/977/1", _changes_required)],
+}
+
+
 def comments(n):
-    out = []
+    out = list(REVIEW_COMMENTS.get(n, []))
     if n in MARKERS:
         worker, cid, hrs = MARKERS[n]
         ts = _iso(hrs)

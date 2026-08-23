@@ -3170,6 +3170,40 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         with _ ->
             []
 
+    /// The review half of `landable` for stale-claim recovery projections (#2854).
+    /// `Reads.prLandable` establishes CI and mergeability only; recovery may call work ready for adoption
+    /// only after one valid effective review chain is host-accepted for this exact PR and current head.
+    /// Any unreadable or malformed fact is a refusal with a reason, never an absent-review inference.
+    let private acceptedReviewHead (ctx: Context) (ref: Ref) (pr: int) : Result<string, string> =
+        match
+            Reads.prHeadSha ctx.Transport ref.Owner ref.Repo pr,
+            Reads.commentsWithIdentity ctx.Transport ref.Owner ref.Repo pr
+        with
+        | Error e, _ -> Error $"the PR head could not be read (%s{Errors.explain e})"
+        | _, Error e -> Error $"the review ledger could not be read (%s{Errors.explain e})"
+        | Ok head, Ok comments ->
+            let comments =
+                comments
+                |> List.map (fun comment ->
+                    ({ Id = comment.Id
+                       Url = comment.Url
+                       Body = comment.Body }: Driver.ReviewComment))
+
+            match Driver.parseEffectiveReviewComments head comments with
+            | Error errors -> Error(String.concat "; " errors)
+            | Ok chain ->
+                let expectedSubject = $"%s{ref.Canonical}/pr/%d{pr}"
+
+                if
+                    chain.MarkerValid
+                    && chain.HostAccepted
+                    && chain.Subject = Some expectedSubject
+                    && chain.HeadSha = Some head
+                then
+                    Ok head
+                else
+                    Error "the current head has no valid host-accepted review chain for this PR"
+
 
 
     let who (ctx: Context) (opts: Options) : int =
@@ -3750,22 +3784,30 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                                         match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
                                         | PrGreen ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE."
+                                            match acceptedReviewHead ctx ref pr with
+                                            | Ok _ ->
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE with a current host-accepted review."
 
-                                            eprint
-                                                "fsgg-coord-engine:   This work is FINISHED — the worker died between \"green\" and \"merge\", the window this protocol leaves open on every item. Do NOT close it: that destroys a reviewed, passing fix. LAND IT:"
+                                                eprint
+                                                    "fsgg-coord-engine:   This work is ready for guarded recovery. Do NOT close it: transfer the orphaned claim, then continue through typed delivery:"
 
-                                            eprint $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
+                                                eprint $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
+                                            | Error why ->
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN and its checks are GREEN, but review readiness is not established: %s{why}."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   The work is NOT ready to land. Do NOT close, reap, or adopt it; inspect the authoritative review-aware verdict: scripts/fsgg-coord landable %d{pr} --repo %s{ref.Repo}"
                                         | PrPending ->
                                             eprint
                                                 $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
 
                                             eprint
-                                                "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle and look again:"
+                                                "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle, then ask the authoritative review-aware gate:"
 
                                             eprint
-                                                $"fsgg-coord-engine:       scripts/fsgg-coord who --repo %s{repoName}        # green? then: scripts/fsgg-coord adopt %s{ref.Short}"
+                                                $"fsgg-coord-engine:       scripts/fsgg-coord landable %d{pr} --repo %s{repoName}"
                                         | PrUnknown ->
                                             eprint
                                                 $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
@@ -5195,19 +5237,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
                             ExitRed
 
-    /// #697 — take over an ORPHAN (a stale claim whose PR is FINISHED) and land it.
+    /// #697 — take over an ORPHAN for guarded delivery.
     ///
     /// `reap` refuses a stale claim whose PR is open (#581, correct) and then offers exactly one exit,
     /// "close it, then reap". For a PR that is green, reviewed and mergeable that exit DESTROYS the best work
-    /// on the board — and it is the path of least resistance. `adopt` lets a worker land another worker's
-    /// orphaned PR through ONE verified command that cannot be talked into landing anything else.
+    /// on the board — and it is the path of least resistance. `adopt` lets a worker recover another worker's
+    /// orphaned PR through ONE verified transfer, then routes the new holder through guarded delivery.
     ///
     /// WHAT MAKES THIS SAFE IS THE GATE, NOT THE TRANSFER. Each refusal below is a state in which "adopt"
-    /// would mean something other than *finish somebody's finished work*: a LIVE claim is not an orphan
+    /// would mean something other than *recover somebody's review-ready work*: a LIVE claim is not an orphan
     /// (taking it is a steal); no open PR is nothing to land (the claim is merely dead — `reap` it); a PR
-    /// that is not GREEN AND MERGEABLE is not finished (rebasing a conflict or fixing a red is AUTHORING);
-    /// and `unknown` refuses too, because adopting on a guess is how a "verified" command launders the
-    /// unverified, destructive act it exists to replace.
+    /// that is not GREEN AND MERGEABLE is not ready (rebasing a conflict or fixing a red is AUTHORING); a PR
+    /// without an exact-head, digest-valid host acceptance is not review-ready; and `unknown` refuses too,
+    /// because adopting on a guess is how a "verified" command launders the unverified act it replaces.
     ///
     /// THE TRANSFER ITSELF IS `claim`'s, ON PURPOSE. `claim` already runs the comment-id CAS, carries the
     /// original `prev` across (#481), and refuses a lost race or a #516 second hold. Re-implementing it here
@@ -5294,33 +5336,42 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                                 ExitRed
                             | Ok(LeaseExpiredPrOpen pnum) ->
-                                // 4. THE GATE. `adopt` lands FINISHED work and nothing else.
+                                // 4. THE GATE. CI/mergeability is necessary but not sufficient: the
+                                // review-aware half must also prove a current host acceptance (#2854).
                                 match Reads.prLandable ctx.Transport ref.Owner ref.Repo pnum with
                                 | PrGreen ->
-                                    // A PRECONDITION report, not a success banner — `claim` below can still
-                                    // refuse (a lost CAS, #516, a twin), and announcing success before it wins
-                                    // would leave the operator unable to tell whether the lock was taken.
-                                    eprint
-                                        $"fsgg-coord-engine: PR #%d{pnum} on 'item/%d{ref.Number}-*' is GREEN and MERGEABLE — worker '%s{ow}' FINISHED this work and died before landing it (idle %d{oage}m). Taking the claim..."
-
-                                    // 5. Take the lock. `claim` does the transfer under the same CAS as every
-                                    //    other lock; it DIES on a lost race, so the epilogue runs only on a win.
-                                    let rc = claim ctx opts
-
-                                    if rc = ExitGreen then
+                                    match acceptedReviewHead ctx ref pnum with
+                                    | Error why ->
                                         eprint
-                                            $"fsgg-coord-engine: ADOPTED %s{ref.Short} from worker '%s{ow}' — the claim is now yours."
+                                            $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} has GREEN checks but is NOT ready for adoption: %s{why}."
 
                                         eprint
-                                            $"  The work is FINISHED. Do NOT rebuild it, and do NOT close PR #%d{pnum}. Land it:"
+                                            $"  REFUSING to transfer the claim. Do NOT merge, reap, or call this work finished; inspect the authoritative verdict: scripts/fsgg-coord landable %d{pnum} --repo %s{ref.Repo}"
 
+                                        ExitRed
+                                    | Ok head ->
+                                        // A PRECONDITION report, not a success banner — `claim` below can
+                                        // still refuse (lost CAS, #516, twin). Review and CI are both bound
+                                        // to the exact head named here; neither is inferred from the other.
                                         eprint
-                                            $"    gh api -X PUT repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pnum}/merge -f merge_method=squash"
+                                            $"fsgg-coord-engine: PR #%d{pnum} on 'item/%d{ref.Number}-*' is GREEN, MERGEABLE, and host-accepted at %s{head} — worker '%s{ow}' left guarded delivery incomplete (idle %d{oage}m). Taking the claim..."
 
-                                        eprint $"    scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --flip --apply"
-                                        ExitGreen
-                                    else
-                                        rc
+                                        // 5. Take the lock. `claim` does the transfer under the same CAS as
+                                        // every other lock; it DIES on a lost race, so the epilogue runs only
+                                        // on a win.
+                                        let rc = claim ctx opts
+
+                                        if rc = ExitGreen then
+                                            eprint
+                                                $"fsgg-coord-engine: ADOPTED %s{ref.Short} from worker '%s{ow}' — the claim is now yours."
+
+                                            eprint
+                                                $"  Do NOT rebuild or close PR #%d{pnum}. Continue through typed delivery, which re-checks this exact head before any merge:"
+
+                                            eprint $"    scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --json"
+                                            ExitGreen
+                                        else
+                                            rc
                                 | PrConflicted ->
                                     eprint
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is OPEN but CONFLICTED with its base — so it is not landable as it stands, and it is not finished work. Rebasing it is AUTHORING, not landing; and GitHub gives a conflicted PR no CI at all (it cannot build refs/pull/%d{pnum}/merge), so nothing about it has been verified since the conflict appeared."
@@ -5372,8 +5423,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// PR is not open at all, #1680) on stdout, the DECISION in the exit code so a poll loop reads "keep
     /// waiting" from "stop" without parsing prose (#724).
     ///
-    /// IT IS THE READ `who`/`reap`/`adopt` ALREADY MAKE (`Reads.prLandable` → `Landable.score`), surfaced on
-    /// its own so the verdict has ONE home. §5 of the worker recipes used to re-derive it in ~40 lines of jq,
+    /// IT IS THE CI/MERGEABILITY READ `who`/`reap`/`adopt` SHARE (`Reads.prLandable` → `Landable.score`),
+    /// surfaced on its own so that verdict has ONE home. Stale-claim recovery additionally requires an
+    /// exact-head, digest-valid host acceptance before it may call the work review-ready. §5 of the worker
+    /// recipes used to re-derive the CI/mergeability slice in ~40 lines of jq,
     /// wrong four times (#547/#606/#698/#720) and fixed in a COPY each time because nothing executes a recipe.
     /// A command a test can hold makes a fifth copy unwritable — this is that command.
     ///

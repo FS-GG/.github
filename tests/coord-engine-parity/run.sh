@@ -4166,18 +4166,20 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
     && ok "#697: ...and 'pending' on the one whose CI has not settled (case 30)" \
     || bad "#697: #976 prState" "$(printf '%s' "$wjson" | jq -c '.[] | select(.number==976)')"
 
-  # 3. THE ONE THAT MATTERS. `reap` must not point the destructive verb at finished work: it REFUSES the
-  #    green orphan, calls it FINISHED, names `adopt`, and NEVER advises "close it, then reap".
+  # 3. `reap` preserves the anti-delete refusal without promoting green checks past the review ledger.
   rerp="$(lnd reap --repo FS.GG.SDD --apply 2>&1)"
   printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#970' \
     && ok "#697: reap REFUSES a claim whose PR is green and mergeable (case 30)" \
     || bad "#697: reap refuses #970" "$rerp"
-  printf '%s' "$rerp" | grep -q 'FS.GG.SDD#970.*GREEN and MERGEABLE' \
-    && ok "#697: ...and calls the work GREEN and MERGEABLE — FINISHED (case 30)" \
-    || bad "#697: reap #970 FINISHED" "$rerp"
-  printf '%s' "$rerp" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
-    && ok "#697: ...and names \`adopt\` as the remedy (case 30)" \
-    || bad "#697: reap #970 names adopt" "$rerp"
+  printf '%s' "$rerp" | grep -q 'FS.GG.SDD#970.*checks are GREEN, but review readiness is not established' \
+    && ok "#2854: reap distinguishes green checks from review-ready work (case 30)" \
+    || bad "#2854: reap review boundary" "$rerp"
+  printf '%s' "$rerp" | grep -q 'fsgg-coord landable 701 --repo FS.GG.SDD' \
+    && ok "#2854: reap defers to the authoritative review-aware verdict (case 30)" \
+    || bad "#2854: reap points at landable" "$rerp"
+  refute "#2854 inversion: reap never calls changes-required work finished or recommends adoption/landing (case 30)" \
+         'work is FINISHED|LAND IT|fsgg-coord adopt FS\.GG\.SDD#970' \
+         'REFUSING to reap FS\.GG\.SDD#970|review readiness is not established' 0 "$rerp"
   refute "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)" \
          'close it, then reap' 'REFUSING to reap FS\.GG\.SDD#970|close it, then reap' 0 "$rerp"
 
@@ -4201,13 +4203,15 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
 fi
 
 # ==================================================================================================
-# case 30 (pr-existence-697) — the `adopt` COMMAND. Land another worker's orphaned PR through ONE verified
-# command that cannot be talked into landing anything else. The GATE is what makes it safe: `adopt` lands
-# FINISHED work (green + mergeable) and nothing else. The transfer reuses `claim` (one lock, one CAS). World
-# (case 30's #697 seeds, one transport over — `adopt_server.py`): #970 GREEN (LAND IT, transfer), #971
+# case 30 (pr-existence-697) — the `adopt` COMMAND. Continue another worker's orphaned PR through one
+# verified transfer. The gate requires green + mergeable AND exact-head host acceptance; the transfer then
+# reuses `claim` (one lock, one CAS) and routes the new holder through typed delivery. World
+# (case 30's #697 seeds, one transport over — `adopt_server.py`): #970 GREEN + host-accepted (guarded
+# transfer), #971
 # CONFLICTED, #972 mergeable-but-ZERO-checks (NOT green, #606), #973 a LIVE claim (a steal, not an orphan),
 # #974 NO open PR (merely dead), #975 mergeable=null-then-false (the lazy re-read sees the conflict), #976
-# checks RUNNING (pending). Every refusal leaves the lock UNTOUCHED.
+# checks RUNNING (pending), #977 GREEN but changes-required (review refusal). Every refusal leaves the lock
+# UNTOUCHED.
 # ==================================================================================================
 ADP_OUT="$(mktemp)"; python3 "$HERE/adopt_server.py" >"$ADP_OUT" 2>/dev/null & ADP_SRV=$!; ADP_PORT=""
 for _ in $(seq 1 50); do ADP_PORT="$(head -n1 "$ADP_OUT" 2>/dev/null)"; [ -n "$ADP_PORT" ] && break; sleep 0.1; done
@@ -4277,15 +4281,34 @@ if [ -z "$ADP_PORT" ]; then bad "adopt fixture bound a port"; else
     && ok "#697: ...and does NOT take the lock on unfinished work (case 30)" \
     || bad "#697: adopt #976 lock leaked" "workers: $(workers_on 976)"
 
-  # 3. THE TRANSFER. A GREEN, mergeable orphan is adopted: adopt confirms GREEN and MERGEABLE, hands the
-  #    worker the MERGE (not a rebuild, not a close), and TRANSFERS the claim under `claim`'s CAS.
+  # 4f. GREEN checks do not supersede a structured changes-required review. This is the bypass #2854
+  #     closes one command downstream from `who` and `reap`.
+  reviewblocked="$(adp adopt FS.GG.SDD#977 --worker heron-697 2>&1 || true)"
+  printf '%s' "$reviewblocked" | grep -q 'GREEN checks but is NOT ready for adoption' \
+    && ok "#2854: adopt refuses a CI-green PR whose review still requires changes (case 30)" \
+    || bad "#2854: adopt #977 review refusal" "$reviewblocked"
+  printf '%s' "$reviewblocked" | grep -q 'fsgg-coord landable 706 --repo FS.GG.SDD' \
+    && ok "#2854: ...and defers to landable rather than a direct merge (case 30)" \
+    || bad "#2854: adopt #977 landable remedy" "$reviewblocked"
+  refute "#2854 inversion: adopt never calls changes-required work finished or emits a direct merge (case 30)" \
+         'work is FINISHED|Land it:|gh api -X PUT|delivery FS\.GG\.SDD#977' \
+         'PR #706 on FS\.GG\.SDD#977|REFUSING to transfer the claim' 0 "$reviewblocked"
+  [ "$(workers_on 977)" = "ghost-977" ] \
+    && ok "#2854: ...and leaves the stale claim untouched when review is not accepted (case 30)" \
+    || bad "#2854: adopt #977 lock leaked" "workers: $(workers_on 977)"
+
+  # 3. THE TRANSFER CONTROL. A GREEN, mergeable, host-accepted orphan is adopted and handed to typed
+  #    delivery (never a raw merge command), preserving legitimate recovery under `claim`'s CAS.
   adopt970="$(adp adopt FS.GG.SDD#970 --worker heron-697 2>&1 || true)"
-  printf '%s' "$adopt970" | grep -q 'GREEN and MERGEABLE' \
-    && ok "#697: adopt confirms the PR is green and mergeable before touching anything (case 30)" \
-    || bad "#697: adopt #970 GREEN banner" "$adopt970"
-  printf '%s' "$adopt970" | grep -q 'Do NOT rebuild it, and do NOT close PR #701' \
-    && ok "#697: adopt hands the worker the MERGE, and says not to close the PR (case 30)" \
+  printf '%s' "$adopt970" | grep -q 'GREEN, MERGEABLE, and host-accepted at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+    && ok "#2854: adopt requires CI and exact-head host acceptance before transfer (case 30)" \
+    || bad "#2854: adopt #970 accepted banner" "$adopt970"
+  printf '%s' "$adopt970" | grep -q 'delivery FS.GG.SDD#970 --pr 701 --json' \
+    && ok "#2854: adopt hands the worker to typed delivery, not a raw merge (case 30)" \
     || bad "#697: adopt #970 epilogue" "$adopt970"
+  refute "#2854: accepted orphan recovery still emits no direct GitHub merge command (case 30)" \
+         'gh api -X PUT|The work is FINISHED|Land it:' \
+         'ADOPTED FS\.GG\.SDD#970|delivery FS\.GG\.SDD#970' 0 "$adopt970"
   # THE TRANSFER ITSELF: heron-697's marker is now on #970, so the live winner (ghost-970 is stale) is the
   # adopter — the claim is theirs, under one CAS, the total order intact.
   printf '%s' "$(workers_on 970)" | grep -q 'heron-697' \
