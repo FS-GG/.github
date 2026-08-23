@@ -19,6 +19,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-23** — **coherent set `github:0.73.2` published and the registry feed projection advanced**
+  (github; [.github#2639](https://github.com/FS-GG/.github/issues/2639),
+  [source PR #2836](https://github.com/FS-GG/.github/pull/2836),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.73.2)):
+  `coord-engine.package-version` advances `0.73.1` → `0.73.2` only after direct reads of both
+  GitHub Packages and nuget.org. The promoted release manifest binds
+  `f7379f69063432173f74e9e5586bd91063e5d2cd`, content
+  `sha256:a9e301df2b7dfe5accd055fb39625ff0ae262a29b86a8692ddef5dc1f7e9a09b`, and the three
+  unsigned package payloads: Coord.Cli
+  `sha256:17e06699e181fc2fc14dc464c599ca736a6fd986832425cdf95d9eefeab22ed7`, Drivers
+  `sha256:82bf0a9678ac07d18b27cc32bcb4cbc32fab66c1c21ef61a796aac9acd885c71`, and Kit
+  `sha256:9d84098a95d0df3152063af6ebd1b2e3012570a7f8d9f0f18bfec8f7f8c5ead9`. The
+  `publishing-and-deployment` skill manifest is regenerated alongside its source projection.
+
 - **2026-08-23** — **`rendering-skills` 0.1.1 completes the universal Rendering product-skill channel; stale feed projections reconciled**
   (rendering; [.github#2639](https://github.com/FS-GG/.github/issues/2639),
   [Rendering#1240](https://github.com/FS-GG/FS.GG.Rendering/issues/1240),
