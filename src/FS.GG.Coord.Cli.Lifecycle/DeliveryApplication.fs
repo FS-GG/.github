@@ -453,24 +453,13 @@ module DeliveryApplication =
             election.Fields.TryFind "opkey" = Some opkey
             && election.Fields.TryFind "pr" = Some(string pr))
 
-    // The fence elects the lowest comment id for the complete operation tuple. Delivery must make
-    // the same observation before it appends another contender: once a different pull request won
-    // this generation, a replacement can only produce a higher, permanently losing election.
-    let winningElection
-        (opkey: string)
-        (item: string)
-        (gen: string)
-        (receiver: string)
-        (elections: Election list)
-        : Election option =
+    // The fence's candidate set is every election bearing this opkey, and it validates the winning
+    // marker's recorded tuple only AFTER choosing the lowest id. Preserve that order here: filtering
+    // malformed or mismatched tuples first could skip the gate's actual winner and authorize a PR
+    // whose higher election the hosted check will permanently reject.
+    let winningElection (opkey: string) (elections: Election list) : Election option =
         elections
-        |> List.filter (fun election ->
-            election.Fields.TryFind "v" = Some "1"
-            && election.Fields.TryFind "opkey" = Some opkey
-            && election.Fields.TryFind "item" = Some item
-            && election.Fields.TryFind "gen" = Some gen
-            && election.Fields.TryFind "receiver" = Some receiver
-            && election.Fields.TryFind "op" = Some "merge")
+        |> List.filter (fun election -> election.Fields.TryFind "opkey" = Some opkey)
         |> List.sortBy _.Id
         |> List.tryHead
 
