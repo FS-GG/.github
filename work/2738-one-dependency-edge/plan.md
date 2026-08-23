@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2738-one-dependency-edge/spec.md sha256:dd53e45a04e12fa97622aa8410c45e0d748ac6050d3e467b9475f2c42b71a048 schemaVersion:1
+- spec: work/2738-one-dependency-edge/spec.md sha256:2148b8e35ab40872e7d38d39ea6dc6b9abf1eb4c8671558525e9aa9f4dff7390 schemaVersion:1
 - clarifications: work/2738-one-dependency-edge/clarifications.md sha256:b4897f5f7b564a781516861329a865ed3899e11b980ac3fa413f684f3168fe93 schemaVersion:1
-- checklist: work/2738-one-dependency-edge/checklist.md sha256:06edf38359ed8dd7528fca06e5862646e08014b8f55c3d09dc5b29388d16ecfa schemaVersion:1
+- checklist: work/2738-one-dependency-edge/checklist.md sha256:f047ef3f5b64b9a52e725915df847d312f5de90b2f3b6306a82a5aca3a11c7bb schemaVersion:1
 
 ## Plan Scope
 - Work item 2738-one-dependency-edge is planned from the current specification, clarification, and checklist facts.
@@ -29,16 +29,16 @@ Prose status: planned
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Treat the Projects-v2 `Blocked by` field as the sole typed dependency-edge authority; body prose never grants or withholds `Ready`.
 - PD-002 [AC-001] [FR-002] complete: Introduce one revision-bound dependency-edge observation consumed by intake, scheduling, coherent blocked writes, reconciliation, and lint projections.
-- PD-003 [AC-001] [FR-003] complete: Thread the observation revision into the intake Ready mutation so a changed board revision produces `Stale` and requires a fresh read.
+- PD-003 [AC-002] [FR-003] complete: Thread the observation revision to the board-write boundary. Refuse a changed observation as `Stale`; when GitHub Projects v2 offers no expected-revision input, refuse the conditional Ready batch with an explicit unsupported-authority diagnostic and zero writes. A Ready transition must use the separate explicit `set-field Status Ready` authority after operator re-evaluation, or a future broker that provides native compare-and-set.
 - PD-004 [AC-001] [FR-004] complete: Keep `Blocked on: human/decision` and `Blocked on: human/action` parsing in `HumanBlock`; these sentinels are distinct from machine dependency edges.
 - PD-005 [AC-001] [FR-005] complete: Continue generating `Blocked by:` prose from typed intake data for human readability, but remove all dependency decisions based on parsing that prose.
 - PD-006 [AC-001] [FR-006] complete: Retire `blockedByBodyDivergence` after tests enumerate empty, live, unreadable, stale, and legacy-divergent states and prove only the column affects dependency meaning.
 
 ## Contract Impact
-- PC-001 [PD-001] internal board contract: dependency observations expose value plus board revision; intake Ready application accepts only an observation current for the mutation snapshot. Existing intake JSON and generated body prose remain compatible.
+- PC-001 [PD-001] internal board contract: dependency observations expose value plus board revision. Intake never claims a current observation authorizes an atomic Projects mutation: mismatch is Stale, while equality on a backend without compare-and-set is an explicit unsupported-authority refusal with zero Ready writes. Existing intake JSON and generated body prose remain compatible; explicit/manual board writes remain a separate authority.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Add focused Core and CLI tests for all edge states, mutate the live-column Ready guard to ignore the dependency and observe the focused suite red, then run the affected project suites and build.
+- VO-001 [PD-001] [PC-001] semanticTest: Add focused Core and CLI tests for all edge states; prove an edge-free observation and an edge installed after the final observed snapshot both receive the unsupported atomic-authority diagnostic and emit zero Ready writes; retain the changed-revision Stale control and discriminating guard mutations, then run the affected project suites and build.
 
 ## Performance Intent
 No performance intent is declared for this work item.

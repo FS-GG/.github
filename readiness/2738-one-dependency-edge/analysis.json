@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "6dc7bd510d071cc89bdc8cc18c15a16cde004b6acbdc6d2c8e7d4037012cc575"
+        "value": "7695977ead35629fb60810e3ba348c3029213f3e5fb99c4e830bb44510be3ce6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "06edf38359ed8dd7528fca06e5862646e08014b8f55c3d09dc5b29388d16ecfa"
+        "value": "f047ef3f5b64b9a52e725915df847d312f5de90b2f3b6306a82a5aca3a11c7bb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "afa46c5c8367fed367b7bcdff5b9b79029693f3d7394a1c902d17c5967ba1bf4"
+        "value": "684510ec9586d528be4399ee31f51b3dfa2cc40bf9b39d0a8539af198619b269"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "dd53e45a04e12fa97622aa8410c45e0d748ac6050d3e467b9475f2c42b71a048"
+        "value": "2148b8e35ab40872e7d38d39ea6dc6b9abf1eb4c8671558525e9aa9f4dff7390"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "fd10093a41588e39dcc0f2a66ad79f2220e02f5dea3e60443d81e30bde05a9ee"
+        "value": "69fb2b95b882bc4d3712d0792c76fec4b823e580577e11e797cb17fd0b82c032"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -271,6 +271,16 @@
     {
       "id": "AR018",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
+      "targetPath": "work/2738-one-dependency-edge/tasks.yml",
+      "sourceId": "AC-002",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/checklist.md",
       "sourceId": null,
       "targetId": null,
@@ -279,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR020",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/plan.md",
       "sourceId": null,
@@ -289,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR021",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-001",
@@ -299,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR022",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-002",
@@ -309,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR023",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-003",
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR024",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-004",
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-005",
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "FR-006",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/clarifications.md",
       "sourceId": null,
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2738-one-dependency-edge/spec.md",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": null,
@@ -369,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2738-one-dependency-edge/tasks.yml",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "T007",
@@ -379,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2738-one-dependency-edge/tasks.yml",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "T008",
@@ -389,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2738-one-dependency-edge/tasks.yml",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "T009",
@@ -399,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2738-one-dependency-edge/tasks.yml",
       "targetPath": "work/2738-one-dependency-edge/tasks.yml",
       "sourceId": "T010",
@@ -411,7 +421,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 31,
+    "readyCount": 32,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

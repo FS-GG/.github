@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2738-one-dependency-edge/spec.md
-    digest: dd53e45a04e12fa97622aa8410c45e0d748ac6050d3e467b9475f2c42b71a048
+    digest: 2148b8e35ab40872e7d38d39ea6dc6b9abf1eb4c8671558525e9aa9f4dff7390
     schemaVersion: 1
   - label: clarifications
     path: work/2738-one-dependency-edge/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2738-one-dependency-edge/checklist.md
-    digest: 06edf38359ed8dd7528fca06e5862646e08014b8f55c3d09dc5b29388d16ecfa
+    digest: f047ef3f5b64b9a52e725915df847d312f5de90b2f3b6306a82a5aca3a11c7bb
     schemaVersion: 1
   - label: plan
     path: work/2738-one-dependency-edge/plan.md
-    digest: afa46c5c8367fed367b7bcdff5b9b79029693f3d7394a1c902d17c5967ba1bf4
+    digest: 684510ec9586d528be4399ee31f51b3dfa2cc40bf9b39d0a8539af198619b269
     schemaVersion: 1
 tasks:
   - id: T001
@@ -55,7 +55,7 @@ tasks:
     dependencies: []
     requirements: [FR-003]
     decisions: []
-    sourceIds: [AC-001, FR-003, PD-003]
+    sourceIds: [AC-002, FR-003, PD-003]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV003]
   - id: T004

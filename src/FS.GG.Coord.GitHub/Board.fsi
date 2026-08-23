@@ -334,10 +334,11 @@ module Board =
     /// took effect) is NEVER queued, because replaying the document would rewrite what already landed; it
     /// surfaces as `Error(Partial …)` for the caller to render field-by-field.
     ///
-    /// `expectedBlockedBy` makes the mutation conditional on the exact dependency-edge observation a
-    /// caller used. The boundary re-reads both Projects item revision and field value immediately before
-    /// mutation; a mismatch fails stale with zero writes. Conditional batches are never deferred because
-    /// replay would discard the condition.
+    /// `expectedBlockedBy` requests a revision-conditional dependency write. The boundary re-reads both
+    /// Projects item revision and field value; a mismatch fails stale with zero writes. Even when they
+    /// match, GitHub Projects v2 supplies no compare-and-set input, so the batch fails closed with an
+    /// unsupported mutation-authority diagnostic and zero writes. Conditional batches are never deferred.
+    /// A Ready transition therefore needs an explicit board-write authority or a CAS-capable broker.
     val boardWriteBatch:
         transport: IGitHubTransport ->
         board: BoardMap ->

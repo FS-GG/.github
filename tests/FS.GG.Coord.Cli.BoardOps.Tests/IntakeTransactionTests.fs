@@ -323,6 +323,81 @@ module IntakeTransactionTests =
             Assert.Equal(3, edgeReads)
             Assert.Equal(0, readyMutationWrites)
 
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``#2738 intake sends no Ready mutation without atomic Projects authority`` installEdgeAfterFinalRead =
+        withCache
+        <| fun cache ->
+            let ready =
+                """{"schema":"fsgg.coord.intake/v1","id":"ready-atomic-authority-2738","owner":"FS-GG","repository":".github","title":"ready atomic authority","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+
+            let draftPath = Path.Combine(cache, "ready-atomic-authority-digest.json")
+            File.WriteAllText(draftPath, ready)
+            let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
+
+            Cache.putIntakeReceipt
+                { IntakeReceipt.Receipt.DraftId = parsed.Id
+                  Owner = parsed.Owner
+                  Repository = parsed.Repository
+                  IssueNumber = 88
+                  DraftDigest = IntakeReceipt.digest parsed }
+            |> Result.defaultWith failwith
+
+            let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
+            let mutable edgeReads = 0
+            let mutable edgeInstalled = false
+            let mutable readyMutationWrites = 0
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/88" ->
+                        ok "{\"number\":88,\"state\":\"open\",\"body\":\"No dependency prose here.\"}"
+                    | "GET", "repos/FS-GG/.github/issues/88/comments" -> ok ($"[{{\"body\":%s{route}}}]")
+                    | "GET", "repos/FS-GG/.github/pulls" -> ok "[]"
+                    | "GET", "repos/FS-GG/.github/git/matching-refs/heads/item/88-" -> ok "[]"
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(document, _) when document.Contains "projectsV2" ->
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":1,"title":"Coordination","id":"PVT"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "fields(first" ->
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"C","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"H","name":"hardening"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                            edgeReads <- edgeReads + 1
+
+                            // The third response is the final observation used by Board. Capture the
+                            // edge-free snapshot first, then install the edge before returning it: any
+                            // subsequent unconditional batch would therefore be a stale Ready write.
+                            let response =
+                                """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"updatedAt":"2026-08-23T10:00:00Z","project":{"number":1},"fieldValueByName":null}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+
+                            if edgeReads = 3 && installEdgeAfterFinalRead then
+                                edgeInstalled <- true
+
+                            ok response
+                        | Query(document, _) when document.Contains "projectItems(first: 20)" ->
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"id":"PI","project":{"number":1}}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "updateProjectV2ItemFieldValue" ->
+                            readyMutationWrites <- readyMutationWrites + 1
+                            Error(NotFound "conditional intake emitted Status=Ready without atomic authority")
+                        | _ -> Error(NotFound "unexpected GraphQL request")
+                    | _ -> Error(NotFound "unexpected request"))
+
+            let code, error = invokeDraftWithError cache ready world
+            Assert.Equal(Kernel.ExitError, code)
+            Assert.True(
+                error.Contains("cannot atomically compare", StringComparison.Ordinal),
+                error + "\n" + String.concat "\n" world.Log
+            )
+            Assert.Contains("Status=Ready was not sent", error, StringComparison.Ordinal)
+            Assert.Equal(3, edgeReads)
+            Assert.Equal(installEdgeAfterFinalRead, edgeInstalled)
+            Assert.Equal(0, readyMutationWrites)
+
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =
         withCache <| fun cache ->

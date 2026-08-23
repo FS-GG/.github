@@ -30,6 +30,13 @@ All mutations below were applied to the authoring tree based on `0c533d0760d2599
 - Observed: exit 1; 9 tests passed and the new interleaving case failed after the fake installed a `Blocked by` edge between the handler's second observation and the board batch, because the mutated route emitted the forbidden batch mutation.
 - Subject: the production condition carried across the handler/board boundary; the fixture proves zero `Status=Ready` mutation when the exact Projects revision or dependency edge changes.
 
+## M5 — treat an equal final observation as mutation authority
+
+- Mutation: replace `Board.boardWriteBatch`'s fail-closed equal-observation arm with `Ok()`, allowing the existing unconditional `setFieldBatch` call to proceed.
+- Command: `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --no-restore --filter 'FullyQualifiedName~intake sends no Ready mutation without atomic Projects authority'`
+- Observed: exit 1; both theory cases failed and logged the aliased batch containing the Ready option, including the case whose fake installed the edge after capturing the third and final observation.
+- Subject: the production board-write boundary's API-capability refusal, for both an edge-free observation and the post-final-read interleaving; equality is observation freshness, not atomic mutation authority.
+
 ## Restoration control
 
-The final verification reruns the focused tests and all four affected suites from restored source. `git diff --check` and the PR diff provide the committed-source control: none of the four mutant spellings is retained.
+The final verification reruns the focused tests and all four affected suites from restored source. `git diff --check` and the PR diff provide the committed-source control: none of the five mutant spellings is retained.

@@ -1499,13 +1499,23 @@ module Board =
                 | Some expected ->
                     itemBlockedByObservation transport board owner repo number
                     |> Result.bind (fun observed ->
-                        if observed = expected then
-                            Ok()
-                        else
+                        if observed <> expected then
                             Error(
                                 Malformed(
                                     $"%s{owner}/%s{repo}#%d{number} conditional board batch",
                                     "Stale dependency-edge observation: the Projects item revision or Blocked by edge changed at the board-write boundary; re-derive and retry"
+                                )
+                            )
+                        else
+                            // GitHub Projects v2 exposes `updatedAt`, but its field-value mutation has no
+                            // expected-revision / If-Match input. A read followed by `setFieldBatch` would
+                            // therefore still race an edge installed after this response. Refuse the whole
+                            // conditional document: an explicit/manual write or a future broker with native
+                            // compare-and-set authority must perform the Ready transition.
+                            Error(
+                                Malformed(
+                                    $"%s{owner}/%s{repo}#%d{number} conditional board batch",
+                                    "Stale dependency-edge mutation authority: GitHub Projects v2 cannot atomically compare the observed revision at the field-mutation boundary; Status=Ready was not sent. Re-derive, then use the explicit board-write authority or a CAS-capable broker."
                                 )
                             ))
 

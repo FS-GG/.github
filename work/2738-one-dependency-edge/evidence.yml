@@ -11,11 +11,11 @@ sourceAnalysis: readiness/2738-one-dependency-edge/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2738-one-dependency-edge/analysis.json
-    digest: 5d76f11064a52e5e9e77e080294d87296479cfc1aac6553adf83249e98524857
+    digest: 8fe5d53af7a031bf9b8df95fe3ff11c7d496f660a283da4a5cadf6722105185e
     schemaVersion: 1
   - label: checklist
     path: work/2738-one-dependency-edge/checklist.md
-    digest: 06edf38359ed8dd7528fca06e5862646e08014b8f55c3d09dc5b29388d16ecfa
+    digest: f047ef3f5b64b9a52e725915df847d312f5de90b2f3b6306a82a5aca3a11c7bb
     schemaVersion: 1
   - label: clarifications
     path: work/2738-one-dependency-edge/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2738-one-dependency-edge/plan.md
-    digest: afa46c5c8367fed367b7bcdff5b9b79029693f3d7394a1c902d17c5967ba1bf4
+    digest: 684510ec9586d528be4399ee31f51b3dfa2cc40bf9b39d0a8539af198619b269
     schemaVersion: 1
   - label: spec
     path: work/2738-one-dependency-edge/spec.md
-    digest: dd53e45a04e12fa97622aa8410c45e0d748ac6050d3e467b9475f2c42b71a048
+    digest: 2148b8e35ab40872e7d38d39ea6dc6b9abf1eb4c8671558525e9aa9f4dff7390
     schemaVersion: 1
   - label: tasks
     path: work/2738-one-dependency-edge/tasks.yml
-    digest: fd10093a41588e39dcc0f2a66ad79f2220e02f5dea3e60443d81e30bde05a9ee
+    digest: 69fb2b95b882bc4d3712d0792c76fec4b823e580577e11e797cb17fd0b82c032
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -41,7 +41,7 @@ evidence:
       id: T001
     taskRefs: [T001]
     requirementRefs: [FR-001]
-    acceptanceScenarioRefs: []
+    acceptanceScenarioRefs: [AC-001]
     clarificationDecisionRefs: []
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -95,7 +95,7 @@ evidence:
       id: T003
     taskRefs: [T003]
     requirementRefs: [FR-003]
-    acceptanceScenarioRefs: []
+    acceptanceScenarioRefs: [AC-002]
     clarificationDecisionRefs: []
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
-      digest: "sha256:24c90ba20a79bff194129e85457bbe6ed88db3b1e3a2065238f7a259fc0f1dea"
+      digest: "sha256:46c6c22f4b885c6329597ae76e235e5fa782c02864b576b00a486c8e28c6d066"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 238
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
