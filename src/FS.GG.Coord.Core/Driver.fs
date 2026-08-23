@@ -99,6 +99,35 @@ module Driver =
                        GrantedBy = inner "grantedBy" value
                        GrantUrl = inner "grantUrl" value }: StructuredDecision.SuccessionGrant)
             | _ -> invalidArg name "must be an object or null"
+        let optionalRepairPhaseReceipt (name: string) (root: JsonElement) =
+            let innerString (field: string) (value: JsonElement) =
+                match value.TryGetProperty field with
+                | true, entry when entry.ValueKind = JsonValueKind.String -> entry.GetString()
+                | true, _ -> invalidArg $"%s{name}.%s{field}" "must be a string"
+                | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+            let innerInt (field: string) (value: JsonElement) =
+                match value.TryGetProperty field with
+                | true, entry when entry.ValueKind = JsonValueKind.Number -> entry.GetInt32()
+                | true, _ -> invalidArg $"%s{name}.%s{field}" "must be an integer"
+                | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+            let innerInt64 (field: string) (value: JsonElement) =
+                match value.TryGetProperty field with
+                | true, entry when entry.ValueKind = JsonValueKind.Number -> entry.GetInt64()
+                | true, _ -> invalidArg $"%s{name}.%s{field}" "must be an integer"
+                | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+            match root.TryGetProperty name with
+            | false, _ -> None
+            | true, value when value.ValueKind = JsonValueKind.Null -> None
+            | true, value when value.ValueKind = JsonValueKind.Object ->
+                Some
+                    ({ ExhaustedPr = innerInt "exhaustedPr" value
+                       EscalationCommentId = innerInt64 "escalationCommentId" value
+                       NewClaimGeneration = innerString "newClaimGeneration" value
+                       NewBranchOrPr = innerString "newBranchOrPr" value
+                       NewImplementerIdentity = innerString "newImplementerIdentity" value
+                       NewCriticIdentity = innerString "newCriticIdentity" value
+                       CandidateHeadSha = innerString "candidateHeadSha" value }: StructuredDecision.RepairPhaseReceipt)
+            | _ -> invalidArg name "must be an object or null"
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -138,6 +167,7 @@ module Driver =
                   DiffAuditRequired = optionalBool "diffAuditRequired" root
                   DiffAuditReceipts = optionalTexts "diffAuditReceipts" root
                   Succession = optionalSuccession "succession" root
+                  RepairPhaseReceipt = optionalRepairPhaseReceipt "repairPhaseReceipt" root
                   Timestamp = text "timestamp" root
                   Digest = text "digest" root }
         with error -> Error error.Message
@@ -165,6 +195,16 @@ module Driver =
                 {| originalCritic = grant.OriginalCritic
                    grantedBy = grant.GrantedBy
                    grantUrl = grant.GrantUrl |})
+        let repairPhaseReceipt =
+            record.RepairPhaseReceipt
+            |> Option.map (fun receipt ->
+                {| exhaustedPr = receipt.ExhaustedPr
+                   escalationCommentId = receipt.EscalationCommentId
+                   newClaimGeneration = receipt.NewClaimGeneration
+                   newBranchOrPr = receipt.NewBranchOrPr
+                   newImplementerIdentity = receipt.NewImplementerIdentity
+                   newCriticIdentity = receipt.NewCriticIdentity
+                   candidateHeadSha = receipt.CandidateHeadSha |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
                previousDigest = record.PreviousDigest; headSha = record.HeadSha
@@ -175,6 +215,7 @@ module Driver =
                initialReview = record.InitialReview; precedingReview = record.PrecedingReview
                diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
                succession = succession
+               repairPhaseReceipt = repairPhaseReceipt
                timestamp = record.Timestamp; digest = record.Digest |}
 
     let private structuredReviewLedger (comments: ReviewComment list) =
@@ -228,6 +269,7 @@ module Driver =
           LatestReviewUrl: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
+          RepairPhaseReceipt: StructuredDecision.RepairPhaseReceipt option
           AcceptanceCount: int
           AcceptancePresent: bool }
 
@@ -261,6 +303,7 @@ module Driver =
               LatestReviewUrl = None
               EscalationPresent = false
               RepairPhasePresent = false
+              RepairPhaseReceipt = None
               AcceptanceCount = 0
               AcceptancePresent = false }
         else
@@ -279,6 +322,7 @@ module Driver =
                   LatestReviewUrl = None
                   EscalationPresent = false
                   RepairPhasePresent = false
+                  RepairPhaseReceipt = None
                   AcceptanceCount = 0
                   AcceptancePresent = false }
             | Ok(_, pairs) ->
@@ -314,6 +358,10 @@ module Driver =
                   LatestReviewUrl = latestReview |> Option.map (fst >> _.Url)
                   EscalationPresent = ofKind StructuredDecision.Escalation |> List.isEmpty |> not
                   RepairPhasePresent = ofKind StructuredDecision.RepairPhase |> List.isEmpty |> not
+                  RepairPhaseReceipt =
+                      ofKind StructuredDecision.RepairPhase
+                      |> List.tryExactlyOne
+                      |> Option.bind (snd >> _.RepairPhaseReceipt)
                   AcceptanceCount = List.length acceptances
                   AcceptancePresent = not (List.isEmpty acceptances) }
 

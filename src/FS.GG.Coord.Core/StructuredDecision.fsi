@@ -55,6 +55,15 @@ module StructuredDecision =
           GrantedBy: string
           GrantUrl: string }
 
+    type RepairPhaseReceipt =
+        { ExhaustedPr: int
+          EscalationCommentId: int64
+          NewClaimGeneration: string
+          NewBranchOrPr: string
+          NewImplementerIdentity: string
+          NewCriticIdentity: string
+          CandidateHeadSha: string }
+
     type ReviewRecord =
         { Schema: string
           Subject: string
@@ -80,6 +89,10 @@ module StructuredDecision =
           /// field fails CLOSED on a succession record (digest mismatch) instead of silently dropping the
           /// grant and applying the unwidened continuity rule to a record that no longer satisfies it.
           Succession: SuccessionGrant option
+          /// The live, seven-field provenance receipt for the one fresh repair phase. Historical v2
+          /// records may omit it; the production writer refuses to author a new repair-phase record
+          /// without it.
+          RepairPhaseReceipt: RepairPhaseReceipt option
           Timestamp: string
           Digest: string }
 

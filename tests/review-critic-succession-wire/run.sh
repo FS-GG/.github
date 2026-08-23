@@ -404,7 +404,10 @@ echo "── 3. LEDGER WRITE: can a granted successor actually RECORD a verdict 
 LEDGER_CASES=(
   "granted-confirmation|confirmation|snipe-8934|GRANT|ordinary|a successor's confirmation (ordinary boundary; legacy grant remains readable)"
   "granted-escalation|escalation|snipe-8934|GRANT|accept|a granted successor's escalation"
-  "granted-repair-phase|repair-phase|snipe-8934|GRANT|accept|a granted successor's repair-phase record"
+  # A repair-phase write has a stronger live boundary than succession alone: it must consume the
+  # seven-field predecessor receipt.  The core suite still proves that a receipt-bearing repair-phase
+  # record accepts the same succession grant; coord-engine-e2e/writes.sh drives the full live chain.
+  "granted-repair-phase|repair-phase|snipe-8934|GRANT|receipt-required|a succession grant without repair-phase provenance"
   "ungranted-confirmation|confirmation|snipe-8934|none|ordinary|an ordinary fresh successor's confirmation"
   "mismatched-grant|confirmation|snipe-8934|MISMATCH|mismatch|a grant naming a critic who never held the seat"
 )
@@ -570,6 +573,16 @@ ledger_legs() {
         bad "$name INVERSION SURVIVED: the record was still accepted with the succession allowance removed -- this leg measures something else" "$detail"
       else
         ok "$name inversion: with the allowance removed, the accepting leg REDS (it is bound to the admission it names)"
+      fi
+    elif [ "$expect" = "receipt-required" ]; then
+      if [ "$rc" -eq 0 ]; then
+        bad "$name: repair-phase without its typed predecessor receipt must be REFUSED" "$detail"
+      elif [ "$after" != "$before" ]; then
+        bad "$name: refused, but a comment was appended anyway ($before -> $after) -- validation must precede the post" "$detail"
+      elif [[ "$detail" != *"requires the seven-field repairPhaseReceipt"* ]]; then
+        bad "$name: refused for a DIFFERENT reason -- the typed repair-phase boundary was not measured" "$detail"
+      else
+        ok "$name ($mode): succession remains legible, but live repair-phase entry requires its typed predecessor receipt"
       fi
     elif [ "$expect" = "mismatch" ] && [ "$mode" = "inverted" ]; then
       if [ "$rc" -eq 0 ] && [ "$after" = "$((before + 1))" ]; then

@@ -39,14 +39,7 @@ module Review =
     /// escalation-marker comment, and the new claim/branch/PR/implementer/critic/head the fresh phase is
     /// bound to. Idempotent: a second `inspect` over the SAME granted receipt reuses it rather than
     /// minting another.
-    type RepairPhaseReceipt =
-        { ExhaustedPr: int
-          EscalationCommentId: int64
-          NewClaimGeneration: string
-          NewBranchOrPr: string
-          NewImplementerIdentity: string
-          NewCriticIdentity: string
-          CandidateHeadSha: string }
+    type RepairPhaseReceipt = StructuredDecision.RepairPhaseReceipt
 
     /// The accountable, out-of-band grant that recovers a chain whose critic despawned mid-round
     /// (.github#2417) — the same "external fact the pure engine cannot observe itself" pattern as

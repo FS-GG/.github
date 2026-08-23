@@ -67,6 +67,7 @@ module Driver =
           LatestReviewUrl: string option
           EscalationPresent: bool
           RepairPhasePresent: bool
+          RepairPhaseReceipt: StructuredDecision.RepairPhaseReceipt option
           /// How many comments canonically carry the host-acceptance marker; see `InitialCount`.
           AcceptanceCount: int
           AcceptancePresent: bool }

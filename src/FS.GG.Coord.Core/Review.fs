@@ -19,14 +19,7 @@ module Review =
           Phase: Phase
           Round: int }
 
-    type RepairPhaseReceipt =
-        { ExhaustedPr: int
-          EscalationCommentId: int64
-          NewClaimGeneration: string
-          NewBranchOrPr: string
-          NewImplementerIdentity: string
-          NewCriticIdentity: string
-          CandidateHeadSha: string }
+    type RepairPhaseReceipt = StructuredDecision.RepairPhaseReceipt
 
     // The accountable, out-of-band grant that lets a chain recover when its critic despawned mid-round
     // (.github#2417) — structurally the same "external fact the pure engine cannot observe itself"

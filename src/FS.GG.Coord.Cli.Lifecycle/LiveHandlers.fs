@@ -573,12 +573,7 @@ module LiveHandlers =
     /// there is no review protocol before a PR exists, so a bare `review <ref>` would either fabricate
     /// meaningless facts or silently answer a question nobody asked.
     ///
-    /// TWO FACTS THIS READ CANNOT ESTABLISH LIVE, DELIBERATELY DEFAULTED RATHER THAN LEFT UNHANDLED:
-    ///   - `RepairPhaseGranted` is always `None`. A granted repair phase binds a NEW claim/branch/PR/
-    ///     critic that lives on a DIFFERENT item than the one this command reads, and resolving that
-    ///     binding live is future work, not a silent wrong answer today — a caller mid-repair-phase-setup
-    ///     sees `RepairPhaseSetup`/`Park` guidance directing it to the host, which is honest.
-    ///   - `RepairRouteAvailable` defaults to `true`. Whether a fresh worker/critic slot exists is a
+    /// `RepairRouteAvailable` defaults to `true`. Whether a fresh worker/critic slot exists is a
     ///     scheduler fact, not something one PR read can observe. Both outcomes of this default route to
     ///     `Park` (human/host action) in `Review.classify` either way — the default only changes the
     ///     STATE label (`OrdinaryExhaustion` vs `TerminalHumanPark`), never whether the action is safe.
@@ -635,7 +630,11 @@ module LiveHandlers =
                             let facts: Review.Facts =
                                 { Comments = reviewComments
                                   Checks = checks
-                                  RepairPhaseGranted = None
+                                  // The production writer validates this seven-field receipt against the
+                                  // exhausted predecessor PR and the current claim/branch/head before it
+                                  // can enter the structured ledger. Reuse that durable fact here instead
+                                  // of dropping it at the live adapter boundary.
+                                  RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
                                   RepairRouteAvailable = true
                                   DiffAuditTrusted = None }
 
@@ -811,6 +810,58 @@ module LiveHandlers =
                     receipt.Kind = kind
                     && receipt.ReviewGeneration = ReviewWait.generationToken draft.HeadSha kind round
 
+                let authorizeRepairPhaseEntry () =
+                    match draft.RepairPhaseReceipt with
+                    | None -> Error "a repair-phase record requires the seven-field repairPhaseReceipt"
+                    | Some entry when entry.ExhaustedPr = pr -> Error "repairPhaseReceipt.exhaustedPr must name the closed predecessor PR"
+                    | Some entry when entry.NewClaimGeneration <> string claim.Id -> Error "repairPhaseReceipt.newClaimGeneration is not current"
+                    | Some entry when entry.NewImplementerIdentity <> claim.Worker.Value -> Error "repairPhaseReceipt.newImplementerIdentity is not the current claimant"
+                    | Some entry when entry.NewCriticIdentity <> draft.Critic -> Error "repairPhaseReceipt.newCriticIdentity does not match the repair-phase critic"
+                    | Some entry when entry.CandidateHeadSha <> draft.HeadSha -> Error "repairPhaseReceipt.candidateHeadSha does not match the repair-phase record head"
+                    | Some entry ->
+                        match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
+                              Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo entry.ExhaustedPr with
+                        | Error error, _, _
+                        | _, Error error, _
+                        | _, _, Error error -> Error(sprintf "repair-phase entry provenance could not be read: %A" error)
+                        | Ok branch, Ok head, Ok exhaustedComments ->
+                            let prBinding = string pr
+                            let branchOrPrMatches =
+                                entry.NewBranchOrPr = branch
+                                || entry.NewBranchOrPr = prBinding
+                                || entry.NewBranchOrPr = $"#%d{pr}"
+                                || entry.NewBranchOrPr = $"pr/%d{pr}"
+                            if not branchOrPrMatches then
+                                Error "repairPhaseReceipt.newBranchOrPr does not match the current branch or PR"
+                            elif head <> entry.CandidateHeadSha then
+                                Error "repairPhaseReceipt.candidateHeadSha is stale for the current PR"
+                            elif claim.Id <= entry.EscalationCommentId then
+                                Error "repairPhaseReceipt.newClaimGeneration must be newer than the exhausted escalation comment"
+                            elif Reads.prLandable ctx.Transport target.Owner target.Repo entry.ExhaustedPr <> Types.PrClosed then
+                                Error "repairPhaseReceipt.exhaustedPr must be closed without merging"
+                            else
+                                let reviewComments =
+                                    exhaustedComments
+                                    |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                let phaseFacts = Driver.reviewPhaseFacts reviewComments
+                                let exactEscalation =
+                                    exhaustedComments
+                                    |> List.tryFind (fun comment -> comment.Id = entry.EscalationCommentId)
+                                    |> Option.bind (fun comment ->
+                                        if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
+                                            Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                                            |> Result.toOption
+                                        else None)
+                                match phaseFacts.StructuredErrors, exactEscalation with
+                                | errors, _ when not (List.isEmpty errors) ->
+                                    let detail = String.concat "; " errors
+                                    Error($"the exhausted repair-phase provenance ledger is invalid: %s{detail}")
+                                | _, Some escalation
+                                    when escalation.Kind = StructuredDecision.Escalation
+                                         && escalation.Subject = $"%s{target.Canonical}/pr/%d{entry.ExhaustedPr}" -> Ok ()
+                                | _ -> Error "repairPhaseReceipt.escalationCommentId does not name the exhausted PR's structured escalation record"
+
                 let authorizeExhaustedClaimTurnover (receipt: ReviewWait.WaitReceipt) evidence =
                     let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
                     let ordered = comments |> List.sortBy _.Id
@@ -959,7 +1010,10 @@ module LiveHandlers =
                     Error "host acceptance requires the immediately preceding critic record's durable review wait to be completed"
                 | StructuredDecision.Initial, ReviewWait.Waiting receipt
                     when generationMatches ReviewWait.InitialReview 0 receipt -> Ok ()
-                | (StructuredDecision.Confirmation | StructuredDecision.Escalation | StructuredDecision.RepairPhase),
+                | StructuredDecision.RepairPhase, ReviewWait.Waiting receipt
+                    when generationMatches ReviewWait.RepairConfirmation draft.Round receipt ->
+                    authorizeRepairPhaseEntry ()
+                | (StructuredDecision.Confirmation | StructuredDecision.Escalation),
                   ReviewWait.Waiting receipt
                     when generationMatches ReviewWait.RepairConfirmation draft.Round receipt -> Ok ()
                 | _, ReviewWait.Invalid errors ->

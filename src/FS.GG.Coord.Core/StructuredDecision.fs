@@ -30,6 +30,15 @@ module StructuredDecision =
           GrantedBy: string
           GrantUrl: string }
 
+    type RepairPhaseReceipt =
+        { ExhaustedPr: int
+          EscalationCommentId: int64
+          NewClaimGeneration: string
+          NewBranchOrPr: string
+          NewImplementerIdentity: string
+          NewCriticIdentity: string
+          CandidateHeadSha: string }
+
     type ReviewRecord =
         { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
           HeadSha: string; ClaimGeneration: string option; BaseSha: string option
@@ -38,6 +47,7 @@ module StructuredDecision =
           Kind: ReviewKind; Round: int; InitialReview: string option
           PrecedingReview: string option; DiffAuditRequired: bool; DiffAuditReceipts: string list
           Succession: SuccessionGrant option
+          RepairPhaseReceipt: RepairPhaseReceipt option
           Timestamp: string; Digest: string }
 
     let private frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
@@ -83,6 +93,18 @@ module StructuredDecision =
         | None -> []
         | Some grant -> [ frame grant.OriginalCritic; frame grant.GrantedBy; frame grant.GrantUrl ]
 
+    let private repairPhaseReceiptFields =
+        function
+        | None -> []
+        | Some receipt ->
+            [ string receipt.ExhaustedPr
+              string receipt.EscalationCommentId
+              frame receipt.NewClaimGeneration
+              frame receipt.NewBranchOrPr
+              frame receipt.NewImplementerIdentity
+              frame receipt.NewCriticIdentity
+              frame receipt.CandidateHeadSha ]
+
     let reviewDigest (record: ReviewRecord) =
         digest
             ([ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
@@ -92,6 +114,7 @@ module StructuredDecision =
                string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
                string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
              @ successionFields record.Succession
+             @ repairPhaseReceiptFields record.RepairPhaseReceipt
              @ (match record.ClaimGeneration, record.BaseSha with
                 | None, None -> []
                 | claim, baseSha -> [ scalar claim; scalar baseSha ]))
@@ -319,6 +342,20 @@ module StructuredDecision =
                       yield "diffAuditRequired belongs to the initial review record"
                   if record.Kind <> Acceptance && not (List.isEmpty record.DiffAuditReceipts) then
                       yield "diffAuditReceipts belong to the acceptance record"
+                  match record.Kind, record.RepairPhaseReceipt with
+                  | RepairPhase, Some receipt ->
+                      if receipt.ExhaustedPr <= 0 then yield "repairPhaseReceipt.exhaustedPr must be positive"
+                      if receipt.EscalationCommentId <= 0L then yield "repairPhaseReceipt.escalationCommentId must be positive"
+                      yield! blank "repairPhaseReceipt.newClaimGeneration" receipt.NewClaimGeneration
+                      yield! blank "repairPhaseReceipt.newBranchOrPr" receipt.NewBranchOrPr
+                      yield! blank "repairPhaseReceipt.newImplementerIdentity" receipt.NewImplementerIdentity
+                      yield! blank "repairPhaseReceipt.newCriticIdentity" receipt.NewCriticIdentity
+                      yield! blank "repairPhaseReceipt.candidateHeadSha" receipt.CandidateHeadSha
+                      if not (sha receipt.CandidateHeadSha) then
+                          yield "repairPhaseReceipt.candidateHeadSha must be an exact 40-hex commit SHA"
+                  | RepairPhase, None -> () // legacy v2 records remain readable; the live writer requires the receipt.
+                  | _, Some _ -> yield "repairPhaseReceipt belongs to a repair-phase record"
+                  | _, None -> ()
                   if record.DiffAuditReceipts |> List.exists String.IsNullOrWhiteSpace then
                       yield "diffAuditReceipts must contain only non-empty encoded receipts"
                   if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then
