@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2738-one-dependency-edge/ship.json",
-      "digest": "sha256:3cd64530c5330e9419462fb9c7aab70c4a36bee435878ad8dde6f1cee2fadc35",
+      "digest": "sha256:0dfff5e93a01c5484b82cadecfcd8e86781ef723b5679c99a07239ec6baf9680",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2738-one-dependency-edge/verify.json",
-      "digest": "sha256:650bdb379a8d9316fe716115adf8d27f4fbb3330ccd30783519d12616c0eca2d",
+      "digest": "sha256:b9f219c55198fd03ae7ca0e8c6023d355ad303deea4d6cf89cfb1d6dbc0aefa6",
       "schemaVersion": 1
     },
     {

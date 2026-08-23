@@ -21,8 +21,38 @@ GOOD="$WORK/good"; make_root "$GOOD"
 expect "clean hand-authored verdict passes" 0 "carry no unverifiable" "$GOOD"
 
 STALE="$WORK/stale"; make_root "$STALE"
-printf '%s\n' '{"status":"shipReady","sourcesDigest":{"algorithm":"sha256","value":"stale"}}' > "$STALE/readiness/sample/ship-verdict.json"
-expect "REGRESSION #2208: a stale digest is red" 1 "unverifiable provenance" "$STALE"
+printf '%s\n' '{"sources":[{"path":"work/spec.md","digest":{"algorithm":"sha256","value":"source"}}]}' > "$STALE/readiness/sample/ship.json"
+printf '%s\n' '{"status":"shipReady","sourcesDigest":{"algorithm":"sha256","value":"0000000000000000000000000000000000000000000000000000000000000000"}}' > "$STALE/readiness/sample/ship-verdict.json"
+expect "REGRESSION #2208: a stale digest is red" 1 "does not match" "$STALE"
+
+VERIFIED="$WORK/verified"; make_root "$VERIFIED"
+python3 - "$VERIFIED/readiness/sample/ship.json" "$VERIFIED/readiness/sample/ship-verdict.json" <<'PY'
+import hashlib, json, sys
+
+sources = [
+    {"path":"work/z.md", "digest":{"algorithm":"sha256", "value":"z"}},
+    {"path":"work/a.md", "digest":{"algorithm":"sha256", "value":"a"}},
+]
+preimage = "\n".join(
+    f"{source['path']}|{source['digest']['algorithm']}:{source['digest']['value']}"
+    for source in sorted(sources, key=lambda source: source["path"])
+)
+value = hashlib.sha256(preimage.encode("utf-8")).hexdigest()
+open(sys.argv[1], "w", encoding="utf-8").write(json.dumps({"sources": sources}, indent=2))
+open(sys.argv[2], "w", encoding="utf-8").write(
+    json.dumps({"status":"shipReady", "sourcesDigest":{"algorithm":"sha256", "value":value}}, indent=2)
+)
+PY
+expect "a generated digest is independently verified from ship.json" 0 "carry no unverifiable" "$VERIFIED"
+
+python3 - "$VERIFIED/readiness/sample/ship.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+doc = json.load(open(path, encoding="utf-8"))
+doc["sources"][0]["digest"]["value"] = "mutated"
+open(path, "w", encoding="utf-8").write(json.dumps(doc, indent=2))
+PY
+expect "mutating a generated verdict source makes the gate red" 1 "does not match" "$VERIFIED"
 
 BAD="$WORK/bad"; make_root "$BAD"
 printf '%s\n' '{not json' > "$BAD/readiness/sample/ship-verdict.json"
@@ -31,10 +61,8 @@ expect "invalid subject is no verdict, not clean" 3 "invalid JSON" "$BAD"
 EMPTY="$WORK/empty"; mkdir -p "$EMPTY/readiness"
 expect "no subjects is no verdict, never a vacuous green" 3 "no ship-verdict.json" "$EMPTY"
 
-# REGRESSION #2393: `fsgg-sdd ship` unconditionally re-adds `sourcesDigest` (reproduced live on PR
-# #2387/#2249) and nothing but memory used to prevent it being committed again. `--fix` is the
-# automated strip: it must repair the exact escape and leave every other byte untouched, so the
-# committed diff after `ship` + `--fix` is only ever "the forbidden key is gone" — never a reformat.
+# REGRESSION #2393: retain the compatibility repair for a legacy digest whose source inventory is
+# unavailable. The default gate now verifies generated digests instead of requiring their absence.
 FIXESC="$WORK/fix-escape"; mkdir -p "$FIXESC/readiness/sample"
 VERDICT="$FIXESC/readiness/sample/ship-verdict.json"
 python3 - "$VERDICT" <<'PY'
