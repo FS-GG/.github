@@ -453,6 +453,27 @@ module DeliveryApplication =
             election.Fields.TryFind "opkey" = Some opkey
             && election.Fields.TryFind "pr" = Some(string pr))
 
+    // The fence elects the lowest comment id for the complete operation tuple. Delivery must make
+    // the same observation before it appends another contender: once a different pull request won
+    // this generation, a replacement can only produce a higher, permanently losing election.
+    let winningElection
+        (opkey: string)
+        (item: string)
+        (gen: string)
+        (receiver: string)
+        (elections: Election list)
+        : Election option =
+        elections
+        |> List.filter (fun election ->
+            election.Fields.TryFind "v" = Some "1"
+            && election.Fields.TryFind "opkey" = Some opkey
+            && election.Fields.TryFind "item" = Some item
+            && election.Fields.TryFind "gen" = Some gen
+            && election.Fields.TryFind "receiver" = Some receiver
+            && election.Fields.TryFind "op" = Some "merge")
+        |> List.sortBy _.Id
+        |> List.tryHead
+
     /// The live adapter must consume its delivery receipt and prove that the same claim generation
     /// still wins immediately before it asks GitHub to merge.  Keeping this boundary pure makes the
     /// no-write branch explicit and independently testable.

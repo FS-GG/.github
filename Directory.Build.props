@@ -455,7 +455,7 @@
        are additive and repaired receiver-visible behaviors; no command, package, or member identity
        is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
