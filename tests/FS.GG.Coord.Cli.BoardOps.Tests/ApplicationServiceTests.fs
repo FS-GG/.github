@@ -1063,8 +1063,9 @@ module ApplicationServiceTests =
             Console.SetError captured
 
             let code =
-                Client.withFollowupAuditContextForTest (context transport) (fun () ->
-                    Client.followupAudit (options [ "followup"; "audit"; "--apply" ]))
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit
+                    (context transport)
+                    (options [ "followup"; "audit"; "--apply" ])
 
             Assert.Equal(0, code)
             Assert.False(File.Exists queue, "the claimed open ref is already resurfaced; its abandoned queue must clear")
@@ -1091,8 +1092,9 @@ module ApplicationServiceTests =
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
 
             let code =
-                Client.withFollowupAuditContextForTest (context transport) (fun () ->
-                    Client.followupAudit (options [ "followup"; "audit"; "--apply" ]))
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit
+                    (context transport)
+                    (options [ "followup"; "audit"; "--apply" ])
 
             Assert.Equal(3, code)
             Assert.Equal(bytes, File.ReadAllText queue)
@@ -4520,7 +4522,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 | Options.Adopt -> Client.adopt ctx opts
                 | Options.Widen -> Client.widen ctx opts
                 | Options.SetPaths -> Client.setPaths ctx opts
-                | Options.ReviewCmd -> Client.review ctx opts
+                | Options.ReviewCmd -> FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review ctx opts
                 | Options.BodyEdits -> Handlers.bodyEditsCmd ctx opts
                 | Options.CommentCmd -> Handlers.commentCmd ctx opts
                 | Options.PacketCmd -> PacketApplication.run opts

@@ -490,10 +490,6 @@ let private legacyHandler (opts: Options) =
     | DriverCmd -> runClient opts
     | CycleCmd -> CycleLedgerApplication.run opts
     | WhoAmI -> Client.whoami opts
-    | Followup ->
-        match Followups.parse opts.Args with
-        | Ok Followups.Audit -> Client.followupAudit opts
-        | _ -> Followups.run opts
     | Predicate -> Client.predicate opts
     | DiffAudit -> SemanticDiffApplication.run opts
     | Next
@@ -522,6 +518,50 @@ let private legacyHandler (opts: Options) =
 
 let private boardOpsProgramRegistrations = Handlers.programHandlers runClient
 
+let private lifecycleProgramRegistrations =
+    let live handler = Client.executeWithContext handler
+
+    FS.GG.Coord.Cli.Lifecycle.Handlers.handlers
+        { Delivery =
+            fun opts ->
+                if opts.SnapshotFile.IsSome then
+                    DeliveryApplication.run opts
+                else
+                    live
+                        (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
+                            (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.completeDelivery Client.offerChoreAfterDone)
+                            Client.classifyDeliveryPaths
+                            (Client.projectPathVerdict Client.DeliveryReceiptProjection)
+                            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
+                            Client.scanAndDecide)
+                        opts
+          Review =
+            fun opts ->
+                if opts.SnapshotFile.IsSome then ReviewApplication.run opts
+                else live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review opts
+          Route = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd
+          Landable = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.landable
+          Done = live (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd Client.offerChoreAfterDone)
+          VerifyPaths =
+            live
+                (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
+                    Client.classifyDeliveryPaths
+                    (Client.projectPathVerdict Client.VerifyPathsProjection)
+                    KitDigest.digestWarn)
+          Followup =
+            fun opts ->
+                match Followups.parse opts.Args with
+                | Ok Followups.Audit -> live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit opts
+                | _ -> Followups.run opts }
+
+let private lifecycleHandlers =
+    FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.validate
+        FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.commands
+        lifecycleProgramRegistrations
+    |> function
+        | Ok table -> table |> Map.toList
+        | Error errors -> failwith ("invalid Lifecycle handler registration: " + String.concat "; " errors)
+
 /// The production-owned legacy inventory. This is deliberately explicit and independent of
 /// `Options.allCommands`: validation must detect a newly parsed command that no production family
 /// registered, rather than auto-registering it through the same reflected inventory used as oracle.
@@ -530,18 +570,14 @@ let private legacyCommands =
       Version
       Scan
       Decide
-      DeliveryCmd
       SelfHostCmd
-      ReviewCmd
       LanesView
       Facts
       CommandContractCmd
       PacketCmd
-      RouteCmd
       DriverCmd
       CycleCmd
       WhoAmI
-      Followup
       Predicate
       DiffAudit
       Next
@@ -553,15 +589,12 @@ let private legacyCommands =
       Budget
       Claim
       Adopt
-      Landable
       Take
       Release
       Heartbeat
       Widen
       SetPaths
       Overlap
-      DoneCmd
-      VerifyPaths
       GraphQlOps
       LintCmd
       OpLockAcquire
@@ -571,7 +604,7 @@ let private legacyProgramRegistrations = legacyCommands |> List.map (fun command
 
 /// The production composition subject used by the producer-agreement test. Each family contributes
 /// registrations; the reflection-derived command inventory remains the independent expected set.
-let commandRegistrations = boardOpsProgramRegistrations @ legacyProgramRegistrations
+let commandRegistrations = boardOpsProgramRegistrations @ lifecycleHandlers @ legacyProgramRegistrations
 
 let private commandHandlers =
     match HandlerRegistration.validate Options.allCommands commandRegistrations with

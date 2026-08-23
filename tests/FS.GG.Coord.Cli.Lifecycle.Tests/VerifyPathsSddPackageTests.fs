@@ -4,9 +4,11 @@ open System
 open System.IO
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.Lifecycle
 
 /// `verify-paths` no longer reporting an `sdd-required` item's OWN mandatory `work/<id>/` +
 /// `readiness/<id>/` output as touch-set drift (.github#2324) — end to end, through the real command.
@@ -14,7 +16,7 @@ open FS.GG.Coord.Cli
 /// `DeliveryRouteTests` holds the pure derivation (`DeliveryRoute.mandatorySddPaths`), but the defect
 /// this item closes is not a derivation: it is the VERDICT a worker's own pre-merge check returns, and
 /// the mid-flight `widen` that verdict forces on every single `sdd-required` item. Only driving
-/// `Client.verifyPaths` against a scripted transport can assert that — the same idiom
+/// `LiveHandlers.verifyPaths` against a scripted transport can assert that — the same idiom
 /// `VerifyPathsClosingKeywordTests` (#2107) and `LandableNotOpenTests` (#1680) use.
 module VerifyPathsSddPackageTests =
 
@@ -72,7 +74,7 @@ module VerifyPathsSddPackageTests =
           DefaultRepo = Some ".github"
           ChoreLocks = [] }
 
-    /// Drive `Client.verifyPaths` and capture (exit code, stdout, STDERR) — same cache-isolation licence
+    /// Drive `LiveHandlers.verifyPaths` and capture (exit code, stdout, STDERR) — same cache-isolation licence
     /// as `VerifyPathsClosingKeywordTests.runVerifyPaths`.
     ///
     /// STDERR IS CAPTURED, AND THAT IS A REQUIREMENT RATHER THAN A CONVENIENCE (round-1 finding F13).
@@ -101,7 +103,13 @@ module VerifyPathsSddPackageTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = Client.verifyPaths (context transport) opts
+            let code =
+                LiveHandlers.verifyPaths
+                    Client.classifyDeliveryPaths
+                    Delivery.pathsVerified
+                    ignore
+                    (context transport)
+                    opts
             Console.Out.Flush()
             Console.Error.Flush()
             code, captured.ToString(), capturedError.ToString()

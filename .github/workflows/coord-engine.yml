@@ -28,6 +28,7 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
       # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
       # workflow would not start on such a change and would be green by absence (#266) — which is
@@ -37,6 +38,7 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/FS.GG.Coord.Cli.Lifecycle.Tests/**"
       # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
       # `dotnet test` on the CLI suite does not run one of them, so a workflow that started only on
       # the CLI suite would report green over a kernel change it never executed.
@@ -150,6 +152,7 @@ jobs:
           dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --locked-mode
 
@@ -261,6 +264,14 @@ jobs:
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=cli.trx" --results-directory "$RUNNER_TEMP/coord-engine/cli"
+
+      # Lifecycle is a separate production and test assembly (.github#2727). The residual CLI suite
+      # cannot discover these tests, so the invocation and independent count guard are both required.
+      - name: Test — lifecycle handlers and typed completion dependency
+        run: dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=lifecycle.trx" --results-directory "$RUNNER_TEMP/coord-engine/lifecycle"
+
+      - name: Non-vacuity — the Lifecycle run must have executed tests
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/lifecycle/lifecycle.trx" --minimum 20 --label "coord-engine (Lifecycle)" --summary-file "$GITHUB_STEP_SUMMARY"
 
       - name: Test — BoardOps handlers and production registration agreement
         run: dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=boardops.trx" --results-directory "$RUNNER_TEMP/coord-engine/boardops"

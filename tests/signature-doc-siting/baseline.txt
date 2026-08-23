@@ -106,10 +106,13 @@
 161 src/FS.GG.Coord.Cli.Kernel/Kernel.fs
 436 src/FS.GG.Coord.Cli.Kernel/Options.fs
 159 src/FS.GG.Coord.Cli.Kernel/Render.fs
-1509 src/FS.GG.Coord.Cli/Client.fs
-15 src/FS.GG.Coord.Cli/DeliveryApplication.fs
-2 src/FS.GG.Coord.Cli/FollowupAudit.fs
-31 src/FS.GG.Coord.Cli/Followups.fs
+1250 src/FS.GG.Coord.Cli/Client.fs
+15 src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs
+2 src/FS.GG.Coord.Cli.Lifecycle/FollowupAudit.fs
+31 src/FS.GG.Coord.Cli.Lifecycle/Followups.fs
+2 src/FS.GG.Coord.Cli.Lifecycle/HandlerRegistration.fs
+2 src/FS.GG.Coord.Cli.Lifecycle/Handlers.fs
+238 src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs
 73 src/FS.GG.Coord.Cli/KitDigest.fs
 83 src/FS.GG.Coord.Cli/LintApplication.fs
 17 src/FS.GG.Coord.Cli/Snapshot.fs

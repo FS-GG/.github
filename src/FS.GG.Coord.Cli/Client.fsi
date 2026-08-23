@@ -32,23 +32,18 @@ namespace FS.GG.Coord.Cli
 ///     `say`, `roomOpen`, `context`, `bootstrapCmd`, `fieldId`, `optionId`, `itemIdCmd`, `flushCmd`
 ///     (each a verb `run` dispatches to itself). They are absent from this file and are now private.
 ///     `OpLock.LeaseMinutes` and `OpLock.release` went the same way.
-///   * 77 remain, and this is the finding the extraction programme (.github#2725–#2729) consumes: of
-///     those 77, exactly FOUR are required by production code outside this module. `Program.fs` needs
-///     `run`, `whoami`, `followupAudit` and `predicate`, and nothing else in `src/` names this module at
-///     all. The other 73 are held open by the TEST PROJECT ALONE.
+    ///   * 77 remained at that measurement point. The extraction programme (.github#2725–#2729) consumes
+    ///     that baseline; Lifecycle now owns the delivery/review/route/verify/followup command family and
+    ///     `Program.fs` reaches Client only for the residual composition seams.
 ///
-/// So this module's real external contract is four functions wide. Everything else exported below is a
-/// testability seam, and each one marks a place where a unit of behaviour is welded to a file that
-/// cannot be constructed in a test — which is the same force that produced the three mutable cells. The
-/// consumer-by-consumer table is in the pull request that added this file.
+/// So this module's command contract is four functions wide. Everything else exported below is either a
+/// testability seam or an explicit production-composition dependency; none is a command dispatcher. Each
+/// marks a place where behaviour remains welded to Client while its owning family is registered outside it.
+/// The consumer-by-consumer table is in the pull request that added this file.
 ///
-/// WHAT THIS FILE DELIBERATELY DID NOT DO. `generatedPathCollector`, `completeDelivery` and
-/// `followupAuditContextOverride` are `let mutable private` forward declarations back-patched thousands
-/// of lines later, and `completeDelivery`'s initial value is a reachable `failwith`. They are the
-/// EVIDENCE motivating the extraction, not this file's work to remove: across two files each is an
-/// ordinary dependency inversion, and inside one module there is no way to express it except a mutable
-/// cell. Removing them here would turn a compiler-checked change into a design change. They stay, and
-/// they stay private.
+    /// `.github#2727` makes completion, scan, generated-path collection, and the shared context boundary
+    /// explicit Lifecycle composition dependencies. The family owns dispatch; Client supplies only the
+    /// residual operations that have not yet moved.
 module Client =
 
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
@@ -287,187 +282,31 @@ module Client =
     val deliveryPathsVerified:
       touchSet: FS.GG.Coord.Types.TouchSet -> files: string list -> bool
 
-    /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
-    /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
-    /// an attempted-but-invalid review into the distinct fact that no review was posted.
-    val deliveryReviewEvidence:
-      landable: bool ->
-        comments: FS.GG.Coord.Driver.ReviewComment list ->
-        FS.GG.Coord.Driver.ReviewChain option * string option
+    /// Run one family-owned live handler through the client's shared context, repo-defaulting, and
+    /// bare-reference boundary. Command families register the handler itself; this seam supplies IO only.
+    val executeWithContext:
+      handler: (Kernel.Context -> Options.Options -> int) -> opts: Options.Options -> int
 
-    /// True when a claimed PR has at least one declared, unverified delivery obligation — the sole
-    /// signal the lifecycle reducer needs to keep a row `In review` rather than advance it
-    /// (round-1 review repair, .github#2264 PR #2271). Pure over already-read facts, precisely so this
-    /// is testable directly rather than only through `reconcile`'s live GitHub wiring — the gap the
-    /// critic named: the prior inline `.Contains` scan lived only inside that IO fold, and NO test drove
-    /// it. REUSES `DeliveryApplication.obligationsFromComments` rather than a second parser: its ANCHORED,
-    /// whole-line match means a comment that merely QUOTES an obligation or receipt marker in prose — the
-    /// org's ordinary review-comment style — can never satisfy it, so it cannot be mistaken for a real
-    /// declaration or a real receipt the way unanchored `.Contains` could.
-    ///
-    /// An unreadable head or comment thread, or a declaration the parser refuses (malformed, stale,
-    /// undeclared), withholds trust rather than granting it: `true`, the same "stay in review" answer a
-    /// genuinely outstanding obligation gives. Only a HEAD that reads AND parses AND is fully verified
-    /// clears it.
-    val outstandingObligations:
-      headFact: FS.GG.Coord.GitHub.Errors.IoResult<string> ->
-        commentsFact: FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.CommentBody list> ->
-        bool
-
-    /// THE MARKER THAT AUTHORIZES ACTING ON A CLAIM — `review`'s and `delivery`'s shared extension of
-    /// `Reads.winner`'s live-lease-only answer with the SAME proof-of-life the scheduler already trusts
-    /// for a `HeldByLiveWork` item (#581, `Schedulability.leaseAuthorizes`): an expired lease backed by
-    /// an OPEN `item/<n>-*` PR is not abandoned, it is a worker paused at the review handoff — stopped
-    /// between turns, unable to heartbeat because it is not running (#2378). One function, so the two
-    /// callers cannot silently disagree about what "live" means for the identical fact (#485's lesson).
-    ///
-    /// `liveness` is a THUNK, not an eager read: `Reads.winner` already answers most calls (a live lease
-    /// needs no PR probe), so the one extra REST call this adds is paid only on the path that actually
-    /// needs it — `Reads.prAlive`'s own doc comment states the same cost discipline ("only on the ONE
-    /// item about to be … reaped, never a scan").
-    ///
-    /// `Ok None` is a REAL, distinct answer — "no marker authorizes this claim" — kept apart from
-    /// `Error`, a read that could not be made. Callers choose their own refusal wording for `None`;
-    /// `review` and `delivery` worded it differently before this function existed and still do.
-    val authorizedMarker:
-      leaseMinutes: int ->
-        markers: FS.GG.Coord.GitHub.Reads.Marker list ->
-        liveness: (unit ->
-                     FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.Types.Liveness>) ->
-        FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.Marker option>
-
-    /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
-    /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>`.
-    ///
-    /// ALL SIX of `scripts/check-claim-fence.py`'s `REQUIRED_AUTH_FIELDS`. Writing only four — which
-    /// is what landed the first time this row was worked — did not make that gate pass NARROWLY: it
-    /// stopped the gate at CHECK 1, so check 4, the only one of the six a forger cannot satisfy by
-    /// typing, was never evaluated on any real pull request.
-    ///
-    /// The two narrower readers are unaffected and need no cutover: `check-claim-generation.py` (the
-    /// only marker reader among `main`'s required contexts) and the receiver-side validation job in
-    /// `.github/workflows/kit-materialize.yml` each require four fields and accept additional pairs.
-    val authorizationMarker:
-      item: string ->
-        gen: string -> opkey: string -> grant: string -> head: string -> string
-
-    /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
-    /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
-    /// entirely — the common case on every `delivery --apply` call after the first — while
-    /// `AuthorizationRebound` carries the WHOLE new body, never a diff, so the caller cannot
-    /// accidentally PATCH a partial rewrite.
-    type AuthorizationRebind =
-        | AuthorizationCurrent
-        | AuthorizationRebound of body: string
-
-    /// Rewrite `body` so it carries EXACTLY ONE `fsgg:pr-authorization` marker, bound to the current
-    /// `item`/`gen`/`head`. Satisfies the item's owed properties directly, by construction rather than
-    /// by a separate check:
-    ///   - "replaces rather than duplicates" — every existing match (zero, one, or many) is stripped
-    ///     before the fresh marker is appended, so the result never carries more than one;
-    ///   - "rebinds on head change" — a single existing match whose text is not byte-identical to the
-    ///     freshly rendered marker (a stale head, a stale gen, or any other drift) is treated exactly
-    ///     like zero matches: stripped and replaced, never left in place or duplicated alongside a
-    ///     second, corrected one.
-    ///
-    /// That second rule is also the WHOLE migration for the six-field marker: a four-field marker
-    /// left on an open pull request is not byte-identical to the freshly rendered one, so it is
-    /// replaced in place on the next `delivery` call, one marker in and one marker out.
-    val rebindAuthorization:
-      body: string ->
-        item: string ->
-        gen: string ->
-        opkey: string -> grant: string -> head: string -> AuthorizationRebind
-
-    /// The merge election this pull request's authorization is GROUNDED IN, as `(opkey, grant)` —
-    /// posting one only when this delivery target does not already own it (.github#2395, design
-    /// §4.2, §11.2 row 3's first act).
-    ///
-    /// `opkey` is `Operation.compose item gen receiver Merge`, CALLED rather than re-expressed so
-    /// this producer and the fence's check 5 cannot disagree about a key. `grant` is the election
-    /// comment's server-assigned id, which is what a forger cannot choose and therefore what makes
-    /// the authorization grounded rather than decorative.
-    ///
-    /// IDEMPOTENT, AND THAT IS A CORRECTNESS PROPERTY RATHER THAN A SAVING. An election bearing this
-    /// operation key AND this pull request is reused — the LOWEST of them, so a duplicate a lost POST
-    /// response could have created cannot change which id is granted. Posting unconditionally would
-    /// deny this pull request for the rest of its claim generation, because a second election carries
-    /// a strictly higher comment id and the fence grants only the lowest.
-    ///
-    /// It REFUSES rather than degrades: a `compose` refusal, an unreadable comment list or a failed
-    /// POST propagates, and `ensureAuthorization` therefore writes nothing at all — never a
-    /// four-field fallback, which is the decorative case design §6.3 names.
-    ///
-    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests` drives it directly against a `Fake.Recorder`,
-    /// the same internal-seam idiom `ensureAuthorization` and `authorizedMarker` already use.
-    val electionGrounding:
+    /// Explicit dependencies of the Lifecycle delivery/verify handlers. They are exposed so Program can
+    /// compose the family handlers directly instead of routing those commands back through `Client.run`.
+    val scanAndDecide:
       ctx: Kernel.Context ->
-        target: FS.GG.Coord.Types.Ref ->
-        gen: string ->
-        pr: int -> FS.GG.Coord.GitHub.Errors.IoResult<string * string>
+        opts: Options.Options ->
+        intent: FS.GG.Coord.GitHub.Cache.ReadIntent ->
+        Result<FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
 
-    /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
-    /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
-    /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
-    /// elsewhere), or the PR has already merged (nothing further to authorize).
-    /// `rebindAuthorization`'s `AuthorizationCurrent` answer skips the PATCH entirely, so a routine
-    /// status check that changed nothing spends one read and zero writes — the common case on every call
-    /// after the first.
-    ///
-    /// NO LONGER GATED ON `--apply` (.github#2488). It used to be — `apply, pr, marker, merged` all had
-    /// to line up — on the theory that this was one of `delivery`'s writes and `--apply` gates every
-    /// write the command makes. Measured against the fleet's real PRs, that gating made the write
-    /// UNREACHABLE: five real `item/<n>-*` PRs merged after this function landed on `main` carried NO
-    /// `fsgg:pr-authorization` marker at all, because nothing in the fleet's real flow ever calls
-    /// `delivery --apply --pr N` — the documented merge step is a direct `gh api -X PUT …/pulls/<pr>/
-    /// merge` (`deep-detail.md`'s "MERGE over REST"), which never reaches this function, and even a
-    /// worker who DID pass `--apply` reached it too late: `--apply` immediately attempts the
-    /// `GuardedLand`/`Complete` transition in the SAME call, so by the time any CI re-evaluation could
-    /// see the freshly-PATCHed body the PR was often already merged or closed. Dropping the gate makes
-    /// every LIVE `delivery <ref> --pr N` call — including a plain, non-`--apply` status read — refresh
-    /// the marker as a side effect wherever a caller with a live GitHub credential DOES make that call
-    /// (a worker's own shell; `pnext-item` §5's own documented step routes to `--snapshot FILE`, an
-    /// IO-free path this change does not touch — nothing in that skill's CURRENT text calls the live
-    /// form, a distinct reachability gap tracked separately, not fixed by this signature change alone).
-    /// This is safe precisely because it is the ONLY thing this function does: unlike `delivery`'s
-    /// `GuardedLand`/`Complete` transitions (still exclusively `--apply`-gated, untouched here), a
-    /// PR-body PATCH of an HTML-comment marker takes no board-affecting action, so a read-only
-    /// inspection performing it carries none of the "did this quietly merge something" risk that gating
-    /// write-capable commands behind `--apply` exists to prevent. It ALSO cannot run from this repo's
-    /// own CI: the live form's first action is a Coordination Projects (v2) board bootstrap
-    /// (`Board.bootstrapCached`), a read this org's CI credential inventory does not carry (ADR-0019
-    /// §1, `.github#2332`) — see `.github/workflows/coherence.yml`'s `claim-generation` job comment for
-    /// the measured failure and why a CI-side self-heal was tried and deliberately dropped.
-    ///
-    /// PATCHes `pulls/{n}`, not `issues/{n}`: this is a pull-request-specific field, and the PR-scoped
-    /// endpoint is the one GitHub documents for it.
-    ///
-    /// Not `private` — `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` drives this directly
-    /// against a `Fake.Recorder`, the same "reuse the internal seam rather than restate the whole
-    /// `delivery` command's board-scan/PR-facts machinery" idiom `AuthorizedMarkerTests.fs` already uses
-    /// for `authorizedMarker`, above. This is what makes the LIVE wired IO (`Reads.prBody` then a
-    /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
-    /// `rebindAuthorization` decision it wraps.
-    val ensureAuthorization:
+    val offerChoreAfterDone:
+      ctx: Kernel.Context -> opts: Options.Options -> ref: FS.GG.Coord.Types.Ref -> unit
+
+    val generatedPaths: root: string -> Set<string>
+
+    /// Classify changed paths against the declared touch-set plus current generated-path and
+    /// route-qualified SDD authorities. Delivery and verify-paths share this exact function.
+    val classifyDeliveryPaths:
       ctx: Kernel.Context ->
-        target: FS.GG.Coord.Types.Ref ->
-        marker: FS.GG.Coord.GitHub.Reads.Marker option ->
-        pr: int option ->
-        head: string ->
-        merged: bool -> FS.GG.Coord.GitHub.Errors.IoResult<unit>
-
-    /// `review` — the resumable review/repair protocol (.github#2175) as one typed answer, and `review record`
-    /// as its only writer.
-    ///
-    /// Two shapes reach here and they are not symmetric. `review record REF draft.json --pr N` seals and
-    /// APPENDS the next structured v2 decision to the PR; every other argument shape inspects and writes
-    /// nothing, returning exactly one closed protocol state plus the single next action that follows from it,
-    /// bound to a freshness token that a changed head invalidates. It decides ordering only: materiality,
-    /// same-critic continuity and repair-phase provenance stay authored by the agents, and this verb never
-    /// substitutes for them.
-    ///
-    /// Exit codes come from the delegated application service rather than from this dispatcher.
-    val review: ctx: Kernel.Context -> opts: Options.Options -> int
+        issue: FS.GG.Coord.Types.Ref ->
+        touchSet: FS.GG.Coord.Types.TouchSet ->
+        files: string list -> FS.GG.Coord.Delivery.PathClassification list
 
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).
@@ -720,21 +559,6 @@ module Client =
     /// `claim`, not a rival to it — so the "GREEN and MERGEABLE" line is a PRECONDITION report, not a success
     /// banner: the `claim` below can still refuse, and the ADOPTED epilogue prints only when it truly won.
     val adopt: ctx: Kernel.Context -> opts: Options.Options -> int
-
-    /// `landable` — is this OPEN PR finished work? One verdict word on stdout, the decision in the exit code.
-    ///
-    /// The #697/#720 gate as a query (#724). `--wait` polls until the verdict SETTLES: it never believes an
-    /// early green (it waits for the run set to STOP GROWING) and keeps waiting while zero runs have
-    /// registered. `--require NAME` (repeatable) demands that a named check have REPORTED — for the one branch
-    /// protection does not require but which decides the PR, and which absent reads like a passing one (#606).
-    /// `--sha SHA` names the head you MEAN to gate, for a caller that just force-pushed and whose PR object
-    /// lags. Neither of those can turn a verdict green; both can hold it pending (#737).
-    ///
-    /// This is the widest exit vocabulary in the module and every arm is load-bearing: 0 green, `ExitPending`
-    /// (7) not settled and worth retrying, `ExitRed` (3) red or conflicted — stop, do not wait,
-    /// `ExitNoVerdict` (4) unknown, fail-closed, `ExitNotOpen` (10) the PR is merged or closed so there is
-    /// nothing left to gate (#1680), and `ExitError` (1) for a usage fault.
-    val landable: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// The authoritative inventory of every `Status=Blocked` writer (#2109).  Every writer, including
     /// a recorded restore, passes the same resolved-Status gate before emitting its mutation — the gate
@@ -996,30 +820,6 @@ module Client =
     /// message the way it must never hide a lock).
     val inbox: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// `done` — the done stamp, and the gate in front of it.
-    ///
-    /// `--flip` moves the row to `Done`. The stamp is not a formality: it audits residual promises before it
-    /// lands, so an item with an undischarged follow-up cannot be stamped green and forgotten.
-    ///
-    /// Four outcomes, and the middle two are the point. 0 is a green stamp. `ExitRed` (3) is a gate that ran
-    /// and refused — the work is not done. `ExitNoVerdict` (4) is a gate that could not read a fact it needed,
-    /// which must never be reported as either of the other two. `ExitError` (1) is a usage fault.
-    val doneCmd: ctx: Kernel.Context -> opts: Options.Options -> int
-
-    /// Check a PR's changed files against the touch-set declared by the issue it implements.
-    ///
-    /// THE VERDICT VOCABULARY IS THE BASH CLIENT'S, because the shim will run one where the other ran:
-    ///   OK      — every changed file is inside the declared touch-set.
-    ///   DRIFT   — a file falls outside it (named), and the PR should widen or split.
-    ///   SKIP    — nothing to verify against (no touch-set, or the issue can't be identified). Green.
-    ///   INVALID — the declared touch-set has only unmatchable tokens (#273).
-    ///
-    /// "I COULD NOT CHECK" IS NEVER A VERDICT (#322). An unreadable head ref, body, or file list is an
-    /// ERROR — even under --warn, which downgrades a real DRIFT/INVALID to advisory but cannot downgrade a
-    /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
-    /// exact fail-open this command exists to prevent.
-    val verifyPaths: ctx: Kernel.Context -> opts: Options.Options -> int
-
     /// `whoami` — resolve, explain, or MINT this shell's worker identity. The only sanctioned source of a
     /// worker id.
     ///
@@ -1206,32 +1006,8 @@ module Client =
     /// the live winner.
     val opLockRelease: ctx: Kernel.Context -> opts: Options.Options -> int
 
-    /// Run `f` with a supplied `Context` installed as `followupAudit`'s ambient context, then restore whatever
-    /// was there before — INCLUDING when `f` throws.
-    ///
-    /// A TEST SEAM, and it is named one so nobody has to guess. `followupAudit` builds its own context from the
-    /// environment, which a unit test cannot do; this lets the application fixture hand it the same typed
-    /// context every other handler receives as an argument. The override is scoped and restored on both exits,
-    /// and production never installs one.
-    ///
-    /// It is exported because the alternative is worse, not because it is good: the honest fix is
-    /// `followupAudit` taking its context as a parameter like every other command here, and that is a
-    /// dependency inversion this file cannot express while it is one module. Read this binding as evidence for
-    /// the extraction programme (.github#2725 onward), not as a pattern to copy.
-    val withFollowupAuditContextForTest:
-      ctx: Kernel.Context -> f: (unit -> 'a) -> 'a
-
-    /// `followup audit` — the read-only reconciliation PREVIEW over the local follow-up queues.
-    ///
-    /// INTENTIONALLY READ-ONLY, and its evidence rule is the reason it can be trusted: a queue's mtime is a
-    /// CANDIDATE SELECTOR, never evidence that its worker died. Each queued issue is re-read from GitHub, and
-    /// its marker scan is required to be COMPLETE before this says the item has no live claim. An incomplete
-    /// scan is not an absence of claims (#1949).
-    ///
-    /// Exits 0 when the audit completed with nothing to report, `ExitRed` when it found unreadable queues or
-    /// residual promises. Like `whoami`, it is reached directly from `Program.fs` — it builds its own context
-    /// rather than receiving one, which is what `withFollowupAuditContextForTest` exists to work around.
-    val followupAudit: opts: Options.Options -> int
+    /// Build the shared live transport context used by the top-level composition.
+    val context: unit -> Result<Kernel.Context * System.IDisposable, int>
 
     /// `board` — the bootstrapped Coordination board as JSON: its number, title, owner and field map.
     ///
@@ -1351,10 +1127,6 @@ module Client =
     /// driven over a recording transport: the tests must count the issue-create POST, not infer it
     /// from a later board result.
     val intakeCmd: ctx: Kernel.Context -> opts: Options.Options -> int
-
-    /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
-    /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
-    val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int
 
     /// THE COMPOSITION EDGE: build the one `Context` for this process, resolve the repo scope, and dispatch to
     /// the IO command `opts` names.

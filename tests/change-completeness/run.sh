@@ -22,6 +22,27 @@ GITHUB_OUT="$WORK/engine.out" "$ROOT/scripts/change-completeness" \
   && ok 'engine changes run the focused structural route' || bad 'engine route failed'
 grep -qx 'engine_changed=true' "$WORK/engine.out" && ok 'engine changes schedule the expensive successor' || bad 'engine impact was misclassified'
 
+if grep -Fq 'FS.GG.Coord.Cli.Lifecycle.Tests.fsproj' "$ROOT/scripts/change-completeness" \
+  && ! grep -Fq 'dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" -c Release --no-restore' "$ROOT/scripts/change-completeness"; then
+  ok 'focused lifecycle filters execute in the owning Lifecycle assembly'
+else
+  bad 'focused lifecycle filters still target the residual CLI assembly'
+fi
+grep -Fq 'read-trx-count.py" "$WORK/lifecycle-focus/lifecycle-focus.trx"' "$ROOT/scripts/change-completeness" \
+  && grep -Fq -- '--minimum 1 --label "change-completeness (Lifecycle focused)"' "$ROOT/scripts/change-completeness" \
+  && ok 'focused lifecycle selection is guarded against zero-match success' \
+  || bad 'focused lifecycle selection can pass vacuously with zero matches'
+
+dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" \
+  -c Release --no-restore --filter FullyQualifiedName~DefinitelyNoLifecycleTestMatches \
+  --logger "trx;LogFileName=zero.trx" --results-directory "$WORK/zero" >/dev/null
+if python3 "$ROOT/scripts/read-trx-count.py" "$WORK/zero/zero.trx" \
+  --minimum 1 --label "change-completeness zero-match mutation" >/dev/null 2>&1; then
+  bad 'zero-match mutation passed the non-vacuity guard'
+else
+  ok 'zero-match mutation reds the non-vacuity guard'
+fi
+
 # The production runner must name every structural family. These are observable diagnostics, not prose:
 # deleting a stage makes this fixture red before a PR can silently stop running that family.
 for label in \

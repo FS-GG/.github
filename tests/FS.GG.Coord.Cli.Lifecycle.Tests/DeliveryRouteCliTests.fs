@@ -10,6 +10,7 @@ open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
+open FS.GG.Coord.Cli.Lifecycle
 
 /// #2298: `sdd-required`'s SDD-package evidence (`work/<id>/spec.md`, `readiness/<id>/analysis.json` at
 /// `implementationReady`) used to gate BOTH `delivery-route record` (the coordinator's write) and every
@@ -26,7 +27,7 @@ open FS.GG.Coord.Cli
 /// missing or malformed ROUTE RECEIPT, the agent's own explicit decision, still refuses (AC5's negative
 /// case, and AC2's "stays closed").
 ///
-/// The command boundary itself is `Client.deliveryRouteCmd`, driven directly against a scripted
+/// The command boundary itself is `LiveHandlers.deliveryRouteCmd`, driven directly against a scripted
 /// transport exactly as `ForceStealTests` already drives `Client.claim` — `record`/`show` need no board
 /// or GraphQL fixture at all, only the issue body and its comment ledger.
 module DeliveryRouteCliTests =
@@ -207,7 +208,7 @@ module DeliveryRouteCliTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = Client.deliveryRouteCmd (context transport) opts
+            let code = LiveHandlers.deliveryRouteCmd (context transport) opts
             Console.Out.Flush()
             code, captured.ToString()
         finally

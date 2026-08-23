@@ -1,0 +1,163 @@
+schemaVersion: 1
+workId: 2727-lifecycle-extraction
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2727-lifecycle-extraction/spec.md
+sourceClarifications: work/2727-lifecycle-extraction/clarifications.md
+sourceChecklist: work/2727-lifecycle-extraction/checklist.md
+sourcePlan: work/2727-lifecycle-extraction/plan.md
+sourceTasks: work/2727-lifecycle-extraction/tasks.yml
+sourceAnalysis: readiness/2727-lifecycle-extraction/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2727-lifecycle-extraction/analysis.json
+    digest: b6ac449f4b55f25de61a74b3965ae81b45d12bdb13646e7f0f83a18d0f3cc9f8
+    schemaVersion: 1
+  - label: checklist
+    path: work/2727-lifecycle-extraction/checklist.md
+    digest: 95a511c008395d6c2407dab420abda41d9a0c9689de8fed2bd5ce043082939a8
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2727-lifecycle-extraction/clarifications.md
+    digest: ae096e67e6ad9f57aaa43f97461dd4aeb6714afb4d4eba58ec4997d6a94ff3d1
+    schemaVersion: 1
+  - label: plan
+    path: work/2727-lifecycle-extraction/plan.md
+    digest: f28dafc34f3381897031de142a7379f2a089840521f54c56227389d01febd70f
+    schemaVersion: 1
+  - label: spec
+    path: work/2727-lifecycle-extraction/spec.md
+    digest: 84ee474b1c2e9f970ec9e6dc02d0e02f8e11abe2b735f0f3ba7a1f26beefb5f4
+    schemaVersion: 1
+  - label: tasks
+    path: work/2727-lifecycle-extraction/tasks.yml
+    digest: 2c0a0f1ff8d7e9d852b1a1b50b93266af6e1e56449fa816ee74dcaa1859bb03b
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:03231f388ccc2c000c84a899121d9cdec87d0b29e90711930abfd572ef15dda0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 136
+      failed: 0
+      skipped: 0
+    notes: ["Release build and focused/legacy test suites passed; gate inversion observed red when the typed completion parameter was renamed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:03231f388ccc2c000c84a899121d9cdec87d0b29e90711930abfd572ef15dda0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 136
+      failed: 0
+      skipped: 0
+    notes: ["Release build and focused/legacy test suites passed; gate inversion observed red when the typed completion parameter was renamed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:03231f388ccc2c000c84a899121d9cdec87d0b29e90711930abfd572ef15dda0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 136
+      failed: 0
+      skipped: 0
+    notes: ["Release build and focused/legacy test suites passed; gate inversion observed red when the typed completion parameter was renamed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:03231f388ccc2c000c84a899121d9cdec87d0b29e90711930abfd572ef15dda0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 136
+      failed: 0
+      skipped: 0
+    notes: ["Release build and focused/legacy test suites passed; gate inversion observed red when the typed completion parameter was renamed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2727-lifecycle-extraction/lifecycle.xml
+      digest: "sha256:03231f388ccc2c000c84a899121d9cdec87d0b29e90711930abfd572ef15dda0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 136
+      failed: 0
+      skipped: 0
+    notes: ["Release build and focused/legacy test suites passed; gate inversion observed red when the typed completion parameter was renamed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

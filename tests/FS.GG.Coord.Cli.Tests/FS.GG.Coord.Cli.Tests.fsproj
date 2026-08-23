@@ -35,20 +35,12 @@
     <Compile Include="OpLockDispatchVerbTests.fs" />
     <Compile Include="CommentMutationTests.fs" />
     <Compile Include="FollowupsTests.fs" />
-    <Compile Include="DeliveryApplicationTests.fs" />
-    <Compile Include="ReviewApplicationTests.fs" />
     <Compile Include="OverlapTests.fs" />
     <Compile Include="ForceStealTests.fs" />
-    <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />
-    <Compile Include="LandableNotOpenTests.fs" />
-    <Compile Include="VerifyPathsClosingKeywordTests.fs" />
-    <Compile Include="VerifyPathsSddPackageTests.fs" />
     <Compile Include="SchedulingCostTests.fs" />
-    <Compile Include="AuthorizedMarkerTests.fs" />
     <Compile Include="ClaimOverlapTests.fs" />
     <Compile Include="ClaimLifecycleDestinationTests.fs" />
-    <Compile Include="DoneStderrTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

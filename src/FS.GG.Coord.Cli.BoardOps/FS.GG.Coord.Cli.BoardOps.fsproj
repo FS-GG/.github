@@ -14,8 +14,6 @@
     <Compile Include="../FS.GG.Coord.Cli/KitDigest.fs" Link="KitDigest.fs" />
     <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fsi" Link="IntakeApplication.fsi" />
     <Compile Include="../FS.GG.Coord.Cli/IntakeApplication.fs" Link="IntakeApplication.fs" />
-    <Compile Include="../FS.GG.Coord.Cli/DeliveryRouteApplication.fsi" Link="DeliveryRouteApplication.fsi" />
-    <Compile Include="../FS.GG.Coord.Cli/DeliveryRouteApplication.fs" Link="DeliveryRouteApplication.fs" />
     <Compile Include="HandlerRegistration.fsi" />
     <Compile Include="HandlerRegistration.fs" />
     <Compile Include="Handlers.fsi" />
@@ -23,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
   </ItemGroup>

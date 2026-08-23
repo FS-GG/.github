@@ -103,6 +103,9 @@ REDIRECT_FLAGS = (
 DECLARED_SITES: dict[str, str | None] = {
     # The one sanctioned way a gate harness gets an engine. Redirect enforced, not assumed.
     "scripts/build-gate-engine": None,
+    # M6 builds its focused Core/Lifecycle test subjects directly, but redirects the complete output
+    # graph through --artifacts-path to a fresh temp directory and proves positive test totals.
+    "tests/m6-decision-cutover/run.sh": None,
     # Builds `$MUT/src/FS.GG.Coord.Cli` — a mutant COPY the fixture makes under `mktemp -d`, outside
     # the caller's checkout entirely. The artifact it produces is inside the copy, so there is nothing
     # in the caller's tree for tier 2a to prefer.

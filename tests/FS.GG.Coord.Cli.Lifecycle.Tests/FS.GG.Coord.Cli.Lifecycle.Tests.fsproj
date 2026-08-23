@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>true</GenerateProgramFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../FS.GG.Coord.Cli.Tests/AssemblyInfo.fs" Link="AssemblyInfo.fs" />
+    <Compile Include="../FS.GG.Coord.Cli.Tests/CacheSandbox.fs" Link="CacheSandbox.fs" />
+    <Compile Include="../FS.GG.Coord.Cli.Tests/StructuredFixtures.fs" Link="StructuredFixtures.fs" />
+    <Compile Include="HandlerRegistrationTests.fs" />
+    <Compile Include="CompletionDependencyTests.fs" />
+    <Compile Include="DeliveryApplicationTests.fs" />
+    <Compile Include="ReviewApplicationTests.fs" />
+    <Compile Include="DeliveryRouteCliTests.fs" />
+    <Compile Include="LandableNotOpenTests.fs" />
+    <Compile Include="VerifyPathsClosingKeywordTests.fs" />
+    <Compile Include="VerifyPathsSddPackageTests.fs" />
+    <Compile Include="AuthorizedMarkerTests.fs" />
+    <Compile Include="DoneStderrTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+</Project>

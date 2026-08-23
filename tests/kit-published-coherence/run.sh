@@ -1787,7 +1787,7 @@ corpus_count="$(printf '%s' "$corpus_index" | grep -c . || true)"
 if [ "$corpus_count" -eq "$EXPECTED_CORPUS_ENTRIES" ]; then
   ok "the shared leading-line corpus carries all $EXPECTED_CORPUS_ENTRIES declared entries"
 else
-  bad "the shared leading-line corpus carries $corpus_count entries, not the $EXPECTED_CORPUS_ENTRIES this arm declares — a corpus shorter than the one this arm claims to check is how a cross-language coupling stops coupling silently (.github#2563). If you added or removed an entry deliberately, update EXPECTED_CORPUS_ENTRIES here AND corpusEntryCount in tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs."
+  bad "the shared leading-line corpus carries $corpus_count entries, not the $EXPECTED_CORPUS_ENTRIES this arm declares — a corpus shorter than the one this arm claims to check is how a cross-language coupling stops coupling silently (.github#2563). If you added or removed an entry deliberately, update EXPECTED_CORPUS_ENTRIES here AND corpusEntryCount in tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs."
 fi
 
 corpus_declares="$(printf '%s' "$corpus_index" | grep -c 'declares$' || true)"
@@ -2862,7 +2862,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # are GONE, replaced by the shared cross-language corpus (.github#2563):
 # + 21 corpus legs, one per entry of tests/delivery-leading-line/corpus.json, driven through the real
 #   `--obligation-arm` entry point. That file is the ONE statement of the leading-line boundary and
-#   `tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs` grades the engine against the same
+#   `tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs` grades the engine against the same
 #   verdicts, so neither language keeps a private leg asserting a SINGLE COMMENT BODY's declares/inert
 #   verdict — which is what makes a COORDINATED one-sided edit (one constant plus that language's own
 #   legs) impossible to hide. Four `#2544` engine-only legs with four-space declaration-form bodies do
