@@ -93,12 +93,16 @@ def verify_sources_digest(path: Path, relative: Path, document: dict) -> str | N
             rendered = ""
         elif (
             isinstance(digest, dict)
-            and isinstance(digest.get("algorithm"), str)
+            and digest.get("algorithm") == "sha256"
             and isinstance(digest.get("value"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", digest["value"]) is not None
         ):
             rendered = f"{digest['algorithm']}:{digest['value']}"
         else:
-            return f"{relative}: {ship_relative} sources[{index}] has a malformed digest"
+            return (
+                f"{relative}: {ship_relative} sources[{index}] digest must use sha256 "
+                "with 64 lowercase hexadecimal characters"
+            )
         canonical.append((source["path"], rendered))
 
     preimage = "\n".join(f"{source_path}|{digest}" for source_path, digest in sorted(canonical))
