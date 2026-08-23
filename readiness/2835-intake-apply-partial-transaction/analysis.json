@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2835-intake-apply-partial-transaction/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "78f3d5b8f02793a806b6b332b6a5fe97849bfa6e3fce41eb01978670c824c7d7"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2835-intake-apply-partial-transaction/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "7eeaf9bbd53cc213f72c4bfeffe90b90260f5ab7329c24236232b0c9681096fd"
+        "value": "f7d9970204fd604446829d74d5f7c6977ff9691740b82db8ad910813c4f5a909"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -376,7 +386,7 @@
     {
       "path": "readiness/2835-intake-apply-partial-transaction/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
