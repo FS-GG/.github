@@ -125,6 +125,30 @@ def main() -> None:
         require(authored[0] == authored[1], f"{relative} differs between authored roots")
         require(acceptance_literal in authored[0], f"{relative} does not consume structured acceptance")
 
+    # .github#2893. The replacement fence is deliberately earlier than ordinary authorization. Both
+    # binding surfaces must name that single exception, its non-authorizing stop, and the required
+    # post-acceptance reissue; otherwise an operator can obey either document and violate the other.
+    main_contract = " ".join(read(".agents", "pnext-item/SKILL.md").split())
+    replacement_contract = contract
+    for literal in (
+        "The sole pre-review exception is a clean-ledger replacement",
+        "an `awaitIndependentReview` or `refreshReview` answer is the expected stop",
+        "reissue this same live call at the ordinary authorization point",
+        "Outside that named replacement fence, do not call live `delivery` before acceptance",
+    ):
+        require(literal in main_contract, f"pnext-item delivery ordering is missing: {literal}")
+    for literal in (
+        "the sole pre-review exception to `pnext-item` §6's post-acceptance placement",
+        "it grants no merge authority",
+        "the worker reissues the same live `delivery` call at §6's ordinary authorization point",
+        "still required to obtain the landing decision",
+    ):
+        require(literal in replacement_contract, f"replacement delivery ordering is missing: {literal}")
+    require(
+        "never after opening the PR" not in main_contract,
+        "pnext-item still forbids the clean-ledger replacement preflight after its PR is opened",
+    )
+
     print("review-round-contract: structured v2 ledger, digest chain, round bounds, and new-only authority hold")
 
 

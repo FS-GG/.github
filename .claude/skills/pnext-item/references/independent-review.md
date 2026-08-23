@@ -675,6 +675,13 @@ stop before review: close the replacement without merging, release the claim, ob
 generation, and only then open the replacement that will carry the fresh chain. An append-only election
 cannot be cleared or superseded by a higher comment id.
 
+This is the sole pre-review exception to `pnext-item` §6's post-acceptance placement, not an alternate
+landing route. A clean result may leave an authorization marker on the replacement head, but the live
+decision must still stop at `awaitIndependentReview` or `refreshReview`; it grants no merge authority.
+After the replacement's fresh review and host acceptance complete, the worker reissues the same live
+`delivery` call at §6's ordinary authorization point before `landable`. That reissue is a zero-cost
+PATCH-skip when the marker remains current and is still required to obtain the landing decision.
+
 Be precise about what is observed: the acceptance's **structure**, not the truth of its accepted head.
 Nothing verifies that an acceptance was genuine, so a forged one will retire a live chain. That is a
 smaller hole than it looks. A forgery bound to the *current* head already yields an accepted chain
