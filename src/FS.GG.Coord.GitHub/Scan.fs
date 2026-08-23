@@ -1512,6 +1512,31 @@ module Scan =
                                 // (expired) age — the starved-queue slice's whole point (#428, case 25).
                                 | None -> ()
                                 | Some m ->
+                                    // .github#2899 repair round 1: `pathRepo=` on the WINNING marker is
+                                    // the reservation scope; the issue repository is only the address
+                                    // from which arm B read the lock. A scoped-out Coordination row can
+                                    // be hosted in `.github` while its claim names another repository,
+                                    // and treating `(o, r)` as both identities invents that reservation
+                                    // in the repository this snapshot is scheduling.
+                                    //
+                                    // Use the established `RepoScope.orFallback` policy: roster aliases
+                                    // resolve canonically; an absent or non-repository (`cross-repo`)
+                                    // marker scope falls back to the issue's hosting repository. Under a
+                                    // scoped scan only a marker whose effective path repository matches
+                                    // the requested repository belongs in this snapshot. An unscoped scan
+                                    // retains every claim and records each under its own effective scope.
+                                    let markerPathRepo =
+                                        m.PathRepo
+                                        |> Option.map RepoScope.resolve
+                                        |> Option.map (RepoScope.orFallback r)
+                                        |> Option.defaultValue r
+
+                                    let belongsToRequestedPathRepo =
+                                        match repo with
+                                        | None -> true
+                                        | Some requested ->
+                                            String.Equals(markerPathRepo, requested, StringComparison.OrdinalIgnoreCase)
+
                                     // The touch-set rides in on the SAME list read (one read, two uses),
                                     // exactly as the board loop reuses the candidate body. A claim declaring
                                     // no touch-set reserves no files — the board loop's own rule (line above).
@@ -1527,19 +1552,22 @@ module Scan =
                                     // `pathsUnreadable` to the wire, `decide` reconstructs
                                     // `TouchSet.Unreadable`, and `Batch.schedule` reds the batch on it.
                                     let reservation =
-                                        match issue.Body with
-                                        | Reads.BodyUnread reason -> Some(RvUnreadable reason)
-                                        | Reads.BodyRead body ->
-                                            match TouchSet.parse body with
-                                            | Declared tokens ->
-                                                tokens
-                                                |> List.map (fun t ->
-                                                    match t with
-                                                    | Matchable s -> s
-                                                    | Unmatchable s -> s)
-                                                |> RvNames
-                                                |> Some
-                                            | _ -> None
+                                        if not belongsToRequestedPathRepo then
+                                            None
+                                        else
+                                            match issue.Body with
+                                            | Reads.BodyUnread reason -> Some(RvUnreadable reason)
+                                            | Reads.BodyRead body ->
+                                                match TouchSet.parse body with
+                                                | Declared tokens ->
+                                                    tokens
+                                                    |> List.map (fun t ->
+                                                        match t with
+                                                        | Matchable s -> s
+                                                        | Unmatchable s -> s)
+                                                    |> RvNames
+                                                    |> Some
+                                                | _ -> None
 
                                     match reservation with
                                     | None -> ()
@@ -1562,7 +1590,7 @@ module Scan =
 
                                         inFlight.Add(
                                             o,
-                                            r,
+                                            markerPathRepo,
                                             rv,
                                             RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds, livePr)
                                         )

@@ -1010,6 +1010,45 @@ let ``#2899 a scoped-out on-board row with no claim is neither reserved nor inve
         Assert.Equal(0, reservations.GetArrayLength())
         Assert.Equal(2, transport.Count "comment-list")
 
+// The discriminating scope control from repair round 1. The row is still hosted in FS.GG.SDD and still
+// scoped out of arm A, but its winning marker says its paths belong to FS.GG.Rendering. Arm B must read
+// that marker and then exclude it from an FS.GG.SDD reservation set; using the issue repository `(o, r)`
+// as the reservation scope makes this control fail with the invented holder #500.
+[<Fact>]
+let ``#2899 a scoped-out claim for another path repository is not reserved in the requested repository`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let candidate = scopeRow "FS.GG.SDD" 99
+    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Shared/**"},
+            {"number":500,"state":"open","body":"Paths: src/Shared/**"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun n ->
+                match n with
+                | 99 -> liveMarkerIn "scoped-holder" "FS.GG.SDD" 99
+                | 500 -> liveMarkerIn "other-repo-holder" "FS.GG.Rendering" 500
+                | _ -> "[]")
+            "Paths: src/Shared/**"
+
+    match Scan.snapshot transport [ candidate; scopedOut ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the opposite-repository marker must remain a readable non-reservation — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let reservations = doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
+
+        let heldNumbers =
+            reservations
+            |> List.map (fun reservation -> reservation.GetProperty("holder").GetProperty("number").GetInt32())
+
+        Assert.Equal<int list>([ 99 ], heldNumbers)
+        Assert.Equal(2, transport.Count "comment-list")
+
 // ---- the Phase column and the issue's age (.github#1598) ----------------------------------------------
 //
 // Two facts the board has always held and the scheduler never read. `Phase` is a single-select column; the
