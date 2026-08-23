@@ -374,13 +374,18 @@ chain carrying no review evidence at all reports the distinct `action: awaitInde
   Coordination Projects-v2 board bootstrap (`Board.bootstrapCached`), a GraphQL read no CI credential in
   this org's inventory carries (ADR-0019 §1, `.github#2332`); routing this call through CI is refuted by
   that boundary, not merely undesirable.
-- **A failed call is reported, never silently swallowed — and never blocks the merge.** The write is the
-  only thing this call does; `claim-generation`'s conclusion is no longer advisory anywhere —
+- **A failed call at the ordinary post-acceptance authorization point is reported, never silently
+  swallowed, and is not an independent merge veto.** The write is the only thing that ordinary call
+  does; `claim-generation`'s conclusion is no longer advisory anywhere —
   `.github#1858` armed it into `main`'s required contexts, and `.github#2517` replaced `landable`'s
   hand-written carve-out with the DERIVED COMPLEMENT of that required set (`Landable.advisoryFrom`), so
   the engine's own rollup scores it `Blocking` too, agreeing with branch protection rather than
   contradicting it. Note the failure (to whoever dispatched you, or in the item's own history) and
-  proceed with the merge.
+  proceed to the typed `landable` gate below; only that exact-head green verdict permits the merge.
+  **This proceed-after-report rule does not cover the clean-ledger pre-review preflight.** A
+  spent-election or other permanent preflight refusal is a hard stop before review: close the
+  replacement PR without merging, release the spent claim, obtain a fresh claim generation, and open a
+  new clean-ledger replacement. Never enter review or merge under the refused generation.
 
 Now wait on the typed `landable` verdict for that exact same head SHA — the marker this call just wrote
 is what lets `claim-generation`, and therefore `landable`, go green. Merge only once `landable` reports
