@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.GitHub
@@ -48,6 +49,50 @@ module IntakeTransactionTests =
         | Ok parsed -> IntakeReceipt.marker parsed
         | Error error -> failwith error
 
+    let private lightweightRouteComment subject =
+        let draft: StructuredDecision.RouteRecord =
+            { Schema = StructuredDecision.RouteSchema
+              Subject = subject
+              Revision = 1
+              PreviousDigest = None
+              Scope = [ "intake Ready guard" ]
+              Dependencies = [ "none" ]
+              TouchSet = [ "src/FS.GG.Coord.Core" ]
+              PolicyVersion = StructuredDecision.PolicyVersion
+              Route = Some DeliveryRoute.Lightweight
+              Agent = "intake-test"
+              Timestamp = "2026-08-23T00:00:00Z"
+              ReasonCodes = [ "fixture" ]
+              Rationale = "current route receipt for the intake Ready guard fixture"
+              SddWorkId = None
+              SpecHome = None
+              RequiredGates = []
+              Digest = "" }
+
+        let record =
+            { draft with
+                Digest = StructuredDecision.routeDigest draft }
+
+        "<!-- fsgg:route-decision/v2 -->\n"
+        + JsonSerializer.Serialize
+            {| schema = record.Schema
+               subject = record.Subject
+               revision = record.Revision
+               previousDigest = record.PreviousDigest
+               scope = record.Scope
+               dependencies = record.Dependencies
+               touchSet = record.TouchSet
+               policyVersion = record.PolicyVersion
+               route = "lightweight"
+               agent = record.Agent
+               timestamp = record.Timestamp
+               reasonCodes = record.ReasonCodes
+               rationale = record.Rationale
+               sddWorkId = record.SddWorkId
+               specHome = record.SpecHome
+               requiredGates = record.RequiredGates
+               digest = record.Digest |}
+
     let private withCache action =
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
@@ -56,6 +101,85 @@ module IntakeTransactionTests =
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
         Environment.SetEnvironmentVariable("FSGG_WORKER", "intake-test")
         try action cache finally Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous); Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker); Directory.Delete(cache, true)
+
+    [<Theory>]
+    [<InlineData(null, false)>]
+    [<InlineData("", false)>]
+    [<InlineData("   ", false)>]
+    [<InlineData("FS-GG/.github#42", true)>]
+    let ``#2738 Ready eligibility consumes only the typed Blocked by column`` (raw: string) refused =
+        let verdict = Handlers.readyDependencyVerdict (Option.ofObj raw)
+        Assert.Equal(refused, verdict.IsSome)
+
+    [<Fact>]
+    let ``#2738 projected Blocked by prose is not an input to Ready eligibility`` () =
+        let body = "Blocked by: FS-GG/.github#42"
+        Assert.Contains("Blocked by:", body)
+        Assert.True((Handlers.readyDependencyVerdict None).IsNone)
+
+    [<Fact>]
+    let ``#2738 a moved Projects item revision stales the Ready decision even when the edge value is unchanged`` () =
+        let observedAt revision : Board.BlockedByObservation =
+            { Value = None
+              Revision = Some revision }
+
+        Assert.False(Handlers.readyDependencyStale (Some(observedAt "r1")) (Some(observedAt "r1")))
+        Assert.True(Handlers.readyDependencyStale (Some(observedAt "r1")) (Some(observedAt "r2")))
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``#2738 intake apply refuses Ready from a live column edge regardless of body prose`` bodyProjectsEdge =
+        withCache
+        <| fun cache ->
+            let ready =
+                """{"schema":"fsgg.coord.intake/v1","id":"ready-edge-2738","owner":"FS-GG","repository":".github","title":"ready edge","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+
+            let draftPath = Path.Combine(cache, "ready-edge-digest.json")
+            File.WriteAllText(draftPath, ready)
+            let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
+
+            Cache.putIntakeReceipt
+                { IntakeReceipt.Receipt.DraftId = parsed.Id
+                  Owner = parsed.Owner
+                  Repository = parsed.Repository
+                  IssueNumber = 88
+                  DraftDigest = IntakeReceipt.digest parsed }
+            |> Result.defaultWith failwith
+
+            let body =
+                if bodyProjectsEdge then
+                    "Blocked by: FS-GG/.github#42"
+                else
+                    "No dependency prose here."
+
+            let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
+            let mutable edgeReads = 0
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/88" ->
+                        ok ($"{{\"number\":88,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                    | "GET", "repos/FS-GG/.github/issues/88/comments" -> ok ($"[{{\"body\":%s{route}}}]")
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(document, _) when document.Contains "projectsV2" ->
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":1,"title":"Coordination","id":"PVT"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "fields(first" ->
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | Query(document, _) when document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                            edgeReads <- edgeReads + 1
+
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"updatedAt":"2026-08-23T10:00:00Z","project":{"number":1},"fieldValueByName":{"text":"FS-GG/.github#42"}}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+                        | _ -> Error(NotFound "Ready must refuse before any other board operation")
+                    | _ -> Error(NotFound "unexpected request"))
+
+            Assert.Equal(Kernel.ExitError, invokeDraft cache ready world)
+            Assert.Equal(1, edgeReads)
 
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =

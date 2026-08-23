@@ -69,7 +69,8 @@ module BlockerLintTests =
             |> List.map (fun path -> File.ReadAllText(Path.Combine(root, path)))
             |> String.concat "\n"
         let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))
-        let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
+        let directStatusWrites =
+            Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
@@ -113,65 +114,6 @@ module BlockerLintTests =
         Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnknown ]).IsNone)
         Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnparseable ]).IsNone)
         Assert.True((verdict "Blocked on: human/decision" []).IsNone)
-
-    // ---- `Blocked by` BODY-VS-FIELD divergence (.github#2079) ---------------------------------------
-    //
-    // `BLOCKED-NO-REASON` above reds ONLY when the field is EMPTY. This is its dual: the field is
-    // NON-empty (so `BLOCKED-NO-REASON` is silent) but STALE — the `FS.GG.Templates#348` shape, where a
-    // park's real edge landed as a `Blocked by:` body line instead of the field, and the field kept an
-    // unrelated (here, fully-resolved) set. `blockedByBodyDivergence` is the ONE predicate `lint`'s
-    // `BLOCKED-BY-INERT` and `reconcile`'s `BLOCKER-CLEARED` withholding both consult.
-
-    [<Fact>]
-    let ``no Blocked by body line is coherent — nothing to diverge from`` () =
-        Assert.Equal<string list>(
-            [],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" "FS-GG/FS.GG.Templates#345" "Paths: none"
-        )
-
-    [<Fact>]
-    let ``the FS.GG.Templates#348 shape — a stale field and a body line naming a ref the field lacks`` () =
-        // The field carries four CLOSED refs; the body's `Blocked by:` line names a FIFTH, different one
-        // (the real, still-open blocker). The field does not carry it, so it is reported.
-        let field = "FS-GG/.github#2068, FS-GG/FS.GG.Templates#345, FS-GG/FS.GG.Game#551, FS-GG/FS.GG.Templates#346"
-        let body = "Unimplementable — the toolchain does not compile.\n\nBlocked by: FS-GG/FS.GG.Templates#370"
-
-        Assert.Equal<string list>(
-            [ "FS-GG/FS.GG.Templates#370" ],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" field body
-        )
-
-    [<Fact>]
-    let ``an empty field with a body line still diverges — BLOCKED-NO-REASON structurally cannot see this`` () =
-        Assert.Equal<string list>(
-            [ "FS-GG/FS.GG.Templates#370" ],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" "" "Blocked by: FS-GG/FS.GG.Templates#370"
-        )
-
-    [<Fact>]
-    let ``a body line that IS already in the field is coherent, not a divergence`` () =
-        Assert.Equal<string list>(
-            [],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" "FS-GG/FS.GG.Templates#370" "Blocked by: #370"
-        )
-
-    [<Fact>]
-    let ``different SPELLINGS of the same ref canonicalize equal and do not diverge`` () =
-        // A bare `#370` in the body and the field's fully-qualified rendering of the same issue must
-        // compare equal — a divergence here would be a false positive on every ordinary park.
-        Assert.Equal<string list>(
-            [],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" "FS-GG/FS.GG.Templates#370" "Blocked by: #370"
-        )
-
-    [<Fact>]
-    let ``prose in the body's Blocked by line is not a ref and draws no divergence`` () =
-        // `Blockers.canonicalizeBlockedBy` refuses prose; a line this rule cannot canonicalize contributes
-        // nothing to the comparison rather than being reported as a phantom ref.
-        Assert.Equal<string list>(
-            [],
-            Client.blockedByBodyDivergence "FS-GG" "FS.GG.Templates" "" "Blocked by: RESOLVED, shipped last week"
-        )
 
     [<Fact>]
     let ``BLOCKER-CYCLE reports each member of a genuine ring and ignores a chain`` () =
@@ -744,12 +686,9 @@ module BlockerLintTests =
 
     // ---- `reconcile` withholds BLOCKER-CLEARED on the divergence (.github#2079, leg 2) ---------------
     //
-    // `FS.GG.SDD#42` is `Blocked`, its FIELD names one blocker, `FS.GG.SDD#8`, which is CLOSED — so
-    // `Chore.derive`'s own precondition (untouched by this issue) is satisfied on the field alone, and
-    // `BLOCKER-CLEARED` would fire. The BODY's `Blocked by:` line names a DIFFERENT ref, `#9`. Whether
-    // `#9` genuinely exists or is open is irrelevant to `blockedByBodyDivergence` — it is not a subset of
-    // the field's set, and that is the whole predicate — so `reconcile` must withhold the promotion this
-    // fixture would otherwise hand out.
+    // `FS.GG.SDD#42` is `Blocked`, its FIELD names one blocker, `FS.GG.SDD#8`, which is CLOSED. The two
+    // bodies below differ only by legacy dependency prose. The lifecycle projection must remain identical:
+    // body prose is no longer parsed back into dependency meaning.
     module private ReconcileWithholdFixture =
 
         let private ok (body: string) : Errors.IoResult<Response> =

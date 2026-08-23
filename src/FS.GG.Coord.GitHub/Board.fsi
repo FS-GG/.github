@@ -80,6 +80,11 @@ module Board =
 
           Fields: Map<string, Field> }
 
+    /// A dependency-edge value bound to the Projects-v2 item revision that produced it.
+    type BlockedByObservation =
+        { Value: string option
+          Revision: string option }
+
     /// A write to one field.
     ///
     /// **`Clear` IS A DIFFERENT MUTATION, NOT AN EMPTY `Set`.** This is a type because it was a trap:
@@ -241,6 +246,15 @@ module Board =
         repo: string ->
         number: int ->
             IoResult<string option>
+
+    /// Fresh dependency-edge observation including the Projects-v2 item revision.
+    val itemBlockedByObservation:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<BlockedByObservation>
 
     /// Fresh resolver read for one projected single-select or text field.
     val itemFieldValue:
