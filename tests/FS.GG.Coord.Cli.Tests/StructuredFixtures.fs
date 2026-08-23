@@ -82,6 +82,7 @@ module StructuredFixtures =
               DiffAuditRequired = false
               DiffAuditReceipts = []
               Succession = None
+              RepairPhaseReceipt = None
               Timestamp = "2026-08-15T00:00:00Z"
               Digest = "" }
         let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
@@ -122,6 +123,7 @@ module StructuredFixtures =
               DiffAuditRequired = false
               DiffAuditReceipts = []
               Succession = None
+              RepairPhaseReceipt = None
               Timestamp = "2026-08-15T00:00:00Z"
               Digest = "" }
         let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
@@ -162,6 +164,7 @@ module StructuredFixtures =
               DiffAuditRequired = false
               DiffAuditReceipts = []
               Succession = None
+              RepairPhaseReceipt = None
               Timestamp = "2026-08-22T00:00:00Z"
               Digest = "" }
         let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }

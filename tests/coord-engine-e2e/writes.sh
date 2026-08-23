@@ -812,6 +812,82 @@ turnover_valid_digest="$(printf '%s' "$turnover_valid_out" | jq -r '.digest // e
 turnover_valid_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"
 turnover_repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 43 --worker vole-418 --json 2>&1)"; turnover_repair_projection_rc=$?
 
+# .github#2865: consume the exhausted predecessor on a genuinely fresh PR. The current claim must be
+# newer than the structured escalation it crosses; the repair-phase record then carries all seven
+# provenance fields durably, so live inspection reads the same typed receipt instead of substituting
+# `RepairPhaseGranted=None`.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr/43" >/dev/null
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_fresh_claim_id" >/dev/null
+repair_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-repair-impl lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+turnover_comment_ids+=("$repair_claim_id")
+repair_head="ffffffffffffffffffffffffffffffffffffffff"
+repair_subject="FS-GG/FS.GG.SDD#43/pr/44"
+
+write_turnover_wait enter "$repair_head:initial-review:0" "" "$repair_claim_id"
+repair_initial_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_wait_rc=$?
+write_turnover_draft initial 0 "" "" "" "$repair_head" "$repair_subject" changes-required
+repair_initial_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_rc=$?
+repair_initial_url="$(printf '%s' "$repair_initial_out" | jq -r '.commentUrl // empty')"
+repair_initial_digest="$(printf '%s' "$repair_initial_out" | jq -r '.digest // empty')"
+write_turnover_wait complete "$repair_head:initial-review:0" "$repair_initial_url" "$repair_claim_id"
+repair_initial_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_complete_rc=$?
+
+write_turnover_wait enter "$repair_head:repair-confirmation:0" "" "$repair_claim_id"
+repair_entry_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_wait_rc=$?
+write_turnover_draft repair-phase 0 "$repair_initial_digest" "$repair_initial_url" "$repair_initial_url" "$repair_head" "$repair_subject" changes-required
+jq --argjson exhausted 43 --argjson escalation "$turnover_valid_id" --arg claim "$repair_claim_id" --arg branch 'item/43-repair-phase' --arg implementer 'fixture-repair-impl' --arg critic "$turnover_critic" --arg head "$repair_head" \
+  '.repairPhaseReceipt={exhaustedPr:$exhausted,escalationCommentId:$escalation,newClaimGeneration:$claim,newBranchOrPr:$branch,newImplementerIdentity:$implementer,newCriticIdentity:$critic,candidateHeadSha:$head}' \
+  "$turnover_draft" >"$turnover_draft.receipt"
+mv "$turnover_draft.receipt" "$turnover_draft"
+
+repair_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+jq '.repairPhaseReceipt="malformed"' "$turnover_draft" >"$turnover_draft.bad"
+repair_malformed_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft.bad" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_malformed_rc=$?
+jq '.repairPhaseReceipt.newClaimGeneration="stale-claim"' "$turnover_draft" >"$turnover_draft.stale"
+repair_stale_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft.stale" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_stale_rc=$?
+jq 'del(.repairPhaseReceipt)' "$turnover_draft" >"$turnover_draft.missing"
+repair_missing_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft.missing" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_missing_rc=$?
+repair_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_entry_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_rc=$?
+repair_entry_url="$(printf '%s' "$repair_entry_out" | jq -r '.commentUrl // empty')"
+repair_entry_digest="$(printf '%s' "$repair_entry_out" | jq -r '.digest // empty')"
+write_turnover_wait complete "$repair_head:repair-confirmation:0" "$repair_entry_url" "$repair_claim_id"
+repair_entry_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_complete_rc=$?
+
+write_turnover_wait enter "$repair_head:repair-confirmation:1" "" "$repair_claim_id"
+repair_confirmation_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_wait_rc=$?
+write_turnover_draft confirmation 1 "$repair_entry_digest" "$repair_initial_url" "$repair_entry_url" "$repair_head" "$repair_subject" pass
+repair_confirmation_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_rc=$?
+repair_confirmation_url="$(printf '%s' "$repair_confirmation_out" | jq -r '.commentUrl // empty')"
+repair_confirmation_digest="$(printf '%s' "$repair_confirmation_out" | jq -r '.digest // empty')"
+write_turnover_wait complete "$repair_head:repair-confirmation:1" "$repair_confirmation_url" "$repair_claim_id"
+repair_confirmation_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_complete_rc=$?
+write_turnover_draft acceptance 0 "$repair_confirmation_digest" "$repair_initial_url" "$repair_confirmation_url" "$repair_head" "$repair_subject" accepted
+repair_acceptance_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_acceptance_rc=$?
+repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_projection_rc=$?
+
+if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$repair_initial_complete_rc" -eq 0 ] \
+   && [ "$repair_entry_wait_rc" -eq 0 ] && [ "$repair_malformed_rc" -ne 0 ] \
+   && [[ "$repair_malformed_out" == *"repairPhaseReceipt"* ]] \
+   && [ "$repair_stale_rc" -ne 0 ] && [[ "$repair_stale_out" == *"newClaimGeneration is not current"* ]] \
+   && [ "$repair_missing_rc" -ne 0 ] && [[ "$repair_missing_out" == *"requires the seven-field repairPhaseReceipt"* ]] \
+   && [ "$repair_before" = "$repair_negative_after" ] && [ "$repair_entry_rc" -eq 0 ] \
+   && [ "$repair_entry_complete_rc" -eq 0 ] && [ "$repair_confirmation_wait_rc" -eq 0 ] \
+   && [ "$repair_confirmation_rc" -eq 0 ] && [ "$repair_confirmation_complete_rc" -eq 0 ] \
+   && [ "$repair_acceptance_rc" -eq 0 ] && [ "$repair_projection_rc" -eq 0 ] \
+   && printf '%s' "$repair_projection" | jq -e '.verdict == "next" and .state == "accepted" and .acceptedReceipt.repairPhase == true' >/dev/null \
+   && curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
+      | jq -e --argjson escalation "$turnover_valid_id" --arg claim "$repair_claim_id" \
+        '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | (.body | split("\n")[1] | fromjson)] | any(.kind == "repair-phase" and .repairPhaseReceipt.escalationCommentId == $escalation and .repairPhaseReceipt.newClaimGeneration == $claim)' >/dev/null; then
+  ok ".github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true"
+else
+  bad ".github#2865: live repair-phase entry must produce and consume the seven-field typed receipt" \
+    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc entry=$repair_entry_wait_rc malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
+fi
+rm -f "$turnover_draft.bad" "$turnover_draft.stale" "$turnover_draft.missing"
+
 turnover_duplicate_before="$turnover_valid_after"
 "$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 43 --json >/dev/null 2>&1; turnover_duplicate_rc=$?
 turnover_duplicate_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq length)"

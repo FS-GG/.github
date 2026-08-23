@@ -50,6 +50,7 @@ module StructuredDecisionTests =
               DiffAuditRequired = false
               DiffAuditReceipts = []
               Succession = None
+              RepairPhaseReceipt = None
               Timestamp = "2026-08-14T09:00:00Z"
               Digest = "" }
         { draft with Digest = StructuredDecision.reviewDigest draft }
@@ -143,6 +144,39 @@ module StructuredDecisionTests =
         Assert.False(accepted.Digest = StructuredDecision.reviewDigest otherBase)
 
     [<Fact>]
+    let ``#2865 repair-phase receipt is digest-bound and projected from the structured ledger`` () =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
+        let receipt: StructuredDecision.RepairPhaseReceipt =
+            { ExhaustedPr = 76
+              EscalationCommentId = 1234L
+              NewClaimGeneration = "5678"
+              NewBranchOrPr = "item/42-repair-phase"
+              NewImplementerIdentity = "snipe-4156"
+              NewCriticIdentity = "tern-2865"
+              CandidateHeadSha = String.replicate 40 "a" }
+        let draft =
+            { review 2 (Some initial.Digest) StructuredDecision.RepairPhase StructuredDecision.ChangesRequired 0
+                (Some "https://review/1") (Some "https://review/1") with
+                RepairPhaseReceipt = Some receipt
+                Digest = "" }
+        let entry = { draft with Digest = StructuredDecision.reviewDigest draft }
+        let changed =
+            { entry with
+                RepairPhaseReceipt = Some { receipt with NewClaimGeneration = "stale" } }
+
+        Assert.False(entry.Digest = StructuredDecision.reviewDigest changed)
+        Assert.Equal(Ok [ initial; entry ], StructuredDecision.validateReviewLedger initial.Subject [ initial; entry ])
+        let comment id record : Driver.ReviewComment =
+            { Id = id
+              Url = $"https://review/%d{id}"
+              Body = "<!-- fsgg:review-decision/v2 -->\n" + Driver.encodeStructuredReview record }
+        let comments = [ comment 1L initial; comment 2L entry ]
+        let facts = Driver.reviewPhaseFacts comments
+        Assert.Empty facts.StructuredErrors
+        Assert.True facts.RepairPhasePresent
+        Assert.Equal(Some receipt, facts.RepairPhaseReceipt)
+
+    [<Fact>]
     let ``M4 review ledger rejects tamper stale links and non exact SHAs`` () =
         let first = review 1 None StructuredDecision.Initial StructuredDecision.Pass 0 None None
         let second = review 2 (Some first.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0 (Some "https://review/1") (Some "https://review/1")
@@ -199,6 +233,16 @@ module StructuredDecisionTests =
                 {| originalCritic = grant.OriginalCritic
                    grantedBy = grant.GrantedBy
                    grantUrl = grant.GrantUrl |})
+        let repairPhaseReceipt =
+            record.RepairPhaseReceipt
+            |> Option.map (fun receipt ->
+                {| exhaustedPr = receipt.ExhaustedPr
+                   escalationCommentId = receipt.EscalationCommentId
+                   newClaimGeneration = receipt.NewClaimGeneration
+                   newBranchOrPr = receipt.NewBranchOrPr
+                   newImplementerIdentity = receipt.NewImplementerIdentity
+                   newCriticIdentity = receipt.NewCriticIdentity
+                   candidateHeadSha = receipt.CandidateHeadSha |})
         JsonSerializer.Serialize
             {| schema = record.Schema; subject = record.Subject; revision = record.Revision
                previousDigest = record.PreviousDigest; headSha = record.HeadSha
@@ -209,6 +253,7 @@ module StructuredDecisionTests =
                initialReview = record.InitialReview; precedingReview = record.PrecedingReview
                diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
                succession = succession
+               repairPhaseReceipt = repairPhaseReceipt
                timestamp = record.Timestamp; digest = record.Digest |}
 
     let reseal (record: StructuredDecision.ReviewRecord) =

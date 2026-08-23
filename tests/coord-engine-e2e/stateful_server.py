@@ -145,6 +145,7 @@ RATE_LIMIT = {"cost": 1, "remaining": 4999}
 # than inventing a sentinel value: absence is the state the client must fail closed on.
 REST_BUDGET_MODE = ["healthy"]
 OPEN_PR_42 = [False]
+CLOSED_PRS = set()
 
 # BOARD READS, COUNTED — so a leg can assert what was NOT spent. #733's `AfterDone` offer costs `done` a
 # scan it otherwise never makes, and `Chores.offer`'s step 1 (`choreLockRef`) is a pure string match that
@@ -779,6 +780,12 @@ class Handler(BaseHTTPRequestHandler):
                 OPEN_PR_42[0] = False
                 return self._send(200, {"openPr42": False})
 
+        m = re.match(r"^/_fixture/close-pr/(\d+)$", path)
+        if m:
+            with LOCK:
+                CLOSED_PRS.add(int(m.group(1)))
+                return self._send(200, {"closedPr": int(m.group(1))})
+
         # #1151 — arm ONE deferred field write. The next `updateProjectV2ItemFieldValue` rate-limits, so
         # `boardWrite` returns `Deferred`; the one after it succeeds. Lets a test drive the deferred-stamp
         # path (`done` keeps the green verdict, surfaces the flush remedy) and then `flush` it clean.
@@ -991,18 +998,18 @@ class Handler(BaseHTTPRequestHandler):
                 "fsgg.coord.review-decision/v2" in comment.get("body", "")
                 for comment in COMMENTS.get(pr, [])
             )
-            head_sha = "d" * 40 if pr == 43 else ("b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40)
-            issue_number = 50 if pr in (502, 503) else 44
+            head_sha = "d" * 40 if pr == 43 else ("f" * 40 if pr == 44 else ("b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40))
+            issue_number = 50 if pr in (502, 503) else (43 if pr == 44 else 44)
             response = {
                 "number": pr,
-                "head": {"ref": f"item/{issue_number}-the-work", "sha": head_sha},
+                "head": {"ref": ("item/43-repair-phase" if pr == 44 else f"item/{issue_number}-the-work"), "sha": head_sha},
                 "base": {"ref": "main", "sha": "9" * 40},
             }
-            if pr == 43:
+            if pr in (43, 44):
                 response.update({
                     "mergeable": True,
                     "mergeable_state": "unstable",
-                    "state": "open",
+                    "state": "closed" if pr in CLOSED_PRS else "open",
                     "merged": False,
                 })
             return self._send(200, response)
@@ -1023,11 +1030,25 @@ class Handler(BaseHTTPRequestHandler):
                     "check_suite_id": 2819,
                 }]
                 return self._send(200, {"total_count": len(runs), "workflow_runs": runs})
+            if head_sha == "f" * 40:
+                runs = [{
+                    "path": ".github/workflows/coherence.yml",
+                    "event": "pull_request",
+                    "head_branch": "item/43-repair-phase",
+                    "pull_requests": [{"number": 44}],
+                    "run_number": 2865,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "check_suite_id": 2865,
+                }]
+                return self._send(200, {"total_count": 1, "workflow_runs": runs})
             return self._send(500, {"message": "fixture: workflow runs unreadable outside pass-red subject"})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/commits/([0-9a-f]+)/check-runs$", path)
         if m:
             if m.group(1) == "d" * 40:
+                return self._send(200, {"total_count": 0, "check_runs": []})
+            if m.group(1) == "f" * 40:
                 return self._send(200, {"total_count": 0, "check_runs": []})
             return self._send(500, {"message": "fixture: check runs unreadable outside pass-red subject"})
 
