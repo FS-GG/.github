@@ -668,6 +668,13 @@ sound, but it rewrites another critic's durable evidence, which is what these ru
 Retirement is also a tie-breaker **between** chains and never a re-classification of one — a single
 accepted chain whose head has moved is refused exactly as before.
 
+Before a clean-ledger replacement enters review, run live `delivery <ref> --pr <replacement> --json`
+while the current claim is still held. This is the merge-election preflight as well as the eventual
+authorization write. If the generation's operation key already has a winning election for another PR,
+stop before review: close the replacement without merging, release the claim, obtain a fresh claim
+generation, and only then open the replacement that will carry the fresh chain. An append-only election
+cannot be cleared or superseded by a higher comment id.
+
 Be precise about what is observed: the acceptance's **structure**, not the truth of its accepted head.
 Nothing verifies that an acceptance was genuine, so a forged one will retire a live chain. That is a
 smaller hole than it looks. A forgery bound to the *current* head already yields an accepted chain
