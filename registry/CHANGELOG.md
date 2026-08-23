@@ -19,6 +19,26 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-23** — **coherent set `github:0.74.0` published and all coord-engine projections reconciled**
+  (github; [.github#2876](https://github.com/FS-GG/.github/issues/2876),
+  [source PR #2879](https://github.com/FS-GG/.github/pull/2879),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.74.0)):
+  `coord-engine.version`, `package-version`, the distributed tool manifest, and generated docs advance
+  to `0.74.0` after promotion run
+  [32647075293](https://github.com/FS-GG/.github/actions/runs/32647075293) observed all three
+  packages on GitHub Packages and nuget.org. The release binds source
+  `d4458d8fdfff0c332c80d920202ab0230bd9de0f`, content
+  `sha256:0bb2cfa7f604caafb1c6530eb1404230e1d75c8b347c9d76a3866b4202e0c7f9`, and
+  payloads Coord.Cli `sha256:6f73d3e5e7b950bf89fdb6af0d0467d8b8aad5b0e2e1050f4ead304fe1046297`,
+  Drivers `sha256:9aacebc386d9c7e5515c073585ae23a9b98bc3a5d1aa1a852017b4dd0fc43052`, and
+  Kit `sha256:0a7c6dd643692d0946cdc8c330ebdd894e84dc8d2b2cb304a23f6f5b24dd1667`.
+  Prepare run [32646374769](https://github.com/FS-GG/.github/actions/runs/32646374769) packed once;
+  exact-source recoveries
+  [32646940445](https://github.com/FS-GG/.github/actions/runs/32646940445),
+  [32646941765](https://github.com/FS-GG/.github/actions/runs/32646941765), and
+  [32646943436](https://github.com/FS-GG/.github/actions/runs/32646943436) observed the delayed public
+  indexes and explicitly skipped duplicate pushes. A nuget.org-only tool install reports `0.74.0.0`.
+
 - **2026-08-23** — **coherent set `github:0.73.2` published and the registry feed projection advanced**
   (github; [.github#2639](https://github.com/FS-GG/.github/issues/2639),
   [source PR #2836](https://github.com/FS-GG/.github/pull/2836),
