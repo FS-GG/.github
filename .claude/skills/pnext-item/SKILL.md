@@ -356,12 +356,16 @@ which is a longer list. **Do not merge on it**, and report the chain to whoever 
 without its problem text), so identify it from the review chain itself rather than from this output. A
 chain carrying no review evidence at all reports the distinct `action: awaitIndependentReview` instead.
 
-- **Once per item, at this exact point — after the host-acceptance marker and all repairs, and before
-  `landable`'s check — never after opening the PR, and never on every push.** A call made earlier binds
-  the marker to whatever head existed then; every later push re-stales it, and nothing short of this step
-  calls `delivery` again. Calling it here is also sufficient on its own — `rebindAuthorization` makes a
-  call against an already-current marker a zero-cost no-op PATCH-skip, so this is never a routine
-  per-push network write.
+- **The ordinary authorization point is exactly here — after the host-acceptance marker and all
+  repairs, before `landable`, and never on every push.** The sole pre-review exception is a clean-ledger
+  replacement: after opening that replacement PR but before dispatching its initial critic, follow
+  `independent-review`'s live `delivery` merge-election preflight. That earlier call may write the
+  current-head marker, but it does not authorize a merge: an `awaitIndependentReview` or `refreshReview`
+  answer is the expected stop. If the preflight is clean, complete review and host acceptance, then
+  reissue this same live call at the ordinary authorization point. `rebindAuthorization` makes that
+  reissue a zero-cost no-op PATCH-skip when the marker is already current while the lifecycle decision
+  advances to landing. Outside that named replacement fence, do not call live `delivery` before
+  acceptance; a call made on an earlier head is stale after any later push.
 - **Only the worker currently holding this item's live claim marker may make this call, and only before
   releasing that claim.** The live form itself refuses otherwise ("no live claim marker can authorize
   delivery") — a fresh critic or a worker after `done --flip` released the claim cannot make it on your
