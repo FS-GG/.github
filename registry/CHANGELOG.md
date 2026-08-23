@@ -19,6 +19,43 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-23** — **`FS.GG.Workspace.Template` 0.8.3 published and registry projections reconciled**
+  (templates; [Templates#418](https://github.com/FS-GG/FS.GG.Templates/issues/418),
+  [source PR #430](https://github.com/FS-GG/FS.GG.Templates/pull/430),
+  [delivery receipt](https://github.com/FS-GG/FS.GG.Templates/pull/430#issuecomment-5387115319),
+  [immutable release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.8.3)):
+  `version`, `package-version`, and `package-tag` advance to `0.8.3` after both public feeds served
+  the package from source `aac493439c924d2162901ff7d78075fbf0d32f7e`. Release run
+  [32651690618](https://github.com/FS-GG/FS.GG.Templates/actions/runs/32651690618) packed and
+  published once. The workflow artifact, immutable release asset, and GitHub Packages archive are
+  byte-identical at SHA-256 `e213db8f8db29099472d457e188fcc8381d135e6489869ee93832e757377c511`;
+  nuget.org's signed archive is SHA-256
+  `77ad51ba1e21ed7cb442d2e7f837c6f7bf76f2b21f485ec62eae752086d261a5`, with an identical
+  unsigned entry map and only `.signature.p7s` added. A clean nuget.org-only template install exposed
+  all five identities, and the public `fs-gg-fable-game` artifact passed its full lifecycle. This
+  reconciliation preserves Templates#418 as the publication owner and adds no `.github` package obligation.
+
+- **2026-08-23** — **coherent set `github:0.75.0` published and all coord-engine projections reconciled**
+  (github; [.github#2835](https://github.com/FS-GG/.github/issues/2835),
+  [repair source PR #2885](https://github.com/FS-GG/.github/pull/2885),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.0)):
+  `coord-engine.version`, `package-version`, the distributed tool manifest, and generated docs advance
+  to `0.75.0` after promotion run
+  [32655013583](https://github.com/FS-GG/.github/actions/runs/32655013583) observed all three
+  packages on GitHub Packages and nuget.org. The release binds exact repair source
+  `97c62f04ce9f8f419060033b99f8a94559bbc3dd`, content
+  `sha256:07b460b778d5a0304239a9b9f24da0c65f8e7e623e775935fe4787e55bbfab76`, and
+  payloads Coord.Cli `sha256:603570ef7b230da73d7270fd7ce3bbd5d1ecfed33cc022171354d2795a43cb22`,
+  Drivers `sha256:3153216d2e63dc069652f8bfe36cd1d0524382b4bb9608f5f1bfcb557b2c3a58`, and
+  Kit `sha256:3445f80b4df5acdd5b7a3288d1cf4adbe74bdc268656dff1514679f33df9735e`.
+  Prepare run [32654330316](https://github.com/FS-GG/.github/actions/runs/32654330316) packed once;
+  exact-source recoveries
+  [32654876218](https://github.com/FS-GG/.github/actions/runs/32654876218),
+  [32654877858](https://github.com/FS-GG/.github/actions/runs/32654877858), and
+  [32654879174](https://github.com/FS-GG/.github/actions/runs/32654879174) consumed the prepared
+  stored bytes after delayed public indexing, without repacking. A nuget.org-only tool install reports
+  `0.75.0.0`. Architecture shape is unaffected.
+
 - **2026-08-23** — **`FS.GG.Workspace.Template` 0.8.2 published and registry projections reconciled**
   (templates; [Templates#428](https://github.com/FS-GG/FS.GG.Templates/issues/428),
   [Templates#385](https://github.com/FS-GG/FS.GG.Templates/issues/385),

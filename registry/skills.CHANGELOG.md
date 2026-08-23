@@ -34,6 +34,16 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-08-23** — RECONCILE (`.github` publishing operator row; .github#2835,
+  [repair PR #2891](https://github.com/FS-GG/.github/pull/2891),
+  [coherent-set 0.75.0](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.0)):
+  `publishing-and-deployment` advances `b1f2927c…` → `dcfa74b2…` after the release-inventory
+  projection moved the published `coord-engine` and `fs-gg-workspace-template` frontiers to `0.75.0`
+  and `0.8.3`. The row is reconciled from `.github`'s regenerated
+  `registry/driver-skill-manifest.json`; only its canonical `sha256` changes. Its id, operator scope,
+  owner, source, `materializes-when: "false"`, schema, and package absence remain unchanged.
+  registry = manifest = bytes.
+
 - **2026-08-23** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-08-23** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
