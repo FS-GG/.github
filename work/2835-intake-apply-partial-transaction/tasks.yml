@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2835-intake-apply-partial-transaction/plan.md
-    digest: 85d04306b27280b3df93dc909b58b7e5d6d2e130467fe0c86f174ade7ffc9314
+    digest: c800d7cea9a62dd845cc3834f10b4c7c1cba53be392873aae6c0c70aad1f22de
     schemaVersion: 1
 tasks:
   - id: T001

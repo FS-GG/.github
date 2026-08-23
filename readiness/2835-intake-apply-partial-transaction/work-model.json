@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c455bd86f4d19bb3379077a59b16a4d88fd8c9a585f600ac40d9c84b7353515d"
+        "value": "29135c19e04553f978c81d4a28a3e5ffe3f8763eec51bdc5566b740f878a3820"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "85d04306b27280b3df93dc909b58b7e5d6d2e130467fe0c86f174ade7ffc9314"
+        "value": "c800d7cea9a62dd845cc3834f10b4c7c1cba53be392873aae6c0c70aad1f22de"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f7d9970204fd604446829d74d5f7c6977ff9691740b82db8ad910813c4f5a909"
+        "value": "c969ea4a1cc85cf729d4f95d0021fee2c1413208050395d6d48bb61f338b8e47"
       }
     }
   ],
@@ -675,7 +675,7 @@
           "path": "work/2835-intake-apply-partial-transaction/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c455bd86f4d19bb3379077a59b16a4d88fd8c9a585f600ac40d9c84b7353515d"
+            "value": "29135c19e04553f978c81d4a28a3e5ffe3f8763eec51bdc5566b740f878a3820"
           },
           "schemaVersion": 1
         },
@@ -683,7 +683,7 @@
           "path": "work/2835-intake-apply-partial-transaction/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "85d04306b27280b3df93dc909b58b7e5d6d2e130467fe0c86f174ade7ffc9314"
+            "value": "c800d7cea9a62dd845cc3834f10b4c7c1cba53be392873aae6c0c70aad1f22de"
           },
           "schemaVersion": 1
         },
@@ -699,14 +699,14 @@
           "path": "work/2835-intake-apply-partial-transaction/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f7d9970204fd604446829d74d5f7c6977ff9691740b82db8ad910813c4f5a909"
+            "value": "c969ea4a1cc85cf729d4f95d0021fee2c1413208050395d6d48bb61f338b8e47"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "90d8edc8c0a1c46b030a012b4fbe1027fefd5b594a287d16f6c1e62976b672fc"
+        "value": "6177c6a9d3e83ee4f7441dd02178ee4251b748217e9910845e4035ee6a6ad12d"
       },
       "currency": "current"
     }
