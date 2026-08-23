@@ -3,26 +3,29 @@
 
 #581 taught the tools that an open `item/<n>-*` PR is proof of life, and stopped there — so `reap` refuses
 such a claim and then offers exactly one exit, "close it, then reap". For a PR that is green, reviewed and
-mergeable, that exit DESTROYS the best work on the board. #697 reads WHAT the PR says (#720's landable
-verdict: green / conflicted / pending / red / unknown), so `who` and `reap` can tell abandoned work from
-finished work.
+mergeable, that exit DESTROYS the best work on the board. #697 reads the CI/mergeability slice of what the
+PR says (#720's green / conflicted / pending / red / unknown verdict), so `who` and `reap` can tell an
+abandoned branch from work that must be preserved. #2854 prevents `who` from promoting that narrow slice
+to a finished/landing verdict without the review ledger.
 
 The world (lifted from the corpus's #697 seeds, one transport over). FS.GG.SDD, two OFF-BOARD stale claims:
 
-    970  stale marker ghost-970, PR #701 OPEN on item/970-finished  -> GREEN and MERGEABLE  -> LAND IT
+    970  stale marker ghost-970, PR #701 OPEN on item/970-finished  -> GREEN checks, changes-required review
     976  stale marker ghost-976, PR #705 OPEN on item/976-running   -> mergeable, checks RUNNING -> pending
 
 The corpus (case 30, `who` + `reap` legs) certifies:
-    who (text)  -> #970's row reads `STALE (#701 OPEN — GREEN: LAND IT)` and an orphan block points at
-                   `fsgg-coord adopt`; #976's reads `STALE (#705 OPEN — checks running)`.
+    who (text)  -> #970's row reports green checks and points at `landable`, without saying finished/land;
+                   #976's reads `STALE (#705 OPEN — checks running)`.
     who --json  -> #970 carries `prState: "green"`, #976 `prState: "pending"`.
     reap        -> REFUSES #970 as FINISHED and names `adopt` (never "close it, then reap"); REFUSES #976
                    as UNFINISHED ("Do NOT close it"); DELETES NOTHING — both claims survive.
 
-The landable verdict is scored over WORKFLOW RUNS (Actions) unioned with CHECK RUNS (#720): #970's head SHA
-has one green run + one green check; #976's has a green run + an in-progress run (and matching check-runs).
+The CI slice is scored over WORKFLOW RUNS (Actions) unioned with CHECK RUNS (#720): #970's head SHA has
+one green run + one green check; #976's has a green run + an in-progress run (and matching check-runs).
+PR #701's comment thread separately carries a digest-valid initial `changes-required` review record.
 """
 
+import hashlib
 import json
 import re
 import sys
@@ -48,23 +51,26 @@ MARKERS = {970: ("ghost-970", 970), 976: ("ghost-976", 976)}
 
 # One OPEN PR per item, on its `item/<n>-*` branch — the worktree protocol's own proof of life (#581).
 # Each carries its head SHA and mergeability; the landable verdict is scored off the SHA's runs + checks.
+GREEN_HEAD = "a" * 40
+PENDING_HEAD = "b" * 40
+
 PULLS = {
     701: {"number": 701, "state": "open", "mergeable": True,
-          "head": {"ref": "item/970-finished", "sha": "green970"}},
+          "head": {"ref": "item/970-finished", "sha": GREEN_HEAD}},
     705: {"number": 705, "state": "open", "mergeable": True,
-          "head": {"ref": "item/976-running", "sha": "pend976"}},
+          "head": {"ref": "item/976-running", "sha": PENDING_HEAD}},
 }
 ITEM_PR = {970: 701, 976: 705}
 
 # Workflow runs by head SHA. #970 is one green run; #976 is a green run plus one still in_progress —
 # supersedes nothing (distinct run numbers, no cancellation), so #976 is `pending`, not green.
 RUNS = {
-    "green970": [
+    GREEN_HEAD: [
         {"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/970-finished",
          "run_number": 1, "status": "completed", "conclusion": "success", "check_suite_id": 1,
          "pull_requests": [{"number": 701}]},
     ],
-    "pend976": [
+    PENDING_HEAD: [
         {"path": ".github/workflows/build.yml", "event": "pull_request", "head_branch": "item/976-running",
          "run_number": 1, "status": "completed", "conclusion": "success", "check_suite_id": 2,
          "pull_requests": [{"number": 705}]},
@@ -76,9 +82,9 @@ RUNS = {
 
 # Check runs by head SHA (the union the rollup also scores, #720). They agree with the runs above.
 CHECKS = {
-    "green970": [{"name": "build", "status": "completed", "conclusion": "success",
+    GREEN_HEAD: [{"name": "build", "status": "completed", "conclusion": "success",
                   "app": {"slug": "github-actions"}, "check_suite": {"id": 1}}],
-    "pend976": [{"name": "build", "status": "completed", "conclusion": "success",
+    PENDING_HEAD: [{"name": "build", "status": "completed", "conclusion": "success",
                  "app": {"slug": "github-actions"}, "check_suite": {"id": 2}},
                 {"name": "test", "status": "in_progress", "conclusion": None,
                  "app": {"slug": "github-actions"}, "check_suite": {"id": 3}}],
@@ -92,7 +98,52 @@ def _iso(hours_ago):
     return (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _frame(value):
+    return f"{len(value.encode('utf-8'))}:{value}"
+
+
+def _changes_required_review():
+    record = {
+        "schema": "fsgg.coord.review-decision/v2",
+        "subject": "FS-GG/FS.GG.SDD#970/pr/701",
+        "revision": 1,
+        "previousDigest": None,
+        "headSha": GREEN_HEAD,
+        "claimGeneration": None,
+        "baseSha": None,
+        "critic": "heron-970",
+        "verdict": "changes-required",
+        "acceptedExceptions": [],
+        "routeApplicability": "not-meaningful",
+        "routeEvidence": ["fixture has no meaningful runtime-route comparison"],
+        "policyVersion": "structured-decisions/1",
+        "kind": "initial",
+        "round": 0,
+        "initialReview": None,
+        "precedingReview": None,
+        "diffAuditRequired": False,
+        "diffAuditReceipts": [],
+        "succession": None,
+        "repairPhaseReceipt": None,
+        "timestamp": "2026-08-23T18:00:00Z",
+        "digest": "",
+    }
+    fields = [
+        _frame(record["schema"]), _frame(record["subject"]), str(record["revision"]), _frame(""),
+        _frame(record["headSha"]), _frame(record["critic"]), _frame(record["verdict"]), "",
+        _frame(record["routeApplicability"]), "".join(_frame(x) for x in record["routeEvidence"]),
+        _frame(record["policyVersion"]), _frame(record["kind"]), str(record["round"]), _frame(""),
+        _frame(""), str(record["diffAuditRequired"]), "", _frame(record["timestamp"]),
+    ]
+    record["digest"] = hashlib.sha256("|".join(fields).encode()).hexdigest()
+    return "<!-- fsgg:review-decision/v2 -->\n" + json.dumps(record, separators=(",", ":"))
+
+
 def comments(n):
+    if n == 701:
+        return [{"id": 70101, "body": _changes_required_review(), "html_url": "https://reviews/70101",
+                 "user": {"login": "EHotwagner"}, "created_at": "2026-08-23T18:00:00Z",
+                 "updated_at": "2026-08-23T18:00:00Z"}]
     if n not in MARKERS:
         return []
     worker, cid = MARKERS[n]

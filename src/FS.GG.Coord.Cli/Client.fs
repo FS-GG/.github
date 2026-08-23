@@ -3395,12 +3395,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | _ -> false
 
                                 // #697: a bare `STALE (#NNN OPEN)` reads as an abandoned branch, and the
-                                // reader reaches for `reap` — the destructive verb — on FINISHED work. So
-                                // when there IS a live PR, read WHAT IT SAYS: `who` is what a human reads
-                                // immediately before deciding to reap, so it is exactly where "GREEN: LAND
-                                // IT" has to appear. Advisory (a `PrUnknown` just falls back to the bare
-                                // flag), and only on the rare stale-with-open-PR row, so the extra reads ride
-                                // the same cost budget as the #581 probe above.
+                                // reader reaches for `reap` — the destructive verb — on live work. So when
+                                // there IS a live PR, read what its checks say. This is deliberately only a
+                                // CI/mergeability observation: `who` does not read the review ledger and must
+                                // therefore defer any finished/landing conclusion to `landable` (#2854).
+                                // Advisory (a `PrUnknown` just falls back to the bare flag), and only on the
+                                // rare stale-with-open-PR row, so the extra reads ride the same cost budget as
+                                // the #581 probe above.
                                 let prState =
                                     match livePr with
                                     | Some(pr, _) -> Some(Reads.prLandable ctx.Transport o r pr)
@@ -3485,12 +3486,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 | Stale m ->
                                     // #581/#697: `STALE (#NNN OPEN — <what the PR says>)` when the work is
                                     // demonstrably alive, a bare `STALE` (which a reaper may collect)
-                                    // otherwise. GREEN work says LAND IT — it is not an abandoned branch.
+                                    // otherwise. Green checks still need the authoritative review-aware
+                                    // `landable` verdict; `who` must not promote that narrower fact to LAND IT.
                                     let flag =
                                         match row.LivePr with
                                         | Some(pr, _) ->
                                             match row.PrState with
-                                            | Some PrGreen -> $"STALE (#%d{pr} OPEN — GREEN: LAND IT)"
+                                            | Some PrGreen -> $"STALE (#%d{pr} OPEN — checks green; verify landable)"
                                             | Some PrConflicted -> $"STALE (#%d{pr} OPEN — conflicted)"
                                             | Some PrPending -> $"STALE (#%d{pr} OPEN — checks running)"
                                             | Some PrRed -> $"STALE (#%d{pr} OPEN — not green)"
@@ -3537,13 +3539,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         (List.length row.Incomplete)
                                         wt
 
-                    // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
-                    // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the
-                    // best work on the board ends up in the bin. `reap` is a destructive verb, and pointing
-                    // it at finished work is precisely the advice this change exists to delete: land it.
+                    // #697: a green PR behind a dead worker gets its OWN stderr lines, and they come FIRST —
+                    // folding it into the generic "reap these" hint is how live work ends up in the bin.
+                    // #2854: CI green is not review acceptance. Preserve the anti-reap warning while
+                    // deferring the only finished/landing verdict to the review-aware `landable` command.
                     // .github#1668: AND ITS READ MUST HAVE BEEN COMPLETE. This block tells a human the claim
-                    // is DEAD and the work is finished — `adopt` it. On a row whose marker read was short,
-                    // "the claim is DEAD" is precisely the thing not established: the hidden comment may be
+                    // is stale and the checks are green. On a row whose marker read was short, "the claim is
+                    // DEAD" is precisely the thing not established: the hidden comment may be
                     // a live marker sitting behind the lapsed one. The row still prints, and the warning
                     // below still names it; what is withheld is the instruction to take it over.
                     let orphans =
@@ -3557,12 +3559,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let refs = orphans |> List.map (fun r -> r.Ref.Short) |> String.concat ", "
 
                         eprint
-                            $"fsgg-coord-engine: %s{refs} — the claim is DEAD but the PR is GREEN and MERGEABLE: that work is FINISHED."
+                            $"fsgg-coord-engine: %s{refs} — the claim is stale and the PR checks are GREEN, but review and landing readiness are not established by `who`."
 
-                        eprint "fsgg-coord-engine:   Do NOT reap or close it. Land it:"
+                        eprint "fsgg-coord-engine:   Do NOT reap or close it. Verify the authoritative verdict:"
 
                         for r in orphans do
-                            eprint $"fsgg-coord-engine:     scripts/fsgg-coord adopt %s{r.Ref.Short}"
+                            match r.LivePr with
+                            | Some(pr, _) ->
+                                eprint
+                                    $"fsgg-coord-engine:     scripts/fsgg-coord landable %d{pr} --repo %s{r.Ref.Repo}"
+                            | None -> ()
 
                     // A markerless In-progress item is work happening OUTSIDE the protocol — warned on
                     // stderr (where case 20 looks for it) regardless of the stdout format, so a `who` piped

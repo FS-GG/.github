@@ -4118,10 +4118,10 @@ fi
 # such a claim and offered exactly one exit, "close it, then reap". For a PR that is GREEN and MERGEABLE that
 # exit DESTROYS the best work on the board. #697 reads the landable verdict (#720) so `who` flies the right
 # flag and `reap` speaks the right refusal. World (case 30's #697 seeds, one transport over): two OFF-BOARD
-# stale claims — #970 whose PR #701 is GREEN and MERGEABLE (LAND IT), #976 whose PR #705 is mergeable but has
-# checks still RUNNING (pending). `landable_server.py` scores each off its head SHA's workflow runs + check
-# runs (#720). The `adopt` command itself (case 30 parts 3–5) and case 31's superseded-run scoring are
-# separate slices; this proves the two TRUTH READS speak the verdict.
+# stale claims — #970 whose PR #701 has GREEN checks but an open structured `changes-required` review,
+# #976 whose PR #705 is mergeable but has checks still RUNNING (pending). `landable_server.py` scores each
+# off its head SHA's workflow runs + check runs (#720). The `adopt` command itself (case 30 parts 3–5) and
+# case 31's superseded-run scoring are separate slices; this proves `who` does not overstate its narrower read.
 # ==================================================================================================
 LND_OUT="$(mktemp)"; python3 "$HERE/landable_server.py" >"$LND_OUT" 2>/dev/null & LND_SRV=$!; LND_PORT=""
 for _ in $(seq 1 50); do LND_PORT="$(head -n1 "$LND_OUT" 2>/dev/null)"; [ -n "$LND_PORT" ] && break; sleep 0.1; done
@@ -4131,16 +4131,27 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
             "$ENGINE" "$@"; }
 
-  # 1. `who` SAYS the work is finished. It is what a human reads immediately before reaping, so it is
-  #    exactly where "GREEN: LAND IT" has to appear — a bare `STALE (#701 OPEN)` reads as an abandoned
-  #    branch and the reader reaches for `reap` (#697).
+  # 1. `who` preserves the anti-reap signal but defers finished/landing authority. PR #701 has green checks
+  #    and an open structured `changes-required` review; describing it as finished would bypass that review.
+  review970="$(FSGG_WORKER=heron-970 lnd review FS-GG/FS.GG.SDD#970 --pr 701 --json 2>/dev/null)"
+  [ "$(printf '%s' "$review970" | jq -r '.state + ":" + .action')" = 'awaitingImplementerRepair:resumeImplementer' ] \
+    && ok "#2854 inversion precondition: fixture review ledger parses as open changes-required (case 30)" \
+    || bad "#2854 inversion precondition" "$review970"
+  lnd970_rc=0
+  lnd970="$(lnd landable 701 --repo FS.GG.SDD 2>/dev/null)" || lnd970_rc=$?
+  [ "$lnd970_rc" -eq 7 ] && [ "$lnd970" = pending ] \
+    && ok "#2854: landable refuses that same CI-green changes-required PR (pending, exit 7) (case 30)" \
+    || bad "#2854: landable review refusal" "rc=$lnd970_rc verdict=$lnd970"
   wtext="$(lnd who --repo FS.GG.SDD 2>&1)"
-  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#970 .*STALE (#701 OPEN — GREEN: LAND IT)' \
-    && ok "#697: who says a stale claim's GREEN PR is FINISHED work — 'STALE (#701 OPEN — GREEN: LAND IT)' (case 30)" \
-    || bad "#697: who GREEN: LAND IT row" "$wtext"
-  printf '%s' "$wtext" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
-    && ok "#697: ...and points at the command that LANDS it, not the one that bins it (case 30)" \
-    || bad "#697: who points at adopt" "$wtext"
+  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#970 .*STALE (#701 OPEN — checks green; verify landable)' \
+    && ok "#2854: who reports green checks but defers the landing verdict to landable (case 30)" \
+    || bad "#2854: who review-aware green row" "$wtext"
+  printf '%s' "$wtext" | grep -q 'fsgg-coord landable 701 --repo FS.GG.SDD' \
+    && ok "#2854: ...and points at the authoritative review-aware query (case 30)" \
+    || bad "#2854: who points at landable" "$wtext"
+  refute "#2854 inversion: open changes-required review is never called finished or told to land (case 30)" \
+         'GREEN: LAND IT|that work is FINISHED|fsgg-coord adopt FS\.GG\.SDD#970' \
+         'FS\.GG\.SDD#970|GREEN: LAND IT|that work is FINISHED|fsgg-coord adopt FS\.GG\.SDD#970' 0 "$wtext"
   # A conflicted/pending PR is NOT green: #976's checks are still running, so its row must NOT say LAND IT.
   printf '%s' "$wtext" | grep -q 'FS.GG.SDD#976 .*STALE (#705 OPEN — checks running)' \
     && ok "#697: a mergeable PR whose checks are RUNNING is 'checks running', not LAND IT (case 30)" \
