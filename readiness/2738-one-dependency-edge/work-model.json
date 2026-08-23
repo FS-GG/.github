@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5f3930d274bfb148f9c8f8cf29340c93f7b6c07c9051b3850f9c3c674db4f90c"
+        "value": "a13584bbb13f001ee1b730d2fb735d659a0f7f411337ac4d9b20e7f40a1dcfc4"
       }
     },
     {
@@ -846,7 +846,7 @@
           "path": "work/2738-one-dependency-edge/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "5f3930d274bfb148f9c8f8cf29340c93f7b6c07c9051b3850f9c3c674db4f90c"
+            "value": "a13584bbb13f001ee1b730d2fb735d659a0f7f411337ac4d9b20e7f40a1dcfc4"
           },
           "schemaVersion": 1
         },
@@ -877,7 +877,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "f41fe92da74d12df448b6414880079105f7a45b05a3b44c590b3c7bb2e4c6ccc"
+        "value": "4b715d18d5d5e92563596fe48d4747507adfbc5f69515503fa0453097b5b1174"
       },
       "currency": "current"
     }

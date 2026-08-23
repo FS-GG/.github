@@ -4236,7 +4236,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           match gate with
                                           | Error _ -> Ok Board.NotOnBoard
                                           | Ok() when List.length writes > 1 ->
-                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
+                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
                                           | Ok() ->
                                               Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
 

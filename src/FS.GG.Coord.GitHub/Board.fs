@@ -1451,6 +1451,7 @@ module Board =
         (owner: string)
         (repo: string)
         (number: int)
+        (expectedBlockedBy: BlockedByObservation option)
         (writes: (string * FieldWrite) list)
         (worker: string)
         : IoResult<WriteOutcome> =
@@ -1489,10 +1490,26 @@ module Board =
                 itemIdCached transport board owner repo number
 
         match resolved with
-        | Error e -> if isQueueable e then queueAll e else Error e
+        | Error e -> if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
         | Ok None -> Ok NotOnBoard
         | Ok(Some item) ->
-            match setFieldBatch transport board item writes with
+            let condition =
+                match expectedBlockedBy with
+                | None -> Ok()
+                | Some expected ->
+                    itemBlockedByObservation transport board owner repo number
+                    |> Result.bind (fun observed ->
+                        if observed = expected then
+                            Ok()
+                        else
+                            Error(
+                                Malformed(
+                                    $"%s{owner}/%s{repo}#%d{number} conditional board batch",
+                                    "Stale dependency-edge observation: the Projects item revision or Blocked by edge changed at the board-write boundary; re-derive and retry"
+                                )
+                            ))
+
+            match condition |> Result.bind (fun () -> setFieldBatch transport board item writes) with
             | Ok() ->
                 // FOLD OUR OWN WRITES INTO THE CACHED SCAN, one per field — the same reason the single write
                 // does it (a claim is always followed by a take, and invalidating would send it to a full scan).
@@ -1509,7 +1526,11 @@ module Board =
                          | Clear -> "")
 
                 Ok Written
-            | Error e -> if isQueueable e then queueAll e else Error e
+            | Error e ->
+                // A conditional write may never enter the unconditional replay queue: doing so would
+                // discard the exact revision/edge fence that authorized it and later grant Ready from a
+                // stale decision. The caller retries by re-deriving the observation instead.
+                if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
 
     type FlushOutcome =
         { Queued: int

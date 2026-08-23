@@ -333,12 +333,18 @@ module Board =
     /// intact — with one addition the transport forces: a batch can land HALF-WAY. A `Partial` (some aliases
     /// took effect) is NEVER queued, because replaying the document would rewrite what already landed; it
     /// surfaces as `Error(Partial …)` for the caller to render field-by-field.
+    ///
+    /// `expectedBlockedBy` makes the mutation conditional on the exact dependency-edge observation a
+    /// caller used. The boundary re-reads both Projects item revision and field value immediately before
+    /// mutation; a mismatch fails stale with zero writes. Conditional batches are never deferred because
+    /// replay would discard the condition.
     val boardWriteBatch:
         transport: IGitHubTransport ->
         board: BoardMap ->
         owner: string ->
         repo: string ->
         number: int ->
+        expectedBlockedBy: BlockedByObservation option ->
         writes: (string * FieldWrite) list ->
         worker: string ->
             IoResult<WriteOutcome>

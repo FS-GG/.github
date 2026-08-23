@@ -570,7 +570,7 @@ module Handlers =
                                 | field, Board.Clear -> $"%s{field}=<cleared>"
                             | _ -> alias
 
-                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number writes w.Id with
+                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number None writes w.Id with
                         // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
                         // landed; reporting nothing happened would be a lie, and reporting success is the bug
                         // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
@@ -2091,17 +2091,18 @@ module Handlers =
                                                         )
                                                     )
                                                 else
-                                                    Ok())
+                                                    Ok current)
 
                                         match
                                             dependencyFresh
-                                            |> Result.bind (fun () ->
+                                            |> Result.bind (fun expectedBlockedBy ->
                                                 Board.boardWriteBatch
                                                     ctx.Transport
                                                     board
                                                     issue.Owner
                                                     issue.Repo
                                                     issue.Number
+                                                    expectedBlockedBy
                                                     writes
                                                     w.Id)
                                         with

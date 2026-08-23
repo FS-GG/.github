@@ -23,6 +23,13 @@ All mutations below were applied to the authoring tree based on `0c533d0760d2599
 - Observed: exit 1; the pagination contract reported expected `[20, 20, 20, 20]`, actual `[20, 20, 20, 21]`.
 - Subject: agreement between every issue-side Projects connection document and the shared completeness guard.
 
+## M4 — discard the board-write boundary condition
+
+- Mutation: replace the exact `expectedBlockedBy` observation passed from `Handlers.fs` to `Board.boardWriteBatch` with `None`.
+- Command: `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --no-restore --filter 'FullyQualifiedName~2738'`
+- Observed: exit 1; 9 tests passed and the new interleaving case failed after the fake installed a `Blocked by` edge between the handler's second observation and the board batch, because the mutated route emitted the forbidden batch mutation.
+- Subject: the production condition carried across the handler/board boundary; the fixture proves zero `Status=Ready` mutation when the exact Projects revision or dependency edge changes.
+
 ## Restoration control
 
-The final verification reruns the focused tests and all four affected suites from restored source. `git diff --check` and the PR diff provide the committed-source control: none of the three mutant spellings is retained.
+The final verification reruns the focused tests and all four affected suites from restored source. `git diff --check` and the PR diff provide the committed-source control: none of the four mutant spellings is retained.
