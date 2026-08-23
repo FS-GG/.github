@@ -236,31 +236,42 @@ module LiveHandlers =
 
             Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number
             |> Result.bind (fun comments ->
-                let owned =
+                let elections =
                     comments
                     |> List.map (fun comment ->
                         ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
                     |> DeliveryApplication.electionsFromComments
-                    |> DeliveryApplication.electionsOwnedBy opkey pr
 
-                match lowestElection owned with
+                match DeliveryApplication.winningElection opkey target.Canonical gen receiver elections with
+                | Some winner when winner.Fields.TryFind "pr" <> Some(string pr) ->
+                    let winningPr = winner.Fields.TryFind "pr" |> Option.defaultValue "unknown"
+                    Error(
+                        Errors.Malformed(
+                            target.Short,
+                            $"claim generation %s{gen} already spent merge election %d{winner.Id} on pull request #%s{winningPr}; close this replacement without merging, release the claim, and obtain a fresh claim generation before opening or reviewing another replacement"
+                        )
+                    )
+                | _ ->
+                    let owned = DeliveryApplication.electionsOwnedBy opkey pr elections
+
+                    match lowestElection owned with
                 // ALREADY ELECTED — the ordinary case on every call after the first, and the reason a
                 // repeated `delivery` neither costs a write nor denies its own pull request. The
                 // LOWEST of this target's own elections is named, not the first one read: a duplicate
                 // that a lost POST response could have created must not change which id is granted.
-                | Some election -> Ok(opkey, string election.Id)
-                | None ->
-                    // The marker is the comment's FIRST BYTE, because the fence anchors its match at
-                    // position 0 of the raw body and never trims. The prose belongs after it.
-                    let body =
-                        DeliveryApplication.electionMarker opkey target.Canonical gen receiver pr
-                        + "\n\nMerge election for this item's current claim generation, posted by `delivery` "
-                        + $"for pull request #%d{pr} (`.github#2395`, design §4.2). Append-only: it carries no "
-                        + "lease, is never deleted, and the lowest-id election bearing this operation key is the "
-                        + "one whose merge this generation admits."
+                    | Some election -> Ok(opkey, string election.Id)
+                    | None ->
+                        // The marker is the comment's FIRST BYTE, because the fence anchors its match at
+                        // position 0 of the raw body and never trims. The prose belongs after it.
+                        let body =
+                            DeliveryApplication.electionMarker opkey target.Canonical gen receiver pr
+                            + "\n\nMerge election for this item's current claim generation, posted by `delivery` "
+                            + $"for pull request #%d{pr} (`.github#2395`, design §4.2). Append-only: it carries no "
+                            + "lease, is never deleted, and the lowest-id election bearing this operation key is the "
+                            + "one whose merge this generation admits."
 
-                    Writes.postIssueComment ctx.Transport target body
-                    |> Result.map (fun id -> (opkey, string id)))
+                        Writes.postIssueComment ctx.Transport target body
+                        |> Result.map (fun id -> (opkey, string id)))
 
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE

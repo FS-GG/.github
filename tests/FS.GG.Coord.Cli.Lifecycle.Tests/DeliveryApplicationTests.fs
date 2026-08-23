@@ -966,6 +966,26 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         | [ election ] -> Assert.Equal(700L, election.Id)
         | other -> failwithf "expected exactly the opkey-and-pr match, got %A" other
 
+    [<Fact>]
+    let ``#2893 winningElection uses the fence tuple and lowest comment id`` () =
+        let wrongGeneration =
+            DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "other-generation" "FS-GG/.github" 8999
+
+        let comments =
+            [ electionComment 702L (anElection 9001)
+              electionComment 700L (anElection 9002)
+              electionComment 699L wrongGeneration ]
+
+        match
+            comments
+            |> DeliveryApplication.electionsFromComments
+            |> DeliveryApplication.winningElection expectedOpKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github"
+        with
+        | Some election ->
+            Assert.Equal(700L, election.Id)
+            Assert.Equal(Some "9002", election.Fields.TryFind "pr")
+        | None -> failwith "expected the lowest election for the complete fence tuple"
+
     // -------------------------------------------------------------------------------------------
     // The wired path
     // -------------------------------------------------------------------------------------------
@@ -1138,18 +1158,21 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     // would let two executors sharing one generation both pass check 4, which is exactly the
     // "at most one merge per (item, generation, receiver)" guarantee the election exists to provide.
     [<Fact>]
-    let ``#2395 an election posted for a different pull request is not reused, and this target elects its own`` () =
+    let ``#2893 an election won by a different pull request refuses before any replacement write`` () =
         let w = world ()
 
         let transport =
             scripted w (okResponse (commentListing [ 5309319100L, anElection 9002 ])) (okResponse """{"id":5309319124}""") "Implements the thing."
 
         match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
-        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
-        | Ok() ->
-            Assert.Single w.PostedBodies |> ignore
-            let body = Assert.Single w.PatchedBodies
-            Assert.Contains("grant=5309319124 ", body)
+        | Ok() -> failwith "a spent generation must refuse the replacement before posting another election"
+        | Error e ->
+            let rendered = $"%A{e}"
+            Assert.Contains("already spent merge election 5309319100 on pull request #9002", rendered)
+            Assert.Contains("release the claim", rendered)
+            Assert.Contains("fresh claim generation", rendered)
+            Assert.Empty w.PostedBodies
+            Assert.Empty w.PatchedBodies
 
     // FAIL CLOSED, AND THE ASSERTION IS THE ABSENCE OF A WRITE RATHER THAN THE PRESENCE OF AN ERROR.
     // A grounding that could not be established must leave the pull-request body exactly as it was:
