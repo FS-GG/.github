@@ -19,6 +19,21 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-23** — **`FS.GG.Workspace.Template` 0.8.2 published and registry projections reconciled**
+  (templates; [Templates#428](https://github.com/FS-GG/FS.GG.Templates/issues/428),
+  [Templates#385](https://github.com/FS-GG/FS.GG.Templates/issues/385),
+  [immutable release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.8.2)):
+  the owner-published template package advances `version`, `package-version`, and `package-tag` to
+  `0.8.2` after release run
+  [32648598242](https://github.com/FS-GG/FS.GG.Templates/actions/runs/32648598242) delivered both
+  feeds from exact source `592ff34600e5cf3e952b927ea445a17e82224753`. Independent downloads
+  confirm the GitHub Packages archive is byte-identical to the release asset at
+  `sha256:4354a57674038724c7d9e40db80a12fdad6c4122e9c01854ffe637b85367b9bc`; all
+  three routes normalize to payload
+  `sha256:b4e55f5207e7fd4bd042ac4cfb8fda1a7ffae828680b3a5efa75910527fa100b`, with
+  nuget.org differing only by registry signing. This reconciliation preserves Templates#428/#385
+  as the publication owners and adds no `.github` post-merge package obligation.
+
 - **2026-08-23** — **coherent set `github:0.74.0` published and all coord-engine projections reconciled**
   (github; [.github#2876](https://github.com/FS-GG/.github/issues/2876),
   [source PR #2879](https://github.com/FS-GG/.github/pull/2879),
