@@ -579,7 +579,7 @@ ledger_legs() {
         bad "$name: repair-phase without its typed predecessor receipt must be REFUSED" "$detail"
       elif [ "$after" != "$before" ]; then
         bad "$name: refused, but a comment was appended anyway ($before -> $after) -- validation must precede the post" "$detail"
-      elif ! printf '%s' "$detail" | grep -q "requires the seven-field repairPhaseReceipt"; then
+      elif [[ "$detail" != *"requires the seven-field repairPhaseReceipt"* ]]; then
         bad "$name: refused for a DIFFERENT reason -- the typed repair-phase boundary was not measured" "$detail"
       else
         ok "$name ($mode): succession remains legible, but live repair-phase entry requires its typed predecessor receipt"

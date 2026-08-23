@@ -826,16 +826,16 @@ repair_head="ffffffffffffffffffffffffffffffffffffffff"
 repair_subject="FS-GG/FS.GG.SDD#43/pr/44"
 
 write_turnover_wait enter "$repair_head:initial-review:0" "" "$repair_claim_id"
-repair_initial_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_wait_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_initial_wait_rc=$?
 write_turnover_draft initial 0 "" "" "" "$repair_head" "$repair_subject" changes-required
 repair_initial_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_rc=$?
 repair_initial_url="$(printf '%s' "$repair_initial_out" | jq -r '.commentUrl // empty')"
 repair_initial_digest="$(printf '%s' "$repair_initial_out" | jq -r '.digest // empty')"
 write_turnover_wait complete "$repair_head:initial-review:0" "$repair_initial_url" "$repair_claim_id"
-repair_initial_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_initial_complete_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_initial_complete_rc=$?
 
 write_turnover_wait enter "$repair_head:repair-confirmation:0" "" "$repair_claim_id"
-repair_entry_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_wait_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_entry_wait_rc=$?
 write_turnover_draft repair-phase 0 "$repair_initial_digest" "$repair_initial_url" "$repair_initial_url" "$repair_head" "$repair_subject" changes-required
 jq --argjson exhausted 43 --argjson escalation "$turnover_valid_id" --arg claim "$repair_claim_id" --arg branch 'item/43-repair-phase' --arg implementer 'fixture-repair-impl' --arg critic "$turnover_critic" --arg head "$repair_head" \
   '.repairPhaseReceipt={exhaustedPr:$exhausted,escalationCommentId:$escalation,newClaimGeneration:$claim,newBranchOrPr:$branch,newImplementerIdentity:$implementer,newCriticIdentity:$critic,candidateHeadSha:$head}' \
@@ -854,16 +854,16 @@ repair_entry_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 
 repair_entry_url="$(printf '%s' "$repair_entry_out" | jq -r '.commentUrl // empty')"
 repair_entry_digest="$(printf '%s' "$repair_entry_out" | jq -r '.digest // empty')"
 write_turnover_wait complete "$repair_head:repair-confirmation:0" "$repair_entry_url" "$repair_claim_id"
-repair_entry_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_complete_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_entry_complete_rc=$?
 
 write_turnover_wait enter "$repair_head:repair-confirmation:1" "" "$repair_claim_id"
-repair_confirmation_wait_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_wait_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_confirmation_wait_rc=$?
 write_turnover_draft confirmation 1 "$repair_entry_digest" "$repair_initial_url" "$repair_entry_url" "$repair_head" "$repair_subject" pass
 repair_confirmation_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_rc=$?
 repair_confirmation_url="$(printf '%s' "$repair_confirmation_out" | jq -r '.commentUrl // empty')"
 repair_confirmation_digest="$(printf '%s' "$repair_confirmation_out" | jq -r '.digest // empty')"
 write_turnover_wait complete "$repair_head:repair-confirmation:1" "$repair_confirmation_url" "$repair_claim_id"
-repair_confirmation_complete_out="$("$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_confirmation_complete_rc=$?
+"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_confirmation_complete_rc=$?
 write_turnover_draft acceptance 0 "$repair_confirmation_digest" "$repair_initial_url" "$repair_confirmation_url" "$repair_head" "$repair_subject" accepted
 repair_acceptance_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_acceptance_rc=$?
 repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_projection_rc=$?

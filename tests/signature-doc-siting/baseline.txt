@@ -112,7 +112,7 @@
 31 src/FS.GG.Coord.Cli.Lifecycle/Followups.fs
 2 src/FS.GG.Coord.Cli.Lifecycle/HandlerRegistration.fs
 2 src/FS.GG.Coord.Cli.Lifecycle/Handlers.fs
-238 src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs
+233 src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs
 73 src/FS.GG.Coord.Cli/KitDigest.fs
 83 src/FS.GG.Coord.Cli/LintApplication.fs
 17 src/FS.GG.Coord.Cli/Snapshot.fs
