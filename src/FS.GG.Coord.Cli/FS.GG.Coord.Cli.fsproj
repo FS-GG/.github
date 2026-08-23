@@ -130,7 +130,17 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.73.2 — post-merge package refresh for typed change-risk authority and receipted completion.
+    <PackageReleaseNotes>0.74.0 — atomic dependency projection, typed lifecycle completion, and actionable review refusals.
+
+WHAT MOVED, AND WHY IT IS A MINOR. Ready promotion now treats the dependency column as authoritative,
+refuses non-atomic projections, and fences the final write boundary against stale dependency facts.
+Lifecycle command handling is extracted behind a typed completion dependency, and review-protocol
+refusals now name the remediation the operator can actually perform. Five previously unreleased engine
+commits are included. These are additive receiver-visible coordination semantics; Protocol.fs is
+unchanged and no package, command, or public member identity is removed (.github#2876; refs #2738,
+#2727, #2834).
+
+0.73.2 — post-merge package refresh for typed change-risk authority and receipted completion.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Review and delivery now advance through typed lifecycle decisions,
 one command catalogue owns parser/help/handler/write classification, standalone `done` is nonterminal,
