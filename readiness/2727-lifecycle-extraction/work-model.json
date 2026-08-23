@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b19784dfca77bd3cd4d761cdc317ea7fdb1251eac8a798da3cbd3090b1867ae4"
+        "value": "1364e31fca459414c707cf74e81ae1024c6333a8fc0bdab0d53f6f8339450034"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "91f7a9265af0bee9d07909390ca1e86cbd6e5dfe7dfb0efe07171bcc9c01dabc"
+        "value": "f28dafc34f3381897031de142a7379f2a089840521f54c56227389d01febd70f"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7de97218a4d3369d10b72871897328a0ac4bf167bdbef67d80c39876f1d2c847"
+        "value": "2c0a0f1ff8d7e9d852b1a1b50b93266af6e1e56449fa816ee74dcaa1859bb03b"
       }
     }
   ],
@@ -163,9 +163,7 @@
       "sourceIds": [
         "AC-001",
         "FR-001",
-        "PD-001",
-        "PD-002",
-        "PD-003"
+        "PD-001"
       ],
       "requiredSkills": [
         "fsharp",
@@ -208,58 +206,6 @@
     },
     {
       "id": "T003",
-      "title": "Update contract surface PC-002",
-      "status": "done",
-      "owner": "sdd",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PC-002",
-        "PD-002"
-      ],
-      "requiredSkills": [
-        "fsharp"
-      ],
-      "requiredEvidence": [
-        "EV003"
-      ],
-      "source": "work/2727-lifecycle-extraction/tasks.yml",
-      "sourceLocation": {
-        "line": 3,
-        "column": 1
-      }
-    },
-    {
-      "id": "T004",
-      "title": "Update contract surface PC-003",
-      "status": "done",
-      "owner": "sdd",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PC-003",
-        "PD-003"
-      ],
-      "requiredSkills": [
-        "fsharp"
-      ],
-      "requiredEvidence": [
-        "EV004"
-      ],
-      "source": "work/2727-lifecycle-extraction/tasks.yml",
-      "sourceLocation": {
-        "line": 4,
-        "column": 1
-      }
-    },
-    {
-      "id": "T005",
       "title": "Record verification evidence VO-001",
       "status": "done",
       "owner": "sdd",
@@ -278,100 +224,16 @@
         "readiness-evidence"
       ],
       "requiredEvidence": [
-        "EV005"
+        "EV003"
       ],
       "source": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceLocation": {
-        "line": 5,
+        "line": 3,
         "column": 1
       }
     },
     {
-      "id": "T006",
-      "title": "Record verification evidence VO-002",
-      "status": "done",
-      "owner": "sdd",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PC-002",
-        "PD-002",
-        "VO-002"
-      ],
-      "requiredSkills": [
-        "automated-tests",
-        "readiness-evidence"
-      ],
-      "requiredEvidence": [
-        "EV006"
-      ],
-      "source": "work/2727-lifecycle-extraction/tasks.yml",
-      "sourceLocation": {
-        "line": 6,
-        "column": 1
-      }
-    },
-    {
-      "id": "T007",
-      "title": "Record verification evidence VO-003",
-      "status": "done",
-      "owner": "sdd",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PC-003",
-        "PD-003",
-        "VO-003"
-      ],
-      "requiredSkills": [
-        "automated-tests",
-        "readiness-evidence"
-      ],
-      "requiredEvidence": [
-        "EV007"
-      ],
-      "source": "work/2727-lifecycle-extraction/tasks.yml",
-      "sourceLocation": {
-        "line": 7,
-        "column": 1
-      }
-    },
-    {
-      "id": "T008",
-      "title": "Record verification evidence VO-004",
-      "status": "done",
-      "owner": "sdd",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PC-001",
-        "PD-003",
-        "VO-004"
-      ],
-      "requiredSkills": [
-        "automated-tests",
-        "readiness-evidence"
-      ],
-      "requiredEvidence": [
-        "EV008"
-      ],
-      "source": "work/2727-lifecycle-extraction/tasks.yml",
-      "sourceLocation": {
-        "line": 8,
-        "column": 1
-      }
-    },
-    {
-      "id": "T009",
+      "id": "T004",
       "title": "Handle migration posture PM-001",
       "status": "done",
       "owner": "sdd",
@@ -388,16 +250,16 @@
         "schema-versioning"
       ],
       "requiredEvidence": [
-        "EV009"
+        "EV004"
       ],
       "source": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceLocation": {
-        "line": 9,
+        "line": 4,
         "column": 1
       }
     },
     {
-      "id": "T010",
+      "id": "T005",
       "title": "Refresh generated view impact GV-001",
       "status": "done",
       "owner": "sdd",
@@ -414,11 +276,11 @@
         "deterministic-json"
       ],
       "requiredEvidence": [
-        "EV010"
+        "EV005"
       ],
       "source": "work/2727-lifecycle-extraction/tasks.yml",
       "sourceLocation": {
-        "line": 10,
+        "line": 5,
         "column": 1
       }
     }
@@ -545,126 +407,6 @@
         "line": 5,
         "column": 1
       }
-    },
-    {
-      "id": "EV006",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T006",
-      "taskRefs": [
-        "T006"
-      ],
-      "requirementRefs": [],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/2727-lifecycle-extraction/evidence.yml",
-      "sourceLocation": {
-        "line": 6,
-        "column": 1
-      }
-    },
-    {
-      "id": "EV007",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T007",
-      "taskRefs": [
-        "T007"
-      ],
-      "requirementRefs": [],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/2727-lifecycle-extraction/evidence.yml",
-      "sourceLocation": {
-        "line": 7,
-        "column": 1
-      }
-    },
-    {
-      "id": "EV008",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T008",
-      "taskRefs": [
-        "T008"
-      ],
-      "requirementRefs": [],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/2727-lifecycle-extraction/evidence.yml",
-      "sourceLocation": {
-        "line": 8,
-        "column": 1
-      }
-    },
-    {
-      "id": "EV009",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T009",
-      "taskRefs": [
-        "T009"
-      ],
-      "requirementRefs": [],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/2727-lifecycle-extraction/evidence.yml",
-      "sourceLocation": {
-        "line": 9,
-        "column": 1
-      }
-    },
-    {
-      "id": "EV010",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T010",
-      "taskRefs": [
-        "T010"
-      ],
-      "requirementRefs": [],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/2727-lifecycle-extraction/evidence.yml",
-      "sourceLocation": {
-        "line": 10,
-        "column": 1
-      }
     }
   ],
   "generatedViews": [
@@ -721,7 +463,7 @@
           "path": "work/2727-lifecycle-extraction/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "b19784dfca77bd3cd4d761cdc317ea7fdb1251eac8a798da3cbd3090b1867ae4"
+            "value": "1364e31fca459414c707cf74e81ae1024c6333a8fc0bdab0d53f6f8339450034"
           },
           "schemaVersion": 1
         },
@@ -729,7 +471,7 @@
           "path": "work/2727-lifecycle-extraction/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "91f7a9265af0bee9d07909390ca1e86cbd6e5dfe7dfb0efe07171bcc9c01dabc"
+            "value": "f28dafc34f3381897031de142a7379f2a089840521f54c56227389d01febd70f"
           },
           "schemaVersion": 1
         },
@@ -745,14 +487,14 @@
           "path": "work/2727-lifecycle-extraction/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "7de97218a4d3369d10b72871897328a0ac4bf167bdbef67d80c39876f1d2c847"
+            "value": "2c0a0f1ff8d7e9d852b1a1b50b93266af6e1e56449fa816ee74dcaa1859bb03b"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "f9833614393aba2616afbca2f796baab952069dd19b00e8f7a3a327f1ec5b62b"
+        "value": "c369a532570a1ee16d055d9f9184dc91905d22148550ad2028af94385b03d310"
       },
       "currency": "current"
     }

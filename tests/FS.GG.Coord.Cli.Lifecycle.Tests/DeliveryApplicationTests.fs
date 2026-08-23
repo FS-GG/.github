@@ -10,9 +10,7 @@ open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 
 module DeliveryApplicationTests =
-    let rec private repoRoot dir =
-        if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
-        else repoRoot (Directory.GetParent(dir).FullName)
+    let private repositoryRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", ".."))
 
     let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
     let comment body = commentWithId 1L body
@@ -50,8 +48,7 @@ module DeliveryApplicationTests =
 
     [<Fact>]
     let ``completion writer consumes the shared decision instead of rebuilding admission`` () =
-        let root = repoRoot (Directory.GetCurrentDirectory())
-        let writer = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Cli/Client.fs"))
+        let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
         Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(writer, "Delivery\\.decideCompletion\\b").Count)
         Assert.Equal(
             1,

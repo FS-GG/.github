@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
@@ -102,7 +103,13 @@ module VerifyPathsSddPackageTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = LiveHandlers.verifyPaths (fun _ -> Set.empty) (fun () -> None) ignore (context transport) opts
+            let code =
+                LiveHandlers.verifyPaths
+                    Client.classifyDeliveryPaths
+                    Delivery.pathsVerified
+                    ignore
+                    (context transport)
+                    opts
             Console.Out.Flush()
             Console.Error.Flush()
             code, captured.ToString(), capturedError.ToString()

@@ -300,6 +300,14 @@ module Client =
 
     val generatedPaths: root: string -> Set<string>
 
+    /// Classify changed paths against the declared touch-set plus current generated-path and
+    /// route-qualified SDD authorities. Delivery and verify-paths share this exact function.
+    val classifyDeliveryPaths:
+      ctx: Kernel.Context ->
+        issue: FS.GG.Coord.Types.Ref ->
+        touchSet: FS.GG.Coord.Types.TouchSet ->
+        files: string list -> FS.GG.Coord.Delivery.PathClassification list
+
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).
     ///

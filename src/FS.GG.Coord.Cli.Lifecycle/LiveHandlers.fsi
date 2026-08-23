@@ -188,8 +188,9 @@ module LiveHandlers =
 
 
     val delivery:
-      completeDelivery: (Kernel.Context -> Options.Options -> int) ->
-        deliveryPathsVerified: (FS.GG.Coord.Types.TouchSet -> string list -> bool) ->
+      completeDelivery: (FS.GG.Coord.Delivery.Snapshot -> FS.GG.Coord.Delivery.Transition -> Kernel.Context -> Options.Options -> int) ->
+        deliveryPathClassifier: (Kernel.Context -> FS.GG.Coord.Types.Ref -> FS.GG.Coord.Types.TouchSet -> string list -> FS.GG.Coord.Delivery.PathClassification list) ->
+        projectPathVerdict: (FS.GG.Coord.Delivery.PathClassification list -> bool) ->
         requireCurrentDeliveryRoute: (Kernel.Context -> FS.GG.Coord.Types.Ref -> Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>) ->
         scanAndDecide: (Kernel.Context -> Options.Options -> FS.GG.Coord.GitHub.Cache.ReadIntent -> FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt>) ->
         ctx: Kernel.Context -> opts: Options.Options -> int
@@ -198,6 +199,12 @@ module LiveHandlers =
 
     val doneCmd:
       offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
+        ctx: Kernel.Context -> opts: Options.Options -> int
+
+    val completeDelivery:
+      offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
+        facts: FS.GG.Coord.Delivery.Snapshot ->
+        transition: FS.GG.Coord.Delivery.Transition ->
         ctx: Kernel.Context -> opts: Options.Options -> int
 
     val sddReadinessEvidenceErrors: workId: string -> raw: string -> string list
@@ -221,8 +228,8 @@ module LiveHandlers =
         Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
 
     val verifyPaths:
-      generatedPaths: (string -> Set<string>) ->
-        kitRoot: (unit -> string option) ->
+      deliveryPathClassifier: (Kernel.Context -> FS.GG.Coord.Types.Ref -> FS.GG.Coord.Types.TouchSet -> string list -> FS.GG.Coord.Delivery.PathClassification list) ->
+        projectPathVerdict: (FS.GG.Coord.Delivery.PathClassification list -> bool) ->
         digestWarn: (unit -> unit) ->
         ctx: Kernel.Context -> opts: Options.Options -> int
 

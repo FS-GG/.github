@@ -55,35 +55,6 @@ module Client =
 
     let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
 
-    /// The `Blocked by` BODY-VS-FIELD divergence (.github#2079) — the refs a body's `Blocked by:` line(s)
-    /// name that the FIELD does not, both sides canonicalized on `Blockers.canonicalizeBlockedBy`'s terms
-    /// so `#8`, `FS-GG/FS.GG.SDD#8` and the field's own rendering of the same ref compare equal.
-    ///
-    /// `[]` means coherent: the body declares no `Blocked by:` line, or everything it names is already in
-    /// the field. A non-empty result is the `FS.GG.Templates#348` shape — a park whose edge landed in the
-    /// wrong medium, leaving a field that satisfies `BLOCKED-NO-REASON` (it is non-empty) while naming
-    /// refs the reader cannot see. `lint`'s `BLOCKED-BY-INERT` and `reconcile`'s `BLOCKER-CLEARED`
-    /// withholding are the same predicate, asked twice for two different reasons — never two copies.
-    ///
-    /// MODULE-LEVEL, ABOVE `reconcile` (.github#1225-ish): both `reconcile` and `lint` need it, and F#
-    /// compiles top to bottom — a copy inside either command would be the second-copy shape #945/#972
-    /// argue against everywhere else in this file.
-    let blockedByBodyDivergence (owner: string) (repo: string) (fieldRaw: string) (body: string) : string list =
-        let canonRefs (raw: string) : Set<string> =
-            match Blockers.canonicalizeBlockedBy owner repo raw with
-            | Ok(Some canonical) -> canonical.Split(',') |> Array.map (fun s -> s.Trim()) |> Set.ofArray
-            | Ok None
-            | Error _ -> Set.empty
-
-        let fieldRefs = canonRefs fieldRaw
-
-        let bodyRefs =
-            HumanBlock.parseBlockedByLines body
-            |> List.collect (fun raw -> canonRefs raw |> Set.toList)
-            |> Set.ofList
-
-        Set.difference bodyRefs fieldRefs |> Set.toList |> List.sort
-
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
     let classVerdict = LintApplication.classVerdict
@@ -371,6 +342,18 @@ module Client =
     // declaration is what lets every earlier consumer in file order (this one is now the EARLIEST) reuse
     // that one fail-closed collector instead of acquiring a second, weaker list of generated paths.
     let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
+
+    // Bound beside the authoritative generated-path and delivery-route readers below. The live
+    // delivery adapter occurs earlier in this module, so this forward binding is the single seam that
+    // lets it and `verifyPaths` consume the identical classifier and authority derivation.
+    let mutable private deliveryPathClassifier:
+        Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list =
+        fun _ _ touchSet files ->
+            Delivery.classifyPaths
+                touchSet
+                (Delivery.AuthorityUnknown "generated-path authority is not initialized")
+                (Delivery.AuthorityUnknown "sdd-package authority is not initialized")
+                files
 
     let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
@@ -1248,22 +1231,26 @@ module Client =
                     | Text -> printfn "%A" action
                     ExitGreen
 
+    type PathVerdictProjection =
+        | DeliveryReceiptProjection
+        | VerifyPathsProjection
+
+    let projectPathVerdict projection (classifications: Delivery.PathClassification list) =
+        match projection with
+        | DeliveryReceiptProjection
+        | VerifyPathsProjection -> Delivery.pathsVerified classifications
+
     /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
     /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
     /// make this false (and block landing); it cannot turn an undeclared authored file into a pass.
     let deliveryPathsVerified (touchSet: TouchSet) (files: string list) =
         let generated =
             match KitDigest.kitRoot () with
-            | Some root -> generatedPathCollector root
-            | None -> Set.empty
+            | Some root -> Delivery.AuthorityKnown("generated-paths:compatibility", generatedPathCollector root)
+            | None -> Delivery.AuthorityUnknown "kit root is unavailable"
 
-        match touchSet with
-        | Declared tokens ->
-            files
-            |> List.forall (fun file ->
-                (tokens |> List.exists (fun token -> TouchSet.covers token file))
-                || Set.contains file generated)
-        | _ -> false
+        Delivery.classifyPaths touchSet generated (Delivery.AuthorityKnown("delivery-route:not-applicable", [])) files
+        |> projectPathVerdict DeliveryReceiptProjection
 
     let outstandingObligations = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations
     let private manifestCandidates =
@@ -1480,8 +1467,8 @@ module Client =
     ///
     /// THE BOARD FIELD IS THE SOURCE, NOT THE BODY'S `Blocked by:` LINE. ADR-0045 makes the COLUMN the
     /// typed dependency edge and `Scan` resolves precisely that (`row.BlockedByRaw`), so reading the body
-    /// here would be a second, disagreeing spelling of one edge — `.github#2079`'s divergence is a finding
-    /// `lint` REPORTS (`blockedByBodyDivergence` above), never a licence to prefer the other side of it.
+    /// here would be a second, disagreeing spelling of one edge. Body prose is a projection only and is
+    /// never compared back into dependency meaning.
     ///
     /// IT FAILS CLOSED IN BOTH DIRECTIONS, on `Scan.resolveBlocker`'s own terms: a token that is not a ref
     /// is `BlockerUnparseable`, a lookup that could not be made is `BlockerUnknown` (`Reads.blockerState`'s
@@ -1675,7 +1662,7 @@ module Client =
                   PullRequest = fact pullRequest
                   Blockers = fact blockers
                   Delivery =
-                    fact ({ Outstanding = false; DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery)
+                    fact ({ Outstanding = false; DoneStamped = Done.hasReceiptFor ref comments }: LifecycleProjection.Delivery)
                   Issue = fact issue }
 
             let intent =
@@ -1705,7 +1692,7 @@ module Client =
                 | Ok comments ->
                     let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                     let delivery : LifecycleProjection.Delivery =
-                        { Outstanding = false; DoneStamped = Done.hasReceipt comments }
+                        { Outstanding = false; DoneStamped = Done.hasReceiptFor item.Ref comments }
                     let _, selected =
                         lifecycleSelection observedAt item delivery (LifecycleProjection.tryWatermark comments)
                     match selected with
@@ -2188,21 +2175,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     |> fun r -> r.Candidates
                     |> List.map (fun c -> c.Item)
 
-                // `CLOSED-ISSUE-NOT-DONE` predates the auditable done receipt and used closure as a
-                // terminal proxy.  Keep its established mechanical writer, but feed it only the terminal
-                // fact it is entitled to project: a freshly read immutable receipt.  An unreadable comment
-                // collection is deliberately equivalent to no receipt here, so a transient REST failure
-                // can withhold a repair but can never manufacture Done.
-                let lifecycleItems =
-                    items
-                    |> List.map (fun item ->
-                        if item.State = Closed && item.Status <> Done then
-                            match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
-                            | Ok comments when Done.hasReceipt comments -> item
-                            | Ok _
-                            | Error _ -> { item with State = Open }
-                        else
-                            item)
+                // Preserve the issue state exactly as observed. The typed reducer already withholds a
+                // closed item that has no verified receipt, and all Status chores from the older generic
+                // derivation are filtered below. Rewriting Closed to Open here hid the very would-correct
+                // state the receipt rollout needs to observe.
+                let lifecycleItems = items
 
                 // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
                 // facts again at the reconciliation boundary and send every coherent observation through
@@ -2213,7 +2190,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // population and is still skipped below; these columns are the small live queue.
                 //
                 // TWO comment threads, not one (round-1 review repair). The watermark and the done receipt
-                // are ISSUE facts — `Writes.lifecycleWatermark`/`Writes.doneReceipt` both post to `ref`,
+                // are ISSUE facts — lifecycle watermarks and typed completion receipts both post to `ref`,
                 // the item itself — so `item.Ref.Number`'s thread is the right and only place to read them.
                 // A delivery obligation/receipt is a PR fact: every other caller of
                 // `DeliveryApplication.obligationsFromComments` in this file (`driver --events`'s
@@ -2313,10 +2290,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 || item.Status = BoardStatus.Ready)
 
                         let delivery =
-                            if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
+                            if not needsDeliveryRead then
+                                Some(
+                                    ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery),
+                                    None,
+                                    false,
+                                    false
+                                )
                             else
                                 match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
-                                | Error _ -> None
+                                | Error error ->
+                                    lifecycleHealthRows.Add(
+                                        {| current = statusWireName item.Status
+                                           intended = $"withheld: completion evidence unreadable: %s{Errors.explain error}"
+                                           intent = "unknown"
+                                           readComplete = false
+                                           subject = item.Ref.Canonical |})
+                                    None
                                 | Ok issueComments ->
                                     // No PR yet ⇒ nothing has been merged to owe a release obligation, so
                                     // `Outstanding = false` — the same "nothing to check" reading
@@ -2332,42 +2322,123 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                             outstandingObligations
                                                 (Reads.prHeadSha ctx.Transport item.Ref.Owner item.Ref.Repo pr)
                                                 (Reads.commentsWithIdentity ctx.Transport item.Ref.Owner item.Ref.Repo pr)
-                                    Some
-                                        (({ Outstanding = outstanding
-                                            DoneStamped = Done.hasReceipt issueComments }: LifecycleProjection.Delivery),
-                                         LifecycleProjection.tryWatermark issueComments)
+                                    let completionState = Done.receiptStateFor item.Ref issueComments
+                                    let correctionState = Done.completionCorrectionStateFor item.Ref issueComments
+                                    match completionState, correctionState with
+                                    | Done.InvalidCompletionReceipt errors, _ ->
+                                        let detail = String.concat "; " errors
+                                        lifecycleHealthRows.Add(
+                                            {| current = statusWireName item.Status
+                                               intended = $"withheld: invalid delivery completion evidence: %s{detail}"
+                                               intent = "unknown"
+                                               readComplete = false
+                                               subject = item.Ref.Canonical |})
+                                        eprint
+                                            $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid delivery completion evidence: %s{detail}"
+                                        None
+                                    | _, Done.InvalidCompletionCorrection errors ->
+                                        let detail = String.concat "; " errors
+                                        lifecycleHealthRows.Add(
+                                            {| current = statusWireName item.Status
+                                               intended = $"withheld: invalid completion correction evidence: %s{detail}"
+                                               intent = "unknown"
+                                               readComplete = false
+                                               subject = item.Ref.Canonical |})
+                                        eprint
+                                            $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid completion correction evidence: %s{detail}"
+                                        None
+                                    | receiptState, correctionState ->
+                                        let doneStamped =
+                                            match receiptState with
+                                            | Done.VerifiedCompletionReceipt _ -> true
+                                            | Done.LegacyReceipt
+                                            | Done.NoReceipt -> false
+                                            | Done.InvalidCompletionReceipt _ -> false
+                                        let correctionPending =
+                                            match correctionState with
+                                            | Done.VerifiedCompletionCorrection _ -> true
+                                            | Done.NoCompletionCorrection
+                                            | Done.InvalidCompletionCorrection _ -> false
+                                        let needsCorrection =
+                                            item.State = Closed
+                                            && (receiptState = Done.NoReceipt || receiptState = Done.LegacyReceipt)
+                                            && correctionState = Done.NoCompletionCorrection
+                                        let needsCompletionProjection =
+                                            match receiptState with
+                                            | Done.VerifiedCompletionReceipt _ ->
+                                                item.State <> Closed || item.Status <> Done
+                                            | _ -> false
+                                        Some
+                                            (({ Outstanding = outstanding || correctionPending
+                                                DoneStamped = doneStamped }: LifecycleProjection.Delivery),
+                                             LifecycleProjection.tryWatermark issueComments,
+                                             needsCorrection,
+                                             needsCompletionProjection)
 
                         match delivery with
                         | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
-                        | Some(delivery, watermark) ->
+                        | Some(delivery, watermark, needsCorrection, needsCompletionProjection) ->
                             let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             let intent, selected = lifecycleSelection observedAt item delivery watermark
+                            let correctionDestination =
+                                if not (List.isEmpty item.Blockers) && not (Blockers.cleared item.Blockers) then
+                                    Blocked
+                                else
+                                    InReview
+                            let selectedForHealth =
+                                if needsCompletionProjection then
+                                    LifecycleProjection.Project(Done, observedAt)
+                                elif needsCorrection then
+                                    LifecycleProjection.Project(correctionDestination, observedAt)
+                                else
+                                    selected
                             lifecycleHealthRows.Add(
                                 {| current = statusWireName item.Status
-                                   intended = resultLabel selected
+                                   intended = resultLabel selectedForHealth
                                    intent = intentLabel intent
                                    readComplete = true
                                    subject = item.Ref.Canonical |})
-                            match selected with
-                            | LifecycleProjection.Project(destination, timestamp) ->
-                                match Chore.lifecycleProjection item destination with
+                            if needsCompletionProjection then
+                                match Chore.completionProjection item with
                                 | Some chore ->
                                     chore :: chores,
                                     Map.add item.Ref
-                                        ({ ObservedAt = timestamp
-                                           Status = destination
+                                        ({ ObservedAt = observedAt
+                                           Status = Done
                                            Intent = intent }: LifecycleProjection.Watermark)
                                         watermarks
                                 | None -> chores, watermarks
-                            // NEITHER A CHORE NOR A WATERMARK (.github#2712 AC2 — "no park, no promote, no
-                            // `Done`, no watermark"). This arm is the second half of the exemption and it
-                            // is not redundant with the reducer's: `advance` decides that no STATUS is
-                            // projected, and this decides that no RECEIPT is persisted either. A watermark
-                            // written here would be a durable ordering fact about a lifecycle the row does
-                            // not have, and `tryWatermark` would keep re-asserting it with a fresh
-                            // `ObservedAt` on every pass.
-                            | LifecycleProjection.Exempt _ -> chores, watermarks
-                            | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
+                            elif needsCorrection then
+                                match Chore.prematureCompletion item correctionDestination with
+                                | Some chore ->
+                                    chore :: chores,
+                                    Map.add item.Ref
+                                        ({ ObservedAt = observedAt
+                                           Status = correctionDestination
+                                           Intent = intent }: LifecycleProjection.Watermark)
+                                        watermarks
+                                | None -> chores, watermarks
+                            else
+                                match selected with
+                                | LifecycleProjection.Project(destination, timestamp) ->
+                                    match Chore.lifecycleProjection item destination with
+                                    | Some chore ->
+                                        chore :: chores,
+                                        Map.add item.Ref
+                                            ({ ObservedAt = timestamp
+                                               Status = destination
+                                               Intent = intent }: LifecycleProjection.Watermark)
+                                            watermarks
+                                    | None -> chores, watermarks
+                                // NEITHER A CHORE NOR A WATERMARK (.github#2712 AC2 — "no park, no promote, no
+                                // `Done`, no watermark"). This arm is the second half of the exemption and it
+                                // is not redundant with the reducer's: `advance` decides that no STATUS is
+                                // projected, and this decides that no RECEIPT is persisted either. A watermark
+                                // written here would be a durable ordering fact about a lifecycle the row does
+                                // not have, and `tryWatermark` would keep re-asserting it with a fresh
+                                // `ObservedAt` on every pass.
+                                | LifecycleProjection.Exempt _ -> chores, watermarks
+                                | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
 
                 // Scheduling Status has one authority: the intent reducer above. `Chore.derive` remains
                 // responsible only for non-lifecycle maintenance such as stale-claim cleanup and Class.
@@ -2743,6 +2814,68 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       // definition once another actor can clear `Blocked by`.
                                       let resolvedStatus = if field = "Status" then Reads.statusOfName value else None
 
+                                      // The durable correction fact is written before its mutable Status
+                                      // projection. A retry may observe the same authority and proceed, but
+                                      // contradictory/malformed evidence or a completion receipt that won
+                                      // the race refuses the board mutation.
+                                      let completionProjectionGate =
+                                          match chore.Kind, resolvedStatus with
+                                          | Chore.CompletionProjection, Some Done ->
+                                              match Reads.commentBodies ctx.Transport chore.Subject.Owner chore.Subject.Repo chore.Subject.Number with
+                                              | Error error ->
+                                                  eprint
+                                                      $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt could not be re-read before projection: %s{Errors.explain error}"
+                                                  Error ExitError
+                                              | Ok comments ->
+                                                  match Done.receiptStateFor chore.Subject comments with
+                                                  | Done.VerifiedCompletionReceipt _ ->
+                                                      match Writes.closeIssueCompleted ctx.Transport chore.Subject with
+                                                      | Ok () -> Ok ()
+                                                      | Error error ->
+                                                          eprint
+                                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt is valid but issue closure was not freshly verified: %s{Errors.explain error}"
+                                                          Error ExitError
+                                                  | state ->
+                                                      eprint
+                                                          $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion authority changed before projection: %A{state}"
+                                                      Error ExitError
+                                          | Chore.PrematureCompletion correction, Some actual
+                                              when Chore.completionCorrectionStatus correction = actual ->
+                                              let destination = Chore.completionCorrectionStatus correction
+                                              match
+                                                  Delivery.createCompletionCorrectionReceipt
+                                                      chore.Subject.Canonical
+                                                      destination
+                                                      DateTimeOffset.UtcNow
+                                              with
+                                              | Error errors ->
+                                                  let detail = String.concat "; " errors
+                                                  eprint
+                                                      $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction could not be authorized: %s{detail}"
+                                                  Error ExitError
+                                              | Ok receipt ->
+                                                  match Writes.completionCorrectionReceipt ctx.Transport chore.Subject receipt with
+                                                  | Ok () ->
+                                                      match Writes.reopenIssue ctx.Transport chore.Subject with
+                                                      | Ok () -> Ok ()
+                                                      | Error error ->
+                                                          eprint
+                                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} correction receipt landed but issue reopen was not freshly verified: %s{Errors.explain error}"
+                                                          Error ExitError
+                                                  | Error error ->
+                                                      eprint
+                                                          $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction receipt could not be persisted: %s{Errors.explain error}"
+                                                      Error ExitError
+                                          | Chore.PrematureCompletion _, _ ->
+                                              eprint
+                                                  $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction has no valid Status destination"
+                                              Error ExitError
+                                          | Chore.CompletionProjection, _ ->
+                                              eprint
+                                                  $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion projection has no valid Done destination"
+                                              Error ExitError
+                                          | _ -> Ok ()
+
                                       let blockedGate =
                                           if field = "Status" then
                                               match resolvedStatus, Map.tryFind chore.Subject lifecycleWatermarks with
@@ -2758,7 +2891,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                               Ok()
 
                                       let gate =
-                                          if field = "Status" then
+                                          if Result.isError completionProjectionGate then
+                                              completionProjectionGate
+                                          elif field = "Status" then
                                               // .github#2698 — THE SEAM WITH NO OPERATOR IN IT, and the one
                                               // the filed acceptance criterion did not name. A host measured
                                               // `reconcile --apply` reporting `LIFECYCLE-PROJECTION-LAG …
@@ -2823,13 +2958,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       // a route refusal was reported to the operator as a
                                       // "Status=Blocked coherence gate" refusal, naming a gate that had
                                       // returned `Ok`.
-                                      let routeRefused = Result.isError gate && Result.isOk blockedGate
+                                      let routeRefused =
+                                          Result.isOk completionProjectionGate
+                                          && Result.isError gate
+                                          && Result.isOk blockedGate
 
                                       let outcome =
                                           match gate with
                                           | Error _ -> Ok Board.NotOnBoard
                                           | Ok() when List.length writes > 1 ->
-                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
+                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
                                           | Ok() ->
                                               Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
 
@@ -2857,7 +2995,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                               // contains the projected status; otherwise a late event could
                                               // be suppressed by a receipt for a mutation that never landed.
                                               match chore.Kind, Map.tryFind chore.Subject lifecycleWatermarks with
-                                              | Chore.LifecycleProjectionLag _, Some watermark ->
+                                              | (Chore.LifecycleProjectionLag _ | Chore.PrematureCompletion _ | Chore.CompletionProjection), Some watermark ->
                                                   match Writes.lifecycleWatermark ctx.Transport chore.Subject (LifecycleProjection.watermarkMarker watermark) with
                                                   | Error e ->
                                                       failed <- true
@@ -2901,6 +3039,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                                   NotAttempted
                                                       $"%s{chore.Subject.Short} has no current delivery-route receipt, so Status=Ready was NOT written — a row promoted without one is unschedulable. The route is an agent judgement this pass may not make: scripts/fsgg-coord delivery-route record %s{chore.Subject.Short} <receipt.json>"
                                               ))
+                                      | Ok Board.NotOnBoard when Result.isError completionProjectionGate ->
+                                          failed <- true
+                                          reconcileRow chore (Some(Failed "completion projection authority could not be persisted or verified"))
                                       | Ok Board.NotOnBoard when Result.isError gate ->
                                           failed <- true
                                           reconcileRow chore (Some(Failed "Status=Blocked coherence gate refused the stale reconcile write"))
@@ -3634,7 +3775,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                                 $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
 
                                             eprint
-                                                $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, stamp the item: scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pr}"
+                                                $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, complete delivery: scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pr} --flip --apply"
                                         | (PrRed | PrConflicted) as verdict ->
                                             // The one genuinely-abandoned case — and the ONLY one that may
                                             // advise closing. A conflicted or red PR is not finished work.
@@ -4390,7 +4531,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     eprint
                         $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
 
-                    eprint "  Finish or drop the item you hold:  scripts/fsgg-coord done <issue> --flip   (or: release <issue>)"
+                    eprint "  Finish or drop the item you hold:  scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply   (or: release <issue>)"
 
                     // #1620: `--force` now carries a SECOND, destructive power — it STEALS a live claim.
                     // This line points a worker at the flag for the #516 override alone, so it has to say
@@ -5170,7 +5311,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         eprint
                                             $"    gh api -X PUT repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pnum}/merge -f merge_method=squash"
 
-                                        eprint $"    scripts/fsgg-coord done %s{ref.Short} --flip"
+                                        eprint $"    scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --flip --apply"
                                         ExitGreen
                                     else
                                         rc
@@ -5203,7 +5344,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is ALREADY MERGED — there is nothing to adopt, and nothing to land. The work is done; what is missing is the STAMP."
 
                                     eprint
-                                        $"  scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pnum}"
+                                        $"  scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --flip --apply"
 
                                     ExitRed
                                 | PrClosed ->
@@ -7575,11 +7716,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// to them.
     let roomOpen (ctx: Context) (opts: Options) : int = Handlers.roomOpen ctx opts
 
-    let generatedPaths (root: string) : Set<string> =
+    let private generatedPathsResult (root: string) : Result<Set<string>, string> =
         let script = Path.Combine(root, "scripts", "generated-paths")
 
+        let failed reason =
+            eprint $"fsgg-coord-engine: %s{reason} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+            Error reason
+
         if not (File.Exists script) then
-            Set.empty
+            failed $"scripts/generated-paths does not exist under %s{root}"
         else
             try
                 let psi = ProcessStartInfo(script)
@@ -7643,10 +7788,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 if not (p.WaitForExit timeoutMs) then
                     (try p.Kill true with _ -> ())
 
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
-
-                    Set.empty
+                    failed $"scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed"
                 else
 
                 // The child is gone; this second, unbounded wait is the documented way to let the async
@@ -7655,22 +7797,79 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 let out = lock sync (fun () -> stdout.ToString())
 
                 if p.ExitCode <> 0 then
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
-
-                    Set.empty
+                    failed $"scripts/generated-paths exited %d{p.ExitCode}"
                 else
                     out.Split('\n')
                     |> Array.map (fun l -> l.Trim())
                     |> Array.filter (fun l -> l <> "")
                     |> Set.ofArray
+                    |> Ok
             with ex ->
-                eprint
-                    $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+                failed $"could not run scripts/generated-paths (%s{ex.Message})"
 
-                Set.empty
+    let generatedPaths (root: string) : Set<string> =
+        generatedPathsResult root |> Result.defaultValue Set.empty
 
     do generatedPathCollector <- generatedPaths
+
+    let private sddPackageAuthority (ctx: Context) (issue: Ref) : Delivery.PathAuthority<PathToken list> =
+        let unknown why =
+            eprint
+                $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
+            Delivery.AuthorityUnknown why
+
+        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteComments ctx issue with
+        | Error error -> unknown (Errors.explain error)
+        | Ok comments ->
+            match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.routeEvidence issue.Canonical comments with
+            | DeliveryRoute.Current receipt ->
+                Delivery.AuthorityKnown(
+                    $"delivery-route:%s{receipt.SubjectRevision}",
+                    DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify)
+            | DeliveryRoute.Stale reasons
+            | DeliveryRoute.Unreadable reasons -> unknown (String.concat "; " reasons)
+
+    let private generatedPathAuthority (issue: Ref) : Delivery.PathAuthority<Set<string>> =
+        let unknown reason =
+            eprint
+                $"fsgg-coord-engine: could not establish generated-path authority (%s{reason}) — NOTHING is subtracted, so generated paths will be reported as drift below."
+            Delivery.AuthorityUnknown reason
+
+        match gitRemoteRepo () with
+        | Some slug
+            when not (String.Equals(slug, $"%s{issue.Owner}/%s{issue.Repo}", StringComparison.OrdinalIgnoreCase)) ->
+            unknown $"checkout %s{slug} is not the subject repository %s{issue.Owner}/%s{issue.Repo}"
+        | None -> unknown "the checkout repository could not be read"
+        | Some _ ->
+            match KitDigest.kitRoot () with
+            | None -> unknown "the kit root could not be read"
+            | Some root ->
+                match generatedPathsResult root with
+                | Error reason -> Delivery.AuthorityUnknown reason
+                | Ok paths ->
+                    let revision =
+                        paths
+                        |> Set.toList
+                        |> List.sort
+                        |> String.concat "\n"
+                        |> Encoding.UTF8.GetBytes
+                        |> SHA256.HashData
+                        |> Convert.ToHexString
+                        |> _.ToLowerInvariant()
+
+                    Delivery.AuthorityKnown($"generated-paths:%s{revision}", paths)
+
+    /// The one route-qualified classifier shared by live delivery and verify-paths.
+    let classifyDeliveryPaths (ctx: Context) (issue: Ref) (touchSet: TouchSet) (files: string list) =
+        let unread = Delivery.AuthorityUnknown "authority read deferred because every path may already be declared"
+        let preliminary = Delivery.classifyPaths touchSet unread unread files
+
+        if preliminary |> List.forall (fun classification -> classification.Admission = Delivery.DeclaredPath) then
+            preliminary
+        else
+            Delivery.classifyPaths touchSet (generatedPathAuthority issue) (sddPackageAuthority ctx issue) files
+
+    do deliveryPathClassifier <- classifyDeliveryPaths
 
     // ---- identity --------------------------------------------------------------------------------------
 
@@ -8486,35 +8685,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     |> Option.map (mk "HUMAN-PARK-MACHINE-CLEARED" "note" r)
                     |> Option.toList
 
-                // BLOCKED-BY-INERT (.github#2079). `BLOCKED-NO-REASON` above reds ONLY when the `Blocked
-                // by` FIELD is empty — its own comment says an item with a real `Blocked by` ref "is
-                // silent here." This is what is not silent: a `Blocked` row whose BODY carries a
-                // `Blocked by:` line naming ref(s) the field does not — the `FS.GG.Templates#348` shape,
-                // where a park's real edge landed as a body line and the field kept a stale, unrelated
-                // (here, fully-resolved) set. A body line is never read by anything that clears a
-                // blocker — `Blocked by` is a board FIELD (ADR-0045/`.github#1933`) — so the declaration
-                // is INERT, and `reconcile` withholds `BLOCKER-CLEARED` on exactly this same predicate
-                // (see below): this finding is what makes that withholding legible rather than silent.
-                //
-                // Same population as `BLOCKED-NO-REASON` — an open `Blocked` row, whose body this pass
-                // already read for the sentinel check — because this shape is dangerous precisely where
-                // that one is silent, and reading every row's body for it would spend the budget that
-                // dies first (#418) on rows where the divergence cannot mislead `BLOCKER-CLEARED` at all.
-                let blockedByInertFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if r.State = IssueState.Open && r.Status = BoardStatus.Blocked then
-                        match blockedByBodyDivergence r.Ref.Owner r.Ref.Repo r.BlockedByRaw body with
-                        | [] -> []
-                        | extra ->
-                            let named = String.concat ", " extra
-
-                            [ mk
-                                  "BLOCKED-BY-INERT"
-                                  "error"
-                                  r
-                                  $"body declares a `Blocked by:` line naming %s{named}, which the FIELD does not carry. A body line is never read by anything that clears a blocker — `Blocked by` is a board FIELD (ADR-0045/.github#1933) — so this declaration is INERT: `BLOCKER-CLEARED` cannot see it, and `reconcile` withholds the promotion on this same divergence. If %s{named} really blocks this item, write it into the field:  scripts/fsgg-coord set-field %s{r.Ref.Short} 'Blocked by' '<refs>'" ]
-                    else
-                        []
-
                 // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
                 // own text does not class it — either because it says nothing about HOW BAD it is (no
                 // `Class:` line, no `[decision]` title prefix, no ADR-0045 `Blocked on: human/decision`
@@ -8648,8 +8818,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                             let hbFindings = humanBlockFindings r body
                             let humanPark = humanParkFindings r body
-                            let blockedByInert = blockedByInertFindings r body
-
                             let clsFindings = classFindings r body
 
                             let epicResult =
@@ -8694,7 +8862,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                      @ tsFindings
                                      @ hbFindings
                                      @ humanPark
-                                     @ blockedByInert
                                      @ clsFindings
                                      @ statusUnsetFindings
                                      @ severityUnsetFindings

@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "8996985353b4e96f65258ef21bc56f32628401bbb2a488478ed37a93893cf80f"
+        "value": "b6ac449f4b55f25de61a74b3965ae81b45d12bdb13646e7f0f83a18d0f3cc9f8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "645c1b6a5e5cabbd4f4c60b4cc8a73fc1f93a343ea135d1ad8f9008c0067b04d"
+        "value": "59ff3f703e12cdfa14b4c2974995025f8cf97866f230a6096b9ce7441b522435"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "837b571cdd4167a9e6d984a76d403ee5c3ef6d07498bc675e0dc8e4d62f64415"
+        "value": "036db7e3479bfcad330f82406b65d88566f51ee20679121f0251258542f98b43"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "91f7a9265af0bee9d07909390ca1e86cbd6e5dfe7dfb0efe07171bcc9c01dabc"
+        "value": "f28dafc34f3381897031de142a7379f2a089840521f54c56227389d01febd70f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "7de97218a4d3369d10b72871897328a0ac4bf167bdbef67d80c39876f1d2c847"
+        "value": "2c0a0f1ff8d7e9d852b1a1b50b93266af6e1e56449fa816ee74dcaa1859bb03b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -151,8 +151,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 10,
-    "dependencyCount": 9,
+    "taskCount": 5,
+    "dependencyCount": 4,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -175,9 +175,7 @@
       "affectedSourceIds": [
         "AC-001",
         "FR-001",
-        "PD-001",
-        "PD-002",
-        "PD-003"
+        "PD-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -220,8 +218,9 @@
         "T003"
       ],
       "affectedSourceIds": [
-        "PC-002",
-        "PD-002"
+        "PC-001",
+        "PD-001",
+        "VO-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -242,8 +241,8 @@
         "T004"
       ],
       "affectedSourceIds": [
-        "PC-003",
-        "PD-003"
+        "PC-001",
+        "PM-001"
       ],
       "severity": "ready",
       "diagnosticIds": [],
@@ -262,120 +261,6 @@
       ],
       "affectedTaskIds": [
         "T005"
-      ],
-      "affectedSourceIds": [
-        "PC-001",
-        "PD-001",
-        "VO-001"
-      ],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "ED-EV006",
-      "obligationId": "EV006",
-      "state": "supported",
-      "observed": true,
-      "classifiedRequirement": false,
-      "journeyRequirement": false,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV006"
-      ],
-      "affectedTaskIds": [
-        "T006"
-      ],
-      "affectedSourceIds": [
-        "PC-002",
-        "PD-002",
-        "VO-002"
-      ],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "ED-EV007",
-      "obligationId": "EV007",
-      "state": "supported",
-      "observed": true,
-      "classifiedRequirement": false,
-      "journeyRequirement": false,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV007"
-      ],
-      "affectedTaskIds": [
-        "T007"
-      ],
-      "affectedSourceIds": [
-        "PC-003",
-        "PD-003",
-        "VO-003"
-      ],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "ED-EV008",
-      "obligationId": "EV008",
-      "state": "supported",
-      "observed": true,
-      "classifiedRequirement": false,
-      "journeyRequirement": false,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV008"
-      ],
-      "affectedTaskIds": [
-        "T008"
-      ],
-      "affectedSourceIds": [
-        "PC-001",
-        "PD-003",
-        "VO-004"
-      ],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "ED-EV009",
-      "obligationId": "EV009",
-      "state": "supported",
-      "observed": true,
-      "classifiedRequirement": false,
-      "journeyRequirement": false,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV009"
-      ],
-      "affectedTaskIds": [
-        "T009"
-      ],
-      "affectedSourceIds": [
-        "PC-001",
-        "PM-001"
-      ],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "ED-EV010",
-      "obligationId": "EV010",
-      "state": "supported",
-      "observed": true,
-      "classifiedRequirement": false,
-      "journeyRequirement": false,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV010"
-      ],
-      "affectedTaskIds": [
-        "T010"
       ],
       "affectedSourceIds": [
         "GV-001",
@@ -473,101 +358,13 @@
       "severity": "ready",
       "diagnosticIds": [],
       "correction": ""
-    },
-    {
-      "id": "TD-EV006",
-      "obligationId": "EV006",
-      "state": "satisfied",
-      "observed": true,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV006"
-      ],
-      "affectedTaskIds": [
-        "T006"
-      ],
-      "affectedRequirementIds": [],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "TD-EV007",
-      "obligationId": "EV007",
-      "state": "satisfied",
-      "observed": true,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV007"
-      ],
-      "affectedTaskIds": [
-        "T007"
-      ],
-      "affectedRequirementIds": [],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "TD-EV008",
-      "obligationId": "EV008",
-      "state": "satisfied",
-      "observed": true,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV008"
-      ],
-      "affectedTaskIds": [
-        "T008"
-      ],
-      "affectedRequirementIds": [],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "TD-EV009",
-      "obligationId": "EV009",
-      "state": "satisfied",
-      "observed": true,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV009"
-      ],
-      "affectedTaskIds": [
-        "T009"
-      ],
-      "affectedRequirementIds": [],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
-    },
-    {
-      "id": "TD-EV010",
-      "obligationId": "EV010",
-      "state": "satisfied",
-      "observed": true,
-      "recordRequirement": false,
-      "evidenceIds": [
-        "EV010"
-      ],
-      "affectedTaskIds": [
-        "T010"
-      ],
-      "affectedRequirementIds": [],
-      "severity": "ready",
-      "diagnosticIds": [],
-      "correction": ""
     }
   ],
   "skillVisibility": [
     {
       "skill": "automated-tests",
       "requiringTaskIds": [
-        "T005",
-        "T006",
-        "T007",
-        "T008"
+        "T003"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
@@ -578,7 +375,7 @@
     {
       "skill": "deterministic-json",
       "requiringTaskIds": [
-        "T010"
+        "T005"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
@@ -590,9 +387,7 @@
       "skill": "fsharp",
       "requiringTaskIds": [
         "T001",
-        "T002",
-        "T003",
-        "T004"
+        "T002"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
@@ -614,10 +409,7 @@
     {
       "skill": "readiness-evidence",
       "requiringTaskIds": [
-        "T005",
-        "T006",
-        "T007",
-        "T008"
+        "T003"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",
@@ -628,7 +420,7 @@
     {
       "skill": "schema-versioning",
       "requiringTaskIds": [
-        "T009"
+        "T004"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2727-lifecycle-extraction/tasks.yml",

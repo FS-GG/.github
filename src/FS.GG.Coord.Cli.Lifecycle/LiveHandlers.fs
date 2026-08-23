@@ -344,8 +344,9 @@ module LiveHandlers =
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
     let delivery
-        (completeDelivery: Context -> Options -> int)
-        (deliveryPathsVerified: TouchSet -> string list -> bool)
+        (completeDelivery: Delivery.Snapshot -> Delivery.Transition -> Context -> Options -> int)
+        (deliveryPathClassifier: Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list)
+        (projectPathVerdict: Delivery.PathClassification list -> bool)
         (requireCurrentDeliveryRoute: Context -> Ref -> Result<DeliveryRoute.Receipt, Errors.IoError>)
         (scanAndDecide: Context -> Options -> Cache.ReadIntent -> Errors.IoResult<Scan.Row list * string * Scan.Receipt>)
         (ctx: Context)
@@ -433,7 +434,9 @@ module LiveHandlers =
                                         |> deliveryReviewEvidence (landable = PrGreen)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
-                                    let pathsVerified = deliveryPathsVerified candidate.Item.TouchSet files
+                                    let pathsVerified =
+                                        deliveryPathClassifier ctx target candidate.Item.TouchSet files
+                                        |> projectPathVerdict
                                     let reviewComments =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -500,8 +503,10 @@ module LiveHandlers =
                                   ObligationsDeclared = obligationsDeclared
                                   Obligations = obligations
                                   ParkedReason = None }
-                            match Delivery.inspect facts, opts.Apply with
-                            | Delivery.Next transition, true when transition.Action = Delivery.GuardedLand ->
+                            let completionDecision =
+                                facts |> Delivery.completionFacts |> Delivery.decideCompletion
+                            match Delivery.inspect facts, completionDecision, opts.Apply with
+                            | Delivery.Next transition, _, true when transition.Action = Delivery.GuardedLand ->
                                 // A delivery receipt authorizes only the exact claim generation that was
                                 // inspected.  Re-read the winning marker immediately before the REST
                                 // write so a released, replaced, or stolen claim cannot merge on stale
@@ -537,11 +542,17 @@ module LiveHandlers =
                                                 printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
                                             | Text -> printfn "merged %s at the inspected head" target.Short
                                             ExitGreen
-                            | Delivery.Next transition, true when transition.Action = Delivery.Complete ->
+                            | Delivery.Next transition, Delivery.CompletionDecision.ProjectCompletion, true
+                                when transition.Action = Delivery.Complete ->
                                 // Delegate the coupled close / board-Done / own-claim-release sequence to
                                 // the existing `done` transaction.  Its `Done.verify` re-reads the merged
                                 // closer and refuses a stale or unrelated PR before any write.
-                                let code = completeDelivery ctx { opts with Args = [ target.Canonical ]; Pr = pr; Apply = false }
+                                let code =
+                                    completeDelivery
+                                        facts
+                                        transition
+                                        ctx
+                                        { opts with Args = [ target.Canonical ]; Pr = pr; Apply = false }
                                 if code <> ExitGreen then code
                                 else
                                     match Cache.pending () with
@@ -550,7 +561,7 @@ module LiveHandlers =
                                         eprint $"fsgg-coord-engine: delivery completion left %d{List.length pending} queued board write(s); run `flush` and re-inspect before cleanup."
                                         ExitNoVerdict
                                     | Error error -> fail error
-                            | Delivery.Next transition, true ->
+                            | Delivery.Next transition, _, true ->
                                 eprint $"fsgg-coord-engine: delivery --apply is refused: the sole fresh action is %A{transition.Action}, not guarded landing."
                                 ExitNoVerdict
                             | _ -> DeliveryApplication.render opts facts
@@ -885,9 +896,23 @@ module LiveHandlers =
                             // historical head to equal the terminal draft therefore rejects the ordinary
                             // multi-round shape. Terminal authority remains exact below: round three, the
                             // escalation draft, completed wait, legacy marker, and live PR all bind one head.
-                            let unresolved =
-                                [ initial; roundOne; roundTwo; roundThree ]
-                                |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
+                            let reviewComments =
+                                ordered
+                                |> List.map (fun comment ->
+                                    ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                            let terminalChecks =
+                                if roundThree.Verdict = StructuredDecision.Pass then
+                                    Reads.prLandable ctx.Transport target.Owner target.Repo pr
+                                else
+                                    Types.PrUnknown
+                            let terminalDecision =
+                                Review.decideOrdinaryExhaustion
+                                    { Phase = Review.Ordinary
+                                      HeadSha = draft.HeadSha
+                                      CurrentClaimGeneration = string claim.Id
+                                      Checks = terminalChecks
+                                      Comments = reviewComments
+                                      WaitState = Some state }
                             let legacyBody = legacy.Body
                             let legacyMatches =
                                 legacyMarkerCount = 1
@@ -910,10 +935,6 @@ module LiveHandlers =
                                 && draft.Succession.IsNone
                             let exactWait =
                                 receipt.Item = target.Canonical
-                                && receipt.Kind = ReviewWait.RepairConfirmation
-                                && receipt.ReviewGeneration =
-                                    ReviewWait.generationToken draft.HeadSha ReviewWait.RepairConfirmation Protocol.reviewPolicy.MaxAutomatedRepairRounds
-                                && receipt.ClaimGeneration <> string claim.Id
                                 && evidence = roundThreeComment.Url
                             let freshClaim = claim.Id > legacy.Id
                             match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr with
@@ -921,7 +942,8 @@ module LiveHandlers =
                             | Ok liveHead when liveHead <> draft.HeadSha ->
                                 Error($"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}")
                             | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires exactly initial plus confirmation rounds 1, 2, and 3"
-                            | Ok _ when not unresolved -> Error "ordinary exhaustion requires a changes-required verdict through confirmation round 3"
+                            | Ok _ when terminalDecision <> Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion ->
+                                Error "ordinary exhaustion requires changes-required through round 2 and either round-3 changes-required or an exact-head round-3 pass with settled red checks"
                             | Ok _ when not legacyMatches -> Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
                             | Ok _ when not exactDraft -> Error "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
                             | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim ordinary round-3 generation"
@@ -1425,7 +1447,7 @@ module LiveHandlers =
                             $"fsgg-coord-engine: landable: PR #%d{pr} is ALREADY MERGED — there is nothing to gate, and --wait does not poll it."
 
                         eprint
-                            $"fsgg-coord-engine:   This is a TERMINAL verdict, not a retry. If you are recovering an item whose worker died between merge and stamp, the work LANDED — go stamp it: scripts/fsgg-coord done <ref> --flip --pr %d{pr}"
+                            $"fsgg-coord-engine:   This is a TERMINAL verdict, not a retry. If you are recovering an item whose worker died between merge and completion projection, the work LANDED — complete delivery: scripts/fsgg-coord delivery <ref> --pr %d{pr} --flip --apply"
 
                     if state = PrClosed then
                         eprint
@@ -1445,7 +1467,12 @@ module LiveHandlers =
                     | PrMerged
                     | PrClosed -> ExitNotOpen
                     | PrUnknown -> ExitNoVerdict
-    let doneCmd (offerChoreAfterDone: Context -> Options -> Ref -> unit) (ctx: Context) (opts: Options) : int =
+    let private runDone
+        (completionAuthority: (Delivery.Snapshot * Delivery.Transition) option)
+        (offerChoreAfterDone: Context -> Options -> Ref -> unit)
+        (ctx: Context)
+        (opts: Options)
+        : int =
         match oneArg opts "done: an issue ref", worker opts with
         | Error c, _
         | _, Error c -> c
@@ -1461,7 +1488,59 @@ module LiveHandlers =
                     match Done.facts ctx.Transport board ref with
                     | Error e -> fail e
                     | Ok facts ->
-                        let verdict = Done.verify opts.Pr opts.Evidence facts
+                        // A correction receipt proves this issue was previously observed CLOSED without
+                        // completion authority and was reopened by reconciliation. Delivery completion may
+                        // therefore verify the historical closing merge while the mutable issue projection
+                        // is OPEN; standalone `done` retains the ordinary CLOSED precondition.
+                        let factsForVerdict =
+                            match completionAuthority, facts.State with
+                            | Some _, Open ->
+                                match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error error ->
+                                    failwith(
+                                        "delivery completion could not read its correction evidence: "
+                                        + Errors.explain error
+                                    )
+                                | Ok comments ->
+                                    match Done.completionCorrectionStateFor ref comments with
+                                    | Done.VerifiedCompletionCorrection _ -> { facts with State = Closed }
+                                    | Done.InvalidCompletionCorrection errors ->
+                                        failwith(
+                                            "delivery completion found invalid correction evidence: "
+                                            + String.concat "; " errors
+                                        )
+                                    | Done.NoCompletionCorrection -> facts
+                            | _ -> facts
+                        let verdict = Done.verify opts.Pr opts.Evidence factsForVerdict
+                        let verdict =
+                            match completionAuthority, verdict with
+                            | None, Green(Done.ClosedByPullRequest(actualPr, mergeSha, _, _)) ->
+                                match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error error ->
+                                    Red
+                                        [ "standalone done could not read typed completion authority: "
+                                          + Errors.explain error ]
+                                | Ok comments ->
+                                    match Done.receiptStateFor ref comments with
+                                    | Done.VerifiedCompletionReceipt receipt
+                                        when receipt.PullRequest = actualPr && receipt.MergeSha = mergeSha ->
+                                        verdict
+                                    | Done.VerifiedCompletionReceipt receipt ->
+                                        Red
+                                            [ $"standalone done found typed completion authority for PR #%d{receipt.PullRequest} @ %s{receipt.MergeSha}, not the verified closer PR #%d{actualPr} @ %s{mergeSha}" ]
+                                    | Done.LegacyReceipt ->
+                                        Red
+                                            [ "legacy done evidence is not completion authority; run delivery --pr <pr> --flip --apply to verify the exact merge and mint a typed receipt" ]
+                                    | Done.NoReceipt ->
+                                        Red
+                                            [ "standalone done cannot mint completion authority; run delivery --pr <pr> --flip --apply first" ]
+                                    | Done.InvalidCompletionReceipt errors ->
+                                        Red
+                                            [ "typed completion authority is invalid: " + String.concat "; " errors ]
+                            | None, Green _ ->
+                                Red
+                                    [ "standalone done requires typed pull-request completion authority; non-PR completion cannot be projected terminal" ]
+                            | _ -> verdict
                         printfn "%s" (Done.render ref verdict)
 
                         // .github#2444 — `.github#2427`'s own acceptance criterion, and #733's precedent
@@ -1474,17 +1553,83 @@ module LiveHandlers =
                         match verdict with
                         | Verdict.NoVerdict _ -> ExitNoVerdict
                         | Red _ -> ExitRed
-                        | Green _ ->
+                        | Green closure ->
                             // Write durable evidence before the mutable Project projection.  If the latter
                             // is deferred, the scheduled lifecycle reconciler can later prove that this was
                             // a verified terminal transition rather than guessing from issue closure.
                             // `renderReceipt`, not `render`: the durable comment deliberately keeps the
                             // passed-over-foreign-closer note for provenance even though stdout no longer
                             // does (.github#2444).
-                            match Writes.doneReceipt ctx.Transport ref (Done.renderReceipt ref verdict) with
-                            | Error e ->
-                                eprint $"fsgg-coord-engine: verified done but could not record its lifecycle receipt: %s{Errors.explain e}"
-                            | Ok() -> ()
+                            match completionAuthority, closure with
+                            | Some(authorityFacts, authorityTransition), Done.ClosedByPullRequest(actualPr, mergeSha, _, _)
+                                when authorityFacts.Freshness.PullRequest = Some actualPr ->
+                                match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error error ->
+                                    failwith(
+                                        "delivery completion could not establish self-host replay authority: "
+                                        + Errors.explain error
+                                    )
+                                | Ok comments ->
+                                    match Done.selfHostReplayState comments with
+                                    | SelfHost.NoBootstrap
+                                    | SelfHost.VerifiedReplay _ -> ()
+                                    | SelfHost.ReplayRequired bootstrap ->
+                                        failwith(
+                                            $"delivery completion is blocked until the shared engine records post-merge replay for self-host bootstrap %s{bootstrap.Digest}"
+                                        )
+                                    | SelfHost.InvalidReplay errors ->
+                                        failwith(
+                                            "delivery completion found invalid self-host replay evidence: "
+                                            + String.concat "; " errors
+                                        )
+                                match
+                                    Delivery.advance
+                                        authorityTransition.FreshnessToken
+                                        authorityTransition.ActionKey
+                                        authorityFacts
+                                with
+                                | Delivery.Next current when current.Action = Delivery.Complete ->
+                                    match
+                                        Delivery.createCompletionReceipt
+                                            ref.Canonical
+                                            actualPr
+                                            mergeSha
+                                            DateTimeOffset.UtcNow
+                                            current.FreshnessToken
+                                            current.ActionKey
+                                            (Delivery.completionFacts authorityFacts)
+                                    with
+                                    | Error errors ->
+                                        failwith(
+                                            "delivery completion receipt was refused after merge verification: "
+                                            + String.concat "; " errors
+                                        )
+                                    | Ok receipt ->
+                                        match Writes.deliveryCompletionReceipt ctx.Transport ref receipt with
+                                        | Ok () ->
+                                            if facts.State = Open then
+                                                match Writes.closeIssueCompleted ctx.Transport ref with
+                                                | Ok () -> ()
+                                                | Error error ->
+                                                    failwith(
+                                                        "delivery completion receipt landed but issue closure could not be freshly verified: "
+                                                        + Errors.explain error
+                                                    )
+                                        | Error error ->
+                                            failwith(
+                                                "verified delivery completion could not append its receipt: "
+                                                + Errors.explain error
+                                            )
+                                | decision ->
+                                    failwithf "delivery completion transition changed after merge verification: %A" decision
+                            | Some _, Done.ClosedByPullRequest(actualPr, _, _, _) ->
+                                failwithf "delivery completion pull request changed after inspection: %A" actualPr
+                            | Some _, _ ->
+                                failwith "delivery completion requires a verified pull-request merge"
+                            | None, _ ->
+                                // Standalone `done` is now a replay-only projection over a matching typed
+                                // completion receipt. The admission above makes this branch write-free.
+                                ()
                             // Stamp the board Done. A board-write failure leaves the stamp GREEN (the work
                             // IS done) and reports the note — the same rule as the bash client. #1151: the
                             // outcome was `|> ignore`d directly under the "reports the note" comment, so a
@@ -1708,6 +1853,22 @@ module LiveHandlers =
                                 // has no readable/durable disposition.
                                 ExitRed
 
+    let doneCmd
+        (offerChoreAfterDone: Context -> Options -> Ref -> unit)
+        (ctx: Context)
+        (opts: Options)
+        : int =
+        runDone None offerChoreAfterDone ctx opts
+
+    let completeDelivery
+        (offerChoreAfterDone: Context -> Options -> Ref -> unit)
+        (facts: Delivery.Snapshot)
+        (transition: Delivery.Transition)
+        (ctx: Context)
+        (opts: Options)
+        : int =
+        runDone (Some(facts, transition)) offerChoreAfterDone ctx opts
+
 
     [<Literal>]
     let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
@@ -1855,26 +2016,8 @@ module LiveHandlers =
     /// yields the empty list — "I could not ask what this route obliges" and "this route obliges nothing"
     /// are opposite facts (#266) — and the reason goes to stderr rather than being swallowed, for the same
     /// reason `generatedPaths` forwards its child's stderr: a mute fail-closed leaves the right verdict and
-    /// removes the only pointer to its cause. It takes the body the caller ALREADY read and one complete,
-    /// paginated REST ledger read, with no second `issueBody`.
-    let private sddPackageTokens (ctx: Context) (issue: Ref) (body: string) : PathToken list =
-        let nothingSubtracted (why: string) =
-            eprint
-                $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
-
-            []
-
-        match readDeliveryRouteComments ctx issue with
-        | Error e -> nothingSubtracted (Errors.explain e)
-        | Ok comments ->
-            match routeEvidence issue.Canonical comments with
-            // A `lightweight` route reaches here too and answers the empty list from
-            // `mandatorySddPaths` — correctly, and SILENTLY: it has no mandatory package, so there is
-            // nothing we failed to read and nothing to warn about.
-            | DeliveryRoute.Current receipt -> DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
-            | DeliveryRoute.Stale reasons
-            | DeliveryRoute.Unreadable reasons -> nothingSubtracted (String.concat "; " reasons)
-
+    /// removes the only pointer to its cause. It takes one complete, paginated REST ledger read and no
+    /// second issue-body read.
     // ---- verify-paths ----------------------------------------------------------------------------------
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
@@ -1890,8 +2033,8 @@ module LiveHandlers =
     /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
     /// exact fail-open this command exists to prevent.
     let verifyPaths
-        (generatedPaths: string -> Set<string>)
-        (kitRoot: unit -> string option)
+        (deliveryPathClassifier: Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list)
+        (projectPathVerdict: Delivery.PathClassification list -> bool)
         (digestWarn: unit -> unit)
         (ctx: Context)
         (opts: Options)
@@ -2099,9 +2242,7 @@ module LiveHandlers =
                         match Reads.prFiles ctx.Transport owner repo pr with
                         | Error e -> fail e
                         | Ok files ->
-                            let drift =
-                                files
-                                |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+                            let classifications = deliveryPathClassifier ctx issue (Declared tokens) files
 
                             // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
                             // by the letter of the touch-set and are not a finding — §1 forbids declaring
@@ -2126,40 +2267,22 @@ module LiveHandlers =
                             // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
                             // subtracted … so it will be reported as drift below") is FALSE on a PR with no
                             // drift — the same sentence in the same sticky comment on the same green PR.
-                            // Both subtractions therefore hang off one `List.isEmpty drift` gate rather
-                            // than two, so neither can be re-armed on the happy path by accident.
-                            let sddPackage, regenerated, undeclared =
-                                if List.isEmpty drift then
-                                    [], [], []
-                                else
+                            // Both authorities hang off the classifier's one preliminary all-declared
+                            // verdict, so neither can be re-armed independently on the happy path.
+                            let pathsWith admission =
+                                classifications
+                                |> List.choose (fun classification ->
+                                    if classification.Admission = admission then Some classification.Path else None)
 
-                                // SUBTRACTED FIRST, and the order is not arbitrary: an SDD package file is
-                                // never a generated, CI-gated artifact, so the two sets are disjoint in
-                                // practice — but partitioning the sdd bucket out first means a file can
-                                // only ever land in ONE reported bucket, and a reader is never asked to
-                                // reconcile the same path appearing twice under two different reasons.
-                                let sddPackage, rest =
-                                    let tokens = sddPackageTokens ctx issue body
-                                    drift |> List.partition (fun f -> tokens |> List.exists (fun t -> TouchSet.covers t f))
-
-                                let subtractable =
-                                    let checkoutIsSubject =
-                                        match gitRemoteRepo () with
-                                        | Some slug ->
-                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
-                                        | None -> false
-
-                                    if not checkoutIsSubject then
-                                        Set.empty
-                                    else
-                                        match kitRoot () with
-                                        | Some root -> generatedPaths root
-                                        | None -> Set.empty
-
-                                let regenerated, undeclared =
-                                    rest |> List.partition (fun f -> Set.contains f subtractable)
-
-                                sddPackage, regenerated, undeclared
+                            let sddPackage = pathsWith Delivery.MandatorySddPath
+                            let regenerated = pathsWith Delivery.GeneratedPath
+                            let undeclared =
+                                classifications
+                                |> List.choose (fun classification ->
+                                    match classification.Admission with
+                                    | Delivery.UndeclaredAuthoredPath
+                                    | Delivery.UnknownPath -> Some classification.Path
+                                    | _ -> None)
 
                             // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
                             // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
@@ -2197,7 +2320,7 @@ module LiveHandlers =
                                     for f in sddPackage do
                                         printfn "    %s" f
 
-                            if List.isEmpty undeclared then
+                            if projectPathVerdict classifications then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
                                 reportRegenerated ()
                                 reportSddPackage ()

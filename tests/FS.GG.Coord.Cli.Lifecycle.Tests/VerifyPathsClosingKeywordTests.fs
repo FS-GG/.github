@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
@@ -73,8 +74,13 @@ module VerifyPathsClosingKeywordTests =
 
             let code =
                 LiveHandlers.verifyPaths
-                    (fun _ -> Set.singleton "registry/repos.lock")
-                    (fun () -> Some ".")
+                    (fun _ _ touchSet files ->
+                        Delivery.classifyPaths
+                            touchSet
+                            (Delivery.AuthorityKnown("fixture", Set.singleton "registry/repos.lock"))
+                            (Delivery.AuthorityKnown("fixture", []))
+                            files)
+                    Delivery.pathsVerified
                     ignore
                     (context transport)
                     opts

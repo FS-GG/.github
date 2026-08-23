@@ -12,9 +12,7 @@ module ReviewApplicationTests =
     let private head = String.replicate 40 "a"
     let private subject = "FS-GG/.github#2175/pr/42"
 
-    let rec private repoRoot dir =
-        if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/ReviewApplication.fs")) then dir
-        else repoRoot (Directory.GetParent(dir).FullName)
+    let private repositoryRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", ".."))
 
     let private snapshot comments checks =
         JsonSerializer.Serialize
@@ -57,9 +55,8 @@ module ReviewApplicationTests =
 
     [<Fact>]
     let ``ordinary exhaustion consumers cannot restore a local terminal predicate`` () =
-        let root = repoRoot (Directory.GetCurrentDirectory())
-        let readSide = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Cli/ReviewApplication.fs"))
-        let writer = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Cli/Client.fs"))
+        let readSide = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs"))
+        let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
 
         for source in [ readSide; writer ] do
             Assert.Equal(1, Regex.Matches(source, "Review\\.decideOrdinaryExhaustion\\b").Count)

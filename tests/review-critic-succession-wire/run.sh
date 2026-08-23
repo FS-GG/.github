@@ -724,8 +724,8 @@ PY
   # scratch tree and requires section 1's BLANK legs to stop refusing. They are re-run from the SAME
   # snapshot files section 1 built, so a flip cannot be explained by a different input.
   WIRE_ANCHOR='        if String.IsNullOrWhiteSpace parsed then invalidArg name "must not be empty"'
-  cp "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs" "$WORK/ReviewApplication.fs.pristine"
-  if ! ANCHOR="$WIRE_ANCHOR" python3 - "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs" <<'PY'
+  cp "$MUT/src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs" "$WORK/ReviewApplication.fs.pristine"
+  if ! ANCHOR="$WIRE_ANCHOR" python3 - "$MUT/src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs" <<'PY'
 import os, sys
 
 path = sys.argv[1]
@@ -756,7 +756,7 @@ PY
       fi
     done
   fi
-  cp "$WORK/ReviewApplication.fs.pristine" "$MUT/src/FS.GG.Coord.Cli/ReviewApplication.fs"
+  cp "$WORK/ReviewApplication.fs.pristine" "$MUT/src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs"
 fi
 
 # ---- non-vacuity floor -------------------------------------------------------------------------------
