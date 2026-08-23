@@ -9021,6 +9021,69 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             eprint "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
             ExitError
 
+    let private selfHostRecord (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ "record"; rawRef; receiptPath ] ->
+            match parseRef ctx rawRef with
+            | Error message -> eprint $"fsgg-coord-engine: self-host: %s{message}"; ExitError
+            | Ok ref ->
+                try
+                    match File.ReadAllText receiptPath |> SelfHost.tryDecodeReceipt with
+                    | Error errors ->
+                        let detail = String.concat "; " errors
+                        eprint $"fsgg-coord-engine: self-host: %s{detail}"
+                        ExitRed
+                    | Ok None ->
+                        eprint "fsgg-coord-engine: self-host: receipt marker is missing"
+                        ExitRed
+                    | Ok(Some receipt) ->
+                        match Writes.selfHostBootstrapReceipt ctx.Transport ref receipt with
+                        | Error error -> fail error
+                        | Ok () ->
+                            printfn "SELF-HOST-RECORDED %s %s" ref.Short receipt.Digest
+                            ExitGreen
+                with error ->
+                    eprint $"fsgg-coord-engine: self-host: could not read receipt: %s{error.Message}"
+                    ExitError
+        | [ "replay-record"; rawRef; receiptPath; snapshotPath; decisionKey; actionKey ] ->
+            match parseRef ctx rawRef with
+            | Error message -> eprint $"fsgg-coord-engine: self-host: %s{message}"; ExitError
+            | Ok ref ->
+                try
+                    match File.ReadAllText receiptPath |> SelfHost.tryDecodeReceipt with
+                    | Error errors ->
+                        let detail = String.concat "; " errors
+                        eprint $"fsgg-coord-engine: self-host: %s{detail}"
+                        ExitRed
+                    | Ok None ->
+                        eprint "fsgg-coord-engine: self-host: bootstrap receipt marker is missing"
+                        ExitRed
+                    | Ok(Some bootstrap) ->
+                        use stream = File.OpenRead snapshotPath
+                        let snapshotHash = SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+                        SelfHost.createReplayReceipt
+                            bootstrap
+                            snapshotHash
+                            { DecisionKey = decisionKey; ActionKey = actionKey }
+                            DateTimeOffset.UtcNow
+                        |> function
+                            | Error errors ->
+                                let detail = String.concat "; " errors
+                                eprint $"fsgg-coord-engine: self-host: %s{detail}"
+                                ExitRed
+                            | Ok receipt ->
+                                match Writes.selfHostReplayReceipt ctx.Transport ref receipt with
+                                | Error error -> fail error
+                                | Ok () ->
+                                    printfn "SELF-HOST-REPLAY-RECORDED %s %s" ref.Short receipt.Digest
+                                    ExitGreen
+                with error ->
+                    eprint $"fsgg-coord-engine: self-host: could not record replay: %s{error.Message}"
+                    ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: self-host needs `record <ref> <receipt>` or `replay-record <ref> <receipt> <snapshot> <decision-key> <action-key>`."
+            ExitError
+
     let executeWithContext (handler: Context -> Options -> int) (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -9102,6 +9165,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | OpLockAcquire -> opLockAcquire ctx opts
                     | OpLockRelease -> opLockRelease ctx opts
                     | GraphQlOps -> graphQlOps ctx opts
+                    | SelfHostCmd -> selfHostRecord ctx opts
                     | LintCmd -> lint ctx opts
                     | other -> failwith $"Client.run received a non-IO command: %A{other}"
             )
