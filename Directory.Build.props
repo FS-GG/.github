@@ -447,8 +447,15 @@
        extract lifecycle handling behind a typed completion dependency, and make review refusals
        name their actionable remediation. These are additive receiver-visible coordination semantics;
        Protocol.fs and all command/package identities remain unchanged. -->
+  <!-- 0.74.0 -> 0.75.0 (.github#2835): MINOR on the stable 0.x line. The coordination engine
+       canonicalizes documented severity input before validation and external writes, resumes the
+       bounded legacy receipt/intent representation through complete board projection, and preserves
+       an issue-bound recovery diagnostic when creation succeeds before receipt persistence. The
+       packed Kit corrects the intake template to the board's canonical severity vocabulary. These
+       are additive and repaired receiver-visible behaviors; no command, package, or member identity
+       is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.74.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

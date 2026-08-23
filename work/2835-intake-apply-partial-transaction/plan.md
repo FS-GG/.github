@@ -30,13 +30,13 @@ Prose status: planned
 - PD-001 [AC-001] [FR-001] complete: Canonicalize the documented lowercase severity vocabulary at JSON decode and validate the resulting value against the board's known option vocabulary before any receipt or external write. Preserve canonical capitalized input unchanged and refuse unknown values.
 - PD-002 [AC-001] [FR-002] complete: Once a receipt resolves an issue, wrap every later projection refusal with a structured partial-state diagnostic naming the stable draft id and existing issue ref, and state that retry resumes without a second create.
 - PD-003 [AC-001] [FR-003] complete: Treat the pre-fix lowercase severity digest as a compatible legacy representation of the same canonical draft. Receipt and intent recovery accept only that bounded normalization difference; all other content mismatches remain fail-closed.
-- PD-004 [AC-001] [FR-004] complete: Extend the recording-transport transaction fixture and end-to-end intake route for lowercase normalization, unknown-value pre-write refusal, legacy receipt/intent recovery, precise partial-state output, and a mutation that restores verbatim lowercase projection and turns the focused suite red.
+- PD-004 [AC-001] [FR-004] complete: Extend the recording-transport transaction fixture and end-to-end intake route for lowercase normalization, unknown-value pre-write refusal, legacy receipt/intent recovery, precise partial-state output, and discriminating mutations for canonicalization, legacy-digest compatibility, and issue-bound recovery. Advance the receiver-visible coherent set from 0.74.0 to the next stable minor, 0.75.0, and verify the full Kit/release coherence surface before merge.
 
 ## Contract Impact
-- PC-001 [PD-001] command report: `fsgg.coord.intake/v1` continues accepting the documented lowercase severity tokens while also accepting canonical board casing; unknown values now fail during validation instead of at the GraphQL mutation. Existing receipt cache JSON remains schema-compatible, with legacy digest compatibility computed rather than persisted as a new field.
+- PC-001 [PD-001] command report: `fsgg.coord.intake/v1` continues accepting the documented lowercase severity tokens while also accepting canonical board casing; unknown values now fail during validation instead of at the GraphQL mutation. Existing receipt cache JSON remains schema-compatible, with legacy digest compatibility computed rather than persisted as a new field. The receiver-visible engine and corrected packed Kit guidance ship together in coherent set 0.75.0.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PC-001] semanticTest: Run focused BoardOps transaction tests and coord-engine e2e intake tests; mutate severity canonicalization back to verbatim projection and record the focused suite's red result; then restore and re-run all affected build, format, projection, and package gates.
+- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PC-001] semanticTest: Run focused and full BoardOps tests, Core tests, coord-engine e2e intake tests, the three discriminating mutations, skill parity/quality, coherent-set version, Kit package self-test, published-coherence obligation arm, release-saga tests, and projection checks; then restore all mutations and record the exact post-merge coherent-set 0.75.0 release obligation.
 
 ## Performance Intent
 No performance intent is declared for this work item.
@@ -45,7 +45,7 @@ No performance intent is declared for this work item.
 - PM-001 [PC-001] compatible: No cache migration is required. New reads accept the one legacy digest produced by lowercase severity and rewrite no existing receipt; successful retries continue through the existing issue-bound receipt.
 
 ## Generated View Impact
-- GV-001 [PD-001] workModel: Refresh the SDD-owned work model, analysis, evidence, verification, and ship receipts from the authored lifecycle sources; no non-SDD generated registry changes are expected.
+- GV-001 [PD-001] workModel: Refresh the SDD-owned work model, analysis, evidence, verification, and ship receipts from the authored lifecycle sources, plus the generated coordination-kit skill manifest after the mirrored skill change.
 
 ## Accepted Deferrals
 No accepted plan deferrals recorded.
