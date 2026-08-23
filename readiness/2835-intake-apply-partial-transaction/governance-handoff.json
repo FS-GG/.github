@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2835-intake-apply-partial-transaction/ship.json",
-      "digest": "sha256:5982ac2692e4951665535197856db64f1e49b1899040fd328ca88888b8240a6f",
+      "digest": "sha256:280fc7575fc825783cf20d3a55090dc3c2f4931716e7e2d23a17cca5dffd935c",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2835-intake-apply-partial-transaction/verify.json",
-      "digest": "sha256:dc856533ca4d93abd6bb41402080a042efd3072a4186f1b7321921ce2d04b48d",
+      "digest": "sha256:3de348084710f08b17d683890375d06b96123b40b11de1dbfccd5a11b8885423",
       "schemaVersion": 1
     },
     {
