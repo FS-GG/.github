@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "0a83cb703eeaafca7ae9ee767f51b6c7ee397b7b8098262a04749ebd4f2000a5"
+        "value": "5f3930d274bfb148f9c8f8cf29340c93f7b6c07c9051b3850f9c3c674db4f90c"
       }
     },
     {
@@ -728,7 +728,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "work/2738-one-dependency-edge/test-results/boardops.trx"
+        "work/2738-one-dependency-edge/verification/boardops.test-report.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -846,7 +846,7 @@
           "path": "work/2738-one-dependency-edge/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "0a83cb703eeaafca7ae9ee767f51b6c7ee397b7b8098262a04749ebd4f2000a5"
+            "value": "5f3930d274bfb148f9c8f8cf29340c93f7b6c07c9051b3850f9c3c674db4f90c"
           },
           "schemaVersion": 1
         },
@@ -877,7 +877,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "814978bad790df79dba1d3d8aab09cb18e3a3c33e08a84ea6458396a8786afac"
+        "value": "f41fe92da74d12df448b6414880079105f7a45b05a3b44c590b3c7bb2e4c6ccc"
       },
       "currency": "current"
     }

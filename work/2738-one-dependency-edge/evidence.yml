@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2738-one-dependency-edge/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2738-one-dependency-edge/analysis.json
-    digest: 91e8fb4254120aeb62a7f1140ea46aa141d819191df75805062e41c494bb6f25
+    digest: bdafda0b3e29472a624ff1f6f3f9a88890f0ab321335be13db1966c6938d5440
     schemaVersion: 1
   - label: checklist
     path: work/2738-one-dependency-edge/checklist.md
@@ -53,7 +53,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -80,7 +80,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -107,7 +107,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -134,7 +134,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -161,7 +161,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -188,7 +188,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -215,7 +215,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -235,14 +235,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV008]
-    artifacts: [work/2738-one-dependency-edge/test-results/boardops.trx]
+    artifacts: [work/2738-one-dependency-edge/verification/boardops.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -269,7 +269,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -296,7 +296,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2738-one-dependency-edge/test-results/boardops.trx
+      source: work/2738-one-dependency-edge/verification/boardops.test-report.xml
       digest: "sha256:bbe809f29949cbdc5b5a0e61e45d41f3ca0de04129b54b27ea6380ad5aa239a0"
       digestContract: exact-bytes-v1
       outcome: passed
