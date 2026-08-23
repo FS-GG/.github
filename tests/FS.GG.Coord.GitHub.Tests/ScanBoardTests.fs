@@ -716,6 +716,11 @@ let private liveMarker (worker: string) (n: int) =
 
     $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"updated_at":"%s{now}"}}]"""
 
+let private liveMarkerIn (worker: string) (pathRepo: string) (n: int) =
+    let now = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 pathRepo=%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"updated_at":"%s{now}"}}]"""
+
 /// One readable live marker plus one comment whose body cannot be classified. The readable marker is a
 /// lower bound, not permission to reserve only its holder's declared surface.
 let private incompleteLiveMarker (worker: string) (n: int) =
@@ -922,6 +927,88 @@ let ``#1794 an off-board issue with an unreadable body and NO claim reserves not
     match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
     | Error e -> failwith $"the sweep must produce a snapshot — got %A{e}"
     | Ok(document, _) -> Assert.DoesNotContain("pathsUnreadable", document)
+
+// ---- .github#2899: candidate arm + claim sweep are an exhaustive partition --------------------------
+//
+// The issue is ON the board but its `cross-repo` sentinel excludes it from the `--repo FS.GG.SDD`
+// candidate arm. Its claim marker independently says `pathRepo=FS.GG.SDD`, so the requested repository
+// still owns its reservation. Before #2899, `boardRefs` was built from the unscoped board and excluded
+// #500 from the sweep too: neither arm read its marker and the overlapping candidate was admitted.
+[<Fact>]
+let ``#2899 a scoped-out on-board claim reaches the reservation sweep exactly once`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let candidate = scopeRow "FS.GG.SDD" 99
+    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Shared/**"},
+            {"number":500,"state":"open","body":"Paths: src/Shared/**"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun n ->
+                match n with
+                | 99 -> liveMarkerIn "scoped-holder" "FS.GG.SDD" 99
+                | 500 -> liveMarkerIn "scoped-out-holder" "FS.GG.SDD" 500
+                | _ -> "[]")
+            "Paths: src/Shared/**"
+
+    match Scan.snapshot transport [ candidate; scopedOut ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the scoped snapshot must preserve both reservation arms — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let reservations = doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
+
+        let heldNumbers =
+            reservations
+            |> List.map (fun reservation -> reservation.GetProperty("holder").GetProperty("number").GetInt32())
+
+        Assert.Equal<int list>([ 99; 500 ], heldNumbers |> List.sort)
+        Assert.Equal(1, heldNumbers |> List.filter ((=) 99) |> List.length)
+        Assert.Equal(1, heldNumbers |> List.filter ((=) 500) |> List.length)
+        Assert.Equal(2, transport.Count "comment-list")
+
+        let scopedOutReservation =
+            reservations
+            |> List.find (fun reservation -> reservation.GetProperty("holder").GetProperty("number").GetInt32() = 500)
+
+        Assert.Equal("FS.GG.SDD", scopedOutReservation.GetProperty("repo").GetString())
+        Assert.Equal("src/Shared/**", scopedOutReservation.GetProperty("paths").[0].GetString())
+
+// The precision control: reaching arm B only authorizes a marker read. A scoped-out board row with no
+// claim is not a reservation and cannot become work in the requested candidate array.
+[<Fact>]
+let ``#2899 a scoped-out on-board row with no claim is neither reserved nor invented as work`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let candidate = scopeRow "FS.GG.SDD" 99
+    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Candidate/**"},
+            {"number":500,"state":"open","body":"Paths: src/Other/**"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun _ -> "[]")
+            "Paths: src/Candidate/**"
+
+    match Scan.snapshot transport [ candidate; scopedOut ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"a markerless scoped-out row must not damage the snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let items = doc.RootElement.GetProperty("items")
+        let reservations = doc.RootElement.GetProperty("inFlight")
+
+        Assert.Equal(1, items.GetArrayLength())
+        Assert.Equal(99, items.[0].GetProperty("number").GetInt32())
+        Assert.Equal(0, reservations.GetArrayLength())
+        Assert.Equal(2, transport.Count "comment-list")
 
 // ---- the Phase column and the issue's age (.github#1598) ----------------------------------------------
 //

@@ -1457,11 +1457,23 @@ module Scan =
         //
         // So scan the in-scope repos' OPEN ISSUES — the SAME paginated, unconditional read `who`/`reap`
         // run (a lock has no hundred-issue limit, and a 304 could serve a `comments: 0` captured before a
-        // marker was posted) — and reserve every LIVE claim on an issue the board did NOT already list.
+        // marker was posted) — and reserve every LIVE claim on an issue the scoped candidate arm did NOT
+        // already read.
         // This is bash's `active_claims` arm B; arm A (the board's In-progress rows) is the candidate loop
         // above, whose claims are already in `inFlight`.
-        let boardRefs =
-            rows |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
+        // .github#2899: THIS SET IS THE PARTITION, so it must describe arm A rather than the whole
+        // unscoped board. `scope` runs before the candidate loop; a board row whose `Repo Scope` is
+        // `cross-repo` therefore does not reach that loop under `--repo .github`, even when its live
+        // claim marker says `pathRepo=.github`. Building this set from `rows` used to suppress that
+        // issue from arm B merely because it appeared somewhere on the board: neither arm read its
+        // marker, `inFlight` lost the reservation, and `batch` admitted overlapping work.
+        //
+        // Open scoped candidates reach the marker read above exactly once. Closed-and-Done candidates
+        // are harmless members: `Reads.openIssues` cannot return them to arm B. Every open issue outside
+        // this set reaches the sweep, whether genuinely off-board or merely outside the requested path-
+        // repository projection. Its marker then decides whether it reserves anything.
+        let candidateRefs =
+            candidates |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
 
         // The repos an off-board claim can live in are the in-scope board's repos (bash derives them the
         // same way). No candidate names a repo → no repo to scan, and no board item means nothing off the
@@ -1479,10 +1491,11 @@ module Scan =
                     for issue in issues do
                         let n = issue.Number
 
-                        // A BOARD ITEM IS NOT OFF THE BOARD: its marker was already read (and reserved, if
-                        // held) by the candidate loop, so re-reading it here would pay the same budget twice
-                        // and risk double-reserving. Only issues the board never listed reach the marker read.
-                        if failure.IsNone && not (boardRefs.Contains(o, r, n)) then
+                        // A SCOPED CANDIDATE IS NOT ARM B: its marker was already read (and reserved, if
+                        // held) by arm A, so re-reading it here would pay the same budget twice and risk
+                        // double-reserving. An on-board row scoped OUT of arm A deliberately reaches this
+                        // read — board membership alone is not evidence that either reservation arm saw it.
+                        if failure.IsNone && not (candidateRefs.Contains(o, r, n)) then
                             let markerSubject = $"%s{o}/%s{r}#%d{n}"
 
                             match
