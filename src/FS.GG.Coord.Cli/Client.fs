@@ -55,35 +55,6 @@ module Client =
 
     let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
 
-    /// The `Blocked by` BODY-VS-FIELD divergence (.github#2079) — the refs a body's `Blocked by:` line(s)
-    /// name that the FIELD does not, both sides canonicalized on `Blockers.canonicalizeBlockedBy`'s terms
-    /// so `#8`, `FS-GG/FS.GG.SDD#8` and the field's own rendering of the same ref compare equal.
-    ///
-    /// `[]` means coherent: the body declares no `Blocked by:` line, or everything it names is already in
-    /// the field. A non-empty result is the `FS.GG.Templates#348` shape — a park whose edge landed in the
-    /// wrong medium, leaving a field that satisfies `BLOCKED-NO-REASON` (it is non-empty) while naming
-    /// refs the reader cannot see. `lint`'s `BLOCKED-BY-INERT` and `reconcile`'s `BLOCKER-CLEARED`
-    /// withholding are the same predicate, asked twice for two different reasons — never two copies.
-    ///
-    /// MODULE-LEVEL, ABOVE `reconcile` (.github#1225-ish): both `reconcile` and `lint` need it, and F#
-    /// compiles top to bottom — a copy inside either command would be the second-copy shape #945/#972
-    /// argue against everywhere else in this file.
-    let blockedByBodyDivergence (owner: string) (repo: string) (fieldRaw: string) (body: string) : string list =
-        let canonRefs (raw: string) : Set<string> =
-            match Blockers.canonicalizeBlockedBy owner repo raw with
-            | Ok(Some canonical) -> canonical.Split(',') |> Array.map (fun s -> s.Trim()) |> Set.ofArray
-            | Ok None
-            | Error _ -> Set.empty
-
-        let fieldRefs = canonRefs fieldRaw
-
-        let bodyRefs =
-            HumanBlock.parseBlockedByLines body
-            |> List.collect (fun raw -> canonRefs raw |> Set.toList)
-            |> Set.ofList
-
-        Set.difference bodyRefs fieldRefs |> Set.toList |> List.sort
-
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
     let classVerdict = LintApplication.classVerdict
@@ -2765,8 +2736,8 @@ module Client =
     ///
     /// THE BOARD FIELD IS THE SOURCE, NOT THE BODY'S `Blocked by:` LINE. ADR-0045 makes the COLUMN the
     /// typed dependency edge and `Scan` resolves precisely that (`row.BlockedByRaw`), so reading the body
-    /// here would be a second, disagreeing spelling of one edge — `.github#2079`'s divergence is a finding
-    /// `lint` REPORTS (`blockedByBodyDivergence` above), never a licence to prefer the other side of it.
+    /// here would be a second, disagreeing spelling of one edge. Body prose is a projection only and is
+    /// never compared back into dependency meaning.
     ///
     /// IT FAILS CLOSED IN BOTH DIRECTIONS, on `Scan.resolveBlocker`'s own terms: a token that is not a ref
     /// is `BlockerUnparseable`, a lookup that could not be made is `BlockerUnknown` (`Reads.blockerState`'s
@@ -11212,35 +11183,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     |> Option.map (mk "HUMAN-PARK-MACHINE-CLEARED" "note" r)
                     |> Option.toList
 
-                // BLOCKED-BY-INERT (.github#2079). `BLOCKED-NO-REASON` above reds ONLY when the `Blocked
-                // by` FIELD is empty — its own comment says an item with a real `Blocked by` ref "is
-                // silent here." This is what is not silent: a `Blocked` row whose BODY carries a
-                // `Blocked by:` line naming ref(s) the field does not — the `FS.GG.Templates#348` shape,
-                // where a park's real edge landed as a body line and the field kept a stale, unrelated
-                // (here, fully-resolved) set. A body line is never read by anything that clears a
-                // blocker — `Blocked by` is a board FIELD (ADR-0045/`.github#1933`) — so the declaration
-                // is INERT, and `reconcile` withholds `BLOCKER-CLEARED` on exactly this same predicate
-                // (see below): this finding is what makes that withholding legible rather than silent.
-                //
-                // Same population as `BLOCKED-NO-REASON` — an open `Blocked` row, whose body this pass
-                // already read for the sentinel check — because this shape is dangerous precisely where
-                // that one is silent, and reading every row's body for it would spend the budget that
-                // dies first (#418) on rows where the divergence cannot mislead `BLOCKER-CLEARED` at all.
-                let blockedByInertFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if r.State = IssueState.Open && r.Status = BoardStatus.Blocked then
-                        match blockedByBodyDivergence r.Ref.Owner r.Ref.Repo r.BlockedByRaw body with
-                        | [] -> []
-                        | extra ->
-                            let named = String.concat ", " extra
-
-                            [ mk
-                                  "BLOCKED-BY-INERT"
-                                  "error"
-                                  r
-                                  $"body declares a `Blocked by:` line naming %s{named}, which the FIELD does not carry. A body line is never read by anything that clears a blocker — `Blocked by` is a board FIELD (ADR-0045/.github#1933) — so this declaration is INERT: `BLOCKER-CLEARED` cannot see it, and `reconcile` withholds the promotion on this same divergence. If %s{named} really blocks this item, write it into the field:  scripts/fsgg-coord set-field %s{r.Ref.Short} 'Blocked by' '<refs>'" ]
-                    else
-                        []
-
                 // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
                 // own text does not class it — either because it says nothing about HOW BAD it is (no
                 // `Class:` line, no `[decision]` title prefix, no ADR-0045 `Blocked on: human/decision`
@@ -11374,8 +11316,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                             let hbFindings = humanBlockFindings r body
                             let humanPark = humanParkFindings r body
-                            let blockedByInert = blockedByInertFindings r body
-
                             let clsFindings = classFindings r body
 
                             let epicResult =
@@ -11420,7 +11360,6 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                      @ tsFindings
                                      @ hbFindings
                                      @ humanPark
-                                     @ blockedByInert
                                      @ clsFindings
                                      @ statusUnsetFindings
                                      @ severityUnsetFindings

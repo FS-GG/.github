@@ -444,8 +444,8 @@ let ``.github#2535 the connection windows in the documents agree with the guards
 
     let projectItemWindows = Sources.windowsOf boardText "projectItems"
 
-    // NON-VACUITY: three `projectItems` documents, or this gate has stopped measuring the thing it names.
-    Assert.Equal<int list>([ 20; 20; 20 ], projectItemWindows)
+    // NON-VACUITY: four `projectItems` documents, or this gate has stopped measuring the thing it names.
+    Assert.Equal<int list>([ 20; 20; 20; 20 ], projectItemWindows)
     Assert.Equal(Sources.literal boardText "ProjectItemsWindow", List.head projectItemWindows)
 
     let fieldWindows = Sources.windowsOf boardText "fields"

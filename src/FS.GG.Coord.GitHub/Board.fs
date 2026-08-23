@@ -26,6 +26,10 @@ module Board =
           Title: string
           Fields: Map<string, Field> }
 
+    type BlockedByObservation =
+        { Value: string option
+          Revision: string option }
+
     type FieldWrite =
         | Set of value: string
         | Clear
@@ -964,14 +968,144 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
 
-    let itemBlockedBy
+    let private ItemBlockedByObservationDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { updatedAt project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+
+    let private repositoryItemBlockedByObservation
         (transport: IGitHubTransport)
         (board: BoardMap)
         (owner: string)
         (repo: string)
         (number: int)
-        : IoResult<string option> =
+        : IoResult<BlockedByObservation> =
+        let subject = $"%s{owner}/%s{repo}#%d{number} Blocked by observation"
 
+        let request =
+            query
+                ItemBlockedByObservationDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
+
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Ok { Value = None; Revision = None }
+                    else
+                        let projectItems = issue.GetProperty "projectItems"
+
+                        let node =
+                            projectItems.GetProperty("nodes").EnumerateArray()
+                            |> Seq.tryFind (fun n ->
+                                match n.TryGetProperty "project" with
+                                | true, p when p.ValueKind = JsonValueKind.Object ->
+                                    match p.TryGetProperty "number" with
+                                    | true, number when number.ValueKind = JsonValueKind.Number ->
+                                        number.GetInt32() = board.Number
+                                    | _ -> false
+                                | _ -> false)
+
+                        match node with
+                        | None ->
+                            Reads.connectionComplete
+                                subject
+                                "this issue's project-item connection"
+                                ProjectItemsWindow
+                                projectItems
+                            |> Result.map (fun () -> { Value = None; Revision = None })
+                        | Some node ->
+                            match node.TryGetProperty "updatedAt" with
+                            | true, revision when revision.ValueKind = JsonValueKind.String ->
+                                let value =
+                                    match node.TryGetProperty "fieldValueByName" with
+                                    | true, fv when fv.ValueKind = JsonValueKind.Object -> textOfFieldValue fv
+                                    | _ -> None
+
+                                Ok
+                                    { Value = value
+                                      Revision = Some(revision.GetString()) }
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the item-blocked-by observation has no project-item `updatedAt` revision"
+                                    )
+                                )
+                with :? KeyNotFoundException ->
+                    Error(
+                        Malformed(
+                            subject,
+                            "the item-blocked-by observation response is missing `repository.issue.projectItems`"
+                        )
+                    )
+
+    let private ExternalItemBlockedByObservationDoc =
+        "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { updatedAt fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } rateLimit { cost remaining } }"
+
+    let private externalItemBlockedByObservation transport board owner repo number =
+        let subject = $"%s{owner}/%s{repo}#%d{number} Blocked by"
+
+        match itemIdCached transport board owner repo number with
+        | Error e -> Error e
+        | Ok None -> Ok { Value = None; Revision = None }
+        | Ok(Some id) ->
+            let request = query ExternalItemBlockedByObservationDoc [ "itemId", VId id ] subject
+
+            match transport.Send request with
+            | Error e -> Error e
+            | Ok response ->
+                match GraphQl.decode subject response.Body Ok with
+                | Error e -> Error e
+                | Ok data ->
+                    try
+                        let node = data.GetProperty "node"
+
+                        if node.ValueKind = JsonValueKind.Null then
+                            Error(NotFound $"board item %s{id} for %s{subject}")
+                        else
+                            match node.TryGetProperty "updatedAt" with
+                            | true, revision when revision.ValueKind = JsonValueKind.String ->
+                                let value =
+                                    match node.TryGetProperty "fieldValueByName" with
+                                    | true, fv when fv.ValueKind = JsonValueKind.Object -> textOfFieldValue fv
+                                    | true, fv when fv.ValueKind = JsonValueKind.Null -> None
+                                    | _ -> None
+
+                                Ok
+                                    { Value = value
+                                      Revision = Some(revision.GetString()) }
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the external item-blocked-by response has no project-item `updatedAt` revision"
+                                    )
+                                )
+                    with :? KeyNotFoundException ->
+                        Error(Malformed(subject, "the external item-blocked-by response is missing `data.node`"))
+
+    let itemBlockedByObservation
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<BlockedByObservation> =
+
+        if ownedByBoardOwner board owner then
+            repositoryItemBlockedByObservation transport board owner repo number
+        else
+            externalItemBlockedByObservation transport board owner repo number
+
+    let itemBlockedBy transport board owner repo number =
         if ownedByBoardOwner board owner then
             repositoryItemBlockedBy transport board owner repo number
         else

@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2738-one-dependency-edge",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2738-one-dependency-edge/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2855f00add78efaff401b3bc50357ba475766cc00e76955bebc3babfe14bccdd"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2738-one-dependency-edge/verify.json",
+      "kind": "source",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7311a209e9a69878c82649de6ac730f0e307eefc0794fe1712f3d65ecd3549d8"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2738-one-dependency-edge/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4d480b7c8417bce4e78dcadd0704eb27a356f708f259ecba2b50307dd598ff95"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "06edf38359ed8dd7528fca06e5862646e08014b8f55c3d09dc5b29388d16ecfa"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "b4897f5f7b564a781516861329a865ed3899e11b980ac3fa413f684f3168fe93"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "23c7e0b310f3533bec930fb6010067afc1302028956f7b9a2e2fa56172e33e2f"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "afa46c5c8367fed367b7bcdff5b9b79029693f3d7394a1c902d17c5967ba1bf4"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "dd53e45a04e12fa97622aa8410c45e0d748ac6050d3e467b9475f2c42b71a048"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2738-one-dependency-edge/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fd10093a41588e39dcc0f2a66ad79f2220e02f5dea3e60443d81e30bde05a9ee"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "shipReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "ready"
+      },
+      {
+        "stage": "checklist",
+        "status": "ready"
+      },
+      {
+        "stage": "clarify",
+        "status": "ready"
+      },
+      {
+        "stage": "evidence",
+        "status": "ready"
+      },
+      {
+        "stage": "plan",
+        "status": "ready"
+      },
+      {
+        "stage": "specify",
+        "status": "ready"
+      },
+      {
+        "stage": "tasks",
+        "status": "ready"
+      },
+      {
+        "stage": "verify",
+        "status": "ready"
+      }
+    ]
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "blockingFindingIds": [],
+    "evidenceSupportedCount": 10,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 10,
+    "evidenceDeferredCount": 0,
+    "evidenceMissingCount": 0,
+    "evidenceStaleCount": 0,
+    "evidenceSyntheticCount": 0,
+    "evidenceInvalidCount": 0
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV006",
+      "obligationId": "EV006",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV007",
+      "obligationId": "EV007",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV008",
+      "obligationId": "EV008",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV009",
+      "obligationId": "EV009",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV010",
+      "obligationId": "EV010",
+      "state": "supported",
+      "observed": true,
+      "severity": "ready",
+      "diagnosticIds": []
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2738-one-dependency-edge/analysis.json",
+      "kind": "analysis",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2738-one-dependency-edge/verify.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2738-one-dependency-edge/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": [],
+    "warningFindingIds": [],
+    "advisoryFindingIds": [],
+    "contributingStages": [],
+    "classifiedObligationsUnmetCount": 0,
+    "journeyObligationsUnmetCount": 0,
+    "correction": ""
+  },
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "shipReady",
+  "nextAction": {
+    "actionId": "ship.next.protectedBoundary",
+    "command": null,
+    "reason": "Ship readiness is current and ready for the protected-boundary handoff."
+  }
+}
