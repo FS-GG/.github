@@ -442,8 +442,13 @@
        Receiver-visible behavior changes additively; no package, command, or member identity is removed. -->
   <!-- 0.73.1 -> 0.73.2 (.github#2639): PATCH refresh for the generated FS.GG.Drivers manifest after
        the published Rendering skill-delivery channel updates the packed publishing-and-deployment skill. -->
+  <!-- 0.73.2 -> 0.74.0 (.github#2876): MINOR on the stable 0.x line. Five unreleased engine
+       commits make dependency projection atomic and authoritative at the Ready write boundary,
+       extract lifecycle handling behind a typed completion dependency, and make review refusals
+       name their actionable remediation. These are additive receiver-visible coordination semantics;
+       Protocol.fs and all command/package identities remain unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.73.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.74.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
