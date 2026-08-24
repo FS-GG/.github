@@ -190,6 +190,7 @@ ROOTS_SRC=""
 SOURCE=""
 MANIFEST=""
 MODE="auto"
+SKILL_ID=""
 
 # --- the roots-declaration lane's state (.github#1710 lane 1) -----------------------------------
 RECEIVER_PROJ=""       # the receiver project both root properties live in
@@ -221,10 +222,15 @@ skill-view — generate a runtime skill root as a view of one source, and assert
                       [--roots "<r1> <r2>"] [--mode auto|link|copy]
   skill-view check    (--source <dir> | --manifest <file.json>) [--tree <dir>] [--roots "<r1> <r2>"]
                       [--receiver-proj <file>] [--expect-roots "<r1> <r2>"] [--absent-ok "<why>"]
+  skill-view identity --skill <id> (--source <dir> | --manifest <file.json>)
+                      [--tree <dir>] [--roots "<r1> <r2>"] [--receiver-proj <file>]
   skill-view selftest [--tree <dir>]
 
   --source <dir>     the ONE source of truth: a directory of <id>/SKILL.md skills.
   --manifest <file>  (check only) a JSON catalog {"skills":[{"id":...}]} to expect instead.
+                     For identity, the selected entry must also carry a non-empty `files` digest
+                     inventory; the report is deterministic `fsgg.skill-identity/v1` JSON.
+  --skill <id>       the one skill whose authority and every runtime-visible copy identity reports.
   --tree <dir>       the repository root the roots are relative to (default: .).
   --roots "<...>"    override the root set. Precedence: --roots > $AGENT_SKILL_ROOTS >
                      <tree>/.agent-skill-roots > the ADR-0011 default.
@@ -572,6 +578,130 @@ do_check() {
   # The denominator is printed with the count, per .github#1513: a count whose population is invisible
   # is a coverage claim the reader supplies for themselves, generously.
   echo "skill-view check: OK — ${#ids[@]} declared skill(s) visible in every one of $nroots root(s) ($checked path(s) examined)."
+}
+
+# ---------------------------------------------------------------------------------------------
+# identity — CONTENT ADDRESS THE DECLARED SOURCE AND EVERY RUNTIME COPY
+# ---------------------------------------------------------------------------------------------
+do_identity() {
+  [ -n "$SKILL_ID" ] || die "identity needs --skill <id>."
+  if [ -n "$SOURCE" ] && [ -n "$MANIFEST" ]; then
+    die "identity accepts exactly one authority: --source or --manifest, not both."
+  fi
+  [ -n "$SOURCE" ] || [ -n "$MANIFEST" ] \
+    || die "identity needs --source <dir> or --manifest <file>; runtime roots cannot declare their own authority."
+  [ -z "$MEMBERSHIP_FAULT" ] || die "cannot read the runtime root declaration: $MEMBERSHIP_FAULT"
+  need_cmd python3 "required to produce deterministic identity JSON"
+
+  python3 - "$TREE_ABS" "$ROOTS" "$LIVE_ROOTS" "$VIEW_ROOTS" "$SOURCE" "$MANIFEST" "$SKILL_ID" <<'PY'
+import hashlib, json, os, sys
+
+tree, roots_raw, live_raw, view_raw, source, manifest, skill_id = sys.argv[1:]
+if (not skill_id or not skill_id[0].isalnum() or
+        any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for c in skill_id)):
+    print(json.dumps({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                      "verdict": "inconclusive", "problems": ["skill id is malformed"]},
+                     indent=2, sort_keys=True))
+    sys.exit(2)
+roots = roots_raw.split()
+live = set(live_raw.split())
+views = set(view_raw.split())
+
+def digest(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+def source_inventory():
+    if source:
+        root = os.path.join(source, skill_id)
+        if not os.path.isdir(root):
+            raise ValueError(f"authority source has no {skill_id}/ directory: {root}")
+        rows = []
+        for base, dirs, files in os.walk(root):
+            dirs.sort(); files.sort()
+            for name in files:
+                path = os.path.join(base, name)
+                rel = os.path.relpath(path, root).replace(os.sep, "/")
+                got = digest(path)
+                if got is None:
+                    raise ValueError(f"authority file is unreadable: {path}")
+                rows.append((rel, got))
+        if not rows:
+            raise ValueError("authority inventory is empty")
+        return {"kind": "source", "path": os.path.abspath(root)}, rows
+    try:
+        with open(manifest, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError(f"authority manifest is unreadable: {exc}")
+    matches = [row for row in doc.get("skills", [])
+               if isinstance(row, dict) and row.get("id") == skill_id]
+    if len(matches) != 1:
+        raise ValueError("authority manifest omits or duplicates the selected skill")
+    entry = matches[0]
+    raw_files = entry.get("files")
+    if not isinstance(raw_files, list) or not raw_files:
+        raise ValueError("authority manifest selected skill has no file inventory")
+    rows, seen = [], set()
+    for row in raw_files:
+        rel = row.get("path") if isinstance(row, dict) else None
+        want = row.get("sha256") if isinstance(row, dict) else None
+        safe_rel = (isinstance(rel, str) and rel and not os.path.isabs(rel) and
+                    os.path.normpath(rel) == rel and rel != ".." and not rel.startswith("../"))
+        if (not safe_rel or rel in seen or
+                not isinstance(want, str) or len(want) != 64 or
+                any(c not in "0123456789abcdef" for c in want)):
+            raise ValueError(f"authority manifest has malformed or duplicate file row: {rel!r}")
+        seen.add(rel); rows.append((rel, want))
+    return {"kind": "manifest", "path": os.path.abspath(manifest),
+            "suppliedBy": entry.get("supplied-by"), "treeSha256": entry.get("tree-sha256")}, rows
+
+report = {"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+          "authority": None, "artifacts": [], "verdict": "inconclusive", "problems": []}
+try:
+    authority, expected_rows = source_inventory()
+except ValueError as exc:
+    report["problems"].append(str(exc))
+    print(json.dumps(report, indent=2, sort_keys=True)); sys.exit(2)
+report["authority"] = authority
+expected = dict(expected_rows)
+
+for root in roots:
+    disposition = "live" if root in live else "view" if root in views else "runtime"
+    skill_root = os.path.join(tree, root, skill_id)
+    actual_files = []
+    if os.path.isdir(skill_root):
+        for base, dirs, files in os.walk(skill_root):
+            dirs.sort(); files.sort()
+            for name in files:
+                actual_files.append(os.path.relpath(os.path.join(base, name), skill_root).replace(os.sep, "/"))
+    else:
+        report["problems"].append(f"[{disposition}-root] missing skill directory: {root}/{skill_id}")
+    for rel, want in expected_rows:
+        path = os.path.join(skill_root, *rel.split("/"))
+        got = digest(path)
+        verdict = "coherent" if got == want else "drift"
+        report["artifacts"].append({"kind": "runtime", "root": root,
+                                    "disposition": disposition,
+                                    "path": f"{root}/{skill_id}/{rel}",
+                                    "expectedSha256": want, "actualSha256": got,
+                                    "verdict": verdict})
+        if verdict != "coherent":
+            report["problems"].append(f"[{disposition}-bytes] {root}/{skill_id}/{rel} differs or is unreadable")
+    extras = sorted(set(actual_files) - set(expected))
+    for rel in extras:
+        report["problems"].append(f"[{disposition}-extra] undeclared runtime file: {root}/{skill_id}/{rel}")
+
+report["verdict"] = "coherent" if not report["problems"] else "drift"
+print(json.dumps(report, indent=2, sort_keys=True))
+sys.exit(0 if not report["problems"] else 1)
+PY
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -989,10 +1119,10 @@ do_selftest() {
 # ---------------------------------------------------------------------------------------------
 CMD="${1:-}"
 case "$CMD" in
-  generate|check|roots|selftest) shift ;;
+  generate|check|identity|roots|selftest) shift ;;
   -h|--help) usage; exit 0 ;;
-  "") usage >&2; die "no subcommand (expected 'generate', 'check', 'roots' or 'selftest')." ;;
-  *) usage >&2; die "unknown subcommand: $CMD (expected 'generate', 'check', 'roots' or 'selftest')." ;;
+  "") usage >&2; die "no subcommand (expected 'generate', 'check', 'identity', 'roots' or 'selftest')." ;;
+  *) usage >&2; die "unknown subcommand: $CMD (expected 'generate', 'check', 'identity', 'roots' or 'selftest')." ;;
 esac
 
 while [ $# -gt 0 ]; do
@@ -1001,6 +1131,7 @@ while [ $# -gt 0 ]; do
     --roots)         need_val "$@"; ROOTS_ARG="$2"; shift 2 ;;
     --source)        need_val "$@"; SOURCE="$2"; shift 2 ;;
     --manifest)      need_val "$@"; MANIFEST="$2"; shift 2 ;;
+    --skill)         need_val "$@"; SKILL_ID="$2"; shift 2 ;;
     --mode)          need_val "$@"; MODE="$2"; shift 2 ;;
     --receiver-proj) need_val "$@"; RECEIVER_PROJ="$2"; shift 2 ;;
     --expect-roots)  need_val "$@"; EXPECT_ROOTS="$2"; shift 2 ;;
@@ -1011,6 +1142,8 @@ while [ $# -gt 0 ]; do
     *) usage >&2; die "unknown argument: $1" ;;
   esac
 done
+
+[ "$CMD" = "identity" ] || [ -z "$SKILL_ID" ] || die "--skill applies only to identity."
 
 [ -d "$TREE" ] || die "--tree is not a directory: $TREE"
 TREE_ABS="$(abs "$TREE")"
@@ -1052,5 +1185,6 @@ fi
 case "$CMD" in
   generate) do_generate ;;
   check)    do_check ;;
+  identity) do_identity ;;
   roots)    do_roots ;;
 esac

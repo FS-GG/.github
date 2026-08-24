@@ -737,6 +737,21 @@ pin_check() { pin_env bash "$SYNC" --check --against-pin "$@"; }
 
 expect_rc "pin: a tree matching its pin is coherent (rc 0)" 0 pin_check "$PRECV"
 
+# The identity projection is over the exact same restored package ledger, but names one skill and
+# every materialized file/digest for agent consumption. Its inversion changes only the receiver.
+identity_out="$(pin_check --identity "${SKILLS[0]}" "$PRECV")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["artifacts"] and d["authority"]["version"]=="0.9.0"' \
+  && ok "pin identity: coherent JSON binds package version and materialized artifacts" \
+  || bad "pin identity: coherent projection" "$identity_out"
+printf '\nidentity divergence\n' >> "$PRECV/.claude/skills/${SKILLS[0]}/SKILL.md"
+expect_out "pin identity: one-line materialized divergence is RED and named (rc 1)" 1 \
+  '"verdict": "drift"' pin_check --identity "${SKILLS[0]}" "$PRECV"
+bash "$SYNC" "$PRECV" >/dev/null
+identity_out="$(pin_check --identity "${SKILLS[0]}" "$PRECV")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; assert json.load(sys.stdin)["verdict"]=="coherent"' \
+  && ok "pin identity: re-materialization restores coherent identity" \
+  || bad "pin identity: restored projection" "$identity_out"
+
 # CRITERION 3 — GREEN REGARDLESS OF HUB STATE, proved directly.
 #
 # The receiver is put in EXACTLY the FS.GG.Audio position: pinned to an older kit, with that older kit
