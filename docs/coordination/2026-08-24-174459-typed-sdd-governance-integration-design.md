@@ -1,18 +1,18 @@
 ---
-title: "Design: Typed SDD constitutional model and compiled governance bridge"
+title: "Design: Typed SDD and complete Governance integration"
 category: Design
 categoryindex: 4
 index: 24
-description: "A deferred successor design that moves Typed SDD constitutional semantics into a typed AST while preserving human ratification, Governance optionality, and existing lifecycle lanes."
+description: "A deferred successor design for incorporating the complete FS.GG.Governance pipeline into Typed SDD, including a typed constitution, operational policy boundaries, evidence, enforcement, release, and audit."
 ---
 
-# Design: Typed SDD constitutional model and compiled governance bridge
+# Design: Typed SDD and complete Governance integration
 
 | Field | Value |
 |---|---|
 | Status | Proposed successor; implementation deferred behind Typed SDD P4 |
 | Authored | 2026-08-24T17:44:59+02:00 |
-| Scope | Typed SDD constitutional authority, ratification, projections, migration, and Governance integration |
+| Scope | Typed SDD constitutional authority plus the complete Governance configuration, sensing, routing, checking, evidence, enforcement, ship, release, and audit pipeline |
 | Depends on | [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md) and the [Typed SDD P0–P4 implementation](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) |
 | Extends | [Typed protocol kernel design](2026-08-24-typed-protocol-kernel-design.md) |
 | Preserves until activation | [ADR-0004](../adr/0004-constitution-ownership-for-lifecycle-sdd-products.md) and the current `.fsgg/constitution.md` contract |
@@ -20,11 +20,21 @@ description: "A deferred successor design that moves Typed SDD constitutional se
 
 ## Executive decision
 
-Typed SDD should eventually represent a product constitution as a first-class typed extension of the
-shared `SpecificationModel`. Its principles, applicability, obligations, exceptions, amendment rules,
-evidence requirements, stable identity, version, and ratification status belong in the inspectable AST.
-The current `.fsgg/constitution.md` then becomes a generated human projection for Typed SDD, not a higher
-semantic authority outside the model.
+Typed SDD should eventually incorporate the whole FS.GG.Governance system through a versioned governance
+integration extension and handoff, not merely connect a typed constitution to four constitutional checks.
+The constitution is the normative root of that integration: its principles, applicability, obligations,
+exceptions, amendment rules, evidence requirements, stable identity, version, and ratification status
+belong in the inspectable `SpecificationModel`. The current `.fsgg/constitution.md` then becomes a generated
+human projection for Typed SDD, not a higher semantic authority outside the model.
+
+The constitution is not the whole governance model. The design also incorporates Governance's existing
+configuration validation, fact sensing, adapters, path/capability routing, gate registry and selection,
+reified check algebra, deterministic/agent/human competency tiers, evidence capture and reuse, freshness,
+cache and cost controls, inherited organizational floors, mode/profile enforcement, ship rollup, release
+preconditions, attestations, audit records, generated views, and CLI/host execution boundary. Those concerns
+remain implemented and owned by FS.GG.Governance. Typed SDD supplies stable normative subjects, declared
+evidence obligations, lifecycle facts, and a versioned binding manifest that lets Governance apply its full
+pipeline without importing SDD code or redefining SDD meaning.
 
 This is deliberately **not part of the current Typed SDD implementation**. No constitution AST, migration,
 compiler surface, provider value, or Governance contract described here may be added to P0–P4. Work may
@@ -35,18 +45,19 @@ must not force the pilot to design a constitutional extension before the generic
 P5—the separate decision to make Typed SDD the omitted-value default—does not silently absorb this work.
 After P4, maintainers must explicitly choose one of two sequences:
 
-1. implement and soak the constitutional extension before the P5 default flip; or
+1. implement and soak the constitution plus complete Governance integration before the P5 default flip; or
 2. complete P5 with the then-current Typed SDD constitution posture and introduce this feature afterward.
 
 Either sequence requires its own feature lifecycle, cross-repository issues, compatibility decisions,
 published artifacts, and acceptance evidence. This design expresses the intended architecture, not
 authorization to widen the active roadmap.
 
-The constitutional AST owns **what a product requires and why**. FS.GG.Governance remains an optional
-consumer and enforcement engine that owns **how a requirement is sensed, who is competent to decide it,
-and at which boundary a failure blocks**. Governance rule implementations are referenced through stable,
-versioned identities; their predicates are not copied into FS.GG.SDD. Standard SDD retains its authored
-Markdown constitution. Freeform (`none`) retains no FS-GG lifecycle constitution.
+The typed specification owns **what a product requires, why, and what evidence is owed**.
+FS.GG.Governance remains an optional adjudication system that owns **how facts are sensed, which checks are
+selected, who or what is competent to decide, whether evidence is reusable, and at which boundary a result
+blocks**. Governance rule implementations and operational policies are referenced through stable, versioned
+identities; their predicates and execution policy are not copied into FS.GG.SDD. Standard SDD retains its
+authored Markdown constitution. Freeform (`none`) retains no FS-GG lifecycle constitution.
 
 ## Why this feature is needed
 
@@ -77,8 +88,10 @@ remove:
 - compiler or normalizer changes can alter constitutional interpretation without a distinct compatibility
   classification.
 
-The answer is not to put all governance behavior inside FS.GG.SDD. The answer is to give constitutional
-meaning one typed home and make enforcement bind to it through an explicit contract.
+The answer is not to put all governance behavior inside FS.GG.SDD. Nor is it enough to add a narrow
+constitution-to-check bridge. The answer is to give normative meaning one typed home and define an explicit
+integration contract through which the complete Governance pipeline can sense, route, adjudicate, capture,
+enforce, ship, release, and explain that meaning.
 
 ## Existing authority and machinery
 
@@ -133,6 +146,77 @@ represent the full Markdown constitution, its amendment semantics, product-local
 or lifecycle classification. Conversely, the Markdown constitution does not carry the Governance profile's
 precise rule identities, sensing boundaries, maturity, or finding provenance.
 
+### Existing complete Governance pipeline
+
+The constitution profile sits inside a substantially larger implemented system. The current Governance
+architecture is a typed, mostly pure pipeline with explicit host edges:
+
+```text
+strict .fsgg configuration + inherited reference profiles
+                         |
+                         v
+                 typed project facts
+                         +---------- external adapters and sensed facts
+                         |
+                         v
+        changed-path routing and finding classification
+                         |
+                         v
+            gate registry and route selection
+                         |
+                         v
+    freshness, reuse, cache eligibility, and cost budget
+                         |
+                         v
+       gate execution + deterministic/agent/human review
+                         |
+                         v
+          evidence capture, provenance, attestations
+                         |
+                         v
+             mode/profile enforcement decision
+                         |
+                         v
+              ship and release rollups
+                         |
+                         v
+       route/gates/evidence/audit/release projections
+```
+
+The configuration boundary is currently the strict, versioned four-file `.fsgg` contract:
+`governance.yml` supplies project facts, `policy.yml` supplies profiles and branch/review policy,
+`capabilities.yml` supplies paths, surfaces, domains, and check declarations, and `tooling.yml` supplies the
+allowlisted command catalog and external-tool requirements. Invalid configuration produces diagnostics and
+no partial typed model. The configuration is operational policy, not an informal shadow of the
+constitution.
+
+Governance then performs several different jobs that must not be collapsed into “run constitutional
+checks”:
+
+- sensing turns repository, project, SDD handoff, release, freshness, tool, and adapter observations into
+  typed facts at explicit I/O boundaries;
+- routing maps normalized changed paths to capability domains, reports ambiguity and unclassified governed
+  paths, builds a stable gate registry, and selects a deduplicated route with reasons and declared cost;
+- adjudication evaluates reified `Check<'fact>` values (`Atom`, `All`, `Any`, `Not`, `Implies`, or explicitly
+  opaque) using three-valued `Pass`, `Fail`, and `Uncertain` semantics and records what every check reads;
+- competency separates deterministic checks from agent-reviewed and human-only decisions instead of
+  pretending all policy is machine-decidable;
+- evidence machinery captures outcomes and provenance, distinguishes real, synthetic, failed, skipped, and
+  pending evidence, computes freshness and reuse identities, and prevents stale or tainted evidence from
+  masquerading as a fresh result;
+- operational controls apply review and cost budgets, cache eligibility, command allowlists, timeouts,
+  environment classes, maturity, severity, execution modes, profiles, and non-lowerable inherited floors;
+- enforcement keeps base severity visible while deriving an effective advisory or blocking posture for the
+  selected mode/profile;
+- ship and release assemble whole-change and publication decisions from already-typed results, including
+  package evidence, release preconditions, attestations, and exit-code basis; and
+- versioned route, gate, evidence, generated-view, audit, and release projections provide stable contracts
+  for CI, branch protection, agents, generated readiness views, and humans.
+
+Typed SDD integration is incomplete unless it gives every one of these stages an explicit source,
+contract, or “Governance-only” boundary. The existing implementation remains the reference behavior; this
+design does not replace it with a speculative second governance kernel in FS.GG.SDD.
+
 ### Existing SDD/Governance handoff
 
 SDD emits an optional versioned `governance-handoff.json`; Governance consumes it without importing SDD
@@ -181,60 +265,66 @@ The target authority split is:
 | Product constitutional principles and obligations | Product-authored constitutional extension source |
 | Normalized constitutional meaning and identity | Canonical specification compiler output |
 | Human acceptance of a constitutional revision | Ratification/amendment receipt |
-| Governance rule implementation and sensing | FS.GG.Governance rule pack |
-| Check competency, maturity, severity, route, and boundary | Governance policy/profile |
+| Governance binding from normative/evidence nodes to operational subjects | Versioned SDD-produced integration manifest, validated by Governance |
+| Governance configuration schema and typed operational facts | FS.GG.Governance configuration contracts |
+| Rule/check algebra, rule implementation, and adapter catalog | FS.GG.Governance kernel and rule packs |
+| Repository, project, release, freshness, and external sensing | FS.GG.Governance sensing/adapters at the host edge |
+| Changed-path classification, gate registry, route, and route rationale | FS.GG.Governance routing/gates pipeline |
+| Check competency, maturity, base severity, mode, profile, and boundary | Governance policy/profile and inherited reference floor |
+| Cost/review budget, command allowlist, environment, and timeout | Governance policy/tooling configuration |
+| Evidence capture, provenance, taint, freshness, reuse, and cache eligibility | FS.GG.Governance evidence pipeline |
+| Agent and human review records | Governance review contracts and approved reviewers |
+| Effective enforcement decision | FS.GG.Governance enforcement fold |
+| Whole-change ship decision and publication decision | FS.GG.Governance ship/release folds |
+| Attestation, audit, route, gate, evidence, and release wire formats | FS.GG.Governance versioned projections |
 | External facts | Their source authority, represented as typed observations |
 | Lifecycle readiness | FS.GG.SDD readiness model |
 | Cross-repository rollout and versions | ADRs, dependency registry, and Coordination board |
 | Human-readable constitution | Generated Markdown projection for Typed SDD |
 
 No row may be silently answered by the authority in another row. In particular, a blocking Governance
-verdict does not amend a constitutional principle, and a constitutional compiler success does not prove
-that an external check passed.
+verdict does not amend a constitutional principle; a constitutional compiler success does not prove that
+an external check passed; an SDD evidence obligation does not decide freshness or cache eligibility; and a
+Governance profile cannot weaken an inherited constitutional obligation.
 
 ## Architecture
 
 ```text
-human constitutional intent
-          |
-          v
-repository-owned constitution authoring skill
-          |
-          v
-agent-authored constitution extension source
-          |
-          v
-Typed SDD compiler + normalizer
-          |
-          +--> normalized ConstitutionModel + digest
-          +--> semantic constitutional diff
-          +--> generated .fsgg/constitution.md
-          +--> lifecycle obligations/evidence plan
-          +--> constitutional binding manifest
-          +--> agent guidance projection
-          |
-          v
-human ratification/amendment decision
-          |
-          v
-revision-bound ratification receipt
-          |
-          +-----------------------------+
-          |                             |
-          v                             v
-FS.GG.SDD readiness             optional Governance adapter
-                                      |
-                                      v
-                             Governance rule packs/profile
-                                      |
-                                      v
-                         advisory/blocking enforcement verdict
+agent-authored Typed SDD source
+  requirements + constitution + evidence declarations
+                         |
+                         v
+              compiler and normalizer
+                         |
+        +----------------+------------------+
+        |                |                  |
+        v                v                  v
+ normalized model   human projections   ratification/readiness
+ and digest         and semantic diff    receipts
+        |
+        v
+ versioned Governance integration manifest
+ normative subjects + applicability + evidence subjects + SDD facts
+        |
+        v
+ optional FS.GG.Governance adapter
+        |
+        +--> compose strict .fsgg config and inherited profiles
+        +--> sense repository/project/release/external facts
+        +--> route changed paths and select gates
+        +--> evaluate reified checks at declared competency tier
+        +--> resolve freshness/reuse/cache/cost and capture evidence
+        +--> derive effective enforcement for mode/profile
+        +--> roll up ship and release decisions
+        +--> emit provenance, attestation, audit, and explanations
 ```
 
-The constitutional model is one extension of the shared `SpecificationModel`, not a separate compiler or
-root document format. Product requirements may reference constitutional nodes. Constitutional nodes may
-refer to registered evidence/check contracts, but must not depend on a product requirement whose validity
-they are supposed to govern; the compiler rejects that cycle.
+The constitutional model and governance integration declaration are extensions of the shared
+`SpecificationModel`, not a separate compiler or root document format. Product requirements may reference
+constitutional nodes. Constitutional nodes may refer to registered evidence contracts, but must not depend
+on a product requirement whose validity they are supposed to govern; the compiler rejects that cycle.
+Bindings to Governance are compiled after normative normalization so operational configuration never
+changes the specification digest.
 
 ## Constitutional extension model
 
@@ -310,6 +400,142 @@ textual, but force, applicability, references, exceptions, required evidence, an
 closures. A predicate implementation may remain opaque only under the specification kernel's registered
 algorithm rules: declared inputs, outputs, reads, evidence, implementation fingerprint, and compatibility
 policy.
+
+## Governance integration extension model
+
+The post-P4 spike should model a small typed integration declaration alongside the constitution. It is a
+binding layer, not a copy of Governance configuration or the Governance rule EDSL. The conceptual normalized
+shape is:
+
+```fsharp
+type GovernanceContractVersion = private GovernanceContractVersion of string
+type GovernanceSubjectId = private GovernanceSubjectId of NodeId
+type GovernanceRuleRef =
+    { Package: PackageIdentity
+      Profile: ProfileId option
+      Rule: RuleId
+      CompatibleVersions: VersionRange }
+
+type EvidenceSubjectBinding =
+    { Obligation: ObligationId
+      Subject: GovernanceSubjectId
+      RequiredEvidence: EvidenceContractRef list }
+
+type GovernanceRuleBinding =
+    { Subject: GovernanceSubjectId
+      ConstitutionalObligation: ObligationId option
+      Requirement: RequirementId option
+      Rule: GovernanceRuleRef
+      AppliesWhen: Applicability
+      Coverage: Required | Supplemental }
+
+type SddFactExport =
+    { Fact: FactContractRef
+      SourceNode: NodeId
+      Freshness: FreshnessDeclaration
+      Sensitivity: DataClassification }
+
+type GovernanceIntegrationModel =
+    { ContractVersion: GovernanceContractVersion
+      Constitution: ConstitutionRef
+      Subjects: GovernanceSubjectId list
+      EvidenceSubjects: EvidenceSubjectBinding list
+      RuleBindings: GovernanceRuleBinding list
+      ExportedFacts: SddFactExport list
+      ExpectedProfiles: ProfileRef list
+      RequiredCapabilities: CapabilityContractRef list }
+```
+
+These names are illustrative until they can be reconciled with the published P4 extension vocabulary and
+the installed Governance API. The semantic boundary is firm:
+
+- the integration model may name a normative node, evidence subject, lifecycle fact, published profile, or
+  external rule contract;
+- it may declare whether a binding is required for coverage or supplemental enforcement;
+- it may declare the minimum data contract and freshness expectation for an SDD-produced fact;
+- it may not encode a `Check<'fact>` predicate, path glob, command line, timeout, cost, maturity, severity,
+  mode, cache result, reviewer verdict, ship decision, or release decision; and
+- it may not claim that a referenced rule exists or passed. Governance validates resolution and produces
+  that evidence.
+
+The normalized SDD model has two related digests. The **normative digest** covers requirements,
+constitution, evidence obligations, and their meaning. The **integration digest** additionally covers the
+binding manifest and external contract ranges. Changing a Governance binding invalidates integration
+evidence but is not automatically a constitutional amendment. Changing the obligation to which it binds
+changes the normative digest and follows constitutional amendment rules.
+
+## End-to-end Governance incorporation
+
+The following matrix is the required architecture contract. A later implementation plan must not reduce
+it to the constitution-profile row.
+
+| Governance machinery | Typed SDD supplies | Governance retains | Integrated output/behavior |
+|---|---|---|---|
+| Strict configuration | Lifecycle identity, integration contract version, expected capabilities/profiles | Four-file schema, validation, normalized operational facts, unknown-field and dangling-reference diagnostics | One validation report that distinguishes malformed SDD handoff, malformed Governance config, and incompatible versions |
+| Inheritance/reference profiles | Optional compatible profile references and normative obligations that must not be weakened | Embedded organization floors, profile composition, collision checks, and “local may raise, never lower” policy | Effective policy explains inherited and local sources independently of the constitution digest |
+| Adapters and sensing | Versioned SDD facts with source node, digest, freshness declaration, and sensitivity | Adapter SPI, built-in adapters, filesystem/git/project/tool/release sensing, SDD-handoff adapter, and I/O isolation | Typed fact assertions with source authority and provenance; no Governance parsing of SDD Markdown/F# |
+| Path/capability routing | Requirement/surface identities when available as useful annotations | Governed root, path maps/globs, domains, ambiguity rules, unmatched-path findings, and deterministic precedence | Route traces may cite SDD subjects but remain valid for non-SDD paths and checks |
+| Gate registry and selection | Stable rule references and coverage requirement | Check/tooling catalog resolution, stable gate identity, prerequisites, timeout, product checks, route selection, and cost rollup | Each selected gate explains both the repository route and any bound normative subject |
+| Rule EDSL/kernel | Normative/evidence subjects and typed input contracts | `Check<'fact>` algebra, fixed-point inference, three-valued verdict, `eval`/`render`/`hash`/`explain`/`reads`, provenance, and opaque-rule restrictions | A verdict cites the exact rule implementation, facts read, and SDD subjects; no predicate duplication in SDD |
+| Competency and review | Human-decision obligations where the specification requires judgement | Deterministic, agent-reviewed, and human-only tiers; prompt isolation; review keys, review budgets, model/reviewer records | `Uncertain` remains explicit until the declared competent authority supplies a valid record |
+| Calibration and advisory promotion | No model mutation; optional evidence subjects for calibration outcomes | Calibration samples, measured confidence, advisory-promotion criteria, and policy-owned maturity transitions | A promotion changes Governance policy/version and evidence, not the normative digest |
+| Gate execution | Nothing executable beyond stable declared external contract references | Command allowlist, environment class, timeout, process host, execution disposition and outcome | Execution records identify selected gate, command contract, input identity, outcome, and provenance |
+| Evidence capture and taint | Evidence obligation ID, subject ID, expected kind, and SDD-owned structural receipts | Capture loop, real/synthetic/pending/failed/skipped states, provenance graph, mutation/producer/render receipts, and taint propagation | Evidence is attached to normative subjects without converting “artifact exists” into “obligation satisfied” |
+| Freshness and reuse | Source model/integration digests and declared fact freshness expectations | Freshness-key construction/resolution/sensing, content identities, evidence reuse store, cache eligibility, and invalidation policy | Reuse proves that exact relevant inputs and contracts match; stale SDD projections or bindings force recomputation |
+| Cost and capacity | At most a declared lifecycle urgency or required boundary, never numeric execution policy | Check cost classes, route rollup, cost budget, review budget, cache controls, and no-hide findings | Planning can display expected Governance cost while Governance alone accepts/refuses a budgeted route |
+| Maturity/severity/mode/profile | Normative force and any constitutionally required boundary as an invariant | Advisory/blocking severity, maturity, six run modes, four enforcement profiles, branch policy, and effective-severity derivation | Enforcement explains base and effective severity; relaxation cannot hide the underlying result or weaken a constitutional invariant |
+| Ship | Exact normative and integration digests, ratification/readiness receipts, and SDD-owned evidence status | Whole-change rollup, blockers/warnings/passing partition, exit-code basis, cache/execution/generated-view additions | Ship output binds the decision to the exact Typed SDD model but is still computable for Standard SDD and non-SDD consumers |
+| Release | Package/release declarations and SDD readiness evidence where applicable | Release sensing, semantic-version rules, package evidence, publication preconditions, attestation summary, release decision/report | Release distinguishes advisory verify preview from blocking release and cites the model used |
+| Audit and explanation | Node titles and stable references suitable for human projection | Route/gates/evidence/attestation/audit/release schemas, deterministic JSON, human text, provenance and generated views | Humans and machines can traverse model node → binding → route → check → evidence → enforcement → ship/release decision |
+| Snapshots and generated-view currency | Canonical source/projection identities and expected producer contract | Snapshot comparison, generated-view declarations, currency sensing/enforcement, refresh commands, and no-clobber behavior | Stale derived views are visible findings and never silently become authority |
+| Host and CLI | No replacement CLI requirement; optional links from SDD commands to Governance artifacts | `fsgg` command parsing, sense/plan/act loops, filesystem/process/network edges, exit codes, and output paths | Tools compose through versioned artifacts; neither repository imports the other's host implementation |
+
+### Configuration and projection posture
+
+The initial feature must keep the four Governance YAML files canonical for operational policy. Generating
+all of them from Typed SDD would improperly make SDD the owner of routing, commands, cost, severity, and
+branch enforcement. Conversely, Governance must not infer normative obligations by reading generated
+`.fsgg/constitution.md`.
+
+One narrow projection is allowed: a Governance-owned resolver may materialize or refresh generated regions
+that are already derivable from a published Governance profile and the integration manifest. The generated
+region must name its producer, input digests, schema version, and regeneration command. Hand-authored
+routing, local checks, policy, and tooling remain untouched. Deleting the projection must not delete an
+embedded inherited floor.
+
+After this integration has soaked, Governance may independently adopt the shared Typed SDD extension
+substrate for a typed authoring EDSL for its own configuration. If it does, Governance still owns that AST,
+compiler extension, compatibility policy, and YAML projections. It is a separate feature and must not be a
+hidden prerequisite of this design.
+
+### Verdict and satisfaction semantics
+
+Constitutional applicability, evidence state, Governance verdict, and enforcement outcome are distinct:
+
+```text
+obligation applicability:  not-applicable | applicable | unresolved
+evidence state:            pending | real | synthetic | failed | skipped | auto-synthetic
+check verdict:             pass | fail | uncertain
+effective enforcement:     advisory | blocking
+whole-change decision:     pass | fail with explicit exit-code basis
+```
+
+No projection may flatten these into one Boolean “compliant” field. A passing check with stale evidence is
+not satisfied. A synthetic receipt remains visibly synthetic. An `Uncertain` agent/human check cannot be
+treated as `Pass`. An advisory failure remains a failure even when it does not block the current mode. An
+unbound required obligation is a coverage failure, not a successful empty route.
+
+### Optionality and non-SDD operation
+
+FS.GG.Governance must continue to govern Standard SDD, Freeform, and repositories with no FS.GG.SDD
+installation. Its configuration, adapters, route, checks, evidence, enforcement, ship, release, and audit
+contracts therefore cannot require a `GovernanceIntegrationModel`. When no typed handoff exists, the SDD
+adapter reports “not supplied” and the rest of Governance operates from its other facts and policy.
+
+Typed SDD likewise remains usable without Governance. It compiles normative meaning, projects the
+constitution, validates its own structural obligations, and emits readiness. For a declared external
+Governance binding it reports `not configured`, `unavailable`, or `unbound` according to the binding's
+coverage semantics; it never fabricates a Governance pass.
 
 ## Bootstrap and physical artifacts
 
@@ -466,34 +692,24 @@ bootstrap.
 
 ### Boundary
 
-The constitutional AST and Governance answer different questions:
+The typed specification and Governance answer different questions:
 
-| Constitutional model | Governance |
+| Typed specification/constitution | Governance |
 |---|---|
 | What is required, forbidden, permitted, or recommended? | How is it sensed or reviewed? |
 | To which changes or surfaces does the obligation apply? | Which repository paths and environments invoke the check? |
-| What evidence kind satisfies the obligation? | Which adapter or command obtains that evidence? |
+| What evidence is owed and which subject owes it? | Which adapter, command, review, or reused receipt obtains and validates that evidence? |
 | Which stable constitutional node explains the requirement? | Which rule/finding identity reports the verdict? |
-| What amendment changed the meaning? | At which mode/profile does failure block? |
+| What amendment changed the meaning? | At which mode/profile does failure block, and what ship/release decision follows? |
 
-The boundary is a versioned binding, conceptually:
-
-```fsharp
-type ConstitutionalCheckBinding =
-    { Obligation: ObligationId
-      Check: CheckContractRef
-      Satisfies: EvidenceKind list
-      ApplicabilityMapping: ApplicabilityMapping
-      ProducerFingerprint: ContentDigest }
-```
-
-The binding cannot restate the constitutional statement. It names the obligation and declares what
-evidence the check can supply. Governance retains its own `CheckTier`, maturity, severity, cost,
-environment, route, inheritance, and explanation behavior.
+The boundary is the `GovernanceIntegrationModel` and its versioned handoff projection defined above. It
+cannot restate the constitutional statement or precompute a verdict. Governance retains its own kernel,
+configuration, `CheckTier`, maturity, severity, cost, environment, routing, execution, inheritance,
+evidence, freshness, review, enforcement, release, and explanation behavior.
 
 ### Reusing the existing F# constitution profile
 
-The existing `fsharp-constitution` profile becomes the first bridge candidate after activation:
+The existing `fsharp-constitution` profile becomes the first integration candidate after activation:
 
 - each existing Governance rule identity maps to one constitutional obligation or to a declared
   input-state diagnostic;
@@ -504,7 +720,7 @@ The existing `fsharp-constitution` profile becomes the first bridge candidate af
 - a cross-repository compatibility fixture proves that every bound obligation resolves to the expected
   Governance identity without copying the rule inventory into SDD.
 
-The bridge must expose honest partial coverage. The existing four packs do not satisfy the whole
+The integration must expose honest partial coverage. The existing four packs do not satisfy the whole
 constitution. Unbound constitutional obligations remain `Unbound`, `HumanDecision`, or satisfied by an
 SDD-owned structured-artifact validator as declared. They never become `Pass` merely because no Governance
 rule exists.
@@ -521,25 +737,25 @@ contract or leaf contract type with no I/O. When Governance is absent:
   requirement; and
 - lifecycle completion follows SDD policy rather than fabricating a Governance verdict.
 
-Installing Governance adds sensing, explanation, routing, and enforcement. It does not change the
+Installing Governance adds the complete operational pipeline described above. It does not change the
 constitution's normalized meaning.
 
 ## Lifecycle integration
 
-The constitutional model participates in the existing lifecycle without adding a stage:
+The typed model and its Governance bindings participate in the existing lifecycle without adding a stage:
 
-| Stage | Constitutional behavior |
-|---|---|
-| Charter | Select effective constitution and record model/digest/status |
-| Specify | Classify scope and requirements against constitutional applicability |
-| Clarify | Surface unresolved constitutional ambiguity one material choice at a time |
-| Checklist | Derive applicable obligations and required evidence |
-| Plan | Explain compliance, exceptions, migrations, and public-surface consequences by node ID |
-| Tasks | Ensure required obligations have owned implementation/evidence tasks |
-| Analyze | Refuse missing, contradictory, stale, or unbound mandatory obligations |
-| Evidence | Attach receipts to constitutional obligation IDs |
-| Verify | Recompile, check projection freshness, replay bindings, and evaluate evidence |
-| Ship | Bind the exact ratified constitution digest into readiness and optional Governance handoff |
+| Stage | Typed SDD behavior | Governance relationship |
+|---|---|---|
+| Charter | Select effective constitution and record model/digest/status | Resolve expected Governance contract/profile compatibility without requiring installation |
+| Specify | Classify requirements against constitutional applicability | Declare governance subjects, fact exports, and evidence obligations by stable ID |
+| Clarify | Surface unresolved constitutional ambiguity one material choice at a time | Expose bindings whose applicability or competent reviewer cannot be derived |
+| Checklist | Derive applicable obligations and required evidence | Report required, supplemental, human, and currently unbound coverage separately |
+| Plan | Explain compliance, exceptions, migrations, and public-surface consequences by node ID | Show routes/costs only from a Governance-produced plan; SDD does not estimate them |
+| Tasks | Ensure required obligations have owned implementation/evidence tasks | Create execution/review tasks for selected gates without copying commands into the spec |
+| Analyze | Refuse missing, contradictory, stale, or unbound mandatory obligations | Validate manifest/config/profile resolution and route completeness |
+| Evidence | Attach SDD-owned receipts to obligation IDs | Capture external results, provenance, review records, freshness, reuse, and taint against the same subjects |
+| Verify | Recompile, check projection freshness, and replay bindings | Sense, route, run/reuse gates, enforce in `Verify`, and emit advisory release preview where configured |
+| Ship | Bind exact normative/integration digests into readiness and handoff | Enforce in `Gate`/`Release`; emit ship, audit, attestation, and release artifacts |
 
 Skills dispatch through the selected representation backend. Standard SDD skills continue reading the
 authored Markdown constitution. Typed SDD skills read the compiled constitutional model and show its
@@ -610,8 +826,19 @@ The implementation must distinguish at least:
 - mandatory evidence obligation with no binding;
 - Governance absent;
 - Governance binding unsupported;
-- Governance read/check indeterminate; and
-- external observation stale or incomplete.
+- Governance configuration invalid or incompatible with the manifest;
+- required profile, adapter, rule, gate, command, or external tool unavailable;
+- route ambiguity, unmatched governed path, or required subject selecting no gate;
+- Governance read/check indeterminate;
+- external observation stale or incomplete;
+- required agent/human review missing, over budget, or bound to different inputs;
+- evidence synthetic, tainted, stale, or ineligible for reuse;
+- cost or review budget exceeded;
+- inherited policy floor conflict;
+- gate execution failed, timed out, or was not executed;
+- stale generated Governance view;
+- ship decision blocked; and
+- release precondition, package evidence, or attestation incomplete.
 
 These cannot collapse to “constitution invalid” or a Boolean. Diagnostics name the constitution, node,
 source version, compiler identity, expected/observed digest, and recovery path where applicable.
@@ -645,15 +872,33 @@ source version, compiler identity, expected/observed digest, and recovery path w
 - abort preserves original bytes and lifecycle selection; and
 - migration and rollback receipts replay deterministically.
 
-### Governance bridge properties
+### Governance integration properties
 
-- every declared bridge binding resolves both a constitutional obligation and a published Governance rule;
+- every declared rule binding resolves both a constitutional obligation and a published Governance rule;
 - an empty binding census is a refusal, not complete coverage;
 - unknown Governance rule identities remain malformed/unbound rather than fabricated violations;
 - Governance maturity or severity changes do not change the constitutional model digest;
 - constitutional meaning changes do change its digest and invalidate stale bindings when required;
 - deleting Governance configuration cannot lower an inherited Governance floor; and
 - Typed SDD without Governance still completes its supported lifecycle path.
+
+### Governance pipeline properties
+
+- strict configuration and handoff validation produces no partial integrated model;
+- adapter and sensing tests prove authority, normalization, provenance, and I/O isolation;
+- path routing and gate selection remain deterministic under irrelevant declaration/input ordering;
+- every selected gate explains its path/domain reason and any bound SDD subject;
+- reified checks preserve `Pass`/`Fail`/`Uncertain`, reads, hash, render, and explanation equivalence;
+- deterministic, agent-reviewed, and human-only checks cannot substitute for one another;
+- execution occurs only through the allowlisted command/environment/timeout contract;
+- evidence state, taint, provenance, freshness, reuse, and cache eligibility survive projection round trips;
+- stale normative or integration digests invalidate reuse without changing the recorded prior outcome;
+- cost and review budgets refuse or diagnose work without hiding required checks;
+- inherited policy floors cannot be lowered by local config, generated-region deletion, mode, or profile;
+- effective severity preserves base severity and reason in every projection;
+- ship and release reports carry upstream decisions verbatim rather than recomputing them from rendered rows;
+- verify remains advisory for release readiness where the Governance contract declares it advisory; and
+- Governance without Typed SDD remains fully supported by the same regression suite.
 
 ### Projection and guidance properties
 
@@ -667,14 +912,25 @@ source version, compiler identity, expected/observed digest, and recovery path w
 | Repository | Future responsibility |
 |---|---|
 | S.I.R. | No new responsibility; supplies evidence about the generic extension substrate only |
-| FS.GG.SDD | Constitution extension types/compiler, generic base model, authoring/migration skills, projections, readiness and handoff producer |
-| FS.GG.Governance | Check-binding consumer, existing F# profile mapping, sensing/enforcement, compatibility fixtures, generated gate-set projection |
+| FS.GG.SDD | Constitution and integration extension types/compiler, generic base model, authoring/migration skills, projections, readiness and handoff producer |
+| FS.GG.Governance | Handoff adapter; config/sensing/routing/gates/kernel/execution/evidence/enforcement/ship/release/audit owner; existing profile mapping; compatibility fixtures |
 | FS.GG.Templates | Compose published lifecycle/provider support only after producer publication |
 | Product repositories | Own local constitutional extensions, human ratification, product-specific evidence and adoption decision |
 | `.github` | Cross-repository ADR, registry contracts, sequencing, compatibility and rollout evidence |
 
-Producer publication precedes consumer adoption. No source-project reference, local package shortcut, or
-shared working-tree dependency may satisfy a rollout acceptance condition.
+The handoff is a versioned data contract. FS.GG.SDD is its producer and publishes the old/new semantics,
+schema version, normalized fixtures, and supported compatibility range before FS.GG.Governance adopts it.
+Governance must accept the prior handoff during the declared compatibility window or fail with a precise
+unsupported-version diagnostic. Additive fields require tolerant older-consumer behavior only where the
+published schema promises it; renamed identities, changed normalization, or altered verdict meaning are
+breaking changes. Governance-owned audit/release schemas follow Governance's own version policy and do not
+wait on an SDD package release unless their shape actually consumes the new contract.
+
+Producer publication precedes consumer adoption, and Governance publication precedes template/product
+adoption of enforcement that depends on it. No source-project reference, local package shortcut, or shared
+working-tree dependency may satisfy a rollout acceptance condition. The dependency registry records the
+handoff version range and consumer minimum. A cross-repository ADR records the durable authority split,
+compatibility window, and retirement criteria before activation.
 
 ## Deferred delivery plan
 
@@ -708,16 +964,41 @@ Exit: one real constitution revision compiles, diffs, projects, ratifies, and re
 
 Exit: every supported generic seed is lossless or returns an explicit stable ambiguity.
 
-### C3 — Governance bridge
+### C3 — Governance integration contract
 
-- Publish the constitutional binding contract from SDD.
+- Publish the normative-subject, evidence-subject, fact-export, rule-binding, and compatibility contract
+  from SDD.
+- Version the handoff; publish old/new semantics, normalized fixtures, and supported consumer ranges.
+- Extend the Governance SDD adapter to validate and lift the handoff into Governance-owned facts without
+  importing SDD implementation code.
 - Map Governance's existing `fsharp-constitution` rules without copying its inventory into SDD.
-- Version the handoff and add installed-package producer/consumer fixtures.
 
-Exit: Governance explains and enforces bound constitutional obligations by stable identity, while absence
-of Governance preserves the Typed SDD lifecycle.
+Exit: configuration and adapter validation resolve subjects, profiles, rules, and facts by stable identity;
+absence of Governance still preserves the Typed SDD lifecycle.
 
-### C4 — Consumer soak
+### C4 — Routing, checks, and execution
+
+- Carry SDD subject references through facts, findings, gates, selected routes, and explanations.
+- Prove path routing and non-SDD gates remain behaviorally unchanged.
+- Bind reified deterministic/agent/human checks and preserve three-valued semantics.
+- Wire selected gates through the existing allowlisted execution boundary and review-record contracts.
+
+Exit: a representative change explains model node → binding → path/domain → gate → check/review → outcome,
+with no duplicated predicate or command in SDD.
+
+### C5 — Evidence, enforcement, ship, and release
+
+- Bind evidence capture, provenance, taint, freshness, reuse, cache eligibility, and cost/review budgets to
+  stable subjects and exact normative/integration digests.
+- Preserve inherited floors, base/effective severity, mode/profile behavior, and the local-only escape hatch.
+- Add the digests and subject links to Governance-owned ship, attestation, audit, generated-view, and release
+  projections with explicit schema/version treatment.
+- Prove Standard SDD and non-SDD Governance workflows remain supported.
+
+Exit: the complete Governance pipeline reaches a deterministic whole-change and publication decision whose
+evidence can be traced to the exact Typed SDD model, without altering that model's meaning.
+
+### C6 — Consumer soak
 
 - Migrate representative unmodified, customized, ratified, unratified, governed, and ungoverned products.
 - Measure authoring questions, ambiguous clauses, binding gaps, projection drift, and rollback use.
@@ -726,7 +1007,7 @@ of Governance preserves the Typed SDD lifecycle.
 Exit: the feature demonstrates bounded authoring friction, no silent migration, no second constitutional
 authority, and no Governance dependency for ordinary Typed SDD operation.
 
-### C5 — Adoption decision
+### C7 — Adoption decision
 
 - Decide whether new Typed SDD workspaces receive the typed base constitution automatically.
 - Decide the posture for existing Typed SDD workspaces and whether any default flip dependency is warranted.
@@ -748,6 +1029,13 @@ The profile is valuable and must be reused, but it represents four executable ru
 complete product constitution. It also owns enforcement maturity and sensing concerns that should not
 define constitutional meaning. Rejected as the sole model.
 
+### Integrate only the constitution profile
+
+This gives shared obligation/check identities but leaves configuration, adapters, route selection,
+competency, evidence lifecycle, inherited floors, ship, release, and audit disconnected from Typed SDD.
+The result would still require humans and agents to correlate most governance outcomes by prose. Rejected
+as incomplete; the profile is the first compatibility slice, not the final architecture.
+
 ### Move Governance into FS.GG.SDD
 
 This would make optional enforcement a lifecycle dependency, duplicate or relocate a mature inference
@@ -759,6 +1047,13 @@ Severity, mode, route cost, environment, and competency answer operational enfor
 them into constitutional meaning would make a `warn`→`block-on-ship` rollout look like a constitutional
 amendment and would prevent repositories from choosing an enforcement posture. Rejected; use versioned
 bindings.
+
+### Put the complete Governance AST inside `SpecificationModel`
+
+This would make every path glob, command, timeout, maturity, profile, cache rule, and release condition part
+of SDD normalization. It would prevent Governance from serving non-SDD consumers, couple release cadence,
+and turn operational tuning into specification changes. Rejected. A future Governance-owned typed extension
+may use the same substrate while retaining separate authority and digests.
 
 ### Generate the constitutional AST from Markdown
 
@@ -786,6 +1081,8 @@ profile while building the substrate it must consume. Rejected by the activation
   ratification receipts.
 - Requirements, plans, evidence, guidance, and Governance findings can cite the same obligation IDs.
 - Existing Governance rule packs and enforcement machinery are reused rather than copied.
+- The complete route-to-release decision chain can cite the same stable normative/evidence subjects.
+- Governance remains independently useful for Standard SDD, Freeform, and non-SDD repositories.
 - Standard SDD and Freeform preserve their present semantics.
 - Compiler self-change and constitutional ratification become visible, replayable operations.
 - Customized constitutions migrate honestly instead of being silently overwritten or heuristically parsed.
@@ -797,7 +1094,10 @@ profile while building the substrate it must consume. Rejected by the activation
   determinism.
 - The base/local composition and amendment rules require long-term compatibility discipline.
 - Existing unratified and customized Markdown constitutions may require real human resolution.
-- The Governance bridge adds another published contract and coordinated release sequence.
+- The Governance integration adds another published contract, schema compatibility window, and coordinated
+  SDD → Governance → template/product release sequence.
+- Carrying subject identities across every Governance projection increases fixture and migration surface.
+- Separate normative and operational authorities require careful UI/projection design to remain legible.
 - A generated constitution can obscure changes unless semantic diffs remain readable and ratification is
   bound to exact normalized meaning.
 - Deferring the feature means early Typed SDD versions may continue using the current constitution posture;
@@ -812,6 +1112,12 @@ Return to design rather than widening implementation if post-P4 evidence shows t
 - product-local composition requires order-dependent conflict resolution;
 - human ratification cannot be bound to exact normalized meaning;
 - Governance integration requires SDD to depend on Governance implementation code;
+- the integration cannot preserve Governance operation for non-SDD repositories;
+- the route/check/evidence/enforcement/release chain cannot retain stable subject identity without invasive
+  duplication of Governance's kernel;
+- integration requires an operational policy change to alter the normative digest;
+- existing Governance verdict, freshness, taint, severity, or release semantics would be flattened into a
+  misleading Boolean;
 - migration would need unrestricted prose inference or silent rewriting;
 - the bootstrap must contain substantive policy to make the system work; or
 - constitutional validation prevents discovery, drafting, or explicit unresolved judgement.
@@ -830,27 +1136,34 @@ The feature is complete only when:
 6. constitutional amendments produce semantic and version classifications, including weakening controls;
 7. compiler/normalizer changes execute the two-compiler compatibility protocol;
 8. the existing Governance F# profile binds by stable obligation/check identities without copied rule
-   semantics;
+   semantics, and the same binding model supports non-constitutional checks;
 9. Governance absence does not prevent supported Typed SDD compilation, authoring, verification, or ship;
-10. Governance presence adds honest sensing and enforcement without changing constitutional meaning;
+10. Governance presence composes strict configuration and inheritance, senses typed facts, routes paths,
+    selects gates, evaluates deterministic/agent/human checks, and records explanations without changing
+    constitutional meaning;
 11. generated Markdown, guidance, readiness, and handoff artifacts carry the same constitution identity and
     fingerprint;
 12. product-local inheritance is deterministic, conflict-refusing, and no-clobber;
-13. installed-package producer/consumer fixtures pass in dependency order with no source-project shortcut;
-14. representative governed and ungoverned consumers complete the full lifecycle and rollback controls; and
-15. a separate adoption decision names whether the feature lands before or after P5 and the exact release
+13. evidence capture, provenance, taint, freshness, reuse, cache eligibility, execution, and cost/review
+    budgets bind to exact normative/integration digests and remain distinguishable in projections;
+14. inherited floors, modes, profiles, base/effective severity, ship rollup, release preconditions,
+    attestations, audit, and generated-view currency retain their existing semantics;
+15. Standard SDD and non-SDD Governance regression journeys remain supported;
+16. installed-package producer/consumer fixtures pass in dependency order with no source-project shortcut;
+17. representative governed and ungoverned consumers complete the full lifecycle and rollback controls; and
+18. a separate adoption decision names whether the feature lands before or after P5 and the exact release
     identities that carry it.
 
 ## Decision still required after P4
 
-This design recommends the constitutional AST and the SDD/Governance boundary. It intentionally does not
-decide whether constitutional support must precede the Typed SDD default flip. That choice should be made
-from P4 evidence:
+This design recommends the constitutional AST plus the complete SDD/Governance integration boundary. It
+intentionally does not decide whether that support must precede the Typed SDD default flip. That choice
+should be made from P4 evidence:
 
 - If the existing constitution posture creates a second semantic authority in real Typed SDD opt-in work,
-  implement C0–C4 before P5.
+  implement and soak C0–C6 before P5.
 - If the posture is a bounded projection/bootstrap concern and migration risk dominates, complete P5 and
-  deliver the constitutional extension as a separately versioned successor.
+  deliver the constitution and Governance integration as a separately versioned successor.
 
 In either case, the current Typed SDD implementation finishes first.
 
@@ -863,6 +1176,13 @@ In either case, the current Typed SDD implementation finishes first.
 - [ADR-0076: agent-authored specification kernel](../adr/0076-agent-authored-fsharp-specification-kernel.md)
 - [Current product constitution](../../.fsgg/constitution.md)
 - [Current FS.GG architecture: SDD and Governance](../architecture.md)
+- [FS.GG.Governance system design index](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/index.md)
+- [FS.GG.Governance inference kernel](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/kernel.md)
+- [FS.GG.Governance rule EDSL](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/rule-edsl.md)
+- [FS.GG.Governance routing and modes](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/routing-and-modes.md)
+- [FS.GG.Governance adapter and composition model](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/adapters.md)
+- [FS.GG.Governance evidence boundaries](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/evidence-boundaries.md)
+- [FS.GG.Governance planning boundary](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/planning-and-optimization.md)
 - [FS.GG.Governance decision 0012: composed F# constitution profile](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/decisions/0012-composed-fsharp-constitution-profile.md)
 - [FS.GG.Governance reference constitution profile](https://github.com/FS-GG/FS.GG.Governance/blob/main/reference-gates/README.md)
 - [FS.GG.SDD generic constitution content contract](https://github.com/FS-GG/FS.GG.SDD/blob/main/specs/033-skeleton-constitution/contracts/constitution-content.md)
