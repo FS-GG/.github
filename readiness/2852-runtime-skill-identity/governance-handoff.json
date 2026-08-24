@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2852-runtime-skill-identity/ship.json",
-      "digest": "sha256:cbde9faf65c7f6a7a2164d6945f299a870d388e8ff7c8e777c4e0e07dc20cc55",
+      "digest": "sha256:5bfd54b94158eff44730b0ef1e1f4018d7599be4dcdb3a421c0b3a7a092c2ccc",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2852-runtime-skill-identity/verify.json",
-      "digest": "sha256:6eca10a89b2705be1624747b2ec76b92c9ce93a6dcd68ef89a9443f2190142e6",
+      "digest": "sha256:eda33b23fd07e67ca7b0f2080ad010ecb954c92a92cb99e4c600c0536a637133",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2852-runtime-skill-identity/work-model.json",
-      "digest": "sha256:9e011e8460b3a5514d4f120bb7ab36ea232683c90392d7567913a62197903142",
+      "digest": "sha256:2798398bafb99b4afaba1158f2b98e86d5b7b8ed68d1b5331171e8dbbf893976",
       "schemaVersion": 1
     }
   ],
