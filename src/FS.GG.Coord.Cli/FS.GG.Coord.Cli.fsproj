@@ -130,7 +130,16 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.0 — resumable intake projection with canonical board-field values.
+    <PackageReleaseNotes>0.75.1 — host-owned review waits and unambiguous completion evidence.
+
+WHAT MOVED, AND WHY IT IS A PATCH. Review queue entry now derives the current claim generation, PR
+head, review kind, and round through the engine rather than a caller-authored token. Completion accepts
+the required structured review record's canonical URL, comment id, or digest, normalizes it to the URL,
+and refuses prose-marker or ambiguous references before append. The packed Kit documents that same
+host-owned route while preserving the exact canonical generation-token contract. This is an additive
+repair with no removed command, package, member, or identity (.github#2859; parent .github#2903).
+
+0.75.0 — resumable intake projection with canonical board-field values.
 
 WHAT MOVED, AND WHY IT IS A MINOR. Intake validation and application now canonicalize the documented
 severity vocabulary before board-field validation and external writes. Failed legacy receipt or intent
