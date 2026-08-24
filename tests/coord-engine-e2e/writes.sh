@@ -374,7 +374,7 @@ if [ "$review_derived_initial_rc" -eq 0 ] \
       '.claimGeneration == "'"$review_claim_id"'" and .reviewGeneration == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0" and .kind == "initial-review" and .evidenceRef == "https://github.com/FS-GG/FS.GG.SDD/pull/42"' >/dev/null \
    && [ "$review_marker_complete_rc" -ne 0 ] && [ "$review_marker_repeat_rc" -ne 0 ] \
    && [ "$review_marker_before" -eq "$review_marker_after" ] \
-   && printf '%s' "$review_marker_complete_out" | grep -q "structured review-decision record $review_initial_url" \
+   && grep -q "structured review-decision record $review_initial_url" <<<"$review_marker_complete_out" \
    && [ "$review_digest_complete_rc" -eq 0 ] && [ "$review_normalized_evidence" = "$review_initial_url" ]; then
   ok "#2859 engine-derived initial wait and pre-append structured-record evidence normalization"
 else
