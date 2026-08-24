@@ -610,9 +610,30 @@ else
 fi
 
 # =============================================================================================
+# 15 — END-TO-END RUNTIME IDENTITY: authority + every declared copy, with one-line inversion.
+# =============================================================================================
+expect "15a identity names the source and verifies every runtime copy" 0 '"verdict": "coherent"' \
+  -- bash "$SV" identity --skill skill-1 --source "$T2/canonical/skills" --tree "$T2"
+
+printf '\nidentity divergence\n' >> "$T2/.agents/skills/skill-1/SKILL.md"
+expect "15b one-line runtime divergence is RED and names the artifact" 1 '[runtime-bytes] .agents/skills/skill-1/SKILL.md' \
+  -- bash "$SV" identity --skill skill-1 --source "$T2/canonical/skills" --tree "$T2"
+bash "$SV" generate --source "$T2/canonical/skills" --tree "$T2" --mode copy >/dev/null
+
+expect "15c restored runtime copies return to the same coherent identity" 0 '"verdict": "coherent"' \
+  -- bash "$SV" identity --skill skill-1 --source "$T2/canonical/skills" --tree "$T2"
+
+printf '{"skills":[{"id":"skill-1","files":[{"path":"../escape","sha256":"%064d"}]}]}\n' 0 > "$WORK/identity-escape.json"
+expect "15d a manifest path that escapes the skill is INCONCLUSIVE, not compared" 2 'malformed or duplicate file row' \
+  -- bash "$SV" identity --skill skill-1 --manifest "$WORK/identity-escape.json" --tree "$T2"
+
+expect "15e a path-shaped skill id is INCONCLUSIVE before any root read" 2 'skill id is malformed' \
+  -- bash "$SV" identity --skill ../skill-1 --source "$T2/canonical/skills" --tree "$T2"
+
+# =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=58
+EXPECTED_LEGS=63
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 

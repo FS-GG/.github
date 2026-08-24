@@ -11,6 +11,12 @@
 # ADR-0017 predicate the union gate (scripts/skill-union-assert.sh --params) evaluates against a
 # scaffold's `scaffold-provenance.json` — its effectiveParameters PLUS the facts the gate derives
 # from that same document, today just `template` from `templateRef` (.github#2576). Absent ⇒ `always`.
+# The same row is the producer-authority link in `fsgg.skill-identity/v1`: `source` names the
+# authoritative SKILL.md and `sha256` is its content identity. `scripts/fsgg-skill-registry-check
+# --identity <id>` joins that row to the producer manifest's complete file inventory and prints the
+# compared paths and digests; a consumer no longer has to infer authority from whichever mirror it
+# happened to open. Package, materialized, and runtime projections carry this identity forward
+# without changing the `materializes-when` contract.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
 #   * PRODUCT skills, TEMPLATE FAMILY (6) — RECONCILED from FS.GG.Templates' producer manifest

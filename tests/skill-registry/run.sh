@@ -1160,7 +1160,7 @@ printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKI
 DRIVER="$(sha "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md")"
 cat > "$DROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "work-roadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/work-roadmap", "materializes-when": "feedback == true and lifecycle == spec-kit" }
+  { "id": "work-roadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/work-roadmap", "materializes-when": "feedback == true and lifecycle == spec-kit", "files": [{"path":"SKILL.md","sha256":"$DRIVER"}] }
 ] }
 JSON
 DREG="$WORK/driver-skills.yml"
@@ -1176,6 +1176,15 @@ write_channels "$DREG" <<'YAML'
 YAML
 run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
   || { echo "FAIL: a coherent .github driver row was not accepted"; run --registry "$DREG" --repos-root "$DROOT" || true; exit 1; }
+
+identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and len(d["artifacts"])==1 and d["authority"]["source"].endswith("SKILL.md")' \
+  || { echo "FAIL: coherent producer identity projection"; echo "$identity_out"; exit 1; }
+printf '\nidentity divergence\n' >> "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: one-line producer divergence did not red identity"; echo "$identity_out"; exit 1; }
+printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
 
 # Discovery + digest actually RUN for the driver class — a wrong digest is caught, not silently passed.
 sed -i "s|sha256: $DRIVER|sha256: $WRONG|" "$DREG"

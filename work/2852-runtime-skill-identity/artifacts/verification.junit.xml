@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="0" errors="0" skipped="0">
+  <testsuite name="runtime-skill-identity" tests="3" failures="0" errors="0" skipped="0">
+    <testcase classname="FS.GG.Identity" name="skill-view 63/63 including runtime divergence and malformed-authority inversions" />
+    <testcase classname="FS.GG.Identity" name="coordination-sync 136/136 including pinned-package materialized divergence inversion" />
+    <testcase classname="FS.GG.Identity" name="skill-registry full fixture including producer divergence inversion" />
+  </testsuite>
+</testsuites>
