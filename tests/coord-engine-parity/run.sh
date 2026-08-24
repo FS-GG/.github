@@ -4284,10 +4284,10 @@ if [ -z "$ADP_PORT" ]; then bad "adopt fixture bound a port"; else
   # 4f. GREEN checks do not supersede a structured changes-required review. This is the bypass #2854
   #     closes one command downstream from `who` and `reap`.
   reviewblocked="$(adp adopt FS.GG.SDD#977 --worker heron-697 2>&1 || true)"
-  printf '%s' "$reviewblocked" | grep -q 'GREEN checks but is NOT ready for adoption' \
+  grep -q 'GREEN checks but is NOT ready for adoption' <<<"$reviewblocked" \
     && ok "#2854: adopt refuses a CI-green PR whose review still requires changes (case 30)" \
     || bad "#2854: adopt #977 review refusal" "$reviewblocked"
-  printf '%s' "$reviewblocked" | grep -q 'fsgg-coord landable 706 --repo FS.GG.SDD' \
+  grep -q 'fsgg-coord landable 706 --repo FS.GG.SDD' <<<"$reviewblocked" \
     && ok "#2854: ...and defers to landable rather than a direct merge (case 30)" \
     || bad "#2854: adopt #977 landable remedy" "$reviewblocked"
   refute "#2854 inversion: adopt never calls changes-required work finished or emits a direct merge (case 30)" \
