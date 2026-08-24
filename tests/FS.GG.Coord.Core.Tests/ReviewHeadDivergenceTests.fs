@@ -96,6 +96,26 @@ module ReviewHeadDivergenceTests =
     let private ordinaryRoundThreeChain terminalVerdict =
         ordinaryRoundThreeChainWithPrefix StructuredDecision.ChangesRequired terminalVerdict
 
+    let private ordinaryRoundFourSuccessorChain terminalVerdict =
+        let first = initial StructuredDecision.ChangesRequired (String.replicate 40 "0")
+        let next revision previous round head verdict preceding =
+            following revision previous StructuredDecision.Confirmation verdict round head preceding
+        let round1 =
+            next 2 first.Digest 1 (String.replicate 40 "1") StructuredDecision.ChangesRequired
+                "https://review/1"
+        let round2 =
+            next 3 round1.Digest 2 (String.replicate 40 "2") StructuredDecision.ChangesRequired
+                "https://review/2"
+        let round3 =
+            next 4 round2.Digest 3 reviewedHead StructuredDecision.Pass "https://review/3"
+        let round4 =
+            next 5 round3.Digest 4 movedHead terminalVerdict "https://review/4"
+        [ StructuredDecisionTests.reviewComment 1L first
+          StructuredDecisionTests.reviewComment 2L round1
+          StructuredDecisionTests.reviewComment 3L round2
+          StructuredDecisionTests.reviewComment 4L round3
+          StructuredDecisionTests.reviewComment 5L round4 ]
+
     let private boundedOrdinaryChain initialVerdict terminalVerdict round head =
         let firstHead = if round = 0 then head else String.replicate 40 "0"
         let first = initial initialVerdict firstHead
@@ -177,6 +197,23 @@ module ReviewHeadDivergenceTests =
         Assert.True(Review.isOrdinaryExhaustionTerminal reviewedHead Types.PrPending changesRequired)
 
         Assert.False(Review.isOrdinaryExhaustionTerminal movedHead Types.PrRed pass)
+
+    [<Fact>]
+    let ``2883 a passing round-four successor reaches host acceptance instead of exhaustion`` () =
+        let passing =
+            verdictOf Review.Ordinary movedHead
+                (ordinaryRoundFourSuccessorChain StructuredDecision.Pass) Types.PrGreen
+        Assert.Equal(Review.AwaitingHostAcceptance, passing.State)
+        Assert.Equal(Review.RequestHostAcceptance, passing.NextAction)
+
+        // Inversion: the same ordinal still exhausts when the successor requests another repair.
+        let repairing =
+            verdictOf Review.Ordinary movedHead
+                (ordinaryRoundFourSuccessorChain StructuredDecision.ChangesRequired) Types.PrGreen
+        Assert.Equal(Review.OrdinaryExhaustion, repairing.State)
+        match repairing.NextAction with
+        | Review.Park _ -> ()
+        | action -> failwithf "expected an exhaustion park, got %A" action
 
     [<Fact>]
     let ``complete ordinary exhaustion decision owns checks wait generation and claim turnover`` () =

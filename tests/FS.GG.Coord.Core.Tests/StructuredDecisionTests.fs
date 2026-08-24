@@ -272,9 +272,44 @@ module StructuredDecisionTests =
                 (Some "https://review/1") (Some "https://review/1")
         initial, acceptance, [ reviewComment 1L initial; reviewComment 2L acceptance ]
 
+    let private acceptedRoundFourSuccessorChain terminalVerdict =
+        let initial = review 1 None StructuredDecision.Initial StructuredDecision.ChangesRequired 0 None None
+        let next revision previous round verdict preceding =
+            review revision (Some previous) StructuredDecision.Confirmation verdict round
+                (Some "https://review/1") (Some preceding)
+        let round1 = next 2 initial.Digest 1 StructuredDecision.ChangesRequired "https://review/1"
+        let round2 = next 3 round1.Digest 2 StructuredDecision.ChangesRequired "https://review/2"
+        let round3 = next 4 round2.Digest 3 StructuredDecision.Pass "https://review/3"
+        let round4 = next 5 round3.Digest 4 terminalVerdict "https://review/4"
+        let acceptance =
+            review 6 (Some round4.Digest) StructuredDecision.Acceptance StructuredDecision.Accepted 0
+                (Some "https://review/1") (Some "https://review/5")
+        [ reviewComment 1L initial
+          reviewComment 2L round1
+          reviewComment 3L round2
+          reviewComment 4L round3
+          reviewComment 5L round4
+          reviewComment 6L acceptance ]
+
     let expectOk = function
         | Ok value -> value
         | Error errors -> failwithf "expected success, got %A" errors
+
+    [<Fact>]
+    let ``2883 acceptance and delivery count repairs rather than passing successor confirmations`` () =
+        let passing = acceptedRoundFourSuccessorChain StructuredDecision.Pass
+        let parsed = Driver.parseEffectiveReviewComments (String.replicate 40 "a") passing |> expectOk
+        Assert.Equal<int list>([ 1; 2; 3 ], parsed.Rounds)
+        Assert.DoesNotContain(
+            "review round ceiling exceeded",
+            Driver.validateReviewChain Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                { parsed with ChecksGreen = true })
+
+        // Inversion: changing the successor's verdict withdraws acceptance authority.
+        Assert.True(
+            acceptedRoundFourSuccessorChain StructuredDecision.ChangesRequired
+            |> Driver.parseEffectiveReviewComments (String.replicate 40 "a")
+            |> Result.isError)
 
     [<Fact>]
     let ``M4 representative active review migration projects a v2 record through the existing protocol`` () =
