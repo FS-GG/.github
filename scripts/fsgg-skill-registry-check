@@ -1252,7 +1252,24 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
                  "verdict": "inconclusive",
                  "problems": ["registry row has no usable source and sha256"]}, 2)
 
-    producer = source.split("/", 1)[0]
+    # `source` is authority, not a convenient path hint. Validate its lexical contract before the
+    # first segment can select a producer or any realpath is derived from it. Otherwise `../...`
+    # selects the aggregate root's parent as the producer and makes the later containment check
+    # internally coherent over attacker-selected bytes.
+    source_parts = source.split("/")
+    source_is_safe = (
+        not os.path.isabs(source)
+        and os.path.normpath(source) == source
+        and len(source_parts) >= 2
+        and all(part not in ("", ".", "..") for part in source_parts)
+        and re.fullmatch(r"[A-Za-z0-9.][A-Za-z0-9._-]*", source_parts[0]) is not None
+    )
+    if not source_is_safe:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": ["registry source must be a normalized non-traversing <producer>/<path>"]}, 2)
+
+    producer = source_parts[0]
     producer_path = os.path.join(repos_root, producer)
     source_path = os.path.join(repos_root, source)
     producer_real = os.path.realpath(producer_path)

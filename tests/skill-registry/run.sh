@@ -1181,6 +1181,34 @@ identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.g
 printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["authority"]["source"]==".github/.claude/skills/cross-repo-coordination/SKILL.md"' \
   || { echo "FAIL: coordination-kit manifest is not a usable producer identity authority"; echo "$identity_out"; exit 1; }
 
+# A lexical parent segment must not be allowed to redefine the selected producer checkout. Reproduce
+# the production-shaped layout the round-three critic measured: keep `.repos/.github` as the sanctioned
+# checkout symlink, point only the registry source at the aggregate root's parent, and place otherwise
+# coherent source/manifest bytes under that parent. Realpath containment alone considers that tree
+# coherent; the registry authority must reject the source before deriving or resolving its producer.
+mkdir -p "$WORK/.claude/skills" "$WORK/registry"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$WORK/.claude/skills/"
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$WORK/registry/coordination-kit-skill-manifest.json"
+cp "$LIVE_PRODUCER/registry/skills.yml" "$WORK/live-skills.good.yml"
+python3 - "$LIVE_PRODUCER/registry/skills.yml" <<'PY'
+import sys, yaml
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    registry = yaml.safe_load(handle)
+row = next(row for row in registry["skills"] if row["id"] == "cross-repo-coordination")
+row["source"] = "../.claude/skills/cross-repo-coordination/SKILL.md"
+with open(path, "w", encoding="utf-8") as handle:
+    yaml.safe_dump(registry, handle, sort_keys=False)
+PY
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="inconclusive" and "normalized non-traversing <producer>/<path>" in d["problems"][0]' \
+  || { echo "FAIL: parent-traversing producer source authority was not refused"; echo "$identity_out"; exit 1; }
+cp "$WORK/live-skills.good.yml" "$LIVE_PRODUCER/registry/skills.yml"
+rm -rf "$WORK/.claude" "$WORK/registry"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restoring the sanctioned producer checkout symlink did not return coherent"; echo "$identity_out"; exit 1; }
+
 # The checkout symlink is sanctioned, but a source symlink escaping that selected checkout is not.
 mv "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md.real"
 printf 'outside producer\n' > "$WORK/escaped-skill.md"
