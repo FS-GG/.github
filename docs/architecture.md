@@ -1029,6 +1029,14 @@ install is what keeps the composition honest. See the
   one tier and not the others, because there are no tiers — which is what **54 vendored copies** of
   the protocol used to guarantee it would.
 
+  **The next boundary is one agent-authored specification kernel, piloted in S.I.R.
+  ([ADR-0076](adr/0076-agent-authored-fsharp-specification-kernel.md), accepted 2026-08-24).**
+  S.I.R. proves the reusable identity, normalization, provenance, evidence, projection, and authoring
+  contracts against its existing executable-rules corpus. FS.GG.SDD then owns and publishes that small
+  substrate; S.I.R. keeps gameplay semantics, while this coordination component consumes process and
+  protocol extensions including observation and mutation algebras. The boundary is explicitly extensible,
+  not one platform-wide closed union, and publication precedes adoption.
+
   **There is one tier left, and it is the fleet's own engine
   ([#1075](https://github.com/FS-GG/.github/issues/1075)).** `projections` compares files *in this
   repo*, so it makes the prose and `Protocol.fs` agree **here** and has nothing to say about the
