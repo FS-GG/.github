@@ -76,6 +76,27 @@ belong on the initial or confirmation record. Every acceptance is preflighted th
 retirement and terminal-chain parser; successful output reports `effectiveChainValidated: true`. The
 command rejects legacy v1 input before any write.
 
+### Durable review waits
+
+Before dispatching a critic, the host writes the queue entry from live authority rather than assembling
+the receipt by hand:
+
+```bash
+scripts/fsgg-coord review wait enter FS-GG/FS.GG.Repo#42 --pr 77 --json
+```
+
+The engine reads the winning claim, current PR head, structured review state, and required critic action;
+it derives `claimGeneration`, `reviewGeneration`, `kind`, `round`, timestamps, and the PR evidence anchor.
+It writes an initial `<head>:initial-review:0` entry or a successor
+`<head>:repair-confirmation:<round>` entry only when that exact dispatch is currently authorized.
+
+The explicit event-file form remains available for terminal completion, cancellation, timeout, and
+compatibility. For a canonical completion, `evidenceRef` identifies the structured
+`fsgg.coord.review-decision/v2` record—not the critic's prose marker. The writer accepts that record's
+canonical GitHub URL, numeric comment id, bare digest, or `sha256:<digest>`, normalizes all four to the
+canonical URL, and refuses a wrong or ambiguous reference before the append-only terminal event is
+written. The refusal names the required record URL, comment id, and digest.
+
 ## Critic succession
 
 Every record in one review generation binds the same critic. The single exception is an accountable,

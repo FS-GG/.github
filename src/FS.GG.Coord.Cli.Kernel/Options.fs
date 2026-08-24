@@ -327,9 +327,12 @@ DECISION (pure — no board, no network):
   review --snapshot FILE [--json|--text]     inspect a supplied review-protocol snapshot without IO
   review record REF draft.json --pr N [--json]
                                              seal and append the next structured v2 review decision
+  review wait enter REF --pr N [--json]       derive and append the one critic-queue entry authorized by
+                                             the live claim, PR head, review kind, and round
   review wait REF event.json --pr N [--json]
                                              append a bounded durable review-wait entry/completion/
-                                             cancellation/timeout event; queue entry is state, not sleep
+                                             cancellation/timeout event; a completion accepts the required
+                                             structured record URL, comment id, or digest and normalizes it
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   driver --events [--cursor FILE] [--json|--text]
                                              derive material transitions and the complete active-item
