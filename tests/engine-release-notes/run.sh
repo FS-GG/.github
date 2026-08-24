@@ -27,6 +27,7 @@ printf '<Project />\n' > "$WORK/Directory.Build.props"
 # the end of this file.
 ADVISORIES='DO NOT ADOPT 0.0.1. Fixture advisory.'
 ADVISORY_REF='$(FsggStandingAdvisories)'
+HISTORY_POINTER='FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE'
 
 # THE PRODUCTION SHAPE, REPRODUCED (.github#2512 / .github#2402): the version is NOT a literal in the
 # project. It is `FsggCoherentSetVersion`, declared in a Directory.Build.props the project inherits,
@@ -57,7 +58,11 @@ project() { # path, version, notes, [advisories]
     echo '  <PropertyGroup>'
     echo '    <Version>$(FsggCoherentSetVersion)</Version>'
     printf '    <FsggStandingAdvisories>%s</FsggStandingAdvisories>\n' "$advisories"
-    printf '    <PackageReleaseNotes>%s</PackageReleaseNotes>\n' "$notes"
+    if [ -n "$notes" ]; then
+      printf '    <PackageReleaseNotes>%s\n\n%s</PackageReleaseNotes>\n' "$notes" "$HISTORY_POINTER"
+    else
+      echo '    <PackageReleaseNotes></PackageReleaseNotes>'
+    fi
     echo '  </PropertyGroup>'
     echo '</Project>'
   } > "$path"
@@ -77,7 +82,7 @@ literal_project() { # path, version, notes
     echo '  <PropertyGroup>'
     printf '    <Version>%s</Version>\n' "$version"
     printf '    <FsggStandingAdvisories>%s</FsggStandingAdvisories>\n' "$ADVISORIES"
-    printf '    <PackageReleaseNotes>%s</PackageReleaseNotes>\n' "$notes"
+    printf '    <PackageReleaseNotes>%s\n\n%s</PackageReleaseNotes>\n' "$notes" "$HISTORY_POINTER"
     echo '  </PropertyGroup>'
     echo '</Project>'
   } > "$path"
@@ -119,6 +124,25 @@ project "$P" "1.2.4" "1.2.3 — stale notes
 $ADVISORY_REF"
 run "$P"
 expect 1 "the measured stale-notes shape is red" "Version is 1.2.4"
+
+P="$WORK/accumulated-history/Test.fsproj"
+project "$P" "1.2.4" "1.2.4 — current notes
+
+1.2.3 — prior notes that must stay on its served registry listing
+
+$ADVISORY_REF"
+run "$P"
+expect 1 "a prior release entry accumulated below the current one is red" \
+  "must contain exactly one release heading"
+
+P="$WORK/missing-history-pointer/Test.fsproj"
+project "$P" "1.2.4" "1.2.4 — current notes
+
+$ADVISORY_REF"
+sed -i "s/$HISTORY_POINTER//" "$P"
+run "$P"
+expect 1 "a listing that drops the served-history pointer is red" \
+  "must have exactly three ordered parts"
 
 P="$WORK/empty/Test.fsproj"
 project "$P" "1.2.4" ""
@@ -175,20 +199,20 @@ else
 fi
 
 boundary_project() { # path, evaluated-length
-  python3 - "$1" "$2" "$ADVISORIES" <<'PY'
+  python3 - "$1" "$2" "$ADVISORIES" "$HISTORY_POINTER" <<'PY'
 import pathlib, sys
-path, want, advisories = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+path, want, advisories, history = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4]
 path.parent.mkdir(parents=True, exist_ok=True)
 (path.parent / "Directory.Build.props").write_text(
     "<Project><PropertyGroup><FsggCoherentSetVersion>1.2.3</FsggCoherentSetVersion>"
     "</PropertyGroup></Project>\n"
 )
 (path.parent / "coherent-set.py").write_text(f'PROJECTS = (\n    "{path}",\n)\n')
-head = "1.2.3 padding "
-tail = "\n" + advisories          # what $(FsggStandingAdvisories) expands to, plus its own newline
+head = "1.2.3 — padding "
+tail = "\n" + advisories + "\n" + history
 pad = want - len(head) - len(tail)
 assert pad > 0, pad
-body = head + ("x" * pad) + "\n$(FsggStandingAdvisories)"
+body = head + ("x" * pad) + "\n$(FsggStandingAdvisories)\n" + history
 path.write_text(
     '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
     "<Version>$(FsggCoherentSetVersion)</Version>"

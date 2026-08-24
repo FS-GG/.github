@@ -103,6 +103,8 @@ COHERENT_SET_NAME = "PROJECTS"
 # The property carrying the standing DO-NOT-ADOPT advisories, separately from the release narrative.
 ADVISORY_PROPERTY = "FsggStandingAdvisories"
 ADVISORY_REFERENCE = f"$({ADVISORY_PROPERTY})"
+SERVED_HISTORY_POINTER = "FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE"
+RELEASE_HEADING = re.compile(r"(?m)^\s*(\d+\.\d+\.\d+)\s+—")
 
 # Rule (c) of check-paths-coherence reads this declaration. The workflow must rerun when the values
 # being compared move; the checker/fixture/workflow paths name their own implementation separately.
@@ -383,6 +385,31 @@ def main(argv: list[str]) -> int:
             f"appear in the evaluated PackageReleaseNotes. The reference does not resolve into the "
             f"published field, so the advisories would not reach a consumer."
         )
+
+    # ── The .github#2579 bounded-shape arm: one current entry, advisory, served history. ──────────
+    # The registry's hard ceiling catches the eventual failure, but it does not enforce the cut
+    # contract that prevents each release from consuming more of that finite budget. The authored
+    # shape is intentionally checked here: evaluation expands the standing advisory and erases the
+    # boundary between the three load-bearing parts.
+    if notes:
+        headings = RELEASE_HEADING.findall(authored)
+        reference_count = authored.count(ADVISORY_REFERENCE)
+        pointer_count = authored.count(SERVED_HISTORY_POINTER)
+        reference_at = authored.find(ADVISORY_REFERENCE)
+        pointer_at = authored.find(SERVED_HISTORY_POINTER)
+        if headings != [version]:
+            problems.append(
+                f"{args.project}'s <PackageReleaseNotes> must contain exactly one release heading "
+                f"for the current Version {version}; found {headings!r}. Replace the prior release "
+                f"entry at each cut instead of accumulating history (.github#2579)."
+            )
+        if reference_count != 1 or pointer_count != 1 or reference_at > pointer_at:
+            problems.append(
+                f"{args.project}'s <PackageReleaseNotes> must have exactly three ordered parts: "
+                f"the current release entry, one {ADVISORY_REFERENCE}, then one served-history "
+                f"pointer beginning {SERVED_HISTORY_POINTER!r}; found advisory references="
+                f"{reference_count}, history pointers={pointer_count}."
+            )
 
     # ── The .github#2579 length arm, over every member of the coherent set. ───────────────────────
     for project in length_subjects:
