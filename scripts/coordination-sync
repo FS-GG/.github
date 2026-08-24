@@ -22,6 +22,9 @@
 #                                         # receiver itself references, restored from the feed, compared
 #                                         # against the sha256s that package's own kit-manifest.tsv
 #                                         # ships. This is what the CI gate runs. See PIN-RELATIVE below.
+#   coordination-sync --check --against-pin --identity <skill-id> <target>
+#                                         # emit deterministic fsgg.skill-identity/v1 JSON for one
+#                                         # package-declared skill and its materialized bytes.
 #
 # `.github` (this repo, the ADR-0019 authority) is the canonical SOURCE — the kit files under this
 # checkout are the source of truth, exactly as sync-build-config's dist/dotnet/ is. Two arms carry the
@@ -149,7 +152,7 @@ die()   { echo "coordination-sync: $*" >&2; exit 2; }
 # honour. Same rot, same fix, as repos-audit.sh (#335).
 usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; }
 
-mode="apply"; repo=""; target=""; base_ref=""; against_pin=""; receiver_project=""; include_build_config=""
+mode="apply"; repo=""; target=""; base_ref=""; against_pin=""; receiver_project=""; include_build_config=""; identity=""
 # The receiver project default is the SAME literal kit-materialize.yml declares as its own
 # `receiver-project` input default. It is a shared contract with the workflow that WRITES the kit, not a
 # location this script invented — the two must name one file or the verifier grades a pin the
@@ -163,6 +166,7 @@ while [ $# -gt 0 ]; do
     --against-pin)          against_pin="yes"; shift ;;
     --receiver-project)     need_val "$@"; receiver_project="$2"; shift 2 ;;
     --include-build-config) include_build_config="yes"; shift ;;
+    --identity)             need_val "$@"; identity="$2"; shift 2 ;;
     -h|--help)              usage; exit 0 ;;
     -*)                     die "unknown flag '$1'." ;;
     *)                      [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
@@ -187,6 +191,13 @@ resolve_roots "$target" "$DEFAULT_ROOTS" "$DEFAULT_LABEL"
   || die "--receiver-project is only meaningful with --against-pin."
 [ -n "$against_pin" ] || [ -z "$include_build_config" ] \
   || die "--include-build-config is only meaningful with --against-pin."
+[ -n "$against_pin" ] || [ -z "$identity" ] \
+  || die "--identity is only meaningful with --check --against-pin."
+case "$identity" in
+  "") ;;
+  [!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) die "--identity must be one skill id beginning with a letter or digit." ;;
+  *) ;;
+esac
 
 # #1584 criterion 6, ANSWERED RATHER THAN INHERITED: the PR-arm/main-arm asymmetry does not carry over.
 #
@@ -677,20 +688,21 @@ def verify(target, roots, rows, archive, include_build_config):
                     contained(target, skill_dir, "a skill directory"), set())
                 expected.add(resolved)
             if not os.path.isfile(path):
-                emit("drift", "missing", rel)
+                emit("drift", "missing", rel, kind, pkg_rel, want, "")
                 continue
-            if sha256_file(path) != want:
-                emit("drift", "differs", rel)
+            actual = sha256_file(path)
+            if actual != want:
+                emit("drift", "differs", rel, kind, pkg_rel, want, actual)
                 continue
             # os.access(X_OK) answers True for everything when the process is root, which is how a mode
             # check quietly stops checking inside a container. Read the mode bits.
             is_exec = bool(stat.S_IMODE(os.stat(path).st_mode) & 0o111)
             if executable and not is_exec:
-                emit("drift", "not executable", rel)
+                emit("drift", "not executable", rel, kind, pkg_rel, want, actual)
             elif not executable and is_exec:
-                emit("drift", "unexpected executable", rel)
+                emit("drift", "unexpected executable", rel, kind, pkg_rel, want, actual)
             else:
-                emit("ok", rel)
+                emit("ok", rel, kind, pkg_rel, want, actual)
 
     # A skill directory is a CLOSED transport unit — build/FS.GG.Kit.targets deletes undeclared files
     # inside one on every materialize, so a file the pinned package does not declare is a tree that does
@@ -702,7 +714,7 @@ def verify(target, roots, rows, archive, include_build_config):
             for name in filenames:
                 found = os.path.realpath(os.path.join(dirpath, name))
                 if found not in expected:
-                    emit("drift", "extra", os.path.relpath(found, target))
+                    emit("drift", "extra", os.path.relpath(found, target), "skill", "", "", sha256_file(found))
 
 
 def main():
@@ -803,11 +815,11 @@ if [ -n "$against_pin" ]; then
   fi
 
   pin_line="$(awk -F'\t' '$1 == "pin" { print; exit }' "$PIN_LEDGER")"
-  [ -z "$pin_line" ] || echo "coordination-sync: pin = $(printf '%s' "$pin_line" | cut -f2) (from $(printf '%s' "$pin_line" | cut -f3))"
+  [ -n "$identity" ] || [ -z "$pin_line" ] || echo "coordination-sync: pin = $(printf '%s' "$pin_line" | cut -f2) (from $(printf '%s' "$pin_line" | cut -f3))"
   src_line="$(awk -F'\t' '$1 == "source" { print $2; exit }' "$PIN_LEDGER")"
-  [ -z "$src_line" ] || echo "coordination-sync: comparand = $src_line (the package's own kit-manifest.tsv; NOT this checkout)"
+  [ -n "$identity" ] || [ -z "$src_line" ] || echo "coordination-sync: comparand = $src_line (the package's own kit-manifest.tsv; NOT this checkout)"
   roots_line="$(awk -F'\t' '$1 == "roots" { print; exit }' "$PIN_LEDGER")"
-  [ -z "$roots_line" ] || echo "coordination-sync: skill roots = $(printf '%s' "$roots_line" | cut -f2) (from $(printf '%s' "$roots_line" | cut -f3))"
+  [ -n "$identity" ] || [ -z "$roots_line" ] || echo "coordination-sync: skill roots = $(printf '%s' "$roots_line" | cut -f2) (from $(printf '%s' "$roots_line" | cut -f3))"
 
   # INCONCLUSIVE outranks everything. Some `ok` lines may already have been emitted before the read
   # failed, and a partial verification is not a verification.
@@ -819,9 +831,60 @@ if [ -n "$against_pin" ]; then
     exit 3
   fi
 
+  # Opt-in machine projection over the same pinned-package ledger. No second restore or hub read is
+  # made: the package manifest is the transport authority and each receiver digest is the observed
+  # materialized artifact. An absent selected skill is inconclusive, never an empty pass.
+  if [ -n "$identity" ]; then
+    identity_rc=0
+    python3 -c '
+import json, re, sys
+skill, path = sys.argv[1], sys.argv[2]
+pin = source = None
+roots = []
+artifacts = []
+problems = []
+with open(path, encoding="utf-8") as handle:
+    for raw in handle:
+        fields = raw.rstrip("\n").split("\t")
+        if not fields:
+            continue
+        if fields[0] == "pin":
+            pin = fields[1] if len(fields) > 1 else None
+        elif fields[0] == "source":
+            source = fields[1] if len(fields) > 1 else None
+        elif fields[0] == "roots":
+            roots = fields[1].split() if len(fields) > 1 else []
+        elif fields[0] in ("ok", "drift"):
+            offset = 0 if fields[0] == "ok" else 1
+            rel_i = 1 + offset
+            rel = fields[rel_i] if len(fields) > rel_i else ""
+            if not re.search(r"(^|/)" + re.escape(skill) + r"/", rel):
+                continue
+            pkg_i, want_i, got_i = rel_i + 2, rel_i + 3, rel_i + 4
+            verdict = "coherent" if fields[0] == "ok" else "drift"
+            artifacts.append({"kind": "materialized", "path": rel,
+                              "packagePath": fields[pkg_i] if len(fields) > pkg_i and fields[pkg_i] else None,
+                              "expectedSha256": fields[want_i] if len(fields) > want_i and fields[want_i] else None,
+                              "actualSha256": fields[got_i] if len(fields) > got_i and fields[got_i] else None,
+                              "verdict": verdict})
+            if verdict != "coherent":
+                problems.append("[" + fields[1] + "] " + rel)
+verdict = "coherent" if artifacts and not problems else "drift" if artifacts else "inconclusive"
+if not artifacts:
+    problems.append("selected skill is absent from the pinned package manifest")
+report = {"schema": "fsgg.skill-identity/v1", "skillId": skill,
+          "authority": {"kind": "pinned-package", "package": "FS.GG.Kit",
+                        "version": pin, "source": source},
+          "roots": roots, "artifacts": artifacts, "verdict": verdict, "problems": problems}
+print(json.dumps(report, indent=2, sort_keys=True))
+sys.exit(0 if verdict == "coherent" else 1 if verdict == "drift" else 3)
+' "$identity" "$PIN_LEDGER" || identity_rc=$?
+    exit "$identity_rc"
+  fi
+
   awk -F'\t' '$1 == "ok" { print "ok: " $2 }' "$PIN_LEDGER"
   if grep -q '^drift	' "$PIN_LEDGER"; then
-    while IFS=$'\t' read -r _k kind rel; do
+    while IFS=$'\t' read -r _k kind rel _identity_fields; do
       echo "::error::coordination-sync: DRIFT ($kind): $rel"
     done < <(grep '^drift	' "$PIN_LEDGER")
     if grep -q '^drift	not executable	' "$PIN_LEDGER"; then
