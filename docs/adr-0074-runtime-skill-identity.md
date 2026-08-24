@@ -40,6 +40,10 @@ generated coordination-kit manifest carries the same canonical source/body diges
 closed raw-file inventory, so it is directly usable as an identity authority as well as package
 input. `.github`'s driver and coordination manifests remain disjoint producer inventories; identity
 selects the unique manifest entry by skill id and refuses duplicates across them.
+Producer containment is evaluated after realpath resolution against the selected producer checkout,
+not the aggregate repositories directory. This admits the hosted `.repos/.github ->
+$GITHUB_WORKSPACE` checkout layout while still refusing a source or inventory file that escapes the
+selected producer.
 
 Absent, unreadable, malformed, empty, or duplicate authority data is `inconclusive` and red. A
 digest mismatch or undeclared runtime file is `drift` and red. Existing check, generate,

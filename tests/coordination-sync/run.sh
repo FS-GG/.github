@@ -75,7 +75,14 @@ mapfile -t SKILL_SRCS < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source 
 SKILLS=(); for src in "${SKILL_SRCS[@]}"; do SKILLS+=("${src##*/}"); done
 echo "coordination-sync fixture — registry declares ${#SKILLS[@]} skill(s): ${SKILLS[*]}"
 IDENTITY_SKILL="cross-repo-coordination"
-printf '%s\n' "${SKILLS[@]}" | grep -qx "$IDENTITY_SKILL" \
+identity_skill_registered=false
+for skill in "${SKILLS[@]}"; do
+  if [ "$skill" = "$IDENTITY_SKILL" ]; then
+    identity_skill_registered=true
+    break
+  fi
+done
+[ "$identity_skill_registered" = true ] \
   || { echo "::error::fixture: real identity subject $IDENTITY_SKILL is absent from the kit roster"; exit 1; }
 
 # --- apply writes the full kit ---

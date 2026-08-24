@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a79051f2772aadc5595dba356d7ce6af0f6438c53bb308ddd6e3a152b6ff235d"
+        "value": "3680aa5e758441aff0e0af65d7e07948d2dd512aaadd6c0ba43041fa59833080"
       }
     },
     {
@@ -1486,7 +1486,7 @@
           "path": "work/2852-runtime-skill-identity/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a79051f2772aadc5595dba356d7ce6af0f6438c53bb308ddd6e3a152b6ff235d"
+            "value": "3680aa5e758441aff0e0af65d7e07948d2dd512aaadd6c0ba43041fa59833080"
           },
           "schemaVersion": 1
         },
@@ -1517,7 +1517,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "5e0f21a935d50b75dca69055a365a1429dddb8ab9573ae7a2e6ff9f3451fd8b1"
+        "value": "2c8baebc6483c68b21c28a2720d56d0a31c39783b8e22e400a3abcd32ecd7e66"
       },
       "currency": "current"
     }

@@ -1252,12 +1252,20 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
                  "verdict": "inconclusive",
                  "problems": ["registry row has no usable source and sha256"]}, 2)
 
+    producer = source.split("/", 1)[0]
+    producer_path = os.path.join(repos_root, producer)
     source_path = os.path.join(repos_root, source)
-    repo_real = os.path.realpath(repos_root)
+    producer_real = os.path.realpath(producer_path)
     source_real = os.path.realpath(source_path)
-    if source_real != repo_real and not source_real.startswith(repo_real + os.sep):
+    # Repository aggregation roots deliberately contain checkout symlinks (for example
+    # `.repos/.github -> $GITHUB_WORKSPACE`).  The selected producer checkout is the security
+    # boundary: its target may live outside the aggregate root, but a source may not escape that
+    # producer after either checkout or source symlinks are resolved.
+    if (not os.path.isdir(producer_path) or
+            (source_real != producer_real and not source_real.startswith(producer_real + os.sep))):
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
-                 "verdict": "inconclusive", "problems": ["registry source escapes repos root"]}, 2)
+                 "verdict": "inconclusive",
+                 "problems": ["registry source escapes producer checkout"]}, 2)
     raw = read_bytes(source_path)
     if raw is None:
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
@@ -1266,7 +1274,6 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
                  "verdict": "inconclusive", "problems": [f"source is unreadable: {source}"]}, 2)
     actual = canonical_digest(raw)
 
-    producer = source.split("/", 1)[0]
     manifest_paths = [os.path.join(repos_root, producer, candidate)
                       for candidate in IDENTITY_MANIFEST_CANDIDATES
                       if os.path.isfile(os.path.join(repos_root, producer, candidate))]
@@ -1301,7 +1308,7 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "verdict": "inconclusive",
                  "problems": ["producer manifest has no supplied-by/file inventory"]}, 2)
-    producer_root = os.path.realpath(os.path.join(repos_root, producer))
+    producer_root = producer_real
     skill_root = os.path.realpath(os.path.join(producer_root, supplied))
     if skill_root != producer_root and not skill_root.startswith(producer_root + os.sep):
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
