@@ -93,11 +93,11 @@ names the awaited event (`initial-review` or `repair-confirmation`); `enteredAt`
 the durable comment or check whose change resumes it. These are authority-issued revisions, not values
 an agent invents.
 
-The engine derives the canonical generation token from live authority: `<head>:initial-review:0` for an
-initial record and `<head>:repair-confirmation:<round>` for confirmation, escalation, or repair-phase
-records. The host does not transcribe it. Exactly one generation may be unconsumed. A new entry is
-refused until the preceding entry has a durable terminal event; multiple distinct unconsumed entries are
-invalid authority, never a latest-wins queue.
+The canonical generation token is `<head>:initial-review:0` for an initial record and
+`<head>:repair-confirmation:<round>` for confirmation, escalation, or repair-phase records. The engine
+derives that token from live authority; the host does not transcribe it. Exactly one generation may be
+unconsumed. A new entry is refused until the preceding entry has a durable terminal event; multiple
+distinct unconsumed entries are invalid authority, never a latest-wins queue.
 
 Entering a review queue writes the receipt before the actor yields. A current receipt plus the open
 item PR preserves the touch-set reservation, but it never extends or resurrects the worker's mutation

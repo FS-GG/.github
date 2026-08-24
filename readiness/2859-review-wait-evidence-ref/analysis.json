@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2859-review-wait-evidence-ref/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "15f25218e53df9c8b66876421953debb2f83c9b5dd47a0aeb4854e2cb576df68"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2859-review-wait-evidence-ref/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "3f95fbfeb75799dbf3e2e2a4fc1ca0e9f2d0b9ae26f40ee5849ad95282b6f9d9"
+        "value": "b41b9ece12ff440e04902c40fd9405d473f7c09547ae7193ee4c16ec01577020"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -496,7 +506,7 @@
     {
       "path": "readiness/2859-review-wait-evidence-ref/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
