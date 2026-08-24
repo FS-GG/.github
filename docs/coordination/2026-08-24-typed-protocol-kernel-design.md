@@ -12,6 +12,7 @@ description: "One agent-authored F# specification AST, piloted in S.I.R., with t
 |---|---|
 | Status | Accepted direction; staged implementation required |
 | Authored | 2026-08-24T09:43:48+02:00 |
+| Updated | 2026-08-24T10:19:38+02:00 — name the `typed-sdd` lifecycle and prepare its default transition |
 | Evidence snapshot | 2026-08-24T07:26:29Z |
 | Scope | A shared specification kernel, the S.I.R. pilot, and the FS-GG coordination process/protocol extension |
 | Extends | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0040](../adr/0040-port-the-io-layer.md), [ADR-0058](../adr/0058-adopt-one-governing-principle-derive-dont-restate.md) |
@@ -56,6 +57,69 @@ change and human projection, validate it, review the semantic diff, and repeat. 
 and tool capability—not trust in an account identity. CI accepts changes only when they pass through the
 canonical compiler, normalizer, provenance record, and generated-view freshness gate. Human-readable
 projections remain first-class review surfaces, but never a second authority.
+
+## Lifecycle name and default direction
+
+The consumer-facing process is **Typed SDD**. Its stable machine identifier is `typed-sdd`. “Typed” names
+the durable property—the canonical specification is a compiled, inspectable AST—without coupling the
+process name to computation-expression syntax, a particular builder, or the current agent runtime.
+
+After the already-decided `spec-kit` retirement, FS-GG workspace and product scaffolding will expose three
+durable lifecycle lanes. During the transition, `spec-kit` remains a fourth legacy value:
+
+| Machine value | Human name | Canonical authority | Intended posture |
+|---|---|---|---|
+| `none` | Freeform | Repository-local choices; no FS-GG specification lifecycle | Permanently available explicit opt-out |
+| `sdd` | Standard SDD | Existing SDD lifecycle artifacts and structured contracts | Current default; remains supported after Typed SDD arrives |
+| `typed-sdd` | Typed SDD | Agent-authored F# EDSL compiled to the canonical Specification AST | Additive opt-in first; intended future workspace default |
+
+`freeform` is vocabulary for humans, not a new wire value: the existing compatible machine token remains
+`none`. The legacy `spec-kit` lane remains on its already-decided retirement path and gains no new role in
+this design.
+
+Typed SDD reuses the Standard SDD lifecycle stages, readiness semantics, and evidence discipline. It changes
+the authoritative representation and authoring path, not the meaning of “specify, clarify, plan, tasks,
+implement, verify, ship.” Skills dispatch to the selected representation backend; they must not fork the
+stage model or maintain a second instruction corpus.
+
+Every supported workspace provider and product profile must eventually be able to select `typed-sdd`. No
+provider may silently coerce it to `sdd`, treat an unrecognized value as `none`, or claim support while
+omitting the compiler, authoring skills, provenance, and readiness checks. The lifecycle value must survive
+unchanged through provider descriptors, scaffold provenance, refresh/upgrade, doctor/readiness, generated
+guidance, and compatibility receipts.
+
+### Default-transition rule
+
+This document establishes `typed-sdd` as the intended successor default, not the current default. `sdd`
+continues to govern omitted lifecycle selection until a separate default-flip decision proves all readiness
+conditions and amends ADR-0056. The flip is one versioned cross-repository contract change and must move the
+raw template, every provider descriptor, `fsgg-sdd scaffold`, workspace wizard, registry, documentation, and
+default-path tests coherently.
+
+Default readiness requires all of the following:
+
+1. S.I.R. has completed the pilot and re-adopted the published kernel without a local shared-substrate copy.
+2. FS.GG.SDD publishes the Typed SDD compiler, lifecycle backend, migration tooling, authoring/inspection
+   skills, and stable contract fixtures to both feeds.
+3. Every supported workspace provider and product profile passes explicit `none`, `sdd`, and `typed-sdd`
+   composition tests; an omitted lifecycle still proves `sdd` until the flip commit.
+4. Fresh Typed SDD workspaces can complete the full lifecycle using only installed artifacts and generated
+   skills, with no S.I.R. checkout or source-project reference.
+5. Standard SDD → Typed SDD migration either preserves each supported semantic fact or returns an explicit,
+   stable ambiguity; it never silently converts prose guesses into canonical AST nodes.
+6. Refresh and upgrade preserve the selected lane, content identity, consumer extensions, and human-readable
+   projections. They do not rewrite canonical specifications behind the author's back.
+7. Agent unavailability, compiler failure, unsupported extension versions, stale projections, and direct
+   canonical edits fail visibly with recovery instructions. `--lifecycle sdd` and `--lifecycle none` remain
+   explicit creation-time choices.
+8. Representative non-S.I.R. consumer workspaces complete an opt-in soak with no second semantic authority,
+   no untyped escape hatch, and bounded authoring friction.
+9. The default-flip release includes migration documentation, rollback boundaries, wrong-default controls,
+   and exact package/template/provider identities.
+
+The flip does not retire Standard SDD. Retirement, if ever justified by measured adoption and migration
+evidence, requires another decision. Freeform (`none`) remains a permanent deliberate escape from the
+platform lifecycle rather than an error or degraded Typed SDD mode.
 
 XML will **not** become the canonical representation of outside data. SCXML and BPMN demonstrate that
 XML can interchange state-machine or business-process models, but serialization does not establish
@@ -167,6 +231,8 @@ design supplies the shared substrate on which those criteria stop being isolated
 9. Prove agent-authored F# specification ergonomics in S.I.R. before extracting a platform contract.
 10. Let product, lifecycle, process, and protocol models share infrastructure without sharing domain
     vocabulary or interpreters.
+11. Make Typed SDD selectable for every supported consumer workspace/profile and prepare it to become the
+    coherent workspace default after an explicit, evidence-gated flip.
 
 ### Non-goals
 
@@ -178,6 +244,7 @@ design supplies the shared substrate on which those criteria stop being isolated
 - Inferring typed semantics from unrestricted natural language or arbitrary F# source.
 - Preventing humans from reading, reviewing, or discussing specifications; only canonical writes are
   agent-mediated.
+- Removing Standard SDD or Freeform merely because Typed SDD becomes the default.
 - Preventing discoveries whose vocabulary does not exist yet.
 - Treating generated internal consistency as proof that an external property is true. ADR-0034's
   amendment preserving independent property gates continues to apply.
@@ -202,6 +269,9 @@ The following words have one meaning in the target architecture.
 | Projection | A rebuildable view derived from events, observations, or the protocol model |
 | Codec | The sole translation between one source-native representation and one domain type |
 | Interpreter | The sole executor of one mutation family against one external authority |
+| Typed SDD | The `typed-sdd` lifecycle: agent-authored F# EDSL compiled to the canonical Specification AST |
+| Standard SDD | The existing `sdd` lifecycle and artifact authority |
+| Freeform | Human name for lifecycle machine value `none`; no FS-GG specification process |
 
 These names belong in the F# types first. CLI strings, JSON keys, documentation tables, and diagrams are
 projections of them.
@@ -818,7 +888,13 @@ The design is considered implemented only when:
 10. model-based tests compare the pure model with fixture-backed interpreters;
 11. at least the claim/election and set-mutation protocols have bounded concurrency verification; and
 12. a 30-day post-cutover reading shows no successor chain caused by hand-authored second
-    representations.
+    representations;
+13. every supported workspace provider/profile can explicitly scaffold and verify `typed-sdd` without
+    changing the current omitted-value default;
+14. Standard SDD migration, refresh, upgrade, authoring, and failure-mode controls satisfy the
+    default-readiness conditions; and
+15. a separate contract-change decision flips every default-bearing surface together only after the
+    opt-in soak is accepted.
 
 ## Sources
 

@@ -5,6 +5,7 @@
 - **Decision owners:** FS-GG/.github, FS.GG.SDD, and S.I.R. maintainers
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, future FS-GG consumers, and the EHotwagner/S.I.R. pilot
 - **Related design:** [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md)
+- **Amended:** 2026-08-24 — name the consumer lifecycle `typed-sdd` and establish its staged default direction
 
 ## Context
 
@@ -47,6 +48,24 @@ semantic authorities. XML may be generated for interchange but is not a canonica
 and freshness checks—not by commit author identity. Humans retain readable projections, semantic diffs, and
 the final decision in each conversational iteration.
 
+## Amendment (2026-08-24): Typed SDD lifecycle and future default
+
+The consumer process is named **Typed SDD** and its stable machine identifier is `typed-sdd`. It is the third
+durable lifecycle posture beside Standard SDD (`sdd`) and Freeform (`none`); during transition, the retiring
+`spec-kit` lane remains a fourth legacy value. `freeform` is not introduced as a competing wire token.
+
+Typed SDD uses the existing SDD lifecycle stages and evidence semantics with a different canonical
+representation and authoring backend. Every supported workspace provider and product profile will gain an
+explicit `typed-sdd` option after the S.I.R. pilot, kernel publication, and re-adoption prove the contract.
+The option must propagate through provider descriptors, scaffolding, provenance, skills, readiness,
+refresh/upgrade, and compatibility receipts without coercion or fallback.
+
+Typed SDD is the intended future workspace default, but this amendment does **not** flip the current
+default. ADR-0056 continues to make `sdd` authoritative for omitted selection. Typed SDD first ships as an
+additive opt-in and completes migration, all-provider/profile, installed-artifact, failure-mode, and
+non-S.I.R. soak evidence. A later cross-repo ADR must amend ADR-0056 and move every default-bearing surface
+coherently. Standard SDD and Freeform remain explicit supported choices after that flip.
+
 ## Consequences
 
 S.I.R. can improve its current provisional builder and authoring loop without waiting for a platform-wide
@@ -58,6 +77,11 @@ The platform must maintain extension compatibility, normalized codecs, migration
 projection freshness. Agent-only canonical authoring also requires an emergency path with an expiring
 exemption; it may never prevent a new finding from being recorded. Until the S.I.R. pilot and extraction
 milestones land, existing SDD Markdown and coordination contracts remain authoritative.
+
+Naming the lifecycle creates a stable contract value before provider work begins and prevents each
+consumer from inventing `ast`, `edsl`, `agent-sdd`, or `executable-sdd` aliases. Delaying the default prevents
+an aspirational design from producing lifecycle-less or unauthorable workspaces. The cost is a deliberate
+opt-in period and a second, evidence-bearing decision before the default can move.
 
 ## Alternatives considered
 
