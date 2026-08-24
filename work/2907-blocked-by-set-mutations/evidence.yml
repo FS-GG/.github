@@ -1,0 +1,416 @@
+schemaVersion: 1
+workId: 2907-blocked-by-set-mutations
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2907-blocked-by-set-mutations/spec.md
+sourceClarifications: work/2907-blocked-by-set-mutations/clarifications.md
+sourceChecklist: work/2907-blocked-by-set-mutations/checklist.md
+sourcePlan: work/2907-blocked-by-set-mutations/plan.md
+sourceTasks: work/2907-blocked-by-set-mutations/tasks.yml
+sourceAnalysis: readiness/2907-blocked-by-set-mutations/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2907-blocked-by-set-mutations/analysis.json
+    digest: 3ae6df877929bd095ea483ed27cced27a3a43bcfe0acd2c4ada8c1b5411888ad
+    schemaVersion: 1
+  - label: checklist
+    path: work/2907-blocked-by-set-mutations/checklist.md
+    digest: 2799d51aeaf8b672cd72d857c78bd907426e73a20a8b7c8cda8ea1ad2c71fe95
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2907-blocked-by-set-mutations/clarifications.md
+    digest: 29371de9aa66598f033214d6fd42665dac6d53189f32f572cdd1327bb6537bc5
+    schemaVersion: 1
+  - label: plan
+    path: work/2907-blocked-by-set-mutations/plan.md
+    digest: 243f8da1ca1d80b697dcbd4c9359371b98f08f39961ec7bb1c363424b198288d
+    schemaVersion: 1
+  - label: spec
+    path: work/2907-blocked-by-set-mutations/spec.md
+    digest: bbfc8ac46a0af4e5487e6e08af4603eb9e97d26877c78774d4f96d892930802f
+    schemaVersion: 1
+  - label: tasks
+    path: work/2907-blocked-by-set-mutations/tasks.yml
+    digest: ae85b8835c2a835841d0d3ad0afbb741d36a51b524397d083b88b34203a8c540
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV012]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fs, src/FS.GG.Coord.Cli.Kernel/Options.fs, src/FS.GG.Coord.Cli/LintApplication.fs, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.BoardOps.Tests/BlockerLintTests.fs, work/2907-blocked-by-set-mutations/verification/verification-evidence.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
+      digest: "sha256:21fa9267ea0052900650a3072ffa5c3cbfd991d64c126ed29f3bac462c7757ec"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 254
+      failed: 0
+      skipped: 0
+    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

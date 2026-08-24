@@ -51,6 +51,8 @@ module Client =
 
     let blockedNoReasonVerdict = LintApplication.blockedNoReasonVerdict
 
+    let blockedByBodyProjectionVerdict = LintApplication.blockedByBodyProjectionVerdict
+
     let humanParkResolvedVerdict = LintApplication.humanParkResolvedVerdict
 
     let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
@@ -8736,6 +8738,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     |> Option.map (mk "BLOCKED-NO-REASON" "error" r)
                     |> Option.toList
 
+                let blockedByProjectionFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    blockedByBodyProjectionVerdict r.Ref.Owner r.Ref.Repo r.BlockedByRaw body
+                    |> Option.map (mk "BLOCKED-BY-BODY-INERT" "error" r)
+                    |> Option.toList
+
                 let humanParkFindings (r: Scan.Row) (body: string) : LintFinding list =
                     Map.tryFind r.Ref blockersByRef
                     |> Option.bind (fun blockers -> humanParkResolvedVerdict r.State r.Status blockers body)
@@ -8860,7 +8867,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         // One body read serves the touch-set rules, the human-block rule, and the epic
                         // body-child-refs.
-                        let bodyNeeded = isTouchSetCandidate || isEpic || isHumanBlockCandidate
+                        // Every open non-Done body may carry an inert `Blocked by:` projection. There is
+                        // no authoritative pre-index for body text, so diagnosing it requires reading the
+                        // same body operators would otherwise trust. Closed/Done rows are historical and
+                        // omitted from this live dependency-safety census.
+                        let isBlockedByProjectionCandidate =
+                            r.State = IssueState.Open && r.Status <> BoardStatus.Done
+
+                        let bodyNeeded =
+                            isTouchSetCandidate || isEpic || isHumanBlockCandidate || isBlockedByProjectionCandidate
 
                         let bodyResult =
                             if bodyNeeded then
@@ -8874,6 +8889,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let tsFindings = touchSetFindings r body
 
                             let hbFindings = humanBlockFindings r body
+                            let blockedByProjection = blockedByProjectionFindings r body
                             let humanPark = humanParkFindings r body
                             let clsFindings = classFindings r body
 
@@ -8918,6 +8934,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     (acc
                                      @ tsFindings
                                      @ hbFindings
+                                     @ blockedByProjection
                                      @ humanPark
                                      @ clsFindings
                                      @ statusUnsetFindings

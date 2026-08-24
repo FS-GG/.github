@@ -452,6 +452,128 @@ module Handlers =
 
                 Error ExitError
 
+    let private canonicalBlockedByRefs (ref: Ref) (raw: string) : Result<string list, int> =
+        match Blockers.canonicalizeBlockedBy ref.Owner ref.Repo raw with
+        | Ok None -> Ok []
+        | Ok(Some canonical) ->
+            canonical.Split(',')
+            |> Array.map (fun value -> value.Trim())
+            |> Array.filter (fun value -> value <> "")
+            |> List.ofArray
+            |> Ok
+        | Error Blockers.Placeholder ->
+            eprint
+                $"fsgg-coord-engine: 'Blocked by' does not take a placeholder ('%s{raw.Trim()}'). Use --clear to clear the set."
+
+            Error ExitError
+        | Error Blockers.NotIssueRefs ->
+            eprint
+                $"fsgg-coord-engine: 'Blocked by' takes issue refs (owner/repo#n), not prose: '%s{raw}'. If the item ITSELF is blocked, that is a Status:  set-field <issue> Status Blocked"
+
+            Error ExitError
+
+    let private blockedByWrite (refs: string list) : Board.FieldWrite =
+        match refs with
+        | [] -> Board.Clear
+        | values -> Board.Set(String.concat ", " values)
+
+    let private setBlockedByMutation (ctx: Context) (opts: Options) (mutation: Options.BlockedByMutation) : int =
+        match opts.Args with
+        | [ refArg; field ] when field = "Blocked by" ->
+            match parseRef ctx refArg, worker opts with
+            | Error msg, _ ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | _, Error c -> c
+            | Ok ref, Ok w ->
+                // Validate caller-supplied refs before any board read. Add/remove still need a live
+                // observation to derive their result, but malformed intent must spend zero GraphQL.
+                let boardResult =
+                    match mutation with
+                    | Options.ClearBlockedBy -> Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title |> Result.mapError Choice2Of2
+                    | Options.AddBlockedBy raw
+                    | Options.RemoveBlockedBy raw
+                    | Options.ReplaceBlockedBy raw ->
+                        match canonicalBlockedByRefs ref raw with
+                        | Error rc -> Error(Choice1Of2 rc)
+                        | Ok _ -> Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title |> Result.mapError Choice2Of2
+
+                match boardResult with
+                | Error(Choice1Of2 rc) -> rc
+                | Error(Choice2Of2 e) -> fail e
+                | Ok board ->
+                    let renderOutcome operation write outcome =
+                        match outcome with
+                        | Board.Written ->
+                            printfn
+                                "set %s Blocked by %s = %s"
+                                ref.Canonical
+                                operation
+                                (match write with | Board.Set value -> value | Board.Clear -> "<cleared>")
+                            ExitGreen
+                        | Board.Deferred ->
+                            printfn "set-field %s Blocked by %s — QUEUED (budget exhausted; flush replays it)" ref.Canonical operation
+                            Errors.ExRate
+                        | Board.NotOnBoard ->
+                            eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
+                            ExitError
+
+                    let writeExplicit operation write =
+                        match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" write w.Id with
+                        | Error e -> fail e
+                        | Ok outcome -> renderOutcome operation write outcome
+
+                    match mutation with
+                    | Options.ReplaceBlockedBy raw ->
+                        match canonicalBlockedByRefs ref raw with
+                        | Error rc -> rc
+                        | Ok [] ->
+                            eprint "fsgg-coord-engine: --replace needs at least one issue ref; use --clear to clear the set."
+                            ExitError
+                        | Ok refs ->
+                            let write = blockedByWrite refs
+                            writeExplicit "replace" write
+                    | Options.ClearBlockedBy ->
+                        writeExplicit "clear" Board.Clear
+                    | Options.AddBlockedBy raw
+                    | Options.RemoveBlockedBy raw as edgeMutation ->
+                        match Board.itemBlockedByObservation ctx.Transport board ref.Owner ref.Repo ref.Number with
+                        | Error e -> fail e
+                        | Ok observed ->
+                            let liveRaw = observed.Value |> Option.defaultValue ""
+                            match canonicalBlockedByRefs ref liveRaw, canonicalBlockedByRefs ref raw with
+                            | Error rc, _
+                            | _, Error rc -> rc
+                            | _, Ok [] ->
+                                let operation =
+                                    match edgeMutation with
+                                    | Options.AddBlockedBy _ -> "add"
+                                    | _ -> "remove"
+
+                                eprint $"fsgg-coord-engine: --%s{operation} needs at least one issue ref."
+                                ExitError
+                            | Ok live, Ok requested ->
+                                let result, operation =
+                                    match edgeMutation with
+                                    | Options.AddBlockedBy _ ->
+                                        let seen = Set.ofList live
+                                        live @ (requested |> List.filter (fun value -> not (Set.contains value seen))), "add"
+                                    | Options.RemoveBlockedBy _ ->
+                                        let removed = Set.ofList requested
+                                        live |> List.filter (fun value -> not (Set.contains value removed)), "remove"
+                                    | _ -> failwith "unreachable explicit edge mutation"
+
+                                let write = blockedByWrite result
+                                match Board.boardWriteGuarded ctx.Transport board ref.Owner ref.Repo ref.Number observed write with
+                                | Error e -> fail e
+                                | Ok outcome -> renderOutcome operation write outcome
+        | [ _; field ] ->
+            eprint $"fsgg-coord-engine: --add/--remove/--replace/--clear apply only to the set-valued 'Blocked by' field (got '%s{field}')."
+            ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: an explicit Blocked by mutation takes <ref> 'Blocked by' and exactly one of --add REFS, --remove REFS, --replace REFS, or --clear."
+            ExitError
+
     // `set-field --batch <ref> Field=Value ...` — N fields in ONE aliased mutation (#448).
     //
     // The whole point is the call count: three separate writes are three GraphQL points; the same three
@@ -620,12 +742,17 @@ module Handlers =
             eprint "fsgg-coord-engine: set-field --batch takes <ref> followed by one or more Field=Value pairs."
             ExitError
 
-    let setField (ctx: Context) (opts: Options) : int =
+    let private setFieldPositional (ctx: Context) (opts: Options) : int =
         if opts.Batch then
             setFieldBatchCmd ctx opts
         else
 
         match opts.Args with
+        | [ _; "Blocked by"; _ ] ->
+            eprint
+                "fsgg-coord-engine: bare replacement of the set-valued 'Blocked by' field is refused. Name the intent: --add REFS, --remove REFS, --replace REFS, or --clear."
+
+            ExitError
         | [ refArg; field; value ] ->
             match parseRef ctx refArg, worker opts with
             | Error msg, _ ->
@@ -718,8 +845,16 @@ module Handlers =
                         eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
                         ExitError
         | _ ->
-            eprint "fsgg-coord-engine: set-field takes <ref> <field> <value> (an empty value clears)."
+            eprint "fsgg-coord-engine: set-field takes <ref> <field> <value>, or <ref> 'Blocked by' with one explicit set mutation."
             ExitError
+
+    let setField (ctx: Context) (opts: Options) : int =
+        match opts.Batch, opts.BlockedByMutation with
+        | true, Some _ ->
+            eprint "fsgg-coord-engine: set-field --batch cannot be combined with --add, --remove, --replace, or --clear."
+            ExitError
+        | _, Some mutation -> setBlockedByMutation ctx opts mutation
+        | _ -> setFieldPositional ctx opts
 
     let child (ctx: Context) (opts: Options) : int =
         match opts.Args with

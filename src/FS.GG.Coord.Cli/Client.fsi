@@ -75,6 +75,10 @@ module Client =
       (FS.GG.Coord.Types.IssueState ->
          FS.GG.Coord.Types.BoardStatus -> string -> string -> string option)
 
+    /// Compatibility seam for the body/field dependency-projection lint verdict.
+    val blockedByBodyProjectionVerdict:
+      (string -> string -> string -> string -> string option)
+
     /// `lint`'s HUMAN-PARK-RESOLVED sentence for one row, or `None`. An ALIAS of
     /// `LintApplication.humanParkResolvedVerdict`.
     ///

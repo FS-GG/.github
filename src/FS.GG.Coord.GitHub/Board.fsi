@@ -327,6 +327,19 @@ module Board =
         worker: string ->
             IoResult<WriteOutcome>
 
+    /// Write a `Blocked by` value derived from a live set only while the field value and Projects-v2
+    /// item revision still equal `expected`. A mismatch fails stale before mutation. Guarded writes are
+    /// never placed on the unconditional deferred queue because replay would lose the observation bound.
+    val boardWriteGuarded:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+        expected: BlockedByObservation ->
+        write: FieldWrite ->
+            IoResult<WriteOutcome>
+
     /// **THE ONE BATCH BOARD WRITE (#448).** `boardWrite` for N fields in one aliased document.
     ///
     /// Carries the SAME deferral policy — an exhausted budget QUEUES every pair, so the whole batch replays

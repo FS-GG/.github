@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System
 open System.IO
 open System.Text.RegularExpressions
 open Xunit
@@ -13,6 +14,140 @@ open FS.GG.Coord.Cli.BoardOps
 module BlockerLintTests =
 
     let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
+
+    [<Fact>]
+    let ``#2907 explicit Blocked by flags are mutually exclusive and scoped to set-field`` () =
+        let parsed =
+            Options.parse [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+            |> Result.defaultWith failwith
+
+        Assert.Equal(Some(Options.AddBlockedBy "#299"), parsed.BlockedByMutation)
+
+        Assert.True(
+            (Options.parse [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299"; "--remove"; "#290" ]).IsError
+        )
+
+        Assert.True((Options.parse [ "heartbeat"; "FS.GG.SDD#42"; "--clear" ]).IsError)
+
+    [<Theory>]
+    [<InlineData("", "Blocked by: #290", true)>]
+    [<InlineData("FS-GG/.github#290", "Blocked by: #299", true)>]
+    [<InlineData("FS-GG/.github#290", "Blocked by: #290", false)>]
+    [<InlineData("", "```\nBlocked by: #290\n```", false)>]
+    let ``#2907 lint treats body dependency text as projection only`` (fieldValue: string) (body: string) (expected: bool) =
+        let actual =
+            Client.blockedByBodyProjectionVerdict "FS-GG" ".github" fieldValue body
+            |> Option.isSome
+
+        Assert.Equal(expected, actual)
+
+    module private BlockedBySetMutationFixture =
+
+        let private ok body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        type Outcome =
+            { Code: int
+              Out: string
+              Error: string
+              Mutations: string list }
+
+        let run (initialValue: string) (secondValue: string) (initialRevision: string) (secondRevision: string) (args: string list) =
+            let mutable observations = 0
+            let mutations = ResizeArray<string>()
+
+            let observation value revision =
+                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"updatedAt":"%s{revision}","project":{{"number":12}},"fieldValueByName":{{"text":"%s{value}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            let transport =
+                Fake.Recorder(fun request ->
+                    match request.Method, request.Path.Trim('/'), request.Body with
+                    | "GET", "rate_limit", _ -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "projectsV2" ->
+                        ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "fields(first" ->
+                        ok """{"data":{"organization":{"projectV2":{"fields":{"totalCount":1,"nodes":[{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName" ->
+                        observations <- observations + 1
+                        if observations = 1 then ok (observation initialValue initialRevision)
+                        else ok (observation secondValue secondRevision)
+                    | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                    | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                        let text =
+                            variables
+                            |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                            |> Option.defaultValue "<missing>"
+                        mutations.Add text
+                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "clearProjectV2ItemFieldValue" ->
+                        mutations.Add "<cleared>"
+                        ok """{"data":{"clearProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    | method, path, _ -> Error(Errors.NotFound $"fixture serves no %s{method} %s{path}"))
+
+            let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-" + Guid.NewGuid().ToString("N"))
+            let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+            let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+            let stdout, stderr = Console.Out, Console.Error
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+
+            try
+                Directory.CreateDirectory dir |> ignore
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+                Environment.SetEnvironmentVariable("FSGG_WORKER", "plover-2907")
+                Console.SetOut capturedOut
+                Console.SetError capturedErr
+                let opts = Options.parse args |> Result.defaultWith failwith
+                let context: Kernel.Context =
+                    { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some "FS.GG.SDD"; ChoreLocks = [] }
+                let code = Handlers.setField context opts
+                Console.Out.Flush()
+                Console.Error.Flush()
+                { Code = code; Out = capturedOut.ToString(); Error = capturedErr.ToString(); Mutations = List.ofSeq mutations }
+            finally
+                Console.SetOut stdout
+                Console.SetError stderr
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+                try Directory.Delete(dir, true) with _ -> ()
+
+    [<Fact>]
+    let ``#2907 add preserves the existing edge while adding the requested edge`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+        Assert.Equal(0, result.Code)
+        Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299" ], result.Mutations)
+
+    [<Fact>]
+    let ``#2907 remove preserves every edge not requested`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299"
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--remove"; "#290" ]
+        Assert.Equal(0, result.Code)
+        Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#299" ], result.Mutations)
+
+    [<Fact>]
+    let ``#2907 concurrent revision change fails stale and sends no mutation`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#777"
+                "r1"
+                "r2"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("Stale dependency-edge observation", result.Error)
+        Assert.Empty(result.Mutations)
 
     /// .github#2698 — a comment ledger holding one current delivery-route receipt for `subject`, as
     /// `Reads.commentBodies` reads it. Any fixture whose command RESOLVES a `Status=Ready` write needs
@@ -73,7 +208,7 @@ module BlockerLintTests =
         let directStatusWrites =
             Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
-        Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(13, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(3, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)

@@ -1401,7 +1401,7 @@ sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field ref-first fixture bound a port"; else
   # a. WRONG IN BOTH WAYS: an unrecognised ref, AND prose in `Blocked by` (which gateField refuses on its
   #    own — b proves it). Ref-first means the REF refusal is the one the caller is handed.
-  r1="$(sfr set-field --worker sf-1032 not-an-issue 'Blocked by' 'the audio team is busy')"; r1rc=$?
+  r1="$(sfr set-field --worker sf-1032 not-an-issue 'Blocked by' --replace 'the audio team is busy')"; r1rc=$?
   { [ "$r1rc" -eq 1 ] && printf '%s' "$r1" | grep -q "unrecognised issue ref 'not-an-issue'"; } \
     && ok "#1032: a bad ref is refused AS A REF — 'unrecognised issue ref', exit 1" \
     || bad "#1032: a bad ref must be refused as a ref" "rc=$r1rc out=$r1"
@@ -1411,7 +1411,7 @@ if [ -z "$SF_PORT" ]; then bad "set-field ref-first fixture bound a port"; else
 
   # b. THE GATE IS ALIVE. The same prose value on a GOOD ref DOES reach the value refusal. This is what
   #    makes (a) a statement about ORDERING rather than about a value check that never runs.
-  r2="$(sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' 'the audio team is busy')"; r2rc=$?
+  r2="$(sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' --replace 'the audio team is busy')"; r2rc=$?
   { [ "$r2rc" -eq 1 ] && printf '%s' "$r2" | grep -q "'Blocked by' takes issue refs"; } \
     && ok "#1032: a GOOD ref with the same prose value DOES reach the value refusal — (a) is not vacuous" \
     || bad "#1032: the 'Blocked by' gate must still refuse prose on a good ref" "rc=$r2rc out=$r2"
@@ -1449,7 +1449,7 @@ fi
 # #611's fix. Each fixture below runs exactly the ONE command its assertion is about.
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field ref-budget fixture bound a port"; else
-  sfr set-field --worker sf-1032 not-an-issue 'Blocked by' 'the audio team is busy' >/dev/null 2>&1
+  sfr set-field --worker sf-1032 not-an-issue 'Blocked by' --replace 'the audio team is busy' >/dev/null 2>&1
   [ "$(muts_on "$SF_PORT" | jq -r '.graphql')" = "0" ] \
     && ok "#1032: a refused ref spends ZERO GraphQL — no read is paid for a ref that can never be used" \
     || bad "#1032: a refused ref must not spend the budget the lock lives on" "graphql=$(muts_on "$SF_PORT" | jq -r '.graphql')"
@@ -1460,7 +1460,7 @@ fi
 # claims as much. A claim with no leg behind it is the thing this whole section is about, so: pin it.
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field value-gate budget fixture bound a port"; else
-  sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' 'the audio team is busy' >/dev/null 2>&1
+  sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' --replace 'the audio team is busy' >/dev/null 2>&1
   [ "$(muts_on "$SF_PORT" | jq -r '.graphql')" = "0" ] \
     && ok "#1032: the 'Blocked by' value gate spends ZERO GraphQL too — it also precedes the board read" \
     || bad "#1032: a refused value must not spend the budget either" "graphql=$(muts_on "$SF_PORT" | jq -r '.graphql')"
@@ -1942,7 +1942,7 @@ rm -f "$SC_OUT"; rm -rf "$SC_CACHE" "$CO"
 # Projects v2 has no dependency field, so `Blocked by` is TEXT. In bash it drifted back into a free-form
 # LOG ("RESOLVED: #8 closed, shipped @d80a8ae"), and `.blocked` — which reads the field back as refs —
 # could not parse it, so an item the board displayed as blocked reached the scheduler UNBLOCKED. The gate
-# is on the WRITE: `set-field <issue> 'Blocked by' <value>` canonicalizes every accepted form
+# is on the WRITE: `set-field <issue> 'Blocked by' --replace <value>` canonicalizes every accepted form
 # (owner/repo#n, repo#n, a bare #n adopting the item's own repo, an issue URL) to one `owner/repo#n`,
 # de-dupes refs that canonicalize alike, and REFUSES prose — before any board read, so a refused value
 # spends no GraphQL (the budget that dies first). The corpus (case 13 lines 153-243) counts `gh`; this
@@ -1959,35 +1959,35 @@ if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
   BBCACHE="$(mktemp -d)"
   # The WRITE path shares one cache — the first write warms bootstrap, each records its mutation.
   bbw() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$BBCACHE" \
-              "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' "$1" 2>&1; }
+              "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' "$@" 2>&1; }
   bblast() { bbget "$BB_PORT" /_writes | jq -r "$1"; }
 
   # 1. A full ref passes through, canonical.
-  bbw 'FS-GG/FS.GG.SDD#8' >/dev/null
+  bbw --replace 'FS-GG/FS.GG.SDD#8' >/dev/null
   [ "$(bblast '.last | "\(.op) \(.field) \(.text)"')" = "set Blocked by FS-GG/FS.GG.SDD#8" ] \
     && ok "Blocked by: a full owner/repo#n ref writes as-is (canonical --text, one transport over)" \
     || bad "Blocked by: full ref passthrough" "$(bblast '.last')"
 
   # 2. A bare #n adopts the BLOCKED item's own repo (SDD#42 -> FS-GG/FS.GG.SDD#33).
-  bbw '#33' >/dev/null
+  bbw --replace '#33' >/dev/null
   [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#33" ] \
     && ok "Blocked by: a bare #n adopts the blocked item's repo (#33 -> FS-GG/FS.GG.SDD#33)" \
     || bad "Blocked by: bare #n adoption" "$(bblast '.last.text')"
 
   # 3. A LIST canonicalizes every form — a repo#n and an issue URL, in order.
-  bbw 'FS.GG.Rendering#33 , https://github.com/FS-GG/FS.GG.Templates/issues/8' >/dev/null
+  bbw --replace 'FS.GG.Rendering#33 , https://github.com/FS-GG/FS.GG.Templates/issues/8' >/dev/null
   [ "$(bblast '.last.text')" = "FS-GG/FS.GG.Rendering#33, FS-GG/FS.GG.Templates#8" ] \
     && ok "Blocked by: a list canonicalizes EVERY form (repo#n + URL), in order" \
     || bad "Blocked by: list canonicalization" "$(bblast '.last.text')"
 
   # 4. Refs that canonicalize alike are DE-DUPED — one edge, not two.
-  bbw '#8, FS-GG/FS.GG.SDD#8' >/dev/null
+  bbw --replace '#8, FS-GG/FS.GG.SDD#8' >/dev/null
   [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#8" ] \
     && ok "Blocked by: refs that canonicalize alike are de-duped (#8 == FS-GG/FS.GG.SDD#8)" \
     || bad "Blocked by: de-dupe" "$(bblast '.last.text')"
 
   # 5. An EMPTY value CLEARS — via the distinct clear mutation, never an empty --text (a no-op on the API).
-  bbw '' >/dev/null
+  bbw --clear >/dev/null
   [ "$(bblast '.last.op')" = "clear" ] \
     && ok "Blocked by: an empty value CLEARS the field (clearProjectV2ItemFieldValue, not an empty update)" \
     || bad "Blocked by: empty clears" "$(bblast '.last')"
@@ -1996,7 +1996,7 @@ if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
   #    cache, so if the gate did NOT fire, bootstrap WOULD hit /graphql: the delta of 0 proves precedence.
   before="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
   pr_refuse="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" \
-                 "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'RESOLVED: #8 closed, shipped @d80a8ae' 2>&1)"; refrc=$?
+                 "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' --replace 'RESOLVED: #8 closed, shipped @d80a8ae' 2>&1)"; refrc=$?
   after="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
   { [ "$refrc" -ne 0 ] && [ "$before" = "$after" ]; } \
     && ok "Blocked by: a refused write (a delivery log) is rejected AND spends ZERO GraphQL (validation precedes resolution)" \
@@ -2004,26 +2004,26 @@ if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
 
   # 7. The delivery log, the inverted edge, and a ref TRAILED by prose are all prose — all refused.
   ( set +e
-    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'blocks FS.GG.Governance#14' >/dev/null 2>&1
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' --replace 'blocks FS.GG.Governance#14' >/dev/null 2>&1
     [ $? -ne 0 ] ) \
     && ok "Blocked by: the inverted 'blocks X' edge is refused (wrong direction)" \
     || bad "Blocked by: inverted edge must refuse"
   ( set +e
-    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'FS-GG/FS.GG.SDD#8 (republish vehicle)' >/dev/null 2>&1
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' --replace 'FS-GG/FS.GG.SDD#8 (republish vehicle)' >/dev/null 2>&1
     [ $? -ne 0 ] ) \
     && ok "Blocked by: prose TRAILING a valid ref is refused — the anchored match will not swallow it" \
     || bad "Blocked by: trailing prose must refuse"
 
   # 8. The prose refusal REDIRECTS: names Status as the home for 'the item IS blocked'.
-  prose_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'not a ref' 2>&1)"
+  prose_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' --replace 'not a ref' 2>&1)"
   printf '%s' "$prose_out" | grep -q 'set-field <issue> Status Blocked' \
     && ok "Blocked by: the prose refusal names Status as the right home for 'is blocked'" \
     || bad "Blocked by: prose refusal must name Status" "$prose_out"
 
   # 9. A '-'/'none' PLACEHOLDER is a distinct refusal — it points at CLEARING, not at Status.
-  ph_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'none' 2>&1)"; phrc=$?
-  { [ "$phrc" -ne 0 ] && printf '%s' "$ph_out" | grep -q "'Blocked by' ''"; } \
-    && ok "Blocked by: a '-'/'none' placeholder is refused TOWARD clearing (points at 'Blocked by' '')" \
+  ph_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' --replace 'none' 2>&1)"; phrc=$?
+  { [ "$phrc" -ne 0 ] && printf '%s' "$ph_out" | grep -q -- "--clear"; } \
+    && ok "Blocked by: a '-'/'none' placeholder is refused TOWARD the explicit --clear intent" \
     || bad "Blocked by: placeholder must point at clearing" "rc=$phrc out=$ph_out"
 
   # 10. THE GATE IS SCOPED to `Blocked by`. Every other TEXT field stays free-form — Contract takes prose.

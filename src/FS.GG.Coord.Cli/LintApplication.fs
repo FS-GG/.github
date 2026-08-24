@@ -157,6 +157,64 @@ module LintApplication =
         else
             None
 
+    // Diagnose a `Blocked by:` BODY projection without ever treating it as dependency authority
+    // (.github#2907). Fenced examples are quotations and ignored. An agreeing canonical projection is
+    // useful human-readable text and stays green; empty, divergent, duplicated, or invalid projections
+    // are actionable because operators otherwise read an inert line as the live edge set.
+    let blockedByBodyProjectionVerdict
+        (owner: string)
+        (repo: string)
+        (blockedBy: string)
+        (body: string)
+        : string option =
+
+        let mutable fence: string option = None
+        let projections = ResizeArray<string>()
+
+        for line in body.Replace("\r\n", "\n").Split('\n') do
+            let trimmed = line.TrimStart()
+            let marker =
+                if trimmed.StartsWith("```") then Some "```"
+                elif trimmed.StartsWith("~~~") then Some "~~~"
+                else None
+
+            match fence, marker with
+            | None, Some opened -> fence <- Some opened
+            | Some opened, Some closed when opened = closed -> fence <- None
+            | None, None ->
+                let prefix = "Blocked by:"
+                if trimmed.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase) then
+                    projections.Add(trimmed.Substring(prefix.Length).Trim())
+            | _ -> ()
+
+        let render value = if System.String.IsNullOrWhiteSpace value then "<empty>" else value
+        let canonicalSet (value: string) =
+            value.Split(',') |> Array.map (fun part -> part.Trim()) |> Set.ofArray
+
+        match List.ofSeq projections with
+        | [] -> None
+        | _ :: _ :: _ ->
+            Some
+                $"body declares %d{projections.Count} unfenced `Blocked by:` lines, but the Projects-v2 `Blocked by` field is the sole authority; keep exactly one generated human-readable projection."
+        | [ raw ] ->
+            match Blockers.canonicalizeBlockedBy owner repo raw with
+            | Error _
+            | Ok None ->
+                Some
+                    $"body declares an invalid or empty `Blocked by:` projection (`%s{render raw}`); it is inert because only the Projects-v2 field creates dependency edges."
+            | Ok(Some bodyCanonical) ->
+                match Blockers.canonicalizeBlockedBy owner repo blockedBy with
+                | Ok(Some fieldCanonical) when canonicalSet fieldCanonical = canonicalSet bodyCanonical -> None
+                | Ok None ->
+                    Some
+                        $"body says `Blocked by: %s{bodyCanonical}` while the authoritative Projects-v2 field is empty; the body line is inert and creates no dependency edge."
+                | Ok(Some fieldCanonical) ->
+                    Some
+                        $"body projects `Blocked by: %s{bodyCanonical}` but the authoritative Projects-v2 field is `%s{fieldCanonical}`; regenerate or remove the divergent body projection."
+                | Error _ ->
+                    Some
+                        $"body projects `Blocked by: %s{bodyCanonical}` but the authoritative Projects-v2 field is not a canonical issue-ref set (`%s{render blockedBy}`); repair the field authority before trusting the projection."
+
     let humanParkResolvedVerdict state status (blockers: Blocker list) (body: string) : string option =
         match HumanBlock.parse body with
         | Some AwaitingHumanDecision when state = IssueState.Open && status = BoardStatus.Blocked && not (List.isEmpty blockers) && (blockers |> List.forall Blockers.isResolved) ->

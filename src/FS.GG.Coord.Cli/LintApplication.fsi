@@ -71,6 +71,11 @@ module LintApplication =
     val blockedNoReasonVerdict:
         state: IssueState -> status: BoardStatus -> blockedBy: string -> body: string -> string option
 
+    /// `Some detail` when an unfenced body `Blocked by:` projection is inert, divergent, duplicated, or
+    /// invalid relative to the authoritative Projects-v2 field; `None` when absent or canonically equal.
+    val blockedByBodyProjectionVerdict:
+        owner: string -> repo: string -> blockedBy: string -> body: string -> string option
+
     val humanParkResolvedVerdict:
         state: IssueState -> status: BoardStatus -> blockers: Blocker list -> body: string -> string option
 

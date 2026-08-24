@@ -1435,6 +1435,57 @@ module Board =
                 // REPORTED, NEVER SWALLOWED. A refusal nobody can read is a refusal that did not happen.
                 Error e
 
+    // A revision-guarded single-field write for a value derived from `Blocked by`'s live set
+    // (.github#2907). Unlike `boardWrite`, this path is never deferred: replaying a derived value after
+    // its observation has aged would turn an edge-local intent back into destructive replacement.
+    let boardWriteGuarded
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        (expected: BlockedByObservation)
+        (write: FieldWrite)
+        : IoResult<WriteOutcome> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} guarded Blocked by write"
+
+        let resolved =
+            if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+                itemId transport board owner repo number
+            else
+                itemIdCached transport board owner repo number
+
+        match resolved with
+        | Error e -> Error e
+        | Ok None -> Ok NotOnBoard
+        | Ok(Some item) ->
+            match itemBlockedByObservation transport board owner repo number with
+            | Error e -> Error e
+            | Ok observed when observed <> expected ->
+                Error(
+                    Malformed(
+                        subject,
+                        "Stale dependency-edge observation: the Projects item revision or Blocked by edge changed at the board-write boundary; no mutation was sent. Re-derive and retry."
+                    )
+                )
+            | Ok _ ->
+                match setField transport board item "Blocked by" write with
+                | Error e -> Error e
+                | Ok() ->
+                    Cache.patchScan
+                        board.Owner
+                        board.Title
+                        owner
+                        repo
+                        number
+                        "Blocked by"
+                        (match write with
+                         | Set value -> value
+                         | Clear -> "")
+
+                    Ok Written
+
     // The batch sibling of `boardWrite` (#448): resolve the item, emit N fields in ONE aliased document,
     // and carry the SAME deferral policy the single write does.
     //
