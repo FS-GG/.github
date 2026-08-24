@@ -352,10 +352,56 @@ write_review_draft initial changes-required 0 "" ""
 review_unwaited_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 "$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json >/dev/null 2>&1; review_unwaited_rc=$?
 review_unwaited_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
-enter_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 initial-review
+review_derived_initial_out="$("$ENGINE" review wait enter FS.GG.SDD#42 --pr 42 --json 2>&1)"; review_derived_initial_rc=$?
+review_derived_initial_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | last | .body')"
 review_initial_out="$("$ENGINE" review record FS.GG.SDD#42 "$review_draft" --pr 42 --json 2>&1)"; review_initial_rc=$?
 review_initial_url="$(printf '%s' "$review_initial_out" | jq -r '.commentUrl // empty')"
-complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "$review_initial_url"
+review_initial_digest="$(printf '%s' "$review_initial_out" | jq -r '.digest // empty')"
+review_marker_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:independent-review:v1 -->\nprose critic marker"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+review_marker_url="https://github.com/FS-GG/FS.GG.SDD/pull/42#issuecomment-$review_marker_id"
+review_marker_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "$review_marker_url"; review_marker_complete_rc=$?
+review_marker_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+review_marker_complete_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_for_record" --pr 42 --json 2>&1)"; review_marker_repeat_rc=$?
+complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "sha256:$review_initial_digest"; review_digest_complete_rc=$?
+review_normalized_evidence="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->")) | (.body | split("\n")[1] | fromjson) | select(.event == "complete")] | last | .evidenceRef')"
+if [ "$review_derived_initial_rc" -eq 0 ] \
+   && printf '%s' "$review_derived_initial_body" | sed -n '2p' | jq -e \
+      '.claimGeneration == "'"$review_claim_id"'" and .reviewGeneration == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0" and .kind == "initial-review" and .evidenceRef == "https://github.com/FS-GG/FS.GG.SDD/pull/42"' >/dev/null \
+   && [ "$review_marker_complete_rc" -ne 0 ] && [ "$review_marker_repeat_rc" -ne 0 ] \
+   && [ "$review_marker_before" -eq "$review_marker_after" ] \
+   && printf '%s' "$review_marker_complete_out" | grep -q "structured review-decision record $review_initial_url" \
+   && [ "$review_digest_complete_rc" -eq 0 ] && [ "$review_normalized_evidence" = "$review_initial_url" ]; then
+  ok "#2859 engine-derived initial wait and pre-append structured-record evidence normalization"
+else
+  bad "#2859 wait entry/evidence authority must be host-owned and unambiguous" "enter=$review_derived_initial_rc:$review_derived_initial_out body=$review_derived_initial_body marker=$review_marker_complete_rc/$review_marker_repeat_rc:$review_marker_before->$review_marker_after:$review_marker_complete_out digest=$review_digest_complete_rc:$review_normalized_evidence expected=$review_initial_url"
+fi
+
+# Move the fixture's live head without adding a structured record: two inert schema-name comments make
+# the stateful server expose head B while the real ledger still contains only the changes-required
+# initial at head A. The host-owned entry must derive confirmation round 1 from those live facts. Cancel
+# it, delete the inert controls, and the original M4 chain continues on head A unchanged.
+review_shift_one="$(curl -fsS -X POST -H 'Content-Type: application/json' -d '{"body":"fixture mentions fsgg.coord.review-decision/v2"}' "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+review_shift_two="$(curl -fsS -X POST -H 'Content-Type: application/json' -d '{"body":"second fixture mentions fsgg.coord.review-decision/v2"}' "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq -r '.id')"
+review_derived_confirmation_out="$("$ENGINE" review wait enter FS.GG.SDD#42 --pr 42 --json 2>&1)"; review_derived_confirmation_rc=$?
+review_derived_confirmation_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | last | .body')"
+write_dispatch_wait cancel bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:repair-confirmation:1
+"$ENGINE" review wait FS.GG.SDD#42 "$review_dispatch_wait" --pr 42 --json >/dev/null 2>&1; review_derived_confirmation_cancel_rc=$?
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_shift_one" >/dev/null
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_shift_two" >/dev/null
+if [ "$review_derived_confirmation_rc" -eq 0 ] && [ "$review_derived_confirmation_cancel_rc" -eq 0 ] \
+   && printf '%s' "$review_derived_confirmation_body" | sed -n '2p' | jq -e \
+      '.reviewGeneration == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:repair-confirmation:1" and .kind == "repair-confirmation"' >/dev/null; then
+  ok "#2859 host-owned successor wait derives the moved head and confirmation round"
+else
+  bad "#2859 successor wait must derive head/kind/round without caller JSON" "enter=$review_derived_confirmation_rc:$review_derived_confirmation_out body=$review_derived_confirmation_body cancel=$review_derived_confirmation_cancel_rc"
+fi
+
 write_review_draft confirmation pass 1 https://fixture.invalid/wrong https://fixture.invalid/wrong
 enter_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:repair-confirmation:1 repair-confirmation
 review_wrong_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
@@ -389,7 +435,7 @@ if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$
    && [[ "$review_acceptance_body" != *'"baseSha":"9999999999999999999999999999999999999999"'* ]] \
    && printf '%s' "$review_moved_initial_out" | jq -e '.revision == 4 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_moved_acceptance_out" | jq -e '.revision == 5 and .effectiveChainValidated == true and (.digest | length) == 64' >/dev/null \
-   && [ "$review_after" -eq $((review_before + 11)) ]; then
+   && [ "$review_after" -eq $((review_before + 14)) ]; then
   ok "M4 review record validates actual backlinks and retires an accepted generation after head movement"
 else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
