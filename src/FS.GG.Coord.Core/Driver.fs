@@ -519,7 +519,10 @@ module Driver =
                     errors.Add "review critic identity must be minted and distinguishing"
                 if latest.Verdict <> StructuredDecision.Pass then
                     errors.Add "the latest structured critic decision must have verdict pass"
-                if confirmations.Length > ceiling then
+                // A passing successor confirmation closes review; it does not request another
+                // implementer repair. Its ordinal may exceed the repair-loop ceiling after a moved
+                // head, so the ceiling must consult the verdict rather than reject on length alone.
+                if confirmations.Length > ceiling && latest.Verdict <> StructuredDecision.Pass then
                     errors.Add "review confirmation round ceiling exceeded"
                 if not (List.isEmpty escalations) && not repairPhase then
                     errors.Add "structured escalation requires a structured repair-phase record"
@@ -617,7 +620,15 @@ module Driver =
                                         $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
 
                 if errors.Count = 0 then
-                    let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. confirmations.Length ]
+                    // `ReviewChain.Rounds` is consumed as the automated-repair count by the delivery
+                    // ceiling and driver event projection. Count verdicts that actually sent work back
+                    // to the implementer; a `pass` is review completion, not another repair round.
+                    let repairRounds =
+                        (if first.Verdict = StructuredDecision.ChangesRequired then 1 else 0)
+                        + (confirmations
+                           |> List.filter (fun (_, record) -> record.Verdict = StructuredDecision.ChangesRequired)
+                           |> List.length)
+                    let rounds = [ 1 .. max 1 repairRounds ]
                     // The critic IN FORCE at the end of the live generation (.github#2662) — the one whose
                     // pass the host accepted — rather than the generation's opening record. Identical to
                     // `first.Critic` on every grant-free ledger, for the reason `reviewPhaseFacts` states.

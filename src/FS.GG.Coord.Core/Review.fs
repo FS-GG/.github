@@ -702,7 +702,14 @@ module Review =
             MalformedEvidence [ reason ], Park reason
         else
             let ceiling = ceilingFor binding.Phase
-            let exhausted = phaseFacts.ConfirmationCount > ceiling && not phaseFacts.AcceptancePresent
+            // The ceiling bounds implementer repair loops, not successful reviews. A successor that
+            // fully reviews a moved head and records `pass` may have a round number above the ceiling,
+            // but it opens no further repair loop. Treating that terminal pass as exhaustion made the
+            // act of recording success park the item before the host could accept it (.github#2883).
+            let exhausted =
+                phaseFacts.ConfirmationCount > ceiling
+                && phaseFacts.LatestVerdict <> Some "pass"
+                && not phaseFacts.AcceptancePresent
 
             match binding.Phase with
             | Repair ->
