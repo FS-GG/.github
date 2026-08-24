@@ -1180,6 +1180,37 @@ run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
 identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")"
 printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and len(d["artifacts"])==1 and d["authority"]["source"].endswith("SKILL.md")' \
   || { echo "FAIL: coherent producer identity projection"; echo "$identity_out"; exit 1; }
+
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$WORK/missing-registry.yml" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema"]=="fsgg.skill-identity/v1" and d["verdict"]=="inconclusive" and "registry is unreadable or malformed" in d["problems"][0]' \
+  || { echo "FAIL: nonexistent registry did not return deterministic inconclusive identity JSON"; echo "$identity_out"; exit 1; }
+
+printf 'skills: [\n' > "$WORK/malformed-registry.yml"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$WORK/malformed-registry.yml" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema"]=="fsgg.skill-identity/v1" and d["verdict"]=="inconclusive" and "registry is unreadable or malformed" in d["problems"][0]' \
+  || { echo "FAIL: malformed registry did not return deterministic inconclusive identity JSON"; echo "$identity_out"; exit 1; }
+
+mv "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md" "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md.missing"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q '"verdict": "inconclusive"' <<<"$identity_out" \
+  || { echo "FAIL: missing producer authority did not return inconclusive identity"; echo "$identity_out"; exit 1; }
+mv "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md.missing" "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+
+cp "$DROOT/.github/registry/driver-skill-manifest.json" "$WORK/identity-manifest.good.json"
+python3 - "$DROOT/.github/registry/driver-skill-manifest.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    doc = json.load(handle)
+doc["skills"][0]["files"].append({"path": "../escape", "sha256": "0" * 64})
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(doc, handle)
+PY
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="inconclusive" and any("../escape" in p for p in d["problems"])' \
+  || { echo "FAIL: escaping producer manifest row did not return inconclusive identity"; echo "$identity_out"; exit 1; }
+cp "$WORK/identity-manifest.good.json" "$DROOT/.github/registry/driver-skill-manifest.json"
+
 printf '\nidentity divergence\n' >> "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
 identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
 [ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \

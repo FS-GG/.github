@@ -1219,7 +1219,14 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", skill_id):
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "verdict": "inconclusive", "problems": ["skill id is malformed"]}, 2)
-    registry = _load_registry(registry_path)
+    try:
+        registry = _load_registry(registry_path)
+    # PyYAML's parser exceptions do not derive from ValueError.  This is the command's authority-input
+    # boundary: any loader failure must remain data in the identity protocol, never escape as Python.
+    except Exception as exc:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": [f"registry is unreadable or malformed: {type(exc).__name__}"]}, 2)
     rows = registry.get("skills") if isinstance(registry, dict) else None
     if not isinstance(rows, list):
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
@@ -1266,6 +1273,9 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "verdict": "inconclusive", "problems": [f"producer manifest is unreadable: {exc}"]}, 2)
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("skills"), list):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": ["producer manifest has no skills list"]}, 2)
     entries = [entry for entry in manifest.get("skills", [])
                if isinstance(entry, dict) and entry.get("id") == skill_id]
     if len(entries) != 1:
@@ -1286,7 +1296,8 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "verdict": "inconclusive", "problems": ["producer supplied-by escapes its repository"]}, 2)
     artifacts = []
-    problems = []
+    authority_problems = []
+    drift_problems = []
     seen = set()
     for file_row in files:
         rel = file_row.get("path") if isinstance(file_row, dict) else None
@@ -1294,23 +1305,27 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
         safe_rel = (isinstance(rel, str) and rel and not os.path.isabs(rel) and
                     os.path.normpath(rel) == rel and rel != ".." and not rel.startswith("../"))
         if not safe_rel or rel in seen or not DIGEST_RE.fullmatch(want):
-            problems.append(f"malformed or duplicate producer file row: {rel!r}")
+            authority_problems.append(f"malformed or duplicate producer file row: {rel!r}")
             continue
         seen.add(rel)
         file_path = os.path.realpath(os.path.join(skill_root, rel))
         if file_path != skill_root and not file_path.startswith(skill_root + os.sep):
-            problems.append(f"producer file escapes the skill root: {rel}")
+            authority_problems.append(f"producer file escapes the skill root: {rel}")
             continue
         file_raw = read_bytes(file_path)
         got = hashlib.sha256(file_raw).hexdigest() if file_raw is not None else None
         artifacts.append({"kind": "producer", "path": f"{producer}/{supplied.rstrip('/')}/{rel}",
                           "expectedSha256": want, "actualSha256": got,
-                          "verdict": "coherent" if got == want else "drift"})
-        if got != want:
-            problems.append(f"producer file differs or is unreadable: {rel}")
+                          "verdict": "coherent" if got == want else "inconclusive" if got is None else "drift"})
+        if got is None:
+            authority_problems.append(f"producer file is unreadable: {rel}")
+        elif got != want:
+            drift_problems.append(f"producer file differs: {rel}")
 
     if actual != declared:
-        problems.append("registry sha256 differs from authoritative SKILL.md")
+        drift_problems.append("registry sha256 differs from authoritative SKILL.md")
+    problems = authority_problems + drift_problems
+    verdict = "inconclusive" if authority_problems else "drift" if drift_problems else "coherent"
     report = {
         "schema": "fsgg.skill-identity/v1",
         "skillId": skill_id,
@@ -1318,10 +1333,10 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
                       "manifest": os.path.relpath(manifest_path, repos_root),
                       "expectedSha256": declared, "actualSha256": actual},
         "artifacts": artifacts,
-        "verdict": "coherent" if not problems else "drift",
+        "verdict": verdict,
         "problems": problems,
     }
-    return report, (0 if not problems else 1)
+    return report, (0 if verdict == "coherent" else 1 if verdict == "drift" else 2)
 
 
 def check(registry_path: str, repos_root: str) -> list[dict]:
