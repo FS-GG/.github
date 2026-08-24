@@ -18,7 +18,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 TOOL="$HERE/../../scripts/fsgg-skill-registry-check"
+SKILL_VIEW="$REPO_ROOT/scripts/skill-view"
 
 python3 "$HERE/catalog-metadata.py"
 
@@ -1157,6 +1159,51 @@ echo "== 60. a .github-authored DRIVER row reconciles from .github's OWN manifes
 DROOT="$WORK/driver-repos"
 mkdir -p "$DROOT/.github/.claude/skills/work-roadmap" "$DROOT/.github/registry"
 printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+
+# The real SB-004 subject, not another invented id: current canonical registry + generated
+# coordination-kit producer manifest + authored multi-file skill tree. Copying the exact tracked
+# inputs under a `.github` checkout-shaped root keeps the cross-repository source path honest while
+# making the inversion disposable.
+LIVE_ROOT="$WORK/live-repos"
+mkdir -p "$LIVE_ROOT/.github/registry" "$LIVE_ROOT/.github/.claude/skills"
+cp "$REPO_ROOT/registry/skills.yml" "$LIVE_ROOT/.github/registry/skills.yml"
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_ROOT/.github/registry/coordination-kit-skill-manifest.json"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$LIVE_ROOT/.github/.claude/skills/"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["skillId"]=="cross-repo-coordination" and len(d["artifacts"]) >= 6 and d["authority"]["manifest"].endswith("coordination-kit-skill-manifest.json")' \
+  || { echo "FAIL: real cross-repo-coordination producer identity is not coherent"; echo "$identity_out"; exit 1; }
+
+# The generated package manifest is itself a usable authority projection, not merely a file list
+# that requires an operator to reconstruct source and digest out of band.
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/coordination-kit-skill-manifest.json" --repos-root "$LIVE_ROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["authority"]["source"]==".github/.claude/skills/cross-repo-coordination/SKILL.md"' \
+  || { echo "FAIL: coordination-kit manifest is not a usable producer identity authority"; echo "$identity_out"; exit 1; }
+
+printf '\nreal producer divergence\n' >> "$LIVE_ROOT/.github/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination producer divergence did not red"; echo "$identity_out"; exit 1; }
+cp "$REPO_ROOT/.claude/skills/cross-repo-coordination/SKILL.md" "$LIVE_ROOT/.github/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real producer identity did not return coherent"; echo "$identity_out"; exit 1; }
+
+RUNTIME_TREE="$WORK/real-runtime"
+mkdir -p "$RUNTIME_TREE/.claude/skills" "$RUNTIME_TREE/.agents/skills"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$RUNTIME_TREE/.claude/skills/"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$RUNTIME_TREE/.agents/skills/"
+printf '.claude/skills .agents/skills\n' > "$RUNTIME_TREE/.agent-skill-roots"
+identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination runtime copies are not coherent"; echo "$identity_out"; exit 1; }
+printf '\nreal runtime divergence\n' >> "$RUNTIME_TREE/.agents/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination runtime divergence did not red"; echo "$identity_out"; exit 1; }
+cp "$RUNTIME_TREE/.claude/skills/cross-repo-coordination/SKILL.md" "$RUNTIME_TREE/.agents/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real runtime identity did not return coherent"; echo "$identity_out"; exit 1; }
 DRIVER="$(sha "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md")"
 cat > "$DROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
