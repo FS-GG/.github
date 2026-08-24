@@ -3170,10 +3170,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         with _ ->
             []
 
-    /// The review half of `landable` for stale-claim recovery projections (#2854).
-    /// `Reads.prLandable` establishes CI and mergeability only; recovery may call work ready for adoption
-    /// only after one valid effective review chain is host-accepted for this exact PR and current head.
-    /// Any unreadable or malformed fact is a refusal with a reason, never an absent-review inference.
+    // The review half of `landable` for stale-claim recovery projections (#2854).
+    // `Reads.prLandable` establishes CI and mergeability only; recovery may call work ready for adoption
+    // only after one valid effective review chain is host-accepted for this exact PR and current head.
+    // Any unreadable or malformed fact is a refusal with a reason, never an absent-review inference.
     let private acceptedReviewHead (ctx: Context) (ref: Ref) (pr: int) : Result<string, string> =
         match
             Reads.prHeadSha ctx.Transport ref.Owner ref.Repo pr,
@@ -5423,10 +5423,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     /// PR is not open at all, #1680) on stdout, the DECISION in the exit code so a poll loop reads "keep
     /// waiting" from "stop" without parsing prose (#724).
     ///
-    /// IT IS THE CI/MERGEABILITY READ `who`/`reap`/`adopt` SHARE (`Reads.prLandable` → `Landable.score`),
-    /// surfaced on its own so that verdict has ONE home. Stale-claim recovery additionally requires an
-    /// exact-head, digest-valid host acceptance before it may call the work review-ready. §5 of the worker
-    /// recipes used to re-derive the CI/mergeability slice in ~40 lines of jq,
+    /// IT IS THE CI/MERGEABILITY READ `who`/`reap`/`adopt` SHARE (`Reads.prLandable` → `Landable.score`), surfaced on its own so that verdict has ONE home.
+    /// Stale-claim recovery also requires exact-head, digest-valid host acceptance. §5 of the worker recipes used to re-derive this slice in ~40 lines of jq,
     /// wrong four times (#547/#606/#698/#720) and fixed in a COPY each time because nothing executes a recipe.
     /// A command a test can hold makes a fifth copy unwritable — this is that command.
     ///
