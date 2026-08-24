@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "dfb94cb7f1e646d2113733a263a31b67d8967f788ce6701f005e29e2aeffdf96"
+        "value": "9efdb0a398fb8d6b2e7e8df488dcc1a726584eb67f567892371700804d4166d2"
       }
     },
     {
@@ -1211,7 +1211,7 @@
           "path": "work/2907-blocked-by-set-mutations/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "dfb94cb7f1e646d2113733a263a31b67d8967f788ce6701f005e29e2aeffdf96"
+            "value": "9efdb0a398fb8d6b2e7e8df488dcc1a726584eb67f567892371700804d4166d2"
           },
           "schemaVersion": 1
         },
@@ -1242,7 +1242,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "6e0cae114cc07a049c5e6a74dc5bf8eaa8f9fd942d9d9f0415092f4eae49d347"
+        "value": "2e0fe7487b2019f4262ae9b0ee8aea4657c2686c60a79bb3fe18dee6b28d1353"
       },
       "currency": "current"
     }

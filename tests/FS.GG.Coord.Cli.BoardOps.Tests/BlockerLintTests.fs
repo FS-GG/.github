@@ -50,7 +50,14 @@ module BlockerLintTests =
             { Code: int
               Out: string
               Error: string
-              Mutations: string list }
+              Mutations: string list
+              IdentityLadderCleared: bool }
+
+        let private identitySessionVars =
+            [ "CLAUDE_CODE_SESSION_ID"
+              "OPENCODE_SESSION_ID"
+              "FSGG_AGENT_SESSION_ID"
+              "FSGG_AGENT_HARNESS" ]
 
         let run (initialValue: string) (secondValue: string) (initialRevision: string) (secondRevision: string) (args: string list) =
             let mutable observations = 0
@@ -88,6 +95,9 @@ module BlockerLintTests =
             let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-" + Guid.NewGuid().ToString("N"))
             let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
             let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+            let previousSessions =
+                identitySessionVars
+                |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
             let stdout, stderr = Console.Out, Console.Error
             use capturedOut = new StringWriter()
             use capturedErr = new StringWriter()
@@ -95,21 +105,34 @@ module BlockerLintTests =
             try
                 Directory.CreateDirectory dir |> ignore
                 Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
-                Environment.SetEnvironmentVariable("FSGG_WORKER", "plover-2907")
+                Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("FSGG_AGENT_HARNESS", null)
+                Environment.SetEnvironmentVariable("FSGG_WORKER", null)
+                let identityLadderCleared =
+                    identitySessionVars
+                    |> List.forall (fun variable -> String.IsNullOrEmpty(Environment.GetEnvironmentVariable variable))
                 Console.SetOut capturedOut
                 Console.SetError capturedErr
-                let opts = Options.parse args |> Result.defaultWith failwith
+                let opts = Options.parse (args @ [ "--worker"; "plover-2907" ]) |> Result.defaultWith failwith
                 let context: Kernel.Context =
                     { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some "FS.GG.SDD"; ChoreLocks = [] }
                 let code = Handlers.setField context opts
                 Console.Out.Flush()
                 Console.Error.Flush()
-                { Code = code; Out = capturedOut.ToString(); Error = capturedErr.ToString(); Mutations = List.ofSeq mutations }
+                { Code = code
+                  Out = capturedOut.ToString()
+                  Error = capturedErr.ToString()
+                  Mutations = List.ofSeq mutations
+                  IdentityLadderCleared = identityLadderCleared }
             finally
                 Console.SetOut stdout
                 Console.SetError stderr
                 Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
                 Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+                for variable, value in previousSessions do
+                    Environment.SetEnvironmentVariable(variable, value)
                 try Directory.Delete(dir, true) with _ -> ()
 
     [<Fact>]
@@ -148,6 +171,45 @@ module BlockerLintTests =
         Assert.NotEqual(0, result.Code)
         Assert.Contains("Stale dependency-edge observation", result.Error)
         Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 set mutation fixture clears every identity session source before using explicit worker`` () =
+        let sessionVariables =
+            [ "CLAUDE_CODE_SESSION_ID"
+              "OPENCODE_SESSION_ID"
+              "FSGG_AGENT_SESSION_ID"
+              "FSGG_AGENT_HARNESS" ]
+        let previous =
+            sessionVariables
+            |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
+
+        let cases =
+            [ [ "CLAUDE_CODE_SESSION_ID", "shared-claude-session" ]
+              [ "OPENCODE_SESSION_ID", "per-worker-opencode-session" ]
+              [ "FSGG_AGENT_SESSION_ID", "custom-session"; "FSGG_AGENT_HARNESS", "custom-harness" ]
+              [ "FSGG_AGENT_HARNESS", "orphaned-harness-name" ] ]
+
+        try
+            for poisoned in cases do
+                for variable in sessionVariables do
+                    Environment.SetEnvironmentVariable(variable, null)
+                for variable, value in poisoned do
+                    Environment.SetEnvironmentVariable(variable, value)
+
+                let result =
+                    BlockedBySetMutationFixture.run
+                        "FS-GG/FS.GG.SDD#290"
+                        "FS-GG/FS.GG.SDD#290"
+                        "r1"
+                        "r1"
+                        [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
+                Assert.True(result.IdentityLadderCleared, $"identity ladder was not cleared for %A{poisoned}")
+                Assert.Equal(0, result.Code)
+                Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299" ], result.Mutations)
+        finally
+            for variable, value in previous do
+                Environment.SetEnvironmentVariable(variable, value)
 
     /// .github#2698 — a comment ledger holding one current delivery-route receipt for `subject`, as
     /// `Reads.commentBodies` reads it. Any fixture whose command RESOLVES a `Status=Ready` write needs

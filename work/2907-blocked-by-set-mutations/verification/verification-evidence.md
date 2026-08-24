@@ -2,16 +2,21 @@
 
 ## Positive controls
 
-- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --no-restore`: 254 passed, 0 failed, 0 skipped.
+- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --no-restore`: 255 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore`: 671 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-restore`: 182 passed, 0 failed, 0 skipped.
 - The Lifecycle, CLI, and Core test project commands each exited zero.
-- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 254 BoardOps tests passing.
+- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 255 BoardOps tests passing.
 - `tests/coord-engine-parity/run.sh` passed the explicit replace/clear, ref-first, zero-GraphQL refusal, canonicalization, de-duplication, and scoped-field controls after its legacy positional calls were migrated.
 - After the initial critic identified a missing hosted body for open/In-progress item #423, the repaired
   serialized parity run passed 616/616 assertions with zero failures and zero not-measured results. Its
   negative control removes only #423's body, proves production requested that body, and proves lint
   aborts rather than returning a partial JSON findings array.
+- After the successor pass, hosted `harness-identity / ladder-decided` exposed an ambient-session leak in
+  `BlockedBySetMutationFixture.run`. The round-2 repair clears all four variables currently read by
+  `Identity.resolve`, uses an explicit `--worker`, and exercises each poisoned source independently.
+  `python3 scripts/check-harness-identity.py --root .` passed its 111-shell/104-F# census, the focused
+  BlockerLint selection passed 36/36, and `tests/harness-identity/run.sh` passed 14/14 mutation controls.
 - `scripts/generate-projections --check` reported every projection current; the signature-doc mutation sweep killed 435/435 mutants.
 - The Release engine build and the 12-entry deterministic package check exited zero.
 
