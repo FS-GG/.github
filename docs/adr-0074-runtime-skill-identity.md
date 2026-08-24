@@ -34,6 +34,13 @@ identity is explicit: `skill-view identity --skill <id>` reads either a source t
 compares every file in every declared runtime root. A receiver project declaration, never traversal
 order, says which root is live and which is a generated view.
 
+`cross-repo-coordination` is the production reference subject. Its central catalog row uses the
+existing `process` scope and its `.github` delivery-class declaration names FS.GG.Kit. The
+generated coordination-kit manifest carries the same canonical source/body digest alongside its
+closed raw-file inventory, so it is directly usable as an identity authority as well as package
+input. `.github`'s driver and coordination manifests remain disjoint producer inventories; identity
+selects the unique manifest entry by skill id and refuses duplicates across them.
+
 Absent, unreadable, malformed, empty, or duplicate authority data is `inconclusive` and red. A
 digest mismatch or undeclared runtime file is `drift` and red. Existing check, generate,
 materialization, and parameter-selection behavior is unchanged.

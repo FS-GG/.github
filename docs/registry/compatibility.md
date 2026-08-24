@@ -301,17 +301,18 @@ The authoritative count of the `skill-registry` catalog ([`registry/skills.yml`]
 *Generated from `registry/skills.yml` — the authoritative breakdown of the skill catalog by
 `scope` and `owner`. This is the machine-owned count; the prose elsewhere on this page cites it.*
 
-**64 rows** = **16 process** + **35 product** + **5 driver** + **8 operator** (11 `fs-gg-game` + 18 `fs-gg-rendering` + 6 `fs-gg-templates`).
+**65 rows** = **17 process** + **35 product** + **5 driver** + **8 operator** (11 `fs-gg-game` + 18 `fs-gg-rendering` + 6 `fs-gg-templates`).
 
 | scope | owner | rows |
 |---|---|---|
 | driver | `.github` | 5 |
 | operator | `.github` | 8 |
+| process | `.github` | 1 |
 | process | `fs-gg-sdd` | 16 |
 | product | `fs-gg-game` | 11 |
 | product | `fs-gg-rendering` | 18 |
 | product | `fs-gg-templates` | 6 |
-| **total** | | **64** |
+| **total** | | **65** |
 
 <!-- END GENERATED: fsgg-skill-registry-counts -->
 
