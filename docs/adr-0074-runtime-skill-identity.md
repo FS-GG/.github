@@ -43,7 +43,9 @@ selects the unique manifest entry by skill id and refuses duplicates across them
 Producer containment is evaluated after realpath resolution against the selected producer checkout,
 not the aggregate repositories directory. This admits the hosted `.repos/.github ->
 $GITHUB_WORKSPACE` checkout layout while still refusing a source or inventory file that escapes the
-selected producer.
+selected producer. Before selecting that producer, the registry source must be a normalized,
+non-absolute, non-traversing `<producer>/<path>`; lexical parent traversal is malformed authority,
+not a way to redefine the producer boundary.
 
 Absent, unreadable, malformed, empty, or duplicate authority data is `inconclusive` and red. A
 digest mismatch or undeclared runtime file is `drift` and red. Existing check, generate,
