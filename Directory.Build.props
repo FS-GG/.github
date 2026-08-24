@@ -454,8 +454,13 @@
        packed Kit corrects the intake template to the board's canonical severity vocabulary. These
        are additive and repaired receiver-visible behaviors; no command, package, or member identity
        is removed. -->
+  <!-- 0.75.0 -> 0.75.1 (.github#2859): PATCH on the stable 0.x line. The packed coordination-kit
+       review guidance now routes queue entry through the host-owned engine boundary, preserves the
+       canonical generation-token contract, and makes structured-record completion evidence
+       unambiguous. The engine adds the matching derived-entry and normalization controls. Additive
+       repair; no command, package, or member identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
