@@ -520,53 +520,61 @@ module Handlers =
 
                     let writeExplicit operation write =
                         match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" write w.Id with
-                        | Error e -> fail e
-                        | Ok outcome -> renderOutcome operation write outcome
+                        | Error e -> Error e
+                        | Ok outcome -> Ok(renderOutcome operation write outcome)
 
-                    match mutation with
-                    | Options.ReplaceBlockedBy raw ->
-                        match canonicalBlockedByRefs ref raw with
-                        | Error rc -> rc
-                        | Ok [] ->
-                            eprint "fsgg-coord-engine: --replace needs at least one issue ref; use --clear to clear the set."
-                            ExitError
-                        | Ok refs ->
-                            let write = blockedByWrite refs
-                            writeExplicit "replace" write
-                    | Options.ClearBlockedBy ->
-                        writeExplicit "clear" Board.Clear
-                    | Options.AddBlockedBy raw
-                    | Options.RemoveBlockedBy raw as edgeMutation ->
-                        match Board.itemBlockedByObservation ctx.Transport board ref.Owner ref.Repo ref.Number with
-                        | Error e -> fail e
-                        | Ok observed ->
-                            let liveRaw = observed.Value |> Option.defaultValue ""
-                            match canonicalBlockedByRefs ref liveRaw, canonicalBlockedByRefs ref raw with
-                            | Error rc, _
-                            | _, Error rc -> rc
-                            | _, Ok [] ->
-                                let operation =
-                                    match edgeMutation with
-                                    | Options.AddBlockedBy _ -> "add"
-                                    | _ -> "remove"
+                    // The lease begins BEFORE the first live edge observation and remains held through
+                    // the GraphQL mutation. Projects v2 has no expected-revision input, so moving only the
+                    // second read closer to the write would preserve the overwrite race this boundary owns.
+                    let transaction () : Errors.IoResult<int> =
+                        match mutation with
+                        | Options.ReplaceBlockedBy raw ->
+                            match canonicalBlockedByRefs ref raw with
+                            | Error rc -> Ok rc
+                            | Ok [] ->
+                                eprint "fsgg-coord-engine: --replace needs at least one issue ref; use --clear to clear the set."
+                                Ok ExitError
+                            | Ok refs ->
+                                let write = blockedByWrite refs
+                                writeExplicit "replace" write
+                        | Options.ClearBlockedBy ->
+                            writeExplicit "clear" Board.Clear
+                        | Options.AddBlockedBy raw
+                        | Options.RemoveBlockedBy raw as edgeMutation ->
+                            match Board.itemBlockedByObservation ctx.Transport board ref.Owner ref.Repo ref.Number with
+                            | Error e -> Error e
+                            | Ok observed ->
+                                let liveRaw = observed.Value |> Option.defaultValue ""
+                                match canonicalBlockedByRefs ref liveRaw, canonicalBlockedByRefs ref raw with
+                                | Error rc, _
+                                | _, Error rc -> Ok rc
+                                | _, Ok [] ->
+                                    let operation =
+                                        match edgeMutation with
+                                        | Options.AddBlockedBy _ -> "add"
+                                        | _ -> "remove"
 
-                                eprint $"fsgg-coord-engine: --%s{operation} needs at least one issue ref."
-                                ExitError
-                            | Ok live, Ok requested ->
-                                let result, operation =
-                                    match edgeMutation with
-                                    | Options.AddBlockedBy _ ->
-                                        let seen = Set.ofList live
-                                        live @ (requested |> List.filter (fun value -> not (Set.contains value seen))), "add"
-                                    | Options.RemoveBlockedBy _ ->
-                                        let removed = Set.ofList requested
-                                        live |> List.filter (fun value -> not (Set.contains value removed)), "remove"
-                                    | _ -> failwith "unreachable explicit edge mutation"
+                                    eprint $"fsgg-coord-engine: --%s{operation} needs at least one issue ref."
+                                    Ok ExitError
+                                | Ok live, Ok requested ->
+                                    let result, operation =
+                                        match edgeMutation with
+                                        | Options.AddBlockedBy _ ->
+                                            let seen = Set.ofList live
+                                            live @ (requested |> List.filter (fun value -> not (Set.contains value seen))), "add"
+                                        | Options.RemoveBlockedBy _ ->
+                                            let removed = Set.ofList requested
+                                            live |> List.filter (fun value -> not (Set.contains value removed)), "remove"
+                                        | _ -> failwith "unreachable explicit edge mutation"
 
-                                let write = blockedByWrite result
-                                match Board.boardWriteGuarded ctx.Transport board ref.Owner ref.Repo ref.Number observed write with
-                                | Error e -> fail e
-                                | Ok outcome -> renderOutcome operation write outcome
+                                    let write = blockedByWrite result
+                                    match Board.boardWriteGuarded ctx.Transport board ref.Owner ref.Repo ref.Number observed write with
+                                    | Error e -> Error e
+                                    | Ok outcome -> Ok(renderOutcome operation write outcome)
+
+                    match Writes.withBlockedByMutationLease ctx.Transport ref transaction with
+                    | Error e -> fail e
+                    | Ok code -> code
         | [ _; field ] ->
             eprint $"fsgg-coord-engine: --add/--remove/--replace/--clear apply only to the set-valued 'Blocked by' field (got '%s{field}')."
             ExitError

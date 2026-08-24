@@ -100,6 +100,16 @@ module Writes =
         body: string ->
             Errors.IoResult<DurableLeaseWrite>
 
+    /// Serialize one complete explicit `Blocked by` read/derive/write transaction using an ephemeral,
+    /// REST-backed comment CAS. Projects v2 field mutations have no expected-revision input, so another
+    /// pre-read is not mutation authority. The lowest live GitHub comment id wins; stale candidates from
+    /// a dead process expire after ten minutes, and every completed contender removes only its own marker.
+    val withBlockedByMutationLease:
+        transport: Transport.IGitHubTransport ->
+        ref: FS.GG.Coord.Types.Ref ->
+        action: (unit -> Errors.IoResult<'value>) ->
+            Errors.IoResult<'value>
+
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
     val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
 

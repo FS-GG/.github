@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli.Tests
 open System
 open System.IO
 open System.Text.RegularExpressions
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -59,8 +60,16 @@ module BlockerLintTests =
               "FSGG_AGENT_SESSION_ID"
               "FSGG_AGENT_HARNESS" ]
 
-        let run (initialValue: string) (secondValue: string) (initialRevision: string) (secondRevision: string) (args: string list) =
+        let private runCore
+            (leaseRaceWinner: bool)
+            (initialValue: string)
+            (secondValue: string)
+            (initialRevision: string)
+            (secondRevision: string)
+            (args: string list) =
             let mutable observations = 0
+            let mutable leaseReads = 0
+            let mutable leaseBody = ""
             let mutations = ResizeArray<string>()
 
             let observation value revision =
@@ -69,6 +78,26 @@ module BlockerLintTests =
             let transport =
                 Fake.Recorder(fun request ->
                     match request.Method, request.Path.Trim('/'), request.Body with
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ ->
+                        leaseReads <- leaseReads + 1
+                        if leaseReads < 3 then ok "[]"
+                        else
+                            let now = DateTimeOffset.UtcNow.ToString("o")
+                            let ours = {| id = 200L; body = leaseBody; updated_at = now; html_url = "https://fixture/200" |}
+                            if leaseRaceWinner then
+                                let winner =
+                                    {| id = 100L
+                                       body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=competitor lease=10 -->"
+                                       updated_at = now
+                                       html_url = "https://fixture/100" |}
+                                ok (JsonSerializer.Serialize [| winner; ours |])
+                            else
+                                ok (JsonSerializer.Serialize [| ours |])
+                    | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments", Json payload ->
+                        use document = JsonDocument.Parse payload
+                        leaseBody <- document.RootElement.GetProperty("body").GetString()
+                        ok """{"id":200}"""
+                    | "DELETE", "repos/FS-GG/FS.GG.SDD/issues/comments/200", _ -> ok "{}"
                     | "GET", "rate_limit", _ -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                     | "POST", "graphql", Query(document, _) when document.Contains "projectsV2" ->
                         ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
@@ -135,6 +164,12 @@ module BlockerLintTests =
                     Environment.SetEnvironmentVariable(variable, value)
                 try Directory.Delete(dir, true) with _ -> ()
 
+        let run initialValue secondValue initialRevision secondRevision args =
+            runCore false initialValue secondValue initialRevision secondRevision args
+
+        let runContended initialValue secondValue initialRevision secondRevision args =
+            runCore true initialValue secondValue initialRevision secondRevision args
+
     [<Fact>]
     let ``#2907 add preserves the existing edge while adding the requested edge`` () =
         let result =
@@ -171,6 +206,128 @@ module BlockerLintTests =
         Assert.NotEqual(0, result.Code)
         Assert.Contains("Stale dependency-edge observation", result.Error)
         Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 lower comment-id contender fences the mutation before any edge read or write`` () =
+        let result =
+            BlockedBySetMutationFixture.runContended
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("lease is held by comment 100", result.Error)
+        Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 two concurrent writers serialize without losing either edge`` () =
+        let sync = obj ()
+        let bothReadyToPost = new Threading.ManualResetEventSlim(false)
+        let bothPosted = new Threading.ManualResetEventSlim(false)
+        let bothElected = new Threading.ManualResetEventSlim(false)
+        let comments = Collections.Generic.Dictionary<int64, string>()
+        let emptyReadsByThread = Collections.Generic.Dictionary<int, int>()
+        let mutable nextComment = 100L
+        let mutable readyToPost = 0
+        let mutable postCount = 0
+        let mutable electionReads = 0
+        let mutable edges = Set.empty<string>
+        let mutable actionsInProgress = 0
+        let mutable maximumConcurrentActions = 0
+
+        let response body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        let commentJson () =
+            lock sync (fun () ->
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                comments
+                |> Seq.sortBy (fun entry -> entry.Key)
+                |> Seq.map (fun entry ->
+                    {| id = entry.Key
+                       body = entry.Value
+                       updated_at = now
+                       html_url = $"https://fixture/%d{entry.Key}" |})
+                |> Seq.toArray
+                |> JsonSerializer.Serialize)
+
+        let transport =
+            { new IGitHubTransport with
+                member _.Send(request: Request) =
+                    match request.Method, request.Path.Trim('/'), request.Body with
+                    | "GET", "repos/FS-GG/.github/issues/42/comments", _ ->
+                        let mustWaitToPost, json =
+                            lock sync (fun () ->
+                                let threadId = Threading.Thread.CurrentThread.ManagedThreadId
+                                let priorReads =
+                                    match emptyReadsByThread.TryGetValue threadId with
+                                    | true, count -> count
+                                    | _ -> 0
+                                let currentReads = priorReads + 1
+                                emptyReadsByThread.[threadId] <- currentReads
+                                let mustWaitToPost = postCount = 0 && currentReads = 2
+                                if mustWaitToPost then
+                                    readyToPost <- readyToPost + 1
+                                    if readyToPost = 2 then bothReadyToPost.Set()
+                                if postCount >= 2 then
+                                    electionReads <- electionReads + 1
+                                    if electionReads >= 2 then bothElected.Set()
+                                mustWaitToPost, commentJson ())
+                        if mustWaitToPost then Assert.True(bothReadyToPost.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not reach the post boundary")
+                        response json
+                    | "POST", "repos/FS-GG/.github/issues/42/comments", Json payload ->
+                        let id, body, mustWait =
+                            use document = JsonDocument.Parse payload
+                            let body = document.RootElement.GetProperty("body").GetString()
+                            lock sync (fun () ->
+                                let id = nextComment
+                                nextComment <- nextComment + 1L
+                                comments.[id] <- body
+                                postCount <- postCount + 1
+                                if postCount = 2 then bothPosted.Set()
+                                id, body, postCount <= 2)
+                        if mustWait then Assert.True(bothPosted.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not post")
+                        response (JsonSerializer.Serialize {| id = id; body = body |})
+                    | "DELETE", path, _ when path.StartsWith "repos/FS-GG/.github/issues/comments/" ->
+                        let id = int64 (path.Substring(path.LastIndexOf('/') + 1))
+                        lock sync (fun () -> comments.Remove id |> ignore)
+                        response "{}"
+                    | method, path, _ -> Error(Errors.NotFound $"race fixture serves no %s{method} %s{path}") }
+
+        let run edge : Errors.IoResult<unit> =
+            Writes.withBlockedByMutationLease transport (ref' 42) (fun () ->
+                lock sync (fun () ->
+                    actionsInProgress <- actionsInProgress + 1
+                    maximumConcurrentActions <- max maximumConcurrentActions actionsInProgress)
+                Assert.True(bothElected.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not complete election reads")
+                lock sync (fun () ->
+                    let observed = edges
+                    edges <- Set.add edge observed
+                    actionsInProgress <- actionsInProgress - 1)
+                Ok())
+
+        let first = Threading.Tasks.Task.Run(fun () -> run "FS-GG/.github#290")
+        let second = Threading.Tasks.Task.Run(fun () -> run "FS-GG/.github#299")
+        Threading.Tasks.Task.WaitAll [| first :> Threading.Tasks.Task; second :> Threading.Tasks.Task |]
+
+        let firstResults = [ first.Result; second.Result ]
+        let firstErrors =
+            firstResults
+            |> List.choose (function | Error error -> Some(Errors.explain error) | Ok() -> None)
+            |> String.concat " | "
+        Assert.True(firstResults |> List.filter Result.isOk |> List.length = 1, firstErrors)
+        Assert.Equal(1, firstResults |> List.filter Result.isError |> List.length)
+        Assert.Equal(1, lock sync (fun () -> edges.Count))
+        Assert.Equal(1, maximumConcurrentActions)
+
+        let losingEdge =
+            if first.Result.IsError then "FS-GG/.github#290" else "FS-GG/.github#299"
+
+        Assert.True((run losingEdge).IsOk)
+        Assert.Equal<string>(Set.ofList [ "FS-GG/.github#290"; "FS-GG/.github#299" ], lock sync (fun () -> edges))
+        Assert.Equal(1, maximumConcurrentActions)
 
     [<Fact>]
     let ``#2907 set mutation fixture clears every identity session source before using explicit worker`` () =

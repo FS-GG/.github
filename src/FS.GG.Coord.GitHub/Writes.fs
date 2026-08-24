@@ -368,6 +368,132 @@ module Writes =
         | Error(NotFound _) -> Ok()
         | Error e -> Error e
 
+    // GitHub Projects v2 field mutations expose no expected-revision input. A read immediately before
+    // `updateProjectV2ItemFieldValue` therefore cannot be a compare-and-set: another process can write
+    // after that read and before our mutation, and our derived set would erase its edge. Serialize the
+    // complete read/derive/write transaction on REST instead, where comment ids provide the same total
+    // order as the claim CAS. The marker is deliberately ephemeral; a bounded stale marker from a dead
+    // process is collected before a new contender enters.
+    [<Literal>]
+    let private BlockedByLeaseMarker = "<!-- fsgg:blocked-by-mutation-lease/v1"
+
+    [<Literal>]
+    let private BlockedByLeaseMinutes = 10
+
+    type private BlockedByLeaseCandidate =
+        { Id: int64
+          Body: string
+          UpdatedAt: DateTimeOffset }
+
+    let private blockedByLeaseCandidates (transport: IGitHubTransport) (ref: Ref) : IoResult<BlockedByLeaseCandidate list> =
+        let subject = $"%s{ref.Short} Blocked by mutation lease"
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            try
+                use document = JsonDocument.Parse response.Body
+                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the authoritative lease comment census is not a JSON array"))
+                else
+                    document.RootElement.EnumerateArray()
+                    |> Seq.fold
+                        (fun state comment ->
+                            state
+                            |> Result.bind (fun candidates ->
+                                match comment.TryGetProperty "body" with
+                                | false, _ ->
+                                    Error(Malformed(subject, "a comment has no readable body, so it cannot be classified as a mutation lease"))
+                                | true, body when body.ValueKind <> JsonValueKind.String ->
+                                    Error(Malformed(subject, "a comment has no readable body, so it cannot be classified as a mutation lease"))
+                                | true, body ->
+                                    let raw = body.GetString()
+                                    if not (raw.StartsWith(BlockedByLeaseMarker, StringComparison.Ordinal)) then
+                                        Ok candidates
+                                    else
+                                        match comment.TryGetProperty "id", comment.TryGetProperty "updated_at" with
+                                        | (true, id), (true, updated)
+                                            when id.ValueKind = JsonValueKind.Number && updated.ValueKind = JsonValueKind.String ->
+                                            match DateTimeOffset.TryParse(updated.GetString()) with
+                                            | true, at -> Ok({ Id = id.GetInt64(); Body = raw; UpdatedAt = at } :: candidates)
+                                            | _ -> Error(Malformed(subject, "a mutation lease has an unreadable updated_at timestamp"))
+                                        | _ -> Error(Malformed(subject, "a mutation lease has no readable id and updated_at"))))
+                        (Ok [])
+                    |> Result.map (List.sortBy _.Id)
+            with :? JsonException as error ->
+                Error(Malformed(subject, $"the mutation lease census is not JSON: %s{error.Message}"))
+
+    // Run one complete Blocked-by read/derive/write transaction while holding the issue's REST-backed
+    // mutation lease. Every contender observes the same lowest GitHub comment id. A loser removes only
+    // its own candidate; no GraphQL read is treated as mutation authority on its own.
+    let withBlockedByMutationLease
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (action: unit -> IoResult<'value>)
+        : IoResult<'value> =
+
+        let subject = $"%s{ref.Short} Blocked by mutation lease"
+        let nonce = Guid.NewGuid().ToString("N")
+        let body = $"%s{BlockedByLeaseMarker} nonce=%s{nonce} lease=%d{BlockedByLeaseMinutes} -->"
+        let now () = DateTimeOffset.UtcNow
+        let isStale candidate = now () - candidate.UpdatedAt > TimeSpan.FromMinutes(float BlockedByLeaseMinutes)
+
+        let rec deleteAll candidates =
+            match candidates with
+            | [] -> Ok()
+            | candidate :: rest ->
+                deleteComment transport ref candidate.Id
+                |> Result.bind (fun () -> deleteAll rest)
+
+        let finish myId actionResult =
+            match deleteComment transport ref myId, actionResult with
+            | Ok(), result -> result
+            | Error cleanup, Ok _ ->
+                Error(Malformed(subject, $"the guarded mutation succeeded but lease comment %d{myId} could not be removed (%s{Errors.explain cleanup}); do not retry until the lease expires"))
+            | Error cleanup, Error actionError ->
+                Error(Malformed(subject, $"the guarded mutation failed (%s{Errors.explain actionError}) and lease comment %d{myId} could not be removed (%s{Errors.explain cleanup})"))
+
+        let runIfWinner myId =
+            blockedByLeaseCandidates transport ref
+            |> Result.bind (fun candidates ->
+                let live = candidates |> List.filter (isStale >> not)
+                match live |> List.tryHead with
+                | Some winner when winner.Id = myId -> finish myId (action ())
+                | Some winner ->
+                    deleteComment transport ref myId
+                    |> Result.bind (fun () -> Error(Malformed(subject, $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent")))
+                | None ->
+                    deleteComment transport ref myId
+                    |> Result.bind (fun () -> Error(Malformed(subject, "our mutation lease candidate disappeared before the authoritative election"))))
+
+        blockedByLeaseCandidates transport ref
+        |> Result.bind (fun initial ->
+            initial
+            |> List.filter isStale
+            |> deleteAll
+            |> Result.bind (fun () -> blockedByLeaseCandidates transport ref)
+            |> Result.bind (fun current ->
+                match current |> List.filter (isStale >> not) |> List.tryHead with
+                | Some winner ->
+                    Error(Malformed(subject, $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent"))
+                | None ->
+                    match postComment transport ref body with
+                    | Ok myId -> runIfWinner myId
+                    | Error writeError ->
+                        blockedByLeaseCandidates transport ref
+                        |> Result.bind (fun recovered ->
+                            match recovered |> List.tryFind (fun candidate -> candidate.Body = body) with
+                            | Some ours -> runIfWinner ours.Id
+                            | None -> Error writeError)))
+
     let private patchComment
         (transport: IGitHubTransport)
         (ref: Ref)
