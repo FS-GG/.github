@@ -130,14 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.1 — host-owned review waits and unambiguous completion evidence.
+    <PackageReleaseNotes>0.75.2 — caller-CWD-independent tier-4 engine resolution.
 
-WHAT MOVED, AND WHY IT IS A PATCH. Review queue entry now derives the current claim generation, PR
-head, review kind, and round through the engine rather than a caller-authored token. Completion accepts
-the required structured review record's canonical URL, comment id, or digest, normalizes it to the URL,
-and refuses prose-marker or ambiguous references before append. The packed Kit documents that same
-host-owned route while preserving the exact canonical generation-token contract. This is an additive
-repair with no removed command, package, member, or identity (.github#2859; parent .github#2903).
+WHAT MOVED, AND WHY IT IS A PATCH. The receiver wrapper now resolves tier 4 from its own tool manifest
+rather than whichever manifest is discoverable from the caller's current directory. It restores that
+exact manifest when needed, verifies the pinned assembly's reported version, and executes the assembly
+directly while preserving caller cwd and argv. A successful production execution emits one stable JSON
+resolution receipt on stderr with the manifest path, package pin, and resolved assembly. This is an
+additive routing and observability repair with no removed command, package, member, or identity
+(.github#2908; parent .github#2903).
 
 $(FsggStandingAdvisories)
 
