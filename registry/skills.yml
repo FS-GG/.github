@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-23"
+updated: "2026-08-24"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -146,7 +146,7 @@ skills:
   # fs-gg-sdd-project — the product-internal project skill; see the fs-gg-project seam below).
   # ------------------------------------------------------------------------------------------------
   - { id: fs-gg-sdd-analyze,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-analyze/SKILL.md,             sha256: ae59ef0f6a58d70985b027e99ed728f687265d7631c600cc4998b040cd084bf3, materializes-when: always }
-  - { id: fs-gg-sdd-authoring-contracts, scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-authoring-contracts/SKILL.md, sha256: 9842c3b5c5b709840760e96ec9c53bb43c30994833e9112726d521b4d4315930, materializes-when: always }
+  - { id: fs-gg-sdd-authoring-contracts, scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-authoring-contracts/SKILL.md, sha256: d2d9ee327c8e2ba340ae4263db0cf915f0374f49df56754a6b34de424e04c4eb, materializes-when: always }
   - { id: fs-gg-sdd-charter,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-charter/SKILL.md,             sha256: 8e1df19bf175309f46de3426a039c82a630bb87caf6a06189d858c1dba97c707, materializes-when: always }
   - { id: fs-gg-sdd-checklist,           scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-checklist/SKILL.md,           sha256: 8471d642d6c7e45459d6fa8e5d2c75f7c426185ac1b8b94659871c9e6ffdf766, materializes-when: always }
   - { id: fs-gg-sdd-clarify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-clarify/SKILL.md,             sha256: dae626d25e237b39add1fa2446f8d8d7d5d0a55efdc1b6f1c482dd37a6f58ab2, materializes-when: always }
