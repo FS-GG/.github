@@ -1513,87 +1513,95 @@ else
 fi
 rm -rf "$NOHEAD" "$D" "$DWT"
 
-# ---- 7. TIER 4 IS A PIPE TOO: `dotnet tool run` EATS --help (#1029) -------------------------------
+# ---- 7. TIER 4 BINDS THE WRAPPER MANIFEST WITHOUT CHANGING CALLER CWD (#2908, #1029) -------------
 #
-# The shim's header promises a transparent pipe that "adds no output of its own" and passes "argv through
-# unchanged". On TIER 4 — the RECEIVERS' shape (`.config/dotnet-tools.json` + `dotnet tool run`) — it was
-# not one. `dotnet tool run` has its OWN `-?, -h, --help` option and CONSUMES those flags before the tool
-# is ever reached, answering with its own help and EXIT 0. So on every receiver repo a worker who asked the
-# coordination tool for help got dotnet's, and nothing reported a failure. `--help` is how a worker
-# discovers a verb or a flag (#891) — what was undeliverable was the whole usage, not one line of it.
-#
-# WHY IT SURVIVED IS STRUCTURAL, AND IT IS THIS FILE'S FAULT. `.github` builds the engine from source and
-# resolves at TIER 2 (ADR-0034 decision 2), which is a genuine `exec` and genuinely transparent — so the ONE
-# repo that owns the shim is the one repo where the bug cannot reproduce, and not one leg above drove tier 4
-# at all. Every tier the owner can reach was pinned; the tier only the receivers reach was not.
-#
-# WHY `dotnet` IS FAKED. Driving the real `dotnet tool run` needs the tool RESTORED from the auth-walled org
-# feed, which no leg here may depend on. So the fake emulates exactly ONE behaviour, MEASURED against the
-# real dotnet 10.0.302 rather than assumed — and nothing else:
-#
-#   dotnet tool run fsgg-coord-engine --help           -> dotnet's own help, exit 0  (eaten)
-#   dotnet tool run fsgg-coord-engine next --help      -> dotnet's own help, exit 0  (eaten; NOT positional)
-#   dotnet tool run fsgg-coord-engine --version        -> reaches the tool           (NOT eaten)
-#   dotnet tool run fsgg-coord-engine -- next --help   -> reaches the tool
-#
-# Leg (a) needs no model at all: it asserts what the SHIM HANDED dotnet, which is the header's contract
-# stated as an argv. Legs (b)-(d) show why that matters, against a dotnet that eats what the real one eats.
-T4="$(mktemp -d)"; DOTNETDIR="$(mktemp -d)"; ARGV_LOG="$T4/argv.log"
+# A receiver wrapper can be invoked while the caller stands in another checkout. `dotnet tool run` has no
+# explicit-manifest option and searches from that cwd, so the old probe/restore (wrapper tree) and execution
+# (caller tree) could select different pins. This fixture gives BOTH trees a manifest and makes their versions
+# observably different. The fake models the production resolver cache written by `dotnet tool restore`, then
+# executes the exact assembly path the shim selected; it never talks to a feed or GitHub.
+T4_BASE="$(mktemp -d)"; T4="$T4_BASE/wrapper"; CALLER="$T4_BASE/caller"
+DOTNETDIR="$(mktemp -d)"; DOTNET_HOME="$(mktemp -d)"; ARGV_LOG="$T4_BASE/argv.log"
+mkdir -p "$T4/scripts" "$T4/.config" "$CALLER/.config" "$DOTNET_HOME/.dotnet/toolResolverCache/1" "$DOTNET_HOME/assemblies/0.71.0" "$DOTNET_HOME/assemblies/0.72.0"
 ( cd "$T4" && git init -q . ) >/dev/null 2>&1
-mkdir -p "$T4/.config"
+( cd "$CALLER" && git init -q . ) >/dev/null 2>&1
+cp "$SHIM" "$T4/scripts/fsgg-coord"; chmod +x "$T4/scripts/fsgg-coord"
+T4_SHIM="$T4/scripts/fsgg-coord"
 cat >"$T4/.config/dotnet-tools.json" <<'JSON'
 { "version": 1, "isRoot": true,
-  "tools": { "fs.gg.coord.cli": { "version": "0.3.0", "commands": ["fsgg-coord-engine"] } } }
+  "tools": { "fs.gg.coord.cli": { "version": "0.72.0", "commands": ["fsgg-coord-engine"] } } }
+JSON
+cat >"$CALLER/.config/dotnet-tools.json" <<'JSON'
+{ "version": 1, "isRoot": true,
+  "tools": { "fs.gg.coord.cli": { "version": "0.71.0", "commands": ["fsgg-coord-engine"] } } }
+JSON
+: >"$DOTNET_HOME/assemblies/0.71.0/fsgg-coord-engine.dll"
+: >"$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll"
+cat >"$DOTNET_HOME/.dotnet/toolResolverCache/1/fs.gg.coord.cli" <<JSON
+[{"Version":"0.71.0","Name":"fsgg-coord-engine","PathToExecutable":"$DOTNET_HOME/assemblies/0.71.0/fsgg-coord-engine.dll"},
+ {"Version":"0.72.0","Name":"fsgg-coord-engine","PathToExecutable":"$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll"}]
 JSON
 cat >"$DOTNETDIR/dotnet" <<'SH'
 #!/usr/bin/env bash
-# A fake `dotnet`. It emulates ONE measured behaviour of `dotnet tool run`: its own -?/-h/--help is
-# consumed BEFORE any `--`, and answered by dotnet itself with exit 0. Everything after a `--` is the
-# tool's. It NEVER talks to GitHub — a leg that can reach the real board is the bug, not the test for it.
-if [ "${1:-}" = "tool" ] && [ "${2:-}" = "run" ]; then
-  shift 2
-  printf '%s\n' "$*" >>"$ARGV_LOG_PATH"
-  shift                                     # the tool name
-  for a in "$@"; do
-    case "$a" in
-      --) break ;;
-      -h|-\?|--help) echo "Description:"; echo "  Run a local tool."; exit 0 ;;
-    esac
-  done
-  [ "${1:-}" = "--" ] && shift
-  echo "ENGINE RAN: $*"
+if [ "${1:-}" = "tool" ] && [ "${2:-}" = "restore" ]; then
+  printf 'RESTORE cwd=%s args=%s\n' "$PWD" "$*" >>"$ARGV_LOG_PATH"
+  cp "$RESTORED_CACHE_FIXTURE" "$DOTNET_CLI_HOME/.dotnet/toolResolverCache/1/fs.gg.coord.cli"
   exit 0
 fi
-echo "fake dotnet: unhandled $*" >&2; exit 64
+assembly="${1:-}"; shift || true
+printf 'EXEC assembly=%s cwd=%s args=%s\n' "$assembly" "$PWD" "$*" >>"$ARGV_LOG_PATH"
+pin="$(basename "$(dirname "$assembly")")"
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' "${FORCE_RESOLVED_VERSION:-$pin.0}"
+  exit 0
+fi
+printf 'ENGINE RAN cwd=%s args=%s\n' "$PWD" "$*"
+exit 0
 SH
 chmod +x "$DOTNETDIR/dotnet"
-t4run() { ( cd "$T4" && env -u FSGG_COORD_ENGINE_BIN ARGV_LOG_PATH="$ARGV_LOG" PATH="$DOTNETDIR:$PATH" "$SHIM" "$@" 2>&1 ); }
+t4run() { ( cd "$CALLER" && env -u FSGG_COORD_ENGINE_BIN DOTNET_CLI_HOME="$DOTNET_HOME" ARGV_LOG_PATH="$ARGV_LOG" PATH="$DOTNETDIR:/usr/bin:/bin" "$T4_SHIM" "$@" 2>&1 ); }
 
-# a. THE CONTRACT, AS AN ARGV. What the shim hands dotnet must separate the caller's argv from dotnet's own
-#    options. This leg models nothing about dotnet — it reads what was handed over.
+# a. POSITIVE + INVERSION: wrapper-root 0.72 wins over caller-root 0.71, while the engine still runs in
+#    CALLER. Resolution evidence must come from the copied PRODUCTION wrapper, not from the fake engine:
+#    the fake deliberately prints only cwd and argv.
 : >"$ARGV_LOG"; out="$(t4run next --help)"; rc=$?
-handed="$(tail -1 "$ARGV_LOG" 2>/dev/null)"
-[ "$handed" = "fsgg-coord-engine -- next --help" ] \
-  && ok "#1029: tier 4 hands dotnet a '--' separator, so the caller's argv is dotnet's tool args, not dotnet's own" \
-  || bad "#1029: the shim must separate the caller's argv from dotnet's options" "handed: $handed"
+resolution="$(jq -Rrc 'fromjson? | select(.schema == "fsgg.coord.engine-resolution/v1")' <<<"$out" 2>/dev/null || true)"
+{ [ "$rc" -eq 0 ] \
+    && jq -e --arg manifest "$T4/.config/dotnet-tools.json" --arg assembly "$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll" \
+      '.schema == "fsgg.coord.engine-resolution/v1" and .tier == 4 and .manifest == $manifest and .pin == "fs.gg.coord.cli@0.72.0" and .resolvedAssembly == $assembly' <<<"$resolution" >/dev/null \
+    && printf '%s' "$out" | grep -Fq "ENGINE RAN cwd=$CALLER args=next --help"; } \
+  && ok ".github#2908: production tier 4 reports wrapper manifest/pin/assembly while the engine preserves caller cwd and argv" \
+  || bad ".github#2908: wrapper manifest selection and command working context must be separate" "rc=$rc out=$out log=$(cat "$ARGV_LOG")"
 
-# b. AND SO THE ENGINE ANSWERS. The same call, against a dotnet that eats what the real one eats.
-{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN: next --help'; } \
-  && ok "#1029: ...so '--help' reaches the ENGINE on a receiver — the pipe is transparent at tier 4" \
-  || bad "#1029: --help must reach the engine through tier 4" "rc=$rc out=$out"
+grep -q 'fs.gg.coord.cli@0.71.0' <<<"$out" \
+  && bad ".github#2908 inversion: caller manifest 0.71.0 silently won" "out=$out" \
+  || ok ".github#2908 inversion: the conflicting CALLER manifest cannot select its 0.71.0 engine"
 
-# c. THE NEGATIVE, and it is the whole bug: dotnet must not be the thing that answers. Exit 0 is what made
-#    this silent — a wrong answer that reported success.
-printf '%s' "$out" | grep -q 'Run a local tool' \
-  && bad "#1029: dotnet answered the help request — the shim is not a pipe at tier 4" "out: $out" \
-  || ok "#1029: ...and dotnet does NOT answer for the engine (no 'Run a local tool', which exited 0 and read as success)"
+# b. Direct assembly execution retains #1029: dotnet's tool-run parser never gets a chance to consume help.
+{ grep -q 'args=next --help' <<<"$out" && ! grep -q 'tool run' "$ARGV_LOG"; } \
+  && ok "#1029: tier 4 remains an argv-transparent pipe; --help reaches the engine, not dotnet tool run" \
+  || bad "#1029: direct tier-4 execution must preserve engine argv" "out=$out log=$(cat "$ARGV_LOG")"
 
-# d. `-h` IS THE SAME OPTION, and a fix that only separated `--help` would leave it eaten.
-: >"$ARGV_LOG"; out="$(t4run -h)"
-{ printf '%s' "$out" | grep -q 'ENGINE RAN: -h' && ! printf '%s' "$out" | grep -q 'Run a local tool'; } \
-  && ok "#1029: '-h' reaches the engine too — dotnet's short form is separated by the same '--'" \
-  || bad "#1029: -h must reach the engine as well" "out: $out"
-rm -rf "$T4" "$DOTNETDIR"
+# c. A missing exact wrapper pin restores the EXPLICIT wrapper manifest even though cwd carries another.
+RESTORED_CACHE="$T4_BASE/restored-cache.json"
+cp "$DOTNET_HOME/.dotnet/toolResolverCache/1/fs.gg.coord.cli" "$RESTORED_CACHE"
+jq '[.[] | select(.Version != "0.72.0")]' "$RESTORED_CACHE" >"$DOTNET_HOME/.dotnet/toolResolverCache/1/fs.gg.coord.cli"
+: >"$ARGV_LOG"
+out="$(RESTORED_CACHE_FIXTURE="$RESTORED_CACHE" t4run budget)"; rc=$?
+{ [ "$rc" -eq 0 ] && grep -Fq "tool restore --tool-manifest $T4/.config/dotnet-tools.json" "$ARGV_LOG" \
+    && grep -q '"pin":"fs.gg.coord.cli@0.72.0"' <<<"$out"; } \
+  && ok ".github#2908: restore is explicitly bound to the wrapper manifest, then that exact pin executes" \
+  || bad ".github#2908: restore must not rediscover the caller manifest" "rc=$rc out=$out log=$(cat "$ARGV_LOG")"
+
+# d. A resolver record whose assembly reports another version REFUSES and names all three authorities.
+: >"$ARGV_LOG"
+out="$(FORCE_RESOLVED_VERSION=0.71.0.0 t4run budget)"; rc=$?
+{ [ "$rc" -eq 69 ] && printf '%s' "$out" | grep -Fq "manifest=$T4/.config/dotnet-tools.json pin=fs.gg.coord.cli@0.72.0" \
+    && printf '%s' "$out" | grep -Fq "resolvedAssembly=$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll resolvedVersion=0.71.0.0"; } \
+  && ok ".github#2908 inversion: a pin/resolved-version mismatch fails closed with manifest, pin and assembly evidence" \
+  || bad ".github#2908: a wrong resolved assembly must never run silently" "rc=$rc out=$out log=$(cat "$ARGV_LOG")"
+
+rm -rf "$T4_BASE" "$DOTNETDIR" "$DOTNET_HOME"
 
 echo
 total=$((pass+failcount))

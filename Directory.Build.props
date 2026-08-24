@@ -459,8 +459,12 @@
        canonical generation-token contract, and makes structured-record completion evidence
        unambiguous. The engine adds the matching derived-entry and normalization controls. Additive
        repair; no command, package, or member identity is removed. -->
+  <!-- 0.75.1 -> 0.75.2 (.github#2908): PATCH on the stable 0.x line. The receiver wrapper now binds
+       tier-4 engine selection to its own tool manifest from any caller cwd, verifies and executes the
+       exact restored assembly, and emits deterministic resolution evidence. Additive routing and
+       observability repair; no command, package, member, or identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.2</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
