@@ -11,6 +11,7 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
+| Updated | 2026-08-24T10:19:38+02:00 — add Typed SDD lifecycle adoption and default preparation |
 | Status | Planned; no implementation milestone is implied complete |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Starting point | `main` at `0d56bb104da22478dfef72825f8cf19425635ed0` |
@@ -23,6 +24,10 @@ extract only the reusable specification substrate into an FS.GG.SDD-owned, publi
 move the FS-GG coordination protocol from strong but locally typed subsystems to process and protocol
 extensions whose facts, commands, events, mutations, receipts, schemas, and projections have exactly one
 authority. Preserve all current external contracts until each bounded surface has a proved replacement.
+
+The consumer-facing process is **Typed SDD**, machine value `typed-sdd`. It will become an additive option
+beside Standard SDD (`sdd`) and Freeform (`none`) before it is eligible to replace `sdd` as the workspace
+default. The roadmap treats option introduction and default selection as separate contract changes.
 
 The roadmap is intentionally incremental. Each milestone must land independently, keep `main` green,
 and leave the old path removable rather than creating a permanent dual authority.
@@ -51,6 +56,9 @@ Track these measures from milestone 0 onward:
 | Mutation controls caught | Named control inventory | 100% of required controls red |
 | Agent-authoring iteration cost | P0 records questions, revisions, diagnostics, and elapsed work per S.I.R. session | No repeated question caused by missing model vocabulary; semantic diff reviewed each iteration |
 | Shared-kernel consumer copies | Census local shared substrate after P2 | Zero after P3 and each later adoption |
+| Provider/profile Typed SDD coverage | P4 derives the supported matrix from provider descriptors | Every supported row proves explicit `none`, `sdd`, and `typed-sdd` |
+| Default-bearing surfaces | P4 derives the census while `sdd` remains default | One P5 flip changes the complete census; zero omitted or divergent defaults |
+| Migration ambiguities | Record typed reason and source location per Standard SDD import | Zero silent guesses; every unresolved fact remains explicit |
 
 Counts never substitute for the qualitative churn reading. A lower issue count achieved by suppressing
 findings is failure.
@@ -84,8 +92,12 @@ P2 extract shared specification kernel into FS.GG.SDD
  v
 P3 publish, register, and re-adopt from S.I.R.
  |
- v
-M0 coordination census and vocabulary
+ +--> P4 all-provider Typed SDD opt-in
+ |      |
+ |      v
+ |    P5 evidence-gated workspace default flip
+ |
+ +--> M0 coordination census and vocabulary
  |
  +--> M1 observation/evidence kernel
  |      |
@@ -111,8 +123,10 @@ M0 coordination census and vocabulary
           M9 retire shadows and measure
 ```
 
-P0–P3 are ordered producer/consumer work: no cross-repository PR assumes unpublished contracts. M2 and M4
-may proceed in parallel only when their touch-sets and shared extension types are separated. M5 must
+P0–P3 are ordered producer/consumer work: no cross-repository PR assumes unpublished contracts. P4 begins
+only after the published boundary is proved by P3; P5 is independent of the coordination M-series and
+cannot use coordination progress as a substitute for consumer readiness. M2 and M4 may proceed in parallel
+only when their touch-sets and shared extension types are separated. M5 must
 incorporate what both coordination pilots actually needed; it extends the already-proven specification
 compiler and must not design a universal DSL from hypothetical requirements.
 
@@ -213,6 +227,69 @@ extension.
 
 The producer/consumer cycle is proven end to end; other FS.GG repositories and coordination may adopt the
 kernel without treating the S.I.R. pilot as a package source.
+
+## P4 — Make Typed SDD an additive option for every consumer
+
+### Deliverables
+
+- Add `typed-sdd` to the lifecycle choice contract while retaining current machine values `sdd`, `none`,
+  and the separately retiring `spec-kit`; keep the omitted-value default at `sdd`.
+- Publish FS.GG.SDD support first, then update provider descriptors, template parameters, workspace wizard,
+  scaffold provenance, registry projections, generated guidance, and consumer pins in dependency order.
+- Route the existing SDD stage skills through a representation backend selected from provenance. Add
+  Typed SDD authoring/inspection operations without copying the lifecycle stage instructions.
+- Add Standard SDD → Typed SDD analysis/migration with explicit `Migrated | Ambiguous | Unsupported`
+  outcomes, semantic diff, rollback boundary, and no writes before acceptance.
+- Add refresh, upgrade, doctor, readiness, and ship checks for compiler/package identity, extension
+  compatibility, canonical source, normalized AST, authoring receipt, and projection freshness.
+- Exercise explicit `none`, `sdd`, and `typed-sdd` across every supported provider/profile, including clean
+  creation, restore, agent authoring, build/test, lifecycle completion, refresh, and upgrade.
+
+### Acceptance
+
+- No supported provider rejects, drops, aliases, or silently downgrades `typed-sdd`.
+- Omitted lifecycle selection still resolves to `sdd` on every default-bearing surface.
+- A fresh consumer installs published artifacts only; no source checkout or S.I.R. dependency is required.
+- Wrong lifecycle, missing compiler, stale projection, unsupported extension, direct edit, and agent-
+  unavailable controls all produce distinct actionable failures.
+- Standard SDD and Freeform behavior remain compatible, and `spec-kit` retirement is neither delayed nor
+  widened.
+
+### Exit criterion
+
+Typed SDD is a fully supported opt-in lane for every workspace/product shape, with a published migration
+path and derived compatibility receipt; it is not yet the default.
+
+## P5 — Evidence-gated Typed SDD workspace default
+
+### Deliverables
+
+- Run representative non-S.I.R. opt-in work through complete Typed SDD lifecycles and publish the authoring
+  friction, ambiguity, failure-recovery, and semantic-authority results.
+- Freeze default-path fixtures for every provider/profile immediately before the flip.
+- Write the separate cross-repo ADR that amends ADR-0056 and names the exact package, template, provider,
+  registry, scaffolder, and wizard versions carrying the new default.
+- In the ordered producer/consumer rollout, flip omitted lifecycle selection from `sdd` to `typed-sdd`
+  everywhere; retain explicit `sdd` and `none` choices.
+- Publish migration and operator guidance, then verify installed artifacts and fresh workspaces from both
+  feeds rather than source-project references.
+- Observe 7-, 14-, and 30-day default cohorts and retain a versioned rollback plan that restores selection
+  semantics without rewriting canonical specifications.
+
+### Acceptance
+
+- All nine default-readiness conditions in the design hold at the exact release identities being flipped.
+- Raw template, every provider, scaffolder, wizard, provenance, registry, docs, and tests agree that omitted
+  lifecycle means `typed-sdd`.
+- Explicit `sdd` remains Standard SDD and explicit `none` remains Freeform; neither is an alias or fallback.
+- A wrong-default mutation makes every default-bearing contract test red.
+- No default-created workspace is silently lifecycle-less or unable to author its first specification.
+- The post-flip cohorts show no second authority, silent migration, or recurring missing-vocabulary chain.
+
+### Exit criterion
+
+Typed SDD is the coherent workspace default across all consumer entry points. Standard SDD and Freeform
+remain explicit supported choices, and any later retirement decision is outside this roadmap.
 
 ## M0 — Ratify vocabulary and produce the protocol census
 
@@ -537,3 +614,7 @@ After M9, write a timestamped report containing:
 - the 7-, 14-, and 30-day churn readings;
 - counter-evidence and remaining failure classes; and
 - a decision on whether SCXML export or a richer visual process projection is now worth adding.
+
+P5 additionally produces a Typed SDD default-transition report containing the derived provider/profile and
+default-bearing-surface censuses, exact release identities, migration results, opt-in soak evidence, wrong-
+default controls, rollback boundary, and 7-, 14-, and 30-day default-cohort readings.

@@ -1037,6 +1037,12 @@ install is what keeps the composition honest. See the
   protocol extensions including observation and mutation algebras. The boundary is explicitly extensible,
   not one platform-wide closed union, and publication precedes adoption.
 
+  The consumer lifecycle is **Typed SDD** (`typed-sdd`). It will first join Standard SDD (`sdd`) and
+  Freeform (`none`) as an explicit option across every supported workspace provider/profile. It is the
+  intended successor workspace default, but `sdd` remains the current default until a separate ADR amends
+  ADR-0056 after published-kernel, migration, installed-artifact, all-profile, and non-S.I.R. soak evidence.
+  A future flip moves every default-bearing surface together and does not retire explicit `sdd` or `none`.
+
   **There is one tier left, and it is the fleet's own engine
   ([#1075](https://github.com/FS-GG/.github/issues/1075)).** `projections` compares files *in this
   repo*, so it makes the prose and `Protocol.fs` agree **here** and has nothing to say about the
