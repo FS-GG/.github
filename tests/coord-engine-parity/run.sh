@@ -2809,6 +2809,35 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
     && ok "case14: ...and that clean scope produced zero findings (a real item, really scanned)" \
     || bad "case14: --repo game must be clean+empty" "$(lt --repo game --json 2>/dev/null)"
 
+  # .github#2907 expands the body census to every open, non-Done row because an inert `Blocked by:`
+  # projection can mislead operators even while work is in progress. The normal fixture above proves
+  # #423 is readable. Now remove exactly that body: the server records that production requested it,
+  # and lint must abort rather than emit a confident findings array over a partial census.
+  LINT_MISSING_OUT="$(mktemp)"
+  FSGG_LINT_MISSING_BODY=423 python3 "$HERE/lint_server.py" >"$LINT_MISSING_OUT" 2>/dev/null &
+  LINT_MISSING_SRV=$!; LINT_MISSING_PORT=""
+  for _ in $(seq 1 50); do
+    LINT_MISSING_PORT="$(head -n1 "$LINT_MISSING_OUT" 2>/dev/null)"
+    [ -n "$LINT_MISSING_PORT" ] && break
+    sleep 0.1
+  done
+  rm -f "$LINT_MISSING_OUT"
+  if [ -z "$LINT_MISSING_PORT" ]; then
+    unmeasured "#2907: unreadable open/In-progress body fails closed — fixture did not bind"
+  else
+    lint_missing="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$LINT_MISSING_PORT" GITHUB_TOKEN=t \
+      FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" \
+      "$ENGINE" lint --json 2>&1)"; lint_missing_rc=$?
+    lint_missing_reads="$(curl -s "http://127.0.0.1:$LINT_MISSING_PORT/_body_reads" | jq -c '.')"
+    printf '%s' "$lint_missing_reads" | jq -e 'index(423) != null' >/dev/null \
+      && ok "#2907: production lint requests the open/In-progress #423 body" \
+      || bad "#2907: missing-body control must prove #423 was requested" "$lint_missing_reads"
+    { [ "$lint_missing_rc" -ne 0 ] && ! printf '%s' "$lint_missing" | jq -e 'type == "array"' >/dev/null 2>&1; } \
+      && ok "#2907: an unreadable #423 body aborts lint instead of returning a partial findings array" \
+      || bad "#2907: unreadable body must fail closed with no findings verdict" "rc=$lint_missing_rc out=$lint_missing"
+    kill "$LINT_MISSING_SRV" 2>/dev/null
+  fi
+
   # ---- the CLASS axis: CLASS-UNSET (.github#1588) and CLASS-INVALID (.github#1651) ----------------
   #
   # The SIXTH lint rule, certified HERE on the day it lands. .github#1609 was filed because two rules —

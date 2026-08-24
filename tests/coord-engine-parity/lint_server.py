@@ -43,11 +43,14 @@ with no bash in sight. The board lives in FS-GG/FS.GG.SDD, plus one clean FS-GG/
 """
 
 import json
+import os
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RATE = {"cost": 1, "remaining": 4988}
+MISSING_BODY = int(os.environ.get("FSGG_LINT_MISSING_BODY", "-1"))
+BODY_READS = []
 
 SDD = "FS-GG/FS.GG.SDD"
 GAME = "FS-GG/FS.GG.Game"
@@ -103,6 +106,10 @@ BODIES = {
     400: "An umbrella epic.\n\nPaths: none",
     422: "Should we do X or Y? A decision.\n\nPaths: none",
     407: "Paths: src/Real/**",
+    # The body-projection lint added by .github#2907 reads every open, non-Done row, including work in
+    # progress. Keep #423 ordinary and classed so it isolates that census expansion without adding a
+    # schedulability/class finding of its own.
+    423: "Paths: src/Real/**\n\nClass: hardening",
     # CLASSED, and it has to be: this is the ONLY row in the `--repo game` scope, and case14 asserts that
     # scope is clean AND empty. An unclassed row here would make CLASS-UNSET fire and turn the corpus's one
     # "a real item, really scanned, and nothing wrong with it" leg into a finding — the assertion would then
@@ -126,7 +133,7 @@ BODIES = {
     # reads the board column back with, and refusing it would report a correctly-triaged row as untriaged.
     436: "Paths: src/Real/**\n\nClass:   Defect  ",
     437: "Paths: none\n\nClass: hardening",
-    # 423 (In progress) and 424 (closed) are NOT candidates, so the engine must never read their bodies.
+    # 424 is closed, so the engine must never read its body.
 }
 
 
@@ -180,12 +187,15 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?", 1)[0]
+        if p.rstrip("/") == "/_body_reads":
+            return self._send(200, BODY_READS)
         if re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p):
             return self._send(200, [])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
-            if n in BODIES:
+            BODY_READS.append(n)
+            if n in BODIES and n != MISSING_BODY:
                 return self._send(200, {"number": n, "body": BODIES[n]})
             return self._send(404, {"message": "Not Found"})
         if p.rstrip("/") == "/rate_limit":

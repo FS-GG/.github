@@ -8,6 +8,10 @@
 - The Lifecycle, CLI, and Core test project commands each exited zero.
 - The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 254 BoardOps tests passing.
 - `tests/coord-engine-parity/run.sh` passed the explicit replace/clear, ref-first, zero-GraphQL refusal, canonicalization, de-duplication, and scoped-field controls after its legacy positional calls were migrated.
+- After the initial critic identified a missing hosted body for open/In-progress item #423, the repaired
+  serialized parity run passed 616/616 assertions with zero failures and zero not-measured results. Its
+  negative control removes only #423's body, proves production requested that body, and proves lint
+  aborts rather than returning a partial JSON findings array.
 - `scripts/generate-projections --check` reported every projection current; the signature-doc mutation sweep killed 435/435 mutants.
 - The Release engine build and the 12-entry deterministic package check exited zero.
 
