@@ -30,8 +30,8 @@ module Landable =
           Status: string
           Conclusion: string option }
 
-    /// A completed, non-successful subject that participates in the settled red verdict. The GitHub read
-    /// boundary binds these identities to the evaluated head SHA before presenting them to an operator.
+    // A completed, non-successful subject that participates in the settled red verdict. The GitHub read
+    // boundary binds these identities to the evaluated head SHA before presenting them to an operator.
     type Failure =
         | WorkflowRunFailure of path: string * runNumber: int * conclusion: string option
         | CheckRunFailure of name: string * checkSuiteId: int64 option * conclusion: string option
@@ -321,9 +321,9 @@ module Landable =
 
         scoredRuns, scoredChecks, liveChecksAll
 
-    /// Exact identities of the bad runs and check-runs that the same classification used by
-    /// `scoreDerived` keeps in its blocking rollup. A registration-race red over zero subjects therefore
-    /// returns no failures, while advisory and superseded subjects cannot leak into the diagnostic.
+    // Exact identities of the bad runs and check-runs that the same classification used by
+    // `scoreDerived` keeps in its blocking rollup. A registration-race red over zero subjects therefore
+    // returns no failures, while advisory and superseded subjects cannot leak into the diagnostic.
     let failuresDerived
         (advisory: AdvisorySet)
         (required: string list)
