@@ -55,6 +55,12 @@ module Landable =
           Status: string
           Conclusion: string option }
 
+    /// A completed, non-successful subject kept in the blocking rollup. The IO boundary adds the evaluated
+    /// head SHA before presenting it; this pure type carries only the subject identity GitHub returned.
+    type Failure =
+        | WorkflowRunFailure of path: string * runNumber: int * conclusion: string option
+        | CheckRunFailure of name: string * checkSuiteId: int64 option * conclusion: string option
+
     /// Split runs into (live, dead-check-suite-ids): a run replaced by a LATER `RunNumber` of its OWN
     /// concurrency group is superseded (#720), and its check suite must be dropped with it. A run nobody
     /// replaced stays live and is still a finding (#698). This is the one expression applied to both the
@@ -178,7 +184,16 @@ module Landable =
         mergeable: bool option ->
         runs: RunRow list ->
         checks: CheckRow list ->
-            PrState * int
+        PrState * int
+
+    /// Exact bad run/check identities selected by the same supersession and advisory classification as
+    /// `scoreDerived`. Empty for a zero-subject registration race and for non-blocking advisory failures.
+    val failuresDerived:
+        advisory: AdvisorySet ->
+        required: string list ->
+        runs: RunRow list ->
+        checks: CheckRow list ->
+        Failure list
 
     /// Which `required` checks are absent from the LIVE check-runs (superseded suites dropped). Diagnostics
     /// only — `scoreRequired` owns the verdict — so the CLI can name the check that never reported instead
