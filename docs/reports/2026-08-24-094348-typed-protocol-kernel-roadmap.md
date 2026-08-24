@@ -11,7 +11,7 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-24T10:19:38+02:00 — add Typed SDD lifecycle adoption and default preparation |
+| Updated | 2026-08-24T10:51:16+02:00 — bind implementation to Standard SDD and bound break-glass repairs |
 | Status | Planned; no implementation milestone is implied complete |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Starting point | `main` at `0d56bb104da22478dfef72825f8cf19425635ed0` |
@@ -31,6 +31,10 @@ default. The roadmap treats option introduction and default selection as separat
 
 The roadmap is intentionally incremental. Each milestone must land independently, keep `main` green,
 and leave the old path removable rather than creating a permanent dual authority.
+
+Until the published `typed-sdd` lifecycle exists, **Standard SDD governs implementation of this roadmap**.
+The project therefore builds Typed SDD through the currently authoritative `sdd` process rather than
+claiming its unfinished successor can validate itself.
 
 ## Baseline and success measures
 
@@ -77,6 +81,33 @@ findings is failure.
    become evidence on the relevant model surface unless they establish a new cause.
 6. **Every milestone has deletion criteria.** Adding a model without retiring a shadow representation
    makes the root problem worse.
+
+## Implementation process and break-glass boundary
+
+Standard SDD owns the feature lifecycle: specify, clarify, plan, task, implement, verify, and ship. Each
+milestone or independently landable vertical slice records its intent, acceptance, evidence, compatibility
+boundary, and unresolved decisions through the installed `sdd` lifecycle. It must not use an ad hoc
+`typed-sdd` approximation as authority before P4 publishes and proves that lifecycle.
+
+`$chainsaw` is not an alternative implementation process. It is an explicitly invoked, bounded
+break-glass operation inside the governing SDD lifecycle and is admissible only when evidence establishes
+that a specific generator, wrapper, workflow, gate, or other project-local mechanism prevents the current
+SDD slice from progressing. One invocation repairs one named obstruction at the lowest trustworthy layer,
+with an exact touch-set, captured before-state, rollback boundary, and verification independent of the
+bypassed mechanism. The implementation returns to Standard SDD immediately after that repair.
+
+Break-glass authority does not permit an implementation to:
+
+- bypass a live claim, overwrite concurrent work, or evade cross-repository sequencing;
+- replace producer publication with a source-project or local-package shortcut;
+- skip compatibility, migration, release, independent-review, or default-flip evidence;
+- describe a bypassed gate as passing; or
+- widen a repair into another roadmap milestone or institutionalize its direct path as normal operation.
+
+Every use records what was bypassed, why the normal route could not deliver, the files or state changed,
+independent verification, remaining drift, rollback, and how the ordinary SDD path was restored. Repeated
+need for the same bypass is evidence of a roadmap or machinery defect and triggers the stop condition below;
+it is not precedent for a broader exemption.
 
 ## Dependency map
 
@@ -157,6 +188,24 @@ examples rather than naming intuition.
 
 ## P1 — Agent-authored S.I.R. specification pilot
 
+### Minimum vertical slice
+
+Before widening the migrated corpus or designing the coordination algebra, land one end-to-end S.I.R.
+slice containing exactly the infrastructure needed to prove the central claim:
+
+1. canonical `SpecificationModel` identity, schema version, and provenance;
+2. the smallest F# authoring surface that constructs the inspectable AST;
+3. compilation, validation, deterministic normalization, and actionable diagnostics;
+4. one real S.I.R. specification migrated without changing its authoritative behavior;
+5. one generated human-readable projection carrying source fingerprint and freshness evidence;
+6. a gate proving reproducibility and rejecting a stale or directly edited projection; and
+7. one complete iterative human/agent authoring session through the governing skill.
+
+No second rule family, general mutation algebra, or provider/profile expansion enters P1 until this slice
+passes its semantic-diff, execution, replay, projection, and wrong-path controls. The slice is deliberately
+small enough that `$chainsaw`, if explicitly invoked for one broken mechanism, cannot become its de facto
+implementation process.
+
 ### Deliverables
 
 - Implement the candidate inspectable AST and try direct records, computation expressions, and a hybrid
@@ -176,6 +225,10 @@ examples rather than naming intuition.
 - A human can review the semantic diff without reading builder mechanics.
 - The gate proves capability-mediated authoring without relying on commit identity and cannot block a new
   finding from being recorded.
+- The minimum vertical slice completes through Standard SDD with its specification, plan, tasks, evidence,
+  and ship record mutually consistent.
+- Any break-glass repair used during the slice has a bounded audit record and either restores the normal
+  SDD route or leaves an explicit unresolved blocker; skipped machinery is never reported as verified.
 
 ### Exit criterion
 
@@ -599,7 +652,10 @@ Pause the roadmap and return to design if any milestone demonstrates that:
 - retained histories cannot be versioned without rewriting immutable evidence;
 - early enforcement blocks finding intake or honest `Unreadable`/`Unknown` outcomes;
 - generated projections would require removing an independent property gate; or
-- the kernel must become a network service to satisfy correctness.
+- the kernel must become a network service to satisfy correctness;
+- the Standard SDD process cannot express or verify an independently landable implementation slice; or
+- the same project-local obstruction requires repeated `$chainsaw` bypasses instead of a bounded repair to
+  the normal path.
 
 These are evidence that the proposed boundary is wrong, not implementation inconvenience to hide.
 
@@ -611,6 +667,8 @@ After M9, write a timestamped report containing:
 - every retired representation and mutation bypass;
 - schema/model versions and supported migration window;
 - model/replay/formal verification results;
+- Standard SDD execution receipts for each milestone and an inventory of any bounded `$chainsaw` uses,
+  including restoration or unresolved-drift evidence;
 - the 7-, 14-, and 30-day churn readings;
 - counter-evidence and remaining failure classes; and
 - a decision on whether SCXML export or a richer visual process projection is now worth adding.
