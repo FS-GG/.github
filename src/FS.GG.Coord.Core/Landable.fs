@@ -30,6 +30,12 @@ module Landable =
           Status: string
           Conclusion: string option }
 
+    /// A completed, non-successful subject that participates in the settled red verdict. The GitHub read
+    /// boundary binds these identities to the evaluated head SHA before presenting them to an operator.
+    type Failure =
+        | WorkflowRunFailure of path: string * runNumber: int * conclusion: string option
+        | CheckRunFailure of name: string * checkSuiteId: int64 option * conclusion: string option
+
     // The concurrency group `cancel-in-progress` actually keys on. Matching it EXACTLY — not on `.Path`
     // alone — is what stops the drop rule being a hole: a `workflow_dispatch` run on the same branch shares
     // the SHA and the path and carries a HIGHER run number, but it is a different `github.ref`, so it
@@ -289,6 +295,58 @@ module Landable =
 
                     if allAdvisory then Advisory else Blocking
 
+    let private scoredSubjects
+        (advisory: AdvisorySet)
+        (required: string list)
+        (runs: RunRow list)
+        (checks: CheckRow list)
+        : RunRow list * CheckRow list * CheckRow list =
+        let live, _ = supersede runs
+        let liveChecksAll = liveChecks runs checks
+        let requiredSet = Set.ofList required
+
+        let scoredChecks =
+            liveChecksAll
+            |> List.filter (fun c ->
+                match checkGating advisory requiredSet c with
+                | Blocking -> true
+                | Advisory -> false)
+
+        let scoredRuns =
+            live
+            |> List.filter (fun r ->
+                match runGating advisory requiredSet liveChecksAll r with
+                | Blocking -> true
+                | Advisory -> false)
+
+        scoredRuns, scoredChecks, liveChecksAll
+
+    /// Exact identities of the bad runs and check-runs that the same classification used by
+    /// `scoreDerived` keeps in its blocking rollup. A registration-race red over zero subjects therefore
+    /// returns no failures, while advisory and superseded subjects cannot leak into the diagnostic.
+    let failuresDerived
+        (advisory: AdvisorySet)
+        (required: string list)
+        (runs: RunRow list)
+        (checks: CheckRow list)
+        : Failure list =
+        let scoredRuns, scoredChecks, _ = scoredSubjects advisory required runs checks
+
+        [ yield!
+              scoredRuns
+              |> List.choose (fun r ->
+                  if isBad r.Status r.Conclusion then
+                      Some(WorkflowRunFailure(r.Path, r.RunNumber, r.Conclusion))
+                  else
+                      None)
+          yield!
+              scoredChecks
+              |> List.choose (fun c ->
+                  if isBad c.Status c.Conclusion then
+                      Some(CheckRunFailure(c.Name, c.CheckSuiteId, c.Conclusion))
+                  else
+                      None) ]
+
     // The verdict AND the number of subjects it was scored over — runs plus check-runs, after the
     // superseded suites are dropped. `--wait` needs that count and the verdict is not enough: a `red` over
     // ZERO subjects is "CI has not started YET" (normal for the first 20-60s after a push), a `red` over
@@ -333,8 +391,7 @@ module Landable =
         // check set is permanently empty — the verdict must come from mergeability, before the checks.
         | Some false -> PrConflicted, 0
         | Some true ->
-            let live, _ = supersede runs
-            let liveChecksAll = liveChecks runs checks
+            let scoredRuns, scoredChecks, liveChecksAll = scoredSubjects advisory required runs checks
 
             // Advisory checks (#2373/#2400, derived since #2517) are excluded from the bad/pending/total
             // rollup UNLESS the caller explicitly named them in `required` — an opt-in override, never a
@@ -342,25 +399,6 @@ module Landable =
             // FULL `liveChecksAll`, so a `--require`d advisory name is still satisfied by its presence
             // exactly as any other required name would be — only its `bad`/`pending` contribution is what
             // the advisory carve-out withholds by default.
-            let requiredSet = Set.ofList required
-
-            // ONE classification, consulted through `Gating` rather than a `Set<string>.Contains` inlined
-            // here — `checkGating` decides each check-run, `runGating` derives each run's from ITS check-runs
-            // (#2400/#2379). Both scored lists are exhaustive matches on the same two-case type.
-            let scoredChecks =
-                liveChecksAll
-                |> List.filter (fun c ->
-                    match checkGating advisory requiredSet c with
-                    | Blocking -> true
-                    | Advisory -> false)
-
-            let scoredRuns =
-                live
-                |> List.filter (fun r ->
-                    match runGating advisory requiredSet liveChecksAll r with
-                    | Blocking -> true
-                    | Advisory -> false)
-
             // The rollup is over BOTH lists (#606): a run can fail with no check-runs at all
             // (`startup_failure`), and a check-run can fail while its run SUCCEEDS (job-level
             // `continue-on-error`). Neither list alone is the truth.

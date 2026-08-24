@@ -2963,3 +2963,33 @@ let ``#2365 prClosingRef treats a null repository the same as an unreadable grap
     match Reads.prClosingRef transport "EHotwagner" "S.I.R" 146 with
     | Error(Malformed(_, detail)) -> Assert.Contains("FAILED READ", detail)
     | other -> failwith $"a null repository is a failed read, not 'closes nothing' — got %A{other}"
+
+[<Fact>]
+let ``#2906 prLandableRequire binds distinct red run and check reasons to the evaluated head`` () =
+    let sha = "sha-2906-red"
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    Some $"""{{"number":801,"state":"open","merged":false,"mergeable":true,"mergeable_state":"unstable","head":{{"ref":"item/2906-x","sha":"%s{sha}"}},"base":{{"ref":"main"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    Some """{"total_count":1,"workflow_runs":[{"path":".github/workflows/coherence.yml","event":"pull_request","head_branch":"item/2906-x","run_number":17,"status":"completed","conclusion":"failure","check_suite_id":17,"pull_requests":[{"number":801}]}]}"""
+                elif req.Path.EndsWith "/check-runs" then
+                    Some """{"total_count":2,"check_runs":[{"name":"external-safety","check_suite":{"id":99},"status":"completed","conclusion":"timed_out"},{"name":"claim-generation","check_suite":{"id":17},"status":"completed","conclusion":"failure"}]}"""
+                else
+                    None
+
+            match body with
+            | Some b -> Ok { Status = 200; Body = b; ETag = None; NextLink = None; Headers = Map.empty }
+            | None -> Error(Errors.NotFound req.Path))
+
+    let state, count, reasons = Reads.prLandableRequire transport "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(3, count)
+    Assert.Equal<Reads.Unmet list>(
+        [ Reads.RedWorkflowRun(sha, ".github/workflows/coherence.yml", 17, Some "failure")
+          Reads.RedCheckRun(sha, "external-safety", Some 99L, Some "timed_out")
+          Reads.RedCheckRun(sha, "claim-generation", Some 17L, Some "failure") ],
+        reasons
+    )

@@ -2249,9 +2249,8 @@ module Reads =
     // waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
     // default for every caller that did not just push.
     //
-    // Why a verdict that is not `red` is nonetheless not `green`. DIAGNOSTICS — the verdict is decided
-    // above, and nothing here changes it — but a bare `pending` is one honest word and no thread to pull,
-    // which is fine while the state is transient and useless on the case that never resolves.
+    // Typed diagnostics beside the verdict. Nothing here changes the decision: pending arms explain why
+    // green is withheld, while red arms name the exact run/check subjects that failed on the scored head.
     //
     // The three arms are held APART because their REMEDIES are opposite, and an operator handed one
     // sentence for all three is sent to look at the wrong thing (#1575 AC2).
@@ -2270,6 +2269,10 @@ module Reads =
         // making the verdict depend on it is #463 (a probe that 403'd everywhere and stopped the kit
         // landing at all).
         | PolicyUnreadable of string
+        // A settled red workflow run, bound to the exact head whose run inventory was scored.
+        | RedWorkflowRun of headSha: string * path: string * runNumber: int * conclusion: string option
+        // A settled red check-run, held apart from workflow runs and every pending/refusal reason.
+        | RedCheckRun of headSha: string * name: string * checkSuiteId: int64 option * conclusion: string option
 
     let prLandableRequire
         (transport: IGitHubTransport)
@@ -2474,7 +2477,8 @@ module Reads =
                         // which is the property `ReadTests`' `Assert.Equal(0, server.PolicyReads)` on the
                         // clean/green leg pins and the reason the derivation is a SECOND pass rather than an
                         // input to the first.
-                        let closed = Landable.scoreRequired required (Some true) runs checks
+                        let closedAdvisory = Landable.noDerivation "no branch policy was consulted"
+                        let closed = Landable.scoreDerived closedAdvisory required (Some true) runs checks
 
                         // PASS 2 — THE DERIVED ADVISORY CARVE-OUT (`.github#2517`).
                         //
@@ -2508,17 +2512,17 @@ module Reads =
                         // states we do derive on are the ones where GitHub has already confirmed every
                         // required context is satisfied.
                         //
-                        // NO `Unmet` REASON COMES FROM HERE, deliberately, consistent with every other
-                        // non-green arm: that list carries assertions the CALLER made (`--require`, `--sha`)
-                        // and GitHub's own refusal, and its stderr banner says so. Nobody asked for this.
-                        let state, n =
+                        // Carry the exact advisory classification that produced the verdict. The red
+                        // diagnostic below must filter through the SAME classification; recomputing with
+                        // the fail-closed default would falsely name an advisory failure as causal.
+                        let (state, n), scoringAdvisory =
                             let couldChangeTheAnswer =
                                 fst closed <> PrGreen
                                 && snd closed > 0
                                 && (refusedState facts |> Option.isNone)
 
                             if not couldChangeTheAnswer then
-                                closed
+                                closed, closedAdvisory
                             else
                                 // AN UNREADABLE POLICY AND AN EMPTY ONE ARE THE SAME VERDICT, and they reach
                                 // it through the same code path rather than by a short-circuit that merely
@@ -2540,11 +2544,22 @@ module Reads =
                                         | RequiredUnreadable why -> Landable.noDerivation why
                                         | RequiredContexts contexts -> Landable.advisoryFrom contexts
 
-                                Landable.scoreDerived advisory required (Some true) runs checks
+                                Landable.scoreDerived advisory required (Some true) runs checks, advisory
 
                         let unmet =
                             Landable.missing required runs checks
                             |> List.map (fun name -> Asserted $"required check `%s{name}` has not reported")
+
+                        let red =
+                            if state <> PrRed then
+                                []
+                            else
+                                Landable.failuresDerived scoringAdvisory required runs checks
+                                |> List.map (function
+                                    | Landable.WorkflowRunFailure(path, runNumber, conclusion) ->
+                                        RedWorkflowRun(sha, path, runNumber, conclusion)
+                                    | Landable.CheckRunFailure(name, checkSuiteId, conclusion) ->
+                                        RedCheckRun(sha, name, checkSuiteId, conclusion))
 
                         // DO NOT CALL THE REPLACED COMMIT'S GREEN OURS (#995, epic #266).
                         //
@@ -2653,7 +2668,7 @@ module Reads =
                                         Landable.missing contexts runs checks |> List.map (fun c -> NotReported(c, b))
 
                             PrPending, n, (Refused(refusal, baseRef) :: named) @ unmet
-                        | _ -> state, n, unmet
+                        | _ -> state, n, red @ unmet
                     | _ -> PrUnknown, 0, []
 
     let prLandableN (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : PrState * int =

@@ -458,10 +458,9 @@ module Reads =
     /// `prLandable`.
     val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
 
-    /// Why a verdict that is not `red` is nonetheless not `green` — the diagnostic channel `prLandableRequire`
-    /// returns beside its verdict. The arms are held APART because their remedies are opposite: one is a
-    /// preference the caller expressed, one is a fact about what GitHub will refuse, and one is the absence
-    /// of any observation at all. One sentence for all three sends the operator to the wrong place (#1575).
+    /// Typed diagnostics returned beside the verdict. Pending assertions/refusals and settled red
+    /// run/check identities remain distinct because their remedies are opposite; red subjects also carry
+    /// the exact head SHA whose inventories were scored.
     type Unmet =
         /// An assertion the CALLER added (`--require NAME`, `--sha SHA`). The base branch policy has no
         /// opinion about it and nothing else will ever look at it.
@@ -474,6 +473,10 @@ module Reads =
         /// The policy could not be read, so the refusal cannot be attributed to a named context. A missing
         /// SENTENCE, never a missing verdict.
         | PolicyUnreadable of string
+        /// A completed bad workflow run that participates in the red verdict, bound to the scored head.
+        | RedWorkflowRun of headSha: string * path: string * runNumber: int * conclusion: string option
+        /// A completed bad check-run that participates in the red verdict, bound to the scored head.
+        | RedCheckRun of headSha: string * name: string * checkSuiteId: int64 option * conclusion: string option
 
     /// `prLandableN`, plus the two assertions a caller may add to it (#737). `prLandableN` is this with
     /// `required = []` and `expected = None`.
@@ -513,10 +516,9 @@ module Reads =
     /// protection and rulesets (#574) — to say WHICH context has not reported. That read is DIAGNOSIS: it
     /// happens only on the refusing path, and a failure costs a sentence, never a verdict.
     ///
-    /// The third element is every unmet reason, TYPED (`Unmet`) — so a `pending` can say what it is waiting
-    /// for instead of being one word with no thread to pull, and so an operator is not told that a refusal
-    /// by the base branch is "an assertion you asked for". The verdict never depends on it. Same
-    /// single-page caveat as `prLandable`.
+    /// The third element is every diagnostic reason, TYPED (`Unmet`) — so a `pending` can say what it is
+    /// waiting for and a settled `red` can name every causal run/check without another API investigation.
+    /// The verdict never depends on this projection. Same single-page caveat as `prLandable`.
     val prLandableRequire:
         transport: IGitHubTransport ->
         owner: string ->

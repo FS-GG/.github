@@ -1599,6 +1599,20 @@ module LiveHandlers =
                             | Reads.PolicyUnreadable why -> Some why
                             | _ -> None)
 
+                    let redWorkflowRuns =
+                        missing
+                        |> List.choose (function
+                            | Reads.RedWorkflowRun(headSha, path, runNumber, conclusion) ->
+                                Some(headSha, path, runNumber, conclusion)
+                            | _ -> None)
+
+                    let redCheckRuns =
+                        missing
+                        |> List.choose (function
+                            | Reads.RedCheckRun(headSha, name, checkSuiteId, conclusion) ->
+                                Some(headSha, name, checkSuiteId, conclusion)
+                            | _ -> None)
+
                     // Gated on `pending` exactly as before: a RED verdict already names a check that failed,
                     // and listing an absent one beneath it buries the finding under a "not yet".
                     if state = PrPending && not asserted.IsEmpty then
@@ -1611,6 +1625,18 @@ module LiveHandlers =
                         else
                             eprint
                                 "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
+
+                    if state = PrRed then
+                        for headSha, path, runNumber, conclusion in redWorkflowRuns do
+                            let outcome = defaultArg conclusion "no conclusion"
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} is red on head `%s{headSha}` — workflow run `%s{path}` (#%d{runNumber}) concluded `%s{outcome}`."
+
+                        for headSha, name, checkSuiteId, conclusion in redCheckRuns do
+                            let outcome = defaultArg conclusion "no conclusion"
+                            let suite = checkSuiteId |> Option.map string |> Option.defaultValue "absent"
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} is red on head `%s{headSha}` — check-run `%s{name}` (suite `%s{suite}`) concluded `%s{outcome}`."
 
                     // AN UNMET `--sha` ON A MERGED PR GETS ITS OWN SENTENCES (#1680), and must NOT borrow
                     // the block above. Every clause up there is FALSE here: this PR is not "not landable"
