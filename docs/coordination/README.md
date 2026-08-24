@@ -28,6 +28,13 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > `.github#2753`, and proposes a staged migration to single typed authorities and receipt-gated
 > completion.
 
+> **Typed specification and protocol kernel.** [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md)
+> and the accepted-direction [kernel design](2026-08-24-typed-protocol-kernel-design.md) place the S.I.R.
+> executable-rules pilot, reusable agent-authored specification AST, and coordination process/mutation
+> extension under one umbrella. Its
+> [delivery roadmap](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) stages pilot,
+> extraction, adoption, and deletion of every shadow representation.
+
 ## Requests and responses → cross-repo issues
 
 A "mailbox message" is a **GitHub issue in the target repo**.
