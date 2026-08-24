@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -161,8 +161,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -188,8 +188,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -215,8 +215,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -242,8 +242,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -269,8 +269,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -296,8 +296,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -323,8 +323,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -350,8 +350,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -377,8 +377,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
@@ -404,8 +404,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2859-review-wait-evidence-ref/artifacts/review-wait-tests.trx
-      digest: "sha256:3b9727fd880353c48d99b1c5c4e5f2a2d41de84ba65d36e3f7b03aff0acda78d"
+      source: work/2859-review-wait-evidence-ref/artifacts/verification.test-report.xml
+      digest: "sha256:483d9387747e21e44319e295c927edcaa7c5339cbf883812ed9a712402200c49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 136
