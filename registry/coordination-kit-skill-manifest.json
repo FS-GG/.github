@@ -3,6 +3,10 @@
   "skills": [
     {
       "id": "check-board",
+      "scope": "process",
+      "owner": ".github",
+      "source": ".github/.claude/skills/check-board/SKILL.md",
+      "sha256": "f7de20e04981ed72ce6bfe886a1776adb78b3926c2a83f315069a3ce8e4fa3f3",
       "supplied-by": ".claude/skills/check-board",
       "tree-sha256": "98acb5ebab5fc2571a1288596c167c11121fed19487567d55c5d52b4a0af7981",
       "files": [
@@ -36,10 +40,15 @@
           "sha256": "102ace39a55a659e5b4de884f9a7271b0598142a4024e2c88cfc9351a9e96555",
           "executable": false
         }
-      ]
+      ],
+      "materializes-when": "always"
     },
     {
       "id": "cross-repo-coordination",
+      "scope": "process",
+      "owner": ".github",
+      "source": ".github/.claude/skills/cross-repo-coordination/SKILL.md",
+      "sha256": "bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0",
       "supplied-by": ".claude/skills/cross-repo-coordination",
       "tree-sha256": "cecb3405867228aa8d3863ef99beb218f0686485222c2d668ce231eccd7692df",
       "files": [
@@ -73,10 +82,15 @@
           "sha256": "eb79ab9a44c353f481a1dc297743cedb38072ca19a1a7a576f27ae6bb53037a2",
           "executable": false
         }
-      ]
+      ],
+      "materializes-when": "always"
     },
     {
       "id": "intra-repo-parallel-work",
+      "scope": "process",
+      "owner": ".github",
+      "source": ".github/.claude/skills/intra-repo-parallel-work/SKILL.md",
+      "sha256": "7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
       "tree-sha256": "307b71bda594bc3adf329dcfba06ac90bd994b4a65938eff483f0382b8708cf8",
       "files": [
@@ -105,10 +119,15 @@
           "sha256": "43e0ee19d40a8585678e419f034ed5c5e8b862d93a5dd167e3ce28b721fe6d5d",
           "executable": false
         }
-      ]
+      ],
+      "materializes-when": "always"
     },
     {
       "id": "pnext-item",
+      "scope": "process",
+      "owner": ".github",
+      "source": ".github/.claude/skills/pnext-item/SKILL.md",
+      "sha256": "44c2aacecbdbbb4f80f7b2f07379ec6ee38502ac84b5c991ea472b09baba29f3",
       "supplied-by": ".claude/skills/pnext-item",
       "tree-sha256": "94ac7f30ba3320f67799888fe262d9cfe72514540b228a4214f539c924943145",
       "files": [
@@ -162,7 +181,8 @@
           "sha256": "323937cc50305259a1b93f1b67c035206af64a658a3f845eaca31f6db5c96529",
           "executable": false
         }
-      ]
+      ],
+      "materializes-when": "always"
     }
   ]
 }

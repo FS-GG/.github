@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2852-runtime-skill-identity",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b1abecf2e451f3f5a2a5909a36e825fe354303f1d692ccfddbfa07b498d44cf6"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 19,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 19
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

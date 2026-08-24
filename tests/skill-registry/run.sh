@@ -18,7 +18,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 TOOL="$HERE/../../scripts/fsgg-skill-registry-check"
+SKILL_VIEW="$REPO_ROOT/scripts/skill-view"
 
 python3 "$HERE/catalog-metadata.py"
 
@@ -1157,10 +1159,123 @@ echo "== 60. a .github-authored DRIVER row reconciles from .github's OWN manifes
 DROOT="$WORK/driver-repos"
 mkdir -p "$DROOT/.github/.claude/skills/work-roadmap" "$DROOT/.github/registry"
 printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+
+# The real SB-004 subject, not another invented id: current canonical registry + generated
+# coordination-kit producer manifest + authored multi-file skill tree. Copying the exact tracked
+# inputs into a disposable producer and symlinking that checkout below the aggregate root reproduces
+# the hosted workflow's `.repos/.github -> $GITHUB_WORKSPACE` layout exactly.
+LIVE_ROOT="$WORK/live-repos"
+LIVE_PRODUCER="$WORK/live-producer"
+mkdir -p "$LIVE_ROOT" "$LIVE_PRODUCER/registry" "$LIVE_PRODUCER/.claude/skills"
+cp "$REPO_ROOT/registry/skills.yml" "$LIVE_PRODUCER/registry/skills.yml"
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$LIVE_PRODUCER/.claude/skills/"
+ln -s "$LIVE_PRODUCER" "$LIVE_ROOT/.github"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["skillId"]=="cross-repo-coordination" and len(d["artifacts"]) >= 6 and d["authority"]["manifest"].endswith("coordination-kit-skill-manifest.json")' \
+  || { echo "FAIL: real cross-repo-coordination producer identity is not coherent"; echo "$identity_out"; exit 1; }
+
+# The generated package manifest is itself a usable authority projection, not merely a file list
+# that requires an operator to reconstruct source and digest out of band.
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/coordination-kit-skill-manifest.json" --repos-root "$LIVE_ROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["authority"]["source"]==".github/.claude/skills/cross-repo-coordination/SKILL.md"' \
+  || { echo "FAIL: coordination-kit manifest is not a usable producer identity authority"; echo "$identity_out"; exit 1; }
+
+# A lexical parent segment must not be allowed to redefine the selected producer checkout. Reproduce
+# the production-shaped layout the round-three critic measured: keep `.repos/.github` as the sanctioned
+# checkout symlink, point only the registry source at the aggregate root's parent, and place otherwise
+# coherent source/manifest bytes under that parent. Realpath containment alone considers that tree
+# coherent; the registry authority must reject the source before deriving or resolving its producer.
+mkdir -p "$WORK/.claude/skills" "$WORK/registry"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$WORK/.claude/skills/"
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$WORK/registry/coordination-kit-skill-manifest.json"
+cp "$LIVE_PRODUCER/registry/skills.yml" "$WORK/live-skills.good.yml"
+python3 - "$LIVE_PRODUCER/registry/skills.yml" <<'PY'
+import sys, yaml
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    registry = yaml.safe_load(handle)
+row = next(row for row in registry["skills"] if row["id"] == "cross-repo-coordination")
+row["source"] = "../.claude/skills/cross-repo-coordination/SKILL.md"
+with open(path, "w", encoding="utf-8") as handle:
+    yaml.safe_dump(registry, handle, sort_keys=False)
+PY
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="inconclusive" and "normalized non-traversing <producer>/<path>" in d["problems"][0]' \
+  || { echo "FAIL: parent-traversing producer source authority was not refused"; echo "$identity_out"; exit 1; }
+cp "$WORK/live-skills.good.yml" "$LIVE_PRODUCER/registry/skills.yml"
+rm -rf "$WORK/.claude" "$WORK/registry"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restoring the sanctioned producer checkout symlink did not return coherent"; echo "$identity_out"; exit 1; }
+
+# The checkout symlink is sanctioned, but a source symlink escaping that selected checkout is not.
+mv "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md.real"
+printf 'outside producer\n' > "$WORK/escaped-skill.md"
+ln -s "$WORK/escaped-skill.md" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q 'registry source escapes producer checkout' <<<"$identity_out" \
+  || { echo "FAIL: a real source escaping its producer checkout was not refused"; echo "$identity_out"; exit 1; }
+rm "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+mv "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md.real" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restoring the contained real source did not return coherent"; echo "$identity_out"; exit 1; }
+
+# Missing and malformed producer authority fail closed through the same symlink-shaped layout.
+mv "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json.missing"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q '"verdict": "inconclusive"' <<<"$identity_out" \
+  || { echo "FAIL: missing real producer manifest did not return inconclusive"; echo "$identity_out"; exit 1; }
+mv "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json.missing" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+
+python3 - "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    manifest = json.load(handle)
+row = next(row for row in manifest["skills"] if row["id"] == "cross-repo-coordination")
+row["files"].append({"path": "../escape", "sha256": "0" * 64})
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(manifest, handle)
+PY
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q 'malformed or duplicate producer file row' <<<"$identity_out" \
+  || { echo "FAIL: malformed real producer authority did not return inconclusive"; echo "$identity_out"; exit 1; }
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real producer authority did not return coherent"; echo "$identity_out"; exit 1; }
+
+printf '\nreal producer divergence\n' >> "$LIVE_ROOT/.github/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination producer divergence did not red"; echo "$identity_out"; exit 1; }
+cp "$REPO_ROOT/.claude/skills/cross-repo-coordination/SKILL.md" "$LIVE_ROOT/.github/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real producer identity did not return coherent"; echo "$identity_out"; exit 1; }
+
+RUNTIME_TREE="$WORK/real-runtime"
+mkdir -p "$RUNTIME_TREE/.claude/skills" "$RUNTIME_TREE/.agents/skills"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$RUNTIME_TREE/.claude/skills/"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$RUNTIME_TREE/.agents/skills/"
+printf '.claude/skills .agents/skills\n' > "$RUNTIME_TREE/.agent-skill-roots"
+identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination runtime copies are not coherent"; echo "$identity_out"; exit 1; }
+printf '\nreal runtime divergence\n' >> "$RUNTIME_TREE/.agents/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: real cross-repo-coordination runtime divergence did not red"; echo "$identity_out"; exit 1; }
+cp "$RUNTIME_TREE/.claude/skills/cross-repo-coordination/SKILL.md" "$RUNTIME_TREE/.agents/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(bash "$SKILL_VIEW" identity --skill cross-repo-coordination --manifest "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" --tree "$RUNTIME_TREE")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real runtime identity did not return coherent"; echo "$identity_out"; exit 1; }
 DRIVER="$(sha "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md")"
 cat > "$DROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "work-roadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/work-roadmap", "materializes-when": "feedback == true and lifecycle == spec-kit" }
+  { "id": "work-roadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/work-roadmap", "materializes-when": "feedback == true and lifecycle == spec-kit", "files": [{"path":"SKILL.md","sha256":"$DRIVER"}] }
 ] }
 JSON
 DREG="$WORK/driver-skills.yml"
@@ -1176,6 +1291,46 @@ write_channels "$DREG" <<'YAML'
 YAML
 run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
   || { echo "FAIL: a coherent .github driver row was not accepted"; run --registry "$DREG" --repos-root "$DROOT" || true; exit 1; }
+
+identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")"
+printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and len(d["artifacts"])==1 and d["authority"]["source"].endswith("SKILL.md")' \
+  || { echo "FAIL: coherent producer identity projection"; echo "$identity_out"; exit 1; }
+
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$WORK/missing-registry.yml" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema"]=="fsgg.skill-identity/v1" and d["verdict"]=="inconclusive" and "registry is unreadable or malformed" in d["problems"][0]' \
+  || { echo "FAIL: nonexistent registry did not return deterministic inconclusive identity JSON"; echo "$identity_out"; exit 1; }
+
+printf 'skills: [\n' > "$WORK/malformed-registry.yml"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$WORK/malformed-registry.yml" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema"]=="fsgg.skill-identity/v1" and d["verdict"]=="inconclusive" and "registry is unreadable or malformed" in d["problems"][0]' \
+  || { echo "FAIL: malformed registry did not return deterministic inconclusive identity JSON"; echo "$identity_out"; exit 1; }
+
+mv "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md" "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md.missing"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q '"verdict": "inconclusive"' <<<"$identity_out" \
+  || { echo "FAIL: missing producer authority did not return inconclusive identity"; echo "$identity_out"; exit 1; }
+mv "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md.missing" "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+
+cp "$DROOT/.github/registry/driver-skill-manifest.json" "$WORK/identity-manifest.good.json"
+python3 - "$DROOT/.github/registry/driver-skill-manifest.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    doc = json.load(handle)
+doc["skills"][0]["files"].append({"path": "../escape", "sha256": "0" * 64})
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(doc, handle)
+PY
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="inconclusive" and any("../escape" in p for p in d["problems"])' \
+  || { echo "FAIL: escaping producer manifest row did not return inconclusive identity"; echo "$identity_out"; exit 1; }
+cp "$WORK/identity-manifest.good.json" "$DROOT/.github/registry/driver-skill-manifest.json"
+
+printf '\nidentity divergence\n' >> "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+identity_rc=0; identity_out="$(run --identity work-roadmap --registry "$DREG" --repos-root "$DROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 1 ] && grep -q '"verdict": "drift"' <<<"$identity_out" \
+  || { echo "FAIL: one-line producer divergence did not red identity"; echo "$identity_out"; exit 1; }
+printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
 
 # Discovery + digest actually RUN for the driver class — a wrong digest is caught, not silently passed.
 sed -i "s|sha256: $DRIVER|sha256: $WRONG|" "$DREG"

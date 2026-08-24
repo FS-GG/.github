@@ -67,9 +67,21 @@
 # `pull_request` and `push: main`, so a change here cannot skip the gate that reads it.
 
 schemaVersion: 1
-updated: 2026-08-15
+updated: 2026-08-24
 
 classes:
+  # ---------------------------------------------------------------------------------------------
+  - owner: .github
+    scope: process
+    disposition: delivered
+    kind: package
+    channel: FS.GG.Kit
+    evidence: src/FS.GG.Kit/stage-kit.sh
+    note: >-
+      The coordination-kit roster supplies these authored skill directories to FS.GG.Kit; its
+      generated manifest carries canonical source/digest plus the closed file inventory, and the
+      package manifest carries those exact files into every declared receiver root.
+
   # ---------------------------------------------------------------------------------------------
   - owner: .github
     scope: driver

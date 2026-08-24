@@ -1,0 +1,1527 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2852-runtime-skill-identity",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "806ac27d0edaf9f6a9134f6ae000972376aeebed6a4a7f5de39f0d2227f106f1"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "4da41852494d983769798a770a6aca1e7e8c0e3d1f640cb7234a93582643daf5"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "3680aa5e758441aff0e0af65d7e07948d2dd512aaadd6c0ba43041fa59833080"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d68b09754eb8d88084a49ae0e18010cf7b939a653b32236b13e5ba00ba537d9c"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "e8dbbe0e8ba61cf28d5907fe2dff23a41a75347177db2bc1ba96facee0da3437"
+      }
+    },
+    {
+      "path": "work/2852-runtime-skill-identity/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "b12ec8f0f713579279c7d81126c789bc6e4d1c8cfd2c7174d9d397d25bf625bd"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2852-runtime-skill-identity",
+    "title": "Bind producer, package, materialized, and runtime-loaded skill identity",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The registry contract MUST expose the authoritative skill id, owner/source path, and canonical sha256 used as the producer identity. (Stories: US-001, US-002; Acceptance: AC-001)",
+      "text": "The registry contract MUST expose the authoritative skill id, owner/source path, and canonical sha256 used as the producer identity. (Stories: US-001, US-002; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 43,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Runtime identity output MUST name the authoritative producer source and every package, materialized, and runtime-visible artifact it compares, including each digest and verdict. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Runtime identity output MUST name the authoritative producer source and every package, materialized, and runtime-visible artifact it compares, including each digest and verdict. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 44,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "\u0060coordination-sync --against-pin\u0060 MUST bind materialized skill bytes to the restored package\u0027s own manifest digest and emit machine-readable identity facts for those comparisons. (Stories: US-002; Acceptance: AC-002)",
+      "text": "\u0060coordination-sync --against-pin\u0060 MUST bind materialized skill bytes to the restored package\u0027s own manifest digest and emit machine-readable identity facts for those comparisons. (Stories: US-002; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 45,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "\u0060skill-view\u0060 MUST bind runtime-visible copies to the receiver\u0027s declared live source/root set and report all copies without inferring authority from traversal order. (Stories: US-001, US-002; Acceptance: AC-003)",
+      "text": "\u0060skill-view\u0060 MUST bind runtime-visible copies to the receiver\u0027s declared live source/root set and report all copies without inferring authority from traversal order. (Stories: US-001, US-002; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 46,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Focused gates MUST prove that a one-line divergence in \u0060cross-repo-coordination\u0060 makes the materialization or runtime identity verdict red, then restore and prove green. (Stories: US-003; Acceptance: AC-004)",
+      "text": "Focused gates MUST prove that a one-line divergence in \u0060cross-repo-coordination\u0060 makes the materialization or runtime identity verdict red, then restore and prove green. (Stories: US-003; Acceptance: AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 47,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Missing, unreadable, malformed, duplicate, and digest-mismatched identity facts MUST fail closed with a reason-specific diagnostic. (Stories: US-003; Acceptance: AC-005)",
+      "text": "Missing, unreadable, malformed, duplicate, and digest-mismatched identity facts MUST fail closed with a reason-specific diagnostic. (Stories: US-003; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2852-runtime-skill-identity/spec.md",
+      "sourceLocation": {
+        "line": 48,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "The registry is producer authority; the package manifest is a sealed transport receipt and must agree when both are available.",
+      "decision": "The registry is producer authority; the package manifest is a sealed transport receipt and must agree when both are available.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2852-runtime-skill-identity/clarifications.md",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "Add a dedicated identity projection while preserving existing check output.",
+      "decision": "Add a dedicated identity projection while preserving existing check output.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2852-runtime-skill-identity/clarifications.md",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "Read the live source and view roots from the receiver project declaration; report every root and reject duplicate divergent copies.",
+      "decision": "Read the live source and view roots from the receiver project declaration; report every root and reject duplicate divergent copies.",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/2852-runtime-skill-identity/clarifications.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement clarification decision DEC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement clarification decision DEC-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Update contract surface PC-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Update contract surface PC-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Record verification evidence VO-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Record verification evidence VO-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-004",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Record verification evidence VO-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-005",
+        "VO-004"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Record verification evidence VO-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-001",
+        "PD-006",
+        "VO-005"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PC-002",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "T019",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV019"
+      ],
+      "source": "work/2852-runtime-skill-identity/tasks.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV019",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T019",
+      "taskRefs": [
+        "T019"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/adr-0074-runtime-skill-identity.md",
+        "registry/skills.yml",
+        "scripts/coordination-sync",
+        "scripts/fsgg-skill-registry-check",
+        "scripts/skill-view",
+        "tests/coordination-sync/run.sh",
+        "tests/skill-registry/run.sh",
+        "tests/skill-view/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2852-runtime-skill-identity/evidence.yml",
+      "sourceLocation": {
+        "line": 19,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2852-runtime-skill-identity/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.1.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "806ac27d0edaf9f6a9134f6ae000972376aeebed6a4a7f5de39f0d2227f106f1"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "4da41852494d983769798a770a6aca1e7e8c0e3d1f640cb7234a93582643daf5"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "3680aa5e758441aff0e0af65d7e07948d2dd512aaadd6c0ba43041fa59833080"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d68b09754eb8d88084a49ae0e18010cf7b939a653b32236b13e5ba00ba537d9c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "e8dbbe0e8ba61cf28d5907fe2dff23a41a75347177db2bc1ba96facee0da3437"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2852-runtime-skill-identity/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b12ec8f0f713579279c7d81126c789bc6e4d1c8cfd2c7174d9d397d25bf625bd"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "2c8baebc6483c68b21c28a2720d56d0a31c39783b8e22e400a3abcd32ecd7e66"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

@@ -11,6 +11,12 @@
 # ADR-0017 predicate the union gate (scripts/skill-union-assert.sh --params) evaluates against a
 # scaffold's `scaffold-provenance.json` — its effectiveParameters PLUS the facts the gate derives
 # from that same document, today just `template` from `templateRef` (.github#2576). Absent ⇒ `always`.
+# The same row is the producer-authority link in `fsgg.skill-identity/v1`: `source` names the
+# authoritative SKILL.md and `sha256` is its content identity. `scripts/fsgg-skill-registry-check
+# --identity <id>` joins that row to the producer manifest's complete file inventory and prints the
+# compared paths and digests; a consumer no longer has to infer authority from whichever mirror it
+# happened to open. Package, materialized, and runtime projections carry this identity forward
+# without changing the `materializes-when` contract.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
 #   * PRODUCT skills, TEMPLATE FAMILY (6) — RECONCILED from FS.GG.Templates' producer manifest
@@ -104,7 +110,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-23"
+updated: "2026-08-24"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -307,6 +313,13 @@ skills:
   - { id: fable-remoting,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-remoting/SKILL.md, sha256: 9b03e2cce0a9c3756d74100690aad5dcfe38cad65f77a31d2210a5f9cb0290e8, materializes-when: "template in [fable-game]" }
   - { id: fable-signalr,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-signalr/SKILL.md, sha256: d02815368cdf32296d061d4755a683e1c30bbed5186fe7d9d1cf78d747eee3c8, materializes-when: "template in [fable-game]" }
   - { id: fable-testing,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-testing/SKILL.md, sha256: 5d170adb4637b65b05e0574c5d69dc7e2aa7807729e8c3498c40f6051c14a16c, materializes-when: "template in [fable-game, fable-bindings]" }
+
+  # ------------------------------------------------------------------------------------------------
+  # COORDINATION PROCESS skills — `.github`-AUTHORED and universally delivered by FS.GG.Kit.
+  # The row is reconciled from the generated coordination-kit manifest, whose `files` inventory is
+  # also the package/runtime identity authority. This first real identity-chain subject is generic:
+  # the manifest emits the same identity fields for every rostered coordination-kit skill.
+  - { id: cross-repo-coordination, scope: process, owner: .github, source: .github/.claude/skills/cross-repo-coordination/SKILL.md, sha256: bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0, materializes-when: always }
 
   # ------------------------------------------------------------------------------------------------
   # DRIVER skills — `.github`-AUTHORED, product-materialized (ADR-0054, resolves #1224; ADR-0053).

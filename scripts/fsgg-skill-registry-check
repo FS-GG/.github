@@ -287,6 +287,13 @@ MANIFEST_CANDIDATES = (
     "registry/driver-skill-manifest.json",
 )
 
+# `.github` publishes two disjoint skill populations. The catalog checker deliberately keeps its
+# historical one-manifest producer model, while identity must locate the selected id in either
+# producer inventory without treating directory order as authority.
+IDENTITY_MANIFEST_CANDIDATES = MANIFEST_CANDIDATES + (
+    "registry/coordination-kit-skill-manifest.json",
+)
+
 # ADR-0017: an entry with no `materializes-when` is unconditionally emitted.
 DEFAULT_WHEN = "always"
 
@@ -1209,6 +1216,164 @@ def _load_registry(registry_path: str) -> dict:
         return yaml.safe_load(handle)
 
 
+def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple[dict, int]:
+    """Project one skill's producer identity without running the whole-registry verdict.
+
+    The registry row owns the public source/digest claim; the producer manifest owns the closed file
+    inventory.  Keeping both in the report makes a stale registry and a stale subordinate file
+    distinguishable instead of collapsing either into "the copy looks different".
+    """
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", skill_id):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": ["skill id is malformed"]}, 2)
+    try:
+        registry = _load_registry(registry_path)
+    # PyYAML's parser exceptions do not derive from ValueError.  This is the command's authority-input
+    # boundary: any loader failure must remain data in the identity protocol, never escape as Python.
+    except Exception as exc:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": [f"registry is unreadable or malformed: {type(exc).__name__}"]}, 2)
+    rows = registry.get("skills") if isinstance(registry, dict) else None
+    if not isinstance(rows, list):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": ["registry has no skills list"]}, 2)
+    matches = [row for row in rows if isinstance(row, dict) and row.get("id") == skill_id]
+    if len(matches) != 1:
+        problem = "skill is absent from registry" if not matches else "skill is duplicated in registry"
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": [problem]}, 2)
+
+    row = matches[0]
+    source = row.get("source")
+    declared = str(row.get("sha256", ""))
+    if not isinstance(source, str) or not source or not DIGEST_RE.fullmatch(declared):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": ["registry row has no usable source and sha256"]}, 2)
+
+    # `source` is authority, not a convenient path hint. Validate its lexical contract before the
+    # first segment can select a producer or any realpath is derived from it. Otherwise `../...`
+    # selects the aggregate root's parent as the producer and makes the later containment check
+    # internally coherent over attacker-selected bytes.
+    source_parts = source.split("/")
+    source_is_safe = (
+        not os.path.isabs(source)
+        and os.path.normpath(source) == source
+        and len(source_parts) >= 2
+        and all(part not in ("", ".", "..") for part in source_parts)
+        and re.fullmatch(r"[A-Za-z0-9.][A-Za-z0-9._-]*", source_parts[0]) is not None
+    )
+    if not source_is_safe:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": ["registry source must be a normalized non-traversing <producer>/<path>"]}, 2)
+
+    producer = source_parts[0]
+    producer_path = os.path.join(repos_root, producer)
+    source_path = os.path.join(repos_root, source)
+    producer_real = os.path.realpath(producer_path)
+    source_real = os.path.realpath(source_path)
+    # Repository aggregation roots deliberately contain checkout symlinks (for example
+    # `.repos/.github -> $GITHUB_WORKSPACE`).  The selected producer checkout is the security
+    # boundary: its target may live outside the aggregate root, but a source may not escape that
+    # producer after either checkout or source symlinks are resolved.
+    if (not os.path.isdir(producer_path) or
+            (source_real != producer_real and not source_real.startswith(producer_real + os.sep))):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": ["registry source escapes producer checkout"]}, 2)
+    raw = read_bytes(source_path)
+    if raw is None:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "authority": {"owner": row.get("owner"), "source": source,
+                               "expectedSha256": declared},
+                 "verdict": "inconclusive", "problems": [f"source is unreadable: {source}"]}, 2)
+    actual = canonical_digest(raw)
+
+    manifest_paths = [os.path.join(repos_root, producer, candidate)
+                      for candidate in IDENTITY_MANIFEST_CANDIDATES
+                      if os.path.isfile(os.path.join(repos_root, producer, candidate))]
+    if not manifest_paths:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "authority": {"owner": row.get("owner"), "source": source,
+                               "expectedSha256": declared, "actualSha256": actual},
+                 "verdict": "inconclusive",
+                 "problems": [f"producer manifest is absent for {producer}"]}, 2)
+    matches = []
+    for candidate_path in manifest_paths:
+        try:
+            with open(candidate_path, encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                     "verdict": "inconclusive", "problems": [f"producer manifest is unreadable: {exc}"]}, 2)
+        if not isinstance(manifest, dict) or not isinstance(manifest.get("skills"), list):
+            return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                     "verdict": "inconclusive", "problems": ["producer manifest has no skills list"]}, 2)
+        matches.extend((candidate_path, entry) for entry in manifest["skills"]
+                       if isinstance(entry, dict) and entry.get("id") == skill_id)
+    if len(matches) != 1:
+        problem = "producer manifests omit skill" if not matches else "producer manifests duplicate skill"
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": [problem]}, 2)
+
+    manifest_path, entry = matches[0]
+    supplied = entry.get("supplied-by")
+    files = entry.get("files")
+    if not isinstance(supplied, str) or not supplied or not isinstance(files, list) or not files:
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive",
+                 "problems": ["producer manifest has no supplied-by/file inventory"]}, 2)
+    producer_root = producer_real
+    skill_root = os.path.realpath(os.path.join(producer_root, supplied))
+    if skill_root != producer_root and not skill_root.startswith(producer_root + os.sep):
+        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                 "verdict": "inconclusive", "problems": ["producer supplied-by escapes its repository"]}, 2)
+    artifacts = []
+    authority_problems = []
+    drift_problems = []
+    seen = set()
+    for file_row in files:
+        rel = file_row.get("path") if isinstance(file_row, dict) else None
+        want = str(file_row.get("sha256", "")) if isinstance(file_row, dict) else ""
+        safe_rel = (isinstance(rel, str) and rel and not os.path.isabs(rel) and
+                    os.path.normpath(rel) == rel and rel != ".." and not rel.startswith("../"))
+        if not safe_rel or rel in seen or not DIGEST_RE.fullmatch(want):
+            authority_problems.append(f"malformed or duplicate producer file row: {rel!r}")
+            continue
+        seen.add(rel)
+        file_path = os.path.realpath(os.path.join(skill_root, rel))
+        if file_path != skill_root and not file_path.startswith(skill_root + os.sep):
+            authority_problems.append(f"producer file escapes the skill root: {rel}")
+            continue
+        file_raw = read_bytes(file_path)
+        got = hashlib.sha256(file_raw).hexdigest() if file_raw is not None else None
+        artifacts.append({"kind": "producer", "path": f"{producer}/{supplied.rstrip('/')}/{rel}",
+                          "expectedSha256": want, "actualSha256": got,
+                          "verdict": "coherent" if got == want else "inconclusive" if got is None else "drift"})
+        if got is None:
+            authority_problems.append(f"producer file is unreadable: {rel}")
+        elif got != want:
+            drift_problems.append(f"producer file differs: {rel}")
+
+    if actual != declared:
+        drift_problems.append("registry sha256 differs from authoritative SKILL.md")
+    problems = authority_problems + drift_problems
+    verdict = "inconclusive" if authority_problems else "drift" if drift_problems else "coherent"
+    report = {
+        "schema": "fsgg.skill-identity/v1",
+        "skillId": skill_id,
+        "authority": {"owner": row.get("owner"), "source": source,
+                      "manifest": os.path.relpath(manifest_path, repos_root),
+                      "expectedSha256": declared, "actualSha256": actual},
+        "artifacts": artifacts,
+        "verdict": verdict,
+        "problems": problems,
+    }
+    return report, (0 if verdict == "coherent" else 1 if verdict == "drift" else 2)
+
+
 def check(registry_path: str, repos_root: str) -> list[dict]:
     registry = _load_registry(registry_path)
 
@@ -1535,6 +1700,11 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
     parser.add_argument(
+        "--identity",
+        metavar="SKILL_ID",
+        help="emit one deterministic fsgg.skill-identity/v1 producer/registry report and exit",
+    )
+    parser.add_argument(
         "--write", action="store_true", help="reconcile stale sha256 / materializes-when in place"
     )
     parser.add_argument(
@@ -1586,6 +1756,15 @@ def main() -> int:
         "reported but does not fail. For PRs only; `main` and the schedule stay absolute (.github#422).",
     )
     args = parser.parse_args()
+
+    if args.identity is not None:
+        if args.write or args.now is not None or args.baseline_registry or args.normalize_when is not None or args.digest is not None or args.producers:
+            sys.exit("fsgg-skill-registry-check: --identity cannot be combined with another action")
+        if not os.path.isdir(args.repos_root):
+            sys.exit(f"fsgg-skill-registry-check: --repos-root '{args.repos_root}' is not a directory.")
+        report, code = identity_report(args.registry, args.repos_root, args.identity)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return code
 
     if args.normalize_when is not None:
         print(normalize_when(args.normalize_when))
