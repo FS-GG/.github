@@ -287,6 +287,13 @@ MANIFEST_CANDIDATES = (
     "registry/driver-skill-manifest.json",
 )
 
+# `.github` publishes two disjoint skill populations. The catalog checker deliberately keeps its
+# historical one-manifest producer model, while identity must locate the selected id in either
+# producer inventory without treating directory order as authority.
+IDENTITY_MANIFEST_CANDIDATES = MANIFEST_CANDIDATES + (
+    "registry/coordination-kit-skill-manifest.json",
+)
+
 # ADR-0017: an entry with no `materializes-when` is unconditionally emitted.
 DEFAULT_WHEN = "always"
 
@@ -1260,30 +1267,34 @@ def identity_report(registry_path: str, repos_root: str, skill_id: str) -> tuple
     actual = canonical_digest(raw)
 
     producer = source.split("/", 1)[0]
-    manifest_path = find_manifest(repos_root, producer)
-    if manifest_path is None:
+    manifest_paths = [os.path.join(repos_root, producer, candidate)
+                      for candidate in IDENTITY_MANIFEST_CANDIDATES
+                      if os.path.isfile(os.path.join(repos_root, producer, candidate))]
+    if not manifest_paths:
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "authority": {"owner": row.get("owner"), "source": source,
                                "expectedSha256": declared, "actualSha256": actual},
                  "verdict": "inconclusive",
                  "problems": [f"producer manifest is absent for {producer}"]}, 2)
-    try:
-        with open(manifest_path, encoding="utf-8") as handle:
-            manifest = json.load(handle)
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
-                 "verdict": "inconclusive", "problems": [f"producer manifest is unreadable: {exc}"]}, 2)
-    if not isinstance(manifest, dict) or not isinstance(manifest.get("skills"), list):
-        return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
-                 "verdict": "inconclusive", "problems": ["producer manifest has no skills list"]}, 2)
-    entries = [entry for entry in manifest.get("skills", [])
-               if isinstance(entry, dict) and entry.get("id") == skill_id]
-    if len(entries) != 1:
-        problem = "producer manifest omits skill" if not entries else "producer manifest duplicates skill"
+    matches = []
+    for candidate_path in manifest_paths:
+        try:
+            with open(candidate_path, encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                     "verdict": "inconclusive", "problems": [f"producer manifest is unreadable: {exc}"]}, 2)
+        if not isinstance(manifest, dict) or not isinstance(manifest.get("skills"), list):
+            return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
+                     "verdict": "inconclusive", "problems": ["producer manifest has no skills list"]}, 2)
+        matches.extend((candidate_path, entry) for entry in manifest["skills"]
+                       if isinstance(entry, dict) and entry.get("id") == skill_id)
+    if len(matches) != 1:
+        problem = "producer manifests omit skill" if not matches else "producer manifests duplicate skill"
         return ({"schema": "fsgg.skill-identity/v1", "skillId": skill_id,
                  "verdict": "inconclusive", "problems": [problem]}, 2)
 
-    entry = entries[0]
+    manifest_path, entry = matches[0]
     supplied = entry.get("supplied-by")
     files = entry.get("files")
     if not isinstance(supplied, str) or not supplied or not isinstance(files, list) or not files:

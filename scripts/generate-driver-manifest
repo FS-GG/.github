@@ -692,13 +692,21 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
     sources = kit_skill_sources(repo_root)
     rows = []
     for source in sources:
-        files, tree_sha = directory_manifest(os.path.join(repo_root, source))
+        skill_root = os.path.join(repo_root, source)
+        files, tree_sha = directory_manifest(skill_root)
+        with open(os.path.join(skill_root, "SKILL.md"), "rb") as handle:
+            skill_raw = handle.read()
         rows.append(
             {
                 "id": os.path.basename(source),
+                "scope": "process",
+                "owner": ".github",
+                "source": f".github/{source.replace(os.sep, '/')}/SKILL.md",
+                "sha256": canonical_digest(skill_raw),
                 "supplied-by": source.replace(os.sep, "/"),
                 "tree-sha256": tree_sha,
                 "files": files,
+                "materializes-when": "always",
             }
         )
     if not rows:

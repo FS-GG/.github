@@ -34,6 +34,11 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-08-24** — `cross-repo-coordination` PROCESS IDENTITY (`.github`; .github#2852,
+  ADR-0074): registered the real FS.GG.Kit-delivered skill against `.github`'s generated
+  coordination-kit producer manifest, including its canonical source/digest and package file
+  inventory, so producer, package, materialized, and runtime identity queries share one subject.
+
 - **2026-08-23** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-08-23** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.

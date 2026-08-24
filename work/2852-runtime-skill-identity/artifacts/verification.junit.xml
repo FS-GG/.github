@@ -3,6 +3,6 @@
   <testsuite name="runtime-skill-identity" tests="3" failures="0" errors="0" skipped="0">
     <testcase classname="FS.GG.Identity" name="skill-view 63/63 including runtime divergence and malformed-authority inversions" />
     <testcase classname="FS.GG.Identity" name="coordination-sync 136/136 including pinned-package materialized divergence inversion" />
-    <testcase classname="FS.GG.Identity" name="skill-registry full fixture including producer divergence plus missing and malformed authority inversions" />
+    <testcase classname="FS.GG.Identity" name="skill-registry full fixture including real cross-repo-coordination producer/runtime identity and discriminating inversions" />
   </testsuite>
 </testsuites>
