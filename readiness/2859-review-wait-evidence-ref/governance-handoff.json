@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2859-review-wait-evidence-ref/ship.json",
-      "digest": "sha256:df7d98fd8d34c8dc4b8a2654b7278e0cf6f437bb030a584d74a3e921ee12522b",
+      "digest": "sha256:97160926ff9d057dbcd2f93afea830f748f877a2be7e920c7ece805100bd0c68",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2859-review-wait-evidence-ref/verify.json",
-      "digest": "sha256:8952ff1695594520bfc442547d1ae33acd0eab01d9f02c8504589f93510d62b3",
+      "digest": "sha256:c83ba7baa9d2159ae780a98e005a20e8cd24b4652718daffa5175c2aaa18ec0e",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2859-review-wait-evidence-ref/work-model.json",
-      "digest": "sha256:09a6ee77a576d89cf1cc2a1ca923157e591785704c29f11ea879fbb06ea3dd88",
+      "digest": "sha256:f233dfb9b9f7282ea68fae65c894717ef23d1645e25be4feddccea73bd8ce416",
       "schemaVersion": 1
     }
   ],
