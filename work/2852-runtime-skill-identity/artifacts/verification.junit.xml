@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites tests="3" failures="0" errors="0" skipped="0">
-  <testsuite name="runtime-skill-identity" tests="3" failures="0" errors="0" skipped="0">
+<testsuites tests="4" failures="0" errors="0" skipped="0">
+  <testsuite name="runtime-skill-identity" tests="4" failures="0" errors="0" skipped="0">
     <testcase classname="FS.GG.Identity" name="skill-view 63/63 including runtime divergence and malformed-authority inversions" />
     <testcase classname="FS.GG.Identity" name="coordination-sync 136/136 including pinned-package materialized divergence inversion" />
-    <testcase classname="FS.GG.Identity" name="skill-registry full fixture including real cross-repo-coordination producer/runtime identity and discriminating inversions" />
+    <testcase classname="FS.GG.Identity" name="skill-registry full fixture including symlink-shaped real producer identity, containment, authority and divergence inversions" />
+    <testcase classname="FS.GG.Identity" name="pipefail-assertions 25/25 including live corpus ratchet" />
   </testsuite>
 </testsuites>

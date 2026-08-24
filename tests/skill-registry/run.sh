@@ -1162,13 +1162,15 @@ printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKI
 
 # The real SB-004 subject, not another invented id: current canonical registry + generated
 # coordination-kit producer manifest + authored multi-file skill tree. Copying the exact tracked
-# inputs under a `.github` checkout-shaped root keeps the cross-repository source path honest while
-# making the inversion disposable.
+# inputs into a disposable producer and symlinking that checkout below the aggregate root reproduces
+# the hosted workflow's `.repos/.github -> $GITHUB_WORKSPACE` layout exactly.
 LIVE_ROOT="$WORK/live-repos"
-mkdir -p "$LIVE_ROOT/.github/registry" "$LIVE_ROOT/.github/.claude/skills"
-cp "$REPO_ROOT/registry/skills.yml" "$LIVE_ROOT/.github/registry/skills.yml"
-cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_ROOT/.github/registry/coordination-kit-skill-manifest.json"
-cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$LIVE_ROOT/.github/.claude/skills/"
+LIVE_PRODUCER="$WORK/live-producer"
+mkdir -p "$LIVE_ROOT" "$LIVE_PRODUCER/registry" "$LIVE_PRODUCER/.claude/skills"
+cp "$REPO_ROOT/registry/skills.yml" "$LIVE_PRODUCER/registry/skills.yml"
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+cp -R "$REPO_ROOT/.claude/skills/cross-repo-coordination" "$LIVE_PRODUCER/.claude/skills/"
+ln -s "$LIVE_PRODUCER" "$LIVE_ROOT/.github"
 identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
 printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["skillId"]=="cross-repo-coordination" and len(d["artifacts"]) >= 6 and d["authority"]["manifest"].endswith("coordination-kit-skill-manifest.json")' \
   || { echo "FAIL: real cross-repo-coordination producer identity is not coherent"; echo "$identity_out"; exit 1; }
@@ -1178,6 +1180,44 @@ printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin
 identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/coordination-kit-skill-manifest.json" --repos-root "$LIVE_ROOT")"
 printf '%s' "$identity_out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="coherent" and d["authority"]["source"]==".github/.claude/skills/cross-repo-coordination/SKILL.md"' \
   || { echo "FAIL: coordination-kit manifest is not a usable producer identity authority"; echo "$identity_out"; exit 1; }
+
+# The checkout symlink is sanctioned, but a source symlink escaping that selected checkout is not.
+mv "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md.real"
+printf 'outside producer\n' > "$WORK/escaped-skill.md"
+ln -s "$WORK/escaped-skill.md" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q 'registry source escapes producer checkout' <<<"$identity_out" \
+  || { echo "FAIL: a real source escaping its producer checkout was not refused"; echo "$identity_out"; exit 1; }
+rm "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+mv "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md.real" "$LIVE_PRODUCER/.claude/skills/cross-repo-coordination/SKILL.md"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restoring the contained real source did not return coherent"; echo "$identity_out"; exit 1; }
+
+# Missing and malformed producer authority fail closed through the same symlink-shaped layout.
+mv "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json.missing"
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q '"verdict": "inconclusive"' <<<"$identity_out" \
+  || { echo "FAIL: missing real producer manifest did not return inconclusive"; echo "$identity_out"; exit 1; }
+mv "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json.missing" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+
+python3 - "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    manifest = json.load(handle)
+row = next(row for row in manifest["skills"] if row["id"] == "cross-repo-coordination")
+row["files"].append({"path": "../escape", "sha256": "0" * 64})
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(manifest, handle)
+PY
+identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
+[ "$identity_rc" -eq 2 ] && grep -q 'malformed or duplicate producer file row' <<<"$identity_out" \
+  || { echo "FAIL: malformed real producer authority did not return inconclusive"; echo "$identity_out"; exit 1; }
+cp "$REPO_ROOT/registry/coordination-kit-skill-manifest.json" "$LIVE_PRODUCER/registry/coordination-kit-skill-manifest.json"
+identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")"
+grep -q '"verdict": "coherent"' <<<"$identity_out" \
+  || { echo "FAIL: restored real producer authority did not return coherent"; echo "$identity_out"; exit 1; }
 
 printf '\nreal producer divergence\n' >> "$LIVE_ROOT/.github/.claude/skills/cross-repo-coordination/SKILL.md"
 identity_rc=0; identity_out="$(run --identity cross-repo-coordination --registry "$LIVE_ROOT/.github/registry/skills.yml" --repos-root "$LIVE_ROOT")" || identity_rc=$?
