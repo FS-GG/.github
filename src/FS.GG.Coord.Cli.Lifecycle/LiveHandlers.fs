@@ -669,14 +669,16 @@ module LiveHandlers =
         | StructuredDecision.Acceptance -> None
 
     let private isCanonicalReviewGeneration (generation: string) =
-        let suffixes = [ ":initial-review:0"; ":repair-confirmation:" ]
-        suffixes
-        |> List.exists (fun suffix ->
-            let index = generation.IndexOf(suffix, StringComparison.Ordinal)
-            index = 40
-            && generation.Substring(0, 40) |> Seq.forall Uri.IsHexDigit
-            && (suffix <> ":repair-confirmation:"
-                || match Int32.TryParse(generation.Substring(index + suffix.Length)) with
+        let initialSuffix = ":initial-review:0"
+        let confirmationPrefix = ":repair-confirmation:"
+        let hasCanonicalHead =
+            generation.Length >= 40
+            && (generation.Substring(0, 40) |> Seq.forall Uri.IsHexDigit)
+        hasCanonicalHead
+        && ((generation.Length = 40 + initialSuffix.Length
+             && generation.EndsWith(initialSuffix, StringComparison.Ordinal))
+            || (generation.Substring(40).StartsWith(confirmationPrefix, StringComparison.Ordinal)
+                && match Int32.TryParse(generation.Substring(40 + confirmationPrefix.Length)) with
                    | true, round when round >= 0 -> true
                    | _ -> false))
 

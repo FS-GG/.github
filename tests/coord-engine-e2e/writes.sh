@@ -369,6 +369,16 @@ review_marker_complete_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_f
 complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "sha256:$review_initial_digest"; review_digest_complete_rc=$?
 review_normalized_evidence="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
   | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->")) | (.body | split("\n")[1] | fromjson) | select(.event == "complete")] | last | .evidenceRef')"
+# Legacy callers may use arbitrary generation names. A name that merely starts like a canonical token
+# is still legacy: the canonical grammar is whole-string, not a substring classifier. This is the
+# production-shaped inversion for the old unanchored predicate: under that mutation the completion
+# tries to resolve a structured record for the junk token, refuses, and strands the wait.
+review_legacy_junk_generation=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0-junk
+review_legacy_junk_evidence=https://fixture.invalid/legacy-review-evidence
+enter_review_record_wait "$review_legacy_junk_generation" initial-review; review_legacy_junk_enter_rc=$?
+complete_review_record_wait "$review_legacy_junk_generation" "$review_legacy_junk_evidence"; review_legacy_junk_complete_rc=$?
+review_legacy_junk_normalized="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
+  | jq -r --arg generation "$review_legacy_junk_generation" '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->")) | (.body | split("\n")[1] | fromjson) | select(.event == "complete" and .reviewGeneration == $generation)] | last | .evidenceRef')"
 if [ "$review_derived_initial_rc" -eq 0 ] \
    && printf '%s' "$review_derived_initial_body" | sed -n '2p' | jq -e \
       '.claimGeneration == "'"$review_claim_id"'" and .reviewGeneration == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0" and .kind == "initial-review" and .evidenceRef == "https://github.com/FS-GG/FS.GG.SDD/pull/42"' >/dev/null \
@@ -379,6 +389,12 @@ if [ "$review_derived_initial_rc" -eq 0 ] \
   ok "#2859 engine-derived initial wait and pre-append structured-record evidence normalization"
 else
   bad "#2859 wait entry/evidence authority must be host-owned and unambiguous" "enter=$review_derived_initial_rc:$review_derived_initial_out body=$review_derived_initial_body marker=$review_marker_complete_rc/$review_marker_repeat_rc:$review_marker_before->$review_marker_after:$review_marker_complete_out digest=$review_digest_complete_rc:$review_normalized_evidence expected=$review_initial_url"
+fi
+if [ "$review_legacy_junk_enter_rc" -eq 0 ] && [ "$review_legacy_junk_complete_rc" -eq 0 ] \
+   && [ "$review_legacy_junk_normalized" = "$review_legacy_junk_evidence" ]; then
+  ok "#2859 canonical-generation suffix anchoring: legacy-compatible junk inversion completes unchanged"
+else
+  bad "#2859 canonical generation classification must reject a trailing-junk suffix" "legacy-junk=$review_legacy_junk_enter_rc/$review_legacy_junk_complete_rc:$review_legacy_junk_normalized expected=$review_legacy_junk_evidence"
 fi
 
 # Move the fixture's live head without adding a structured record: two inert schema-name comments make
@@ -435,7 +451,7 @@ if [ "$review_initial_rc" -eq 0 ] && [ "$review_confirmation_rc" -eq 0 ] && [ "$
    && [[ "$review_acceptance_body" != *'"baseSha":"9999999999999999999999999999999999999999"'* ]] \
    && printf '%s' "$review_moved_initial_out" | jq -e '.revision == 4 and (.digest | length) == 64' >/dev/null \
    && printf '%s' "$review_moved_acceptance_out" | jq -e '.revision == 5 and .effectiveChainValidated == true and (.digest | length) == 64' >/dev/null \
-   && [ "$review_after" -eq $((review_before + 14)) ]; then
+   && [ "$review_after" -eq $((review_before + 16)) ]; then
   ok "M4 review record validates actual backlinks and retires an accepted generation after head movement"
 else
   bad "M4 review record must append parseable v2 generations with actual backlinks" "comments=$review_before->$review_after wrong=$review_wrong_rc:$review_wrong_before->$review_wrong_after initial=$review_initial_rc:$review_initial_out confirmation=$review_confirmation_rc:$review_confirmation_out acceptance=$review_acceptance_rc:$review_acceptance_out moved-initial=$review_moved_initial_rc:$review_moved_initial_out moved-acceptance=$review_moved_acceptance_rc:$review_moved_acceptance_out"
