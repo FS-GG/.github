@@ -1555,20 +1555,25 @@ if [ "${1:-}" = "--version" ]; then
   printf '%s\n' "${FORCE_RESOLVED_VERSION:-$pin.0}"
   exit 0
 fi
-printf 'ENGINE RAN pin=%s assembly=%s cwd=%s args=%s\n' "$pin" "$assembly" "$PWD" "$*"
+printf 'ENGINE RAN cwd=%s args=%s\n' "$PWD" "$*"
 exit 0
 SH
 chmod +x "$DOTNETDIR/dotnet"
 t4run() { ( cd "$CALLER" && env -u FSGG_COORD_ENGINE_BIN DOTNET_CLI_HOME="$DOTNET_HOME" ARGV_LOG_PATH="$ARGV_LOG" PATH="$DOTNETDIR:/usr/bin:/bin" "$T4_SHIM" "$@" 2>&1 ); }
 
 # a. POSITIVE + INVERSION: wrapper-root 0.72 wins over caller-root 0.71, while the engine still runs in
-#    CALLER. Output names the pin, assembly, cwd and argv, so every half is observable in one execution.
+#    CALLER. Resolution evidence must come from the copied PRODUCTION wrapper, not from the fake engine:
+#    the fake deliberately prints only cwd and argv.
 : >"$ARGV_LOG"; out="$(t4run next --help)"; rc=$?
-{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Fq "ENGINE RAN pin=0.72.0 assembly=$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll cwd=$CALLER args=next --help"; } \
-  && ok ".github#2908: tier 4 binds execution to the WRAPPER manifest's 0.72.0 assembly while preserving caller cwd and argv" \
+resolution="$(jq -Rrc 'fromjson? | select(.schema == "fsgg.coord.engine-resolution/v1")' <<<"$out" 2>/dev/null || true)"
+{ [ "$rc" -eq 0 ] \
+    && jq -e --arg manifest "$T4/.config/dotnet-tools.json" --arg assembly "$DOTNET_HOME/assemblies/0.72.0/fsgg-coord-engine.dll" \
+      '.schema == "fsgg.coord.engine-resolution/v1" and .tier == 4 and .manifest == $manifest and .pin == "fs.gg.coord.cli@0.72.0" and .resolvedAssembly == $assembly' <<<"$resolution" >/dev/null \
+    && printf '%s' "$out" | grep -Fq "ENGINE RAN cwd=$CALLER args=next --help"; } \
+  && ok ".github#2908: production tier 4 reports wrapper manifest/pin/assembly while the engine preserves caller cwd and argv" \
   || bad ".github#2908: wrapper manifest selection and command working context must be separate" "rc=$rc out=$out log=$(cat "$ARGV_LOG")"
 
-grep -q 'pin=0.71.0' <<<"$out" \
+grep -q 'fs.gg.coord.cli@0.71.0' <<<"$out" \
   && bad ".github#2908 inversion: caller manifest 0.71.0 silently won" "out=$out" \
   || ok ".github#2908 inversion: the conflicting CALLER manifest cannot select its 0.71.0 engine"
 
@@ -1584,7 +1589,7 @@ jq '[.[] | select(.Version != "0.72.0")]' "$RESTORED_CACHE" >"$DOTNET_HOME/.dotn
 : >"$ARGV_LOG"
 out="$(RESTORED_CACHE_FIXTURE="$RESTORED_CACHE" t4run budget)"; rc=$?
 { [ "$rc" -eq 0 ] && grep -Fq "tool restore --tool-manifest $T4/.config/dotnet-tools.json" "$ARGV_LOG" \
-    && grep -q 'ENGINE RAN pin=0.72.0' <<<"$out"; } \
+    && grep -q '"pin":"fs.gg.coord.cli@0.72.0"' <<<"$out"; } \
   && ok ".github#2908: restore is explicitly bound to the wrapper manifest, then that exact pin executes" \
   || bad ".github#2908: restore must not rediscover the caller manifest" "rc=$rc out=$out log=$(cat "$ARGV_LOG")"
 

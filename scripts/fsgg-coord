@@ -22,8 +22,9 @@
 # written here today would simply start rotting tomorrow. If you want the count, run `wc -l`.
 #
 # WHAT IT DOES. It resolves ONE engine and execs it, passing argv through unchanged and returning its exit
-# code unchanged. It is a transparent pipe — it adds no output of its own on the happy path and holds no
-# state. The resolution order is:
+# code unchanged. It preserves engine stdout and exit status and holds no state. Tier 4 additionally emits
+# one stable JSON resolution receipt on stderr, because its manifest pin and executed assembly can otherwise
+# diverge invisibly with caller cwd (#2908). The resolution order is:
 #
 #   1. THE EXPLICIT BIN      — `FSGG_COORD_ENGINE_BIN`. An instruction. Honoured or REFUSED, never fallen
 #                              back from: a caller who named an engine that is not there must be told, not
@@ -440,6 +441,13 @@ $restore_out$hint"
       "$TOOL_PIN"|"$TOOL_PIN.0") ;;
       *) die "engine pin mismatch: manifest=$MANIFEST pin=$TOOL_PACKAGE@$TOOL_PIN resolvedAssembly=$TOOL_ASSEMBLY resolvedVersion=${RESOLVED_VERSION:-unreadable}" ;;
     esac
+
+    # STDERR, never stdout: stdout is the engine's machine contract (`next` is one bare ref, JSON verbs are
+    # one JSON value). The receipt is itself one deterministic JSON object so paths containing spaces or
+    # quotes remain unambiguous, and it is emitted only after the exact assembly reports the pinned version.
+    jq -cn --arg manifest "$MANIFEST" --arg package "$TOOL_PACKAGE" --arg pin "$TOOL_PIN" --arg assembly "$TOOL_ASSEMBLY" \
+      '{schema:"fsgg.coord.engine-resolution/v1",tier:4,manifest:$manifest,pin:($package+"@"+$pin),resolvedAssembly:$assembly}' >&2 \
+      || die "could not render the tier-4 engine-resolution receipt for manifest=$MANIFEST pin=$TOOL_PACKAGE@$TOOL_PIN resolvedAssembly=$TOOL_ASSEMBLY"
 
     # No `cd`: repository-sensitive engine behaviour still observes the caller's working directory. Direct
     # assembly execution also keeps argv transparent without `dotnet tool run` consuming -h/--help (#1029).
