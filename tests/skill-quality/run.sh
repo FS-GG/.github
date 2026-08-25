@@ -201,6 +201,71 @@ for runtime in (".claude", ".agents"):
 PY
 }
 
+# .github#2844 — a repair-added guard is not covered merely because a critic reached it once.
+# This committed probe is called by this file (the workflow's one skill-quality entry point), records
+# each invocation, and fails at a named branch when the organization-wide contract is weakened. The
+# counter is the coverage assertion: zero executions are a failure even if every source-text predicate
+# below would otherwise be true.
+REPAIR_GUARD_COVERAGE="$WORK/repair-guard-coverage.count"
+printf '0\n' >"$REPAIR_GUARD_COVERAGE"
+
+verify_repair_guard_contract() {
+  local root="$1" count branch agents_contract claude_contract
+  agents_contract="$root/.agents/skills/pnext-item/references/independent-review.md"
+  claude_contract="$root/.claude/skills/pnext-item/references/independent-review.md"
+  count="$(cat "$REPAIR_GUARD_COVERAGE")"
+  printf '%s\n' "$((count + 1))" >"$REPAIR_GUARD_COVERAGE"
+
+  if ! cmp -s "$agents_contract" "$claude_contract"; then
+    echo "repair-guard-contract: authored-roots-diverged" >&2
+    return 1
+  fi
+  for branch in \
+    "A repair-added guard carries committed reachability evidence" \
+    "committed positive control" \
+    "non-zero invocation count" \
+    "recording the exact failing branch"; do
+    if ! grep -Fq -- "$branch" "$agents_contract"; then
+      echo "repair-guard-contract: missing-committed-reachability-clause: $branch" >&2
+      return 1
+    fi
+  done
+}
+
+verify_repair_guard_contract "$ROOT"
+if [ "$(cat "$REPAIR_GUARD_COVERAGE")" -le 0 ]; then
+  echo "skill-quality fixture: repair-guard contract probe was never invoked" >&2
+  exit 1
+fi
+echo "PASS  .github#2844: committed repair-guard probe reached its contract branch"
+pass=$((pass+1))
+
+seed
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for runtime in (".claude", ".agents"):
+    path = root / runtime / "skills/pnext-item/references/independent-review.md"
+    text = path.read_text()
+    needle = "recording the exact failing branch"
+    if needle not in text:
+        raise SystemExit(f"fixture clause missing from {path}")
+    path.write_text(text.replace(needle, "recording that the run failed", 1))
+PY
+repair_guard_rc=0
+verify_repair_guard_contract "$WORK/tree" >"$WORK/out" 2>&1 || repair_guard_rc=$?
+if [ "$repair_guard_rc" -eq 1 ] \
+  && grep -Fq -- "repair-guard-contract: missing-committed-reachability-clause: recording the exact failing branch" "$WORK/out"; then
+  echo "PASS  repair-guard probe identifies its broken-subject rejection branch"
+  pass=$((pass+1))
+else
+  echo "FAIL  repair-guard probe did not reject the broken subject at the named branch" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
 seed
 printf '\n```sh\nscripts/fsgg-coord widen .github#1 --apply\n```\n' \
   >>"$WORK/tree/docs/coordination/semantic-regression.md"

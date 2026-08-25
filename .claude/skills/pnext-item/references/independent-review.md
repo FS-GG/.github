@@ -327,6 +327,17 @@ inventory actually owe; this is never a suite-wide sweep.
    added case. A repair that adds cases without re-running the original escape has not been shown to
    close it.
 
+8a. **A repair-added guard carries committed reachability evidence.** When a repair adds or strengthens
+    a guard, the same change adds a **committed positive control** that drives the newly protected branch
+    through the suite entry point CI invokes. An ad-hoc review probe is historical evidence only; it does
+    not prove the committed suite will report the guard decaying later.
+
+    Instrument the exact guard or decision branch during that committed run and assert a **non-zero invocation count**.
+    Name the invocation, the branch, and the observed count; a source-text mention
+    is not execution coverage. Then break the guard's subject and run the committed probe, recording the exact failing branch.
+    If the subject mutation does not reach the repair-added branch, the control has
+    measured a neighbouring refusal and does not prove the repair.
+
 9. **When a repair strengthens what a gate ASSERTS, re-derive the evidence for the stronger claim.**
    Making a gate's claim broader, more specific, or more confident changes what must be proved, and
    evidence gathered for the weaker claim does not carry forward. On `FS.GG.Templates#349` a round-1
