@@ -1036,8 +1036,11 @@ install is what keeps the composition honest. See the
   S.I.R. proved reusable identity, normalization, provenance, evidence, projection, and authoring
   contracts against its executable-rules corpus. Future behavioral meaning moves to canonical Quint;
   FS.GG.SDD publishes a small generated integration contract and F#/Fable bindings without recreating
-  Quint expressions. S.I.R. keeps gameplay interpreters, while coordination consumes process and mutation
-  identities after the Quint-capable producer is published. Publication still precedes adoption.
+  Quint expressions. Model-based testing follows the same boundary: FS.GG.SDD owns generic Quint/ITF
+  mechanics, while each product owns its canonical model, real-operation adapter, observable-state
+  projection, and replay tests. S.I.R. keeps gameplay interpreters, while coordination consumes process and
+  mutation identities after the Quint-capable producer is published. `.github` owns routing and fleet
+  evidence rather than centralized product replay. Publication still precedes adoption.
 
   The consumer lifecycle is **Typed SDD** (`typed-sdd`). It will first join Standard SDD (`sdd`) and
   Freeform (`none`) as an explicit option across every supported workspace provider/profile. It is the

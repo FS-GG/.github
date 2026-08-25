@@ -22,6 +22,12 @@ architecture and rationale.
 > compiled-contract boundary. Census/bootstrap work may proceed, but protocol implementation must wait for
 > that producer artifact. The current F# P4 package remains production authority meanwhile.
 
+> **Model-based-testing siting:** FS.GG.SDD supplies the published Quint/ITF and generic replay contract;
+> `FS.GG.Coordination` owns its canonical protocol model, adapter, observable-state projection, and replay
+> tests. `.github` owns the frozen v1 corpus, isolated GitHub qualification environment, registry, and
+> routing policy. It must not grow a centralized v2 replay implementation or a product-specific shadow
+> transition model.
+
 | Field | Value |
 |---|---|
 | Status | Ongoing renovation; design and execution spine filed, implementation not started |
@@ -217,7 +223,7 @@ These gates replace the existing coordination validation/verification process fo
 | Q0 Architecture | Authorities and boundaries are coherent | Accepted ADR, authority/mutation/deletion census, threat model, independent review |
 | Q1 Compiler | Typed source is deterministic and complete | Canonical bytes/fingerprint, semantic diff, schema/projection freshness, wrong-model controls |
 | Q2 Pure model | State and decisions obey invariants | Unit, property, model, bounded formal, and independently authored transition tests |
-| Q3 Adapter | External observations and writes preserve meaning | Recorded fixtures, pagination/completeness, revision, idempotency, partial/indeterminate controls |
+| Q3 Adapter | External observations and writes preserve meaning | Consumer-owned ITF replay adapter, observable-state projection, recorded fixtures, pagination/completeness, revision, idempotency, partial/indeterminate and mapping-mutation controls |
 | Q4 Sandbox | Real GitHub behavior matches the adapter contract | Isolated repositories/project, destructive test identities, API/permission/rate evidence |
 | Q5 Shadow | V2 reads the live fleet without changing it | Complete snapshots, v1/v2 decision comparison, explained divergence ledger, zero v2 write permission |
 | Q6 Recovery | Every multi-step path resumes safely | Failure after every step, receipt replay, compensation/roll-forward, rollback rehearsal |
@@ -229,6 +235,12 @@ These gates replace the existing coordination validation/verification process fo
 No single test generator may satisfy both sides of a safety claim. For example, the protocol compiler may
 generate all legal epoch transitions, but an independent black-box suite must still attempt an old-client
 write after freeze and reject a forged or rewound ledger.
+
+Q2 model checking and Q3/Q4 correspondence answer different questions. Q2 proves properties of the Quint
+model. Q3 replays fingerprinted ITF traces through the real pure implementation and compares only its
+declared model-observable state. Q4 exercises the same adapter boundary against isolated GitHub behavior.
+Passing one gate cannot substitute for either of the others, and `.github` may not host a fake v2
+implementation merely to make replay pass.
 
 ## 5. Detailed milestones
 

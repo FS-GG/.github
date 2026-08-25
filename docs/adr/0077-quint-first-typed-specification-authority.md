@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-25
+- **Amended:** 2026-08-26 — locate model-based testing at the producer/consumer boundary
 - **Decision owners:** FS-GG/.github, FS.GG.SDD, and S.I.R. maintainers
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, future FS-GG consumers, and EHotwagner/S.I.R.
 - **Supersedes:** [ADR-0076](0076-agent-authored-fsharp-specification-kernel.md) for future canonical authoring; its P0–P4 delivery record remains historical fact
@@ -43,6 +44,14 @@ arbitrary Quint expression semantics. Behavioral meaning remains in Quint and is
 native examples, simulation, model checking, temporal properties, and ITF traces. Generated F# and Fable
 types are consumer bindings over the compiled contract, not canonical authoring surfaces.
 
+Model-based testing is a consumer-owned conformance test powered by producer-owned tooling. FS.GG.SDD
+owns pinned Quint execution, ITF validation, the generic replay protocol, trace/evidence identity, and
+impact selection. Each implementation repository owns its canonical domain modules, the adapter that
+maps stable Quint actions to real production operations, and the projection from implementation state to
+the smaller model-observable state. `.github` owns registry and CI-routing policy, not centralized product
+replay. Neither the compiled contract nor a replay adapter may duplicate Quint transition semantics or
+product business logic.
+
 The first qualification milestone must author three complete vertical slices before a production backend
 is implemented:
 
@@ -79,6 +88,12 @@ bindings—remain useful after their authoring assumptions are separated from F#
 FS-GG must qualify and distribute a hermetic pinned toolchain, maintain a fail-closed adapter for each
 supported Quint/profile version, and test runtime/model correspondence. Full model checking is an
 impact-selected verification tier; documentation-only and unrelated changes do not start Apalache.
+
+Real correspondence therefore requires a receiver-owned qualification slice. The Q1 producer experiment
+may prove generic trace mechanics in FS.GG.SDD, but its S.I.R. claim is not accepted until a test-only
+S.I.R. child replays the same fingerprinted traces through the real interpreter. The later production
+adoption feature moves canonical rule authority and adds the complete native/Fable/rollback matrix; the
+qualification child changes no production authority.
 
 FS-GG must also pin, review, attribute, and adapt any `quint-llm-kit` material it uses. Agent prompts and
 skills remain replaceable authoring assistance: only checked `.qnt` source, compiled-contract receipts, and
