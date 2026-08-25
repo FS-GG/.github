@@ -596,8 +596,8 @@ echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two
 # here rather than only in a human reviewer's eye.
 ARCH="$REPO_ROOT/docs/architecture.md"
 PROFILE_README="$REPO_ROOT/profile/README.md"
-if grep -qF 'FS.GG.Workspace.Template` 0.8.1' "$ARCH" \
-  && grep -qF 'package-version` **0.8.1**' "$ARCH" \
+if grep -qF 'FS.GG.Workspace.Template` 0.9.0' "$ARCH" \
+  && grep -qF 'package-version` **0.9.0**' "$ARCH" \
   && grep -qF 'package-version` **0.8.0**' "$ARCH" \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
