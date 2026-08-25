@@ -78,6 +78,13 @@ let ``typed delivery completion receipt is accepted only after digest verificati
         { HeadSha = "head"
           Merged = true
           MergeReachable = true
+          PostMergeVerification =
+            FS.GG.Coord.Delivery.Verified
+                { MergeSha = "merge-sha"
+                  DefaultBranch = "main"
+                  Runs =
+                    [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
+                        Sha = "merge-sha"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
           IssueClosed = true
           BoardDone = false
           ClaimReleased = false

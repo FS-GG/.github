@@ -450,6 +450,16 @@ module Reads =
     /// is a follow-up.
     val prLandable: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState
 
+    /// Read the merged PR, repository default branch, and complete exact-merge Actions inventory.
+    /// Only a non-empty all-success set of `push` runs for that SHA and branch verifies completion;
+    /// absent/pending/red remain typed observations and every incomplete/malformed read fails closed.
+    val postMergeVerification:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        pr: int ->
+            Errors.IoResult<FS.GG.Coord.Delivery.PostMergeVerification>
+
     /// `prLandable`, plus the NUMBER of subjects the verdict was scored over (`Landable.scoreN`) — the read
     /// `landable --wait` polls on (#724). The count distinguishes a `red` over zero subjects (the
     /// registration race — "CI has not started yet") from a `red` over real ones (a finding), and the

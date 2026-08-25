@@ -100,6 +100,12 @@ module DoneStderrTests =
             { HeadSha = "head"
               Merged = true
               MergeReachable = true
+              PostMergeVerification =
+                FS.GG.Coord.Delivery.Verified
+                    { MergeSha = "e605d37"; DefaultBranch = "main"
+                      Runs =
+                        [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
+                            Sha = "e605d37"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
               IssueClosed = true
               BoardDone = false
               ClaimReleased = false

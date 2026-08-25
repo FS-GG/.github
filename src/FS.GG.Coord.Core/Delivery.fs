@@ -162,10 +162,34 @@ module Delivery =
           Obligations: Obligation list
           ParkedReason: string option }
 
+    type PostMergeRun =
+        { Id: int64
+          Attempt: int
+          Workflow: string
+          Event: string
+          Branch: string
+          Sha: string
+          Status: string
+          Conclusion: string
+          Url: string }
+
+    type PostMergeVerificationReceipt =
+        { MergeSha: string
+          DefaultBranch: string
+          Runs: PostMergeRun list }
+
+    type PostMergeVerification =
+        | NotObserved
+        | Awaiting of reason: string
+        | Rejected of reason: string
+        | Unreadable of reason: string
+        | Verified of PostMergeVerificationReceipt
+
     type CompletionFacts =
         { HeadSha: string
           Merged: bool
           MergeReachable: bool
+          PostMergeVerification: PostMergeVerification
           IssueClosed: bool
           BoardDone: bool
           ClaimReleased: bool
@@ -179,6 +203,7 @@ module Delivery =
         | NotMerged
         | Refused of reason: string
         | VerifyOutstandingObligation of name: string
+        | AwaitPostMergeVerification of reason: string
         | ProjectCompletion
         | CleanupCompletedDelivery
 
@@ -194,6 +219,7 @@ module Delivery =
           MergeSha: string
           MergeReachable: bool
           ObligationReceipts: VerifiedObligationReceipt list
+          PostMergeVerification: PostMergeVerificationReceipt option
           PendingBoardWrites: int
           FreshnessToken: string
           ActionKey: string
@@ -224,6 +250,7 @@ module Delivery =
         | AwaitLandability
         | GuardedLand
         | VerifyObligation of name: string
+        | AwaitPostMergeVerification of reason: string
         | Complete
         | CleanupWorktree
         | RouteFollowUp of reason: string
@@ -232,7 +259,8 @@ module Delivery =
         { Stage: Stage
           Action: Action
           FreshnessToken: string
-          ActionKey: string }
+          ActionKey: string
+          PostMergeVerification: PostMergeVerification }
 
     type Verdict =
         | Next of Transition
@@ -311,15 +339,52 @@ module Delivery =
           declaredPathsProblem snapshot ]
         |> List.choose id
 
-    let private next (snapshot: Snapshot) stage action =
-        let token = freshnessToken snapshot.Freshness
-        let actionKey = digest $"%s{token}\n%A{stage}\n%A{action}"
-        Next { Stage = stage; Action = action; FreshnessToken = token; ActionKey = actionKey }
+    let private postMergeVerificationToken =
+        function
+        | NotObserved -> "notObserved"
+        | Awaiting reason -> "awaiting\n" + reason
+        | Rejected reason -> "rejected\n" + reason
+        | Unreadable reason -> "unreadable\n" + reason
+        | Verified receipt ->
+            [ "verified"
+              receipt.MergeSha
+              receipt.DefaultBranch
+              yield!
+                  receipt.Runs
+                  |> List.sortBy (fun run -> run.Id, run.Attempt)
+                  |> List.collect (fun run ->
+                      [ string run.Id
+                        string run.Attempt
+                        run.Workflow
+                        run.Event
+                        run.Branch
+                        run.Sha
+                        run.Status
+                        run.Conclusion
+                        run.Url ]) ]
+            |> String.concat "\n"
 
-    let completionFacts (snapshot: Snapshot) =
+    let private nextWithPostMergeVerification postMergeVerification (snapshot: Snapshot) stage action =
+        let token = freshnessToken snapshot.Freshness
+        let actionKey =
+            [ token; string stage; string action; postMergeVerificationToken postMergeVerification ]
+            |> String.concat "\n"
+            |> digest
+        Next
+            { Stage = stage
+              Action = action
+              FreshnessToken = token
+              ActionKey = actionKey
+              PostMergeVerification = postMergeVerification }
+
+    let private next snapshot stage action =
+        nextWithPostMergeVerification NotObserved snapshot stage action
+
+    let completionFactsWithPostMergeVerification postMergeVerification (snapshot: Snapshot) =
         { HeadSha = snapshot.Freshness.HeadSha
           Merged = snapshot.Merged
           MergeReachable = snapshot.MergeReachable
+          PostMergeVerification = postMergeVerification
           IssueClosed = snapshot.IssueClosed
           BoardDone = snapshot.BoardDone
           ClaimReleased = snapshot.ClaimReleased
@@ -327,6 +392,9 @@ module Delivery =
           CleanupEligible = snapshot.CleanupEligible
           ObligationsDeclared = snapshot.ObligationsDeclared
           Obligations = snapshot.Obligations }
+
+    let completionFacts snapshot =
+        completionFactsWithPostMergeVerification NotObserved snapshot
 
     let decideCompletion (facts: CompletionFacts) =
         if not facts.Merged then
@@ -365,21 +433,48 @@ module Delivery =
                 | Some obligation -> CompletionDecision.VerifyOutstandingObligation obligation.Id
                 | None when not facts.MergeReachable ->
                     CompletionDecision.Refused "merged pull request is not reachable from the default branch"
-                | None when not facts.IssueClosed || not facts.BoardDone || not facts.ClaimReleased || facts.PendingWrites <> 0 ->
-                    CompletionDecision.ProjectCompletion
-                | None when not facts.CleanupEligible ->
-                    CompletionDecision.Refused "cleanup is not eligible before completion"
-                | None -> CompletionDecision.CleanupCompletedDelivery
+                | None ->
+                    match facts.PostMergeVerification with
+                    | NotObserved ->
+                        CompletionDecision.AwaitPostMergeVerification "no exact-merge default-branch execution has been observed"
+                    | Awaiting reason -> CompletionDecision.AwaitPostMergeVerification reason
+                    | Rejected reason -> CompletionDecision.Refused($"post-merge verification was rejected: %s{reason}")
+                    | Unreadable reason -> CompletionDecision.Refused($"post-merge verification is unreadable: %s{reason}")
+                    | Verified receipt when String.IsNullOrWhiteSpace receipt.MergeSha ->
+                        CompletionDecision.Refused "post-merge verification carries no merge SHA"
+                    | Verified receipt when String.IsNullOrWhiteSpace receipt.DefaultBranch ->
+                        CompletionDecision.Refused "post-merge verification carries no default branch"
+                    | Verified receipt when List.isEmpty receipt.Runs ->
+                        CompletionDecision.Refused "post-merge verification carries no successful execution runs"
+                    | Verified receipt when
+                        receipt.Runs
+                        |> List.exists (fun run ->
+                            run.Sha <> receipt.MergeSha
+                            || run.Branch <> receipt.DefaultBranch
+                            || run.Event <> "push"
+                            || run.Status <> "completed"
+                            || run.Conclusion <> "success") ->
+                        CompletionDecision.Refused "post-merge verification contains a run that is not an exact-merge successful default-branch push execution"
+                    | Verified _ when not facts.IssueClosed || not facts.BoardDone || not facts.ClaimReleased || facts.PendingWrites <> 0 ->
+                        CompletionDecision.ProjectCompletion
+                    | Verified _ when not facts.CleanupEligible ->
+                        CompletionDecision.Refused "cleanup is not eligible before completion"
+                    | Verified _ -> CompletionDecision.CleanupCompletedDelivery
 
     let private completionReceiptDigest (receipt: DeliveryCompletionReceipt) =
-        [ receipt.Item
-          string receipt.PullRequest
-          receipt.MergeSha
-          string receipt.MergeReachable
-          string receipt.PendingBoardWrites
-          receipt.FreshnessToken
-          receipt.ActionKey
-          receipt.CompletedAt.ToUniversalTime().ToString("O")
+        [ yield receipt.Item
+          yield string receipt.PullRequest
+          yield receipt.MergeSha
+          yield string receipt.MergeReachable
+          yield string receipt.PendingBoardWrites
+          yield receipt.FreshnessToken
+          yield receipt.ActionKey
+          yield receipt.CompletedAt.ToUniversalTime().ToString("O")
+          match receipt.PostMergeVerification with
+          | Some verification ->
+              yield "postMergeVerification"
+              yield postMergeVerificationToken (Verified verification)
+          | None -> ()
           yield!
               receipt.ObligationReceipts
               |> List.sortBy (fun obligation -> obligation.Id, obligation.Kind)
@@ -412,18 +507,24 @@ module Delivery =
                       Kind = obligation.Kind
                       Evidence = obligation.Evidence.Value
                       HeadSha = obligation.HeadSha })
-            let unsigned =
-                { Item = item
-                  PullRequest = pullRequest
-                  MergeSha = mergeSha
-                  MergeReachable = facts.MergeReachable
-                  ObligationReceipts = obligations
-                  PendingBoardWrites = facts.PendingWrites
-                  FreshnessToken = freshnessToken
-                  ActionKey = actionKey
-                  CompletedAt = completedAt
-                  Digest = "" }
-            Ok { unsigned with Digest = completionReceiptDigest unsigned }
+            match facts.PostMergeVerification with
+            | Verified verification when verification.MergeSha = mergeSha ->
+                let unsigned =
+                    { Item = item
+                      PullRequest = pullRequest
+                      MergeSha = mergeSha
+                      MergeReachable = facts.MergeReachable
+                      ObligationReceipts = obligations
+                      PostMergeVerification = Some verification
+                      PendingBoardWrites = facts.PendingWrites
+                      FreshnessToken = freshnessToken
+                      ActionKey = actionKey
+                      CompletedAt = completedAt
+                      Digest = "" }
+                Ok { unsigned with Digest = completionReceiptDigest unsigned }
+            | Verified verification ->
+                Error [ $"post-merge verification is for %s{verification.MergeSha}, not completion merge %s{mergeSha}" ]
+            | _ -> Error [ "post-merge verification is required to mint a completion receipt" ]
         | [], decision ->
             Error [ $"completion receipt is not authorized by decision %A{decision}" ]
 
@@ -433,6 +534,25 @@ module Delivery =
               if receipt.PullRequest <= 0 then yield "pull request must be positive"
               if String.IsNullOrWhiteSpace receipt.MergeSha then yield "merge SHA is required"
               if not receipt.MergeReachable then yield "merge is not reachable"
+              match receipt.PostMergeVerification with
+              | Some verification when verification.MergeSha <> receipt.MergeSha ->
+                  yield "post-merge verification merge SHA does not match the completion merge SHA"
+              | Some verification ->
+                  match decideCompletion
+                      { HeadSha = receipt.MergeSha
+                        Merged = true
+                        MergeReachable = true
+                        PostMergeVerification = Verified verification
+                        IssueClosed = false
+                        BoardDone = false
+                        ClaimReleased = false
+                        PendingWrites = 0
+                        CleanupEligible = false
+                        ObligationsDeclared = true
+                        Obligations = [] } with
+                  | CompletionDecision.ProjectCompletion -> ()
+                  | decision -> yield $"post-merge verification is invalid: %A{decision}"
+              | None -> () // Legacy v1 receipts remain replay authority; new minting always writes Some.
               if receipt.PendingBoardWrites <> 0 then yield "pending board writes must be zero"
               if String.IsNullOrWhiteSpace receipt.FreshnessToken then yield "freshness token is required"
               if String.IsNullOrWhiteSpace receipt.ActionKey then yield "action key is required"
@@ -463,12 +583,31 @@ module Delivery =
                    headSha = obligation.HeadSha |})
             |> List.toArray
         let payload =
+            let postMergeVerification =
+                receipt.PostMergeVerification
+                |> Option.map (fun verification ->
+                    {| mergeSha = verification.MergeSha
+                       defaultBranch = verification.DefaultBranch
+                       runs =
+                        verification.Runs
+                        |> List.map (fun run ->
+                            {| id = run.Id
+                               attempt = run.Attempt
+                               workflow = run.Workflow
+                               event = run.Event
+                               branch = run.Branch
+                               sha = run.Sha
+                               status = run.Status
+                               conclusion = run.Conclusion
+                               url = run.Url |})
+                        |> List.toArray |})
             {| schema = "fsgg.coord.delivery-completion/v1"
                item = receipt.Item
                pullRequest = receipt.PullRequest
                mergeSha = receipt.MergeSha
                mergeReachable = receipt.MergeReachable
                obligationReceipts = obligations
+               postMergeVerification = postMergeVerification
                pendingBoardWrites = receipt.PendingBoardWrites
                freshnessToken = receipt.FreshnessToken
                actionKey = receipt.ActionKey
@@ -511,12 +650,39 @@ module Delivery =
                           Evidence = requiredString "evidence" obligation
                           HeadSha = requiredString "headSha" obligation })
                     |> Seq.toList
+                let postMergeVerification =
+                    match root.TryGetProperty "postMergeVerification" with
+                    | false, _ -> None
+                    | true, value when value.ValueKind = JsonValueKind.Null -> None
+                    | true, value when value.ValueKind = JsonValueKind.Object ->
+                        let runsElement = value.GetProperty "runs"
+                        if runsElement.ValueKind <> JsonValueKind.Array then
+                            invalidArg "postMergeVerification.runs" "must be an array"
+                        let runs =
+                            runsElement.EnumerateArray()
+                            |> Seq.map (fun run ->
+                                { Id = run.GetProperty("id").GetInt64()
+                                  Attempt = requiredInt "attempt" run
+                                  Workflow = requiredString "workflow" run
+                                  Event = requiredString "event" run
+                                  Branch = requiredString "branch" run
+                                  Sha = requiredString "sha" run
+                                  Status = requiredString "status" run
+                                  Conclusion = requiredString "conclusion" run
+                                  Url = requiredString "url" run })
+                            |> Seq.toList
+                        Some
+                            { MergeSha = requiredString "mergeSha" value
+                              DefaultBranch = requiredString "defaultBranch" value
+                              Runs = runs }
+                    | _ -> invalidArg "postMergeVerification" "must be an object or null"
                 let receipt: DeliveryCompletionReceipt =
                     { Item = requiredString "item" root
                       PullRequest = requiredInt "pullRequest" root
                       MergeSha = requiredString "mergeSha" root
                       MergeReachable = requiredBool "mergeReachable" root
                       ObligationReceipts = obligations
+                      PostMergeVerification = postMergeVerification
                       PendingBoardWrites = requiredInt "pendingBoardWrites" root
                       FreshnessToken = requiredString "freshnessToken" root
                       ActionKey = requiredString "actionKey" root
@@ -670,7 +836,7 @@ module Delivery =
               DiffAuditHead = receipt.DiffAuditHead }
         { snapshot with Review = Some chain; ReviewProblem = None }
 
-    let inspect snapshot =
+    let inspectWithPostMergeVerification postMergeVerification snapshot =
         match validate snapshot with
         | missingFacts when not (List.isEmpty missingFacts) ->
             let names = String.concat ", " missingFacts
@@ -681,13 +847,17 @@ module Delivery =
             match snapshot.ParkedReason with
             | Some reason when not (String.IsNullOrWhiteSpace reason) -> next snapshot Parked (RouteFollowUp reason)
             | _ when snapshot.Merged ->
-                match decideCompletion (completionFacts snapshot) with
+                match decideCompletion (completionFactsWithPostMergeVerification postMergeVerification snapshot) with
                 | CompletionDecision.NotMerged -> NoVerdict "completion facts do not describe a merged pull request"
                 | CompletionDecision.Refused reason -> NoVerdict reason
                 | CompletionDecision.VerifyOutstandingObligation name ->
-                    next snapshot MergedAwaitingObligations (VerifyObligation name)
-                | CompletionDecision.ProjectCompletion -> next snapshot MergedAwaitingObligations Complete
-                | CompletionDecision.CleanupCompletedDelivery -> next snapshot Done CleanupWorktree
+                    nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (VerifyObligation name)
+                | CompletionDecision.AwaitPostMergeVerification reason ->
+                    nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (AwaitPostMergeVerification reason)
+                | CompletionDecision.ProjectCompletion ->
+                    nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
+                | CompletionDecision.CleanupCompletedDelivery ->
+                    nextWithPostMergeVerification postMergeVerification snapshot Done CleanupWorktree
             | _ when Option.isNone snapshot.Freshness.PullRequest ->
                 next snapshot Implementation ContinueImplementation
             | _ ->
@@ -710,10 +880,16 @@ module Delivery =
                         next snapshot Landable AwaitLandability
                     | None -> next snapshot Accepted GuardedLand
 
-    let advance freshnessToken actionKey snapshot =
-        match inspect snapshot with
+    let inspect snapshot =
+        inspectWithPostMergeVerification NotObserved snapshot
+
+    let advanceWithPostMergeVerification postMergeVerification freshnessToken actionKey snapshot =
+        match inspectWithPostMergeVerification postMergeVerification snapshot with
         | Next transition when transition.FreshnessToken = freshnessToken && transition.ActionKey = actionKey ->
             Next transition
         | Next _ ->
             NoVerdict "delivery receipt is stale or does not authorize this transition"
         | NoVerdict reason -> NoVerdict reason
+
+    let advance freshnessToken actionKey snapshot =
+        advanceWithPostMergeVerification NotObserved freshnessToken actionKey snapshot

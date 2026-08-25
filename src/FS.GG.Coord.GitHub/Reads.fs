@@ -1802,6 +1802,154 @@ module Reads =
                     |> Some
                 | _ -> None
 
+    /// Observe the complete Actions-run inventory for a merged pull request's exact merge SHA and
+    /// classify only successful `push` executions on the repository default branch as verification.
+    let postMergeVerification
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<Delivery.PostMergeVerification> =
+
+        let prSubject = $"%s{owner}/%s{repo} PR #%d{pr} post-merge facts"
+        let repoSubject = $"%s{owner}/%s{repo} default branch"
+
+        let readObject subject path =
+            conditionalGet transport subject path [] Single
+            |> Result.bind (fun body -> parse subject body)
+
+        match readObject prSubject $"repos/%s{owner}/%s{repo}/pulls/%d{pr}",
+              readObject repoSubject $"repos/%s{owner}/%s{repo}" with
+        | Error error, _
+        | _, Error error -> Error error
+        | Ok prDoc, Ok repoDoc ->
+            use prDoc = prDoc
+            use repoDoc = repoDoc
+            let prRoot = prDoc.RootElement
+            let repoRoot = repoDoc.RootElement
+            let merged =
+                match prRoot.TryGetProperty "merged" with
+                | true, value when value.ValueKind = JsonValueKind.True -> true
+                | _ -> false
+            let mergeSha = str prRoot "merge_commit_sha"
+            let baseBranch =
+                match prRoot.TryGetProperty "base" with
+                | true, value when value.ValueKind = JsonValueKind.Object -> str value "ref"
+                | _ -> None
+            let defaultBranch = str repoRoot "default_branch"
+
+            match merged, mergeSha, baseBranch, defaultBranch with
+            | false, _, _, _ -> Ok(Delivery.Awaiting "the pull request has not merged")
+            | _, None, _, _ -> Error(Malformed(prSubject, "the merged PR carried no merge_commit_sha"))
+            | _, _, None, _ -> Error(Malformed(prSubject, "the merged PR carried no base.ref"))
+            | _, _, _, None -> Error(Malformed(repoSubject, "the repository carried no default_branch"))
+            | true, Some mergeSha, Some baseBranch, Some defaultBranch when baseBranch <> defaultBranch ->
+                Ok(Delivery.Rejected($"merged PR base '%s{baseBranch}' is not repository default branch '%s{defaultBranch}'"))
+            | true, Some mergeSha, Some _, Some defaultBranch ->
+                let runsSubject = $"%s{owner}/%s{repo} post-merge runs @ %s{mergeSha}"
+                match
+                    conditionalGet
+                        transport
+                        runsSubject
+                        $"repos/%s{owner}/%s{repo}/actions/runs"
+                        [ "head_sha", mergeSha; "per_page", string CollectionPageSize ]
+                        (Page(CollectionPageSize, Some "workflow_runs"))
+                with
+                | Error error -> Error error
+                | Ok body ->
+                    match parse runsSubject body with
+                    | Error error -> Error error
+                    | Ok runsDoc ->
+                        use runsDoc = runsDoc
+                        let root = runsDoc.RootElement
+                        match root.TryGetProperty "total_count", root.TryGetProperty "workflow_runs" with
+                        | (true, total), (true, runs)
+                            when total.ValueKind = JsonValueKind.Number && runs.ValueKind = JsonValueKind.Array ->
+                            let expected = total.GetInt32()
+                            let observed = runs.GetArrayLength()
+                            if expected <> observed then
+                                Error(
+                                    Malformed(
+                                        runsSubject,
+                                        $"workflow run inventory reports %d{expected} entries but returned %d{observed}; incomplete evidence cannot verify completion"
+                                    )
+                                )
+                            else
+                                let parseRun index (run: JsonElement) =
+                                    let requiredString name =
+                                        match str run name with
+                                        | Some value when not (String.IsNullOrWhiteSpace value) -> Ok value
+                                        | _ -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+                                    let requiredInt64 name =
+                                        match int64Of run name with
+                                        | Some value -> Ok value
+                                        | None -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+                                    let requiredInt name =
+                                        match intOf run name with
+                                        | Some value -> Ok value
+                                        | None -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+
+                                    match requiredInt64 "id", requiredInt "run_attempt", requiredString "path",
+                                          requiredString "event", requiredString "head_branch", requiredString "head_sha",
+                                          requiredString "status", requiredString "html_url" with
+                                    | Ok id, Ok attempt, Ok workflow, Ok event, Ok branch, Ok sha, Ok status, Ok url ->
+                                        Ok
+                                            ({ Id = id
+                                               Attempt = attempt
+                                               Workflow = workflow
+                                               Event = event
+                                               Branch = branch
+                                               Sha = sha
+                                               Status = status
+                                               Conclusion = str run "conclusion" |> Option.defaultValue ""
+                                               Url = url }: Delivery.PostMergeRun)
+                                    | results ->
+                                        let firstError =
+                                            [ match results with
+                                              | Error error, _, _, _, _, _, _, _ -> yield error
+                                              | _, Error error, _, _, _, _, _, _ -> yield error
+                                              | _, _, Error error, _, _, _, _, _ -> yield error
+                                              | _, _, _, Error error, _, _, _, _ -> yield error
+                                              | _, _, _, _, Error error, _, _, _ -> yield error
+                                              | _, _, _, _, _, Error error, _, _ -> yield error
+                                              | _, _, _, _, _, _, Error error, _ -> yield error
+                                              | _, _, _, _, _, _, _, Error error -> yield error
+                                              | _ -> () ]
+                                            |> List.head
+                                        Error firstError
+
+                                let parsed =
+                                    runs.EnumerateArray()
+                                    |> Seq.mapi parseRun
+                                    |> Seq.fold (fun state next ->
+                                        state |> Result.bind (fun collected -> next |> Result.map (fun value -> value :: collected))) (Ok [])
+                                    |> Result.map List.rev
+
+                                parsed
+                                |> Result.map (fun allRuns ->
+                                    let matching =
+                                        allRuns
+                                        |> List.filter (fun run ->
+                                            run.Event = "push"
+                                            && run.Branch = defaultBranch
+                                            && run.Sha = mergeSha)
+                                    if List.isEmpty matching then
+                                        Delivery.Awaiting "no exact-merge default-branch push execution has registered"
+                                    elif matching |> List.exists (fun run -> run.Status <> "completed") then
+                                        Delivery.Awaiting "an exact-merge default-branch push execution is still running"
+                                    else
+                                        match matching |> List.tryFind (fun run -> run.Conclusion <> "success") with
+                                        | Some run ->
+                                            Delivery.Rejected(
+                                                $"workflow run %d{run.Id} completed with conclusion '%s{run.Conclusion}'"
+                                            )
+                                        | None ->
+                                            Delivery.Verified
+                                                { MergeSha = mergeSha
+                                                  DefaultBranch = defaultBranch
+                                                  Runs = matching |> List.sortBy (fun run -> run.Id, run.Attempt) })
+                        | _ -> Error(Malformed(runsSubject, "the Actions response carried no numeric total_count and workflow_runs array"))
+
     // The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
     let private checkRuns
         (transport: IGitHubTransport)

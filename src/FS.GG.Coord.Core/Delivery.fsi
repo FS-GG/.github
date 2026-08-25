@@ -123,12 +123,39 @@ module Delivery =
           Obligations: Obligation list
           ParkedReason: string option }
 
+    /// One completed Actions execution observed on the repository default branch at the exact merge SHA.
+    type PostMergeRun =
+        { Id: int64
+          Attempt: int
+          Workflow: string
+          Event: string
+          Branch: string
+          Sha: string
+          Status: string
+          Conclusion: string
+          Url: string }
+
+    /// Immutable complete-set evidence for the post-merge execution gate.
+    type PostMergeVerificationReceipt =
+        { MergeSha: string
+          DefaultBranch: string
+          Runs: PostMergeRun list }
+
+    /// Merged is deliberately not Verified. Every non-verified arm remains visible and retryable.
+    type PostMergeVerification =
+        | NotObserved
+        | Awaiting of reason: string
+        | Rejected of reason: string
+        | Unreadable of reason: string
+        | Verified of PostMergeVerificationReceipt
+
     /// Complete facts for deciding whether a merged delivery must verify an obligation, project
     /// completion, refuse, or may proceed to cleanup.
     type CompletionFacts =
         { HeadSha: string
           Merged: bool
           MergeReachable: bool
+          PostMergeVerification: PostMergeVerification
           IssueClosed: bool
           BoardDone: bool
           ClaimReleased: bool
@@ -142,6 +169,7 @@ module Delivery =
         | NotMerged
         | Refused of reason: string
         | VerifyOutstandingObligation of name: string
+        | AwaitPostMergeVerification of reason: string
         | ProjectCompletion
         | CleanupCompletedDelivery
 
@@ -158,6 +186,7 @@ module Delivery =
           MergeSha: string
           MergeReachable: bool
           ObligationReceipts: VerifiedObligationReceipt list
+          PostMergeVerification: PostMergeVerificationReceipt option
           PendingBoardWrites: int
           FreshnessToken: string
           ActionKey: string
@@ -180,6 +209,9 @@ module Delivery =
 
     /// Select only the completion facts from the wider delivery snapshot.
     val completionFacts: Snapshot -> CompletionFacts
+
+    /// Select completion facts while carrying the independently observed exact-merge verification state.
+    val completionFactsWithPostMergeVerification: PostMergeVerification -> Snapshot -> CompletionFacts
 
     /// One completion authority shared by lifecycle projection and live writer admission.
     val decideCompletion: CompletionFacts -> CompletionDecision
@@ -238,6 +270,7 @@ module Delivery =
         | AwaitLandability
         | GuardedLand
         | VerifyObligation of name: string
+        | AwaitPostMergeVerification of reason: string
         | Complete
         | CleanupWorktree
         | RouteFollowUp of reason: string
@@ -247,7 +280,8 @@ module Delivery =
         { Stage: Stage
           Action: Action
           FreshnessToken: string
-          ActionKey: string }
+          ActionKey: string
+          PostMergeVerification: PostMergeVerification }
 
     type Verdict =
         | Next of Transition
@@ -257,6 +291,17 @@ module Delivery =
     /// PR head, board state, or declared touch-set makes the receipt unusable rather than permitting a
     /// write against newer facts.
     val advance: freshnessToken: string -> actionKey: string -> Snapshot -> Verdict
+
+    /// Advance the transition against the same independently observed post-merge verification fact.
+    val advanceWithPostMergeVerification:
+        postMergeVerification: PostMergeVerification ->
+        freshnessToken: string ->
+        actionKey: string ->
+        Snapshot ->
+        Verdict
+
+    /// Inspect delivery with an exact-merge verification observation supplied by the IO boundary.
+    val inspectWithPostMergeVerification: PostMergeVerification -> Snapshot -> Verdict
 
     /// Hash the complete mutation subject. Callers must present this token when advancing it.
     val freshnessToken: Freshness -> string

@@ -417,9 +417,9 @@ module LiveHandlers =
                             | TouchSet.Undeclared -> Delivery.Undeclared
                             | Unreadable reason -> Delivery.Unread reason
 
-                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
+                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list * Delivery.PostMergeVerification, Errors.IoError> =
                             match opts.Pr with
-                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, None, false, false, false, [])
+                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, None, false, false, false, [], Delivery.NotObserved)
                             | Some pr ->
                                 match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
                                       Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
@@ -443,7 +443,14 @@ module LiveHandlers =
                                     let obligations = DeliveryApplication.obligationsFromComments head reviewComments
                                     let obligationsDeclared = Result.isOk obligations
                                     let obligations = obligations |> Result.defaultValue []
-                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, reviewProblem, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
+                                    let postMergeVerification =
+                                        if landable = PrMerged then
+                                            match Reads.postMergeVerification ctx.Transport target.Owner target.Repo pr with
+                                            | Ok verification -> verification
+                                            | Error error -> Delivery.Unreadable(Errors.explain error)
+                                        else
+                                            Delivery.NotObserved
+                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, reviewProblem, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations, postMergeVerification)
                                 | Error error, _, _, _, _, _
                                 | _, Error error, _, _, _, _
                                 | _, _, _, Error error, _, _
@@ -464,14 +471,14 @@ module LiveHandlers =
                         // `--apply` invocation.
                         let branchAndPr =
                             branchAndPr
-                            |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
+                            |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification) ->
                                 ensureAuthorization ctx target marker pr head merged
                                 |> Result.map (fun () ->
-                                    (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations)))
+                                    (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification)))
 
                         match branchAndPr with
                         | Error error -> fail error
-                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
+                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification) ->
                             let facts: Delivery.Snapshot =
                                 { Freshness =
                                     { ItemRef = target.Short
@@ -504,8 +511,10 @@ module LiveHandlers =
                                   Obligations = obligations
                                   ParkedReason = None }
                             let completionDecision =
-                                facts |> Delivery.completionFacts |> Delivery.decideCompletion
-                            match Delivery.inspect facts, completionDecision, opts.Apply with
+                                facts
+                                |> Delivery.completionFactsWithPostMergeVerification postMergeVerification
+                                |> Delivery.decideCompletion
+                            match Delivery.inspectWithPostMergeVerification postMergeVerification facts, completionDecision, opts.Apply with
                             | Delivery.Next transition, _, true when transition.Action = Delivery.GuardedLand ->
                                 // A delivery receipt authorizes only the exact claim generation that was
                                 // inspected.  Re-read the winning marker immediately before the REST
@@ -564,7 +573,7 @@ module LiveHandlers =
                             | Delivery.Next transition, _, true ->
                                 eprint $"fsgg-coord-engine: delivery --apply is refused: the sole fresh action is %A{transition.Action}, not guarded landing."
                                 ExitNoVerdict
-                            | _ -> DeliveryApplication.render opts facts
+                            | _ -> DeliveryApplication.renderWithPostMergeVerification opts postMergeVerification facts
 
     /// The live `review <ref> --pr N` adapter (.github#2175) — matches `delivery <ref> [--pr N]`'s shape
     /// rather than inventing a parallel spelling, and reuses the SAME live reads that function already
@@ -1826,7 +1835,8 @@ module LiveHandlers =
                                             + String.concat "; " errors
                                         )
                                 match
-                                    Delivery.advance
+                                    Delivery.advanceWithPostMergeVerification
+                                        authorityTransition.PostMergeVerification
                                         authorityTransition.FreshnessToken
                                         authorityTransition.ActionKey
                                         authorityFacts
@@ -1840,7 +1850,9 @@ module LiveHandlers =
                                             DateTimeOffset.UtcNow
                                             current.FreshnessToken
                                             current.ActionKey
-                                            (Delivery.completionFacts authorityFacts)
+                                            (Delivery.completionFactsWithPostMergeVerification
+                                                authorityTransition.PostMergeVerification
+                                                authorityFacts)
                                     with
                                     | Error errors ->
                                         failwith(

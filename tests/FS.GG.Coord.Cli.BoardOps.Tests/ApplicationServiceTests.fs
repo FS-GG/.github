@@ -2315,6 +2315,12 @@ module ApplicationServiceTests =
             { HeadSha = "head"
               Merged = true
               MergeReachable = true
+              PostMergeVerification =
+                Delivery.Verified
+                    { MergeSha = $"merge-%d{number}"; DefaultBranch = "main"
+                      Runs =
+                        [ { Id = int64 number; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
+                            Sha = $"merge-%d{number}"; Status = "completed"; Conclusion = "success"; Url = $"https://run/%d{number}" } ] }
               IssueClosed = true
               BoardDone = false
               ClaimReleased = false
@@ -3525,6 +3531,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             { HeadSha = "head"
               Merged = true
               MergeReachable = true
+              PostMergeVerification =
+                Delivery.Verified
+                    { MergeSha = "merge-sha"; DefaultBranch = "main"
+                      Runs =
+                        [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
+                            Sha = "merge-sha"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
               IssueClosed = true
               BoardDone = false
               ClaimReleased = false

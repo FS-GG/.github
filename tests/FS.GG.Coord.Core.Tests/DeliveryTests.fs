@@ -51,6 +51,27 @@ module DeliveryTests =
           Obligations = []
           ParkedReason = None }
 
+    let verified mergeSha =
+        Delivery.Verified
+            { MergeSha = mergeSha
+              DefaultBranch = "main"
+              Runs =
+                [ { Id = 2905L
+                    Attempt = 1
+                    Workflow = "CI"
+                    Event = "push"
+                    Branch = "main"
+                    Sha = mergeSha
+                    Status = "completed"
+                    Conclusion = "success"
+                    Url = "https://github.example/runs/2905" } ] }
+
+    let inspectVerified facts =
+        Delivery.inspectWithPostMergeVerification (verified "merge-sha") facts
+
+    let completionFactsVerified facts =
+        Delivery.completionFactsWithPostMergeVerification (verified "merge-sha") facts
+
     let transition expectedStage expectedAction result =
         match result with
         | Delivery.Next value ->
@@ -125,7 +146,64 @@ module DeliveryTests =
                 Merged = true
                 MergeReachable = true
                 IssueClosed = false }
-        transition Delivery.MergedAwaitingObligations Delivery.Complete (Delivery.inspect awaitingStamp)
+        transition Delivery.MergedAwaitingObligations Delivery.Complete (inspectVerified awaitingStamp)
+
+    [<Fact>]
+    let ``#2905 PR green and merged cannot complete before an exact default-branch run then can`` () =
+        let merged =
+            { snapshot "pr-head" with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = false }
+
+        transition
+            Delivery.MergedAwaitingObligations
+            (Delivery.Action.AwaitPostMergeVerification "no exact-merge default-branch execution has been observed")
+            (Delivery.inspect merged)
+
+        transition
+            Delivery.MergedAwaitingObligations
+            Delivery.Complete
+            (Delivery.inspectWithPostMergeVerification (verified "merge-sha") merged)
+
+    [<Fact>]
+    let ``#2905 red and unreadable post-merge observations remain visible and recoverable`` () =
+        let merged = { snapshot "pr-head" with Merged = true; MergeReachable = true }
+
+        for verification, expected in
+            [ Delivery.Rejected "CI failed", "CI failed"
+              Delivery.Unreadable "Actions API timed out", "Actions API timed out" ] do
+            match Delivery.inspectWithPostMergeVerification verification merged with
+            | Delivery.Next transition ->
+                Assert.Equal(Delivery.MergedAwaitingObligations, transition.Stage)
+                match transition.Action with
+                | Delivery.Action.AwaitPostMergeVerification reason -> Assert.Contains(expected, reason)
+                | action -> failwithf "expected visible verification wait, got %A" action
+            | Delivery.NoVerdict reason -> Assert.Contains(expected, reason)
+
+        transition
+            Delivery.MergedAwaitingObligations
+            Delivery.Complete
+            (Delivery.inspectWithPostMergeVerification (verified "merge-sha") merged)
+
+    [<Fact>]
+    let ``#2905 exact-merge completion authority is resumable and idempotent`` () =
+        let merged = { snapshot "pr-head" with Merged = true; MergeReachable = true }
+        match Delivery.inspectWithPostMergeVerification (verified "merge-sha") merged with
+        | Delivery.Next receipt ->
+            for _ in 1..2 do
+                match
+                    Delivery.advanceWithPostMergeVerification
+                        receipt.PostMergeVerification
+                        receipt.FreshnessToken
+                        receipt.ActionKey
+                        merged
+                with
+                | Delivery.Next replay ->
+                    Assert.Equal(Delivery.Complete, replay.Action)
+                    Assert.Equal(receipt.ActionKey, replay.ActionKey)
+                | verdict -> failwithf "expected idempotent replay, got %A" verdict
+        | verdict -> failwithf "expected completion authority, got %A" verdict
 
     [<Fact>]
     let ``complete delivery decision owns obligations reachability projections and cleanup`` () =
@@ -139,7 +217,7 @@ module DeliveryTests =
                 PendingWrites = 0
                 CleanupEligible = true }
 
-        let decide facts = facts |> Delivery.completionFacts |> Delivery.decideCompletion
+        let decide facts = facts |> completionFactsVerified |> Delivery.decideCompletion
         Assert.Equal(Delivery.CompletionDecision.NotMerged, decide (snapshot "head-a"))
 
         let pendingObligation =
@@ -171,7 +249,7 @@ module DeliveryTests =
               { completed with ClaimReleased = false; CleanupEligible = false }
               { completed with PendingWrites = 1; CleanupEligible = false } ] do
             Assert.Equal(Delivery.CompletionDecision.ProjectCompletion, decide incomplete)
-            transition Delivery.MergedAwaitingObligations Delivery.Complete (Delivery.inspect incomplete)
+            transition Delivery.MergedAwaitingObligations Delivery.Complete (inspectVerified incomplete)
 
         let cleanupIneligible = { completed with CleanupEligible = false }
         Assert.Equal(
@@ -179,7 +257,7 @@ module DeliveryTests =
             decide cleanupIneligible
         )
         Assert.Equal(Delivery.CompletionDecision.CleanupCompletedDelivery, decide completed)
-        transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect completed)
+        transition Delivery.Done Delivery.CleanupWorktree (inspectVerified completed)
 
     [<Fact>]
     let ``bounded delivery completion model keeps reducer projection and writer admission identical`` () =
@@ -201,6 +279,7 @@ module DeliveryTests =
             | Delivery.CompletionDecision.NotMerged -> "notMerged"
             | Delivery.CompletionDecision.Refused _ -> "refused"
             | Delivery.CompletionDecision.VerifyOutstandingObligation _ -> "verify"
+            | Delivery.CompletionDecision.AwaitPostMergeVerification _ -> "awaitPostMergeVerification"
             | Delivery.CompletionDecision.ProjectCompletion -> "project"
             | Delivery.CompletionDecision.CleanupCompletedDelivery -> "cleanup"
         let reducerClass = function
@@ -233,7 +312,7 @@ module DeliveryTests =
                                             ObligationsDeclared = declared
                                             Obligations = obligations }
                                     let decision =
-                                        candidate |> Delivery.completionFacts |> Delivery.decideCompletion
+                                        candidate |> completionFactsVerified |> Delivery.decideCompletion
                                     let expected =
                                         match obligationCase with
                                         | "absent"
@@ -248,7 +327,7 @@ module DeliveryTests =
                                     let context =
                                         $"obligations=%s{obligationCase}; reachable=%b{reachable}; issueClosed=%b{issueClosed}; boardDone=%b{boardDone}; claimReleased=%b{claimReleased}; pending=%d{pendingWrites}; cleanup=%b{cleanupEligible}"
                                     Assert.True(decisionClass decision = expected, context)
-                                    Assert.True(reducerClass (Delivery.inspect candidate) = expected, context)
+                                    Assert.True(reducerClass (inspectVerified candidate) = expected, context)
                                     Assert.Equal(
                                         (expected = "project"),
                                         (decision = Delivery.CompletionDecision.ProjectCompletion)
@@ -274,7 +353,7 @@ module DeliveryTests =
                 PendingWrites = 0
                 CleanupEligible = true
                 Obligations = [ obligation "kit" "head-a" (Some "https://receipt") true ] }
-        let decide facts = facts |> Delivery.completionFacts |> Delivery.decideCompletion
+        let decide facts = facts |> completionFactsVerified |> Delivery.decideCompletion
         let authoritative = decide terminal
         Assert.Equal(Delivery.CompletionDecision.CleanupCompletedDelivery, authoritative)
 
@@ -298,11 +377,11 @@ module DeliveryTests =
 
         let forked =
             { terminal with BoardDone = false; CleanupEligible = false }
-            |> Delivery.inspect
+            |> inspectVerified
         let action = function
             | Delivery.Next transition -> Some transition.Action
             | Delivery.NoVerdict _ -> None
-        Assert.NotEqual(action (Delivery.inspect terminal), action forked)
+        Assert.NotEqual(action (inspectVerified terminal), action forked)
 
     [<Fact>]
     let ``delivery completion receipt binds merge obligations pending writes and transition identity`` () =
@@ -325,7 +404,7 @@ module DeliveryTests =
                     [ verified "kit" "https://receipt/kit"
                       verified "tool" "https://receipt/tool" ] }
         let transition =
-            match Delivery.inspect candidate with
+            match inspectVerified candidate with
             | Delivery.Next value when value.Action = Delivery.Complete -> value
             | other -> failwithf "expected completion projection, got %A" other
         let completedAt = DateTimeOffset.Parse("2026-08-22T15:00:00Z")
@@ -337,7 +416,7 @@ module DeliveryTests =
                 completedAt
                 transition.FreshnessToken
                 transition.ActionKey
-                (Delivery.completionFacts candidate)
+                (completionFactsVerified candidate)
             |> Result.defaultWith (String.concat "; " >> failwith)
 
         Assert.Equal("merge-sha", receipt.MergeSha)
@@ -377,7 +456,7 @@ module DeliveryTests =
                 completedAt
                 transition.FreshnessToken
                 transition.ActionKey
-                (Delivery.completionFacts outstanding)
+                (completionFactsVerified outstanding)
             |> Result.isError
         )
 
@@ -424,7 +503,7 @@ module DeliveryTests =
                 BoardDone = true
                 ClaimReleased = true
                 CleanupEligible = false }
-        match Delivery.inspect incomplete with
+        match inspectVerified incomplete with
         | Delivery.NoVerdict reason -> Assert.Contains("cleanup is not eligible", reason)
         | result -> failwithf "expected no-verdict, got %A" result
 
@@ -439,7 +518,7 @@ module DeliveryTests =
                 ClaimReleased = true
                 PendingWrites = 0
                 CleanupEligible = true }
-        transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminal)
+        transition Delivery.Done Delivery.CleanupWorktree (inspectVerified terminal)
 
     // -- .github#2233: `Unreadable` no longer collapses into the same `[]` a genuine omission answers --
 
@@ -489,7 +568,7 @@ module DeliveryTests =
                 ClaimReleased = true
                 PendingWrites = 0
                 CleanupEligible = true }
-        transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalButUnread)
+        transition Delivery.Done Delivery.CleanupWorktree (inspectVerified terminalButUnread)
 
     [<Fact>]
     let ``#2233 a freshness token computed over Unread differs from one computed over Known empty`` () =
@@ -582,7 +661,7 @@ module DeliveryTests =
         for declaredPaths in [ Delivery.DeclaredNone; Delivery.Undeclared ] do
             let terminalSnapshot =
                 terminal { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } }
-            transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalSnapshot)
+            transition Delivery.Done Delivery.CleanupWorktree (inspectVerified terminalSnapshot)
 
     /// .github#2175 acceptance 10: `Review.AcceptedReceipt` folds into `Snapshot` as exactly the
     /// `Driver.ReviewChain` shape `Delivery` has always consumed — no `Stage`/`Action`/`Snapshot` type
