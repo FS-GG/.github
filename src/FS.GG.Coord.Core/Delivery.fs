@@ -451,10 +451,14 @@ module Delivery =
                         |> List.exists (fun run ->
                             run.Sha <> receipt.MergeSha
                             || run.Branch <> receipt.DefaultBranch
-                            || run.Event <> "push"
-                            || run.Status <> "completed"
-                            || run.Conclusion <> "success") ->
-                        CompletionDecision.Refused "post-merge verification contains a run that is not an exact-merge successful default-branch push execution"
+                            || run.Event <> "push") ->
+                        CompletionDecision.Refused "post-merge verification contains a run that is not an exact-merge default-branch push execution"
+                    | Verified receipt when
+                        receipt.Runs
+                        |> List.exists (fun run ->
+                            run.Status = "completed" && run.Conclusion = "success")
+                        |> not ->
+                        CompletionDecision.Refused "post-merge verification carries no successful completed execution run"
                     | Verified _ when not facts.IssueClosed || not facts.BoardDone || not facts.ClaimReleased || facts.PendingWrites <> 0 ->
                         CompletionDecision.ProjectCompletion
                     | Verified _ when not facts.CleanupEligible ->
@@ -631,6 +635,10 @@ module Delivery =
                     match element.TryGetProperty name with
                     | true, value when value.ValueKind = JsonValueKind.Number -> value.GetInt32()
                     | _ -> invalidArg name "must be an integer"
+                let stringValue (name: string) (element: JsonElement) =
+                    match element.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
+                    | _ -> invalidArg name "must be a string"
                 let requiredBool (name: string) (element: JsonElement) =
                     match element.TryGetProperty name with
                     | true, value when value.ValueKind = JsonValueKind.True -> true
@@ -668,7 +676,11 @@ module Delivery =
                                   Branch = requiredString "branch" run
                                   Sha = requiredString "sha" run
                                   Status = requiredString "status" run
-                                  Conclusion = requiredString "conclusion" run
+                                  // A retained matching run may still be pending, for which GitHub's
+                                  // conclusion is null and the adapter's stable wire value is "".
+                                  // It remains diagnostic receipt data; the separate validator requires
+                                  // at least one completed-success run before this receipt is authority.
+                                  Conclusion = stringValue "conclusion" run
                                   Url = requiredString "url" run })
                             |> Seq.toList
                         Some

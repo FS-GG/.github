@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "c305aab0e1cf8697ceb40abf5f607d9363dde06bcba11294ec052abf0c957fd0"
+        "value": "910fe1f6655761a529cd4b09d21978f776e0e468830d7e0ad93442dfa60f3be4"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "2b93bd66cf2207dd1a1644d6f243b6acf4abbe5e469df99fdab15b65786648d8"
+        "value": "ec54125f49965f3b14c3a3de4fe0ee86ccdd873bda98f4978c41181658566361"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396"
+        "value": "e125a5eb5345c6bbe3ea10b61c2fc732eaf50f109a6ac0e719dc0ab92717e04e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "9756369ac836404f4a1319788e2191f62f61f3dec48fd13ca5fbc4fd8f9c4784"
+        "value": "c89c534decad0139cf1a65dd9ec4ce48e425b270d8ba23ad993b2e00cf1f4f82"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409"
+        "value": "f0d561a6985da58ba453923ed3aa6bcfd64f2cc88093bf50417918bec1fcae2d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef"
+        "value": "c1905298c0cdd7b52c48f905804c8202a82cf2344e6306c988d6f994afd23ce4"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678"
+        "value": "f2a65c9b5320b1fb5e8cf29cc58758b8a9f3edcdac0dc00f1a53c57318fbe9a4"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -197,6 +197,7 @@
       ],
       "affectedSourceIds": [
         "AC-001",
+        "AC-002",
         "AC-003",
         "FR-002"
       ],

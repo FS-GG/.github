@@ -13,11 +13,11 @@ work:
 sources:
   - label: spec
     path: work/2905-post-merge-verification/spec.md
-    digest: 9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef
+    digest: c1905298c0cdd7b52c48f905804c8202a82cf2344e6306c988d6f994afd23ce4
     schemaVersion: 1
   - label: clarifications
     path: work/2905-post-merge-verification/clarifications.md
-    digest: 69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396
+    digest: e125a5eb5345c6bbe3ea10b61c2fc732eaf50f109a6ac0e719dc0ab92717e04e
     schemaVersion: 1
   - label: checklist
     path: work/2905-post-merge-verification/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2905-post-merge-verification/plan.md
-    digest: 44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409
+    digest: f0d561a6985da58ba453923ed3aa6bcfd64f2cc88093bf50417918bec1fcae2d
     schemaVersion: 1
 tasks:
   - id: T001
@@ -45,7 +45,7 @@ tasks:
     dependencies: []
     requirements: [FR-002]
     decisions: []
-    sourceIds: [AC-001, AC-003, FR-002]
+    sourceIds: [AC-001, AC-002, AC-003, FR-002]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV002]
   - id: T003
