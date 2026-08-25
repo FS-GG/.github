@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2968-new-sdd-workspace-0-10-1-release/plan.md
-    digest: 4b73a651e6a8782a8a2ac9c0485731e4100168efe96fb6a099bcdb6a4e14a102
+    digest: 5979f01d95a6d70405890418f2b0f1f23045d590c49c23f96059d81aa7666913
     schemaVersion: 1
 tasks:
   - id: T001
@@ -248,6 +248,16 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV022]
+  - id: T023
+    title: Record verification evidence VO-006
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-006]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV023]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

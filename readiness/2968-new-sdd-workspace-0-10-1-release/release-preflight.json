@@ -34,7 +34,7 @@
   },
   "package": {
     "id": "FS.GG.NewSddWorkspace",
-    "sha256": "130b127ee15659a4b0fff42cf1a6271bd993cb1a0590346b52f7768ea4f587d5",
+    "version": "0.10.1",
     "nuspecRepositoryCommit": "264725f374e3f05da46d7c3089462076a1f9bf7a"
   },
   "cleanLocalInstall": {

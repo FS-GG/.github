@@ -26,7 +26,7 @@ Prose status: planned
 - Produce local preparation evidence now. Model tag creation, publishing, served-feed comparison, install proof, and registry reconciliation as explicit host/post-merge obligations rather than synthetic passes.
 
 ## Plan Decisions
-- PD-001 [DEC-001] [AC-001] [FR-001] complete: Check the exact source commit, evaluated `Version`, self-test, locked Release build, and package metadata; record immutable command-produced results.
+- PD-001 [DEC-001] [AC-001] [FR-001] complete: Check the exact source commit, evaluated `Version`, self-test, locked Release build, and package metadata; wire the refusal into the matching hosted NewSdd self-test job and record reproducible command-produced results.
 - PD-002 [DEC-002] [AC-002] [FR-002] complete: Leave tag/publish authority to the host and declare one publication obligation bound to the exact source and package hash.
 - PD-003 [DEC-003] [AC-003] [FR-003] complete: Require both feed downloads, canonical archive comparison excluding `.signature.p7s`, nuspec commit verification, and a clean isolated global-tool install/version invocation.
 - PD-004 [DEC-004] [AC-004] [FR-004] complete: Exclude registry/docs from this PR and preserve a separately sequenced feed-derived reconciliation obligation after `.github#2941`.
@@ -42,6 +42,7 @@ Prose status: planned
 - VO-003 [PD-002] [PC-002] release: after host authorization, the immutable tag and release workflow bind to the frozen source and publish GitHub Packages before nuget.org without repacking.
 - VO-004 [PD-003] [PC-003] distribution: both served packages compare canonically equal and a clean isolated tool path installs and reports 0.10.1.
 - VO-005 [PD-004] registry: after `.github#2941`, feed-derived registry/changelog/compatibility reconciliation passes the registry and projection gates.
+- VO-006 [PD-001] [PC-001] gateEfficacy: The hosted NewSdd self-test job runs the one-release preflight when the exact 2968 work/readiness subject changes, byte-compares its deterministic receipt, and runs tracked controls proving version, source-diff, inventory, self-test, build, nuspec, tool-list, tool-help, subject-routing, unreadable-input, and empty-input refusals red.
 
 ## Performance Intent
 No performance intent is declared for this work item.

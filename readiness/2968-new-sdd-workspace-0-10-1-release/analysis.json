@@ -61,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "4b73a651e6a8782a8a2ac9c0485731e4100168efe96fb6a099bcdb6a4e14a102"
+        "value": "5979f01d95a6d70405890418f2b0f1f23045d590c49c23f96059d81aa7666913"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "1eaf7680be2881ff0dd26607dad3bfdf15dbf941fd9762e098ac082542ba1c19"
+        "value": "6e66067f609205b3d76c6ff788ce317db1dfa17ae55a8fde4da921bf165ab23f"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -330,6 +330,16 @@
     },
     {
       "id": "AR025",
+      "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/plan.md",
+      "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
+      "sourceId": "VO-006",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "AC-001",
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "AC-002",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "AC-003",
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "AC-004",
@@ -369,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/checklist.md",
       "sourceId": null,
@@ -379,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/plan.md",
       "sourceId": null,
@@ -389,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "FR-001",
@@ -399,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR033",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "FR-002",
@@ -409,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR034",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "FR-003",
@@ -419,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR035",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "FR-004",
@@ -429,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR036",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/clarifications.md",
       "sourceId": null,
@@ -439,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR037",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/spec.md",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": null,
@@ -449,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR038",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T005",
@@ -459,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR039",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T006",
@@ -469,7 +479,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR040",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T007",
@@ -479,7 +489,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR040",
+      "id": "AR041",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T008",
@@ -489,7 +499,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR041",
+      "id": "AR042",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T009",
@@ -499,7 +509,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR042",
+      "id": "AR043",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T010",
@@ -509,7 +519,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR043",
+      "id": "AR044",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T011",
@@ -519,7 +529,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR044",
+      "id": "AR045",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T012",
@@ -529,7 +539,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR045",
+      "id": "AR046",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T013",
@@ -539,7 +549,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR046",
+      "id": "AR047",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T014",
@@ -549,7 +559,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR047",
+      "id": "AR048",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T015",
@@ -559,7 +569,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR048",
+      "id": "AR049",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T016",
@@ -569,7 +579,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR049",
+      "id": "AR050",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T017",
@@ -579,7 +589,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR050",
+      "id": "AR051",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T018",
@@ -589,7 +599,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR051",
+      "id": "AR052",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T019",
@@ -599,7 +609,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR052",
+      "id": "AR053",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T020",
@@ -609,7 +619,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR053",
+      "id": "AR054",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T021",
@@ -619,10 +629,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR054",
+      "id": "AR055",
       "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
       "sourceId": "T022",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR056",
+      "sourcePath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
+      "targetPath": "work/2968-new-sdd-workspace-0-10-1-release/tasks.yml",
+      "sourceId": "T023",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -631,7 +651,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 54,
+    "readyCount": 56,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
