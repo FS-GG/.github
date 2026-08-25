@@ -80,7 +80,8 @@ if [[ -n "${FSTAR_DOTNET:-}" ]]; then
 
   (
     cd "$experiment_root/fsharp-smoke"
-    export DOTNET_ROOT="$(cd "$(dirname "$FSTAR_DOTNET")" && pwd)"
+    DOTNET_ROOT="$(cd "$(dirname "$FSTAR_DOTNET")" && pwd)"
+    export DOTNET_ROOT
     export DOTNET_MULTILEVEL_LOOKUP=0
     "$FSTAR_DOTNET" build \
       ExtractionSmoke.fsproj \
