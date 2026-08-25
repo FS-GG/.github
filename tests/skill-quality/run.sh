@@ -605,12 +605,12 @@ text = path.read_text()
 start = text.find("  - id: game-scene-adapter\n")
 if start < 0:
     raise SystemExit("fixture coherent-set producer missing")
-package = text.find('    package-version: "0.13.0"', start)
+package = text.find('    package-version: "0.14.0"', start)
 if package < 0:
     raise SystemExit("fixture coherent-set package version missing")
-path.write_text(text[:package] + text[package:].replace('    package-version: "0.13.0"', '    package-version: "0.13.1"', 1))
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.14.0"', '    package-version: "9.9.9"', 1))
 PY
-expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:0.13.1"
+expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:9.9.9"
 
 seed
 python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
