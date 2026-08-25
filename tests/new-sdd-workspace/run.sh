@@ -33,8 +33,10 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 echo "new-sdd-workspace parse fixture — building the CLI (Release)…"
 dotnet build "$PROJ" -c Release --nologo -v quiet 1>&2
 
-# Newest match wins, so a leftover older-TFM output dir can't feed a stale dll to the run below.
-DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -name new-sdd-workspace.dll 2>/dev/null | sort | tail -1)"
+# Newest *built artifact* wins by modification time. Lexical path order used to prefer a stale
+# `publish/` DLL over the just-built `net*/` DLL, which let the mutation controls compile a changed
+# subject and then execute yesterday's artifact — a false green in the guard that prevents false green.
+DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -type f -name new-sdd-workspace.dll -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
 [ -n "$DLL" ] && [ -f "$DLL" ] || { echo "::error::could not locate built new-sdd-workspace.dll under bin/Release"; exit 1; }
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
@@ -103,6 +105,12 @@ expect_err "--template with no following token needs a value" \
   "--template needs a value" -- "$TGT" P --template
 expect_err "an unknown --template is rejected before any scaffold" \
   "unknown template 'bogus'" -- "$TGT" P --template bogus
+expect_err "--lifecycle swallowing the next flag as its value is caught" \
+  "--lifecycle needs a value (got flag '--ref')" -- "$TGT" P --lifecycle --ref v1
+expect_err "--lifecycle with no following token needs a value" \
+  "--lifecycle needs a value" -- "$TGT" P --lifecycle
+expect_err "an unknown lifecycle is rejected before any scaffold" \
+  "unknown lifecycle 'bogus'" -- "$TGT" P --lifecycle bogus
 expect_err "a rendering profile is rejected for a non-rendering template" \
   "--profile is only supported by the rendering template" -- "$TGT" P --template console --profile game
 expect_err "fable-bindings requires its package closure" \
@@ -461,6 +469,11 @@ expect_execution() {
 }
 
 expect_execution "omitted --template keeps the rendering compatibility route" rendering "profile=game" --profile game
+expect_execution "omitted lifecycle forwards the Standard SDD default" rendering "lifecycle=sdd"
+expect_execution "explicit Standard SDD remains distinct" rendering "lifecycle=sdd" --lifecycle sdd
+expect_execution "explicit Typed SDD is forwarded unchanged" rendering "lifecycle=typed-sdd" --lifecycle typed-sdd
+expect_execution "explicit Freeform is forwarded unchanged" rendering "lifecycle=none" --lifecycle none
+expect_execution "legacy Spec Kit remains selectable and frozen" rendering "lifecycle=spec-kit" --lifecycle spec-kit
 expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
 expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
 expect_execution "fable-game routes to its provider and descriptor" fable-game "productName=Product" --template fable-game
@@ -512,6 +525,16 @@ if [ ! -e "$TGT" ]; then
   ok "hermetic: no accepted parse created the target dir (all stopped at preflight)"
 else
   bad "a valid parse scaffolded for real — the PATH scrub failed to hide fsgg-sdd" "found: $TGT"
+fi
+
+# The outer acceptance run also proves its own sensitivity. The child runs compile the real CLI
+# after changing one production expression at a time; the guard prevents recursive mutation runs.
+if [ -z "${FSGG_MUTATION_CHILD:-}" ]; then
+  if bash "$HERE/mutation-controls.sh"; then
+    ok "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+  else
+    bad "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+  fi
 fi
 
 echo "new-sdd-workspace parse fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

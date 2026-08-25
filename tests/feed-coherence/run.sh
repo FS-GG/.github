@@ -509,6 +509,80 @@ else bad "registry/dependencies.yml: the subject set is IDENTICAL to CONTRACT_PA
 fi
 
 echo
+echo "--- P4 Typed SDD registry contract and gate-inversion controls ---"
+# This is the release-specific acceptance guard: feed coherence proves package reality, while this
+# guard proves the additive P4 identities/default/vocabulary that a schema-valid YAML mutation could
+# otherwise change silently. Every negative case mutates a throwaway copy and must fail for its named
+# field, so a vacuous or wrong-subject failure cannot satisfy the control.
+p4_contract() {
+  python3 - "$1" <<'PY'
+import sys
+import yaml
+
+doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+rows = [row for row in doc.get("contracts", []) if row.get("id") == "fs-gg-ui-template"]
+if len(rows) != 1:
+    raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
+row = rows[0]
+expected = {
+    "version": "0.28.0",
+    "package-version": "0.28.0",
+    "package-tag": "fs-gg-ui-template/v0.28.0",
+}
+for key, value in expected.items():
+    if str(row.get(key)) != value:
+        raise SystemExit(f"P4 identity mismatch: {key}={row.get(key)!r}, expected {value!r}")
+floor = row.get("minimum-fsgg-sdd") or {}
+if str(floor.get("version")) != "1.4.0-preview.1":
+    raise SystemExit(f"P4 floor mismatch: {floor.get('version')!r}, expected '1.4.0-preview.1'")
+lifecycle = ((row.get("parameters") or {}).get("lifecycle") or {})
+if lifecycle.get("type") != "choice (spec-kit|sdd|typed-sdd|none)":
+    raise SystemExit(f"P4 lifecycle vocabulary mismatch: {lifecycle.get('type')!r}")
+if lifecycle.get("default") != "sdd":
+    raise SystemExit(f"P4 default mismatch: {lifecycle.get('default')!r}, expected 'sdd'")
+PY
+}
+
+p4_mutation() {
+  local name="$1" field="$2" value="$3" needle="$4"
+  local target="$WORK/p4-$name.yml" out rc=0
+  python3 - "$REPO_ROOT/registry/dependencies.yml" "$target" "$field" "$value" <<'PY'
+import sys
+import yaml
+
+src, target, field, value = sys.argv[1:5]
+doc = yaml.safe_load(open(src, encoding="utf-8"))
+row = next(row for row in doc["contracts"] if row.get("id") == "fs-gg-ui-template")
+if field in {"default", "type"}:
+    subject = row["parameters"]["lifecycle"]
+elif field == "floor":
+    subject, field = row["minimum-fsgg-sdd"], "version"
+else:
+    subject = row
+if str(subject.get(field)) == value:
+    raise SystemExit(f"vacuous P4 mutation: {field} is already {value!r}")
+subject[field] = value
+yaml.safe_dump(doc, open(target, "w", encoding="utf-8"), sort_keys=False)
+PY
+  out="$(p4_contract "$target" 2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ] && grep -qF "$needle" <<<"$out"; then
+    ok "P4 $name mutation makes the registry contract guard red"
+  else
+    bad "P4 $name mutation makes the registry contract guard red" "rc=$rc output=$out"
+  fi
+}
+
+if p4_contract "$REPO_ROOT/registry/dependencies.yml"; then
+  ok "P4 registry identities, lifecycle vocabulary, floor, and Standard SDD default agree"
+else
+  bad "P4 registry identities, lifecycle vocabulary, floor, and Standard SDD default agree"
+fi
+p4_mutation wrong-default default typed-sdd "P4 default mismatch"
+p4_mutation lifecycle-loss type 'choice (spec-kit|sdd|none)' "P4 lifecycle vocabulary mismatch"
+p4_mutation rendering-identity version 0.27.0 "P4 identity mismatch"
+p4_mutation orchestrator-floor floor 1.3.0-preview.3 "P4 floor mismatch"
+
+echo
 echo "--- CI guard on hand-authored prose (.github#2070 repair round 3): does the prose that names"
 echo "    fs-gg-workspace-template/game-skills versions still agree with the registry's corrected"
 echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two commits? ---"

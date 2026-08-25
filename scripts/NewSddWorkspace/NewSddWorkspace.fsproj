@@ -17,10 +17,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>new-sdd-workspace</ToolCommandName>
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
-    <Version>0.9.1</Version>
+    <Version>0.10.0</Version>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
-    <Description>FS.GG workspace scaffolder — composes the SDD lifecycle skeleton, a runnable Rendering app (profile-selectable), and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
+    <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
     <Authors>FS-GG</Authors>
     <Company>FS-GG</Company>
     <PackageTags>fsgg;scaffold;workspace;dotnet-tool;sdd;spectre</PackageTags>

@@ -53,6 +53,9 @@ type Options =
       Product: string
       /// The SDD scaffold provider selected by --template. Omitted selection remains rendering.
       Template: string
+      /// The representation backend selected by --lifecycle. Omission remains Standard SDD.
+      /// The token is forwarded unchanged to the provider; typed-sdd is never aliased to sdd.
+      Lifecycle: string
       Ref: string
       Upgrade: bool
       Governance: bool
@@ -97,6 +100,7 @@ let assembleWizardOptions
     (target: string)
     (product: string)
     (template: string)
+    (lifecycle: string)
     (gitRef: string)
     (governance: bool)
     (pinned: bool)
@@ -112,6 +116,7 @@ let assembleWizardOptions
     { Target = target
       Product = product
       Template = template
+      Lifecycle = lifecycle
       Ref = gitRef
       Upgrade = false
       Governance = governance
@@ -1112,6 +1117,7 @@ let private header (opts: Options) =
     grid.AddRow("[grey]product[/]", sprintf "[bold]%s[/]" (Markup.Escape opts.Product)) |> ignore
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
     grid.AddRow("[grey]template[/]", Markup.Escape opts.Template) |> ignore
+    grid.AddRow("[grey]lifecycle[/]", Markup.Escape opts.Lifecycle) |> ignore
     match opts.Profile with
     | Some profile -> grid.AddRow("[grey]profile[/]", Markup.Escape profile) |> ignore
     | None -> ()
@@ -1235,6 +1241,8 @@ let private usage () =
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", templates |> List.map fst)))
+    AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd)"
+    AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   rendering-only profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--npm-package[/] <name>  fable-bindings package name (requires --npm-version)"
@@ -1264,6 +1272,7 @@ type private Draft =
     { Product: string option
       Target: string option
       Template: string option
+      Lifecycle: string option
       Profile: string option
       NpmPackage: string option
       NpmVersion: string option
@@ -1282,6 +1291,7 @@ let private emptyDraft =
     { Product = None
       Target = None
       Template = None
+      Lifecycle = None
       Profile = None
       NpmPackage = None
       NpmVersion = None
@@ -1312,6 +1322,7 @@ let private paramsPanel (d: Draft) =
     row "product" (d.Product |> Option.map (fun p -> sprintf "[bold green]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
     row "target" (d.Target |> Option.map (fun t -> sprintf "[green]%s[/]" (Markup.Escape t)) |> Option.defaultValue pendingCell)
     row "template" (d.Template |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+    row "lifecycle" (d.Lifecycle |> Option.map (fun p -> sprintf "[aqua]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
     match d.Template, d.Profile with
     | Some "rendering", _ -> row "profile" (d.Profile |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
     | _ -> ()
@@ -1379,7 +1390,8 @@ let private previewPanel (d: Draft) =
 
     let prodAnno =
         d.Product |> Option.map (fun p -> sprintf "[grey](productName=[/][green]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
-    let sdd = tree.AddNode(sprintf "SDD lifecycle skeleton  %s" prodAnno)
+    let lifecycle = d.Lifecycle |> Option.defaultValue "sdd"
+    let sdd = tree.AddNode(sprintf "%s lifecycle skeleton  %s" (Markup.Escape lifecycle) prodAnno)
     sdd.AddNode "[grey37]charter · spec · plan · tasks[/]" |> ignore
 
     let appLabel, profileAnno =
@@ -1437,6 +1449,7 @@ let private equivalentCommand (d: Draft) =
     parts.Add(d.Target |> Option.defaultValue "<target>")
     parts.Add(d.Product |> Option.defaultValue "<product>")
     (match d.Template with Some t when t <> "rendering" -> parts.Add(sprintf "--template %s" t) | _ -> ())
+    (match d.Lifecycle with Some lifecycle when lifecycle <> "sdd" -> parts.Add(sprintf "--lifecycle %s" lifecycle) | _ -> ())
     (match d.Template, d.Profile with Some "rendering", Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
     (match d.NpmPackage, d.NpmVersion with Some packageName, Some version -> parts.Add(sprintf "--npm-package %s --npm-version %s" packageName version) | _ -> ())
     (match d.BindingTarget with Some bindingTarget -> parts.Add(sprintf "--binding-target %s" bindingTarget) | _ -> ())
@@ -1500,6 +1513,19 @@ let private interactive () : Options option =
                 .AddChoices(templates |> List.map (fun (id, gloss) -> sprintf "%s — %s" id gloss) |> List.toArray))
             .Split(' ').[0]
     draft <- { draft with Template = Some template }
+
+    draftView draft
+    let lifecycle =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Specification [magenta]lifecycle[/]?")
+                .AddChoices(
+                    [| "sdd — Standard SDD (current default)"
+                       "typed-sdd — Typed SDD (canonical F# specification)"
+                       "none — Freeform (no FS-GG lifecycle)"
+                       "spec-kit — legacy/frozen" |]))
+            .Split(' ').[0]
+    draft <- { draft with Lifecycle = Some lifecycle }
 
     let profile =
         if supportsProfile template then
@@ -1624,7 +1650,7 @@ let private interactive () : Options option =
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some({ assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks with
+        Some({ assembleWizardOptions target product template lifecycle gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks with
                  PublicBoard = Some publicBoard
                  TrustedWriters = trustedWriters })
     else
@@ -1635,6 +1661,7 @@ let private interactive () : Options option =
 let private parse (argv: string list) : Result<Options, string> =
     let knownProfiles = profiles |> List.map fst
     let knownTemplates = templates |> List.map fst
+    let knownLifecycles = [ "none"; "sdd"; "typed-sdd"; "spec-kit" ]
     let validate (opts: Options) =
         match opts.Profile, opts.Template with
         | Some _, template when not (supportsProfile template) ->
@@ -1667,6 +1694,12 @@ let private parse (argv: string list) : Result<Options, string> =
             if List.contains value knownTemplates then flags { acc with Template = value } t
             else Error(sprintf "unknown template '%s' (choose one of: %s)" value (String.Join(", ", knownTemplates)))
         | [ "--template" ] -> Error "--template needs a value"
+        | "--lifecycle" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--lifecycle needs a value (got flag '%s')" value)
+        | "--lifecycle" :: value :: t ->
+            if List.contains value knownLifecycles then flags { acc with Lifecycle = value } t
+            else Error(sprintf "unknown lifecycle '%s' (choose one of: %s)" value (String.Join(", ", knownLifecycles)))
+        | [ "--lifecycle" ] -> Error "--lifecycle needs a value"
         | "--profile" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--profile needs a value (got flag '%s')" value)
         | "--profile" :: value :: t ->
@@ -1725,6 +1758,7 @@ let private parse (argv: string list) : Result<Options, string> =
             { Options.Target = target
               Product = product
               Template = "rendering"
+              Lifecycle = "sdd"
               Ref = "main"
               Upgrade = false
               Governance = true
@@ -1858,12 +1892,14 @@ let private run (opts: Options) : int =
                 | _ -> []
             let bindingTargetParam =
                 opts.BindingTarget |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ]) |> Option.defaultValue []
+            let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" opts.Lifecycle ]
             let code, _ =
                 runProcess true "fsgg-sdd"
                     ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
                      @ profileParam
                      @ npmParams
                      @ bindingTargetParam
+                     @ lifecycleParam
                      @ [ "--param"; sprintf "productName=%s" opts.Product ])
             if code = 0 then
                 AnsiConsole.MarkupLine(sprintf "  [green]✓[/] SDD skeleton + %s workspace scaffolded" (Markup.Escape opts.Template))

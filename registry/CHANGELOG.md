@@ -32,6 +32,19 @@ no gate behaviour changes — this is purely how humans record the log.
   resolve to source `0d56bb104da22478dfef72825f8cf19425635ed0`; its coherent-set release remains an
   unpromoted draft, so this entry records feed reality without claiming completed promotion.
 
+- **2026-08-25** — **Typed SDD becomes an additive registry and workspace-creation choice; Standard SDD remains the default**
+  (sdd/rendering/github; [.github#2925](https://github.com/FS-GG/.github/issues/2925),
+  [SDD#916](https://github.com/FS-GG/FS.GG.SDD/issues/916),
+  [Rendering#1269](https://github.com/FS-GG/FS.GG.Rendering/issues/1269),
+  [Rendering release run 32786664161](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/32786664161)):
+  advances `fs-gg-ui-template` to the published coherent set `0.28.0`, advances its exact
+  `minimum-fsgg-sdd` floor to published `1.4.0-preview.1`, and grows the lifecycle vocabulary from
+  `spec-kit|sdd|none` to `spec-kit|sdd|typed-sdd|none`. The omitted/default value deliberately stays
+  `sdd`; `typed-sdd` preserves canonical F# source, normalized AST, authoring receipt, generated
+  projection, and readiness identity rather than aliasing Standard SDD. `new-sdd-workspace` now
+  accepts the same explicit choice and forwards it unchanged to the provider. Templates provider
+  mirrors remain the ordered downstream step in FS.GG.Templates#432.
+
 - **2026-08-23** — **`FS.GG.Workspace.Template` 0.8.2 published and registry projections reconciled**
   (templates; [Templates#428](https://github.com/FS-GG/FS.GG.Templates/issues/428),
   [Templates#385](https://github.com/FS-GG/FS.GG.Templates/issues/385),
