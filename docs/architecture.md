@@ -582,11 +582,11 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `fsgg-contracts` | FS.GG.SDD | `7.5.2` | `7.5.2` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.7.0` | `1.7.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.28.0` | `0.28.0` |
-| `game-sim-core` | FS.GG.Game | `0.13.0` | `0.13.0` |
-| `game-scene-adapter` | FS.GG.Game | `0.13.0` | `0.13.0` |
+| `game-sim-core` | FS.GG.Game | `0.13.0` | `0.14.0` |
+| `game-scene-adapter` | FS.GG.Game | `0.13.0` | `0.14.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
-| `coord-engine` | FS-GG/.github | `0.74.0` | `0.75.2` |
+| `coord-engine` | FS-GG/.github | `0.74.0` | `0.75.4` |
 | `new-sdd-workspace` | FS-GG/.github | `0.10.0` | `0.10.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.9.0` | `0.9.0` |
 | `game-skills` | FS.GG.Game | `0.8.0` | `0.8.0` |
