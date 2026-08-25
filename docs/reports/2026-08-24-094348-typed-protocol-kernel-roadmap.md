@@ -17,7 +17,7 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-25 — record shipped kernel, AST-first capability boundary, coordination supersession, and the completed #2905 v1 safety checkpoint |
+| Updated | 2026-08-26 — record completed P4 release reconciliation, defer P5's default flip until OperatingV2, and begin the GS2 handoff |
 | Status | P-series completed historical delivery; future authoring and coordination execution superseded |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
@@ -73,7 +73,7 @@ This section is the dispatch boundary between the two roadmaps. A board column d
 |---|---|---|
 | P0–P4 | Complete producer/consumer history and the published dependency v2 uses | Preserve receipts and exact package identities; repair any release residue under v1. |
 | P5 readiness/soak | Independent lifecycle work, not a coordination prerequisite | May proceed while v2 is in `GS2-00`–`GS2-09`; publish every identity change so the cutover census can ingest it. |
-| P5 default flip | A fleet-wide default-bearing contract change | Finish and stabilize before `GS2-10`, or defer until the cutover ledger reaches `OperatingV2`. |
+| P5 default flip | Deferred fleet-wide default-bearing contract change | Do not start the flip during cutover preparation. Resume only after the cutover ledger reaches `OperatingV2`. |
 | `.github#2932` | An open row filed from the former M0 execution plan | Do not claim as written. Transfer census/baseline/corpus obligations to `GS2-00`; transfer typed coordination implementation to `GS2-02`; record the supersession on the issue. |
 | M1–M9 rows or future rows derived from those headings | Technical inventory, not milestones | Map each requirement to a GS2 unit or mark it historical/non-protocol; never schedule it merely because it is `Ready`. |
 
@@ -208,11 +208,22 @@ the checked state so the status remains readable without color.
 - 🟩 [x] **P2 — shared FS.GG.SDD specification kernel:** published.
 - 🟩 [x] **P3 — published-kernel re-adoption:** completed with producer/consumer receipts.
 - 🟩 [x] **P4 — additive Typed SDD option:** published and supported across the provider/profile matrix.
-- ⬜ [ ] **P5 — evidence-gated default flip:** planned, not started; it remains subject to the P5/GS2
-  sequencing boundary above.
+- 🟨 [ ] **P5 — evidence-gated default flip:** explicitly deferred until `OperatingV2`; readiness-only
+  evidence may continue, but no provider, template, scaffolder, wizard, registry, or workspace default
+  changes during cutover preparation.
 - 🟩 [x] **Residual v1 safety checkpoint — `.github#2905`:** merged as `.github#2973` at
   `3d1e6b186397f807163ed144290bee6a7c20343c`; exact default-branch push successes established the
   post-merge verification fact, the issue is Closed, the board row is Done, and the claim is released.
+- 🟩 [x] **P4 release residue — `.github#2968` and `.github#2983`:** the New SDD Workspace
+  `0.10.1` repair and coherent coordination set `0.75.5` are published, promoted, dual-feed verified,
+  registry-reconciled, and closed with typed delivery receipts. The 0.75.5 release source is
+  `34b1fd8b074e926cb3bce2c156f439cd8dcb0943`; reconciliation merged in PR #2992.
+- 🟩 [x] **Active Templates input — FS.GG.Templates PR #437:** classified **finish**; it merged and
+  published `fs-gg-templates/v0.10.0`. The later Game.Core 0.14.0 adoption is independent receiver work,
+  not a Typed SDD prerequisite or reason to reopen P4.
+- 🟩 [x] **GS2-00.0 roadmap handoff:** `.github#2932` is mapped to its GS2 successors and closes with
+  this checkpoint; epic #2952 has checkable child acceptance; #2964 and #2965 use native `Blocked by`
+  fields; and a fresh lifecycle reconciliation reports no projection repairs.
 
 The final checkbox is **not M4 progress**. It is a bounded v1 correctness repair whose evidence joins the
 frozen defect corpus. M0–M9 remain historical inventory and are not schedulable merely because their old
@@ -234,10 +245,12 @@ board rows are Ready.
    detached second pass makes no tracked changes.
 5. **Review immutable evidence.** A fresh critic reviews the exact head and production route. Any repair
    moves the head and requires the engine-derived successor wait. Never translate prose into acceptance.
-6. **Recover authority by creating a fresh identity, not rewriting history.** If a claim generation has
-   already elected another PR, or a moved-head review wait remains bound to a retired claim, rotate the
-   claim legitimately and use a fresh canonical successor PR. Prove its raw diff and stable patch ID match
-   the reviewed repair; close the unusable predecessor unmerged with cross-links.
+6. **Recover authority with a fresh generation, not rewritten history.** Before rotating a claim, cancel
+   its unconsumed review wait. If one generation already elected another PR, release and reclaim
+   legitimately, then let the engine mint a new authorization/election for the current unmerged PR; create
+   a successor PR only when the branch/head identity itself must be replaced. If rotation already happened
+   and the old worker-owned queue entry makes a new wait impossible, remove only that exact stale automation
+   entry, record the recovery, and create a current-generation wait.
 7. **Make the delivery handoff self-contained before merge.** Put `Closes #<item>.` on a line by itself;
    bind exact-head obligations; copy the exact `Paths:` declaration into the PR body when terminal recovery
    must reconstruct the handoff from a merged PR; and issue only the typed delivery action the engine names.
@@ -250,6 +263,41 @@ board rows are Ready.
 10. **Complete, checkpoint, and stop.** Apply the terminal typed receipt, verify Closed/Done/claim-release
     projections, update this recipe with the milestone evidence and lessons, and stop at the requested
     milestone rather than starting the next dependency-ready unit.
+
+### Checkpoint lessons from the P4 release residue
+
+What went right:
+
+- 🟩 [x] Publication packed each 0.75.5 member once, kept all component tags on the exact merged source,
+  and promoted only after both feeds served matching unsigned payloads.
+- 🟩 [x] Post-merge SDD reconciliation replaced 18 pre-merge deferrals with 18 observed release evidence
+  records and reached a no-change `shipReady` fixed point.
+- 🟩 [x] Independent review compared immutable release assets, GitHub Packages, nuget.org, nuspec source
+  commits, tags, public installation, registry projections, and engine freshness rather than trusting
+  workflow conclusions alone.
+- 🟩 [x] The terminal delivery receipts kept release verification and registry reconciliation distinct,
+  so the item could not complete after publication while the authored registry still advertised 0.75.4.
+
+What went wrong, and the retained rule:
+
+- 🟩 [x] All three first publisher runs pushed successfully but timed out while nuget.org indexed.
+  **Retained rule:** resume the exact prepared manifest after the feed becomes readable; never repack or
+  issue a blind duplicate push, and treat feed observation—not a run's first conclusion—as publication
+  authority.
+- 🟩 [x] Regenerating the publishing skill also changed the driver manifest, and a historical tracked
+  `.trx` contradicted the terminal M6 artifact rule. **Retained rule:** run the complete policy-subject
+  and generated-manifest checks for a registry reconciliation, not only the focused release suites.
+- 🟩 [x] A second PR on the original claim generation lost the append-only merge election already won by
+  PR #2990. **Retained rule:** one claim generation authorizes one winning merge; rotate the generation
+  before authorizing post-merge reconciliation.
+- 🟩 [x] Head recovery accumulated stale and duplicate no-obligations markers, and rotating before
+  cancelling the old review wait left an unconsumable queue entry. **Retained rule:** amend known marker
+  ids explicitly, keep exactly one current-head declaration, and terminalize the wait before claim
+  rotation.
+- 🟩 [x] The typed semantic-diff host found 252 generated SDD projection occurrences across nine token
+  pairs, beyond the artifact rename that triggered manual review. **Retained rule:** let the engine
+  inventory the whole exact-base/head diff and attach accountable receipts for every discovered
+  occurrence.
 
 ### Checkpoint lessons from `.github#2905`
 
@@ -509,9 +557,10 @@ path and derived compatibility receipt; it is not yet the default.
 
 ## P5 — Evidence-gated Typed SDD workspace default
 
-**Status:** planned, not started. P5 is independent of coordination-v2 feature delivery. Its readiness and
-soak work may overlap `GS2-00`–`GS2-09`; its default flip must either stabilize before `GS2-10` or wait
-until `OperatingV2`.
+**Status:** default flip deferred until `OperatingV2`. P5 is independent of coordination-v2 feature
+delivery. Readiness and soak evidence may continue without changing default-bearing contracts, but the
+provider, template, scaffolder, wizard, registry, and workspace-default flip must not start during cutover
+preparation. This is the selected branch of the earlier either/or sequencing rule.
 
 ### Deliverables
 
