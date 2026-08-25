@@ -1666,12 +1666,35 @@ module Board =
                     let write =
                         if entry.Value = "" then Clear else Set entry.Value
 
+                    // A queued replacement is still an authoritative `Blocked by` writer. The caller that
+                    // queued it released its lease when the rate-limited first attempt ended, so replaying
+                    // directly through `attempt` would reopen the exact overwrite window the live routes
+                    // close. Reacquire the item-scoped lease for the replay itself. Keep the callback's
+                    // observed result so cleanup uncertainty can be distinguished from contention: if the
+                    // write landed but deleting our ticket failed, the queue entry is already fulfilled and
+                    // must be dropped; otherwise a failed lease/action leaves it queued for an explicit retry.
+                    let mutable attempted: IoResult<WriteOutcome> option = None
+
+                    let replay () =
+                        let result = attempt transport board owner repo number entry.Field write
+                        attempted <- Some result
+                        result
+
+                    let result =
+                        if entry.Field = "Blocked by" then
+                            Writes.withBlockedByMutationLease
+                                transport
+                                { Owner = owner; Repo = repo; Number = number }
+                                replay
+                        else
+                            replay ()
+
                     // REPLAY THROUGH `attempt`, NOT `boardWrite`. `boardWrite` carries the DEFER policy —
                     // it queues on an exhausted budget — and that is exactly right for a FIRST attempt and
                     // exactly wrong for a replay: this entry is ALREADY in the queue, so deferring it again
                     // appends a second copy. Every flush under a dead budget would double the queue,
                     // forever, while reporting that it had written nothing and backing off from nothing.
-                    match attempt transport board owner repo number entry.Field write with
+                    match result with
                     | Ok Written ->
                         Cache.dropPending entry
                         written <- written + 1
@@ -1701,6 +1724,20 @@ module Board =
                         // AN EXHAUSTED BUDGET STOPS THE WHOLE FLUSH. The rest would fail identically, and
                         // spending REST calls to confirm that is exactly the back-off EX_RATE exists to
                         // signal. The remainder STAYS QUEUED — untouched, and not re-appended.
+                        stopped <- Some e
+
+                    | Error e when entry.Field = "Blocked by" ->
+                        match attempted with
+                        | Some(Ok Written) ->
+                            // The mutation landed; only lease cleanup is uncertain. Retaining the queued
+                            // replacement would replay a fulfilled stale value after the ticket expires.
+                            Cache.dropPending entry
+                            written <- written + 1
+                        | _ -> ()
+
+                        // Contention and transport uncertainty are retryable for a queued authoritative
+                        // writer. Stop this pass and retain the current entry unless the action is known to
+                        // have landed; later entries remain untouched and no duplicate is appended.
                         stopped <- Some e
 
                     | Error _ ->

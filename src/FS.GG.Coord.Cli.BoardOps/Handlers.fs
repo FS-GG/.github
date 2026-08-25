@@ -1991,8 +1991,13 @@ module Handlers =
                         // remedy that does work; this number is the one the reset actually clears.
                         let remaining = r.Queued - r.Written - r.Dropped - r.Skipped
 
-                        eprint
-                            $"fsgg-coord-engine: the budget ran out mid-flush; %d{remaining} write(s) REMAIN QUEUED — re-run flush after the reset."
+                        match e with
+                        | Errors.RateLimited _ ->
+                            eprint
+                                $"fsgg-coord-engine: the budget ran out mid-flush; %d{remaining} write(s) REMAIN QUEUED — re-run flush after the reset."
+                        | _ ->
+                            eprint
+                                $"fsgg-coord-engine: flush stopped before an authoritative write could be serialized; %d{remaining} write(s) REMAIN QUEUED and no duplicate was appended — retry after the reported mutation lease clears."
 
                         fail e
 

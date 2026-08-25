@@ -236,6 +236,69 @@ module BlockerLintTests =
         Assert.Empty(result.Mutations)
 
     [<Fact>]
+    let ``#2907 flush replay cannot interleave with an active derived writer`` () =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-flush-" + Guid.NewGuid().ToString("N"))
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let mutations = ResizeArray<string>()
+
+        let response body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        let now = DateTimeOffset.UtcNow.ToString("o")
+        let contender =
+            JsonSerializer.Serialize
+                [| {| id = 100L
+                      body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=derived-writer lease=10 -->"
+                      updated_at = now
+                      html_url = "https://fixture/100" |} |]
+
+        let transport =
+            Fake.Recorder(fun request ->
+                match request.Method, request.Path.Trim('/'), request.Body with
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ -> response contender
+                | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
+                    response """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                    variables
+                    |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                    |> Option.defaultValue "<missing>"
+                    |> mutations.Add
+                    response """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                | method, path, _ -> Error(Errors.NotFound $"flush fixture serves no %s{method} %s{path}"))
+
+        let board: Board.BoardMap =
+            { Number = 12
+              Id = "PVT_coord"
+              Owner = "FS-GG"
+              Title = "Coordination"
+              Fields = Map.ofList [ "Blocked by", { Id = "PVTF_blocked"; Type = Board.Text } ] }
+
+        let queued: Cache.Deferred =
+            { Ref = "FS-GG/FS.GG.SDD#42"
+              Field = "Blocked by"
+              Value = "FS-GG/FS.GG.SDD#299"
+              At = now
+              Worker = "plover-2907"
+              Board = Some("FS-GG", "Coordination") }
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Cache.defer (Errors.RateLimited(Errors.GraphQlBudget, None)) queued
+            |> Result.defaultWith (Errors.explain >> failwith)
+
+            let outcome = Board.flush transport board |> Result.defaultWith (Errors.explain >> failwith)
+
+            Assert.Equal(0, outcome.Written)
+            Assert.Equal(0, outcome.Dropped)
+            Assert.Contains("lease is held by comment 100", outcome.Stopped |> Option.map Errors.explain |> Option.defaultValue "")
+            Assert.Empty(mutations)
+            Assert.Single(Cache.pending () |> Result.defaultWith (Errors.explain >> failwith)) |> ignore
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            try Directory.Delete(dir, true) with _ -> ()
+
+    [<Fact>]
     let ``#2907 two concurrent writers serialize without losing either edge`` () =
         let sync = obj ()
         let bothReadyToPost = new Threading.ManualResetEventSlim(false)

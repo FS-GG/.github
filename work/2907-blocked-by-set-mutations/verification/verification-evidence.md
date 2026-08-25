@@ -2,11 +2,11 @@
 
 ## Positive controls
 
-- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --no-restore`: 258 passed, 0 failed, 0 skipped.
+- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --no-restore`: 259 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore`: 671 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-restore`: 182 passed, 0 failed, 0 skipped.
 - The Lifecycle, CLI, and Core test project commands each exited zero.
-- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 258 BoardOps tests passing.
+- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 259 BoardOps tests passing.
 - `tests/coord-engine-parity/run.sh` passed the explicit replace/clear, ref-first, zero-GraphQL refusal, canonicalization, de-duplication, and scoped-field controls after its legacy positional calls were migrated.
 - After the initial critic identified a missing hosted body for open/In-progress item #423, the repaired
   serialized parity run passed 616/616 assertions with zero failures and zero not-measured results. Its
@@ -43,6 +43,18 @@
   lease. A discriminating batch interleaving fixture installs a lower-ID contender and proves the losing
   command emits zero board mutations; the release fixture proves its route posts the same lease marker.
   The expanded Release BoardOps suite passed 258/258.
+- The round-2 successor critic executed the deferred queue route and proved `Board.flush` could replay an
+  unconditional `Blocked by` replacement beneath an active lower-ID contender. The repair reacquires the
+  same issue-comment lease during replay, retains the current entry and stops without duplication when the
+  action did not provably land, and removes a fulfilled entry if only ticket cleanup is uncertain. The
+  focused lower-ID control records zero field mutations and one still-pending entry; the expanded Release
+  BoardOps suite passed 259/259.
+- The same critic identified a premature delivery authorization while successor review was pending. The
+  PR marker was removed through a body edit at `2026-08-25T07:08:21Z`; the append-only election comment
+  `5406718363` remains as audit evidence but no current PR marker references its grant. Running
+  `scripts/check-claim-generation.py` against exact head `6cd87934b3dfc239da337e5b6f469b377323fc86`
+  and the re-read marker-free body returned 1 with `[missing]`, proving the old election cannot authorize
+  the head. No authorization is recreated before the post-acceptance delivery boundary.
 
 ## Gate inversions
 
@@ -57,9 +69,13 @@ Each bounded mutation was applied alone, the focused test was observed red, and 
 6. The batch writer's shared-lease predicate was disabled. The new interleaving control failed because
    the batch command returned zero and mutated the field despite the active lower-ID contender; restoring
    the shared predicate returned the focused control green.
+7. The deferred replay's shared-lease predicate was disabled. The flush-vs-derived interleaving control
+   failed because flush reported one write, emitted the replacement beneath the active lower-ID contender,
+   and removed the pending entry; restoring the lease returned zero mutations and preserved exactly one
+   queued entry.
 
 These inversions discriminate union, subtraction, stale-write refusal, body-projection linting,
-server-ordered mutation fencing, and authoritative-writer lease bypass independently.
+server-ordered mutation fencing, direct-writer lease bypass, and deferred-flush lease bypass independently.
 
 ## Runtime controls
 
