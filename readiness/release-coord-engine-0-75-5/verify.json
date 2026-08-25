@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "4be95fb935046ba8c024f6e404aab4f06c05f940242361db5922c58a0fcabf84"
+        "value": "8aa380bcc2173b7dc8d8f265c6a6d3f1e8238fe13967c6e3e2d984a254a93f7a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "beabbdeda3eb96ca8ef38567d86765caf5dd80bf15321d0d2bccc4ebdb412669"
+        "value": "3ea03b67b2012e2321e3a933f2ab76a79873e60d8e9473d9ef3c8e506f8ea055"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06"
+        "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "0c4e27dfa20adfd2f9bd94e8ddff781a4a14dad4ddfb31971496b7dc5ddd28a0"
+        "value": "6e39ac912850aefdfb34746e7727c35a225312a85b2df6d8ad9c986d16337fee"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
+        "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
+        "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06"
+        "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
+        "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
+        "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
       }
     }
   ],
@@ -251,8 +251,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports two",
-      "decision": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports two",
+      "title": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports three",
+      "decision": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports three",
       "requirementRefs": [],
       "storyRefs": [],
       "acceptanceRefs": [],
@@ -1283,7 +1283,7 @@
           "path": "work/release-coord-engine-0-75-5/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06"
+            "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
           },
           "schemaVersion": 1
         },
@@ -1299,7 +1299,7 @@
           "path": "work/release-coord-engine-0-75-5/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
+            "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
           },
           "schemaVersion": 1
         },
@@ -1315,14 +1315,14 @@
           "path": "work/release-coord-engine-0-75-5/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
+            "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "2e9879714b22b5c989424d34792c386e3bae1e3fbebf64b2a1ea57d9cbc823a4"
+        "value": "54b92c8695a226eb7b1957570c23870e07525d61e3a726c6e8b05f2dc5c41bf6"
       },
       "currency": "current"
     }

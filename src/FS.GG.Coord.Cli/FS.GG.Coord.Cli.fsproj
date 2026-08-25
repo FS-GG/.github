@@ -130,7 +130,7 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.5 — full merge provenance and correct post-merge success classification.
+    <PackageReleaseNotes>0.75.5 — authoritative closed-delivery paths, full merge provenance, and correct post-merge success classification.
 
 WHAT MOVED, AND WHY IT IS A PATCH. Post-merge verification now recognizes a completed successful
 default-branch push run as success instead of leaving a correctly published merge stranded behind a
@@ -143,7 +143,12 @@ object id. Typed completion receipts and REST post-merge verification already ca
 refusing after the work had already printed FSGG-DONE. The production HTTP route and exact inversion
 pin the equality boundary (.github#2981).
 
-Both fixes are compatible lifecycle correctness repairs above immutable `0.75.4`. `Protocol.fs` is
+Delivery now reads the authoritative issue body after closure, so a closed item's declared `Paths:`
+remain available to post-merge completion instead of being mistaken for an undeclared touch set.
+Unread issue state remains distinct from a genuinely absent declaration, and production-route closed,
+unread, and absent controls pin that boundary (.github#2871).
+
+All three fixes are compatible lifecycle correctness repairs above immutable `0.75.4`. `Protocol.fs` is
 unchanged across the release span. Typed SDD P0-P4 remain complete and P5's default flip remains
 deferred until OperatingV2; this cut changes no provider or receiver contract (.github#2983).
 

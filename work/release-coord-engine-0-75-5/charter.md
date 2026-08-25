@@ -30,7 +30,8 @@ policyPointers:
 
 ## Scope Boundaries
 - Advance `FS.GG.Coord.Cli`, `FS.GG.Kit`, and `FS.GG.Drivers` together from published `0.75.4` to
-  stable `0.75.5`, carrying the post-merge verification classifier and full completion merge-OID fixes.
+  stable `0.75.5`, carrying the post-merge verification classifier, full completion merge-OID, and
+  authoritative closed-delivery Paths fixes.
 - Use the existing coherent-release saga, sibling tag namespaces, dual-feed order, and Trusted
   Publishing bindings without redesigning them.
 - Reconcile source version/release notes before publication, then reconcile feed-facing registry,

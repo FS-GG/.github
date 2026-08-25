@@ -17,7 +17,7 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/release-coord-engine-0-75-5/spec.md sha256:e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb schemaVersion:1
-- clarifications: work/release-coord-engine-0-75-5/clarifications.md sha256:5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06 schemaVersion:1
+- clarifications: work/release-coord-engine-0-75-5/clarifications.md sha256:4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36 schemaVersion:1
 - checklist: work/release-coord-engine-0-75-5/checklist.md sha256:63588e54fb6afac34efe5faab3ea1e242d8869db461901018d49b5c3dd2a250c schemaVersion:1
 
 ## Plan Scope
@@ -28,8 +28,9 @@ Prose status: planned
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Advance `FsggCoherentSetVersion` from `0.75.4` to `0.75.5`
-  with a dated source comment naming the two compatible non-wire commits. Replace Coord.Cli's bounded
-  release-note head with `0.75.5`, describing post-merge classification and full merge-OID completion.
+  with a dated source comment naming the three compatible non-wire repairs. Replace Coord.Cli's bounded
+  release-note head with `0.75.5`, describing post-merge classification, full merge-OID completion, and
+  authoritative closed-delivery Paths.
   Leave feed-facing registry and public pins at observed `0.75.4` before publication.
 - PD-002 [AC-002] [FR-002] complete: Declare mapped release obligations on the exact reviewed head.
   After guarded merge, let `kit-auto-publish.yml` call the existing prepare-once saga and atomically

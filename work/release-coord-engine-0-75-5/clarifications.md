@@ -24,9 +24,9 @@ No clarification answers recorded.
 - DEC-001: Select stable `0.75.5`. Live checks on 2026-08-25 found coherent `0.75.4` source/packages,
   a promoted immutable `coherent-set/v0.75.4`, and no `0.75.5` component or coherent-set tag. Existing
   `0.75.4` identities remain immutable and are never repacked or retagged.
-- DEC-002: Classify the release as PATCH on the stable `0.x` line. Fresh engine analysis reports two
-  unreleased compatible lifecycle defect repairs (`087b6d3d`, `2dd09d83`) and zero commits touching
-  `src/FS.GG.Coord.Core/Protocol.fs`; package identities, commands, flags, schemas, and exits remain.
+- DEC-002: Classify the release as PATCH on the stable `0.x` line. Fresh engine analysis reports three
+  unreleased compatible lifecycle defect repairs (`087b6d3d`, `2dd09d83`, `3836749c`) and zero commits
+  touching `src/FS.GG.Coord.Core/Protocol.fs`; package identities, commands, flags, schemas, and exits remain.
 - DEC-003: Keep the three existing release workflow filenames and tag namespaces. Their Trusted
   Publishing policies and receiver resolution are external bindings, and the saga already owns exact
   coherent membership, shared source SHA, prepare-once storage, and GitHub-first dual-feed order.

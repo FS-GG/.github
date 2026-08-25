@@ -17,7 +17,7 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/release-coord-engine-0-75-5/clarifications.md
-    digest: 5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06
+    digest: 4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36
     schemaVersion: 1
   - label: checklist
     path: work/release-coord-engine-0-75-5/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/release-coord-engine-0-75-5/plan.md
-    digest: c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2
+    digest: e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee
     schemaVersion: 1
 tasks:
   - id: T001
