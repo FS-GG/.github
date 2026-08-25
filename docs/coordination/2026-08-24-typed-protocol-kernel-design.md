@@ -12,7 +12,7 @@ description: "One agent-authored F# specification AST, piloted in S.I.R., with t
 |---|---|
 | Status | Generic kernel direction accepted and implemented; coordination delivery amended by the GitHub Substrate v2 governing design |
 | Authored | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-25 — retain the published kernel, replace the coordination migration path with an independently qualified fleet cutover |
+| Updated | 2026-08-25 — retain the published kernel, clarify the AST-first capability boundary, and replace the coordination migration path with an independently qualified fleet cutover |
 | Evidence snapshot | 2026-08-24T07:26:29Z |
 | Scope | A shared specification kernel, the S.I.R. pilot, and the FS-GG coordination process/protocol extension |
 | Extends | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0040](../adr/0040-port-the-io-layer.md), [ADR-0058](../adr/0058-adopt-one-governing-principle-derive-dont-restate.md) |
@@ -58,6 +58,35 @@ change and human projection, validate it, review the semantic diff, and repeat. 
 and tool capability—not trust in an account identity. CI accepts changes only when they pass through the
 canonical compiler, normalizer, provenance record, and generated-view freshness gate. Human-readable
 projections remain first-class review surfaces, but never a second authority.
+
+### Primary corpus and optional capabilities
+
+The normalized typed AST is the product boundary, not an intermediate created only to generate code or
+proof obligations. It is the programmatic specification corpus that agents and repository tools consume
+directly when they inspect a domain, plan an application, exchange protocol descriptions, construct
+types/data, compare versions, or derive another representation. Markdown, JSON Schema, diagrams, source
+generators, generated source code, and solver inputs are projections; source-native outside data remains
+external evidence. A domain extension cannot promote one of those forms into a parallel authority.
+
+The kernel is deliberately useful when a model has no executable interpretation and no valuable theorem.
+A specification may primarily describe concepts, relationships, types, data, requirements, protocols,
+examples, decisions, or deliberately unspecified behavior. Readability is judged at the F# authoring
+surface and human projection; semantic completeness, stable identity, and machine usability are judged at
+the normalized AST. Typed domain extensions provide vocabulary without turning the shared substrate into
+one universal language or a generic property bag.
+
+Execution, simulation, validation, generation, model checking, and proof are **optional capabilities over
+the AST**. No capability language becomes specification authority, and no model is required to produce
+code or admit a useful proof. A capability consumes the canonical model directly or through an explicit,
+versioned lowering; its result binds the model fingerprint, capability/toolchain identity, assumptions,
+and evidence. An extraction backend is justified only when its generated artifact is intentionally used;
+it is not part of the default authoring contract.
+
+The [F* specification experiment](../fstar/README.md) demonstrates this boundary. F* successfully proved
+and extracted selected pure semantics, but its value depends on using those semantics as an executable
+authority. It remains one possible capability backend, not the corpus language. The experiment's
+[architectural assessment](../fstar/reports/assessment.md) therefore strengthens rather than replaces the
+AST-first decision.
 
 ### Coordination implementation amendment (2026-08-25)
 
@@ -844,12 +873,19 @@ Retain representative production-safe histories and replay them on every protoco
 same determinism principle used by durable workflow systems. Mutation controls remove one guard,
 revision, subject, authority, idempotency key, or projection source and must make a named test red.
 
-### Optional formal verification
+### Optional analysis and proof capabilities
 
-The F# model remains executable authority. For high-concurrency protocols—the claim CAS, operation
-election, set mutation, and saga retry state—generate or maintain a small TLA+ model to check safety,
-deadlock freedom, and selected liveness properties. Formal models are verification artifacts, not a
-second executable implementation.
+The canonical AST remains specification authority whether or not a useful proof exists. A domain may
+register digest-bound validators, simulators, SMT lowerings, model checkers, theorem provers, or extraction
+backends, but absence of such a capability is not a degraded specification state. Each registered result
+names its model fingerprint, lowering or correspondence contract, toolchain, assumptions, scope, and
+outcome; `unknown`, bounded evidence, and theorem-level proof remain distinct.
+
+For high-concurrency coordination protocols—the claim CAS, operation election, set mutation, and saga
+retry state—generate or maintain a small TLA+ model to check safety, deadlock freedom, and selected
+liveness properties. For pure semantic fragments, F*, SMT, or another suitable backend may be selected
+when the expected property justifies the additional model and toolchain. Formal artifacts are consumers
+or derived evidence, never a second specification authority or a corpus-wide adoption requirement.
 
 ## Prior work and lessons adopted
 
