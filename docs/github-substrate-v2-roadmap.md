@@ -440,9 +440,18 @@ write after freeze and reject a forged or rewound ledger.
 - [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
   environments, immutable releases/tags, one pack, SBOMs, attestations, dependency submission/review, and
   public-download verification.
-- [ ] **GS2-06.7 — Workflow consolidation.** Replace duplicated policy jobs with typed inventory,
-  composite steps, reusable job contracts, and stable aggregate outputs. Record every removed workflow and
-  obligation.
+- [ ] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
+  with typed inventory, composite steps, reusable job contracts, and stable aggregate outputs. Compile a
+  versioned dependency graph from changed subjects and non-file inputs to the smallest sound transitive
+  closure of build, test, policy, coordination, packaging, and release obligations; policy may still mark
+  an obligation unconditional. Required aggregates always resolve, but an unselected child reports a typed
+  `NotApplicable` reason without provisioning its expensive job. Unknown, ambiguous, stale, or incomplete
+  impact fails closed rather than silently skipping work, and merge-group selection is recomputed against
+  the queued head and current base/settings. Independently test representative source, test, workflow,
+  dependency, generated-output, documentation, policy, and release changes plus mixed and unknown changes.
+  Before cutover, record per-repository baselines and accepted targets for workflow/job fan-out, billed
+  minutes, queue time, and p50/p95 completion time, and prove the selector meets them without a missed
+  obligation. Record every removed workflow and obligation.
 - [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
 

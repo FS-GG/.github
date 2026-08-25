@@ -588,7 +588,32 @@ The target is not an arbitrary workflow count. Acceptance requires:
 - receiver job IDs and aggregate context names are versioned public contracts; and
 - removed workflows appear in a deletion ledger with their replacement or retired obligation.
 
-### 7.3 Immutable execution dependencies
+### 7.3 Sound change-impact selection
+
+CI selection is compiled from a versioned dependency graph, not maintained as unrelated workflow-local
+`paths:` lists. The graph maps changed subjects and non-file inputs through generated outputs, packages,
+reusable workflows, policies, repository profiles, and release topology to the smallest sound transitive
+closure of build, test, policy, coordination, packaging, and release obligations. An obligation may declare
+itself unconditional when its invariant truly applies to every change.
+
+The selector emits a source-bound manifest containing the observed base/head, relevant settings and pins,
+selected obligations, typed reasons, and graph/model fingerprint. Stable aggregate checks always resolve;
+an obligation outside the selected closure contributes `NotApplicable(reason, evidence)` without starting
+its expensive job. `NotApplicable` is a first-class result, not success fabricated from an absent check.
+Unknown subjects, ambiguous ownership, incomplete diffs, stale graphs, missing generated-output edges, or
+unreadable external inputs fail closed into a conservative selection or an explicit refusal. Merge-group
+selection is recomputed against the queued head and current base/settings rather than copied from the pull
+request run.
+
+Independent qualification covers representative source, test, workflow, dependency, generated-output,
+documentation, policy, and release changes; mixed changes; renames/deletions; base movement; and deliberately
+unknown inputs. It proves both directions: every affected obligation runs, and every omitted obligation is
+outside the computed closure. Before fleet cutover, each repository records a comparable baseline and
+accepted target for triggered workflows, provisioned jobs, billed minutes, queue time, and p50/p95 completion
+time. The selector must meet those targets without a missed obligation; post-cutover Q10 measurements detect
+regression rather than serving as the first performance acceptance gate.
+
+### 7.4 Immutable execution dependencies
 
 Cross-repository reusable workflows and third-party Actions use full commit SHAs. Renovate is the sole
 automated update path. A modelled pin policy replaces the current accepted `@main` exception after the v2
@@ -1053,12 +1078,14 @@ The architecture is accepted for implementation only when:
 11. each migration step has an exact deletion criterion and no indefinite compatibility mode;
 12. receiver changes are published/adopted in contract order with no source-project shortcuts;
 13. the required-check/ruleset model is complete before merge queue can replace custom check election;
-14. sealed v1 evidence remains auditable after all v1 production code is removed; and
-15. a final review can point to each retained custom mechanism and state the missing native semantic that
+14. change-impact selection proves every affected obligation runs, every omission is justified, unknown
+   impact fails closed, and pre-cutover CI fan-out, cost, queue, and latency targets are met;
+15. sealed v1 evidence remains auditable after all v1 production code is removed; and
+16. a final review can point to each retained custom mechanism and state the missing native semantic that
    still justifies it;
-16. the Typed SDD handoff dispositions every open P4 residue, `.github#2932` clause, P5 decision, active
+17. the Typed SDD handoff dispositions every open P4 residue, `.github#2932` clause, P5 decision, active
    receiver change, and release saga without treating P5 as a hidden prerequisite; and
-17. the candidate manifest proves the exact generic-kernel, lifecycle-default, provider, scaffolder,
+18. the candidate manifest proves the exact generic-kernel, lifecycle-default, provider, scaffolder,
    registry, workflow, receiver, and settings identities protected by the concurrent-change gate.
 
 ## 18. Stop conditions
@@ -1078,6 +1105,7 @@ Return to design instead of widening implementation if:
 - a superseded M-series Project row can still dispatch replacement implementation into v1;
 - Typed SDD P5, a kernel release, or another receiver-contract change must cross the frozen candidate or
   cutover window to succeed;
+- the change-impact selector cannot prove an omitted obligation is outside the affected transitive closure;
 - the extension begins copying generic specification-kernel concepts into `.github`; or
 - implementation adds more compatibility readers, public commands, or workflows than its accepted deletion
   ledger retires.
