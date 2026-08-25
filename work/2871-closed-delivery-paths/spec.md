@@ -51,9 +51,9 @@ make a valid `Paths:` declaration visible to delivery.
 
 ## Functional Requirements
 - FR-001: Given one issue body with a matchable Paths declaration, delivery projects the identical declared path tokens while the issue is open and after it is closed. (Stories: US-001; Acceptance: AC-001)
-- FR-002: An unread issue-body or projection read produces an unread no-verdict reason and never the definite no-Paths diagnosis. (Stories: US-001; Acceptance: AC-001)
-- FR-003: A genuinely absent Paths declaration still produces the existing undeclared no-verdict diagnosis. (Stories: US-001; Acceptance: AC-001)
-- FR-004: Existing open-item delivery, claim authorization, and fail-closed behavior remain unchanged. (Stories: US-001; Acceptance: AC-001)
+- FR-002: An unread issue-body or projection read produces an unread no-verdict reason and never the definite no-Paths diagnosis. (Stories: US-002; Acceptance: AC-002)
+- FR-003: A genuinely absent Paths declaration still produces the existing undeclared no-verdict diagnosis. (Stories: US-002; Acceptance: AC-003)
+- FR-004: Existing open-item delivery, claim authorization, and fail-closed behavior remain unchanged. (Stories: US-001; Acceptance: AC-004)
 
 ## Ambiguities
 No material ambiguities recorded.

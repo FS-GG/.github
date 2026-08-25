@@ -1,0 +1,2263 @@
+<testsuite name="env" tests="1" failures="0"><testcase name="env"><system-out><![CDATA[{
+  "schemaVersion": 1,
+  "reportVersion": "2.6.0",
+  "toolVersion": "1.0.0",
+  "command": {
+    "name": "refresh",
+    "stage": "refresh"
+  },
+  "context": {
+    "projectRoot": ".",
+    "workId": "2871-closed-delivery-paths"
+  },
+  "invocation": {
+    "outputFormat": "json",
+    "dryRun": true
+  },
+  "outcome": "succeeded",
+  "coherent": false,
+  "changedArtifacts": [
+    {
+      "path": ".agents/skills/fs-gg-sdd-analyze/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ae59ef0f6a58d70985b027e99ed728f687265d7631c600cc4998b040cd084bf3"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-authoring-contracts/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9842c3b5c5b709840760e96ec9c53bb43c30994833e9112726d521b4d4315930"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-charter/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8e1df19bf175309f46de3426a039c82a630bb87caf6a06189d858c1dba97c707"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-checklist/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8471d642d6c7e45459d6fa8e5d2c75f7c426185ac1b8b94659871c9e6ffdf766"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-clarify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "dae626d25e237b39add1fa2446f8d8d7d5d0a55efdc1b6f1c482dd37a6f58ab2"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-evidence/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "91cec168ed536a769fbdf7734318d8990083dfa665890328e359b9fc14b38bfb"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-getting-started/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "498a8881158fbb06495b7fbd1ef02ae07a5f7ddd6252954e7f2c0492b86a03b5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-lifecycle/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "cf881c492738181b55c3527076b349890fd6011fcccb5cbdaa80cfc9a3f119eb"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-plan/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ae0dce2d603967a333b8c340ab2ba3890ad4e362d5ea060fb272dfeb9775a6f5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-refresh-agents/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "fc78016a53808fadee6a3692946694ad4a9e50e929769fee31b85c6140149619"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-ship/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "5255a14d529dea40802c438c9d69722d37d9fe545e2048d44f051efc673a84f2"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-specify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-tasks/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-troubleshooting/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-validate/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".agents/skills/fs-gg-sdd-verify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/board-analyst/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "17b6c1b045b65ad22331461fbe13b031e36ff4a741e7657a4118ab4104f32efe"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/board-analyst/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "7cc156faca7dad5e5ab45d4d1392bab640f8f56191b9cf57e8848dd1b9698c0d"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "7cc156faca7dad5e5ab45d4d1392bab640f8f56191b9cf57e8848dd1b9698c0d"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/board-analyst/references/churn-reading.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4d18efe4ff85c055732579600a5aa4d9b7b6fca40f48a9b3cf4b0f70b0958d9e"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4d18efe4ff85c055732579600a5aa4d9b7b6fca40f48a9b3cf4b0f70b0958d9e"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/board-analyst/references/the-bar.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "6f6981b5a4b8798fe0359dbd0bec1fb1f6a98f5542b6da54b6e68efd4460c5a5"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "6f6981b5a4b8798fe0359dbd0bec1fb1f6a98f5542b6da54b6e68efd4460c5a5"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "f7de20e04981ed72ce6bfe886a1776adb78b3926c2a83f315069a3ce8e4fa3f3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "f7de20e04981ed72ce6bfe886a1776adb78b3926c2a83f315069a3ce8e4fa3f3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "ce496dbe4554189ab811f644c23d82019dba330c7a0449bdcc3973f46966bcf0"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ce496dbe4554189ab811f644c23d82019dba330c7a0449bdcc3973f46966bcf0"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/references/judgement-findings.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4d1829883c233ea4a05da6475222a43ee4873f302e50b3695dc6ee566feea454"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4d1829883c233ea4a05da6475222a43ee4873f302e50b3695dc6ee566feea454"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/references/mechanical-reconciliation.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "455f2b3d81e54baaa08bcad80eeaa615104ed29e699d7020efdfdc25369b77f5"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "455f2b3d81e54baaa08bcad80eeaa615104ed29e699d7020efdfdc25369b77f5"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/check-board/references/receipt-examples.sh",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "102ace39a55a659e5b4de884f9a7271b0598142a4024e2c88cfc9351a9e96555"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "102ace39a55a659e5b4de884f9a7271b0598142a4024e2c88cfc9351a9e96555"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "bc040e2ba93b490a31f868497e46eeb2c6a2eea6f27a3fc90bb21361887aefe0"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "796390eed1239e8f0ba6d982fe0efc19412e21513ca5fd0600bffdcf52bef8cb"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "796390eed1239e8f0ba6d982fe0efc19412e21513ca5fd0600bffdcf52bef8cb"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/references/coherent-releases.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "81390861d504fb2573c43495c8781b6aeb819cd04b8f25dec558b3389451baf5"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "81390861d504fb2573c43495c8781b6aeb819cd04b8f25dec558b3389451baf5"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/references/contract-changes.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "257b46c31adcee4c494b00ce17db3045fd60164e8b3d38e8cc7a8f64555ffc2b"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "257b46c31adcee4c494b00ce17db3045fd60164e8b3d38e8cc7a8f64555ffc2b"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "01694e898c291b5da7441d71189eb779c64e4427f847c3978a7cdbda082f2547"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "01694e898c291b5da7441d71189eb779c64e4427f847c3978a7cdbda082f2547"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cross-repo-coordination/references/mailbox-and-board.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "eb79ab9a44c353f481a1dc297743cedb38072ca19a1a7a576f27ae6bb53037a2"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "eb79ab9a44c353f481a1dc297743cedb38072ca19a1a7a576f27ae6bb53037a2"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cut-nuget-release/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "098f2cc7f04d7fffd31a27c53b916fc9135bf7f15e40e51d5c8dc3b78875104c"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "098f2cc7f04d7fffd31a27c53b916fc9135bf7f15e40e51d5c8dc3b78875104c"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/cut-nuget-release/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "b2028a180680809e37f9fceb2d1e11f09df69f1def808e1dbe7997f5743fc12d"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "b2028a180680809e37f9fceb2d1e11f09df69f1def808e1dbe7997f5743fc12d"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board-best/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "e5cb68e4cc0d31137b7bfcbfbc9ff175c150628d1cef825c20108a4738ed0763"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e5cb68e4cc0d31137b7bfcbfbc9ff175c150628d1cef825c20108a4738ed0763"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board-best/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "ef0c772045d0289521a0460e11491ecacb241dc7ee7443f6de1013b5ef0df434"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ef0c772045d0289521a0460e11491ecacb241dc7ee7443f6de1013b5ef0df434"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board-normal/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8fc07f85b8548838a1c3d723c223284399a9b84fde108ab23551f94172b29639"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8fc07f85b8548838a1c3d723c223284399a9b84fde108ab23551f94172b29639"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board-normal/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "a8f387ef6f765581a0b3e7b96edcc804ed4316d831f321411f913be37e265148"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "a8f387ef6f765581a0b3e7b96edcc804ed4316d831f321411f913be37e265148"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "1cf43ace7aa3c1ccfec7203f27eac581071f84a88242100ef02cf3bce41f0ad3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "1cf43ace7aa3c1ccfec7203f27eac581071f84a88242100ef02cf3bce41f0ad3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/references/backlog-triage.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "044154304073b8b28dee3d7643d08debb5ba95fcdcc63223f2fba1c540b44869"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "044154304073b8b28dee3d7643d08debb5ba95fcdcc63223f2fba1c540b44869"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "938d7fff071b959eabb1f78707dd892896175bf1d4a686857da33cd913edd59f"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "938d7fff071b959eabb1f78707dd892896175bf1d4a686857da33cd913edd59f"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/references/host-loop.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "e2e4bb8d7c6cbdaafed92fc2c49c398e75fe03836bbf0be9b22f1ceb05c045da"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e2e4bb8d7c6cbdaafed92fc2c49c398e75fe03836bbf0be9b22f1ceb05c045da"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/drive-board/references/org-scope.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "50084301748aeccfc7aa42484fe9cb3aef8a7424ce66000fb5b6e8e4fe83f982"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "50084301748aeccfc7aa42484fe9cb3aef8a7424ce66000fb5b6e8e4fe83f982"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-analyze/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ae59ef0f6a58d70985b027e99ed728f687265d7631c600cc4998b040cd084bf3"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-authoring-contracts/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9842c3b5c5b709840760e96ec9c53bb43c30994833e9112726d521b4d4315930"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-charter/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8e1df19bf175309f46de3426a039c82a630bb87caf6a06189d858c1dba97c707"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-checklist/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8471d642d6c7e45459d6fa8e5d2c75f7c426185ac1b8b94659871c9e6ffdf766"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-clarify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "dae626d25e237b39add1fa2446f8d8d7d5d0a55efdc1b6f1c482dd37a6f58ab2"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-evidence/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "91cec168ed536a769fbdf7734318d8990083dfa665890328e359b9fc14b38bfb"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-getting-started/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "498a8881158fbb06495b7fbd1ef02ae07a5f7ddd6252954e7f2c0492b86a03b5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-lifecycle/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "cf881c492738181b55c3527076b349890fd6011fcccb5cbdaa80cfc9a3f119eb"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-plan/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ae0dce2d603967a333b8c340ab2ba3890ad4e362d5ea060fb272dfeb9775a6f5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-refresh-agents/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "fc78016a53808fadee6a3692946694ad4a9e50e929769fee31b85c6140149619"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-ship/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "5255a14d529dea40802c438c9d69722d37d9fe545e2048d44f051efc673a84f2"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-specify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-tasks/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-troubleshooting/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-validate/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/fs-gg-sdd-verify/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/intra-repo-parallel-work/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/intra-repo-parallel-work/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8b0d364a19639d166ac2648b58bbc824881b8fdfb4c1c691730364ddff186974"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8b0d364a19639d166ac2648b58bbc824881b8fdfb4c1c691730364ddff186974"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/intra-repo-parallel-work/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8a5a59968fd1fc12aa6c39c9a5fe35ed193bb604019b642bd14d54a78d120d15"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8a5a59968fd1fc12aa6c39c9a5fe35ed193bb604019b642bd14d54a78d120d15"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/intra-repo-parallel-work/references/protocol-facts.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "6d3a347418d0c6cd21dfdd39a525d571b4d37a909183decbd8f1e8c9e8b8cab3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "6d3a347418d0c6cd21dfdd39a525d571b4d37a909183decbd8f1e8c9e8b8cab3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/intra-repo-parallel-work/references/worktrees-and-overlap.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "43e0ee19d40a8585678e419f034ed5c5e8b862d93a5dd167e3ce28b721fe6d5d"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "43e0ee19d40a8585678e419f034ed5c5e8b862d93a5dd167e3ce28b721fe6d5d"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/lane-steward/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "d45808282c4a2a02397159cfa781fd73ef841e9210c344d4e82a087202f4c9ca"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "d45808282c4a2a02397159cfa781fd73ef841e9210c344d4e82a087202f4c9ca"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/lane-steward/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "07ae0bf88a7a82592faa531b0c1cdcbcd918619bdc1461b31a61ad25f91e58ef"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "07ae0bf88a7a82592faa531b0c1cdcbcd918619bdc1461b31a61ad25f91e58ef"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/p-add/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "5f70ae93d72d99a1e6c40530dc2de9eb52396f4e09f60d3cf33c9f27f2cf2428"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "5f70ae93d72d99a1e6c40530dc2de9eb52396f4e09f60d3cf33c9f27f2cf2428"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/p-add/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "7f4336ec09f77399146c0b44d7767cb2342a2c288ca38ae7c405b662d676c123"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "7f4336ec09f77399146c0b44d7767cb2342a2c288ca38ae7c405b662d676c123"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/padd-item/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "afa270481a9ba5335a39314cb739264307def81bb1a8173aa3fd343024d397d1"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "afa270481a9ba5335a39314cb739264307def81bb1a8173aa3fd343024d397d1"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/padd-item/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "b5e453d33a40ed8aa0a14a34b01b01fbe72f351d6269208a77e883b7efac02f8"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "b5e453d33a40ed8aa0a14a34b01b01fbe72f351d6269208a77e883b7efac02f8"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "44c2aacecbdbbb4f80f7b2f07379ec6ee38502ac84b5c991ea472b09baba29f3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "44c2aacecbdbbb4f80f7b2f07379ec6ee38502ac84b5c991ea472b09baba29f3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4386e592dec3f185120a1495204cdd15679d9a72ca18852d9819fa029fadeda3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4386e592dec3f185120a1495204cdd15679d9a72ca18852d9819fa029fadeda3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/command-contracts.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4443e2fd1d2370c77c43059c681732be9fc235774bc2f79772e26bb0070a9e38"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4443e2fd1d2370c77c43059c681732be9fc235774bc2f79772e26bb0070a9e38"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/control-plane-provenance.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "0226e35852b9b32e61344885a1ac45a7774bbc8f83ea5d8f0e01c13a3f9feaed"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "0226e35852b9b32e61344885a1ac45a7774bbc8f83ea5d8f0e01c13a3f9feaed"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "58bfd1748065eeb84ea6f2695cf5656a3c6d2486eec1b90012da12b7eb252ff7"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "58bfd1748065eeb84ea6f2695cf5656a3c6d2486eec1b90012da12b7eb252ff7"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/findings-and-filing.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "47057a7c0a43f2220c26d18b2f7a9ed3ed898c5f266d2254a4b42c1b459d4689"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "47057a7c0a43f2220c26d18b2f7a9ed3ed898c5f266d2254a4b42c1b459d4689"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/independent-review.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "fef64b1c82fae105f33cb0c09f8e5617f40d5d5c73e1cd89a136b9448b154669"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "fef64b1c82fae105f33cb0c09f8e5617f40d5d5c73e1cd89a136b9448b154669"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/measurement-discipline.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "af7105588c099794872378bc8ec07cc48a54e71d63c16815c62e0b02659eb092"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "af7105588c099794872378bc8ec07cc48a54e71d63c16815c62e0b02659eb092"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/merge-and-release.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "c88f4a0cd85906c3bfa1cc2927da49c46cc052796a6ce433fc13fb434db6eaf1"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "c88f4a0cd85906c3bfa1cc2927da49c46cc052796a6ce433fc13fb434db6eaf1"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/pnext-item/references/performance-first.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "323937cc50305259a1b93f1b67c035206af64a658a3f845eaca31f6db5c96529"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "323937cc50305259a1b93f1b67c035206af64a658a3f845eaca31f6db5c96529"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/publishing-and-deployment/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "0c0387a31059bfa5fc20ffc509ce7ca412e12162ff15549ab766a9132b4587fd"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "0c0387a31059bfa5fc20ffc509ce7ca412e12162ff15549ab766a9132b4587fd"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/publishing-and-deployment/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "f174167a129646a4b0d46f5867196753bee3490950f904b8486c2608976c3409"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "f174167a129646a4b0d46f5867196753bee3490950f904b8486c2608976c3409"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/spectre-console/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "9135818dc2128e011f9755713eb73b05298755c2b169970828d663659a299adb"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9135818dc2128e011f9755713eb73b05298755c2b169970828d663659a299adb"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/spectre-console/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "c9d4a94c581769e67b9ed0c4cb654b85f285a57781655b63842eb5423a068239"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "c9d4a94c581769e67b9ed0c4cb654b85f285a57781655b63842eb5423a068239"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board-best/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "04b3a71ef552162a1e99032085b425586fd0a0779f4b7c0eab9134c099eabf05"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "04b3a71ef552162a1e99032085b425586fd0a0779f4b7c0eab9134c099eabf05"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board-best/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "9d85ffa0636c28f3d4a6713217640b3572bb003ec5759ac5a00a3851a10ff548"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9d85ffa0636c28f3d4a6713217640b3572bb003ec5759ac5a00a3851a10ff548"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board-normal/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "535454433c62cdb9088861ca7afbdf8b7c650dc870d789fa211f7715a2a03e07"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "535454433c62cdb9088861ca7afbdf8b7c650dc870d789fa211f7715a2a03e07"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board-normal/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "2058fafb85ceaf1b6bed448a4cb4f6b51bfdbee05c9eb062af0647cb27dc1ec0"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "2058fafb85ceaf1b6bed448a4cb4f6b51bfdbee05c9eb062af0647cb27dc1ec0"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "a4d2b19cde3fd490c669da9a007b16620a106586efc30c32a02efd92f58d0433"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "a4d2b19cde3fd490c669da9a007b16620a106586efc30c32a02efd92f58d0433"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/references/backlog-triage.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "6609c38a0a9094a8cd017cba554be3c9d28f93d58f0a0e611682d10283a7d4a5"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "6609c38a0a9094a8cd017cba554be3c9d28f93d58f0a0e611682d10283a7d4a5"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "87aae5dbb5834e6ecf98c3a656eddca573f8fe5af35c8adf77323a4e03981893"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "87aae5dbb5834e6ecf98c3a656eddca573f8fe5af35c8adf77323a4e03981893"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/references/feedback-contract.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "e0ae7d05c45241ae3f49abea9076449d3f3d746cc336d972438c6ac7cd9d7e00"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e0ae7d05c45241ae3f49abea9076449d3f3d746cc336d972438c6ac7cd9d7e00"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/references/host-loop.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "88c5d8152eb7861b01806954539c175b69f853796f5bacfa49aabe2279cbbea3"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "88c5d8152eb7861b01806954539c175b69f853796f5bacfa49aabe2279cbbea3"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/references/workspace-scope.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "9435aa1fcc975aba3c3f22066b708a3061b13e9181f4c03fce6dc0526807e245"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9435aa1fcc975aba3c3f22066b708a3061b13e9181f4c03fce6dc0526807e245"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-board/scripts/validate-feedback-state.py",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/SKILL.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "2f32838581513e136ca7d55e86ef142386cafa345dca1b2d26375281a19c7f38"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "2f32838581513e136ca7d55e86ef142386cafa345dca1b2d26375281a19c7f38"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/agents/openai.yaml",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "d15ec5205fcd2d3698bcfb5b82237036ed115c1a28bf4acd03aa4a8dd55def22"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "d15ec5205fcd2d3698bcfb5b82237036ed115c1a28bf4acd03aa4a8dd55def22"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/references/critique-contract.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "00cfd9e21e5de88c4e1e30466a559e9e6a84b09c71f74fde52ad0bfa227aa183"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "00cfd9e21e5de88c4e1e30466a559e9e6a84b09c71f74fde52ad0bfa227aa183"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/references/deep-detail.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8ebce8de2de77b8eb75de68eafe4dc68fd202557df1b0e47aff182c4c3dafa82"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8ebce8de2de77b8eb75de68eafe4dc68fd202557df1b0e47aff182c4c3dafa82"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/references/feedback-contract.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "aa96c7fa98903f8766597efd8c2d85dd6f1c43f3d96f9200bdf7735d19cef972"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "aa96c7fa98903f8766597efd8c2d85dd6f1c43f3d96f9200bdf7735d19cef972"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/references/host-loop.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "4307c49c060eb20e864cd982a39fcecdad91763acfe4218a3259e3fb783a448e"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "4307c49c060eb20e864cd982a39fcecdad91763acfe4218a3259e3fb783a448e"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/references/roadmap-ledger.md",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/scripts/validate-critique-state.py",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".claude/skills/work-roadmap/scripts/validate-feedback-state.py",
+      "kind": "agentGuidance",
+      "ownership": "authored",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths",
+      "kind": "directory",
+      "ownership": "sdd",
+      "operation": "noChange",
+      "beforeDigest": null,
+      "afterDigest": null,
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/claude",
+      "kind": "directory",
+      "ownership": "sdd",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": null,
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/claude/commands.md",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "e218c7319759a37abb6c5d3647cab2228c73b26c894c510642b16198eb047e42"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/claude/guidance.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "9ddbaaa6869d07f3cab87a3f6582d57819305f9b17f9f4b0bc1f8dae420b7afe"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/claude/skills.md",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "77a317b603ad8a225fde1064a712df9f6f60bd7d057b5ade7e212d9fb4e5502e"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/codex",
+      "kind": "directory",
+      "ownership": "sdd",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": null,
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/codex/commands.md",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "5d2e29520595a367305d93916b4ecb63fefb4f9e0799989ff4809038bd726bda"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/codex/guidance.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "3f6329b488c9c437563eb58f5643074aacfb1b462b561b7c7c05edd87f750a7a"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/codex/skills.md",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "d7072a5933017d28cb463463ed53928dc7075c2864c8fc0a49db9890422df39a"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/governance-handoff.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "update",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "02da426ad63af537cfb979432cc7167f2e59b8d9476de96f567b449e2c605666"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "5c0c693df18017ae7a420c31c74aa2255b200fea3b4c2ed9b3ca797f2b2a4ad1"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/summary.md",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "create",
+      "beforeDigest": null,
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "f9a95d3a343205bcd2eb99c61358c0e52f622b9e7334beb787ea4304faaea15c"
+      },
+      "safeWriteDecision": "dryRunOnly",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/work-model.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    }
+  ],
+  "specification": null,
+  "clarification": null,
+  "checklist": null,
+  "plan": null,
+  "tasks": null,
+  "analysis": null,
+  "evidence": null,
+  "verification": null,
+  "ship": null,
+  "agentGuidance": null,
+  "refresh": {
+    "workId": "2871-closed-delivery-paths",
+    "stage": "refresh",
+    "status": "refreshed-current",
+    "summaryPath": "readiness/2871-closed-delivery-paths/summary.md",
+    "refreshedViewIds": [
+      "agent-commands",
+      "governance-handoff",
+      "summary"
+    ],
+    "alreadyCurrentViewIds": [
+      "analysis",
+      "ship",
+      "ship-verdict",
+      "verify",
+      "work-model"
+    ],
+    "blockedViewIds": [],
+    "notApplicableViewIds": [],
+    "preservedAuthoredPaths": [
+      ".fsgg/agents.yml",
+      ".fsgg/project.yml",
+      ".fsgg/sdd.yml",
+      "work/2871-closed-delivery-paths/checklist.md",
+      "work/2871-closed-delivery-paths/clarifications.md",
+      "work/2871-closed-delivery-paths/evidence.yml",
+      "work/2871-closed-delivery-paths/plan.md",
+      "work/2871-closed-delivery-paths/spec.md",
+      "work/2871-closed-delivery-paths/tasks.yml"
+    ],
+    "findingIds": [],
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "disposition": "refreshed-current",
+    "perViewState": [
+      [
+        "work-model",
+        "current"
+      ],
+      [
+        "analysis",
+        "current"
+      ],
+      [
+        "verify",
+        "current"
+      ],
+      [
+        "ship",
+        "current"
+      ],
+      [
+        "ship-verdict",
+        "current"
+      ],
+      [
+        "governance-handoff",
+        "current"
+      ],
+      [
+        "agent-commands",
+        "current"
+      ],
+      [
+        "summary",
+        "current"
+      ]
+    ],
+    "sourceSnapshotCount": 4,
+    "readiness": "refreshReady"
+  },
+  "scaffold": null,
+  "doctor": null,
+  "upgrade": null,
+  "lint": null,
+  "surface": null,
+  "dependencySurface": null,
+  "generatedViews": [
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/claude/guidance.json",
+      "kind": "agent-commands",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": "readiness/2871-closed-delivery-paths/work-model.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/agent-commands/codex/guidance.json",
+      "kind": "agent-commands",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": "readiness/2871-closed-delivery-paths/work-model.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/analysis.json",
+      "kind": "analysis",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/governance-handoff.json",
+      "kind": "governance-handoff",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": "readiness/2871-closed-delivery-paths/ship.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "bcad9b1540bb047f179e725c0079c5c097ae82e195fd09b346b9f141c0c9b663"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/verify.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "f1d6e70b036710845e94b518e1646af7b241f9c2e24fa54ea4523c50549e496d"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/work-model.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/ship-verdict.json",
+      "kind": "ship-verdict",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": "readiness/2871-closed-delivery-paths/ship.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "bcad9b1540bb047f179e725c0079c5c097ae82e195fd09b346b9f141c0c9b663"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/ship.json",
+      "kind": "ship",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/summary.md",
+      "kind": "summary",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": "readiness/2871-closed-delivery-paths/agent-commands/claude/guidance.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9ddbaaa6869d07f3cab87a3f6582d57819305f9b17f9f4b0bc1f8dae420b7afe"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/agent-commands/codex/guidance.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "3f6329b488c9c437563eb58f5643074aacfb1b462b561b7c7c05edd87f750a7a"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/analysis.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "51df8cde499c0f5b4da5541af6301bb3b85a3bd3218f6bf06e79abfec34ad453"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/ship.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "bcad9b1540bb047f179e725c0079c5c097ae82e195fd09b346b9f141c0c9b663"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/verify.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "f1d6e70b036710845e94b518e1646af7b241f9c2e24fa54ea4523c50549e496d"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "readiness/2871-closed-delivery-paths/work-model.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "18da51e9a459d3888b4ff127d158c8f28b5366eddd33efa4f29939419103a347"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/verify.json",
+      "kind": "verification",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "66c37dd400f3bbb3fc6cb386f677d8af470aada9220fdeffd425521fe1a03e0f"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "1394fd166a483968a50bddb78d5ceba323ec8a7f853782cc2bfcea4dcdfb289c"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "1a70c3c6851eca70cc6d263fe72ff59d2bacc96de8424e24966d9c7ca238f97f"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fea0807854150a2a8028cb2e55d8126ab82ebdeb0c0e8872cc98bee3d69daecd"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "17d446247f6a0f38b9bff29790975e3679910778831a7198932bf872c26307d6"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2871-closed-delivery-paths/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "6c745e56f32f499bb2c603b947a77aca3d7162635e06ab512abfcd27cde483aa"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "nextAction": {
+    "actionId": "refreshGenerated",
+    "command": null,
+    "workId": "2871-closed-delivery-paths",
+    "reason": "Generated views are current; rely on the refreshed readiness for the selected work item.",
+    "requiredArtifacts": [
+      "readiness/2871-closed-delivery-paths/summary.md"
+    ],
+    "blockingDiagnosticIds": []
+  },
+  "help": null,
+  "lifecycleStatus": {
+    "workId": "2871-closed-delivery-paths",
+    "isLifecycleStage": false,
+    "currentOrdinal": 10,
+    "totalStages": 10,
+    "outcome": "succeeded",
+    "nextCommand": null,
+    "stages": [
+      {
+        "command": "charter",
+        "ordinal": 1,
+        "state": "done"
+      },
+      {
+        "command": "specify",
+        "ordinal": 2,
+        "state": "done"
+      },
+      {
+        "command": "clarify",
+        "ordinal": 3,
+        "state": "done"
+      },
+      {
+        "command": "checklist",
+        "ordinal": 4,
+        "state": "done"
+      },
+      {
+        "command": "plan",
+        "ordinal": 5,
+        "state": "done"
+      },
+      {
+        "command": "tasks",
+        "ordinal": 6,
+        "state": "done"
+      },
+      {
+        "command": "analyze",
+        "ordinal": 7,
+        "state": "done"
+      },
+      {
+        "command": "evidence",
+        "ordinal": 8,
+        "state": "done"
+      },
+      {
+        "command": "verify",
+        "ordinal": 9,
+        "state": "done"
+      },
+      {
+        "command": "ship",
+        "ordinal": 10,
+        "state": "done"
+      }
+    ]
+  }
+}
+]]></system-out></testcase></testsuite>

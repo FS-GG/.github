@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2871-closed-delivery-paths/spec.md sha256:01cafc3faa8e5a4b103061ffff9197babfec80479d5688421c1b86db19bf333e schemaVersion:1
+- spec: work/2871-closed-delivery-paths/spec.md sha256:17d446247f6a0f38b9bff29790975e3679910778831a7198932bf872c26307d6 schemaVersion:1
 - clarifications: work/2871-closed-delivery-paths/clarifications.md sha256:1394fd166a483968a50bddb78d5ceba323ec8a7f853782cc2bfcea4dcdfb289c schemaVersion:1
 - checklist: work/2871-closed-delivery-paths/checklist.md sha256:66c37dd400f3bbb3fc6cb386f677d8af470aada9220fdeffd425521fe1a03e0f schemaVersion:1
 

@@ -4,10 +4,10 @@
   "workId": "2871-closed-delivery-paths",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "64d43072e583a7ceaebe592b2a43c9f64fecc8f70903cf4ee6bc27867b9d79d4"
+    "value": "2a747b81fea60638915efe22fc2a0b312c4082b7f91de67ae76413f5ee747984"
   },
   "verificationReadiness": {
     "status": "verificationReady",
@@ -16,7 +16,7 @@
     "evidenceObservedCount": 18
   },
   "disposition": {
-    "state": "advisory",
+    "state": "shipReady",
     "blockingFindingIds": []
   },
   "readiness": "shipReady"

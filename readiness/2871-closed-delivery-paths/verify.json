@@ -4,7 +4,7 @@
   "workId": "2871-closed-delivery-paths",
   "stage": "verify",
   "status": "verificationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,17 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "842d6be3236501704e63d5639ad1be44a4d1d952d95a090a85547233f90107d0"
+        "value": "0bced30b773ed0bab9b8ee036774548f579686c708c185cfd44f4cc8240b3b6e"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2871-closed-delivery-paths/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "71cd27d95e4450d881bd8539a861be7f2b2cc7b06b7b2e1a61453fa9b994f2da"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "4c627a8377100af3a7fc5e3c254b5a0e24dbc3ef770fd50b0639aa3e7c8016cb"
+        "value": "baff5b3a94a438d67be82114d7ae3f7a677893f75855e737f79194e41a6605e7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "6512245ce645919a9658edd5b628d893d4261aafd2371335fe9362c52e6efe10"
+        "value": "fea0807854150a2a8028cb2e55d8126ab82ebdeb0c0e8872cc98bee3d69daecd"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "01cafc3faa8e5a4b103061ffff9197babfec80479d5688421c1b86db19bf333e"
+        "value": "17d446247f6a0f38b9bff29790975e3679910778831a7198932bf872c26307d6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -155,7 +165,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV001"
       ],
@@ -177,7 +186,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV002"
       ],
@@ -199,7 +207,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV003"
       ],
@@ -221,7 +228,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV004"
       ],
@@ -243,7 +249,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV005"
       ],
@@ -264,7 +269,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV006"
       ],
@@ -285,7 +289,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV007"
       ],
@@ -306,7 +309,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV008"
       ],
@@ -330,7 +332,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV009"
       ],
@@ -354,7 +355,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV010"
       ],
@@ -378,7 +378,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV011"
       ],
@@ -402,7 +401,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV012"
       ],
@@ -425,7 +423,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV013"
       ],
@@ -449,7 +446,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV014"
       ],
@@ -472,7 +468,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV015"
       ],
@@ -494,7 +489,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV016"
       ],
@@ -517,7 +511,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV017"
       ],
@@ -539,7 +532,6 @@
       "observed": true,
       "classifiedRequirement": false,
       "journeyRequirement": false,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV018"
       ],
@@ -561,7 +553,6 @@
       "obligationId": "EV001",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV001"
       ],
@@ -580,7 +571,6 @@
       "obligationId": "EV002",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV002"
       ],
@@ -599,7 +589,6 @@
       "obligationId": "EV003",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV003"
       ],
@@ -618,7 +607,6 @@
       "obligationId": "EV004",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV004"
       ],
@@ -637,7 +625,6 @@
       "obligationId": "EV005",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV005"
       ],
@@ -654,7 +641,6 @@
       "obligationId": "EV006",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV006"
       ],
@@ -671,7 +657,6 @@
       "obligationId": "EV007",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV007"
       ],
@@ -688,7 +673,6 @@
       "obligationId": "EV008",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV008"
       ],
@@ -705,7 +689,6 @@
       "obligationId": "EV009",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV009"
       ],
@@ -722,7 +705,6 @@
       "obligationId": "EV010",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV010"
       ],
@@ -739,7 +721,6 @@
       "obligationId": "EV011",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV011"
       ],
@@ -756,7 +737,6 @@
       "obligationId": "EV012",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV012"
       ],
@@ -773,7 +753,6 @@
       "obligationId": "EV013",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV013"
       ],
@@ -790,7 +769,6 @@
       "obligationId": "EV014",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV014"
       ],
@@ -807,7 +785,6 @@
       "obligationId": "EV015",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV015"
       ],
@@ -824,7 +801,6 @@
       "obligationId": "EV016",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV016"
       ],
@@ -841,7 +817,6 @@
       "obligationId": "EV017",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV017"
       ],
@@ -858,7 +833,6 @@
       "obligationId": "EV018",
       "state": "satisfied",
       "observed": true,
-      "recordRequirement": false,
       "evidenceIds": [
         "EV018"
       ],
@@ -976,28 +950,11 @@
     {
       "path": "readiness/2871-closed-delivery-paths/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
-      "diagnosticIds": [
-        "workModelNotGenerated"
-      ]
+      "currency": "current",
+      "diagnosticIds": []
     }
   ],
-  "findings": [
-    {
-      "id": "VF001",
-      "severity": "warning",
-      "category": "warning",
-      "path": "readiness/2871-closed-delivery-paths/work-model.json",
-      "relatedIds": [
-        "readiness/2871-closed-delivery-paths/work-model.json",
-        "requirementNotTyped",
-        "requirementNotTyped",
-        "requirementNotTyped"
-      ],
-      "message": "Generated view \u0027readiness/2871-closed-delivery-paths/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
-      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view."
-    }
-  ],
+  "findings": [],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -1021,21 +978,7 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [
-    {
-      "id": "workModelNotGenerated",
-      "severity": "warning",
-      "artifact": "readiness/2871-closed-delivery-paths/work-model.json",
-      "message": "Generated view \u0027readiness/2871-closed-delivery-paths/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
-      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view.",
-      "relatedIds": [
-        "readiness/2871-closed-delivery-paths/work-model.json",
-        "requirementNotTyped",
-        "requirementNotTyped",
-        "requirementNotTyped"
-      ]
-    }
-  ],
+  "diagnostics": [],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",
