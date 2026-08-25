@@ -2227,6 +2227,7 @@ done
 # carries `Paths: src/Closed/**`. The production command must use the latter and continue
 # implementation. Reverting LiveHandlers to `candidate.Item.TouchSet` makes this exact leg return the
 # false `declared paths were never declared` no-verdict seen in the release cut.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/activate-issue/49" >/dev/null
 curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=vole-418 lease=120 -->"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/49/comments" >/dev/null

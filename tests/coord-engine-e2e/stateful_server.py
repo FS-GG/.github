@@ -64,7 +64,7 @@ ISSUES = {
     # while the closure-sensitive board projection has lost the body. Delivery must read the former;
     # using the latter reproduces the false "no Paths" terminal refusal.
     49: {"body": "A closed delivery item.\n\nPaths: src/Closed/**",
-         "projection_body": "", "state": "CLOSED", "status": "In review"},
+         "projection_body": "", "state": "CLOSED", "status": "In review", "off_board": True},
     # #1087 — the free-refusal control: an UNROSTERED repo (no chore lock at all). All seven FS-GG repos now
     # have one, so the honest "no lock" case is a repo `choreLockRef` does not know. `done` here stamps and
     # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
@@ -814,6 +814,15 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 FAIL_NEXT_ISSUE_BODY.add(int(m.group(1)))
                 return self._send(200, {"issueBodyFailureArmed": int(m.group(1))})
+
+        m = re.match(r"^/_fixture/activate-issue/(\d+)$", path)
+        if m:
+            n = int(m.group(1))
+            with LOCK:
+                if n not in ISSUES:
+                    return self._send(404, {"message": "Not Found"})
+                ISSUES[n]["off_board"] = False
+                return self._send(200, {"issueActivated": n})
 
         if path.rstrip("/") == "/_fixture/fail-next-claim-post":
             with LOCK:
