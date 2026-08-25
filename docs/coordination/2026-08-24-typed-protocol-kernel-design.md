@@ -60,6 +60,12 @@ projections remain first-class review surfaces, but never a second authority.
 
 ## Lifecycle name and default direction
 
+Implementation status (2026-08-25): the P4 producer artifacts are published as FS.GG.SDD
+`1.4.0-preview.1` and FS.GG.UI.Template `0.28.0`. The organization registry and
+`new-sdd-workspace` therefore expose `typed-sdd` additively while continuing to resolve omission to
+`sdd`. Provider/profile adoption remains an ordered consumer step; this status does not authorize the
+P5 default flip.
+
 The consumer-facing process is **Typed SDD**. Its stable machine identifier is `typed-sdd`. “Typed” names
 the durable property—the canonical specification is a compiled, inspectable AST—without coupling the
 process name to computation-expression syntax, a particular builder, or the current agent runtime.

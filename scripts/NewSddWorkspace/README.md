@@ -24,13 +24,14 @@ Requires the `fsgg-sdd` CLI on PATH (`dotnet tool install --global FS.GG.SDD.Cli
 
 ```sh
 new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>; compatibility default = rendering
+new-sdd-workspace ./Typed Typed --lifecycle typed-sdd
 new-sdd-workspace ./Tool Tool --template console
 new-sdd-workspace ./Portal Portal --template web
 new-sdd-workspace ./Interop Interop --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the meaningful
-parameters with prompts (product → target → application type → provider-specific parameters → governance → descriptor ref → currency →
+parameters with prompts (product → target → application type → lifecycle → provider-specific parameters → governance → descriptor ref → currency →
 this workspace's repo / coordination org / board / chore-locks, defaulting to FS-GG).
 The wizard follows the established defaults without asking redundant confirmations: coordination is
 on and an immediate post-scaffold `fsgg-sdd upgrade` is off. Scripted callers can still opt out with
@@ -43,6 +44,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | Option | Effect |
 |---|---|
 | `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
+| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the representation backend and forwards it unchanged to `fsgg-sdd scaffold`. Omitted remains `sdd` during P4. `typed-sdd` is the canonical F# specification lane, `none` is Freeform, and `spec-kit` remains legacy/frozen. |
 | `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
 | `--npm-package <name>` / `--npm-version <exact>` / `--binding-target <browser\|node\|universal>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure and target runtime. They are rejected for other templates. |
 | `--ref <git-ref>` | `FS.GG.Templates` ref to fetch the provider descriptor from (default: `main` = newest coherent set). Pass a tag to pin a reproducible version. |

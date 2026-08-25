@@ -519,7 +519,10 @@ contracts:
     # where 0.23.0 gave only `.claude` and `.agents`. New content in scaffolded output is additive,
     # which is why it is a MINOR and not 0.23.1: a patch would drop new directories into projects
     # pinned to 0.23.x. This is a template-only cut; no FS.GG.UI framework member moved.
-    # 0.27.0 is the current Rendering coherent set: all three tags resolve to b8e60c317a3b64f259c4aaf462910041c40426e5 (Rendering PR #1258), and FS.GG.UI.Template 0.27.0 is present on both feeds.
+    # 0.28.0 is the current Rendering coherent set: all three tags resolve to
+    # 6f0c46f5229a647fd045aee1913096e6774da872 (Rendering PR #1271), and
+    # FS.GG.UI.Template 0.28.0 is present on both feeds. It adds the distinct typed-sdd lane while
+    # preserving omitted/default sdd, explicit none, and legacy spec-kit.
     version: "0.28.0"
     package-version: "0.28.0"
     package-tag: "fs-gg-ui-template/v0.28.0"
@@ -534,20 +537,13 @@ contracts:
     # 049). The coherent set therefore carries a MINIMUM coherent fsgg-sdd version — the oldest CLI
     # that seeds them. See coherence id `fsgg-sdd-orchestrator-axis`.
     minimum-fsgg-sdd:
-      version: "0.6.0"         # PINNED (FR-007 satisfied): FS.GG.SDD released v0.6.0 (2026-07-04;
-                               # FS.GG.SDD.Cli 0.6.0 on the org feed + nuget.org), shipping feature 073
-                               # (transient-artifact taxonomy): fsgg-sdd now SEEDS a .gitignore for
-                               # regenerable output into scaffolded products. Per the maintainer decision
-                               # that a product on this pin MUST contain the seeded .gitignore, this grew
-                               # the expected seeded-artifact surface, so per FR-011 the minimum coherent
-                               # CLI ADVANCES 0.4.0->0.6.0 (0.6.0 is the oldest published CLI that seeds
-                               # the .gitignore; 0.5.0 did not). Advancing the minimum FLIPS the coherence
-                               # row `fsgg-sdd-orchestrator-axis` coherent:true->false until the Templates
-                               # provider descriptor re-mirrors this (minimumFsggSdd 0.4.0->0.6.0 — standing
-                               # request FS.GG.Templates#99). PRIOR advances: 0.3.0->0.4.0 (feature 056
-                               # 3-root skill union; re-cohered via Templates#49/PR#51, 574e90c, 2026-07-02)
-                               # and the original 0.3.0 lockstep (epic #85).
-      requires: "FS.GG.SDD Feature 049 (early-stage-guidance) + Feature 051 (seeded fs-gg-sdd-* process skills) + Feature 056 (3-root byte-identical skill union) + Feature 073 (seeded .gitignore for regenerable output)"
+      version: "1.4.0-preview.1" # P4 Typed SDD producer-first floor. FS.GG.SDD#916 / v1.4.0-preview.1
+                                 # was published to GitHub Packages and nuget.org before this registry
+                                 # flip and independently installed from the public feed. It is the first
+                                 # release carrying the canonical specification kernel, typed lifecycle
+                                 # backend, migration analysis, authoring receipt, normalized AST,
+                                 # generated projection, doctor/refresh/upgrade, and readiness contracts.
+      requires: "FS.GG.SDD 1.4.0-preview.1 Typed SDD compiler/backend, migration analysis, canonical source + normalized AST, authoring receipt, generated projection, refresh/upgrade/doctor, and readiness/ship checks; includes all earlier Standard SDD seeded artifacts"
       adr: "docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md"
       tracking: "Live enforcement: FS.GG.Templates scripts/check-provider-floors.py (required composition check; FS.GG.Templates#383). Historic 0.4.0->0.6.0 re-mirror: FS.GG.Templates#99, closed via PR#100. FS.GG.SDD#49 records the CLI provenance/warning axis."
       # This is deliberately an enumerable subject, not a YAML list: the typed registry validator
@@ -587,17 +583,20 @@ contracts:
           `dotnet new fs-gg-ui --productName Acme` exit 0, no 127). Cross-ref #27 <-> SDD#35;
           published + made consumer-readable by #29/#26.
       lifecycle:
-        type: "choice (spec-kit|sdd|none)"
+        type: "choice (spec-kit|sdd|typed-sdd|none)"
         default: "sdd"   # ADR-0056 (2026-07-20) FLIPS the default spec-kit -> sdd and reclassifies spec-kit as a LEGACY lane (frozen, scheduled for removal); amends ADR-0002 §Decision.2. publish-before-flip FR-007: the default-carrying template is LIVE FIRST — FS.GG.UI.Template 0.15.0 (org feed, published 2026-07-20T07:19:58Z) ships content/.template.config/template.json lifecycle.defaultValue == "sdd" (verified in the published nupkg) — and this row flips AFTER. The version/package-version/package-tag above ADVANCED 0.14.0 -> 0.15.0 in the SAME flip, so the coherent-set version this row asserts is the one that actually carries the sdd default (0.14.0 scaffolds spec-kit — flipping the default without the pin would leave the registry asserting sdd while its own pin points at a spec-kit template). Flipped by .github#1246 (from ADR-0056 / #1244; producer FS.GG.Rendering#944/#946). PRIOR default "spec-kit" (byte-identical to pre-ADR-0002 output; existing profile tests unchanged).
         notes: >
-          sdd -> app-only product + SDD skeleton; none -> emits neither .specify/ nor a
+          typed-sdd -> product plus an external Typed SDD backend whose canonical F# source,
+          normalized AST, authoring receipt, Markdown projection, compiler/package identity, and
+          readiness evidence remain distinct from Standard SDD. sdd -> app-only product + Standard
+          SDD skeleton; none -> emits neither .specify/ nor a
           constitution. Gates ONLY the lifecycle WORKSPACE: .specify/, constitution, the
           .agents//.claude/ agent-context tree, the blanket authoring-skills copy + speckit-*
           command skills, .template.config/generated/, and docs/skillist-reference.md (the
           full-registry catalog). Feature 219 (FS.GG.Rendering#30, additive / surface-neutral):
           the framework product-usage skills under .agents/skills/fs-gg-* and
           .claude/skills/fs-gg-* are NOT lifecycle-gated — they follow the product PROFILE and
-          emit under EVERY lifecycle (spec-kit|sdd|none), so the recommended SDD path and the
+          emit under EVERY lifecycle (spec-kit|sdd|typed-sdd|none), so both SDD paths and the
           full-stack composition now carry the profile-appropriate fs-gg-* skills. spec-kit stays
           byte-identical (no parameter add/remove/rename; the sdd/none paths gain skills, no file
           removed). Feature 223 (FS.GG.Rendering#35, RELEASED @ 0.1.55-preview.1): fs-gg-symbology

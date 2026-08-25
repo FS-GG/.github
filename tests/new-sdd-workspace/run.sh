@@ -103,6 +103,12 @@ expect_err "--template with no following token needs a value" \
   "--template needs a value" -- "$TGT" P --template
 expect_err "an unknown --template is rejected before any scaffold" \
   "unknown template 'bogus'" -- "$TGT" P --template bogus
+expect_err "--lifecycle swallowing the next flag as its value is caught" \
+  "--lifecycle needs a value (got flag '--ref')" -- "$TGT" P --lifecycle --ref v1
+expect_err "--lifecycle with no following token needs a value" \
+  "--lifecycle needs a value" -- "$TGT" P --lifecycle
+expect_err "an unknown lifecycle is rejected before any scaffold" \
+  "unknown lifecycle 'bogus'" -- "$TGT" P --lifecycle bogus
 expect_err "a rendering profile is rejected for a non-rendering template" \
   "--profile is only supported by the rendering template" -- "$TGT" P --template console --profile game
 expect_err "fable-bindings requires its package closure" \
@@ -461,6 +467,11 @@ expect_execution() {
 }
 
 expect_execution "omitted --template keeps the rendering compatibility route" rendering "profile=game" --profile game
+expect_execution "omitted lifecycle forwards the Standard SDD default" rendering "lifecycle=sdd"
+expect_execution "explicit Standard SDD remains distinct" rendering "lifecycle=sdd" --lifecycle sdd
+expect_execution "explicit Typed SDD is forwarded unchanged" rendering "lifecycle=typed-sdd" --lifecycle typed-sdd
+expect_execution "explicit Freeform is forwarded unchanged" rendering "lifecycle=none" --lifecycle none
+expect_execution "legacy Spec Kit remains selectable and frozen" rendering "lifecycle=spec-kit" --lifecycle spec-kit
 expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
 expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
 expect_execution "fable-game routes to its provider and descriptor" fable-game "productName=Product" --template fable-game

@@ -5,6 +5,7 @@ let defaults =
         "./Pong"
         "Pong"
         "rendering"
+        "sdd"
         "main"
         true
         false
@@ -23,6 +24,9 @@ if not defaults.Coordinate then
 if defaults.Upgrade then
     failwith "the wizard must not silently select the explicit --upgrade behavior"
 
+if defaults.Lifecycle <> "sdd" then
+    failwith "the wizard must preserve Standard SDD as the P4 default"
+
 if defaults.WorkspaceRepo <> Some "FS-GG/Pong"
    || defaults.BoardOwner <> "FS-GG"
    || defaults.BoardTitle <> "Coordination"
@@ -34,6 +38,7 @@ let nonDefaultWiring =
         "./Product.X"
         "Product.X"
         "rendering"
+        "typed-sdd"
         "release/v1"
         false
         true
@@ -48,6 +53,7 @@ let nonDefaultWiring =
 
 if not nonDefaultWiring.Coordinate
    || nonDefaultWiring.Upgrade
+   || nonDefaultWiring.Lifecycle <> "typed-sdd"
    || nonDefaultWiring.WorkspaceRepo <> Some "acme/Product.X"
    || nonDefaultWiring.BoardOwner <> "acme"
    || nonDefaultWiring.BoardTitle <> "Roadmap"

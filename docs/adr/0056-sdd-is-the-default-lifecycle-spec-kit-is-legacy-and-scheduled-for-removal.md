@@ -1,5 +1,11 @@
 # ADR-0056: `sdd` is the default lifecycle for every vendored product; `spec-kit` is legacy, frozen, and scheduled for removal
 
+> **P4 additive amendment (2026-08-25, `.github#2925`):** `typed-sdd` is now a fourth explicit
+> lifecycle value beside `spec-kit|sdd|none`. This does not amend the default decision below:
+> omission still means `sdd`. Typed SDD preserves its exact token and uses the published
+> FS.GG.SDD `1.4.0-preview.1` canonical F# backend; it is neither an alias nor a fallback. Changing
+> the omitted value remains the separate P5 evidence-gated cross-repository decision.
+
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS.GG.Rendering (owns `fs-gg-ui` `.template.config/template.json` — the `lifecycle` symbol default and the raw-template guard); FS.GG.SDD (owns `fsgg-sdd scaffold` and its default, and the migration path); FS-GG/.github (owns `registry/dependencies.yml` `fs-gg-ui-template`, `registry/skills.yml` + the `workRoadmap` driver, this ADR, and governance); FS.GG.Game / FS.GG.Rendering (own `fs-gg-feedback-capture` + the Spec Kit `after_*` hook machinery on the removal path); FS.GG.Templates (composition/provider pins); FS.GG.Governance (constitution/overlay on the now-default lane).

@@ -1,0 +1,512 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "typed-sdd-p4-registry",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.4.0-preview.1",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/typed-sdd-p4-registry/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "a37f9b853320e4d26d419c25c3731219306d61f6dd56b1cc225f38fa6db4ea55"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/typed-sdd-p4-registry/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3735767218a7be33019c35c08f9cce091e74caef1604dd38085e08f3281fccb9"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/typed-sdd-p4-registry/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2c440c98ee9db1ef47f2e075fe6f36bc99892dc8ce7b479b5e4e994886ad3b16"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/typed-sdd-p4-registry/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4b4c4d974472c18c46cb14d0e4b64539c4b40a476dfa3b3e19c9aa8beb8b1ae5"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/typed-sdd-p4-registry/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4c1ec75f49efde71f0b87b953c1cccb9e1da29d7a2ccc9da4e23aff3cbe2a741"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/typed-sdd-p4-registry/checklist.md",
+      "targetPath": "work/typed-sdd-p4-registry/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/typed-sdd-p4-registry/checklist.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/typed-sdd-p4-registry/clarifications.md",
+      "targetPath": "work/typed-sdd-p4-registry/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/typed-sdd-p4-registry/clarifications.md",
+      "targetPath": "work/typed-sdd-p4-registry/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/typed-sdd-p4-registry/clarifications.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "PD-007",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/typed-sdd-p4-registry/plan.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-006",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "FR-007",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/typed-sdd-p4-registry/spec.md",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR034",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T010",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T011",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
+      "sourcePath": "work/typed-sdd-p4-registry/tasks.yml",
+      "targetPath": "work/typed-sdd-p4-registry/tasks.yml",
+      "sourceId": "T013",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 37,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/typed-sdd-p4-registry/work-model.json",
+      "kind": "workModel",
+      "currency": "missing",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}
