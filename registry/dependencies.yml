@@ -945,8 +945,8 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: new-sdd-workspace
-    version: "0.10.0"          # SOURCE SemVer 0.10.0: additive none|sdd|typed-sdd|spec-kit lifecycle selection with omitted/default sdd, exact provider forwarding, and executable default/lifecycle-loss mutation controls (.github#2925). Released from new-sdd-workspace/v0.10.0 at c8fb03827612438fdb03ea0bb47e224ed86d557a.
-    package-version: "0.10.0"  # FEED newest, independently verified on GitHub Packages and nuget.org after release run 32795601184; the 26 non-signature payload entries are byte-identical. Org archive SHA-256 5fbd743400d8dbd6822c94e265a5fe5f0cd18d13e0f006922665eb5ccd40f6a3; public signed archive SHA-256 a144cbe615c083ca4a19154341ca8bcdc9e4f1da295c357254921b60b17777ff. Tag new-sdd-workspace/v0.10.0 points to c8fb03827612438fdb03ea0bb47e224ed86d557a. publish-before-flip FR-007 satisfied. PRIOR 0.9.0.
+    version: "0.10.1"          # SOURCE SemVer 0.10.1: forward patch cut from exact source 264725f374e3f05da46d7c3089462076a1f9bf7a after 0.10.0 introduced additive none|sdd|typed-sdd|spec-kit lifecycle selection with omitted/default sdd, exact provider forwarding, and executable default/lifecycle-loss mutation controls (.github#2968/#2925). Annotated tag new-sdd-workspace/v0.10.1 peels to that source. PRIOR 0.10.0 at c8fb03827612438fdb03ea0bb47e224ed86d557a.
+    package-version: "0.10.1"  # FEED newest, independently verified on GitHub Packages and nuget.org after release run 32858342782; all 26 normalized payload files are byte-identical with manifest digest sha256:69c7f9e0ab09076dfed201eb1b57e803829386cb8a2de4bd63a0b841fd964ace. Org archive SHA-256 7eede495377db5a0b11d7aaaae2387761d85309cf2044af6249668f324d85cd8; public signed archive SHA-256 1f2a63cc63386574e307cdcf08dd013151393156c6f875ba00ea09c7e81c4ea7. The served nuspec binds version 0.10.1 and repository commit 264725f374e3f05da46d7c3089462076a1f9bf7a; a public-only install and hosted ANSI help route pass. publish-before-flip FR-007 satisfied. PRIOR 0.10.0.
     owner: github             # Registry.fs resolves owner against repoIds + the literal `github`. `.github` owns the scaffolder: ADR-0016 retired FS.GG.Templates' local `new-fullstack` for this single org CLI, and its release workflow lives here because the tool does (mirrors coord-engine).
     # ADR-0016's single org scaffolder (renamed new-sdd-fullstack → new-sdd-workspace, package
     # FS.GG.NewSddFullstack → FS.GG.NewSddWorkspace). A `dotnet new`-style CLI humans install
@@ -967,16 +967,17 @@ contracts:
     # here to make a gate happy — the empty list IS the recorded decision.
     surface: "the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool"
     consumers: []             # DELIBERATELY EMPTY — see the block above. A `dotnet new` tool humans install; nothing in the graph restores it, so it has no consumer edge. schemaVersion 2 (.github#1114) makes this a legal, honest value distinct from an OMITTED `consumers`.
-    # .github#2925 completed epic #2067 rollout phase 6 on 2026-08-25: release 0.10.0 includes the
+    # .github#2925 completed epic #2067 rollout phase 6 on 2026-08-25: release 0.10.0 introduced the
     # --template <rendering|console|web|fable-game|fable-bindings> selector merged via
     # .github#2069/PR#2074. Release run 32795601184 published the exact c8fb0382 tree to both feeds
     # before this row advanced, preserving the future-artifact guard recorded in .github#2070.
-    # The remaining P4 provider implementation then shipped in FS.GG.Workspace.Template 0.9.0;
-    # this wizard identity is published and selectable, not a pending rollout phase.
+    # The forward 0.10.1 patch preserves that public CLI surface and its exact provider forwarding.
+    # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
+    # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.9.0"   # SOURCE: FS.GG.Templates renamed its planned package `FS.GG.Templates` (frozen at 0.7.1, .github#2070/DEC-001) to `FS.GG.Workspace.Template` per ADR-0072 §1 and published it at 0.8.0 (FS-GG/FS.GG.Templates#349), advanced through 0.8.1/0.8.2, and published the P4 Typed SDD provider/profile adoption at 0.9.0 (FS-GG/FS.GG.Templates#432, tag fs-gg-templates/v0.9.0 -> 045183ab25d52b5f96feb9804f12e95d54b7de58). Four independent identities land together; see `surface` below.
-    package-version: "0.9.0"   # FEED: release run 32811684105 completed successfully; GitHub Packages version 1168464584 and nuget.org both serve 0.9.0. The immutable release asset is sha256:428109ba503e9e73f1534aeb1ed76a075a334bc05a5039f582f13edd8ed65502; nuget.org's signed archive is sha256:3f9cc747ea78088a9235c85df2fbb0e0ef1e75052657bb03c3cf45ca70c8292a and its nuspec binds repository commit 045183ab25d52b5f96feb9804f12e95d54b7de58. check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest on the feed for EVERY package-bearing contract — it is not a "what a consumer has adopted" field.
-    package-tag: "fs-gg-templates/v0.9.0"
+    version: "0.10.0"   # SOURCE: the five-template FS.GG.Workspace.Template set advances from the P4 Typed SDD provider/profile adoption at 0.9.0 to the accessible fable-game browser baseline and corrected Typed SDD release-floor gate at 0.10.0 (FS-GG/FS.GG.Templates#431/#435/#437). Annotated tag fs-gg-templates/v0.10.0 peels to exact source 565ad45d2dda386e9d1673071cc0b424cfd02be6. PRIOR 0.9.0 at 045183ab25d52b5f96feb9804f12e95d54b7de58.
+    package-version: "0.10.0"   # FEED: release run 32857268949 packed once and both GitHub Packages and nuget.org serve 0.10.0. Canonical/GitHub archive sha256:3c5477ecd3cacba95fd0ea6b3047ea926fc834f779943c1dd93c62c61582b2e6; public signed archive sha256:69cbed30447e6bd4d221e0ce78060c8245d2744fc3993b4c27368aeeb48d11c8 differs only by .signature.p7s. All 154 normalized payload files share manifest digest sha256:859a831b4d69d6568c6716565544b6f36a06c0e7f7bfc52c22b8b39136d90f74; nuspec sha256:7467b12789b433374ec9c95c4d1d81a962363dae1c9bdbe71e6d54264c0962c8 binds the exact source. Fresh isolated installs from both served archives register all five template identities. check-feed-coherence.py asserts literal newest on both feeds.
+    package-tag: "fs-gg-templates/v0.10.0"
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
@@ -997,7 +998,7 @@ contracts:
       npm package/declaration closure, ADR-0072 §3, first proved by the unreleased
       EHotwagner/babylonjsBindings reference). All four also carry `fs-gg-governance` (the pre-existing
       governance overlay template, folded into this package at the same rename).
-    consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.0.
+    consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.1.
     minimum-fsgg-sdd:
       version: "1.4.0-preview.1" # P4 Typed SDD floor, mirrored by every FS.GG.Templates provider in #432.
       requires: "Typed Protocol Kernel lifecycle selection, compilation, provenance, refresh, upgrade, and diagnostics for every workspace identity"
