@@ -983,21 +983,23 @@ contracts:
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
     # HTTP with explicit DTOs replaces Fable.Remoting for fable-game's typed request/response half,
     # because the upstream Fable.Remoting.MsgPack defect blocking the pinned Fable compiler — FS.GG.Templates#370 — is
-    # unfixed). One packable dotnet-template package, FOUR independent identities; a generated
+    # unfixed). One packable dotnet-template package, FIVE registered identities: four independently
+    # selected workspace providers plus the separately registered governance overlay. A generated
     # workspace selects exactly one. Registry activation began in epic .github#2067 rollout phases
     # 4/5 (.github#2070); phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0
     # with `--template`, and Templates#432 then published this P4 provider family at 0.9.0.
     surface: >
-      FS.GG.Workspace.Template package, four `dotnet new` identities: `fs-gg-console` (provider
-      `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F#
+      FS.GG.Workspace.Template package, five packaged `dotnet new` identities: four workspace-provider
+      identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane,
+      ADR-0072 §2); `fs-gg-web` (provider `web` — F#
       ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider
       `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented
       real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response
       per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069);
       `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned
       npm package/declaration closure, ADR-0072 §3, first proved by the unreleased
-      EHotwagner/babylonjsBindings reference). All four also carry `fs-gg-governance` (the pre-existing
-      governance overlay template, folded into this package at the same rename).
+      EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered
+      pre-existing governance overlay template folded into this package at the same rename.
     consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.1.
     minimum-fsgg-sdd:
       version: "1.4.0-preview.1" # P4 Typed SDD floor, mirrored by every FS.GG.Templates provider in #432.

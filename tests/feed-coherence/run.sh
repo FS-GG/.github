@@ -623,14 +623,18 @@ if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [[ "$new_sdd_registry_block" != *'stay at the RELEASED 0.9.0'* ]] \
   && [[ "$workspace_registry_block" == *'phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0'* ]] \
   && [[ "$workspace_registry_block" == *'registry-active and wizard-selectable through published new-sdd-workspace 0.10.1'* ]] \
+  && [[ "$workspace_registry_block" == *'five packaged `dotnet new` identities: four workspace-provider'* ]] \
+  && [[ "$workspace_registry_block" == *'plus `fs-gg-governance`, the separately registered'* ]] \
+  && [[ "$workspace_registry_block" != *'four `dotnet new` identities'* ]] \
+  && [[ "$workspace_registry_block" != *'All four also carry `fs-gg-governance`'* ]] \
   && [[ "$workspace_registry_block" != *'wizard-selectable only after phase 6'* ]] \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
   && ! grep -qF 'coherent release pending' "$PROFILE_README" \
   && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
   && grep -qF 'its consumed version' "$ARCH"
-then ok "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
-else bad "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
+then ok "hand-authored template pins and the five registered template identities agree with the registry"
+else bad "hand-authored template pins and the five registered template identities must agree with the registry"
 fi
 
 WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"
