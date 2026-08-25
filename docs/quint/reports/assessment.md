@@ -166,7 +166,9 @@ The replacement-oriented qualification milestone has these exit criteria:
 3. author one complete requirements/evidence package, one executable S.I.R.
    rule, and one concurrent coordination protocol;
 4. generate the current Markdown, schema, semantic diff, and F# consumer API;
-5. replay ITF traces against one real F# interpreter;
+5. keep generic ITF mechanics in FS.GG.SDD while a test-only S.I.R. qualification child owns the adapter
+   that replays fingerprinted traces against the real F# interpreter; do not satisfy correspondence with a
+   producer-owned imitation of product behavior;
 6. prove equivalent Quint forms normalize identically and unsupported Quint
    constructs fail with useful diagnostics;
 7. measure agent/human readability, evolution cost, CI time, dependency size,

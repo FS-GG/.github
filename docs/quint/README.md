@@ -74,6 +74,12 @@ not started: the published F# specification kernel remains production authority 
 [migration design](../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) completes its
 qualification, publication, and explicit consumer rollout.
 
+Model-based testing does not turn this experiment or FS.GG.SDD into the owner of S.I.R. behavior. The
+producer owns pinned Quint/ITF mechanics and a generic replay protocol. A test-only S.I.R. qualification
+child owns the real interpreter adapter, observable-state projection, and product fixtures; Q4 later
+productionizes the accepted boundary when canonical rule authority moves. These research models remain
+evidence and are not copied into production by implication.
+
 That qualification also evaluates the upstream
 [`quint-co/quint-llm-kit`](https://github.com/quint-co/quint-llm-kit) language, modeling, verification,
 implementation, and refactoring guidance. It is an Apache-2.0 authoring accelerator, not authority. FS-GG

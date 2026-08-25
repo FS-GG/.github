@@ -18,6 +18,7 @@ compiler IR or a generated AST into a second authority.
 |---|---|
 | Status | Accepted design; feature preparation only; implementation not started |
 | Authored | 2026-08-25 |
+| Amended | 2026-08-26 — model-based testing ownership and Q1 consumer split |
 | Current authority | `fsharp-specification-v1` as published by Typed SDD P4 |
 | Target authority | Canonical Quint modules under a versioned FS-GG Quint profile |
 | Stable lifecycle token | `typed-sdd` |
@@ -55,7 +56,7 @@ canonical .qnt module set
           v
 versioned FS-GG Quint-profile validator
           |                         \
-          |                          +--> Quint run/test/verify --> ITF evidence
+          |                          +--> Quint run/test/verify --> fingerprinted ITF evidence
           v
 small generated FS-GG compiled contract
           |
@@ -64,6 +65,11 @@ small generated FS-GG compiled contract
           +--> semantic diff and migration report
           +--> evidence, provenance, and projection receipts
           +--> deterministic CI impact index
+
+consumer-owned canonical .qnt + generated ITF
+          |
+          v
+consumer replay adapter --> real implementation --> model-observable state comparison
 ```
 
 Quint source owns behavioral meaning: types, pure calculations, state, actions, nondeterministic choices,
@@ -179,7 +185,53 @@ checkout, packages an attributed snapshot, or derives smaller FS-GG-owned skills
 choice is accepted through the existing skill manifest/materialization contract. Agent guidance remains
 replaceable: canonical `.qnt` bytes and deterministic tool evidence decide correctness.
 
-## 6. Prepared feature sequence
+## 6. Model-based testing ownership and protocol
+
+Quint is not compiled into the production application. FS-GG uses the model-based-testing pattern
+described by the [Quint documentation](https://quint.sh/docs/model-based-testing): Quint produces valid
+ITF executions and expected model states; an implementation-language adapter replays those actions
+through the real system and compares an explicit observable-state projection after each step.
+
+Ownership is split at the repository boundary:
+
+| Owner | Owns | Must not own |
+|---|---|---|
+| FS.GG.SDD | Hermetic Quint invocation, ITF validation/decoding, stable action and observation codecs, generic replay-loop contract, trace/evidence receipts, fixtures, failure rendering, and deterministic CI impact selection | S.I.R., Governance, Rendering, or Coordination business behavior; source-project references to consumers |
+| Implementing product | Canonical product `.qnt` modules at the backend-ratified stable location, action adapter, real implementation invocation, observable-state projection, normalization/quiescence rules, product witnesses, and replay tests | A second transition implementation that merely imitates Quint; a private Quint toolchain fork |
+| `.github` | Registry/pin reconciliation, cross-repository ordering, selective-CI policy, and fleet evidence | Centralized execution of every product's replay suite or product-specific adapter logic |
+
+The generic protocol is deliberately smaller than a generated application. For each trace it initializes
+the implementation, decodes a stable action identity and arguments, invokes the real operation, waits only
+at declared deterministic quiescence points, projects implementation state into the model's observable
+state, normalizes declared representation differences, and reports the first divergence. An adapter that
+reimplements the rule instead of calling production behavior is a failed control.
+
+Every replay receipt binds at least the canonical module digest, Quint/toolchain/profile versions,
+compiled-contract digest, adapter digest, implementation revision, trace digest, seed, and bounds. A small
+reviewed witness/regression corpus is committed; larger sampled corpora are generated in CI and retained
+only when they fail. Model checking proves properties of the specification. Replay proves sampled
+correspondence with the implementation. Neither result alone proves the other.
+
+Product-emitted trace validation is the reverse direction and follows only after forward replay is
+qualified: implementation events are normalized to the same stable action/state vocabulary and Quint
+decides whether the observed execution is admitted. It is useful for isolated GitHub and staging
+evidence, but it is not required to make the first S.I.R. qualification decision.
+
+Q1 is consequently split without moving product ownership into FS.GG.SDD:
+
+1. FS.GG.SDD owns the generic protocol, hermetic experiment, toy/reference controls, contract proposal,
+   and cross-domain measurement report.
+2. The test-only [S.I.R. Q1 child `EHotwagner/S.I.R.#353`](https://github.com/EHotwagner/S.I.R./issues/353)
+   owns the real combat-interpreter adapter and fingerprinted runtime replay. It changes no rule authority,
+   runtime API, package, provider, or default.
+3. Q1 accepts implementation only when both sides pass. Q4 later moves canonical S.I.R. authority and
+   adds production native/Fable, frozen-corpus, package-only, migration, and rollback qualification.
+
+The future FS.GG.Coordination repository follows the same rule: its Quint protocol and replay adapter live
+with its pure model and implementation. `.github` retains the frozen v1 corpus and isolated qualification
+environment but does not become the v2 model or adapter owner.
+
+## 7. Prepared feature sequence
 
 ### Q0 — Decision and program preparation (`.github`)
 
@@ -187,7 +239,7 @@ Publish ADR-0077, this design, successor notices, and bounded feature issues. Pr
 
 Exit: the decision and issue graph are merged; no implementation or live contract changed.
 
-### Q1 — Cross-domain authoring qualification (FS.GG.SDD)
+### Q1 — Cross-domain authoring qualification (FS.GG.SDD plus test-only `S.I.R.#353`)
 
 Author three non-production vertical slices: a complete requirements/evidence package, one S.I.R. rule with
 runtime/ITF correspondence, and one concurrent coordination process with retry, stale observation, lost
@@ -198,13 +250,20 @@ FS-GG-minimal workflow; evaluate the standalone language/modeling/execution skil
 explanations, transition labels, type/listener coverage, and Choreo/plain-Quint choice. Record which pieces
 are adopted, adapted, or rejected and why.
 
-Exit: accept or refuse implementation. Refusal changes no authority.
+FS.GG.SDD proves the generic replay protocol without referencing consumer source projects. The S.I.R.
+child binds the exact candidate to the real combat interpreter through an initialize/apply/observe adapter,
+checks the first divergent transition, and proves injected implementation or mapping defects are detected.
+The child owns product fixtures and state normalization; it does not move canonical rule authority.
+
+Exit: accept or refuse implementation only after the producer experiment and S.I.R. child agree on exact
+model, trace, adapter, and implementation fingerprints. Refusal changes no authority.
 
 ### Q2 — Hermetic toolchain, validator, and compiled contract (FS.GG.SDD)
 
 Qualify a content-addressed Quint/Node closure and separately cached Apalache/JRE toolchain. Implement the
 pinned IR adapter, profile validation, contract codec, canonical bytes, diagnostics, semantic diff,
-projections, generated bindings, golden IR fixtures, version refusal, and mutation controls.
+projections, generated bindings, golden IR fixtures, version refusal, mutation controls, ITF decoding, and
+the language-neutral replay protocol/evidence envelope. Product adapters remain consumer-owned.
 
 Pin the accepted `quint-llm-kit` revision/content digests separately from Quint itself. Re-run its adopted
 workflow fixtures on upgrades and reject an incompatible moving-kit/latest-Quint combination.
@@ -224,8 +283,9 @@ Exit: installed-artifact and negative-control suites pass; current `sdd` default
 ### Q4 — S.I.R. adoption and correspondence (S.I.R.)
 
 Move canonical rule specification to Quint, consume generated F#/Fable bindings, and replay ITF traces
-through the real interpreter. Preserve frozen rule/application bytes, public API, native/Fable equality,
-and registered opaque implementation fingerprints.
+through the real interpreter by productionizing—not silently replacing—the accepted Q1 child adapter.
+Preserve frozen rule/application bytes, public API, native/Fable equality, registered opaque implementation
+fingerprints, package-only consumption, migration evidence, and rollback.
 
 Exit: no F# and Quint co-authority remains; correspondence and rollback controls pass.
 
@@ -254,7 +314,7 @@ Independently decide whether omitted lifecycle moves from `sdd` to `typed-sdd`.
 
 Exit: one canonical authoring language remains; any default change has its own ADR and fleet candidate.
 
-## 7. Selective CI contract
+## 8. Selective CI contract
 
 | Change | Minimum checks |
 |---|---|
@@ -262,7 +322,8 @@ Exit: one canonical authoring language remains; any default change has its own A
 | Quint catalogue, requirements, evidence, or metadata | Typecheck, profile validation, compilation, freshness, structural tests |
 | Pure calculation or action | Previous row plus named Quint tests and bounded simulation |
 | Invariant, temporal property, dispatcher, or model bound | Previous row plus affected model checking and negative controls |
-| Bound runtime implementation | Associated contract tests and ITF/runtime correspondence |
+| Bound runtime implementation | Consumer-owned adapter tests and affected ITF/runtime correspondence; no unrelated product replay |
+| Consumer replay adapter or observable-state projection | Adapter completeness, golden witnesses, mapping mutations, failing-prefix diagnostics, and affected runtime replay |
 | Quint/profile/compiler/toolchain adapter | Full corpus, version controls, model checks, S.I.R. replay, native/Fable parity |
 | Unrelated product surface | No Quint or Apalache startup unless the compiled impact graph reaches it |
 | Adopted Quint LLM Kit guidance/pin | Skill quality, upstream fixture replay, prompt/command diff review, profile/tool version compatibility |
@@ -270,7 +331,7 @@ Exit: one canonical authoring language remains; any default change has its own A
 Agent judgement may explain a selection but does not replace the deterministic selector. Selector,
 profile, compiler, or impact-graph changes fail safe to the broader affected suite.
 
-## 8. Documentation and evidence policy
+## 9. Documentation and evidence policy
 
 Decision and active-design documents receive successor notices. Current producer/provider manuals continue
 describing the shipped F# backend until Q3/Q6 changes the published artifacts, preventing documentation
@@ -280,7 +341,7 @@ Historical work packages, readiness receipts, generated guidance, release notes,
 the F* and initial Quint experiment reports are not rewritten. New work and migration receipts provide the
 successor evidence chain.
 
-## 9. Program acceptance
+## 10. Program acceptance
 
 Quint becomes production authority only when:
 
@@ -289,7 +350,8 @@ Quint becomes production authority only when:
 - unsupported constructs and compiler drift fail with stable diagnostics;
 - the compiled contract does not encode arbitrary Quint expressions;
 - S.I.R. corpus bytes and runtime behavior remain equivalent;
-- ITF traces replay against a real implementation;
+- the Q1 S.I.R. child replays fingerprinted ITF traces against the real interpreter without duplicating
+  combat semantics, and Q4 productionizes that boundary;
 - coordination safety and liveness controls are meaningful;
 - the dependency closure is hermetic, licensed, cached, and reproducible;
 - every adopted `quint-llm-kit` file is pinned, attributed, reviewed, fixture-tested, and compatible with

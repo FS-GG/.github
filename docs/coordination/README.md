@@ -33,7 +33,10 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > P0–P4 substrate. [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md) and the
 > [Quint-first migration design](2026-08-25-quint-first-typed-sdd-migration-design.md) govern future
 > canonical authoring: Quint owns behavior and native verification; a small generated FS-GG contract owns
-> stable integration facts. The `typed-sdd` token and current `sdd` default remain unchanged.
+> stable integration facts. FS.GG.SDD owns generic Quint/ITF replay mechanics, while each implementing
+> product owns its canonical model and real-operation adapter; the test-only
+> [S.I.R. Q1 child](https://github.com/EHotwagner/S.I.R./issues/353) must prove that boundary before
+> production implementation. The `typed-sdd` token and current `sdd` default remain unchanged.
 
 > **GitHub Substrate v2 and fleet cutover.** The proposed
 > [governing design](2026-08-25-github-substrate-v2-fleet-cutover-design.md) applies the published typed

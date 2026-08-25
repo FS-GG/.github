@@ -876,7 +876,13 @@ receipts; it is never a shell checklist presumed complete.
 - stale projection or webhook state cannot authorize a mutation;
 - merge queue re-evaluates every temporal required check against the merge group;
 - exact-head review and post-merge protected-run verification remain distinct; and
-- model-based plus bounded formal tests cover claim/election, relation set mutation, and saga retry.
+- model-based plus bounded formal tests cover claim/election, relation set mutation, and saga retry;
+- FS.GG.Coordination owns the canonical Quint model, ITF replay adapter, and model-observable state
+  projection, while FS.GG.SDD owns only generic trace mechanics and `.github` owns qualification routing;
+- replay receipts bind model, toolchain, compiled contract, adapter, implementation, trace, seed, and bounds;
+  and
+- mapping mutations and an independently authored black-box suite prove the adapter cannot pass by
+  duplicating the model instead of invoking the real implementation.
 
 ### 12.4 Fleet and release
 
