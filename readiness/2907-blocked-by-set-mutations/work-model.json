@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "293bdb2351bdd2a72c57c97ad5c194aa355c8d601fab7c3569078e6c35e0b91e"
+        "value": "46d7a68f1db1af274f69c5b6f67bf934c28d6e6ca364410d82233eff0423ca9a"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2a25693ad19ec71fae3d71ca89967249432608121e3e94a033fc7f863aed7b8c"
+        "value": "511c4d709cfea3b1e0e6a9af24a7c564d514ad41dfde8d147d5c242dd889b603"
       }
     }
   ],
@@ -1219,7 +1219,7 @@
           "path": "work/2907-blocked-by-set-mutations/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "293bdb2351bdd2a72c57c97ad5c194aa355c8d601fab7c3569078e6c35e0b91e"
+            "value": "46d7a68f1db1af274f69c5b6f67bf934c28d6e6ca364410d82233eff0423ca9a"
           },
           "schemaVersion": 1
         },
@@ -1235,14 +1235,14 @@
           "path": "work/2907-blocked-by-set-mutations/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2a25693ad19ec71fae3d71ca89967249432608121e3e94a033fc7f863aed7b8c"
+            "value": "511c4d709cfea3b1e0e6a9af24a7c564d514ad41dfde8d147d5c242dd889b603"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "295c56a840eec8703337a8ba1be07cf386c1edbdb2e9eb6242ed161dc47d4ecd"
+        "value": "24d0e204b3ce7405cc0008e3b44a8039bc05d4ab132870da6b082a21f39dc64b"
       },
       "currency": "current"
     }

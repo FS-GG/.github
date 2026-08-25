@@ -70,6 +70,17 @@
   `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx`. The recovery removes that file,
   binds every evidence declaration to the exact bytes of the allowed command-produced JUnit receipt,
   and retains the 259-test result in its embedded transcript and evidence notes.
+- Recovery PR #2944 then measured a separate append-only election collision on exact head
+  `f002dc9f073576c79132cb6a06ead0d05dfb5713`. After independent review and host acceptance record
+  `5407786870`, live delivery created authorization grant `5407800325`, but claim-fence run
+  `32828366457` rejected it: the older election `5406718363`, bound to already-merged PR #2936, was the
+  lowest marker for operation key `d163d676e274b8a021f2610d937859b5b2fe83c2f1f6754bef664b6bda9a8d05`.
+  Both elections inherited claim generation `5406278215`, so retrying delivery or editing markers could
+  not make PR #2944 authoritative. The PR was closed unmerged, the claim was released explicitly to
+  `In review`, and an ordinary typed claim minted generation `5407856386`. Because host acceptance binds
+  the claim generation as well as the head and effective base, the old acceptance is retained only as
+  historical evidence; the successor PR requires a genuine evidence-bearing head move, fresh initial
+  review, fresh host acceptance, and a new delivery election.
 
 ## Gate inversions
 
