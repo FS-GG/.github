@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **Typed SDD provider-family compiler floor advanced** (sdd/templates; [.github#2928](https://github.com/FS-GG/.github/issues/2928), [SDD#916](https://github.com/FS-GG/FS.GG.SDD/issues/916), [Templates#432](https://github.com/FS-GG/FS.GG.Templates/issues/432)): `fs-gg-ui-template.minimum-fsgg-sdd` was advanced by the producer-first rollout and `fs-gg-workspace-template.minimum-fsgg-sdd` now joins it at the dual-published `1.4.0-preview.1`, the first CLI carrying the Typed Protocol Kernel lifecycle. This enables additive explicit `typed-sdd`; omitted lifecycle remains `sdd`.
+
 - **2026-08-25** — **`FS.GG.NewSddWorkspace` 0.10.0 published and registry identity reconciled**
   (github; [.github#2925](https://github.com/FS-GG/.github/issues/2925),
   [release run 32795601184](https://github.com/FS-GG/.github/actions/runs/32795601184)):

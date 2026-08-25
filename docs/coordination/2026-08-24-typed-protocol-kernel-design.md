@@ -79,6 +79,10 @@ durable lifecycle lanes. During the transition, `spec-kit` remains a fourth lega
 | `sdd` | Standard SDD | Existing SDD lifecycle artifacts and structured contracts | Current default; remains supported after Typed SDD arrives |
 | `typed-sdd` | Typed SDD | Agent-authored F# EDSL compiled to the canonical Specification AST | Additive opt-in first; intended future workspace default |
 
+P4 rollout record (2026-08-25): FS.GG.SDD.Cli `1.4.0-preview.1` is the published minimum compiler
+for both rendering and workspace-template provider families. This floor enables the additive
+`typed-sdd` lane; it does not change the omitted-value default from `sdd`.
+
 `freeform` is vocabulary for humans, not a new wire value: the existing compatible machine token remains
 `none`. The legacy `spec-kit` lane remains on its already-decided retirement path and gains no new role in
 this design.

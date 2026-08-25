@@ -15,6 +15,8 @@ It asserts, at minimum (H4):
 
 It also cross-checks the coherent ✅/❌ flag per row against the registry `coherent:` boolean,
 since a projected-but-contradictory flag is the same self-contradiction class (review H3).
+The `fsgg-sdd-orchestrator-axis` row additionally projects every distinct contract
+`minimum-fsgg-sdd.version`; unlike historical prose, that live floor is now gated.
 
 WHY A GENERATED REGION, NOT THE PROSE CELL (#1081 option 2, DECIDED 2026-07-17 — ADR-0044 / #527).
 Assertion 2 used to read the literal from the hand-authored `Version` CELL of the "Versioned
@@ -188,6 +190,7 @@ def main() -> int:
     coh_cols, coh_row_lines = _table(md, "Coherence state")
     coh_rows = {cid: row for row in coh_row_lines if (cid := _first_cell_id(row))}
     coh_flag_col = _require_col(coh_cols, "Coherent?", "Coherence state", proj_path, errors)
+    coh_summary_col = _require_col(coh_cols, "Summary", "Coherence state", proj_path, errors)
     for entry in doc.get("coherence") or []:
         cid = str(entry.get("id", "")).strip()
         if not cid:
@@ -212,6 +215,43 @@ def main() -> int:
             errors.append(
                 f"coherence id {cid!r}: registry says coherent={want} but projection row shows "
                 f"{'✅ yes' if got else '❌ no'}.")
+
+    # The orchestrator floor used to be left as hand-maintained history in this table and drifted
+    # from 0.6.0 to 1.4.0-preview.1 while the generic projection gate stayed green. It is a live
+    # compatibility fact, not release-history judgement: require every distinct registry floor in
+    # the row's explicitly labelled **Current:** assertion. Looking anywhere in Summary is too weak:
+    # the headline and release-history parenthetical also contain old/current versions and can hide
+    # a stale current sentence.
+    floor_values: list[str] = []
+    for contract in doc.get("contracts") or []:
+        floor = contract.get("minimum-fsgg-sdd")
+        if isinstance(floor, dict) and floor.get("version") is not None:
+            value = floor.get("version")
+            if not isinstance(value, str):
+                errors.append(
+                    f"contract id {contract.get('id')!r}: minimum-fsgg-sdd.version is not a quoted "
+                    f"string in {reg_path}.")
+            elif value not in floor_values:
+                floor_values.append(value)
+    if floor_values:
+        axis = coh_rows.get("fsgg-sdd-orchestrator-axis")
+        if axis is None:
+            errors.append(
+                "registry contracts declare minimum-fsgg-sdd floors but coherence id "
+                "'fsgg-sdd-orchestrator-axis' has no projection row.")
+        elif coh_summary_col is not None:
+            summary = _cell(axis, coh_summary_col)
+            for value in floor_values:
+                current_assertion = re.search(
+                    rf"\*\*Current:\*\*[^|\n]*?\bagree on\s+\*\*`{re.escape(value)}`\*\*",
+                    summary,
+                    re.I,
+                )
+                if current_assertion is None:
+                    errors.append(
+                        f"fsgg-sdd-orchestrator-axis: **Current:** assertion does not say all "
+                        f"provider-family floors agree on minimum-fsgg-sdd {value!r} — the "
+                        f"compatibility floor prose is stale relative to {reg_path}.")
 
     # --- 2. Contract version literals projected -------------------------------------------
     # #1081 option 2 (DECIDED 2026-07-17, ADR-0044 / #527): the version literal is now the MACHINE-OWNED
