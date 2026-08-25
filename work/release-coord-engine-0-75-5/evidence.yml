@@ -11,7 +11,7 @@ sourceAnalysis: readiness/release-coord-engine-0-75-5/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/release-coord-engine-0-75-5/analysis.json
-    digest: 8aa380bcc2173b7dc8d8f265c6a6d3f1e8238fe13967c6e3e2d984a254a93f7a
+    digest: e262c085c2c0210b7c7be5f1ea2b55138e7fb077caae1e7aaedd0cda3441960b
     schemaVersion: 1
   - label: checklist
     path: work/release-coord-engine-0-75-5/checklist.md
@@ -31,11 +31,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/release-coord-engine-0-75-5/tasks.yml
-    digest: b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445
+    digest: 66329c8fdc7b73019f5bc7c9611e7461eb419ff735350d4ec19c0ff368c9e459
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T001
@@ -46,17 +46,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV002
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T002
@@ -67,17 +73,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV003
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T003
@@ -88,17 +100,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV004
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T004
@@ -109,17 +127,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV005
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T005
@@ -130,17 +154,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV006
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T006
@@ -151,17 +181,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV006]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV007
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T007
@@ -172,17 +208,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV007]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV008
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T008
@@ -193,17 +235,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV008]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV009
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T009
@@ -214,17 +262,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV010
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T010
@@ -235,17 +289,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV010]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV011
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T011
@@ -256,17 +316,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV011]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV012
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T012
@@ -277,17 +343,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV012]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV013
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T013
@@ -298,17 +370,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV013]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV014
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T014
@@ -319,17 +397,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002, PD-003]
     obligationRefs: [EV014]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV015
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T015
@@ -340,17 +424,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004, PD-005]
     obligationRefs: [EV015]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV016
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T016
@@ -361,17 +451,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV016]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV017
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T017
@@ -382,17 +478,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV017]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
   - id: EV018
-    kind: deferral
+    kind: verification
     subject:
       type: task
       id: T018
@@ -403,14 +505,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV018]
-    artifacts: []
-    sourceRefs: []
-    result: deferred
+    artifacts: [work/release-coord-engine-0-75-5/artifacts/release-observation.json]
+    sourceRefs:
+      - kind: verification
+        path: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+    result: pass
     synthetic: false
-    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
-    owner: github
-    scope: pre-merge preparation or exact-merge post-delivery evidence
-    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
-    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
+    observedRun:
+      source: work/release-coord-engine-0-75-5/artifacts/release-observation.json
+      digest: "sha256:023ea504bf345249a38d6454480842b1ef7957c521a983c8b5c06422c771572b"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed from the immutable coherent-set/v0.75.5 release, promoted manifest, both public feeds, exact-source tags, publisher smoke tests, and registry reconciliation."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

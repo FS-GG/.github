@@ -19,6 +19,23 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **coordination coherent set `github:0.75.5` published and fully reconciled**
+  (github; [.github#2983](https://github.com/FS-GG/.github/issues/2983),
+  [source PR #2990](https://github.com/FS-GG/.github/pull/2990),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.5)):
+  advances the coord-engine source, package, generated projections, and distributed tool pin from
+  `0.75.4` to `0.75.5`. The release binds exact source
+  `34b1fd8b074e926cb3bce2c156f439cd8dcb0943`, content
+  `sha256:5ccf669a83d3fc5e85f438f1a64a22b3716a2a1c24d8cbb1206b5cc3d4857d96`, and identical
+  unsigned payloads across GitHub Packages and nuget.org: Coord.Cli
+  `sha256:4dd2e33a7f0c01421e779e0d40af2d1841b95d697b9641ff149ee225fe1aa097`, Drivers
+  `sha256:1fd7f7aac9d8afc47b9a8777acb4e15e6584e053fbab958d907a6651a086ab6c`, and Kit
+  `sha256:2d2dbfd8ab33d409d918e9ea3d97345cc9a7ad2740c65cea72979c7f30d629f8`.
+  Prepare run 32900545935 packed once; initial publishers 32900931746/32900931837/32900932704
+  persisted the bounded nuget.org indexing wait, and exact-source reruns observed the same immutable
+  packages without repacking or duplicate pushes. Promotion run 32901850739 verified both registries
+  and published the stable channel at 2026-08-25T21:36:26Z.
+
 - **2026-08-25** — **`FS.GG.NewSddWorkspace` 0.10.1 published and registry identity reconciled**
   (github; [.github#2968](https://github.com/FS-GG/.github/issues/2968),
   [release run 32858342782](https://github.com/FS-GG/.github/actions/runs/32858342782)):

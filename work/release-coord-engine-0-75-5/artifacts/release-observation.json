@@ -1,0 +1,60 @@
+{
+  "schema": "fsgg.release-observation/1",
+  "workId": "release-coord-engine-0-75-5",
+  "version": "0.75.5",
+  "sourceSha": "34b1fd8b074e926cb3bce2c156f439cd8dcb0943",
+  "contentId": "sha256:5ccf669a83d3fc5e85f438f1a64a22b3716a2a1c24d8cbb1206b5cc3d4857d96",
+  "previousStableVersion": "0.75.4",
+  "promotedAt": "2026-08-25T21:36:26Z",
+  "release": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.5",
+  "runs": {
+    "prepare": "https://github.com/FS-GG/.github/actions/runs/32900545935",
+    "kit": "https://github.com/FS-GG/.github/actions/runs/32900931746",
+    "coordCli": "https://github.com/FS-GG/.github/actions/runs/32900931837",
+    "drivers": "https://github.com/FS-GG/.github/actions/runs/32900932704",
+    "promotion": "https://github.com/FS-GG/.github/actions/runs/32901850739"
+  },
+  "tags": {
+    "kit/v0.75.5": "34b1fd8b074e926cb3bce2c156f439cd8dcb0943",
+    "drivers/v0.75.5": "34b1fd8b074e926cb3bce2c156f439cd8dcb0943",
+    "coord-engine/v0.75.5": "34b1fd8b074e926cb3bce2c156f439cd8dcb0943",
+    "coherent-set/v0.75.5": "34b1fd8b074e926cb3bce2c156f439cd8dcb0943"
+  },
+  "artifacts": {
+    "FS.GG.Coord.Cli": {
+      "inputAndOrgSha256": "7926e6f67714a2da803a2c2ba8ee765a9381357fd377e621e5a1dc70b9b4618c",
+      "nugetSha256": "4f850e627a52d1327190f75302370fd5480d9b996e95fc35caf897817e80853e",
+      "payloadSha256": "sha256:4dd2e33a7f0c01421e779e0d40af2d1841b95d697b9641ff149ee225fe1aa097"
+    },
+    "FS.GG.Drivers": {
+      "inputAndOrgSha256": "423796117c32528ac4f2c34711d6e5e145ae99cb1b0135b50c0ea6fe45dd7636",
+      "nugetSha256": "acaff3737f4b78b1cbef3a50dcdfcf3e9cb490a87838deec1079f0c1329af251",
+      "payloadSha256": "sha256:1fd7f7aac9d8afc47b9a8777acb4e15e6584e053fbab958d907a6651a086ab6c"
+    },
+    "FS.GG.Kit": {
+      "inputAndOrgSha256": "ca4ff665b4fb8d6e24d728b84d90ae87685989de5dd61c1be7861a0cc4a0a2f8",
+      "nugetSha256": "28231b13d34b812500e52ed022f0583a9abee18f56c2b28ddcc969e709ea508e",
+      "payloadSha256": "sha256:2d2dbfd8ab33d409d918e9ea3d97345cc9a7ad2740c65cea72979c7f30d629f8"
+    }
+  },
+  "releaseAssets": {
+    "releaseManifestSha256": "16c25d8dc24fbb103558cbd4b6dbb911d4110e0e21cb0af75edb106603cc758e",
+    "stableChannelSha256": "b7342cf7ceb4ab3c578b1ac9393014ef6ffb3460eafeeeb6e82afdd66a59d0b3"
+  },
+  "verification": {
+    "githubPackages": "verified",
+    "nugetOrg": "verified",
+    "normalizedPayloads": "identical",
+    "packageSourceSha": "verified",
+    "publicInstallation": "verified-by-publisher-smoke",
+    "promotion": "immutable",
+    "p5DefaultFlip": "deferred-until-OperatingV2"
+  },
+  "taskResults": {
+    "T001": "passed", "T002": "passed", "T003": "passed", "T004": "passed",
+    "T005": "passed", "T006": "passed", "T007": "passed", "T008": "passed",
+    "T009": "passed", "T010": "passed", "T011": "passed", "T012": "passed",
+    "T013": "passed", "T014": "passed", "T015": "passed", "T016": "passed",
+    "T017": "passed", "T018": "passed"
+  }
+}
