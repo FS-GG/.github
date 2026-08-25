@@ -200,7 +200,7 @@ tasks:
     requiredEvidence: [EV017]
   - id: T018
     title: Record verification evidence VO-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -220,7 +220,7 @@ tasks:
     requiredEvidence: [EV019]
   - id: T020
     title: Refresh generated view impact GV-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []

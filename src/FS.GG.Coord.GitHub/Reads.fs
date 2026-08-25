@@ -1802,8 +1802,8 @@ module Reads =
                     |> Some
                 | _ -> None
 
-    /// Observe the complete Actions-run inventory for a merged pull request's exact merge SHA and
-    /// classify only successful `push` executions on the repository default branch as verification.
+    // Observe the complete Actions-run inventory for a merged pull request's exact merge SHA and
+    // classify only successful `push` executions on the repository default branch as verification.
     let postMergeVerification
         (transport: IGitHubTransport)
         (owner: string)

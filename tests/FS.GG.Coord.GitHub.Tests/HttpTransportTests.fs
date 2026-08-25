@@ -156,6 +156,36 @@ let ``the adapter FOLLOWS Link rel=next and CONCATENATES the pages`` () =
     | Error e -> failwith $"pagination must succeed — got %A{e}"
 
 [<Fact>]
+let ``#2905 the adapter also paginates GitHub wrapper collections without losing runs`` () =
+    use server = new Server()
+
+    server.On(fun req res ->
+        if req.Url.PathAndQuery.Contains "page=2" then
+            server.Json
+                res
+                200
+                """{"total_count":2,"workflow_runs":[{"id":2,"conclusion":"failure"}]}"""
+                []
+        else
+            server.Json
+                res
+                200
+                """{"total_count":2,"workflow_runs":[{"id":1,"conclusion":"success"}]}"""
+                [ "Link", $"<%s{server.Base}/repos/o/r/actions/runs?page=2>; rel=\"next\"" ])
+
+    use transport = new HttpTransport(server.Base, "t")
+    let t = transport :> IGitHubTransport
+
+    match t.Send(get "repos/o/r/actions/runs") with
+    | Ok response ->
+        use doc = Text.Json.JsonDocument.Parse response.Body
+        let runs = doc.RootElement.GetProperty("workflow_runs")
+        Assert.Equal(2, runs.GetArrayLength())
+        Assert.Equal(2, List.length server.Requests)
+        Assert.Equal(None, response.ETag)
+    | Error e -> failwith $"wrapper pagination must preserve every run — got %A{e}"
+
+[<Fact>]
 let ``#2308 markerScan keeps a stale claim found only on REST page two`` () =
     use server = new Server()
     let old = DateTimeOffset.UtcNow.AddHours(-3).ToString("yyyy-MM-ddTHH:mm:ssZ")

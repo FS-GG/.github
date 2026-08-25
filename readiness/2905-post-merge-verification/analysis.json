@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2905-post-merge-verification/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2f4a91f74253dcb586faf83b344baf48d3db455d0d037c34e8340241105215aa"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2905-post-merge-verification/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "1a5800830abd9c7a28198a2a407956f81bbd7b3a0777b30dd0bfcdf908399fd4"
+        "value": "f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -596,7 +606,7 @@
     {
       "path": "readiness/2905-post-merge-verification/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
