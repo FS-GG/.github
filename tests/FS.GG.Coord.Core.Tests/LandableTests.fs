@@ -73,6 +73,26 @@ module LandableTests =
         Assert.Equal(PrRed, score (Some true) [ greenRun; failed ] [])
 
     [<Fact>]
+    let ``#2906 red provenance names every blocking run and check but excludes advisory failures`` () =
+        let blockingRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/2906-x" [ 2906 ] 17 "completed" (Some "failure") (Some 17L)
+
+        let unrelated = named "external-safety" (Some 99L) "completed" (Some "timed_out")
+        let itemOwned = named "claim-generation" (Some 17L) "completed" (Some "failure")
+        let advisory = named "feed" (Some 18L) "completed" (Some "failure")
+        let fromMain = advisoryFrom [ "claim-generation"; "external-safety" ]
+
+        Assert.Equal<Failure list>(
+            [ WorkflowRunFailure(".github/workflows/coherence.yml", 17, Some "failure")
+              CheckRunFailure("external-safety", Some 99L, Some "timed_out")
+              CheckRunFailure("claim-generation", Some 17L, Some "failure") ],
+            failuresDerived fromMain [] [ greenRun; blockingRun ] [ unrelated; itemOwned; advisory ]
+        )
+
+        // Counterweight: the registration-race `red` has no failed identity to invent.
+        Assert.Empty(failuresDerived fromMain [] [] [])
+
+    [<Fact>]
     let ``a skipped conclusion counts as passed, not as a finding`` () =
         let skipped = run ".github/workflows/lint.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "skipped") (Some 2L)
         Assert.Equal(PrGreen, score (Some true) [ greenRun; skipped ] [])
