@@ -464,7 +464,7 @@
        exact restored assembly, and emits deterministic resolution evidence. Additive routing and
        observability repair; no command, package, member, or identity is removed. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.76.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

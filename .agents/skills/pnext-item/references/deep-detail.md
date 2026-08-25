@@ -107,19 +107,58 @@ fsgg-coord: WARNING — the engine is STALE, so it need not behave as the code y
 ```
 
 `take` and `claim` are both in that set, so the refusal lands on the **first** thing you do — and on
-`heartbeat` and `done` if a merge lands mid-item, which is where it costs a lease. Run the check
-before the write, not after the refusal:
+`heartbeat` and `done` if a merge lands mid-item, which is where it costs a lease. Receiver repositories
+do not carry those source trees, so they instead compare the `origin/main` manifest pin with the engine
+the wrapper actually resolves. Run the repo-shape-aware check before the write, not after a refusal:
 
 ```sh
 git fetch origin
-SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"       # the path, for the repair
-SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"     # the commit it is sitting on
-[ -n "$SHARED_HEAD" ] || { echo "cannot read the shared checkout's HEAD — that is not freshness"; exit 1; }
-git rev-list --count "$SHARED_HEAD..origin/main" -- \
-  src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub
+git rev-parse --verify 'origin/main^{commit}' >/dev/null || {
+  echo "cannot resolve origin/main — engine currency is unknown" >&2; exit 1;
+}
+ENGINE_SOURCE_PATHS=(src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub)
+ENGINE_SOURCE_COUNT=0
+for path in "${ENGINE_SOURCE_PATHS[@]}"; do
+  git cat-file -e "origin/main:$path" 2>/dev/null && ENGINE_SOURCE_COUNT=$((ENGINE_SOURCE_COUNT + 1))
+done
+
+case "$ENGINE_SOURCE_COUNT" in
+  3)
+    SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"
+    SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"
+    [ -n "$SHARED_HEAD" ] || {
+      echo "cannot read the shared checkout's HEAD — engine currency is unknown" >&2; exit 1;
+    }
+    ENGINE_DRIFT="$(git rev-list --count "$SHARED_HEAD..origin/main" -- "${ENGINE_SOURCE_PATHS[@]}")" || {
+      echo "cannot measure coordination source drift" >&2; exit 1;
+    }
+    case "$ENGINE_DRIFT" in ''|*[!0-9]*) echo "invalid coordination source drift: $ENGINE_DRIFT" >&2; exit 1;; esac
+    printf 'coordination source drift: %s\n' "$ENGINE_DRIFT"
+    ;;
+  0)
+    ENGINE_MANIFEST="$(git show origin/main:.config/dotnet-tools.json)" || {
+      echo "receiver has no readable origin/main engine manifest" >&2; exit 1;
+    }
+    ENGINE_PIN="$(jq -er '.tools["fs.gg.coord.cli"].version | select(type == "string" and length > 0)' \
+      <<<"$ENGINE_MANIFEST")" || {
+      echo "receiver origin/main manifest has no single readable fs.gg.coord.cli pin" >&2; exit 1;
+    }
+    ENGINE_RESOLVED="$(scripts/fsgg-coord --version)" || {
+      echo "cannot resolve the engine that will perform the board write" >&2; exit 1;
+    }
+    case "$ENGINE_RESOLVED" in
+      "$ENGINE_PIN"|"$ENGINE_PIN.0") printf 'receiver engine current: %s\n' "$ENGINE_PIN" ;;
+      *) echo "receiver engine drift: origin/main pins $ENGINE_PIN, wrapper resolved $ENGINE_RESOLVED" >&2; exit 1 ;;
+    esac
+    ;;
+  *)
+    echo "partial coordination source shape ($ENGINE_SOURCE_COUNT/3) — engine currency is unknown" >&2
+    exit 1
+    ;;
+esac
 ```
 
-Non-zero, and only then:
+In the authoring branch, non-zero, and only then:
 
 ```sh
 git -C "$SHARED" merge --ff-only origin/main
@@ -128,12 +167,19 @@ dotnet build "$SHARED/src/FS.GG.Coord.Cli" -c Release
 
 Every line of that has a reason, and skipping one costs the thing it protects:
 
+- **Shape comes from `origin/main`, not the mutable working tree.** All three coordination source
+  roots select the authoring branch; none selects the receiver manifest branch; a partial source shape
+  refuses. A valid `origin/main` commit is established first, so a missing path is an observed absence
+  rather than a failed ref lookup reported as absence.
+- **A receiver measures the pin and the resolved engine, not an empty source pathspec.** The manifest
+  is read from `origin/main`, while `scripts/fsgg-coord --version` observes the engine the next board
+  write will actually execute. Exact equality is required except for the .NET assembly version's one
+  ordinary trailing `.0`. A missing manifest, tool entry, version, or executable is unknown and refuses.
 - **`git worktree list --porcelain | head -1`, not `..`.** git documents the *main* working tree
   first, as an absolute path from anywhere. This is the same spelling `scripts/fsgg-coord`'s own
   `shared_toplevel` uses, deliberately — a recipe that resolved the shared checkout differently from
-  the resolver would measure a tree the engine does not come from. In a receiver (no source build,
-  no `src/FS.GG.Coord.*`) the count is `0` and this whole block is a no-op, which is correct: a
-  receiver execs a packaged engine and has nothing beside it to be stale against.
+  the resolver would measure a tree the engine does not come from. This is reached only in the
+  authoring branch; a receiver never substitutes its own worktree HEAD for a packaged-engine subject.
 - **The check reads the shared checkout's HEAD *as a commit*, and runs `rev-list` HERE — no
   `git -C`.** `--porcelain`'s second line is `HEAD <sha>`, and every linked worktree shares the
   common dir's object database, so your own checkout can resolve and walk a commit that is checked

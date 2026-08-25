@@ -1,0 +1,156 @@
+schemaVersion: 1
+work:
+  id: 2864-engine-currency-repo-shape
+  title: "Repository-shape-aware engine currency verification"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2864-engine-currency-repo-shape/spec.md
+  sourceClarifications: work/2864-engine-currency-repo-shape/clarifications.md
+  sourceChecklist: work/2864-engine-currency-repo-shape/checklist.md
+  sourcePlan: work/2864-engine-currency-repo-shape/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2864-engine-currency-repo-shape/spec.md
+    digest: 77a8c56ddc54a891c4a9a6c6696e9674a498f1bbcc82bad936e9b9806ac208da
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2864-engine-currency-repo-shape/clarifications.md
+    digest: 96f307ae6e449ca1c707e4cd411b6f5d0802d4e3becf7a1f225a408efa654b2b
+    schemaVersion: 1
+  - label: checklist
+    path: work/2864-engine-currency-repo-shape/checklist.md
+    digest: c5a7e148e59b241ebaf2b59b53fac7e638cf966ce8e5f513fe71178abd257f5e
+    schemaVersion: 1
+  - label: plan
+    path: work/2864-engine-currency-repo-shape/plan.md
+    digest: e7d6570b4738fc500a5a5f7902b98c8f4781565ce05394e4b7f123b6cf2a4a69
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-002, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-003, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-004, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-002, PD-003, PD-004, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-005, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-005]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Refresh generated view impact GV-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-002, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV012]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2864-engine-currency-repo-shape."

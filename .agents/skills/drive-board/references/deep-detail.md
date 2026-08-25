@@ -295,21 +295,59 @@ first occurrence cost a `set-field` that silently did not land**, caught only be
 contradicted it. The tax scales with how fast the fleet lands work, which is what a good run of this
 skill maximises.
 
-Run the check once per wave. Past the `git fetch` — which §5's verification already makes you run, and
-which does double duty here, because a linked worktree shares the common dir's refs — it is four local
-`git` calls, ~5 ms, and no network of its own:
+Run the check once per wave. The source-authoring shape measures the shared engine build; a receiver
+shape measures its `origin/main` manifest pin against the engine the wrapper actually resolves. Neither
+shape may turn an absent subject into a current verdict:
 
 ```sh
 git fetch origin
-SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"       # the path, for the repair
-SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"     # the commit it is sitting on
-[ -n "$SHARED_HEAD" ] || { echo "cannot read the shared checkout's HEAD — that is not freshness"; exit 1; }
-git rev-list --count "$SHARED_HEAD..origin/main" -- \
-  src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub
+git rev-parse --verify 'origin/main^{commit}' >/dev/null || {
+  echo "cannot resolve origin/main — engine currency is unknown" >&2; exit 1;
+}
+ENGINE_SOURCE_PATHS=(src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub)
+ENGINE_SOURCE_COUNT=0
+for path in "${ENGINE_SOURCE_PATHS[@]}"; do
+  git cat-file -e "origin/main:$path" 2>/dev/null && ENGINE_SOURCE_COUNT=$((ENGINE_SOURCE_COUNT + 1))
+done
+
+case "$ENGINE_SOURCE_COUNT" in
+  3)
+    SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"
+    SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"
+    [ -n "$SHARED_HEAD" ] || {
+      echo "cannot read the shared checkout's HEAD — engine currency is unknown" >&2; exit 1;
+    }
+    ENGINE_DRIFT="$(git rev-list --count "$SHARED_HEAD..origin/main" -- "${ENGINE_SOURCE_PATHS[@]}")" || {
+      echo "cannot measure coordination source drift" >&2; exit 1;
+    }
+    case "$ENGINE_DRIFT" in ''|*[!0-9]*) echo "invalid coordination source drift: $ENGINE_DRIFT" >&2; exit 1;; esac
+    printf 'coordination source drift: %s\n' "$ENGINE_DRIFT"
+    ;;
+  0)
+    ENGINE_MANIFEST="$(git show origin/main:.config/dotnet-tools.json)" || {
+      echo "receiver has no readable origin/main engine manifest" >&2; exit 1;
+    }
+    ENGINE_PIN="$(jq -er '.tools["fs.gg.coord.cli"].version | select(type == "string" and length > 0)' \
+      <<<"$ENGINE_MANIFEST")" || {
+      echo "receiver origin/main manifest has no single readable fs.gg.coord.cli pin" >&2; exit 1;
+    }
+    ENGINE_RESOLVED="$(scripts/fsgg-coord --version)" || {
+      echo "cannot resolve the engine that will perform the board write" >&2; exit 1;
+    }
+    case "$ENGINE_RESOLVED" in
+      "$ENGINE_PIN"|"$ENGINE_PIN.0") printf 'receiver engine current: %s\n' "$ENGINE_PIN" ;;
+      *) echo "receiver engine drift: origin/main pins $ENGINE_PIN, wrapper resolved $ENGINE_RESOLVED" >&2; exit 1 ;;
+    esac
+    ;;
+  *)
+    echo "partial coordination source shape ($ENGINE_SOURCE_COUNT/3) — engine currency is unknown" >&2
+    exit 1
+    ;;
+esac
 ```
 
-Non-zero, and **only** then — this half is a Release build, so it is gated on the answer, never run per
-wave on principle:
+In the authoring branch, non-zero, and **only** then — this half is a Release build, so it is gated on
+the answer, never run per wave on principle:
 
 ```sh
 git -C "$SHARED" merge --ff-only origin/main
@@ -329,7 +367,12 @@ have one subject, and so must the check and the repair. Three clauses are worth 
   rebuilds whatever tree you are standing in — never the stale one — and changes nothing.
 - **Scoped to the engine's three source trees, not `main` as a whole.** A docs commit, a workflow edit
   or a registry row must not send the fleet into a Release rebuild; "halting the fleet whenever `main`
-  moves" is the outcome #1549 explicitly refused.
+  moves" is the outcome #1549 explicitly refused. The all-or-none source census prevents a renamed or
+  partially absent source shape from reporting zero drift.
+- **Receiver currency compares two authorities.** The expected version comes from the immutable
+  `origin/main` manifest and the observed version comes from the wrapper that will execute the board
+  write. A missing ref, manifest, tool entry, or resolved version refuses; an exact match permits the
+  assembly's ordinary trailing `.0` and nothing broader.
 
 **This is a protocol step, not a new gate.** `#1549`'s guard is already the enforcement, and it fails
 closed; what was missing was an actor that owned the repair before the refusal landed. `pnext-item` §1
@@ -338,15 +381,9 @@ worktree — and escalates the repair here (`.github#1594`). That escalation's l
 [host-loop](host-loop.md): a worker reporting "I am refused the shared checkout, and the engine is N
 behind" has done the right thing and is owed this repair, not a re-dispatch.
 
-Two notes on reach. In a checkout with **no source build at all** the count is `0` and the whole block is
-a no-op, correctly: a receiver resolves a packaged engine at tiers 3/4, never reaches `stale_guard`, and
-has nothing beside it to be stale against — so this step costs a workspace driver nothing and needs no
-repo special-case. Do not read that backwards *inside* `.github`, where the guard does run: a pathspec
-that matches nothing also counts `0`, so if the engine's projects were ever renamed or moved, this check
-would answer "fresh" forever while `stale_guard` — which probes that the trees exist and returns *no
-verdict* when they do not — refuses every write. A host repairing nothing while blocked is the same
-fail-open one level up; if the count is `0` and the refusal persists, suspect the pathspec, not the
-board. And an **empty
+Two notes on reach. A checkout with no coordination source roots is now an explicit receiver branch,
+not a no-op: its package pin is the meaningful subject. A partial source shape refuses instead of
+feeding `rev-list` a pathspec that cannot observe the whole engine. And an **empty
 `SHARED_HEAD` refuses** rather than reporting fresh: `--porcelain`'s second line is `bare` for a bare
 main working tree, and `rev-list --count "..origin/main"` is valid git meaning `HEAD..origin/main` —
 i.e. it would measure *your* tree, which is current by construction, and answer `0`. Cannot look ≠
