@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "55c489a188ac4e2988f23ac1fe87eed664dc0780622b76df4d586293502af5ce"
+        "value": "7c66d8ede7f9a41f1df1581bbe5fa27ee9d96da133f3dd6f90d54be607a143f6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -253,5 +253,16 @@
       "kind": "skills"
     }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "id": "agents.staleGeneratedGuidance",
+      "severity": "warning",
+      "artifact": "readiness/2907-blocked-by-set-mutations/agent-commands/claude/guidance.json",
+      "message": "Generated agent guidance for target \u0027claude\u0027 no longer matches the current normalized work model.",
+      "correction": "Regenerate agent guidance so the generated view matches the current work model.",
+      "relatedIds": [
+        "claude"
+      ]
+    }
+  ]
 }

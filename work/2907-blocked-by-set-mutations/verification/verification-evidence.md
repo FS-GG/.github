@@ -6,7 +6,10 @@
 - `dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore`: 671 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-restore`: 182 passed, 0 failed, 0 skipped.
 - The Lifecycle, CLI, and Core test project commands each exited zero.
-- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 259 BoardOps tests passing.
+- The command-produced JUnit receipt at `readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml`
+  records one successful gate invocation and embeds the complete BoardOps transcript: 259 passed, 0 failed,
+  0 skipped. `tests/observed-command-report/run.sh` proves the producer propagates a failing command,
+  emits `failures=1`, and refuses a missing command.
 - `tests/coord-engine-parity/run.sh` passed the explicit replace/clear, ref-first, zero-GraphQL refusal, canonicalization, de-duplication, and scoped-field controls after its legacy positional calls were migrated.
 - After the initial critic identified a missing hosted body for open/In-progress item #423, the repaired
   serialized parity run passed 616/616 assertions with zero failures and zero not-measured results. Its
@@ -61,6 +64,12 @@
   The prior exact-count assertions rejected both successful routes. The repaired checks now require those
   exact ordered method/path/kind shapes, retain the semantic status/field/fresh-observation assertions,
   and the complete write corpus passes 186/186 with the vetted `fsgg-sdd` 1.0.0 validator selected.
+- Post-merge policy run `32826466267` exposed that the original observed receipt used a tracked historical
+  `.trx`, which `scripts/m6-cutover-acceptance.py` forbids. Before repair,
+  `tests/m6-cutover-acceptance/run.sh` exited 1 and named only
+  `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx`. The recovery removes that file,
+  binds every evidence declaration to the exact bytes of the allowed command-produced JUnit receipt,
+  and retains the 259-test result in its embedded transcript and evidence notes.
 
 ## Gate inversions
 
@@ -82,6 +91,10 @@ Each bounded mutation was applied alone, the focused test was observed red, and 
 8. The intake lease-acquire method and reconcile lease-acquire method were each inverted from POST to
    DELETE in their production wire assertions. The full write corpus rejected exactly the two affected
    routes; restoring POST returned all 186 assertions green.
+9. The observed-command wrapper was given `bash -c 'exit 7'`. It returned 7 and emitted a JUnit suite
+   with `tests=1` and `failures=1`; its missing-command arm returned 2 without creating an output file.
+   The pre-repair M6 policy subject independently returned 1 for the tracked historical TRX, while the
+   repaired tree returns green after replacing it with the command-produced JUnit receipt.
 
 These inversions discriminate union, subtraction, stale-write refusal, body-projection linting,
 server-ordered mutation fencing, direct-writer lease bypass, deferred-flush lease bypass, and exact

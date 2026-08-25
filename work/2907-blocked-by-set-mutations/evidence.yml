@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2907-blocked-by-set-mutations/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2907-blocked-by-set-mutations/analysis.json
-    digest: efe9dd7d48a92e767121cd19ce304042f36f5660d0b63aa2f7ae9fac126c94b4
+    digest: 847bbee367f238a4a64278a3fc6ea421b5bcfbdbd66d8bb91d850491e43c73ed
     schemaVersion: 1
   - label: checklist
     path: work/2907-blocked-by-set-mutations/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2907-blocked-by-set-mutations/plan.md
-    digest: 09ec88a8ad050fd481afc03294f9e363f624ea67114ded5c721b0a8978260d58
+    digest: 293bdb2351bdd2a72c57c97ad5c194aa355c8d601fab7c3569078e6c35e0b91e
     schemaVersion: 1
   - label: spec
     path: work/2907-blocked-by-set-mutations/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2907-blocked-by-set-mutations/tasks.yml
-    digest: 789088c41b495d64d4bcd30b432b61d31bf8fcdaabaefebe19ba8469b8c2353d
+    digest: 2a25693ad19ec71fae3d71ca89967249432608121e3e94a033fc7f863aed7b8c
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -53,14 +53,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV002
     kind: verification
     subject:
@@ -80,14 +80,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV003
     kind: verification
     subject:
@@ -107,14 +107,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV004
     kind: verification
     subject:
@@ -134,14 +134,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV005
     kind: verification
     subject:
@@ -161,14 +161,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV006
     kind: verification
     subject:
@@ -188,14 +188,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV007
     kind: verification
     subject:
@@ -215,14 +215,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV008
     kind: verification
     subject:
@@ -242,14 +242,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV009
     kind: verification
     subject:
@@ -269,14 +269,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV010
     kind: verification
     subject:
@@ -296,14 +296,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV011
     kind: verification
     subject:
@@ -323,14 +323,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV012
     kind: verification
     subject:
@@ -350,14 +350,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV013
     kind: verification
     subject:
@@ -377,14 +377,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
   - id: EV014
     kind: verification
     subject:
@@ -404,13 +404,13 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
+      source: readiness/2907-blocked-by-set-mutations/test-results/boardops.junit.xml
+      digest: "sha256:951b15f7e2e211a2717f58aa74826de9b3d8b39fdcf2182ab883ffcf884b623e"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 259
+      passed: 1
       failed: 0
       skipped: 0
-    notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
+    notes: ["The command-produced JUnit receipt embeds the passing 259-test BoardOps transcript. tests/observed-command-report/run-gate-junit.sh propagates the command exit code and emits failures=1 for a failing command; its wired self-test covers positive, failing, and missing-command controls. verification-evidence.md records the bounded production inversions and complete affected gates."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

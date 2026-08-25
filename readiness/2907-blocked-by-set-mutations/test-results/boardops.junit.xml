@@ -1,0 +1,12 @@
+<testsuite name="dotnet" tests="1" failures="0"><testcase name="dotnet"><system-out><![CDATA[  FS.GG.Coord.Core -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.Lifecycle -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.Cli.Lifecycle/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.dll
+  FS.GG.Coord.Cli.BoardOps -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.Cli.BoardOps/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.dll
+  FS.GG.Coord.Cli -> /tmp/fsgg-2907-godwit/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll
+  FS.GG.Coord.Cli.BoardOps.Tests -> /tmp/fsgg-2907-godwit/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll
+Test run for /tmp/fsgg-2907-godwit/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   259, Skipped:     0, Total:   259, Duration: 1 s - FS.GG.Coord.Cli.BoardOps.Tests.dll (net10.0)
+]]></system-out></testcase></testsuite>
