@@ -1,0 +1,19 @@
+{
+  "quintVersion": "0.32.0",
+  "quintPackage": "@informalsystems/quint",
+  "quintArchive": "quint-0.32.0.tgz",
+  "quintArchiveSha512": "f58a238bb0d4ea6a119b5a1f0da37e7ed77135c1067228866e6ede37832395c09b7efeff63fcdc85a75c5d746631998df684cf5d493d1a686340e8400c9b2249",
+  "quintNpmIntegrity": "sha512-9Yoji7DU6moRm1ofDaN+ftdxNcEGciiGbm7eN4MjlcCbfv7/Y/zchadcXXRmMZmN9oTPXUk9GmhjQOhADJsiSQ==",
+  "quintDownload": "https://registry.npmjs.org/@informalsystems/quint/-/quint-0.32.0.tgz",
+  "apalacheVersion": "0.56.1",
+  "apalacheArchive": "apalache-0.56.1.tgz",
+  "apalacheArchiveSha256": "91125e5a3646b9c9d3a7d921d3323f321fac5071909f72b3960c66ff2f998ee1",
+  "apalacheDownload": "https://github.com/apalache-mc/apalache/releases/download/v0.56.1/apalache.tgz",
+  "javaRuntime": "Eclipse Temurin JRE 21.0.12.1+1",
+  "javaArchive": "OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+  "javaArchiveSha256": "2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500",
+  "javaDownload": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+  "verifiedNode": "26.7.0",
+  "verificationBackend": "Apalache",
+  "verificationDepth": 2
+}
