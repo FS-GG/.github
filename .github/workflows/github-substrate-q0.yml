@@ -1,0 +1,81 @@
+name: github-substrate-q0
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/github-substrate-q0.yml"
+      - "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md"
+      - "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md"
+      - "docs/github-substrate-v2-roadmap.md"
+      - "work/2953-gh-modernization-m0-invariants/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/github-substrate-q0.yml"
+      - "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md"
+      - "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md"
+      - "docs/github-substrate-v2-roadmap.md"
+      - "work/2953-gh-modernization-m0-invariants/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-q0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authority-census-is-bound:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Q0 binds its frozen census to sourceBase; a shallow checkout cannot independently
+          # enumerate that object and must never turn "unavailable" into "unchanged".
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - uses: actions/setup-dotnet@v6
+      - name: Build the command-contract producer used by the frozen inventory
+        run: |
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Prove the gate rejects corrupt fingerprints and an unknown writer
+        run: |
+          evidence=work/2953-gh-modernization-m0-invariants/q0-evidence.json
+          validator=work/2953-gh-modernization-m0-invariants/validate_q0.py
+          bad_digest="$(mktemp)"
+          unknown_writer="$(mktemp)"
+          jq '.inventories[0].pathListSha256 = "not-a-digest"' "$evidence" > "$bad_digest"
+          jq '.mutations += [(.mutations[0] * {id:"M-unknown", class:"unknownWriter"})]' "$evidence" > "$unknown_writer"
+          if python3 "$validator" "$bad_digest"; then
+            echo "corrupt inventory digest survived Q0 validation" >&2
+            exit 1
+          fi
+          if python3 "$validator" "$unknown_writer"; then
+            echo "unknown writer class survived Q0 validation" >&2
+            exit 1
+          fi
+
+      - name: Recompute every census fingerprint and run all subject mutations
+        run: >-
+          python3 work/2953-gh-modernization-m0-invariants/validate_q0.py
+          work/2953-gh-modernization-m0-invariants/q0-evidence.json --self-test
+
+      - name: Require exact role-bound acceptance once review rows exist
+        run: |
+          evidence=work/2953-gh-modernization-m0-invariants/q0-evidence.json
+          validator=work/2953-gh-modernization-m0-invariants/validate_q0.py
+          reviews="$(jq '.reviews | length' "$evidence")"
+          required="$(jq '.reviewsRequired | length' "$evidence")"
+          if [ "$reviews" -gt 0 ] && [ "$reviews" -ne "$required" ]; then
+            echo "partial Q0 review set is not admissible" >&2
+            exit 1
+          fi
+          if [ "$reviews" -eq "$required" ]; then
+            python3 "$validator" "$evidence" --acceptance
+          fi

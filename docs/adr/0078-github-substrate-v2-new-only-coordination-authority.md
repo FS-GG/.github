@@ -6,6 +6,7 @@
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, FS-GG/FS.GG.Rendering, FS-GG/FS.GG.Governance, FS-GG/FS.GG.Templates, FS-GG/FS.GG.Game, FS-GG/FS.GG.Audio, FS-GG/FS.GG.Net, and the new FS-GG/FS.GG.Coordination component
 - **Related design:** [GitHub Substrate v2 fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md)
 - **Execution roadmap:** [GitHub Substrate v2 fleet cutover roadmap](../github-substrate-v2-roadmap.md)
+- **Q0 threat model:** [protected epoch, administration, GitHub state, supply chain, and receivers](../../work/2953-gh-modernization-m0-invariants/threat-model.md)
 
 ## Context
 
@@ -67,6 +68,9 @@ adoption, provider/default, and retirement rows are not hidden prerequisites for
 
 Every compatibility reader, migration adapter, workflow, command, field, parser, schedule, exception, and
 package introduced or retained for cutover has a named deletion unit and an observable absence test.
+The Q0 threat model defines the protected assets, actors, five trust boundaries, abuse cases, controls,
+residual risks, security acceptance, and pre/post-`OpenV2` incident posture. Its exact bytes and the
+authority/mutation/corpus/deletion subject are bound into one independently recomputed review fingerprint.
 
 ## Consequences
 

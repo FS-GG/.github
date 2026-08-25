@@ -1,18 +1,34 @@
 #!/usr/bin/env python3
-"""Fail-closed structural and omission controls for the GS2-00 Q0 evidence."""
+"""Fail-closed, source-bound controls for the GS2-00 Q0 evidence."""
 
 from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
 
+ROOT = Path(__file__).resolve().parents[2]
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+TREE_INVENTORIES = {
+    "workflows": ".github/workflows", "scripts": "scripts", "core": "src/FS.GG.Coord.Core",
+    "github": "src/FS.GG.Coord.GitHub", "cli": "src/FS.GG.Coord.Cli",
+    "lifecycle": "src/FS.GG.Coord.Cli.Lifecycle", "boardOps": "src/FS.GG.Coord.Cli.BoardOps",
+    "registry": "registry", "skills": ".agents/skills",
+}
+COMMAND_INVENTORIES = {
+    "protocolFacts": ["scripts/fsgg-coord", "facts", "--json"],
+    "commandContract": ["scripts/fsgg-coord", "command-contract", "--json"],
+}
 REQUIRED_AUTHORITY = {
-    "issueBody", "comment", "project", "registry", "workflow", "command",
-    "jsonContract", "environment", "file", "package", "schedule", "setting", "external",
+    "issueBody", "comment", "project", "registry", "workflow", "command", "jsonContract",
+    "environment", "file", "package", "schedule", "setting", "external",
 }
 REQUIRED_MUTATION = {"command", "workflow", "release", "repairScript", "administrative", "appRoute"}
 REQUIRED_CORPUS = {
@@ -25,6 +41,38 @@ REQUIRED_HANDOFF = {
     "v2-unit", "v2-blocker", "parallel-product", "candidate-input-change",
     "superseded-inventory", "cutover-deferred",
 }
+REQUIRED_THREAT_BOUNDARIES = {
+    "protectedEpoch", "administrativePrincipal", "githubMutableState",
+    "packageSupplyChain", "crossRepositoryReceiver",
+}
+
+
+def digest_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def canonical_digest(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return digest_bytes(encoded)
+
+
+def run_bytes(command: list[str]) -> bytes:
+    return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE).stdout
+
+
+def git_paths(commit: str, root: str) -> list[str]:
+    return run_bytes(["git", "ls-tree", "-r", "--name-only", commit, "--", root]).decode().splitlines()
+
+
+def review_subject(data: dict[str, Any]) -> dict[str, Any]:
+    """The exact non-circular Q0 material every role signs."""
+    return {
+        key: data[key]
+        for key in (
+            "sourceBase", "inventories", "authorities", "mutations", "corpus",
+            "compatibilityDeletion", "handoff", "runtimeDecision", "liveProjection", "threatModel",
+        )
+    }
 
 
 def ids_unique(rows: list[dict[str, Any]], label: str, errors: list[str]) -> None:
@@ -45,11 +93,46 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if data.get("schema") != "fsgg.github-substrate.q0-evidence/v1":
         errors.append("schema: unsupported")
 
+    source_base = data.get("sourceBase", "")
+    if not GIT_SHA.fullmatch(source_base):
+        errors.append("sourceBase: expected exact lowercase 40-hex git object")
+    else:
+        try:
+            run_bytes(["git", "cat-file", "-e", f"{source_base}^{{commit}}"])
+        except subprocess.CalledProcessError:
+            errors.append("sourceBase: commit is unavailable")
+
     inventories = data.get("inventories", [])
     ids_unique(inventories, "inventories", errors)
     require_fields(inventories, {"id", "root", "count", "pathListSha256"}, "inventories", errors)
-    if not inventories or any(not isinstance(row.get("count"), int) or row["count"] <= 0 for row in inventories):
-        errors.append("inventories: empty or non-positive census")
+    by_id = {row.get("id"): row for row in inventories}
+    expected_inventory_ids = set(TREE_INVENTORIES) | set(COMMAND_INVENTORIES)
+    if set(by_id) != expected_inventory_ids:
+        errors.append(f"inventories: id mismatch missing={sorted(expected_inventory_ids-set(by_id))} extra={sorted(set(by_id)-expected_inventory_ids)}")
+    if GIT_SHA.fullmatch(source_base):
+        for inventory_id, root in TREE_INVENTORIES.items():
+            if inventory_id not in by_id:
+                continue
+            paths = git_paths(source_base, root)
+            expected_digest = digest_bytes(("\n".join(paths) + "\n").encode())
+            row = by_id[inventory_id]
+            if row.get("root") != root or row.get("count") != len(paths) or row.get("pathListSha256") != expected_digest:
+                errors.append(f"inventories[{inventory_id}]: does not match independently enumerated sourceBase tree")
+    for inventory_id, command in COMMAND_INVENTORIES.items():
+        if inventory_id not in by_id:
+            continue
+        try:
+            output = run_bytes(command)
+            parsed = json.loads(output)
+            count = 1 if inventory_id == "protocolFacts" else len(parsed.get("commands", []))
+            row = by_id[inventory_id]
+            if row.get("root") != " ".join(command) or row.get("count") != count or row.get("pathListSha256") != digest_bytes(output):
+                errors.append(f"inventories[{inventory_id}]: does not match independently executed command output")
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            errors.append(f"inventories[{inventory_id}]: derivation failed: {error}")
+    for row in inventories:
+        if not SHA256.fullmatch(str(row.get("pathListSha256", ""))):
+            errors.append(f"inventories[{row.get('id')}]: invalid SHA-256")
 
     authorities = data.get("authorities", [])
     ids_unique(authorities, "authorities", errors)
@@ -57,15 +140,18 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     present_authority = {row.get("category") for row in authorities}
     if present_authority != REQUIRED_AUTHORITY:
         errors.append(f"authorities: category mismatch missing={sorted(REQUIRED_AUTHORITY-present_authority)} extra={sorted(present_authority-REQUIRED_AUTHORITY)}")
+    invalid_dispositions = {row.get("disposition") for row in authorities} - REQUIRED_CLASSIFICATIONS
+    if invalid_dispositions:
+        errors.append(f"authorities: unsupported dispositions {sorted(invalid_dispositions)}")
 
     mutations = data.get("mutations", [])
     ids_unique(mutations, "mutations", errors)
     require_fields(mutations, {"id", "class", "routes", "endpoint", "precondition", "permission", "v2", "unit"}, "mutations", errors)
     mutation_classes = {row.get("class") for row in mutations}
-    if not REQUIRED_MUTATION <= mutation_classes:
-        errors.append(f"mutations: missing classes {sorted(REQUIRED_MUTATION-mutation_classes)}")
-    if any(not row.get("routes") for row in mutations):
-        errors.append("mutations: empty route coverage")
+    if mutation_classes != REQUIRED_MUTATION:
+        errors.append(f"mutations: class mismatch missing={sorted(REQUIRED_MUTATION-mutation_classes)} extra={sorted(mutation_classes-REQUIRED_MUTATION)}")
+    if any(not isinstance(row.get("routes"), list) or not row["routes"] for row in mutations):
+        errors.append("mutations: empty or invalid route coverage")
 
     corpus = data.get("corpus", [])
     ids_unique(corpus, "corpus", errors)
@@ -86,9 +172,8 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if len({row.get("ref") for row in handoff}) != len(handoff):
         errors.append("handoff: duplicate ref")
     handoff_classes = {row.get("classification") for row in handoff}
-    allowed = REQUIRED_HANDOFF
-    if not handoff_classes <= allowed:
-        errors.append(f"handoff: unsupported classifications {sorted(handoff_classes-allowed)}")
+    if not handoff_classes <= REQUIRED_HANDOFF:
+        errors.append(f"handoff: unsupported classifications {sorted(handoff_classes-REQUIRED_HANDOFF)}")
     if not {"v2-blocker", "parallel-product", "candidate-input-change", "superseded-inventory", "cutover-deferred"} <= handoff_classes:
         errors.append("handoff: required disposition class absent")
 
@@ -97,35 +182,71 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if runtime.get("posture") != "scheduled-audit-authoritative" or runtime.get("hostedBoundary") != "rejected-for-cutover":
         errors.append("runtimeDecision: unratified cutover posture")
 
+    threat = data.get("threatModel", {})
+    require_fields([threat], {"path", "sha256", "boundaries"}, "threatModel", errors)
+    threat_path = ROOT / str(threat.get("path", ""))
+    if not threat_path.is_file():
+        errors.append("threatModel: source file missing")
+    elif threat.get("sha256") != digest_bytes(threat_path.read_bytes()):
+        errors.append("threatModel: digest does not match source bytes")
+    if not SHA256.fullmatch(str(threat.get("sha256", ""))):
+        errors.append("threatModel: invalid SHA-256")
+    if set(threat.get("boundaries", [])) != REQUIRED_THREAT_BOUNDARIES:
+        errors.append("threatModel: protected-boundary census mismatch")
+
     projection = data.get("liveProjection", {})
     if set(projection.get("blockedBy", {})) != {"FS-GG/.github#2963", "FS-GG/.github#2964", "FS-GG/.github#2965"}:
         errors.append("liveProjection: program dependency census incomplete")
+    expected_children = {f"FS-GG/.github#{number}" for number in range(2954, 2966)}
+    if set(projection.get("childBoundaryCitations", [])) != expected_children:
+        errors.append("liveProjection: ADR/rollback child citation census incomplete")
     if projection.get("pendingBoardWrites") != 0:
         errors.append("liveProjection: pending board writes")
 
+    try:
+        expected_review_fingerprint = canonical_digest(review_subject(data))
+    except KeyError as error:
+        errors.append(f"reviewFingerprint: missing subject {error.args[0]}")
+        expected_review_fingerprint = ""
+    if not SHA256.fullmatch(str(data.get("reviewFingerprint", ""))) or data.get("reviewFingerprint") != expected_review_fingerprint:
+        errors.append("reviewFingerprint: does not bind the canonical Q0 subject")
+
     if acceptance:
         required_reviews = set(data.get("reviewsRequired", []))
-        accepted = {row.get("role") for row in data.get("reviews", []) if row.get("verdict") == "accepted" and row.get("fingerprint")}
-        if required_reviews != accepted:
+        reviews = data.get("reviews", [])
+        require_fields(reviews, {"role", "verdict", "fingerprint", "evidenceRef", "reviewer"}, "reviews", errors)
+        accepted = {row.get("role") for row in reviews if row.get("verdict") == "accepted"}
+        if required_reviews != accepted or len(reviews) != len(required_reviews):
             errors.append(f"reviews: acceptance mismatch missing={sorted(required_reviews-accepted)} extra={sorted(accepted-required_reviews)}")
+        for row in reviews:
+            if row.get("fingerprint") != expected_review_fingerprint or not SHA256.fullmatch(str(row.get("fingerprint", ""))):
+                errors.append(f"reviews[{row.get('role')}]: fingerprint does not bind the canonical Q0 subject")
     return errors
 
 
 def self_test(data: dict[str, Any]) -> list[str]:
     failures: list[str] = []
-    mutations = [
-        ("authority omission", lambda d: d["authorities"].pop()),
-        ("writer omission", lambda d: d["mutations"].pop()),
-        ("corpus omission", lambda d: d["corpus"].pop()),
-        ("deletion proof omission", lambda d: d["compatibilityDeletion"][0].__setitem__("absenceTest", "")),
-        ("runtime ambiguity", lambda d: d["runtimeDecision"].__setitem__("posture", "webhook-authoritative")),
+    candidate_mutations = [
+        ("inventory digest", lambda d: d["inventories"][0].__setitem__("pathListSha256", "not-a-digest")),
+        ("unknown writer", lambda d: d["mutations"].append({**d["mutations"][0], "id": "M-unknown", "class": "unknownWriter"})),
+        ("corpus subject", lambda d: d["corpus"][0].__setitem__("expected", "weakened")),
+        ("deletion unit", lambda d: d["compatibilityDeletion"][0].__setitem__("deleteUnit", "GS2-never")),
+        ("threat source", lambda d: d["threatModel"].__setitem__("sha256", "0" * 64)),
         ("pending projection", lambda d: d["liveProjection"].__setitem__("pendingBoardWrites", 1)),
     ]
-    for name, mutate in mutations:
+    for name, mutate in candidate_mutations:
         candidate = copy.deepcopy(data)
         mutate(candidate)
         if not validate(candidate):
             failures.append(f"mutation survived: {name}")
+
+    acceptance = copy.deepcopy(data)
+    acceptance["reviews"] = [
+        {"role": role, "verdict": "accepted", "fingerprint": "x", "evidenceRef": "https://example.invalid/review", "reviewer": role}
+        for role in acceptance["reviewsRequired"]
+    ]
+    if not validate(acceptance, acceptance=True):
+        failures.append("mutation survived: arbitrary reviewer fingerprint")
     return failures
 
 

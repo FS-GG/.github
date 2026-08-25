@@ -4,7 +4,7 @@
   "observedAt": "2026-08-26T00:00:00+02:00",
   "inventories": [
     {"id":"workflows","root":".github/workflows","count":116,"pathListSha256":"644c5c3a7f74a87e3517c7bbdb475ad674eade25723c206d2e77f785ca166066"},
-    {"id":"scripts","root":"scripts","count":116,"pathListSha256":"577c92595928494b34e6cb59b49584db95658fcb628c942ef3a3f838d124b027"},
+    {"id":"scripts","root":"scripts","count":117,"pathListSha256":"1e398b86bbe155df4ec93d8086edb3b7bbc215a9cc0bb1782e7cf31e75b8ad55"},
     {"id":"core","root":"src/FS.GG.Coord.Core","count":74,"pathListSha256":"a43583847bac28616e35e509828ebbeea80337c16182527a8913a7bc45a20941"},
     {"id":"github","root":"src/FS.GG.Coord.GitHub","count":28,"pathListSha256":"731564c9cfd2cf794ba72fc2e6f36919dedd7474cf83a67ca0105d43141dbdde"},
     {"id":"cli","root":"src/FS.GG.Coord.Cli","count":27,"pathListSha256":"3a630939c137a4768899cb0f687aae4677677cb069da5105b86888fe68c08a8d"},
@@ -97,7 +97,9 @@
     {"ref":"FS-GG/.github#2959","classification":"parallel-product","decision":"advisory-only pilot outside critical path"}
   ],
   "runtimeDecision": {"posture":"scheduled-audit-authoritative","hostedBoundary":"rejected-for-cutover","owner":"FS-GG/.github protected audit workflows until v2 audit adoption","availability":"fail closed on missed/unreadable/incomplete run","secrets":"no new hosted secret boundary","ingress":"no production webhook ingress required","observability":"Actions runs plus typed audit receipts","upgrades":"immutable workflow/tool pins","incidentResponse":"disable mutation, retain reads, repair from complete audit","retention":"git indexes plus immutable artifacts/releases","cost":"measure API budget and cadence before GS2-10","disasterRecovery":"rerun complete audit from immutable candidate; no cursor-only recovery"},
-  "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"pendingBoardWrites":0},
+  "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"childBoundaryCitations":["FS-GG/.github#2954","FS-GG/.github#2955","FS-GG/.github#2956","FS-GG/.github#2957","FS-GG/.github#2958","FS-GG/.github#2959","FS-GG/.github#2960","FS-GG/.github#2961","FS-GG/.github#2962","FS-GG/.github#2963","FS-GG/.github#2964","FS-GG/.github#2965"],"pendingBoardWrites":0},
+  "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"b94663dceaa00af6754457c6e3e812f2533b48a748eedaae58d31fd1f4d1a1d2","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
+  "reviewFingerprint": "230d6fea6c8f503e807884c76f5ff9fbf1eb4f7104f793891e8f4d1b72df70de",
   "reviewsRequired":["architecture","security","operations","crossRepository"],
   "reviews":[]
 }

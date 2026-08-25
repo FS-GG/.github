@@ -719,6 +719,14 @@ evidence designed for this cutover:
    attestation, and install-from-feed tests; and
 9. an independent architecture/security/cutover review over exact candidate artifacts and evidence.
 
+The Q0 security artifact is the source-bound
+[threat model](../../work/2953-gh-modernization-m0-invariants/threat-model.md). It enumerates actors,
+assets, the protected epoch, administrative principal, mutable GitHub state, package/supply-chain, and
+cross-repository receiver boundaries, their abuse cases, mitigations, incident posture, and residual
+risk. The Q0 validator independently recomputes its byte digest and the canonical non-circular review
+fingerprint; every architecture, security, operations, and cross-repository verdict must bind that exact
+fingerprint.
+
 The typed model may generate exhaustive structural and transition cases, but at least one black-box oracle
 for every safety-critical invariant must be maintained outside that generator. Otherwise a defect in the
 specification or compiler would also manufacture a passing test. Qualification results are versioned,

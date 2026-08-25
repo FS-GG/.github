@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="0.628485"><testcase name="q0-candidate-and-mutation-controls" time="0.038742"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="0.037264"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.119373"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.031762"><system-out>{
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.122164"><testcase name="q0-candidate-and-mutation-controls" time="3.216893"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="0.429767"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.097252"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.026311"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -16,8 +16,8 @@
         {
             "id": "scripts",
             "root": "scripts",
-            "count": 116,
-            "pathListSha256": "577c92595928494b34e6cb59b49584db95658fcb628c942ef3a3f838d124b027"
+            "count": 117,
+            "pathListSha256": "1e398b86bbe155df4ec93d8086edb3b7bbc215a9cc0bb1782e7cf31e75b8ad55"
         },
         {
             "id": "core",
@@ -697,8 +697,34 @@
                 "FS-GG/.github#2964"
             ]
         },
+        "childBoundaryCitations": [
+            "FS-GG/.github#2954",
+            "FS-GG/.github#2955",
+            "FS-GG/.github#2956",
+            "FS-GG/.github#2957",
+            "FS-GG/.github#2958",
+            "FS-GG/.github#2959",
+            "FS-GG/.github#2960",
+            "FS-GG/.github#2961",
+            "FS-GG/.github#2962",
+            "FS-GG/.github#2963",
+            "FS-GG/.github#2964",
+            "FS-GG/.github#2965"
+        ],
         "pendingBoardWrites": 0
     },
+    "threatModel": {
+        "path": "work/2953-gh-modernization-m0-invariants/threat-model.md",
+        "sha256": "b94663dceaa00af6754457c6e3e812f2533b48a748eedaae58d31fd1f4d1a1d2",
+        "boundaries": [
+            "protectedEpoch",
+            "administrativePrincipal",
+            "githubMutableState",
+            "packageSupplyChain",
+            "crossRepositoryReceiver"
+        ]
+    },
+    "reviewFingerprint": "230d6fea6c8f503e807884c76f5ff9fbf1eb4f7104f793891e8f4d1b72df70de",
     "reviewsRequired": [
         "architecture",
         "security",
@@ -707,7 +733,7 @@
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.005666"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.395679"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.006824"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.345118"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
