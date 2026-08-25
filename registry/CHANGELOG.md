@@ -19,6 +19,32 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **coordination coherent set `github:0.75.4` published and fully reconciled**
+  (github; [.github#2941](https://github.com/FS-GG/.github/issues/2941),
+  [source PR #2967](https://github.com/FS-GG/.github/pull/2967),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.4)):
+  advances the coord-engine source, package, generated projections, and distributed tool pin to
+  `0.75.4` after promotion run
+  [32850612346](https://github.com/FS-GG/.github/actions/runs/32850612346) observed all three packages
+  on GitHub Packages and nuget.org. The release binds exact source `8d7204710d08d1cbeed76b74ae0afe089b6ea4e1`,
+  content `sha256:18444dd1c84386de62ce324728c0f6b42343789eac6e747e858469aefa25a378`,
+  and identical unsigned payloads across feeds: Coord.Cli
+  `sha256:315ebfb276f76a62f81eb9285f84ce9a59e5585af9c2b735037df3b7b28fc8e4`, Drivers
+  `sha256:d470f549150b792e5c52b0466f20785dc57d8c340b5dc95bdfe3bd896f09b58d`, and Kit
+  `sha256:f486dc1746691419630d23745bdfea72a0d7dcec5555dce8a511731855df9ac3`.
+  Prepare run 32849407503 packed once; exact-source recoveries 32850378589/32850382204/32850385224
+  resumed the durable journals after public-feed indexing without repacking or duplicate pushes.
+
+- **2026-08-25** — **Game Core/Render/Harness coherent set `0.14.0` published and reconciled**
+  (game; [Game#606](https://github.com/FS-GG/FS.GG.Game/issues/606),
+  [Game PR #607](https://github.com/FS-GG/FS.GG.Game/pull/607),
+  [release run 32849207929](https://github.com/FS-GG/FS.GG.Game/actions/runs/32849207929)):
+  advances `game-sim-core` and `game-scene-adapter` source/package identities from `0.13.0` to the
+  coherent additive MINOR `0.14.0`. Tag `v0.14.0` resolves to exact merged source
+  `f1ef2297e90997ab51e82c02bc810e140008f8cb`; the workflow packed the Core/Render/Harness set once,
+  published GitHub Packages before nuget.org, and preserved every non-signature payload byte.
+  The release adds the Harness action-coverage public surface while retaining one coherent scalar.
+
 - **2026-08-25** — **`FS.GG.Workspace.Template` 0.9.0 published and registry identity reconciled**
   (templates; [.github#2934](https://github.com/FS-GG/.github/issues/2934),
   [Templates#432](https://github.com/FS-GG/FS.GG.Templates/issues/432),
