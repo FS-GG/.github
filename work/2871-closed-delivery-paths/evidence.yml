@@ -53,7 +53,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -80,7 +80,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -107,7 +107,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -134,7 +134,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -161,7 +161,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -188,7 +188,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -215,7 +215,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -242,7 +242,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -269,7 +269,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -296,7 +296,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -323,7 +323,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -350,7 +350,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -377,7 +377,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -404,7 +404,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -431,7 +431,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -458,7 +458,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -485,7 +485,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      source: work/2871-closed-delivery-paths/verification/lifecycle.test-results.xml
       digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
       digestContract: exact-bytes-v1
       outcome: passed
