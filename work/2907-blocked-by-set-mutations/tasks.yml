@@ -13,11 +13,11 @@ work:
 sources:
   - label: spec
     path: work/2907-blocked-by-set-mutations/spec.md
-    digest: bbfc8ac46a0af4e5487e6e08af4603eb9e97d26877c78774d4f96d892930802f
+    digest: 0c67131cd75f9737152d3f9ff3318365c8ad48644e84fb2634238552972e9421
     schemaVersion: 1
   - label: clarifications
     path: work/2907-blocked-by-set-mutations/clarifications.md
-    digest: 29371de9aa66598f033214d6fd42665dac6d53189f32f572cdd1327bb6537bc5
+    digest: 115ac7f1746e8903a61e362007d2e4e4270c4ecd32383a4576134cfb1eaa0861
     schemaVersion: 1
   - label: checklist
     path: work/2907-blocked-by-set-mutations/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2907-blocked-by-set-mutations/plan.md
-    digest: 243f8da1ca1d80b697dcbd4c9359371b98f08f39961ec7bb1c363424b198288d
+    digest: 40be45af09bcb77f4cb5fe4b2228f7b6d7d03b66cbf9d679c504e99546f066e3
     schemaVersion: 1
 tasks:
   - id: T001

@@ -2,11 +2,11 @@
 
 ## Positive controls
 
-- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --no-restore`: 257 passed, 0 failed, 0 skipped.
+- `dotnet test tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj -c Release --no-restore`: 258 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore`: 671 passed, 0 failed, 0 skipped.
 - `dotnet test tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --no-restore`: 182 passed, 0 failed, 0 skipped.
 - The Lifecycle, CLI, and Core test project commands each exited zero.
-- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 257 BoardOps tests passing.
+- The durable TRX at `readiness/2907-blocked-by-set-mutations/test-results/boardops.trx` records all 258 BoardOps tests passing.
 - `tests/coord-engine-parity/run.sh` passed the explicit replace/clear, ref-first, zero-GraphQL refusal, canonicalization, de-duplication, and scoped-field controls after its legacy positional calls were migrated.
 - After the initial critic identified a missing hosted body for open/In-progress item #423, the repaired
   serialized parity run passed 616/616 assertions with zero failures and zero not-measured results. Its
@@ -37,6 +37,12 @@
   on its kept-alive HTTP/1.1 connection. Guarding 204 before serialization made
   `scripts/check-parity-fixtures.py` green across all 46 fixtures and the full parity corpus green at
   616/616 with zero not-measured results. The hosted red is the negative control for the framing fix.
+- The round-1 successor critic found that the lease covered derived and explicit single-field intents but
+  could still be bypassed by other authoritative writers. The repair routes `set-field --batch`, intake,
+  reconcile lifecycle repairs, and `release --blocked-by` through the same server-ordered issue-comment
+  lease. A discriminating batch interleaving fixture installs a lower-ID contender and proves the losing
+  command emits zero board mutations; the release fixture proves its route posts the same lease marker.
+  The expanded Release BoardOps suite passed 258/258.
 
 ## Gate inversions
 
@@ -48,14 +54,19 @@ Each bounded mutation was applied alone, the focused test was observed red, and 
 4. The inert-body verdict was suppressed with `Ok None`. The lint theory failed because the divergent body case expected a finding and observed none.
 5. The production mutation-lease election was reversed from lowest to highest comment id. The lower-id
    contender control failed because the command returned zero instead of fencing our higher-id writer.
+6. The batch writer's shared-lease predicate was disabled. The new interleaving control failed because
+   the batch command returned zero and mutated the field despite the active lower-ID contender; restoring
+   the shared predicate returned the focused control green.
 
-These inversions discriminate union, subtraction, stale-write refusal, body-projection linting, and
-server-ordered mutation fencing independently.
+These inversions discriminate union, subtraction, stale-write refusal, body-projection linting,
+server-ordered mutation fencing, and authoritative-writer lease bypass independently.
 
 ## Runtime controls
 
 - Parser controls cover all four explicit intents, mutual exclusion, and rejection outside `set-field`.
 - Legacy positional `Blocked by` replacement is refused before transport with the four explicit remedies; the parity fixture uses `--replace` and `--clear` and proves malformed explicit values spend zero GraphQL.
 - Handler transport controls independently vary the first observation and guarded re-observation, assert the derived field mutation, and assert zero mutation on stale data.
+- Batch, release, intake, reconcile, and explicit set-field controls provide a persistent issue-comment
+  thread and therefore fail if any authoritative `Blocked by` route does not join the common lease.
 - Lint controls distinguish absent/equal projection from empty, divergent, duplicate, and invalid body text; fenced examples remain ignored.
 - The body lint is diagnostic-only and never feeds a board mutation route.

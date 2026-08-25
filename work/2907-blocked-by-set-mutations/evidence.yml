@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2907-blocked-by-set-mutations/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2907-blocked-by-set-mutations/analysis.json
-    digest: 3ae6df877929bd095ea483ed27cced27a3a43bcfe0acd2c4ada8c1b5411888ad
+    digest: de7256466ee0f2bf2514f56b4388c8484b196422887baeb08971d574d350c2d3
     schemaVersion: 1
   - label: checklist
     path: work/2907-blocked-by-set-mutations/checklist.md
@@ -19,19 +19,19 @@ sourceSnapshots:
     schemaVersion: 1
   - label: clarifications
     path: work/2907-blocked-by-set-mutations/clarifications.md
-    digest: 29371de9aa66598f033214d6fd42665dac6d53189f32f572cdd1327bb6537bc5
+    digest: 115ac7f1746e8903a61e362007d2e4e4270c4ecd32383a4576134cfb1eaa0861
     schemaVersion: 1
   - label: plan
     path: work/2907-blocked-by-set-mutations/plan.md
-    digest: 243f8da1ca1d80b697dcbd4c9359371b98f08f39961ec7bb1c363424b198288d
+    digest: 40be45af09bcb77f4cb5fe4b2228f7b6d7d03b66cbf9d679c504e99546f066e3
     schemaVersion: 1
   - label: spec
     path: work/2907-blocked-by-set-mutations/spec.md
-    digest: bbfc8ac46a0af4e5487e6e08af4603eb9e97d26877c78774d4f96d892930802f
+    digest: 0c67131cd75f9737152d3f9ff3318365c8ad48644e84fb2634238552972e9421
     schemaVersion: 1
   - label: tasks
     path: work/2907-blocked-by-set-mutations/tasks.yml
-    digest: ae85b8835c2a835841d0d3ad0afbb741d36a51b524397d083b88b34203a8c540
+    digest: ca008be2a053f9c3741bbd613539e01933034430173ee45912f1ccc062b90138
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:52d675d5191ed3ecc2eca8f68c16ac5cdecf53b48fe4be444878366dc7a49c1c"
+      digest: "sha256:7ebcb6d4c668b581fe6f0f4bcbf16b601ad2b6fd4cfacf0308eceefd526b03f6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 257
+      passed: 258
       failed: 0
       skipped: 0
     notes: [The observed BoardOps receipt covers parser, "and inert-body lint controls; verification-evidence.md records four independently observed red inversions and the complete affected-project gate set.", set-mutation, stale-write]

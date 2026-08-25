@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "29371de9aa66598f033214d6fd42665dac6d53189f32f572cdd1327bb6537bc5"
+        "value": "115ac7f1746e8903a61e362007d2e4e4270c4ecd32383a4576134cfb1eaa0861"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "02b417f6fac4ec096e11ab6622d556948782cfd43b0d2bbfc5da284e3b29e7b0"
+        "value": "9cfd01ed61b964904187a486f1066c624d4608cd4826c4676430e3da9dcfd487"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "243f8da1ca1d80b697dcbd4c9359371b98f08f39961ec7bb1c363424b198288d"
+        "value": "40be45af09bcb77f4cb5fe4b2228f7b6d7d03b66cbf9d679c504e99546f066e3"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bbfc8ac46a0af4e5487e6e08af4603eb9e97d26877c78774d4f96d892930802f"
+        "value": "0c67131cd75f9737152d3f9ff3318365c8ad48644e84fb2634238552972e9421"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ae85b8835c2a835841d0d3ad0afbb741d36a51b524397d083b88b34203a8c540"
+        "value": "ca008be2a053f9c3741bbd613539e01933034430173ee45912f1ccc062b90138"
       }
     }
   ],
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "Add and remove bind both the live field value and Projects-v2 item revision; a changed value or revision at the guarded write boundary fails stale and emits no mutation. (Stories: US-001; Acceptance: AC-001, AC-002, AC-003)",
-      "text": "Add and remove bind both the live field value and Projects-v2 item revision; a changed value or revision at the guarded write boundary fails stale and emits no mutation. (Stories: US-001; Acceptance: AC-001, AC-002, AC-003)",
+      "title": "Because Projects-v2 exposes no compare-and-set mutation, every authoritative \u0060Blocked by\u0060 writer (add/remove, explicit replacement/clear, batch, release, intake, and reconcile) acquires the same server-ordered issue-comment mutation lease before observing or writing the field and retains it through the GraphQL mutation. Add/remove additionally bind the live field value and Projects-v2 item revision; a changed value or revision at the guarded write boundary fails stale and emits no mutation. (Stories: US-001; Acceptance: AC-001, AC-002, AC-003)",
+      "text": "Because Projects-v2 exposes no compare-and-set mutation, every authoritative \u0060Blocked by\u0060 writer (add/remove, explicit replacement/clear, batch, release, intake, and reconcile) acquires the same server-ordered issue-comment mutation lease before observing or writing the field and retains it through the GraphQL mutation. Add/remove additionally bind the live field value and Projects-v2 item revision; a changed value or revision at the guarded write boundary fails stale and emits no mutation. (Stories: US-001; Acceptance: AC-001, AC-002, AC-003)",
       "acceptanceCriteria": [
         "AC-001",
         "AC-002",
@@ -235,8 +235,8 @@
     },
     {
       "id": "FR-006",
-      "title": "Focused tests and gate inversion prove add preserves \u0060#290\u0060 while adding \u0060#299\u0060, remove preserves \u0060#299\u0060 while removing \u0060#290\u0060, a changed observation is never overwritten, and lint distinguishes inert, divergent, invalid, absent, and agreeing body projections. (Stories: US-001, US-002; Acceptance: AC-006)",
-      "text": "Focused tests and gate inversion prove add preserves \u0060#290\u0060 while adding \u0060#299\u0060, remove preserves \u0060#299\u0060 while removing \u0060#290\u0060, a changed observation is never overwritten, and lint distinguishes inert, divergent, invalid, absent, and agreeing body projections. (Stories: US-001, US-002; Acceptance: AC-006)",
+      "title": "Focused tests and gate inversion prove add preserves \u0060#290\u0060 while adding \u0060#299\u0060, remove preserves \u0060#299\u0060 while removing \u0060#290\u0060, batch and release cannot bypass an active derived writer\u0027s lease, a changed observation is never overwritten, and lint distinguishes inert, divergent, invalid, absent, and agreeing body projections. (Stories: US-001, US-002; Acceptance: AC-006)",
+      "text": "Focused tests and gate inversion prove add preserves \u0060#290\u0060 while adding \u0060#299\u0060, remove preserves \u0060#299\u0060 while removing \u0060#290\u0060, batch and release cannot bypass an active derived writer\u0027s lease, a changed observation is never overwritten, and lint distinguishes inert, divergent, invalid, absent, and agreeing body projections. (Stories: US-001, US-002; Acceptance: AC-006)",
       "acceptanceCriteria": [
         "AC-006"
       ],
@@ -282,8 +282,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "Introduce a guarded single-field board write accepting \u0060BlockedByObservation\u0060. It resolves the item, re-reads the observation immediately before mutation, and emits no mutation on mismatch. The fixture controls the two reads independently and asserts a stale diagnostic plus zero update/clear documents when the second revision or value differs.",
-      "decision": "Introduce a guarded single-field board write accepting \u0060BlockedByObservation\u0060. It resolves the item, re-reads the observation immediately before mutation, and emits no mutation on mismatch. The fixture controls the two reads independently and asserts a stale diagnostic plus zero update/clear documents when the second revision or value differs.",
+      "title": "Put every authoritative \u0060Blocked by\u0060 mutation route behind \u0060Writes.withBlockedByMutationLease\u0060, acquired before observation and held through mutation. The shared lease covers add/remove, explicit replacement/clear, \u0060set-field --batch\u0060, \u0060release --blocked-by\u0060, intake, and reconcile writes. Keep \u0060Board.boardWriteGuarded\u0060 as a secondary detector: it accepts \u0060BlockedByObservation\u0060, re-reads immediately before mutation, and emits no mutation on mismatch. Fixtures control observations and the issue-comment lease independently, assert a stale diagnostic plus zero update/clear documents on mismatch, and assert that a lower-ID contender fences batch/release without any board mutation.",
+      "decision": "Put every authoritative \u0060Blocked by\u0060 mutation route behind \u0060Writes.withBlockedByMutationLease\u0060, acquired before observation and held through mutation. The shared lease covers add/remove, explicit replacement/clear, \u0060set-field --batch\u0060, \u0060release --blocked-by\u0060, intake, and reconcile writes. Keep \u0060Board.boardWriteGuarded\u0060 as a secondary detector: it accepts \u0060BlockedByObservation\u0060, re-reads immediately before mutation, and emits no mutation on mismatch. Fixtures control observations and the issue-comment lease independently, assert a stale diagnostic plus zero update/clear documents on mismatch, and assert that a lower-ID contender fences batch/release without any board mutation.",
       "requirementRefs": [
         "FR-003"
       ],
@@ -322,8 +322,8 @@
     },
     {
       "id": "DEC-004",
-      "title": "Mutation controls independently replace union with requested-only, subtraction with empty, and stale comparison with unconditional success; lint controls suppress the body comparison. Each control must red a named focused test, then be restored before the full gates.",
-      "decision": "Mutation controls independently replace union with requested-only, subtraction with empty, and stale comparison with unconditional success; lint controls suppress the body comparison. Each control must red a named focused test, then be restored before the full gates.",
+      "title": "Mutation controls independently replace union with requested-only, subtraction with empty, bypass the shared lease from an authoritative batch/release route, and replace stale comparison with unconditional success; lint controls suppress the body comparison. Each control must red a named focused test, then be restored before the full gates.",
+      "decision": "Mutation controls independently replace union with requested-only, subtraction with empty, bypass the shared lease from an authoritative batch/release route, and replace stale comparison with unconditional success; lint controls suppress the body comparison. Each control must red a named focused test, then be restored before the full gates.",
       "requirementRefs": [
         "FR-006"
       ],
@@ -1203,7 +1203,7 @@
           "path": "work/2907-blocked-by-set-mutations/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "29371de9aa66598f033214d6fd42665dac6d53189f32f572cdd1327bb6537bc5"
+            "value": "115ac7f1746e8903a61e362007d2e4e4270c4ecd32383a4576134cfb1eaa0861"
           },
           "schemaVersion": 1
         },
@@ -1211,7 +1211,7 @@
           "path": "work/2907-blocked-by-set-mutations/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "02b417f6fac4ec096e11ab6622d556948782cfd43b0d2bbfc5da284e3b29e7b0"
+            "value": "9cfd01ed61b964904187a486f1066c624d4608cd4826c4676430e3da9dcfd487"
           },
           "schemaVersion": 1
         },
@@ -1219,7 +1219,7 @@
           "path": "work/2907-blocked-by-set-mutations/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "243f8da1ca1d80b697dcbd4c9359371b98f08f39961ec7bb1c363424b198288d"
+            "value": "40be45af09bcb77f4cb5fe4b2228f7b6d7d03b66cbf9d679c504e99546f066e3"
           },
           "schemaVersion": 1
         },
@@ -1227,7 +1227,7 @@
           "path": "work/2907-blocked-by-set-mutations/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bbfc8ac46a0af4e5487e6e08af4603eb9e97d26877c78774d4f96d892930802f"
+            "value": "0c67131cd75f9737152d3f9ff3318365c8ad48644e84fb2634238552972e9421"
           },
           "schemaVersion": 1
         },
@@ -1235,14 +1235,14 @@
           "path": "work/2907-blocked-by-set-mutations/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "ae85b8835c2a835841d0d3ad0afbb741d36a51b524397d083b88b34203a8c540"
+            "value": "ca008be2a053f9c3741bbd613539e01933034430173ee45912f1ccc062b90138"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "041086d508d87646cfdf5f884ca356216b1262d60ceb06999d65b2fbc6c06586"
+        "value": "d36191f4bc954cb12f417fbdd7cc9701adf6e8aada904a66ca7977b6f23f5a9f"
       },
       "currency": "current"
     }

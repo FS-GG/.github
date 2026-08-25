@@ -477,6 +477,20 @@ module Handlers =
         | [] -> Board.Clear
         | values -> Board.Set(String.concat ", " values)
 
+    // Projects v2 offers no conditional field mutation. Every writer of the authoritative
+    // `Blocked by` field must participate in this same serialization boundary, including aliased
+    // batch/intake writes that also carry unrelated fields.
+    let private withBlockedByLeaseForWrites
+        (ctx: Context)
+        (ref: Ref)
+        (writes: (string * Board.FieldWrite) list)
+        (action: unit -> Errors.IoResult<'value>)
+        : Errors.IoResult<'value> =
+        if writes |> List.exists (fun (field, _) -> field = "Blocked by") then
+            Writes.withBlockedByMutationLease ctx.Transport ref action
+        else
+            action ()
+
     let private setBlockedByMutation (ctx: Context) (opts: Options) (mutation: Options.BlockedByMutation) : int =
         match opts.Args with
         | [ refArg; field ] when field = "Blocked by" ->
@@ -700,7 +714,10 @@ module Handlers =
                                 | field, Board.Clear -> $"%s{field}=<cleared>"
                             | _ -> alias
 
-                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number None writes w.Id with
+                        match
+                            withBlockedByLeaseForWrites ctx ref writes (fun () ->
+                                Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number None writes w.Id)
+                        with
                         // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
                         // landed; reporting nothing happened would be a lie, and reporting success is the bug
                         // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
@@ -2249,17 +2266,18 @@ module Handlers =
                                                     Ok current)
 
                                         match
-                                            dependencyFresh
-                                            |> Result.bind (fun expectedBlockedBy ->
-                                                Board.boardWriteBatch
-                                                    ctx.Transport
-                                                    board
-                                                    issue.Owner
-                                                    issue.Repo
-                                                    issue.Number
-                                                    expectedBlockedBy
-                                                    writes
-                                                    w.Id)
+                                            withBlockedByLeaseForWrites ctx issue writes (fun () ->
+                                                dependencyFresh
+                                                |> Result.bind (fun expectedBlockedBy ->
+                                                    Board.boardWriteBatch
+                                                        ctx.Transport
+                                                        board
+                                                        issue.Owner
+                                                        issue.Repo
+                                                        issue.Number
+                                                        expectedBlockedBy
+                                                        writes
+                                                        w.Id))
                                         with
                                         | Error e -> failProjection e
                                         | Ok Board.Deferred ->

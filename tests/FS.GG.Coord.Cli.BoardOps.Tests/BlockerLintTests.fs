@@ -222,6 +222,20 @@ module BlockerLintTests =
         Assert.Empty(result.Mutations)
 
     [<Fact>]
+    let ``#2907 batch replacement joins the same lease and cannot bypass an active derived writer`` () =
+        let result =
+            BlockedBySetMutationFixture.runContended
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Blocked by=#299" ]
+
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("lease is held by comment 100", result.Error)
+        Assert.Empty(result.Mutations)
+
+    [<Fact>]
     let ``#2907 two concurrent writers serialize without losing either edge`` () =
         let sync = obj ()
         let bothReadyToPost = new Threading.ManualResetEventSlim(false)
@@ -803,9 +817,31 @@ module BlockerLintTests =
         /// resolver read — `None` is the genuinely-empty field; `Some v` is a STALE non-empty value, for
         /// round 1's reproduction: a same-call CLEAR must not trust it.
         let private build (body: string) (liveBlockedBy: string option) =
+            let comments = Collections.Generic.Dictionary<int64, string>()
+            let mutable nextComment = 9000L
+            let commentsJson () =
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                comments
+                |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+                |> Seq.toArray
+                |> JsonSerializer.Serialize
+
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson ())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = nextComment
+                        nextComment <- nextComment + 1L
+                        comments.[id] <- document.RootElement.GetProperty("body").GetString()
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    comments.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
+                    ok "{}"
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
                 | "POST", "graphql" ->
@@ -957,6 +993,18 @@ module BlockerLintTests =
         /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
         /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
         let transport () =
+            let comments = Collections.Generic.Dictionary<int64, string>()
+            let mutable nextComment = 9096L
+            let commentsJson subject =
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                seq {
+                    yield {| id = 7900L; body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None; updated_at = now |}
+                    for entry in comments do
+                        yield {| id = entry.Key; body = entry.Value; updated_at = now |}
+                }
+                |> Seq.toArray
+                |> JsonSerializer.Serialize
+
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
@@ -999,14 +1047,26 @@ module BlockerLintTests =
                 // channel's own coverage lives in `ApplicationServiceTests` and `LifecycleProjectionTests`,
                 // where the receipt is read back by the reconcile pass that used to revert it.
                 | "POST", "repos/FS-GG/rogue3/issues/96/comments"
-                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
+                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = nextComment
+                        nextComment <- nextComment + 1L
+                        comments.[id] <- document.RootElement.GetProperty("body").GetString()
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/rogue3/issues/comments/"
+                                   || p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
+                    comments.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
+                    ok "{}"
                 // .github#2698: `set-field <ref> Status Ready` — both spellings these legs drive — now
                 // requires a CURRENT delivery-route receipt on the row it promotes. The subject is bound to
                 // the canonical owner, so each twin gets its OWN receipt: a fixture that served one for
                 // both would quietly agree with a gate that ignored the subject binding, which is the
                 // failure `validateRouteLedger` exists to catch and the one these legs are already about.
-                | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (routedLedger "FS-GG/rogue3#96")
-                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (routedLedger "EHotwagner/rogue3#96")
+                | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (commentsJson "FS-GG/rogue3#96")
+                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (commentsJson "EHotwagner/rogue3#96")
                 | m, p -> Error(Errors.NotFound $"the receipt fixture serves no %s{m} %s{p}"))
 
     [<Theory>]
@@ -1183,8 +1243,8 @@ module BlockerLintTests =
                   ETag = None
                   NextLink = None; Headers = Map.empty }
 
-        /// A live claim marker, or none — `Writes.verifyHeld`'s subject, `ForceStealTests.Thread` scaled
-        /// down to what this fixture needs (no POST, since `release` never adds a comment).
+        /// A live claim marker, or none — `Writes.verifyHeld`'s subject, plus the ephemeral mutation
+        /// lease comment `release --blocked-by` must now post and remove around its field write.
         type private Thread(holder: string option) =
             let comments = System.Collections.Generic.Dictionary<int64, string>()
 
@@ -1204,6 +1264,13 @@ module BlockerLintTests =
                 |> sprintf "[%s]"
 
             member _.Remove(id: int64) = comments.Remove id |> ignore
+
+            member _.Add(body: string) =
+                let id =
+                    if comments.Count = 0 then 9000L
+                    else (comments.Keys |> Seq.max) + 1L
+                comments.[id] <- body
+                id
 
         /// The NON-HOLDER fixture. It answers ONLY `rate_limit` and the marker read — every OTHER
         /// endpoint, GraphQL included, is a hard refusal. If the fix is correct, `release` never reaches
@@ -1229,6 +1296,13 @@ module BlockerLintTests =
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = thread.Add(document.RootElement.GetProperty("body").GetString())
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
                 | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
                     thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
                     ok ""
@@ -1347,6 +1421,7 @@ module BlockerLintTests =
 
         Assert.Equal(0, code)
         Assert.Contains("released", out)
+        Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
         // The field write DID happen — this is the positive half of the pair, proving the reordering
         // did not turn into an over-correction that refuses a legitimate holder too.
         Assert.True(transport.Logged "updateProjectV2ItemFieldValue" || transport.Logged "item-edit")

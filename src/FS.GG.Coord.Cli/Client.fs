@@ -37,6 +37,20 @@ module Client =
     // (.github#2726–#2729) depend on the Kernel rather than on the module they are being cut out of.
     open FS.GG.Coord.Cli.Kernel
 
+    // Every authoritative `Blocked by` writer shares the same issue-comment lease. Projects v2 has no
+    // expected-revision/CAS input, so guarding only add/remove would still let release or reconcile race
+    // between the derived writer's final observation and unconditional mutation.
+    let private withBlockedByLeaseForWrites
+        (ctx: Context)
+        (ref: Ref)
+        (writes: (string * Board.FieldWrite) list)
+        (action: unit -> Errors.IoResult<'value>)
+        : Errors.IoResult<'value> =
+        if writes |> List.exists (fun (field, _) -> field = "Blocked by") then
+            Writes.withBlockedByMutationLease ctx.Transport ref action
+        else
+            action ()
+
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
     /// there is nothing to say. `status` is the already-rendered wire name.
     ///
@@ -2968,10 +2982,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       let outcome =
                                           match gate with
                                           | Error _ -> Ok Board.NotOnBoard
-                                          | Ok() when List.length writes > 1 ->
-                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
                                           | Ok() ->
-                                              Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
+                                              withBlockedByLeaseForWrites ctx chore.Subject writes (fun () ->
+                                                  if List.length writes > 1 then
+                                                      Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
+                                                  else
+                                                      Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id)
 
                                       match outcome with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
@@ -5521,7 +5537,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     Error ExitError
                 | Ok board ->
                     match
-                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id
+                        Writes.withBlockedByMutationLease ctx.Transport ref (fun () ->
+                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id)
                     with
                     | Ok Board.Written -> Ok()
                     | Ok Board.Deferred ->

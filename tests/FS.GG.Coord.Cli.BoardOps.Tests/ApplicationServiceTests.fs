@@ -32,6 +32,31 @@ module ApplicationServiceTests =
     let private routedLedger (subject: string) =
         JsonSerializer.Serialize [| {| id = 7900; body = currentRouteComment subject "" |} |]
 
+    type private MutationCommentThread(initialBodies: string list) =
+        let comments = Collections.Generic.Dictionary<int64, string>()
+        let mutable nextId = 9000L
+
+        do
+            initialBodies
+            |> List.iter (fun body ->
+                comments.[nextId] <- body
+                nextId <- nextId + 1L)
+
+        member _.Json() =
+            let now = DateTimeOffset.UtcNow.ToString("o")
+            comments
+            |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+            |> Seq.toArray
+            |> JsonSerializer.Serialize
+
+        member _.Add(body: string) =
+            let id = nextId
+            nextId <- nextId + 1L
+            comments.[id] <- body
+            id
+
+        member _.Remove(id: int64) = comments.Remove id |> ignore
+
     [<Fact>]
     let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
         let current : DeliveryRoute.Receipt =
@@ -2478,6 +2503,7 @@ module ApplicationServiceTests =
     let private partialBlockerReconcileWorld () =
         let mutable mutationAccepted = false
         let staleBlocker = "FS-GG/FS.GG.SDD#45"
+        let thread = MutationCommentThread [ currentRouteComment "FS-GG/FS.GG.SDD#47" "" ]
 
         let items () =
             let status = if mutationAccepted then "Ready" else "Blocked"
@@ -2524,8 +2550,16 @@ module ApplicationServiceTests =
             // what it must carry; the `DeclaredNone` path has its own fixture below.
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: src/A.fs"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use document = JsonDocument.Parse payload
+                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
+                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+            | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                ok "{}"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2544,6 +2578,7 @@ module ApplicationServiceTests =
     let private declaredNoneReconcileWorld () =
         let mutable status = "Blocked"
         let mutable blockedBy = "FS-GG/FS.GG.SDD#45"
+        let thread = MutationCommentThread []
 
         let items () =
             [ boardItemInWithBody status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN" "Paths: none"
@@ -2589,8 +2624,16 @@ module ApplicationServiceTests =
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: none"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
+            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use document = JsonDocument.Parse payload
+                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
+                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+            | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                ok "{}"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
@@ -2851,6 +2894,7 @@ module ApplicationServiceTests =
     let private externalOwnerWriteWorldWithLookup (lookupResponse: string) =
         let mutable status = "Blocked"
         let mutable blockedBy = "FS-GG/.github#2155"
+        let thread = MutationCommentThread [ currentRouteComment "EHotwagner/rogue3#96" "" ]
 
         let items () =
             let blocker =
@@ -2907,8 +2951,16 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/issues/96" ->
                 ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
-            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (routedLedger "EHotwagner/rogue3#96")
-            | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
+            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (thread.Json())
+            | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                match req.Body with
+                | Json payload ->
+                    use document = JsonDocument.Parse payload
+                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
+                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+            | "DELETE", p when p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
+                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                ok "{}"
             | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
