@@ -600,15 +600,15 @@ arch_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$ARCH")"
 profile_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$PROFILE_README")"
 workspace_contract_rows="$(grep -F '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")"
 game_skills_contract_rows="$(grep -F '| `game-skills` | FS.GG.Game |' "$ARCH")"
-if [ "$(printf '%s\n' "$arch_templates_rows" | grep -c .)" -eq 1 ] \
-  && printf '%s\n' "$arch_templates_rows" | grep -qF 'FS.GG.Workspace.Template` 0.9.0' \
-  && printf '%s\n' "$arch_templates_rows" | grep -qF '`new-sdd-workspace` 0.10.0' \
-  && [ "$(printf '%s\n' "$profile_templates_rows" | grep -c .)" -eq 1 ] \
-  && printf '%s\n' "$profile_templates_rows" | grep -qF '| `0.9.0` |' \
-  && [ "$(printf '%s\n' "$workspace_contract_rows" | grep -c .)" -eq 1 ] \
-  && printf '%s\n' "$workspace_contract_rows" | grep -qF '| `0.9.0` | `0.9.0` |' \
-  && [ "$(printf '%s\n' "$game_skills_contract_rows" | grep -c .)" -eq 1 ] \
-  && printf '%s\n' "$game_skills_contract_rows" | grep -qF '| `0.8.0` | `0.8.0` |' \
+if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.9.0'* ]] \
+  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.0'* ]] \
+  && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$PROFILE_README")" -eq 1 ] \
+  && [[ "$profile_templates_rows" == *'| `0.9.0` |'* ]] \
+  && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
+  && [[ "$workspace_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
+  && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
+  && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
   && ! grep -qF 'coherent release pending' "$PROFILE_README" \
