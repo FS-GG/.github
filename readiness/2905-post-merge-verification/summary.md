@@ -3,9 +3,9 @@
      sources:
        - readiness/2905-post-merge-verification/agent-commands/claude/guidance.json  digest:88aff6973a3e98e04eb11701bb4676b69add4217555072315f87fe4ff3de278d  schema:1(current)
        - readiness/2905-post-merge-verification/agent-commands/codex/guidance.json  digest:42a013f2eb11ff5784e2166df6ed42bd439516e5ec7f353a67ad8f5f69b1e1c8  schema:1(current)
-       - readiness/2905-post-merge-verification/analysis.json  digest:5813bc277dce7467ef19b31e7050b1c4ba0f870be7bad51e5139fb45b2bd371f  schema:1(current)
-       - readiness/2905-post-merge-verification/ship.json  digest:b907cf894f108d9cfcf0c034e925edca2b2a5c1e6628c748ef0ebd25af05de12  schema:1(current)
-       - readiness/2905-post-merge-verification/verify.json  digest:aa2d108e02cab25717ec8dda586fb2b0b9d8fbe883e4117b5ff9544c80ca46dd  schema:1(current)
+       - readiness/2905-post-merge-verification/analysis.json  digest:4c35c5ebc9b5241cb4a7ec2fffb060757fcc6814cb1edfa04cd34abf28375ea5  schema:1(current)
+       - readiness/2905-post-merge-verification/ship.json  digest:a6c15a8979561fcce8c88f37e1618888f428d5d221fff66f5d0683efdd1d1b3e  schema:1(current)
+       - readiness/2905-post-merge-verification/verify.json  digest:187f1744d9116f86f0022c2c0137c234345f5e4156542859164393705050c2db  schema:1(current)
        - readiness/2905-post-merge-verification/work-model.json  digest:df0092cb9849a38a31e4e27c1558ff54dd9456820156c2c0d678b1fe8ef3218b  schema:1(current)
      outputDigest: 44fefd35ad82b60a5ebda51fc399922d3a2fe168d6e8c8c48e14c459c6420a05 -->
 
