@@ -111,9 +111,14 @@ expect_red tool-list-empty "$gate" --check-tool-list "$fixture_dir/empty.log"
 
 printf 'new-sdd-workspace\nUsage\n' >"$fixture_dir/tool-help-good.txt"
 sed 's/Usage/Instructions/' "$fixture_dir/tool-help-good.txt" >"$fixture_dir/tool-help-mutated.txt"
+printf 'new-sdd-workspace\n\033[1mUsage\033[0m\n' >"$fixture_dir/tool-help-ansi.txt"
+printf 'new-sdd-workspace\n\033]0;title\aUsage\n' >"$fixture_dir/tool-help-unsupported.txt"
 expect_pass tool-help-control "$gate" --check-tool-help "$fixture_dir/tool-help-good.txt"
 expect_red tool-help-mutation "$gate" --check-tool-help "$fixture_dir/tool-help-mutated.txt"
 expect_red tool-help-empty "$gate" --check-tool-help "$fixture_dir/empty.log"
+expect_pass tool-help-ansi-normalized "$gate" --check-tool-help "$fixture_dir/tool-help-ansi.txt"
+expect_red tool-help-ansi-literal-refusal "$gate" --check-tool-help-literal "$fixture_dir/tool-help-ansi.txt"
+expect_red tool-help-unsupported-escape "$gate" --check-tool-help "$fixture_dir/tool-help-unsupported.txt"
 
 printf '<?xml version="1.0" encoding="UTF-8"?>\n'
 printf '<testsuite name="new-sdd-workspace-release-preflight" tests="%d" failures="%d">\n' "$((passed + failed))" "$failed"

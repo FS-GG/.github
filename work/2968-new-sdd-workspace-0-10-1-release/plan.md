@@ -42,7 +42,7 @@ Prose status: planned
 - VO-003 [PD-002] [PC-002] release: after host authorization, the immutable tag and release workflow bind to the frozen source and publish GitHub Packages before nuget.org without repacking.
 - VO-004 [PD-003] [PC-003] distribution: both served packages compare canonically equal and a clean isolated tool path installs and reports 0.10.1.
 - VO-005 [PD-004] registry: after `.github#2941`, feed-derived registry/changelog/compatibility reconciliation passes the registry and projection gates.
-- VO-006 [PD-001] [PC-001] gateEfficacy: The hosted NewSdd self-test job runs the one-release preflight when the exact 2968 work/readiness subject changes, byte-compares its deterministic receipt, and runs tracked controls proving version, source-diff, inventory, self-test, build, nuspec, tool-list, tool-help, subject-routing, unreadable-input, and empty-input refusals red.
+- VO-006 [PD-001] [PC-001] gateEfficacy: The hosted NewSdd self-test job runs the one-release preflight when the exact 2968 work/readiness subject changes, byte-compares its deterministic receipt, and runs tracked controls proving version, source-diff, inventory, self-test, build, nuspec, tool-list, tool-help, subject-routing, unreadable-input, and empty-input refusals red. The clean installed CLI is also executed with `GITHUB_ACTIONS=true` and `NO_COLOR` absent: the control observes Spectre's ANSI-bold `Usage`, proves the former literal assertion red, strips only SGR sequences while refusing leftover escapes, and then proves normalized `Usage` green.
 
 ## Performance Intent
 No performance intent is declared for this work item.

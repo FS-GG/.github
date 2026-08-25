@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="new-sdd-workspace-release-preflight" tests="32" failures="0">
+<testsuite name="new-sdd-workspace-release-preflight" tests="35" failures="0">
   <testcase name="inventory-control"></testcase>
   <testcase name="inventory-candidate-mutation"></testcase>
   <testcase name="inventory-empty-non-vacuity"></testcase>
@@ -32,4 +32,7 @@
   <testcase name="tool-help-control"></testcase>
   <testcase name="tool-help-mutation"></testcase>
   <testcase name="tool-help-empty"></testcase>
+  <testcase name="tool-help-ansi-normalized"></testcase>
+  <testcase name="tool-help-ansi-literal-refusal"></testcase>
+  <testcase name="tool-help-unsupported-escape"></testcase>
 </testsuite>

@@ -83,7 +83,18 @@ check_tool_list() {
 check_tool_help() {
   test "$#" -eq 1 || fail "tool-help requires one file"
   test -s "$1" || fail "tool help '$1' is missing or empty"
-  grep -q '^Usage$' "$1" || fail "installed tool help smoke did not reach Usage"
+  local normalized
+  normalized="$(LC_ALL=C sed $'s/\033\\[[0-9;]*m//g' "$1")"
+  if LC_ALL=C grep -q $'\033' <<<"$normalized"; then
+    fail "tool help contains an unsupported ANSI escape"
+  fi
+  grep -q '^Usage$' <<<"$normalized" || fail "installed tool help smoke did not reach Usage"
+}
+
+check_tool_help_literal() {
+  test "$#" -eq 1 || fail "literal tool-help requires one file"
+  test -s "$1" || fail "literal tool help '$1' is missing or empty"
+  grep -q '^Usage$' "$1" || fail "literal tool help did not contain plain Usage"
 }
 
 release_subject_changed() {
@@ -108,6 +119,7 @@ case "${1:-}" in
   --check-nuspec) shift; check_nuspec "$@"; exit ;;
   --check-tool-list) shift; check_tool_list "$@"; exit ;;
   --check-tool-help) shift; check_tool_help "$@"; exit ;;
+  --check-tool-help-literal) shift; check_tool_help_literal "$@"; exit ;;
   --release-subject-changed) shift; release_subject_changed "$@"; exit ;;
   "") ;;
   *) fail "unknown mode '$1'"; exit 1 ;;
@@ -168,7 +180,12 @@ dotnet tool install "$package_id" --version "$version" --tool-path "$artifact_di
   --configfile "$artifact_dir/NuGet.Config" >"$artifact_dir/install.log"
 dotnet tool list --tool-path "$artifact_dir/tool" >"$artifact_dir/tool-list.txt"
 check_tool_list "$artifact_dir/tool-list.txt"
-"$artifact_dir/tool/new-sdd-workspace" --help >"$artifact_dir/tool-help.txt"
+GITHUB_ACTIONS=true env -u NO_COLOR "$artifact_dir/tool/new-sdd-workspace" --help >"$artifact_dir/tool-help.txt"
+if check_tool_help_literal "$artifact_dir/tool-help.txt" 2>/dev/null; then
+  fail "hosted writer control did not reproduce ANSI-styled Usage"
+fi
+LC_ALL=C grep -q $'\033\[1mUsage\033\[0m' "$artifact_dir/tool-help.txt" \
+  || fail "hosted writer control did not observe Spectre bold Usage"
 check_tool_help "$artifact_dir/tool-help.txt"
 
 # Deliberately omit the raw nupkg hash: SDK pack zip timestamps make a second
@@ -194,6 +211,7 @@ jq -n \
     build: { configuration: "Release", lockedRestore: true, warnings: 0, errors: 0 },
     package: { id: "FS.GG.NewSddWorkspace", version: $version, nuspecRepositoryCommit: $nuspecRepositoryCommit },
     cleanLocalInstall: { packageVersion: $version, command: "new-sdd-workspace", helpSmoke: "pass" },
+    hostedWriterControl: { environment: "GITHUB_ACTIONS=true; NO_COLOR absent", ansiBoldUsageObserved: true, literalAssertionRefused: true, normalizedAssertion: "pass" },
     publicationPerformed: false,
     registryReconciliationPerformed: false
   }'

@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2968-new-sdd-workspace-0-10-1-release/plan.md
-    digest: 5979f01d95a6d70405890418f2b0f1f23045d590c49c23f96059d81aa7666913
+    digest: 5f38f4fee6d3ab0ab5084c888ea7a6a2b6a5268399939e3eafb09104d8517795
     schemaVersion: 1
 tasks:
   - id: T001

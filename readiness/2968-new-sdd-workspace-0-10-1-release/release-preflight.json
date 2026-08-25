@@ -42,6 +42,12 @@
     "command": "new-sdd-workspace",
     "helpSmoke": "pass"
   },
+  "hostedWriterControl": {
+    "environment": "GITHUB_ACTIONS=true; NO_COLOR absent",
+    "ansiBoldUsageObserved": true,
+    "literalAssertionRefused": true,
+    "normalizedAssertion": "pass"
+  },
   "publicationPerformed": false,
   "registryReconciliationPerformed": false
 }
