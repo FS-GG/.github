@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **`FS.GG.NewSddWorkspace` 0.10.0 published and registry identity reconciled**
+  (github; [.github#2925](https://github.com/FS-GG/.github/issues/2925),
+  [release run 32795601184](https://github.com/FS-GG/.github/actions/runs/32795601184)):
+  advances `new-sdd-workspace` source and package identities to `0.10.0` after both feeds exposed
+  the release tagged at merge `c8fb0382`. The 26 non-signature payload entries are byte-identical;
+  the public archive adds only its NuGet signature. This release makes `typed-sdd` an additive exact
+  lifecycle choice while preserving omitted/default `sdd`, explicit `none`, and frozen `spec-kit`.
+
 - **2026-08-25** — **three package frontiers reconciled from both public feeds**
   (rendering, github, templates; [Rendering#1269](https://github.com/FS-GG/FS.GG.Rendering/issues/1269),
   [.github#2918](https://github.com/FS-GG/.github/pull/2918),
