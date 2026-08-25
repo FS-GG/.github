@@ -148,19 +148,19 @@ module Transport =
 
             "?" + encoded
 
-    // Concatenate two JSON array pages.
+    // Concatenate two collection pages. GitHub uses both root arrays (`issues`) and wrapper objects
+    // (`workflow_runs`, `check_runs`); both must remain complete across `Link: rel=next`.
     //
     // A page that is not an array is a FAILED READ, never an empty one. `gh` exits 0 on a truncated page
     // or a proxy's HTML error body, and the empty string that falls out of `jq` reads as "nothing here" —
     // that is #461, and it is the reason this returns an error instead of an empty array.
-    let private mergeArrays (first: string) (second: string) : Result<string, string> =
+    let private mergePages (first: string) (second: string) : Result<string, string> =
         try
             use a = JsonDocument.Parse first
             use b = JsonDocument.Parse second
 
-            if a.RootElement.ValueKind <> JsonValueKind.Array || b.RootElement.ValueKind <> JsonValueKind.Array then
-                Error "a paginated response whose page is not a JSON array"
-            else
+            match a.RootElement.ValueKind, b.RootElement.ValueKind with
+            | JsonValueKind.Array, JsonValueKind.Array ->
                 let merged = JsonArray()
 
                 for item in a.RootElement.EnumerateArray() do
@@ -170,6 +170,30 @@ module Transport =
                     merged.Add(JsonNode.Parse(item.GetRawText()))
 
                 Ok(merged.ToJsonString())
+            | JsonValueKind.Object, JsonValueKind.Object ->
+                let merged = JsonNode.Parse(first).AsObject()
+                let commonArrays =
+                    b.RootElement.EnumerateObject()
+                    |> Seq.choose (fun property ->
+                        match a.RootElement.TryGetProperty property.Name with
+                        | true, firstValue
+                            when firstValue.ValueKind = JsonValueKind.Array
+                                 && property.Value.ValueKind = JsonValueKind.Array ->
+                            Some(property.Name, property.Value)
+                        | _ -> None)
+                    |> List.ofSeq
+
+                if List.isEmpty commonArrays then
+                    Error "paginated wrapper pages carry no common JSON array property"
+                else
+                    for name, source in commonArrays do
+                        let target = merged[name].AsArray()
+                        for item in source.EnumerateArray() do
+                            target.Add(JsonNode.Parse(item.GetRawText()))
+                    Ok(merged.ToJsonString())
+            | JsonValueKind.Array, _
+            | _, JsonValueKind.Array -> Error "a paginated response whose page is not a JSON array"
+            | _ -> Error "paginated response pages do not share a mergeable JSON collection shape"
 
         with :? JsonException as e ->
             Error $"a page of the response is not JSON: %s{e.Message}"
@@ -345,7 +369,7 @@ module Transport =
                         match sendOne request link with
                         | Error e -> Error e
                         | Ok page ->
-                            match mergeArrays acc.Body page.Body with
+                            match mergePages acc.Body page.Body with
                             | Error detail -> Error(Malformed(request.Subject, detail))
                             // THE VALIDATOR DIES AT THE MERGE. `acc.ETag` is PAGE ONE'S — it was returned by
                             // the first request and it describes that request's answer, not this

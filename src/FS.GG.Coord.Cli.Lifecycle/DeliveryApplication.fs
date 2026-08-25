@@ -152,6 +152,39 @@ module DeliveryApplication =
                Verified = readBoolean "verified" obligation }: Delivery.Obligation))
         |> List.ofSeq
 
+    let private postMergeVerification (element: JsonElement) : Delivery.PostMergeVerification =
+        match element.TryGetProperty "postMergeVerification" with
+        | false, _ -> Delivery.NotObserved
+        | true, value when value.ValueKind = JsonValueKind.Null -> Delivery.NotObserved
+        | true, value when value.ValueKind = JsonValueKind.Object ->
+            match readString "kind" value with
+            | "notObserved" -> Delivery.NotObserved
+            | "awaiting" -> Delivery.Awaiting(readString "reason" value)
+            | "rejected" -> Delivery.Rejected(readString "reason" value)
+            | "unreadable" -> Delivery.Unreadable(readString "reason" value)
+            | "verified" ->
+                let runsElement = required "runs" value
+                if runsElement.ValueKind <> JsonValueKind.Array then invalidArg "postMergeVerification.runs" "must be an array"
+                let runs =
+                    runsElement.EnumerateArray()
+                    |> Seq.map (fun run ->
+                        ({ Id = run.GetProperty("id").GetInt64()
+                           Attempt = readInteger "attempt" run
+                           Workflow = readString "workflow" run
+                           Event = readString "event" run
+                           Branch = readString "branch" run
+                           Sha = readString "sha" run
+                           Status = readString "status" run
+                           Conclusion = readString "conclusion" run
+                           Url = readString "url" run }: Delivery.PostMergeRun))
+                    |> List.ofSeq
+                Delivery.Verified
+                    { MergeSha = readString "mergeSha" value
+                      DefaultBranch = readString "defaultBranch" value
+                      Runs = runs }
+            | kind -> invalidArg "postMergeVerification.kind" $"unknown kind '%s{kind}'"
+        | _ -> invalidArg "postMergeVerification" "must be an object or null"
+
     let private obligationId = "[a-z0-9][a-z0-9_.-]*"
     let private obligationKind = "[a-z0-9][a-z0-9_-]*"
     let private deliveryHead = "[0-9A-Za-z._-]+"
@@ -490,7 +523,7 @@ module DeliveryApplication =
             | None, _ -> Error "delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
             | _, None -> Error "delivery effective base could not be re-read; GitHub merge was not attempted"
 
-    let private snapshot (raw: string) : Result<Delivery.Snapshot, string> =
+    let private snapshot (raw: string) : Result<Delivery.Snapshot * Delivery.PostMergeVerification, string> =
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
@@ -507,7 +540,7 @@ module DeliveryApplication =
                   HeadSha = readString "headSha" freshnessElement
                   DeclaredPaths = declaredPaths freshnessElement
                   BoardState = readString "boardState" freshnessElement }
-            Ok
+            Ok(
                 { Freshness = freshness
                   ItemBranchCanonical = readBoolean "itemBranchCanonical" root
                   ClosingLinkageCanonical = readBoolean "closingLinkageCanonical" root
@@ -528,7 +561,8 @@ module DeliveryApplication =
                   CleanupEligible = readBoolean "cleanupEligible" root
                   ObligationsDeclared = readBoolean "obligationsDeclared" root
                   Obligations = obligations root
-                  ParkedReason = readOptionalString "parkedReason" root }
+                  ParkedReason = readOptionalString "parkedReason" root },
+                postMergeVerification root)
         with error -> Error error.Message
 
     let private stage (value: Delivery.Stage) =
@@ -553,6 +587,7 @@ module DeliveryApplication =
         | Delivery.AwaitLandability -> "awaitLandability"
         | Delivery.GuardedLand -> "guardedLand"
         | Delivery.VerifyObligation _ -> "verifyObligation"
+        | Delivery.Action.AwaitPostMergeVerification _ -> "awaitPostMergeVerification"
         | Delivery.Complete -> "complete"
         | Delivery.CleanupWorktree -> "cleanupWorktree"
         | Delivery.RouteFollowUp _ -> "routeFollowUp"
@@ -561,11 +596,12 @@ module DeliveryApplication =
         match value with
         | Delivery.RepairReviewHandoff reason
         | Delivery.RefreshReview reason
+        | Delivery.Action.AwaitPostMergeVerification reason
         | Delivery.RouteFollowUp reason -> Some reason
         | _ -> None
 
-    let render opts facts =
-        match Delivery.inspect facts with
+    let renderWithPostMergeVerification opts postMergeVerification facts =
+        match Delivery.inspectWithPostMergeVerification postMergeVerification facts with
         | Delivery.NoVerdict reason ->
             match opts.Render with
             | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery/1"; verdict = "noVerdict"; reason = reason |})
@@ -581,6 +617,9 @@ module DeliveryApplication =
                 | None -> printfn "%s — %s" (stage transition.Stage) (action transition.Action)
             ExitCode.toInt ExitCode.Green
 
+    let render opts facts =
+        renderWithPostMergeVerification opts Delivery.NotObserved facts
+
     let run opts =
         let raw = input opts
         if String.IsNullOrWhiteSpace raw then
@@ -591,4 +630,5 @@ module DeliveryApplication =
             | Error error ->
                 eprint $"fsgg-coord-engine: delivery snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
-            | Ok facts -> render opts facts
+            | Ok(facts, postMergeVerification) ->
+                renderWithPostMergeVerification opts postMergeVerification facts

@@ -1,0 +1,534 @@
+schemaVersion: 1
+workId: 2905-post-merge-verification
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2905-post-merge-verification/spec.md
+sourceClarifications: work/2905-post-merge-verification/clarifications.md
+sourceChecklist: work/2905-post-merge-verification/checklist.md
+sourcePlan: work/2905-post-merge-verification/plan.md
+sourceTasks: work/2905-post-merge-verification/tasks.yml
+sourceAnalysis: readiness/2905-post-merge-verification/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2905-post-merge-verification/analysis.json
+    digest: c305aab0e1cf8697ceb40abf5f607d9363dde06bcba11294ec052abf0c957fd0
+    schemaVersion: 1
+  - label: checklist
+    path: work/2905-post-merge-verification/checklist.md
+    digest: 17b68d376ca373cbbe904455f94d099d7c40d9897324425ff1d8c845e1839663
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2905-post-merge-verification/clarifications.md
+    digest: 69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396
+    schemaVersion: 1
+  - label: plan
+    path: work/2905-post-merge-verification/plan.md
+    digest: 44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409
+    schemaVersion: 1
+  - label: spec
+    path: work/2905-post-merge-verification/spec.md
+    digest: 9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef
+    schemaVersion: 1
+  - label: tasks
+    path: work/2905-post-merge-verification/tasks.yml
+    digest: f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/HttpTransportTests.fs, tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs, tests/FS.GG.Coord.Cli.Lifecycle.Tests/DoneStderrTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs, tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/HttpTransportTests.fs, tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-002]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/DoneStderrTests.fs, tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-003]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/DoneFactsTests.fs, tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-004]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Cli.BoardOps.Tests/ApplicationServiceTests.fs, tests/FS.GG.Coord.Cli.Lifecycle.Tests/DoneStderrTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/WriteTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-005]
+    obligationRefs: []
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fsi, src/FS.GG.Coord.Core/Delivery.fsi, src/FS.GG.Coord.GitHub/Reads.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: []
+    artifacts: [readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: []
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/DoneFactsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: []
+  - id: EV020
+    kind: deferral
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: []
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "Generated-view currency is established by the SDD refresh, verify, and ship generators rather than by a test-run receipt."
+    owner: merlin-f426
+    scope: "Machine-observed proof of generated work-model, summary, agent-guidance, and ship-verdict currency."
+    laterLifecycleVisibility: The refresh and ship views report currency and the committed ship verdict binds the authored sources at handoff.
+    notes: []
+lifecycleNotes:
+  - "Next lifecycle action: verify."

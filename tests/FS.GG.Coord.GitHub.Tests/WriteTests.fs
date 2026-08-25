@@ -2006,6 +2006,7 @@ let ``delivery completion receipt appends once and refuses contradictory authori
         { HeadSha = "head-a"
           Merged = true
           MergeReachable = true
+          PostMergeVerification = FS.GG.Coord.Delivery.NotObserved
           IssueClosed = true
           BoardDone = false
           ClaimReleased = false
@@ -2014,6 +2015,13 @@ let ``delivery completion receipt appends once and refuses contradictory authori
           ObligationsDeclared = true
           Obligations = [] }
     let mint mergeSha completedAt =
+        let verification =
+            FS.GG.Coord.Delivery.Verified
+                { MergeSha = mergeSha
+                  DefaultBranch = "main"
+                  Runs =
+                    [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
+                        Sha = mergeSha; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
         FS.GG.Coord.Delivery.createCompletionReceipt
             aRef.Canonical
             99
@@ -2021,7 +2029,7 @@ let ``delivery completion receipt appends once and refuses contradictory authori
             completedAt
             "freshness"
             "action"
-            completionFacts
+            { completionFacts with PostMergeVerification = verification }
         |> Result.defaultWith (String.concat "; " >> failwith)
     let first = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:00:00Z"))
     let retry = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:01:00Z"))
