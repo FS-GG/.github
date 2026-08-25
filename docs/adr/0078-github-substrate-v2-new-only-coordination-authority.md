@@ -47,9 +47,11 @@ freeze. V1 and v2 normal writers are never active together.
 
 The fleet epoch is an expected-parent Git ledger on a dedicated protected ref with immutable phase tags
 and a protected environment approval boundary. The issue projection is informative, not authoritative.
-The legal spine is `OperatingV1 -> FreezeRequested -> Frozen -> SwitchedV2 -> VerifiedV2 -> OpenV2 ->
-OperatingV2`. Rollback may restore the bridge v1 authority only through `VerifiedV2`. `OpenV2` is the point
-of no return: afterward recovery is roll-forward and v1 never resumes.
+The legal spine is `OperatingV1 -> Preparing(manifest) -> FreezeRequested(manifest) -> Frozen(snapshot) ->
+SwitchedV2(candidate) -> VerifiedV2(evidence) -> OpenV2(acceptance) -> RetiringV1(deletion) ->
+OperatingV2(report)`. Before `OpenV2`, any state from `Preparing` through `VerifiedV2` may enter
+`RollingBack(reason) -> OperatingV1(recovery)`. `OpenV2` is the point of no return: afterward recovery is
+roll-forward and v1 never resumes.
 
 Qualification is independent of v1 completion. Generated structural/model cases and independently
 authored black-box controls bind exact source, model, dependency, package, workflow, receiver, settings,

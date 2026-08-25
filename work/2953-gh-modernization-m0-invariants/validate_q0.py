@@ -45,6 +45,8 @@ REQUIRED_THREAT_BOUNDARIES = {
     "protectedEpoch", "administrativePrincipal", "githubMutableState",
     "packageSupplyChain", "crossRepositoryReceiver",
 }
+REQUIRED_REVIEW_ROLES = {"architecture", "security", "operations", "crossRepository"}
+REVIEW_EVIDENCE = re.compile(r"^https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*$")
 
 
 def digest_bytes(value: bytes) -> str:
@@ -200,6 +202,9 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     expected_children = {f"FS-GG/.github#{number}" for number in range(2954, 2966)}
     if set(projection.get("childBoundaryCitations", [])) != expected_children:
         errors.append("liveProjection: ADR/rollback child citation census incomplete")
+    bootstrap = projection.get("bootstrapRepository", {})
+    if bootstrap.get("ref") != "FS-GG/FS.GG.Coordination" or bootstrap.get("visibility") != "PUBLIC" or bootstrap.get("defaultBranch") != "main" or bootstrap.get("state") != "inert" or not GIT_SHA.fullmatch(str(bootstrap.get("initialHead", ""))):
+        errors.append("liveProjection: early bootstrap repository receipt is incomplete or active")
     if projection.get("pendingBoardWrites") != 0:
         errors.append("liveProjection: pending board writes")
 
@@ -211,8 +216,11 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if not SHA256.fullmatch(str(data.get("reviewFingerprint", ""))) or data.get("reviewFingerprint") != expected_review_fingerprint:
         errors.append("reviewFingerprint: does not bind the canonical Q0 subject")
 
+    required_reviews = set(data.get("reviewsRequired", []))
+    if required_reviews != REQUIRED_REVIEW_ROLES or len(data.get("reviewsRequired", [])) != len(REQUIRED_REVIEW_ROLES):
+        errors.append("reviewsRequired: exact independent role policy is mandatory")
+
     if acceptance:
-        required_reviews = set(data.get("reviewsRequired", []))
         reviews = data.get("reviews", [])
         require_fields(reviews, {"role", "verdict", "fingerprint", "evidenceRef", "reviewer"}, "reviews", errors)
         accepted = {row.get("role") for row in reviews if row.get("verdict") == "accepted"}
@@ -221,6 +229,12 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         for row in reviews:
             if row.get("fingerprint") != expected_review_fingerprint or not SHA256.fullmatch(str(row.get("fingerprint", ""))):
                 errors.append(f"reviews[{row.get('role')}]: fingerprint does not bind the canonical Q0 subject")
+        reviewers = [row.get("reviewer") for row in reviews]
+        if len(set(reviewers)) != len(REQUIRED_REVIEW_ROLES):
+            errors.append("reviews: every role requires a distinct independent reviewer")
+        evidence_refs = [row.get("evidenceRef") for row in reviews]
+        if len(set(evidence_refs)) != len(REQUIRED_REVIEW_ROLES) or any(not REVIEW_EVIDENCE.fullmatch(str(ref)) for ref in evidence_refs):
+            errors.append("reviews: every role requires a distinct canonical PR-comment evidence URL")
     return errors
 
 
@@ -247,6 +261,19 @@ def self_test(data: dict[str, Any]) -> list[str]:
     ]
     if not validate(acceptance, acceptance=True):
         failures.append("mutation survived: arbitrary reviewer fingerprint")
+    erased = copy.deepcopy(data)
+    erased["reviewsRequired"] = []
+    erased["reviews"] = []
+    if not validate(erased, acceptance=True):
+        failures.append("mutation survived: erased review policy")
+    forged = copy.deepcopy(data)
+    forged["reviews"] = [
+        {"role": role, "verdict": "accepted", "fingerprint": data["reviewFingerprint"],
+         "evidenceRef": "https://example.invalid/review", "reviewer": "same-reviewer"}
+        for role in forged["reviewsRequired"]
+    ]
+    if not validate(forged, acceptance=True):
+        failures.append("mutation survived: forged or non-independent role reviews")
     return failures
 
 

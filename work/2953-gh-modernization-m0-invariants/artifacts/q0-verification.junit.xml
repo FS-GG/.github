@@ -1,8 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.010775"><testcase name="q0-candidate-and-mutation-controls" time="3.127841"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="0.419754"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.094540"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.026006"><system-out>{
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.832971"><testcase name="q0-candidate-and-mutation-controls" time="3.930965"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="0.435440"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
+Q0-RED: reviews: every role requires a distinct independent reviewer
+Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence URL
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.095678"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.027486"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -602,6 +604,11 @@
     ],
     "handoff": [
         {
+            "ref": "FS-GG/FS.GG.Coordination@ce22e4d10f2efae7aa09018521487b598c082350",
+            "classification": "v2-unit",
+            "decision": "User-authorized early inert GS2-01 bootstrap: public repository initialized on main; no v2 writer, runtime, App, environment, or event subscription enabled"
+        },
+        {
             "ref": "FS-GG/.github#2968",
             "classification": "superseded-inventory",
             "decision": "P4 release residue closed and Done; retain release evidence"
@@ -683,6 +690,13 @@
     },
     "liveProjection": {
         "epic": "FS-GG/.github#2952 body corrected to GS2 mapping",
+        "bootstrapRepository": {
+            "ref": "FS-GG/FS.GG.Coordination",
+            "visibility": "PUBLIC",
+            "defaultBranch": "main",
+            "initialHead": "ce22e4d10f2efae7aa09018521487b598c082350",
+            "state": "inert"
+        },
         "blockedBy": {
             "FS-GG/.github#2963": [
                 "FS-GG/.github#2953",
@@ -715,7 +729,7 @@
     },
     "threatModel": {
         "path": "work/2953-gh-modernization-m0-invariants/threat-model.md",
-        "sha256": "aaaebacf8e781db131babc7bc9fa2b7c7d46734ca1e827b4fab48427cf2fdd5f",
+        "sha256": "c42700acc4d0ccc21999c6ceb8c07a6f4caa2dec7d07637adad9018b2bd4ce81",
         "boundaries": [
             "protectedEpoch",
             "administrativePrincipal",
@@ -724,7 +738,7 @@
             "crossRepositoryReceiver"
         ]
     },
-    "reviewFingerprint": "2665035f9ebc31f11c3e403fa5d486f916b4d902ca8faed78c1f2f143347660e",
+    "reviewFingerprint": "4feb7fde1cd9a7e26df61a874260da9e5848c5929789e53bfd5d9402b84c8a6d",
     "reviewsRequired": [
         "architecture",
         "security",
@@ -733,7 +747,7 @@
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.004318"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.338317"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.004587"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.338815"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
