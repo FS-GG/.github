@@ -219,8 +219,9 @@ packaged by `.template.package/` as `FS.GG.UI.Template`). Parameters: `profile`
 (`app`/`game`/`headless-scene`/`governed`/`sample-pack` — `game` is a minimal
 replaceable Pong-style starter and the intended game/rendering default, Feature
 220), `designSystem` (`wcag`/`ant`),
-`lifecycle` (`spec-kit`/`sdd`/`none` — `sdd` is the default and `spec-kit` a frozen
-legacy lane since [ADR-0056](adr/0056-sdd-is-the-default-lifecycle-spec-kit-is-legacy-and-scheduled-for-removal.md),
+`lifecycle` (`spec-kit`/`sdd`/`typed-sdd`/`none` — `sdd` remains the default,
+`typed-sdd` is the distinct canonical-F# opt-in, and `spec-kit` is a frozen legacy lane since
+[ADR-0056](adr/0056-sdd-is-the-default-lifecycle-spec-kit-is-legacy-and-scheduled-for-removal.md),
 amending ADR-0002), `productName` (the additive alias
 of the canonical `--name`, ADR-0005), and `initGit` (the side-effect-free opt-in
 from the Feature 205 behavior break — generation no longer auto-runs git/chmod).
