@@ -604,25 +604,25 @@ workspace_contract_map_rows="$(grep -F '| `fs-gg-workspace-template` | Templates
 new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-workspace-template$/p' "$REPO_ROOT/registry/dependencies.yml")"
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.9.0'* ]] \
-  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.0'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.10.0'* ]] \
+  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$PROFILE_README")" -eq 1 ] \
-  && [[ "$profile_templates_rows" == *'| `0.9.0` |'* ]] \
+  && [[ "$profile_templates_rows" == *'| `0.10.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.10.0` | `0.10.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
   && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_map_rows" == *'registry-active .github#2934'* ]] \
-  && [[ "$workspace_contract_map_rows" == *'wizard `--template` selection published in `new-sdd-workspace` 0.10.0'* ]] \
-  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.10.0, scaffold-provider@SDD |'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'registry-active .github#2941'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'wizard `--template` selection published in `new-sdd-workspace` 0.10.1'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.10.1, scaffold-provider@SDD |'* ]] \
   && [[ "$workspace_contract_map_rows" != *'registry-active .github#2070; wizard `--template` selection pending its own release'* ]] \
   && [[ "$workspace_contract_map_rows" != *'| `.github` wizard (pending release) |'* ]] \
-  && [[ "$new_sdd_registry_block" == *'release 0.10.0 includes the'* ]] \
+  && [[ "$new_sdd_registry_block" == *'release 0.10.0 introduced the'* ]] \
   && [[ "$new_sdd_registry_block" == *'published and selectable, not a pending rollout phase'* ]] \
   && [[ "$new_sdd_registry_block" != *'stay at the RELEASED 0.9.0'* ]] \
   && [[ "$workspace_registry_block" == *'phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0'* ]] \
-  && [[ "$workspace_registry_block" == *'registry-active and wizard-selectable through published new-sdd-workspace 0.10.0'* ]] \
+  && [[ "$workspace_registry_block" == *'registry-active and wizard-selectable through published new-sdd-workspace 0.10.1'* ]] \
   && [[ "$workspace_registry_block" != *'wizard-selectable only after phase 6'* ]] \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
