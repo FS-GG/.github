@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <OtherFlags>--mlcompatibility --langversion:5.0</OtherFlags>
+    <FStarExtractedPath Condition="'$(FStarExtractedPath)' == ''">missing-extracted-path</FStarExtractedPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Prims.fs" />
+    <Compile Include="FStar_Pervasives_Native.fs" />
+    <Compile Include="$(FStarExtractedPath)/SIR_CombatConsequences.fs" Link="Generated/SIR_CombatConsequences.fs" />
+    <Compile Include="$(FStarExtractedPath)/SIR_CommunicationNetwork.fs" Link="Generated/SIR_CommunicationNetwork.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+</Project>
