@@ -52,6 +52,67 @@ replacement is the successor design's F0–F9 sequence: independently build and 
 v1 bridge fence, prepare and shadow-read, freeze all normal writers, switch and verify the closed fleet,
 open v2 once, then retire v1. Preparation may be additive; production authorship may not be dual.
 
+## Live handoff to GitHub Substrate v2
+
+This section is the dispatch boundary between the two roadmaps. A board column does not override it.
+
+| Existing or prospective work | Current meaning | Next action |
+|---|---|---|
+| P0–P4 | Complete producer/consumer history and the published dependency v2 uses | Preserve receipts and exact package identities; repair any release residue under v1. |
+| P5 readiness/soak | Independent lifecycle work, not a coordination prerequisite | May proceed while v2 is in `GS2-00`–`GS2-09`; publish every identity change so the cutover census can ingest it. |
+| P5 default flip | A fleet-wide default-bearing contract change | Finish and stabilize before `GS2-10`, or defer until the cutover ledger reaches `OperatingV2`. |
+| `.github#2932` | An open row filed from the former M0 execution plan | Do not claim as written. Transfer census/baseline/corpus obligations to `GS2-00`; transfer typed coordination implementation to `GS2-02`; record the supersession on the issue. |
+| M1–M9 rows or future rows derived from those headings | Technical inventory, not milestones | Map each requirement to a GS2 unit or mark it historical/non-protocol; never schedule it merely because it is `Ready`. |
+
+The exact transfer from `.github#2932` is:
+
+- authority/read, codec, decision, mutation, receipt, projection, and protocol-string censuses →
+  `GS2-00.3`, `GS2-00.4`, and `GS2-00.6`;
+- incident mapping, 72-hour churn, replay/mutation baselines, and omission/misclassification controls →
+  `GS2-00.5` and Q0 evidence;
+- deletion/shadow classification → `GS2-00.7`;
+- canonical coordination role types, AST nodes, and compiler-owned vocabulary → `GS2-02` in
+  `FS.GG.Coordination`;
+- representative byte-compatibility fixtures → v1 frozen corpus inputs for Q3/Q5/Q9; and
+- Standard SDD checklist/plan/tasks/analyze/verify/ship artifacts → historical process evidence only, not
+  a v2 acceptance gate.
+
+### Concurrency and change control
+
+Ordinary product work continues through v1 until the announced cutover window. Product branches do not
+need a v2 rebase. Work that changes the generic kernel, lifecycle defaults, provider/profile descriptors,
+workspace scaffolding, registry contracts, coordination receivers, reusable workflows, or repository
+settings is different: it changes an input to the cutover manifest.
+
+Before `GS2-10`, such a change may land through its owning program, after which the v2 census, receiver
+snapshot, dependency locks, and affected qualification evidence are refreshed. At and after `GS2-10`, the
+same change is deferred unless operators intentionally mint a new candidate identity and rerun Q0–Q7.
+No release, provider flip, lifecycle-default flip, or receiver mutation may cross `GS2-11`–`GS2-12`.
+Deferred P5 work resumes only after `OperatingV2`, through v2 coordination.
+
+### Residual-work checkpoint before v2 starts
+
+Before assigning `GS2-00`, the program owner records a clean handoff receipt containing:
+
+1. the terminal disposition of every P4 release/tag/feed/registry repair, including `.github#2968` and
+   its delivery PR if still open;
+2. the disposition of `.github#2932` and a mapping from each still-valid acceptance clause to GS2 units;
+3. the P5 decision—`not started`, `readiness only`, `complete before GS2-10`, or `deferred until
+   OperatingV2`—with exact package/provider identities;
+4. all active Typed SDD claims, reviews, delivery operations, releases, and receiver PRs, each classified
+   `finish`, `park`, or `defer`; and
+5. confirmation that no worker can obtain a superseded M-series row solely because its Project status is
+   `Ready`.
+
+Dependencies formerly named by `.github#2932`, including `.github#2903`, `.github#2905`, `.github#2841`,
+and `.github#2850`, are adjudicated independently at this checkpoint. A bounded defect required for safe
+v1 operation may finish under v1; completed evidence enters the frozen corpus; replacement-only work maps
+to a GS2 unit or is closed; and genuinely non-critical work may be parked or deferred. Its old dependency
+edge neither makes the row a v2 blocker nor authorizes the superseded M0 implementation.
+
+This checkpoint does not make Typed SDD a blocker for v2. It prevents an ambiguous handoff and a moving
+candidate from being mistaken for independent parallel work.
+
 ## Baseline and success measures
 
 The starting 72-hour board window measured:
@@ -331,6 +392,10 @@ path and derived compatibility receipt; it is not yet the default.
 
 ## P5 — Evidence-gated Typed SDD workspace default
 
+**Status:** planned, not started. P5 is independent of coordination-v2 feature delivery. Its readiness and
+soak work may overlap `GS2-00`–`GS2-09`; its default flip must either stabilize before `GS2-10` or wait
+until `OperatingV2`.
+
 ### Deliverables
 
 - Run representative non-S.I.R. opt-in work through complete Typed SDD lifecycles and publish the authoring
@@ -368,6 +433,9 @@ compatibility promises, and per-surface cutovers are superseded by the linked Gi
 fleet-cutover plan.
 
 ## M0 — Ratify vocabulary and produce the protocol census
+
+**Status:** superseded as an executable milestone. `.github#2932` retains useful census and corpus
+acceptance, but must not be claimed as a v1 implementation row; use the handoff mapping above.
 
 ### Deliverables
 

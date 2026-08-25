@@ -73,13 +73,59 @@ v1 and v2 writers never do. The fleet switches while normal writes are frozen, c
 `OpenV2` point of no return, and deletes v1 production paths afterward. The earlier M0–M9 material remains
 an incident and proof-obligation inventory, not an executable migration sequence.
 
+### Program handoff and concurrency contract
+
+The word *Typed* now names two related but operationally different programs. Typed SDD P0–P5 owns the
+generic specification kernel and workspace lifecycle. GitHub Substrate v2 owns the coordination-specific
+extension and fleet replacement. They share a published contract; they do not share an implementation
+queue, qualification authority, or production cutover.
+
+As of 2026-08-25, P0–P4 are complete: the generic kernel and additive `typed-sdd` lifecycle are published,
+S.I.R. has re-adopted the package boundary, and the supported provider/profile matrix accepts the additive
+lane. P5, the evidence-gated change of the omitted workspace lifecycle from `sdd` to `typed-sdd`, has not
+started and is not a prerequisite for coordination v2. The v2 bootstrap pins the exact published kernel it
+qualifies; it does not consume a moving source checkout or whichever lifecycle happens to be the workspace
+default.
+
+The program boundary is therefore:
+
+| Work | Disposition | Concurrency rule |
+|---|---|---|
+| Typed SDD P4 publication or registry residue | Finish under current v1 operations | Restore feed, tag, registry, and receiver coherence before freezing a v2 candidate; do not fold release repair into v2 qualification. |
+| Typed SDD P5 soak, migration, and default-readiness evidence | May run beside `GS2-00`–`GS2-09` | It owns lifecycle usability, not coordination semantics. Record every package, provider, scaffolder, registry, and receiver change in the live cutover census. |
+| P5 default flip | Complete before `GS2-10` or defer until `OperatingV2` | The flip changes default-bearing receiver contracts. It may not occur after the v2 candidate/manifest is frozen unless the candidate receives a new identity and Q0–Q7 are rerun. |
+| Historical coordination M0 census and defect inventory | Fold into `GS2-00` | Preserve observations, incidents, baselines, and omission controls; do not treat the old milestone status as authority to implement in v1. |
+| Coordination vocabulary, AST, compiler, mutation algebra, events, and receipts | Implement in `FS.GG.Coordination` under `GS2-02` onward | Do not add the replacement architecture to the v1 `FS.GG.Coord.*` source tree. |
+| Standard SDD artifacts produced by earlier coordination work | Historical evidence only | They may inform the corpus but cannot qualify v2, whose acceptance comes from the independent Q0–Q10 lane. |
+| Ordinary product work | Continue through v1 until the announced freeze | Product commits do not need to be rebased onto v2. Live coordination state is drained, migrated, parked, or sealed by the cutover manifest. |
+
+The open [`.github#2932`](https://github.com/FS-GG/.github/issues/2932) row predates this handoff. Its
+authority/mutation census, issue mapping, compatibility fixtures, and baseline measurements belong to
+`GS2-00.3`–`GS2-00.7`. Its proposed additions to the v1 Core namespace and its Standard SDD completion
+contract are superseded. The corresponding typed production model belongs to `GS2-02` in the new
+repository. Until the issue is amended or resolved as superseded, its `Ready` Project status is not a
+license to claim it.
+
+Changes remain possible after either program starts, but they have explicit consequences:
+
+1. A new generic-kernel release before `GS2-10` is an ordinary candidate dependency change and requires
+   requalification of every affected v2 gate.
+2. A kernel, lifecycle-default, provider, workflow, registry, or receiver change after `GS2-10` invalidates
+   the exact cutover candidate and manifest. The operator either cuts a new candidate and repeats Q0–Q7 or
+   defers the change.
+3. No release or default flip crosses `GS2-11`–`GS2-12`; all release sagas and receiver mutations are
+   drained before `Frozen(snapshot)`.
+4. After `OpenV2`, deferred Typed SDD work resumes through v2 and recovery remains roll-forward. V1 is not
+   reopened to make a lifecycle rollout easier.
+
 ## Lifecycle name and default direction
 
-Implementation status (2026-08-25): the P4 producer artifacts are published as FS.GG.SDD
-`1.4.0-preview.1` and FS.GG.UI.Template `0.28.0`. The organization registry and
-`new-sdd-workspace` therefore expose `typed-sdd` additively while continuing to resolve omission to
-`sdd`. Provider/profile adoption remains an ordered consumer step; this status does not authorize the
-P5 default flip.
+Implementation status (2026-08-25): P4 is complete. The generic kernel and lifecycle backend are
+published as FS.GG.SDD `1.4.0-preview.1`; the rendering and workspace-template producer/consumer chain,
+registry, providers, profiles, and `new-sdd-workspace` expose `typed-sdd` additively while continuing to
+resolve omission to `sdd`. Any remaining tag/feed/registry mismatch is release residue to repair under the
+current lifecycle, not unfinished authority for the superseded coordination M-series. This status does not
+authorize the P5 default flip.
 
 The consumer-facing process is **Typed SDD**. Its stable machine identifier is `typed-sdd`. “Typed” names
 the durable property—the canonical specification is a compiled, inspectable AST—without coupling the

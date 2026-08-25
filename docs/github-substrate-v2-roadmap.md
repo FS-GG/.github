@@ -92,6 +92,38 @@ Planned -> Ready -> Implementing -> Candidate -> Qualified -> Accepted
 
 Roadmap checkboxes are updated only from accepted receipts. They are a human projection, not proof.
 
+### 1.4 Typed SDD handoff and parallel-work rule
+
+Typed SDD P0–P4 are complete and provide the published generic kernel. The former coordination M0–M9
+sequence is not another lane to burn down beside this roadmap. It is an inventory whose still-valid
+requirements are mapped into GS2 units. In particular, `.github#2932` must not be claimed as written:
+
+- its authority/mutation/compatibility census and baselines move to `GS2-00.3`–`GS2-00.7`;
+- its omission and byte-compatibility controls enter the frozen v1 corpus;
+- its coordination types and compiler surface move to `GS2-02` in `FS.GG.Coordination`; and
+- its Standard SDD completion artifacts remain historical evidence, not v2 qualification.
+
+Ordinary product work continues through v1 and does not need a v2 rebase. Typed SDD P5 readiness and soak
+work may run in parallel through `GS2-09`. The P5 default flip has only two admitted schedules: complete
+and stabilize it before `GS2-10`, or defer it until `OperatingV2`. At `GS2-10`, the kernel version,
+lifecycle defaults, providers, scaffolder, registry, receiver heads, workflows, and settings become frozen
+candidate inputs. Any later change invalidates approval and requires a new candidate plus the complete
+Q0–Q7 rerun. No such change crosses `GS2-11`–`GS2-12`.
+
+Before dispatching a unit, classify every adjacent row as one of:
+
+| Classification | Meaning | Scheduling effect |
+|---|---|---|
+| `v2-unit` | Directly implements one named GS2 unit | Schedulable only when that unit's prerequisites hold |
+| `v2-blocker` | Proven external work without which a unit cannot be authored or qualified | File/retain in its owning repo and record a real dependency edge |
+| `parallel-product` | Ordinary product or Typed SDD work whose output can be re-observed before candidate freeze | May proceed; it does not become part of the v2 worker's touch-set |
+| `candidate-input-change` | Kernel, lifecycle default, provider, registry, workflow, receiver, or settings change | Refresh before `GS2-10`; mint a new candidate or defer afterward |
+| `superseded-inventory` | Former M-series work already transferred into GS2 acceptance | Never claim from Project status; amend/close the obsolete row |
+| `cutover-deferred` | Safe work intentionally held across the freeze | Resume only after `OperatingV2` through the new system |
+
+The Coordination board remains the visibility and dependency projection. It is not allowed to recreate the
+superseded execution plan by presenting a historical M-series row as `Ready`.
+
 ## 2. Non-negotiable program invariants
 
 1. The published FS.GG.SDD specification kernel is consumed as a package; no source-project shortcut or
@@ -200,6 +232,16 @@ write after freeze and reject a forged or rewound ledger.
 **Owner:** `.github`
 **Exit gate:** Q0
 
+- [ ] **GS2-00.0 — Accept the program handoff.** Finish or explicitly disposition Typed SDD P4
+  release/tag/feed/registry residue (including `.github#2968` while it remains open); amend or resolve
+  `.github#2932` as superseded and map each retained clause to this roadmap; record whether P5 is not
+  started, readiness-only, finishing before `GS2-10`, or deferred until `OperatingV2`; classify every
+  active Typed SDD claim, review, delivery, release, and receiver PR as `finish`, `park`, or `defer`.
+  Re-adjudicate `.github#2932`'s declared dependencies (`.github#2903`, `.github#2905`, `.github#2841`,
+  and `.github#2850`) independently as current-v1 defects, corpus inputs, real v2 blockers, or deferred
+  work; the superseded edge itself is not a v2 prerequisite.
+  Repair the modernization Epic's task-line acceptance and place dependencies for `.github#2964` and
+  `.github#2965` in the authoritative Project `Blocked by` field rather than inert issue-body lines.
 - [ ] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
   mechanism, GitHub plan/API limitation, permission boundary, and rollback claim in the governing design.
 - [ ] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
@@ -213,7 +255,9 @@ write after freeze and reject a forged or rewound ledger.
   current precondition and eventual v2 disposition.
 - [ ] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
   touch-set, dependency, hierarchy, intake, review, delivery, merge, release, pagination, rate-limit,
-  partial-write, stale-read, and self-hosting incidents.
+  partial-write, stale-read, and self-hosting incidents. Import `.github#2932`'s reproducible 72-hour
+  churn, mutation-entry, protocol-string, replay, omission, and misclassification baselines without
+  importing its superseded v1 implementation plan.
 - [ ] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
   marker schemas, package IDs/versions, reusable workflow inputs/outputs/job IDs, required contexts, and
   receiver pins. Classify each `Preserve`, `Migrate`, `Seal`, or `Retire`.
@@ -491,7 +535,8 @@ write after freeze and reject a forged or rewound ledger.
 **Exit gates:** Q0–Q7 accepted against one immutable candidate
 
 - [ ] **GS2-10.1 — Freeze candidate identities.** Record source commits, dependency locks, model/compiler
-  fingerprints, packages, container/tool assets if any, workflows, App build, and verifier artifacts.
+  fingerprints, packages, container/tool assets if any, workflows, App build, verifier artifacts, Typed
+  SDD lifecycle-default decision, provider/scaffolder identities, and every receiver head/settings profile.
 - [ ] **GS2-10.2 — Run the full qualification matrix.** No selective rerun may replace a failed full
   result; repairs create a new candidate identity.
 - [ ] **GS2-10.3 — Complete live shadow comparison.** Read the complete fleet repeatedly over a bounded
@@ -507,6 +552,10 @@ write after freeze and reject a forged or rewound ledger.
   manual steps.
 - [ ] **GS2-10.8 — Approve readiness.** Independent architecture, security, operations, migration, and
   receiver reviewers accept the exact candidate/manifest. Any source or plan change invalidates approval.
+- [ ] **GS2-10.9 — Close the concurrent-change gate.** Prove there is no active kernel publication,
+  lifecycle-default flip, provider/registry flip, coordination receiver change, reusable-workflow change,
+  repository-settings mutation, or release saga expected to cross the cutover window. Defer each remaining
+  row until `OperatingV2` or mint a new candidate and repeat the complete Q0–Q7 matrix.
 
 ### GS2-11 — Freeze the production fleet
 
@@ -520,7 +569,8 @@ write after freeze and reject a forged or rewound ledger.
 - [ ] **GS2-11.2 — Acquire the cutover grant.** Enter the protected environment and commit/anchor
   `FreezeRequested(manifest)` with exact expected parent.
 - [ ] **GS2-11.3 — Stop ingress.** Refuse new claims, intake/roadmap applies, board mutations, review and
-  delivery advances, coordination merges/dispatches, settings reconciles, and releases.
+  delivery advances, coordination merges/dispatches, settings reconciles, releases, lifecycle-default
+  changes, provider/registry flips, and receiver updates.
 - [ ] **GS2-11.4 — Drain active work.** Complete, release, or explicitly park every claim, queued write,
   review, delivery, merge election, operation lock, and release saga. Active count must reach zero.
 - [ ] **GS2-11.5 — Restrict repositories temporarily.** Apply the approved update restrictions with only
@@ -611,7 +661,10 @@ write after freeze and reject a forged or rewound ledger.
 - [ ] **GS2-14.5 — Reconcile public architecture and operations docs.** Update the component map,
   coordination guide, recovery guide, security model, release guide, skills, and website status from v2
   authority; remove renovation warnings only when the 30-day gate passes.
-- [ ] **GS2-14.6 — Close children and Epic.** Verify every child issue and native subissue relationship,
+- [ ] **GS2-14.6 — Release deferred programs.** Re-observe the normalized receiver fleet and authorize
+  P5 or other `cutover-deferred` work to resume through v2. Do not reuse a pre-cutover claim, review,
+  candidate, or release receipt.
+- [ ] **GS2-14.7 — Close children and Epic.** Verify every child issue and native subissue relationship,
   accept Q10, publish the final report, and close `.github#2952` only when no legacy production authority or
   unowned follow-up remains.
 
@@ -625,7 +678,8 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - migration of the ADR corpus to a future typed `DecisionExtension`;
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
-- a later decision to make `typed-sdd` the default lifecycle; and
+- a later decision to make `typed-sdd` the default lifecycle, subject to the `GS2-10` candidate-freeze
+  rule above; and
 - convenience UI, reports, or projections that do not authorize a coordination decision.
 
 These may proceed independently with their own evidence. If one becomes a real prerequisite, the governing
@@ -721,6 +775,11 @@ evidence that either definition holds.
 
 - Architecture changes require the governing design and ADR to change first.
 - Sequence, prerequisites, unit boundaries, and exit-gate changes update this file.
+- Typed SDD P5, generic-kernel, provider/scaffolder, registry, workflow, receiver, or settings changes
+  update the concurrent-change ledger until `GS2-10`; after that point they invalidate the candidate or are
+  recorded as `cutover-deferred`.
+- A former M-series issue may not return to a schedulable state without an explicit mapping showing which
+  GS2 requirement is missing and why the existing transfer does not already own it.
 - Implementation semantics live in the typed `FS.GG.Coordination` specification and are projected here by
   stable unit/subject links once that compiler exists; do not copy union cases into this roadmap.
 - Accepted unit receipts append their source/artifact/evidence links to the unit; they do not replace its

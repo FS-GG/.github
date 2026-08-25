@@ -71,6 +71,60 @@ Filing this Epic demonstrated two live representation defects:
 Neither was bypassed. They are evidence for the v2 rule: one compiled vocabulary, one authority binding,
 and no production mutation whose value has not been validated against the observed native schema.
 
+### 1.2 Typed SDD coexistence and program handoff
+
+The generic Typed SDD rollout and the coordination replacement are related through one published package,
+not through one shared migration. Typed SDD P0–P4 are complete and supply the independently consumable
+kernel. P5—the later evidence-gated workspace-default flip—is outside the v2 critical path. The historical
+coordination M0–M9 plan is superseded as an execution sequence; its vocabulary, incidents, baselines, and
+proof obligations remain inputs to this design.
+
+This distinction prevents three avoidable forms of friction:
+
+- ordinary FS.GG product work does not stop or require a Git rebase while v2 is built;
+- a Project row from the former M-series cannot silently dispatch implementation into the v1 engine; and
+- a lifecycle/provider release cannot change receiver or package identities underneath an accepted v2
+  candidate.
+
+The handoff is explicit:
+
+| Source work | V2 destination | What is not carried forward |
+|---|---|---|
+| `.github#2932` authority, read, codec, decision, mutation, receipt, projection, string, and open-issue census | `GS2-00.3`–`GS2-00.7`, the Q0 corpus, and later Q3/Q5/Q9 controls | Adding replacement vocabulary to v1 Core; Standard SDD completion as v2 proof |
+| M1–M9 observation, algebra, saga, event, compiler, schema, enforcement, model/replay, and deletion requirements | `GS2-02`–`GS2-09` and Q1–Q9 | Incremental production strangling, indefinite adapters, multiple authority flips |
+| Published P0–P4 kernel and Typed SDD artifacts | Exact dependency pinned at `GS2-01.4`, then frozen in the `GS2-10` candidate | Source-project references, moving preview selection, lifecycle-default coupling |
+| P4 release/tag/feed/registry residue | Normal v1 release recovery before candidate freeze | Treating an incoherent published set as a v2 prerequisite or qualification shortcut |
+| P5 readiness and soak evidence | Independent program allowed beside `GS2-00`–`GS2-09` | Making P5 completion a hidden v2 gate |
+
+The live open [`.github#2932`](https://github.com/FS-GG/.github/issues/2932) item was filed before the
+new-only cutover decision. It must be amended or resolved as superseded before a scheduler may offer its
+old implementation scope. A `Ready` Project projection is not stronger than the governing design. Its
+still-valid acceptance clauses are transferred requirement by requirement; they are not lost by closing
+or rewriting the obsolete execution row.
+
+### 1.3 Concurrent-change and candidate-invalidation rules
+
+V1 remains the production authority through `OpenV2`, so ordinary issues, product changes, reviews, and
+releases continue before the cutover window. Their coordination metadata is a migration input, not code
+that must be rebased onto v2. Work touching a cutover input follows stricter rules:
+
+1. **Before `GS2-10`:** generic-kernel, Typed SDD, provider/profile, scaffolder, registry, workflow,
+   receiver, and repository-settings changes may land through their owning programs. The v2 census,
+   dependency lock, shadow comparison, receiver snapshot, and affected qualification gates are refreshed.
+2. **At `GS2-10`:** source commits, kernel/package identities, lifecycle defaults, providers, receiver
+   heads, workflows, settings, and cutover transforms become one immutable candidate/manifest.
+3. **After `GS2-10`:** a change to any frozen input either waits or creates a new candidate identity and
+   repeats the complete Q0–Q7 matrix. A selective green rerun cannot preserve the old approval.
+4. **During `GS2-11`–`GS2-12`:** no package release, lifecycle-default flip, provider/registry flip,
+   receiver mutation, ordinary merge, or coordination write crosses the window.
+5. **After `OpenV2`:** deferred work resumes through v2. V1 is never reopened to complete P5 or another
+   rollout.
+
+P5 may therefore run in parallel only in two safe shapes: finish its default flip and stabilize every
+default-bearing receiver before `GS2-10`, or defer the flip until the ledger reaches `OperatingV2`.
+Readiness experiments may continue earlier, but their outputs have no authority to mutate a frozen
+candidate.
+
 ## 2. Goals and non-goals
 
 ### Goals
@@ -1001,7 +1055,11 @@ The architecture is accepted for implementation only when:
 13. the required-check/ruleset model is complete before merge queue can replace custom check election;
 14. sealed v1 evidence remains auditable after all v1 production code is removed; and
 15. a final review can point to each retained custom mechanism and state the missing native semantic that
-   still justifies it.
+   still justifies it;
+16. the Typed SDD handoff dispositions every open P4 residue, `.github#2932` clause, P5 decision, active
+   receiver change, and release saga without treating P5 as a hidden prerequisite; and
+17. the candidate manifest proves the exact generic-kernel, lifecycle-default, provider, scaffolder,
+   registry, workflow, receiver, and settings identities protected by the concurrent-change gate.
 
 ## 18. Stop conditions
 
@@ -1017,6 +1075,9 @@ Return to design instead of widening implementation if:
 - merge queue would bypass or fail to re-run a temporal required check;
 - desired-state application cannot distinguish unsupported, unauthorized, absent, stale, and partial;
 - rollback requires deleting or rewriting evidence created before `OpenV2`;
+- a superseded M-series Project row can still dispatch replacement implementation into v1;
+- Typed SDD P5, a kernel release, or another receiver-contract change must cross the frozen candidate or
+  cutover window to succeed;
 - the extension begins copying generic specification-kernel concepts into `.github`; or
 - implementation adds more compatibility readers, public commands, or workflows than its accepted deletion
   ledger retires.
@@ -1040,3 +1101,7 @@ The independent architecture review must answer, from evidence rather than prefe
    parsers, schedules, settings, and receiver pins?
 10. Would a maintainer with only the sealed archive, cutover manifest, published artifacts, and GitHub state
     be able to explain and recover every partial step?
+11. Has every still-valid `.github#2932` requirement moved to one GS2 unit without carrying its superseded
+    v1 implementation or Standard SDD qualification route?
+12. Can P5 and ordinary product work proceed without changing a frozen candidate, and will every deferred
+    row resume only after `OperatingV2` through the new system?
