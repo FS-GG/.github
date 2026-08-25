@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/release-coord-engine-0-75-5/ship.json",
-      "digest": "sha256:d33392c3daef8db14a15337454b31af4535f2f0cb86db22e8ec5f323c24f1fa1",
+      "digest": "sha256:6a947964292e50435c9b6524957ade921e45367283744ac4fb098349258b9545",
       "schemaVersion": 1
     },
     {
       "path": "readiness/release-coord-engine-0-75-5/verify.json",
-      "digest": "sha256:cdb95bde0a1ad937b5ca5bccaa2e896ed78ec5019425f49be7cc52c26014e663",
+      "digest": "sha256:59a53adbdf88dcb8893612630c057c3d42198e1551c37dab14894363aac626ee",
       "schemaVersion": 1
     },
     {

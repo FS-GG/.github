@@ -11,7 +11,7 @@ sourceAnalysis: readiness/release-coord-engine-0-75-5/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/release-coord-engine-0-75-5/analysis.json
-    digest: fb0e283bc5aabf5402f04de8d728e5cd93d0c828863295502f6e796e1ef08376
+    digest: 4be95fb935046ba8c024f6e404aab4f06c05f940242361db5922c58a0fcabf84
     schemaVersion: 1
   - label: checklist
     path: work/release-coord-engine-0-75-5/checklist.md

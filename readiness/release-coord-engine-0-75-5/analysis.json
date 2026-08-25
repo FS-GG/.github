@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "4a20309d75c856c9002e4a62c7db84d52edcd78706b95d15d221d1f5e6e687fd"
+        "value": "beabbdeda3eb96ca8ef38567d86765caf5dd80bf15321d0d2bccc4ebdb412669"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
