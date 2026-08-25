@@ -75,16 +75,19 @@ surface and human projection; semantic completeness, stable identity, and machin
 the normalized AST. Typed domain extensions provide vocabulary without turning the shared substrate into
 one universal language or a generic property bag.
 
-Execution, simulation, validation, generation, model checking, and proof are **optional capabilities over
-the AST**. No capability language becomes specification authority, and no model is required to produce
-code or admit a useful proof. A capability consumes the canonical model directly or through an explicit,
+Canonical compilation and validation, the normalized AST, and a fingerprinted human projection are the
+baseline contract. Beyond that baseline, domain-specific execution, simulation, additional validation,
+source/schema generation, model checking, and proof are **optional capabilities over the AST**. No
+capability language becomes specification authority, and no model is required to produce executable code
+or admit a useful proof. A capability consumes the canonical model directly or through an explicit,
 versioned lowering; its result binds the model fingerprint, capability/toolchain identity, assumptions,
 and evidence. An extraction backend is justified only when its generated artifact is intentionally used;
 it is not part of the default authoring contract.
 
 The [F* specification experiment](../fstar/README.md) demonstrates this boundary. F* successfully proved
-and extracted selected pure semantics, but its value depends on using those semantics as an executable
-authority. It remains one possible capability backend, not the corpus language. The experiment's
+and extracted selected pure semantics. The proofs have value as evidence; the distinctive extraction
+advantage depends on intentionally using the generated semantics as an executable authority. F* remains
+one possible capability backend, not the corpus language. The experiment's
 [architectural assessment](../fstar/reports/assessment.md) therefore strengthens rather than replaces the
 AST-first decision.
 
@@ -875,11 +878,12 @@ revision, subject, authority, idempotency key, or projection source and must mak
 
 ### Optional analysis and proof capabilities
 
-The canonical AST remains specification authority whether or not a useful proof exists. A domain may
-register digest-bound validators, simulators, SMT lowerings, model checkers, theorem provers, or extraction
-backends, but absence of such a capability is not a degraded specification state. Each registered result
-names its model fingerprint, lowering or correspondence contract, toolchain, assumptions, scope, and
-outcome; `unknown`, bounded evidence, and theorem-level proof remain distinct.
+The canonical compiler validation and required human projection remain mandatory whether or not a useful
+proof exists. A domain may additionally register digest-bound validators, simulators, SMT lowerings,
+model checkers, theorem provers, or extraction backends, but absence of those additional capabilities is
+not a degraded specification state. Each registered result names its model fingerprint, lowering or
+correspondence contract, toolchain, assumptions, scope, and outcome; `unknown`, bounded evidence, and
+theorem-level proof remain distinct.
 
 For high-concurrency coordination protocols—the claim CAS, operation election, set mutation, and saga
 retry state—generate or maintain a small TLA+ model to check safety, deadlock freedom, and selected

@@ -40,10 +40,11 @@ selects that lifecycle, but it does **not** certify the coordination replacement
 design's custom qualification contract so the machinery under replacement is not its own acceptance oracle.
 
 The normalized typed AST is the enduring deliverable of this roadmap and the programmatic corpus consumed
-by agents. Application-building tools, executable semantics, schemas, documentation, simulations, and
-proof artifacts are optional consumers of that corpus. The roadmap assumes neither that every arbitrary
-domain has a useful proof nor that extraction is desirable; a proof backend earns a place only for a
-bounded model/property pair and never becomes a parallel specification authority.
+by agents. Canonical validation and a fingerprinted human projection remain required. Application-building
+tools and additional domain-specific execution, simulation, generation, analysis, and proof capabilities
+consume that corpus without owning it. The roadmap assumes neither that every arbitrary domain has a useful
+proof nor that extraction is desirable; a proof backend earns a place only for a bounded model/property
+pair and never becomes a parallel specification authority.
 
 ## 2026-08-25 coordination supersession boundary
 
@@ -175,9 +176,10 @@ Every remaining milestone and successor program preserves the same capability bo
    agent. Surface syntax may be convenient F#, while consumers depend only on the compiled AST.
 3. A domain may declare no executable or proof capability. Concepts, relationships, types/data,
    requirements, protocols, examples, and explicit unknowns remain complete specification material.
-4. Optional validators, simulators, generators, model checkers, SMT encodings, theorem provers, and
-   extractors register as versioned AST consumers. Results bind the exact model fingerprint, lowering,
-   toolchain, assumptions, scope, and evidence strength.
+4. Beyond mandatory compiler validation and human projection, optional domain-specific validators,
+   simulators, generators, model checkers, SMT encodings, theorem provers, and extractors register as
+   versioned AST consumers. Results bind the exact model fingerprint, lowering, toolchain, assumptions,
+   scope, and evidence strength.
 5. Generated code is used only by an explicit runtime adoption decision. Maintaining generated or
    proof-language code beside an independent implementation does not establish equivalence.
 6. No proof-language-specific construct enters the shared AST merely to make one backend convenient;
