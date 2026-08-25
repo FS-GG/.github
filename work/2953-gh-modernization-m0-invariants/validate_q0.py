@@ -73,7 +73,7 @@ def review_subject(data: dict[str, Any]) -> dict[str, Any]:
         for key in (
             "sourceBase", "inventories", "authorities", "mutations", "corpus",
             "compatibilityDeletion", "handoff", "runtimeDecision", "liveProjection", "threatModel",
-            "adminSettingsReport",
+            "adminSettingsReport", "governingArtifacts", "corpusArtifact",
         )
     }
 
@@ -104,6 +104,25 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
             run_bytes(["git", "cat-file", "-e", f"{source_base}^{{commit}}"])
         except subprocess.CalledProcessError:
             errors.append("sourceBase: commit is unavailable")
+
+    governing = data.get("governingArtifacts", [])
+    require_fields(governing, {"path", "sha256"}, "governingArtifacts", errors)
+    governing_by_path = {row.get("path"): row for row in governing}
+    required_governing = {
+        "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
+        "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
+        "docs/github-substrate-v2-roadmap.md",
+    }
+    if set(governing_by_path) != required_governing or len(governing) != len(required_governing):
+        errors.append("governingArtifacts: exact ADR/design/roadmap set is required")
+    for path, row in governing_by_path.items():
+        artifact_path = ROOT / str(path)
+        if not artifact_path.is_file():
+            errors.append(f"governingArtifacts[{path}]: source file missing")
+        elif row.get("sha256") != digest_bytes(artifact_path.read_bytes()):
+            errors.append(f"governingArtifacts[{path}]: digest does not match source bytes")
+        if not SHA256.fullmatch(str(row.get("sha256", ""))):
+            errors.append(f"governingArtifacts[{path}]: invalid SHA-256")
 
     inventories = data.get("inventories", [])
     ids_unique(inventories, "inventories", errors)
@@ -158,10 +177,45 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
 
     corpus = data.get("corpus", [])
     ids_unique(corpus, "corpus", errors)
-    require_fields(corpus, {"id", "kind", "source", "expected"}, "corpus", errors)
+    require_fields(corpus, {"id", "kind", "source", "expected", "artifact", "originalBytesSha256"}, "corpus", errors)
     corpus_kinds = {row.get("kind") for row in corpus}
     if corpus_kinds != REQUIRED_CORPUS:
         errors.append(f"corpus: kind mismatch missing={sorted(REQUIRED_CORPUS-corpus_kinds)} extra={sorted(corpus_kinds-REQUIRED_CORPUS)}")
+    corpus_artifact = data.get("corpusArtifact", {})
+    require_fields([corpus_artifact], {"path", "sha256"}, "corpusArtifact", errors)
+    corpus_path = ROOT / str(corpus_artifact.get("path", ""))
+    originals: dict[str, Any] = {}
+    if not corpus_path.is_file():
+        errors.append("corpusArtifact: source file missing")
+    else:
+        raw_corpus = corpus_path.read_bytes()
+        if corpus_artifact.get("sha256") != digest_bytes(raw_corpus):
+            errors.append("corpusArtifact: digest does not match source bytes")
+        try:
+            decoded_corpus = json.loads(raw_corpus)
+            if decoded_corpus.get("schema") != "fsgg.github-substrate.q0-corpus-originals/v1" or decoded_corpus.get("encoding") != "UTF-8":
+                errors.append("corpusArtifact: unsupported schema or encoding")
+            entries = decoded_corpus.get("entries", [])
+            originals = {entry.get("id"): entry for entry in entries}
+            if len(originals) != len(entries) or set(originals) != {row.get("id") for row in corpus}:
+                errors.append("corpusArtifact: original-byte id census does not match typed corpus")
+        except (json.JSONDecodeError, AttributeError) as error:
+            errors.append(f"corpusArtifact: unreadable JSON: {error}")
+    if not SHA256.fullmatch(str(corpus_artifact.get("sha256", ""))):
+        errors.append("corpusArtifact: invalid SHA-256")
+    for row in corpus:
+        original = originals.get(row.get("id"))
+        if not isinstance(original, dict):
+            continue
+        original_digest = digest_bytes(str(original.get("bytesUtf8", "")).encode())
+        if not original.get("mediaType") or original.get("sourceRef") != row.get("source"):
+            errors.append(f"corpus[{row.get('id')}]: provenance metadata does not match typed row")
+        if original.get("sha256") != original_digest or row.get("originalBytesSha256") != original_digest:
+            errors.append(f"corpus[{row.get('id')}]: original bytes are not digest-bound")
+        if row.get("artifact") != f"q0-corpus-originals.json#{row.get('id')}":
+            errors.append(f"corpus[{row.get('id')}]: artifact locator mismatch")
+        if not SHA256.fullmatch(str(row.get("originalBytesSha256", ""))):
+            errors.append(f"corpus[{row.get('id')}]: invalid SHA-256")
 
     deletion = data.get("compatibilityDeletion", [])
     ids_unique(deletion, "compatibilityDeletion", errors)
@@ -253,8 +307,10 @@ def self_test(data: dict[str, Any]) -> list[str]:
     failures: list[str] = []
     candidate_mutations = [
         ("inventory digest", lambda d: d["inventories"][0].__setitem__("pathListSha256", "not-a-digest")),
+        ("governing artifact", lambda d: d["governingArtifacts"][0].__setitem__("sha256", "0" * 64)),
         ("unknown writer", lambda d: d["mutations"].append({**d["mutations"][0], "id": "M-unknown", "class": "unknownWriter"})),
         ("corpus subject", lambda d: d["corpus"][0].__setitem__("expected", "weakened")),
+        ("corpus original bytes", lambda d: d["corpus"][0].__setitem__("originalBytesSha256", "0" * 64)),
         ("deletion unit", lambda d: d["compatibilityDeletion"][0].__setitem__("deleteUnit", "GS2-never")),
         ("threat source", lambda d: d["threatModel"].__setitem__("sha256", "0" * 64)),
         ("administrator report", lambda d: d["adminSettingsReport"].__setitem__("sha256", "0" * 64)),
