@@ -1,0 +1,163 @@
+schemaVersion: 1
+workId: typed-sdd-p4-floor
+stage: evidence
+status: evidenceReady
+sourceSpec: work/typed-sdd-p4-floor/spec.md
+sourceClarifications: work/typed-sdd-p4-floor/clarifications.md
+sourceChecklist: work/typed-sdd-p4-floor/checklist.md
+sourcePlan: work/typed-sdd-p4-floor/plan.md
+sourceTasks: work/typed-sdd-p4-floor/tasks.yml
+sourceAnalysis: readiness/typed-sdd-p4-floor/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/typed-sdd-p4-floor/analysis.json
+    digest: 2f5aab583421fb6f65c03ae98c658161338f7307b06883d79b7fb727e43e9586
+    schemaVersion: 1
+  - label: checklist
+    path: work/typed-sdd-p4-floor/checklist.md
+    digest: 9f3ab77066fad099991b7923acc79c8a60a0020153361bdc4fb0ba8129f99344
+    schemaVersion: 1
+  - label: clarifications
+    path: work/typed-sdd-p4-floor/clarifications.md
+    digest: 6554a35b720fa67aecd2bb06997f1bc2a3af62004f9ba0fcc17b0ef2a0c610cd
+    schemaVersion: 1
+  - label: plan
+    path: work/typed-sdd-p4-floor/plan.md
+    digest: 791b5e09eb7a7e2048f681e2424b8738440e23c348680e59973f6d54d0afd441
+    schemaVersion: 1
+  - label: spec
+    path: work/typed-sdd-p4-floor/spec.md
+    digest: aa5761716839581bec012bfa418ada0b6372ee84b6e1cd1dfd00b25e02ce6eed
+    schemaVersion: 1
+  - label: tasks
+    path: work/typed-sdd-p4-floor/tasks.yml
+    digest: fd9deaad7208d5eb770de391163945d91f957fa0dd761c7a6a1fade0252789db
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [docs/coordination/2026-08-24-typed-protocol-kernel-design.md, registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/typed-sdd-p4-floor/registry-validation.junit.xml
+      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Both provider-family floors advance to the published Typed SDD compiler without changing defaults.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [docs/architecture.md, registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/typed-sdd-p4-floor/registry-validation.junit.xml
+      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The registry authority and generated orchestrator-axis projection agree.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [docs/registry/compatibility.md, registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/typed-sdd-p4-floor/registry-validation.junit.xml
+      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Typed registry validation, and Templates five-descriptor equality checks pass., changelog, compatibility projection, generated projections]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [registry/CHANGELOG.md, registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/typed-sdd-p4-floor/registry-validation.junit.xml
+      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The minimum advance is recorded with publication provenance and preserves Standard SDD compatibility.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [docs/architecture.md, readiness/typed-sdd-p4-floor/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/typed-sdd-p4-floor/registry-validation.junit.xml
+      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Generated projections and the normalized work model were refreshed from current sources.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

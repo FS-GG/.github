@@ -52,6 +52,8 @@ contracts:
   - id: demo
     version: "0.4.0"
     package-version: "0.4.0"
+    minimum-fsgg-sdd:
+      version: "0.6.0"
     owner: sdd
     surface: "demo surface"
     consumers: []
@@ -68,6 +70,7 @@ contracts:
 coherence:
   - { id: demo-coh, coherent: true,  owner: sdd }
   - { id: bad-coh,  coherent: false, owner: sdd }
+  - { id: fsgg-sdd-orchestrator-axis, coherent: true, owner: sdd }
 YAML
 
 # The well-formed projection. The gate reads the GENERATED `## Contract version literals` table (each
@@ -83,6 +86,7 @@ cat > "$BASE" <<'MD'
 |---|---|---|---|
 | `demo-coh` | ✅ yes | SDD | holds |
 | `bad-coh` | ❌ no | SDD | standing request |
+| `fsgg-sdd-orchestrator-axis` | ✅ yes | SDD | **Coherent — provider-family minimum at `0.6.0`.** **Current:** all provider-family floors agree on **`0.6.0`**. Release history (0.3.0 → 0.4.0 → 0.6.0). |
 
 ## Versioned contracts
 
@@ -286,6 +290,10 @@ expect_fail "missing contract row"        "has no row"          "$(variant nocon
 expect_fail "missing coherence row"       "has no row"          "$(variant nocoh      's#^| `demo-coh` |.*$##')"
 expect_fail "coherent flag contradicts"   "registry says coherent=True" \
   "$(variant flagflip  's#| `demo-coh` | ✅ yes |#| `demo-coh` | ❌ no |#')"
+expect_fail "stale orchestrator current floor reds despite matching headline/history" "Current:** assertion does not say all provider-family floors agree on minimum-fsgg-sdd '0.6.0'" \
+  "$(variant stalefloor 's#agree on \*\*`0.6.0`\*\*#agree on **`0.5.0`**#')"
+expect_fail "duplicate contradictory Current authority reds" "must contain exactly one **Current:** authority clause, found 2" \
+  "$(variant duplicatecurrent 's#Release history#**Current:** all provider-family floors agree on **`0.5.0`**. Release history#')"
 
 # --- fail-closed corollaries (epic #266): a missing subject must not read as "checked, fine" ---
 expect_fail "version column absent"       "has no 'version' column" \
