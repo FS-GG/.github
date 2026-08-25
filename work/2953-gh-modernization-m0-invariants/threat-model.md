@@ -6,8 +6,9 @@ when they introduce concrete schemas, interpreters, credentials, packages, or re
 
 ## Assets and security objectives
 
-- The protected epoch and its monotonic `OperatingV1 -> Bridging -> OperatingV2 -> OpenV2` history must
-  remain authentic, complete, ordered, and impossible to roll back after `OpenV2`.
+- The protected epoch and its monotonic `OperatingV1 -> FreezeRequested -> Frozen -> SwitchedV2 ->
+  VerifiedV2 -> OpenV2 -> OperatingV2` history must remain authentic, complete, ordered, and impossible
+  to roll back after `OpenV2`.
 - Claims, blockers, review decisions, delivery receipts, releases, and administrative plans must retain
   their exact subject, revision, completeness, principal, and evidence bindings.
 - Administrative and release credentials must be least-privilege, short-lived where GitHub supports it,

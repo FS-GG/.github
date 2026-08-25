@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.122164"><testcase name="q0-candidate-and-mutation-controls" time="3.216893"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="0.429767"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.097252"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.026311"><system-out>{
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.010775"><testcase name="q0-candidate-and-mutation-controls" time="3.127841"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="0.419754"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.094540"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.026006"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -715,7 +715,7 @@
     },
     "threatModel": {
         "path": "work/2953-gh-modernization-m0-invariants/threat-model.md",
-        "sha256": "b94663dceaa00af6754457c6e3e812f2533b48a748eedaae58d31fd1f4d1a1d2",
+        "sha256": "aaaebacf8e781db131babc7bc9fa2b7c7d46734ca1e827b4fab48427cf2fdd5f",
         "boundaries": [
             "protectedEpoch",
             "administrativePrincipal",
@@ -724,7 +724,7 @@
             "crossRepositoryReceiver"
         ]
     },
-    "reviewFingerprint": "230d6fea6c8f503e807884c76f5ff9fbf1eb4f7104f793891e8f4d1b72df70de",
+    "reviewFingerprint": "2665035f9ebc31f11c3e403fa5d486f916b4d902ca8faed78c1f2f143347660e",
     "reviewsRequired": [
         "architecture",
         "security",
@@ -733,7 +733,7 @@
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.006824"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.345118"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.004318"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.338317"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
