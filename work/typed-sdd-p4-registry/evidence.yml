@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-registry/verification/acceptance.junit.xml
-      digest: "sha256:3f4fe67da533921e67a239704b1a1df34759701c9b450a455f32e9b4a6ed7fb7"
+      digest: "sha256:5952063f8ad2508b9e19c3fe00e39597415e6f38e40f39cbe6fc73f9b159c583"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Implementation and focused acceptance suite passed on 2026-08-25.]

@@ -33,8 +33,10 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 echo "new-sdd-workspace parse fixture — building the CLI (Release)…"
 dotnet build "$PROJ" -c Release --nologo -v quiet 1>&2
 
-# Newest match wins, so a leftover older-TFM output dir can't feed a stale dll to the run below.
-DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -name new-sdd-workspace.dll 2>/dev/null | sort | tail -1)"
+# Newest *built artifact* wins by modification time. Lexical path order used to prefer a stale
+# `publish/` DLL over the just-built `net*/` DLL, which let the mutation controls compile a changed
+# subject and then execute yesterday's artifact — a false green in the guard that prevents false green.
+DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -type f -name new-sdd-workspace.dll -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
 [ -n "$DLL" ] && [ -f "$DLL" ] || { echo "::error::could not locate built new-sdd-workspace.dll under bin/Release"; exit 1; }
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
@@ -523,6 +525,16 @@ if [ ! -e "$TGT" ]; then
   ok "hermetic: no accepted parse created the target dir (all stopped at preflight)"
 else
   bad "a valid parse scaffolded for real — the PATH scrub failed to hide fsgg-sdd" "found: $TGT"
+fi
+
+# The outer acceptance run also proves its own sensitivity. The child runs compile the real CLI
+# after changing one production expression at a time; the guard prevents recursive mutation runs.
+if [ -z "${FSGG_MUTATION_CHILD:-}" ]; then
+  if bash "$HERE/mutation-controls.sh"; then
+    ok "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+  else
+    bad "wrong-default and lifecycle-loss mutation controls go red and restore exactly"
+  fi
 fi
 
 echo "new-sdd-workspace parse fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
