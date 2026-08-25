@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "release-coord-engine-0-75-5",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "2e1660e1ef3b0ad0e15daf68b58f80364570f2bed0810d7a20ce853a2b1005e4"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 0,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 0
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

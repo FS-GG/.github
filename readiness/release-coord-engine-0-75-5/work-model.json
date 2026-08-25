@@ -1,0 +1,1332 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "release-coord-engine-0-75-5",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "63588e54fb6afac34efe5faab3ea1e242d8869db461901018d49b5c3dd2a250c"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "04d83fd947e53a03c2a83ad32e79771de4838aad6feb550e81654dbcbe4d4b99"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
+      }
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "release-coord-engine-0-75-5",
+    "title": "Coherent coordination release 0.75.5",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The reviewed preparation MUST advance the single coherent-set source and all evaluated (covers AC-001)",
+      "text": "The reviewed preparation MUST advance the single coherent-set source and all evaluated (covers AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/release-coord-engine-0-75-5/spec.md",
+      "sourceLocation": {
+        "line": 60,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Publication MUST use the existing repository coherent-release saga from the exact merged (covers AC-002)",
+      "text": "Publication MUST use the existing repository coherent-release saga from the exact merged (covers AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/release-coord-engine-0-75-5/spec.md",
+      "sourceLocation": {
+        "line": 64,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "The prepared packages MUST publish to GitHub Packages first and nuget.org second without (covers AC-003)",
+      "text": "The prepared packages MUST publish to GitHub Packages first and nuget.org second without (covers AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/release-coord-engine-0-75-5/spec.md",
+      "sourceLocation": {
+        "line": 67,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Feed-derived post-publication reconciliation MUST advance registry source/package versions, (covers AC-004)",
+      "text": "Feed-derived post-publication reconciliation MUST advance registry source/package versions, (covers AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/release-coord-engine-0-75-5/spec.md",
+      "sourceLocation": {
+        "line": 71,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Completion MUST require sibling-tag equality, immutable coherent-set promotion, release (covers AC-005)",
+      "text": "Completion MUST require sibling-tag equality, immutable coherent-set promotion, release (covers AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/release-coord-engine-0-75-5/spec.md",
+      "sourceLocation": {
+        "line": 75,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Select stable \u00600.75.5\u0060. Live checks on 2026-08-25 found coherent \u00600.75.4\u0060 source/packages,",
+      "decision": "Select stable \u00600.75.5\u0060. Live checks on 2026-08-25 found coherent \u00600.75.4\u0060 source/packages,",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ]
+    },
+    {
+      "id": "DEC-002",
+      "title": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports three",
+      "decision": "Classify the release as PATCH on the stable \u00600.x\u0060 line. Fresh engine analysis reports three",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 27,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "DEC-003",
+      "title": "Keep the three existing release workflow filenames and tag namespaces. Their Trusted",
+      "decision": "Keep the three existing release workflow filenames and tag namespaces. Their Trusted",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "DEC-004",
+      "title": "Preserve publish-before-flip ordering. Preparation advances the source version and bounded",
+      "decision": "Preserve publish-before-flip ordering. Preparation advances the source version and bounded",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "DEC-005",
+      "title": "Treat source preparation, saga publication, feed verification, feed-derived reconciliation,",
+      "decision": "Treat source preparation, saga publication, feed verification, feed-derived reconciliation,",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ]
+    },
+    {
+      "id": "DEC-006",
+      "title": "Typed SDD P5 remains deferred until OperatingV2. This release ships already-merged P0-P4",
+      "decision": "Typed SDD P5 remains deferred until OperatingV2. This release ships already-merged P0-P4",
+      "requirementRefs": [],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/release-coord-engine-0-75-5/clarifications.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement clarification decision DEC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement clarification decision DEC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-002"
+      ],
+      "sourceIds": [
+        "DEC-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement clarification decision DEC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-003"
+      ],
+      "sourceIds": [
+        "DEC-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement clarification decision DEC-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-004"
+      ],
+      "sourceIds": [
+        "DEC-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-005"
+      ],
+      "sourceIds": [
+        "DEC-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-006"
+      ],
+      "sourceIds": [
+        "DEC-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-002",
+        "PD-003",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-004",
+        "PD-005",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "T016",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV016"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "T017",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV017"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "T018",
+      "title": "Refresh generated view impact GV-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-002",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV018"
+      ],
+      "source": "work/release-coord-engine-0-75-5/tasks.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV016",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T016",
+      "taskRefs": [
+        "T016"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV017",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T017",
+      "taskRefs": [
+        "T017"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 17,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV018",
+      "kind": "deferral",
+      "subjectType": "task",
+      "subjectId": "T018",
+      "taskRefs": [
+        "T018"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "deferred",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
+      "source": "work/release-coord-engine-0-75-5/evidence.yml",
+      "sourceLocation": {
+        "line": 18,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/release-coord-engine-0-75-5/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.2.5"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "63588e54fb6afac34efe5faab3ea1e242d8869db461901018d49b5c3dd2a250c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "04d83fd947e53a03c2a83ad32e79771de4838aad6feb550e81654dbcbe4d4b99"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/release-coord-engine-0-75-5/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "54b92c8695a226eb7b1957570c23870e07525d61e3a726c6e8b05f2dc5c41bf6"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

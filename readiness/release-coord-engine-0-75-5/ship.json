@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "release-coord-engine-0-75-5",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/release-coord-engine-0-75-5/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "8aa380bcc2173b7dc8d8f265c6a6d3f1e8238fe13967c6e3e2d984a254a93f7a"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/release-coord-engine-0-75-5/verify.json",
+      "kind": "source",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "1b0eeab0b5c79a85aca9b39c06377fbcb72c26fdc8726e2116f505a7ac47b84e"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/release-coord-engine-0-75-5/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3ea03b67b2012e2321e3a933f2ab76a79873e60d8e9473d9ef3c8e506f8ea055"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "63588e54fb6afac34efe5faab3ea1e242d8869db461901018d49b5c3dd2a250c"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4b51f437b0ff60aa7be2f52c93b1435849cfa4e2b655016bf8cee4d35b046e36"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "6e39ac912850aefdfb34746e7727c35a225312a85b2df6d8ad9c986d16337fee"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e4a6766901c86188f0bd9e6274228cf62a9a26c950828f076aec05d8840db1ee"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/release-coord-engine-0-75-5/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "b73f925b8bfeee46974f201c5eee503204dd3b65e906cd26255bb00cd7437445"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "shipReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "ready"
+      },
+      {
+        "stage": "checklist",
+        "status": "ready"
+      },
+      {
+        "stage": "clarify",
+        "status": "ready"
+      },
+      {
+        "stage": "evidence",
+        "status": "ready"
+      },
+      {
+        "stage": "plan",
+        "status": "ready"
+      },
+      {
+        "stage": "specify",
+        "status": "ready"
+      },
+      {
+        "stage": "tasks",
+        "status": "ready"
+      },
+      {
+        "stage": "verify",
+        "status": "ready"
+      }
+    ]
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "blockingFindingIds": [],
+    "evidenceSupportedCount": 0,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 0,
+    "evidenceDeferredCount": 18,
+    "evidenceMissingCount": 0,
+    "evidenceStaleCount": 0,
+    "evidenceSyntheticCount": 0,
+    "evidenceInvalidCount": 0
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV006",
+      "obligationId": "EV006",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV007",
+      "obligationId": "EV007",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV008",
+      "obligationId": "EV008",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV009",
+      "obligationId": "EV009",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV010",
+      "obligationId": "EV010",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV011",
+      "obligationId": "EV011",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV012",
+      "obligationId": "EV012",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV013",
+      "obligationId": "EV013",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV014",
+      "obligationId": "EV014",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV015",
+      "obligationId": "EV015",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV016",
+      "obligationId": "EV016",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV017",
+      "obligationId": "EV017",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    },
+    {
+      "id": "ED-EV018",
+      "obligationId": "EV018",
+      "state": "deferred",
+      "observed": false,
+      "severity": "advisory",
+      "diagnosticIds": []
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/release-coord-engine-0-75-5/analysis.json",
+      "kind": "analysis",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/release-coord-engine-0-75-5/verify.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/release-coord-engine-0-75-5/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": [],
+    "warningFindingIds": [],
+    "advisoryFindingIds": [],
+    "contributingStages": [],
+    "classifiedObligationsUnmetCount": 0,
+    "journeyObligationsUnmetCount": 0,
+    "correction": ""
+  },
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "shipReady",
+  "nextAction": {
+    "actionId": "ship.next.protectedBoundary",
+    "command": null,
+    "reason": "Ship readiness is current and ready for the protected-boundary handoff."
+  }
+}

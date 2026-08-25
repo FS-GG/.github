@@ -473,8 +473,15 @@
        Recutting 0.75.3 would violate immutable package identity, so 0.75.4 is the first version whose
        own listing tells the complete story. Protocol.fs, package identities, commands, and members
        remain unchanged. -->
+  <!-- 0.75.4 -> 0.75.5 (.github#2983): PATCH on the stable 0.x line. Three compatible lifecycle defect
+       repairs ship: post-merge verification now classifies successful completed runs correctly;
+       completion provenance preserves GraphQL's full merge object id so it can equal the full REST
+       merge_commit_sha; and closed-item delivery reads authoritative issue Paths while preserving
+       unread-versus-undeclared state. Protocol.fs has zero commits across the span; package identities,
+       commands, flags, schemas, exits, and public members remain unchanged. Typed SDD P5 stays deferred
+       until OperatingV2 and no provider/receiver default changes in this cut. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.4</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.5</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
