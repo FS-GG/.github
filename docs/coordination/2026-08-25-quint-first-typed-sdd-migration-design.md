@@ -139,7 +139,47 @@ not deferred:
   to migrate and complete a declared soak; and
 - omitted lifecycle remains `sdd` until a separate ADR changes every default-bearing surface.
 
-## 5. Prepared feature sequence
+## 5. Quint LLM Kit integration
+
+The program incorporates [`quint-co/quint-llm-kit`](https://github.com/quint-co/quint-llm-kit) as an
+upstream authoring and verification-guidance corpus. The preparation review used commit
+`cc75369f741af7d490936f82002c2d28e3b3d78d`; Q1 must deliberately select and digest its own candidate
+rather than inheriting that snapshot silently. At the reviewed revision the kit provides:
+
+- lightweight `quint-lang`, `quint-modeling`, and `quint-execute-spec` skills usable without its Docker
+  environment;
+- a larger `/spec:*`, `/verify:*`, `/code:*`, and `/refactor:*` workflow;
+- executable-first modeling guidance using typecheck followed by simulation;
+- reachability witnesses so a vacuously constrained model does not look safe;
+- trace explanation, type/message reachability, listener coverage, transition labeling, gap analysis, and
+  implementation-migration workflows; and
+- optional Quint LSP/knowledge MCP services and Choreo-oriented distributed-protocol patterns.
+
+These are valuable accelerators, but their boundary differs from the FS-GG contract:
+
+1. The kit is Apache-2.0 and reusable with attribution, but its maintainers explicitly describe it as
+   internally developed, not thoroughly evaluated for general use, and supplied without suitability or
+   reliability guarantees.
+2. Its Docker path is Claude-oriented and installs the latest Quint. FS-GG requires a runtime-neutral skill
+   path and exact Quint, kit revision, dependency, profile, and compiler identities.
+3. Its modeling skill deliberately favors sampled `quint run` during iteration and reserves
+   `quint verify` for explicit model-checking work. FS-GG adopts that fast inner loop but adds declared,
+   impact-selected model-checking gates for production invariants and temporal properties.
+4. Its implementation skill treats the Quint spec as ground truth and separates research, plan,
+   implementation, and verification. FS-GG adds compiled-contract identities, evidence receipts,
+   authorization boundaries, no-silent-spec-change rules, and runtime/ITF correspondence.
+5. Its Choreo default for message-passing protocols is an evaluation candidate for the coordination model,
+   not an automatic dependency. Q1 must compare it with plain Quint against readability, state space,
+   generated-contract extraction, supply chain, and long-term ownership.
+
+No `curl .../main | bash`, unpinned plugin install, moving Docker image, or moving prompt corpus may satisfy
+an acceptance gate. Q1 records the reviewed upstream commit and content digests, runs upstream examples,
+and dispositions every imported/adapted instruction. Q2 decides whether FS-GG references a pinned upstream
+checkout, packages an attributed snapshot, or derives smaller FS-GG-owned skills. Q3 publishes whichever
+choice is accepted through the existing skill manifest/materialization contract. Agent guidance remains
+replaceable: canonical `.qnt` bytes and deterministic tool evidence decide correctness.
+
+## 6. Prepared feature sequence
 
 ### Q0 — Decision and program preparation (`.github`)
 
@@ -153,7 +193,10 @@ Author three non-production vertical slices: a complete requirements/evidence pa
 runtime/ITF correspondence, and one concurrent coordination process with retry, stale observation, lost
 update, double apply, ordering, deadlock, safety, and liveness controls. Measure readability, diagnostics,
 size, time, dependencies, upgrade sensitivity, and semantic-diff usefulness. Draft the profile and contract
-only from demonstrated needs.
+only from demonstrated needs. Run the same corpus through a pinned `quint-llm-kit` workflow and an
+FS-GG-minimal workflow; evaluate the standalone language/modeling/execution skills, witnesses, trace
+explanations, transition labels, type/listener coverage, and Choreo/plain-Quint choice. Record which pieces
+are adopted, adapted, or rejected and why.
 
 Exit: accept or refuse implementation. Refusal changes no authority.
 
@@ -163,14 +206,18 @@ Qualify a content-addressed Quint/Node closure and separately cached Apalache/JR
 pinned IR adapter, profile validation, contract codec, canonical bytes, diagnostics, semantic diff,
 projections, generated bindings, golden IR fixtures, version refusal, and mutation controls.
 
+Pin the accepted `quint-llm-kit` revision/content digests separately from Quint itself. Re-run its adopted
+workflow fixtures on upgrades and reject an incompatible moving-kit/latest-Quint combination.
+
 Exit: a clean consumer compiles the Q1 corpus deterministically without a source-project reference; raw
 Quint IR is not a public or committed authority.
 
 ### Q3 — Typed SDD backend v2 and migration (FS.GG.SDD)
 
 Add the new backend and manifest to author, inspect, migrate, rollback, refresh, upgrade, doctor, readiness,
-and packaged skills. Preserve v1 inspection and rollback. Publish and verify exact producer artifacts from
-both feeds before adoption.
+and packaged skills. Package or resolve only the reviewed, attributed `quint-llm-kit` guidance selected by
+Q1/Q2; do not expose an unpinned installer. Preserve v1 inspection and rollback. Publish and verify exact
+producer artifacts from both feeds before adoption.
 
 Exit: installed-artifact and negative-control suites pass; current `sdd` default is unchanged.
 
@@ -207,7 +254,7 @@ Independently decide whether omitted lifecycle moves from `sdd` to `typed-sdd`.
 
 Exit: one canonical authoring language remains; any default change has its own ADR and fleet candidate.
 
-## 6. Selective CI contract
+## 7. Selective CI contract
 
 | Change | Minimum checks |
 |---|---|
@@ -218,11 +265,12 @@ Exit: one canonical authoring language remains; any default change has its own A
 | Bound runtime implementation | Associated contract tests and ITF/runtime correspondence |
 | Quint/profile/compiler/toolchain adapter | Full corpus, version controls, model checks, S.I.R. replay, native/Fable parity |
 | Unrelated product surface | No Quint or Apalache startup unless the compiled impact graph reaches it |
+| Adopted Quint LLM Kit guidance/pin | Skill quality, upstream fixture replay, prompt/command diff review, profile/tool version compatibility |
 
 Agent judgement may explain a selection but does not replace the deterministic selector. Selector,
 profile, compiler, or impact-graph changes fail safe to the broader affected suite.
 
-## 7. Documentation and evidence policy
+## 8. Documentation and evidence policy
 
 Decision and active-design documents receive successor notices. Current producer/provider manuals continue
 describing the shipped F# backend until Q3/Q6 changes the published artifacts, preventing documentation
@@ -232,7 +280,7 @@ Historical work packages, readiness receipts, generated guidance, release notes,
 the F* and initial Quint experiment reports are not rewritten. New work and migration receipts provide the
 successor evidence chain.
 
-## 8. Program acceptance
+## 9. Program acceptance
 
 Quint becomes production authority only when:
 
@@ -244,6 +292,8 @@ Quint becomes production authority only when:
 - ITF traces replay against a real implementation;
 - coordination safety and liveness controls are meaningful;
 - the dependency closure is hermetic, licensed, cached, and reproducible;
+- every adopted `quint-llm-kit` file is pinned, attributed, reviewed, fixture-tested, and compatible with
+  the supported Quint/profile version;
 - selective CI is narrow and fail-safe, including docs-only changes;
 - v1 authorities remain inspectable and explicitly migratable; and
 - publication, registry, provider, and consumer order is verified against actual artifacts.

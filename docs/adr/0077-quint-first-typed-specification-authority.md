@@ -51,6 +51,14 @@ is implemented:
 3. one concurrent coordination process with safety, retry, stale-observation, ordering, and liveness
    properties.
 
+The qualification reuses and evaluates the Apache-2.0
+[`quint-co/quint-llm-kit`](https://github.com/quint-co/quint-llm-kit) as upstream authoring guidance. Its
+language, modeling, verification, implementation-correspondence, witness, trace-explanation, type-coverage,
+and refactoring workflows are inputs to FS-GG skills and tests. The kit is not authority, is not installed
+from a moving branch, and does not override the pinned Quint/profile/compiler contract. Its own public
+disclaimer says it has not been thoroughly evaluated for general use, and its default of automatically
+installing the latest Quint conflicts with FS-GG reproducibility; both are explicit qualification subjects.
+
 If the requirements package is not readable, the profile needs a second authored authority, or extraction
 requires reimplementing Quint semantics, the milestone is refused and this decision is revisited before
 any lifecycle authority changes.
@@ -71,6 +79,10 @@ bindings—remain useful after their authoring assumptions are separated from F#
 FS-GG must qualify and distribute a hermetic pinned toolchain, maintain a fail-closed adapter for each
 supported Quint/profile version, and test runtime/model correspondence. Full model checking is an
 impact-selected verification tier; documentation-only and unrelated changes do not start Apalache.
+
+FS-GG must also pin, review, attribute, and adapt any `quint-llm-kit` material it uses. Agent prompts and
+skills remain replaceable authoring assistance: only checked `.qnt` source, compiled-contract receipts, and
+verification evidence can authorize a semantic or implementation change.
 
 P0–P4 work packages, readiness receipts, release notes, and old projections remain immutable historical
 evidence. New successor work records the migration. The Typed SDD default decision remains deferred until

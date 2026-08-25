@@ -73,3 +73,9 @@ stable integration facts and does not reproduce arbitrary Quint expression seman
 not started: the published F# specification kernel remains production authority until the
 [migration design](../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) completes its
 qualification, publication, and explicit consumer rollout.
+
+That qualification also evaluates the upstream
+[`quint-co/quint-llm-kit`](https://github.com/quint-co/quint-llm-kit) language, modeling, verification,
+implementation, and refactoring guidance. It is an Apache-2.0 authoring accelerator, not authority. FS-GG
+will pin and test any adopted revision, avoid moving installers/latest-version assumptions, and retain its
+own profile, evidence, migration, and authorization rules.
