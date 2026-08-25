@@ -73,6 +73,7 @@ def review_subject(data: dict[str, Any]) -> dict[str, Any]:
         for key in (
             "sourceBase", "inventories", "authorities", "mutations", "corpus",
             "compatibilityDeletion", "handoff", "runtimeDecision", "liveProjection", "threatModel",
+            "adminSettingsReport",
         )
     }
 
@@ -196,6 +197,16 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if set(threat.get("boundaries", [])) != REQUIRED_THREAT_BOUNDARIES:
         errors.append("threatModel: protected-boundary census mismatch")
 
+    admin_report = data.get("adminSettingsReport", {})
+    require_fields([admin_report], {"path", "sha256"}, "adminSettingsReport", errors)
+    admin_report_path = ROOT / str(admin_report.get("path", ""))
+    if not admin_report_path.is_file():
+        errors.append("adminSettingsReport: source file missing")
+    elif admin_report.get("sha256") != digest_bytes(admin_report_path.read_bytes()):
+        errors.append("adminSettingsReport: digest does not match source bytes")
+    if not SHA256.fullmatch(str(admin_report.get("sha256", ""))):
+        errors.append("adminSettingsReport: invalid SHA-256")
+
     projection = data.get("liveProjection", {})
     if set(projection.get("blockedBy", {})) != {"FS-GG/.github#2963", "FS-GG/.github#2964", "FS-GG/.github#2965"}:
         errors.append("liveProjection: program dependency census incomplete")
@@ -246,6 +257,7 @@ def self_test(data: dict[str, Any]) -> list[str]:
         ("corpus subject", lambda d: d["corpus"][0].__setitem__("expected", "weakened")),
         ("deletion unit", lambda d: d["compatibilityDeletion"][0].__setitem__("deleteUnit", "GS2-never")),
         ("threat source", lambda d: d["threatModel"].__setitem__("sha256", "0" * 64)),
+        ("administrator report", lambda d: d["adminSettingsReport"].__setitem__("sha256", "0" * 64)),
         ("pending projection", lambda d: d["liveProjection"].__setitem__("pendingBoardWrites", 1)),
     ]
     for name, mutate in candidate_mutations:

@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="4.832971"><testcase name="q0-candidate-and-mutation-controls" time="3.930965"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="0.435440"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="5.207963"><testcase name="q0-candidate-and-mutation-controls" time="4.314707"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="0.426277"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
 Q0-RED: reviews: every role requires a distinct independent reviewer
 Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence URL
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.095678"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.027486"><system-out>{
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.098217"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.026050"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -738,7 +738,11 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
             "crossRepositoryReceiver"
         ]
     },
-    "reviewFingerprint": "4feb7fde1cd9a7e26df61a874260da9e5848c5929789e53bfd5d9402b84c8a6d",
+    "adminSettingsReport": {
+        "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
+        "sha256": "2d3488bdb403242deaec545ebd9b7495e1f7cfcad6c69b63a72280cef8437731"
+    },
+    "reviewFingerprint": "b8b9e111036f435b475cb2f9ea0998ddd2d3de0dc827c4ed9ed670b75eaca2a8",
     "reviewsRequired": [
         "architecture",
         "security",
@@ -747,7 +751,7 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.004587"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.338815"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.004133"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.338580"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
