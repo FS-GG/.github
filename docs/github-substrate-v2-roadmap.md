@@ -30,7 +30,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | Ongoing renovation; design and execution spine filed, implementation not started |
+| Status | GS2-00 implementing; Q0 evidence and ADR proposed, scheduled-audit runtime selected |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -288,6 +288,8 @@ implementation merely to make replay pass.
   incident response, data retention, cost, and disaster recovery. If no acceptable host is approved,
   scheduled audits remain authoritative and `.github#2961` is removed from the cutover critical path by an
   explicit amendment rather than by shipping an unowned service.
+  **Decision:** reject a hosted boundary for this cutover. Scheduled complete audits remain authoritative;
+  events are an optional post-`OperatingV2` accelerator and `.github#2961` is not on the critical path.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

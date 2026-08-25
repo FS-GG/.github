@@ -556,6 +556,14 @@ operator repair uses the same plan and receipt contract.
 
 ### 6.4 Event-driven reconciliation with audit repair
 
+**Q0 runtime decision (2026-08-26).** Scheduled complete audits are authoritative for this cutover. A
+continuously hosted App/webhook boundary is rejected from the critical path because no complete operational
+owner, availability target, secret/ingress posture, observability, upgrade/incident process, retention,
+cost, and disaster-recovery evidence has been accepted. Event ingestion may still be implemented and
+qualified as an optional accelerator, but no event or cursor can authorize a transition and GS2-01 does not
+provision a hosted runtime. Reconsidering that boundary requires a separate accepted amendment after
+`OperatingV2`.
+
 Webhooks normalize into immutable event envelopes keyed by source and delivery/event ID. They schedule a
 narrow subject reconciliation; they do not directly mutate derived state. Duplicate and reordered events
 are idempotent. The durable cursor records what has been processed.

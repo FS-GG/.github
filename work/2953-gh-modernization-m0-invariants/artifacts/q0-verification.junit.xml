@@ -1,0 +1,1205 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="0.628485"><testcase name="q0-candidate-and-mutation-controls" time="0.038742"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="0.037264"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.119373"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.031762"><system-out>{
+    "schema": "fsgg.github-substrate.q0-evidence/v1",
+    "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
+    "observedAt": "2026-08-26T00:00:00+02:00",
+    "inventories": [
+        {
+            "id": "workflows",
+            "root": ".github/workflows",
+            "count": 116,
+            "pathListSha256": "644c5c3a7f74a87e3517c7bbdb475ad674eade25723c206d2e77f785ca166066"
+        },
+        {
+            "id": "scripts",
+            "root": "scripts",
+            "count": 116,
+            "pathListSha256": "577c92595928494b34e6cb59b49584db95658fcb628c942ef3a3f838d124b027"
+        },
+        {
+            "id": "core",
+            "root": "src/FS.GG.Coord.Core",
+            "count": 74,
+            "pathListSha256": "a43583847bac28616e35e509828ebbeea80337c16182527a8913a7bc45a20941"
+        },
+        {
+            "id": "github",
+            "root": "src/FS.GG.Coord.GitHub",
+            "count": 28,
+            "pathListSha256": "731564c9cfd2cf794ba72fc2e6f36919dedd7474cf83a67ca0105d43141dbdde"
+        },
+        {
+            "id": "cli",
+            "root": "src/FS.GG.Coord.Cli",
+            "count": 27,
+            "pathListSha256": "3a630939c137a4768899cb0f687aae4677677cb069da5105b86888fe68c08a8d"
+        },
+        {
+            "id": "lifecycle",
+            "root": "src/FS.GG.Coord.Cli.Lifecycle",
+            "count": 18,
+            "pathListSha256": "72a261a2f9f7d319dce8451a05764db1936a144ab44aee462920981f329980ef"
+        },
+        {
+            "id": "boardOps",
+            "root": "src/FS.GG.Coord.Cli.BoardOps",
+            "count": 6,
+            "pathListSha256": "635104d6dcb190ede92babaef0eb26397609c17d86eb3c1798dcc31066968a3c"
+        },
+        {
+            "id": "registry",
+            "root": "registry",
+            "count": 10,
+            "pathListSha256": "292f43b8c6ec6387d9d733e50de9f1ac370b6b0151cc5b102b6e6920909f61f3"
+        },
+        {
+            "id": "skills",
+            "root": ".agents/skills",
+            "count": 74,
+            "pathListSha256": "355462ca93c98a8247f21ee3330f36b6868930b9ff193e0cb51298667372b957"
+        },
+        {
+            "id": "protocolFacts",
+            "root": "scripts/fsgg-coord facts --json",
+            "count": 1,
+            "pathListSha256": "75dce52e68aaf6eb1b21b41f43a68348dd9a95843c181029dfe597452899f7a3"
+        },
+        {
+            "id": "commandContract",
+            "root": "scripts/fsgg-coord command-contract --json",
+            "count": 54,
+            "pathListSha256": "780b3a8779b9e91358b2200f8d696de54b4e76341f0e3ddf2962d5b0ddd8a441"
+        }
+    ],
+    "authorities": [
+        {
+            "id": "A-issue-body",
+            "category": "issueBody",
+            "subject": "unfenced Paths/Class/Kind/legacy metadata and intake receipt",
+            "authority": "GitHub issue body at issue node id",
+            "revision": "body bytes plus issue updated_at; insufficient alone for concurrent decisions",
+            "completeness": "single issue read",
+            "owner": "v1 Writes/Markdown; v2 issue adapter",
+            "disposition": "Migrate",
+            "unit": "GS2-05,GS2-09,GS2-13"
+        },
+        {
+            "id": "A-comments",
+            "category": "comment",
+            "subject": "claim/lease/touch-set, review, delivery, op-lock/election and receipts",
+            "authority": "GitHub server comment id/order plus validated marker digest chain",
+            "revision": "comment id and immutable referenced head/generation",
+            "completeness": "all pages plus total count",
+            "owner": "v1 Reads/Writes; v2 protocol stream adapter",
+            "disposition": "Migrate",
+            "unit": "GS2-04,GS2-05,GS2-09"
+        },
+        {
+            "id": "A-project",
+            "category": "project",
+            "subject": "membership, Status, Phase, Repo Scope, Workstream, dates, effort, contract, Blocked by",
+            "authority": "GitHub Projects v2 projection only",
+            "revision": "fresh GraphQL value and node id; no CAS",
+            "completeness": "terminal cursor and fresh subject reread",
+            "owner": "v1 Board/Scan; v2 Project adapter",
+            "disposition": "Migrate",
+            "unit": "GS2-04,GS2-05,GS2-13"
+        },
+        {
+            "id": "A-registry",
+            "category": "registry",
+            "subject": "repository roster, dependencies/contracts, skill catalog, receiver identities",
+            "authority": "reviewed git files under registry/",
+            "revision": "git blob SHA and schema version",
+            "completeness": "typed validator plus generated projection inventory",
+            "owner": ".github",
+            "disposition": "Preserve",
+            "unit": "GS2-06,GS2-10"
+        },
+        {
+            "id": "A-workflow",
+            "category": "workflow",
+            "subject": "coordination, policy, audit, release, dispatch and reconciliation routes",
+            "authority": "workflow blob SHA plus run/check identity",
+            "revision": "workflow SHA, run head SHA and attempt",
+            "completeness": "116-path frozen inventory plus generator/required-context checks",
+            "owner": ".github then thin v2 entry points",
+            "disposition": "Migrate",
+            "unit": "GS2-06,GS2-08,GS2-13"
+        },
+        {
+            "id": "A-command",
+            "category": "command",
+            "subject": "54 registered fsgg-coord command roots and their flags/exit contracts",
+            "authority": "typed command-contract output",
+            "revision": "engine source/artifact fingerprint",
+            "completeness": "command-contract count and parser tests",
+            "owner": "v1 Coord.Cli; v2 generated command host",
+            "disposition": "Migrate",
+            "unit": "GS2-02,GS2-05,GS2-13"
+        },
+        {
+            "id": "A-json",
+            "category": "jsonContract",
+            "subject": "protocol facts, marker JSON, intake, review, delivery, self-host, release and readiness receipts",
+            "authority": "versioned schema/codec plus original bytes",
+            "revision": "schema id and SHA-256 digest",
+            "completeness": "codec registrations plus marker-prefix census",
+            "owner": "owning producer",
+            "disposition": "Seal",
+            "unit": "GS2-03,GS2-09,GS2-13"
+        },
+        {
+            "id": "A-env",
+            "category": "environment",
+            "subject": "worker/session identity, board owner/project, API base, tokens, App secrets, feed/OIDC and cutover environment",
+            "authority": "runtime environment or GitHub protected environment",
+            "revision": "run id/environment deployment id; secret values never recorded",
+            "completeness": "permission/workflow environment census",
+            "owner": "workflow/repository/org settings",
+            "disposition": "Migrate",
+            "unit": "GS2-06,GS2-08,GS2-10"
+        },
+        {
+            "id": "A-files",
+            "category": "file",
+            "subject": "v1 source, skills, docs, generated projections, work/readiness and archived evidence",
+            "authority": "git tree/blob or immutable artifact digest",
+            "revision": "commit/blob SHA and generator identity",
+            "completeness": "content-addressed root inventories",
+            "owner": "owning repository",
+            "disposition": "Seal",
+            "unit": "GS2-03,GS2-09,GS2-13"
+        },
+        {
+            "id": "A-package",
+            "category": "package",
+            "subject": "FS.GG.Coord.Cli, FS.GG.Kit, FS.GG.Drivers, FS.GG.SDD artifacts and receiver pins",
+            "authority": "served nupkg bytes on nuget.org plus immutable source/tag",
+            "revision": "package version, SHA-256, nuspec repository commit",
+            "completeness": "both-feed/public-read and clean-install checks",
+            "owner": "producer release",
+            "disposition": "Migrate",
+            "unit": "GS2-06,GS2-08,GS2-10"
+        },
+        {
+            "id": "A-schedule",
+            "category": "schedule",
+            "subject": "board reconcile/archive, claims, audits, registry/feed and receiver repair",
+            "authority": "workflow schedule definition plus observed runs",
+            "revision": "workflow SHA and run ids",
+            "completeness": "116 workflow inventory and schedule-key search",
+            "owner": ".github/receivers",
+            "disposition": "Migrate",
+            "unit": "GS2-07,GS2-08,GS2-13"
+        },
+        {
+            "id": "A-setting",
+            "category": "setting",
+            "subject": "issue types/fields, custom properties, rulesets, branch/tag policy, Actions, environments, security, releases and App permissions",
+            "authority": "GitHub live settings API",
+            "revision": "fresh supported API response and expected pre-state",
+            "completeness": "rostered repositories plus explicit unsupported/unauthorized outcomes",
+            "owner": "organization/repository administrators",
+            "disposition": "Migrate",
+            "unit": "GS2-04,GS2-06,GS2-12"
+        },
+        {
+            "id": "A-external",
+            "category": "external",
+            "subject": "external roster repositories and owners",
+            "authority": "external owner; FS-GG observes only",
+            "revision": "fresh API response or explicit unreadable outcome",
+            "completeness": "registry roster including external rows",
+            "owner": "external maintainer",
+            "disposition": "Preserve",
+            "unit": "GS2-06,GS2-10"
+        }
+    ],
+    "mutations": [
+        {
+            "id": "M-comment-create-delete-patch",
+            "class": "command",
+            "routes": [
+                "claim",
+                "take",
+                "release",
+                "heartbeat",
+                "reap",
+                "say",
+                "comment",
+                "review",
+                "delivery-route",
+                "op-lock"
+            ],
+            "endpoint": "POST/DELETE/PATCH issues/comments",
+            "precondition": "minted identity, winning live claim/lease or exact receipt state; authoritative reread",
+            "permission": "issues:write",
+            "v2": "typed append/transition interpreter",
+            "unit": "GS2-08 fence; GS2-13 delete"
+        },
+        {
+            "id": "M-board-fields",
+            "class": "command",
+            "routes": [
+                "add",
+                "set-field",
+                "reconcile",
+                "delivery --flip",
+                "done --flip"
+            ],
+            "endpoint": "GraphQL addProjectV2ItemById/updateProjectV2ItemFieldValue",
+            "precondition": "complete board map, typed value, set-valued lease for Blocked by, fresh verification",
+            "permission": "project",
+            "v2": "Project projection interpreter",
+            "unit": "GS2-08 fence; GS2-13 delete generic verbs"
+        },
+        {
+            "id": "M-issue-body-state",
+            "class": "command",
+            "routes": [
+                "widen",
+                "set-paths",
+                "intake apply",
+                "room open",
+                "delivery completion"
+            ],
+            "endpoint": "PATCH/POST issues and sub_issues",
+            "precondition": "held claim or validated intake; body rewrite/issue state reread",
+            "permission": "issues:write",
+            "v2": "issue/relation plan interpreter",
+            "unit": "GS2-08 fence; GS2-13 delete parsers"
+        },
+        {
+            "id": "M-pr",
+            "class": "command",
+            "routes": [
+                "delivery",
+                "guarded landing"
+            ],
+            "endpoint": "PATCH pulls body; PUT pulls/merge",
+            "precondition": "exact head, current authorization/election, accepted independent review, green landable",
+            "permission": "pull_requests:write,contents:write",
+            "v2": "review/delivery saga",
+            "unit": "GS2-08 fence; GS2-13 delete v1"
+        },
+        {
+            "id": "M-dispatch",
+            "class": "workflow",
+            "routes": [
+                "fsgg-dispatch-broker",
+                "dispatch-sender",
+                "skillmirror-redrive",
+                "lockfile-sync"
+            ],
+            "endpoint": "POST actions/workflows/dispatches or repository_dispatches",
+            "precondition": "App installation token, op-lock grant/opkey, exact receiver/event contract",
+            "permission": "actions:write,contents:read",
+            "v2": "registered dispatch interpreter",
+            "unit": "GS2-08 adopt/disable; GS2-13 delete"
+        },
+        {
+            "id": "M-release",
+            "class": "release",
+            "routes": [
+                "release-coord-engine",
+                "release-kit",
+                "release-drivers",
+                "release-new-sdd-workspace",
+                "release-saga-promote",
+                "kit-auto-publish"
+            ],
+            "endpoint": "tags/releases/packages/feed pushes and receiver dispatch",
+            "precondition": "protected environment, immutable source/tag, one pack, accepted obligation",
+            "permission": "contents:write,id-token:write,packages:write",
+            "v2": "dual-feed resumable release plan",
+            "unit": "GS2-06 harden; GS2-08 fence; GS2-13 retire v1 packages"
+        },
+        {
+            "id": "M-repair",
+            "class": "repairScript",
+            "routes": [
+                "repos.sh protect",
+                "project-field-options",
+                "feed-autofix",
+                "skill-registry-autofix",
+                "touch-set-drift"
+            ],
+            "endpoint": "settings contexts, Project options, issue/comment patches",
+            "precondition": "explicit --apply/protected operator or workflow identity; snapshot/rollback where destructive",
+            "permission": "administration or narrow App permission",
+            "v2": "desired-state plan/apply",
+            "unit": "GS2-06,GS2-12,GS2-13"
+        },
+        {
+            "id": "M-admin",
+            "class": "administrative",
+            "routes": [
+                "repository creation",
+                "App installation",
+                "rulesets",
+                "environments",
+                "issue fields/types",
+                "custom properties",
+                "temporary restrictions"
+            ],
+            "endpoint": "GitHub organization/repository settings APIs or protected UI operation",
+            "precondition": "protected administrative grant, exact plan, expected pre-state, receipt",
+            "permission": "org/repository administration",
+            "v2": "separate admin principal/environment",
+            "unit": "GS2-01,GS2-08,GS2-11,GS2-12,GS2-13"
+        },
+        {
+            "id": "M-runtime",
+            "class": "appRoute",
+            "routes": [
+                "future webhook reconcile"
+            ],
+            "endpoint": "event schedules a read/plan; no direct derived-state mutation",
+            "precondition": "not production-enabled for cutover; separately qualified after OperatingV2",
+            "permission": "none for cutover",
+            "v2": "optional accelerator",
+            "unit": "GS2-07 deferred operational activation"
+        }
+    ],
+    "corpus": [
+        {
+            "id": "C-claim",
+            "kind": "claim",
+            "source": "Protocol.fs claim CAS and .github#2903",
+            "expected": "lowest live marker wins; twin/unreadable refuses"
+        },
+        {
+            "id": "C-touch-set",
+            "kind": "touchSet",
+            "source": ".github#2841 and #353 controls",
+            "expected": "one named current source; overlap fails closed"
+        },
+        {
+            "id": "C-dependency",
+            "kind": "dependency",
+            "source": "Blocked by set mutation and #2903",
+            "expected": "set add/remove preserves concurrent edges"
+        },
+        {
+            "id": "C-hierarchy",
+            "kind": "hierarchy",
+            "source": "sub-issue pagination and #547",
+            "expected": "complete native edge census"
+        },
+        {
+            "id": "C-intake",
+            "kind": "intake",
+            "source": "fsgg.coord.intake/v1 fixtures",
+            "expected": "typed fields/body/board projection or refusal"
+        },
+        {
+            "id": "C-review",
+            "kind": "review",
+            "source": "review v2 records and wait receipts",
+            "expected": "exact-head independent ordered chain"
+        },
+        {
+            "id": "C-delivery",
+            "kind": "delivery",
+            "source": ".github#2905 and delivery-completion/v1",
+            "expected": "merged distinct from post-merge verified"
+        },
+        {
+            "id": "C-merge",
+            "kind": "merge",
+            "source": "claim fence/election/landable fixtures",
+            "expected": "exact head and current authorization required"
+        },
+        {
+            "id": "C-release",
+            "kind": "release",
+            "source": "dual-feed saga and #2968 evidence",
+            "expected": "one pack, both served bytes, recoverable partial"
+        },
+        {
+            "id": "C-pagination",
+            "kind": "pagination",
+            "source": "recipe-pagination and adapter fixtures",
+            "expected": "truncation is incomplete, never absence"
+        },
+        {
+            "id": "C-rate",
+            "kind": "rateLimit",
+            "source": "GraphQL/REST budget fixtures",
+            "expected": "typed primary/secondary/unknown; writes queue only where safe"
+        },
+        {
+            "id": "C-partial",
+            "kind": "partialWrite",
+            "source": "Board partial alias and lost-response fixtures",
+            "expected": "partial/indeterminate distinct; authoritative reread"
+        },
+        {
+            "id": "C-stale",
+            "kind": "staleRead",
+            "source": "engine/claim/review freshness incidents",
+            "expected": "stale evidence cannot authorize"
+        },
+        {
+            "id": "C-self-host",
+            "kind": "selfHosting",
+            "source": "self-host receipt/replay fixtures",
+            "expected": "candidate independently replays exact snapshot"
+        },
+        {
+            "id": "C-churn",
+            "kind": "churn72h",
+            "source": ".github#2932 transferred baseline",
+            "expected": "historical churn retained, not v2 proof"
+        },
+        {
+            "id": "C-mutation-entry",
+            "kind": "mutationEntry",
+            "source": "Writes.fs plus workflow/script inventories",
+            "expected": "unknown write entry makes bridge build red"
+        },
+        {
+            "id": "C-protocol-string",
+            "kind": "protocolString",
+            "source": "Protocol.fs/projection currentness",
+            "expected": "raw string outside codec/derived projection detected"
+        },
+        {
+            "id": "C-replay",
+            "kind": "replay",
+            "source": "model/review/release replay fixtures",
+            "expected": "duplicate/reordered/lost response converges or refuses"
+        },
+        {
+            "id": "C-omission",
+            "kind": "omission",
+            "source": "zero-row and missing-page controls",
+            "expected": "omitted category or row makes validation red"
+        },
+        {
+            "id": "C-misclassification",
+            "kind": "misclassification",
+            "source": "Class/Paths/Blocked-by incidents",
+            "expected": "wrong authority/category makes validation red"
+        },
+        {
+            "id": "C-byte-compat",
+            "kind": "byteCompatibility",
+            "source": "representative CLI JSON/plain/rich and package fixtures",
+            "expected": "OperatingV1 bridge preserves bytes/behavior"
+        }
+    ],
+    "compatibilityDeletion": [
+        {
+            "id": "D-cli-public",
+            "surface": "54 v1 command roots, flags and exit codes",
+            "classification": "Migrate",
+            "deleteUnit": "GS2-13.5",
+            "absenceTest": "clean v2 install refuses retired generic mutation verbs"
+        },
+        {
+            "id": "D-markers",
+            "surface": "v1 marker/JSON schemas and decoders",
+            "classification": "Seal",
+            "deleteUnit": "GS2-13.5,GS2-13.8",
+            "absenceTest": "production dependency scan has no v1 decoder; archive verifier still passes"
+        },
+        {
+            "id": "D-packages",
+            "surface": "FS.GG.Coord.Cli/Kit/Drivers v1 package identities",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.5",
+            "absenceTest": "receiver and lock census contains only exact v2 artifacts; old client refuses epoch"
+        },
+        {
+            "id": "D-workflows",
+            "surface": "v1 writer, dispatch, schedule and release workflows",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.5,GS2-13.7",
+            "absenceTest": "static workflow census plus runtime dispatch attempts find no v1 writer"
+        },
+        {
+            "id": "D-checks",
+            "surface": "required contexts and reusable workflow inputs/outputs/job IDs",
+            "classification": "Migrate",
+            "deleteUnit": "GS2-13.9",
+            "absenceTest": "every receiver exposes only approved aggregate contracts on PR and merge_group"
+        },
+        {
+            "id": "D-receiver-pins",
+            "surface": "eight receiver tool/kit/workflow pins",
+            "classification": "Migrate",
+            "deleteUnit": "GS2-13.9",
+            "absenceTest": "manifest reread resolves exact v2 identities and no bridge/v1 pin"
+        },
+        {
+            "id": "D-project-fields",
+            "surface": "Class/Kind/Repo Scope/Blocked-by/status projection fields",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.6",
+            "absenceTest": "live schema and clean client cannot read or write retired fields"
+        },
+        {
+            "id": "D-body-parsers",
+            "surface": "Paths/Class/Kind/Repo Scope/Blocked-by and legacy body sentinels/parsers",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.6",
+            "absenceTest": "production source/dependency scan has no parser; sealed fixtures remain verifiable"
+        },
+        {
+            "id": "D-comments",
+            "surface": "mutable comments used as production authority",
+            "classification": "Seal",
+            "deleteUnit": "GS2-13.6,GS2-13.8",
+            "absenceTest": "v2 decision path ignores mutable historical comments except sealed verifier"
+        },
+        {
+            "id": "D-source",
+            "surface": "src/FS.GG.Coord.* v1 trees and shell shim",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.5",
+            "absenceTest": "clean checkout build graph and executable census contain no v1 production path"
+        },
+        {
+            "id": "D-schedules",
+            "surface": "v1 reconcile/archive/claim/repair schedules",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.7",
+            "absenceTest": "Actions schedule census contains only approved v2 audit/release routes"
+        },
+        {
+            "id": "D-settings",
+            "surface": "v1 App permissions, credentials, environments, ruleset exceptions and caches",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.7",
+            "absenceTest": "fresh settings/App/environment census reports absence"
+        },
+        {
+            "id": "D-rollback",
+            "surface": "pre-OpenV2 bridge settings, pins and rollback assets",
+            "classification": "Retire",
+            "deleteUnit": "GS2-13.7",
+            "absenceTest": "after OpenV2 no credential/route can restore v1"
+        },
+        {
+            "id": "D-ledger",
+            "surface": "protected epoch ledger and phase tags",
+            "classification": "Preserve",
+            "deleteUnit": "GS2-14.4",
+            "absenceTest": "not deleted; ancestry/tamper verifier remains runnable"
+        },
+        {
+            "id": "D-archive",
+            "surface": "content-addressed v1 corpus, manifest and verifier",
+            "classification": "Preserve",
+            "deleteUnit": "GS2-14.4",
+            "absenceTest": "outside production closure but maintainer verification succeeds"
+        }
+    ],
+    "handoff": [
+        {
+            "ref": "FS-GG/.github#2968",
+            "classification": "superseded-inventory",
+            "decision": "P4 release residue closed and Done; retain release evidence"
+        },
+        {
+            "ref": "FS-GG/.github#2932",
+            "classification": "superseded-inventory",
+            "decision": "closed and Done; clauses mapped to GS2-00/02 and corpus"
+        },
+        {
+            "ref": "FS-GG/.github#2905",
+            "classification": "parallel-product",
+            "decision": "closed v1 defect; post-merge distinction is corpus input"
+        },
+        {
+            "ref": "FS-GG/.github#2841",
+            "classification": "parallel-product",
+            "decision": "current v1 touch-set defect and corpus input; not a v2 prerequisite"
+        },
+        {
+            "ref": "FS-GG/.github#2850",
+            "classification": "parallel-product",
+            "decision": "parked v1 hardening with no current executable scope; not a v2 prerequisite"
+        },
+        {
+            "ref": "FS-GG/.github#2903",
+            "classification": "parallel-product",
+            "decision": "current v1 defects/corpus; no superseded M0 dependency edge"
+        },
+        {
+            "ref": "FS-GG/FS.GG.SDD#924",
+            "classification": "v2-blocker",
+            "decision": "publish Quint-backed Typed SDD v2 before GS2-02"
+        },
+        {
+            "ref": "FS-GG/FS.GG.SDD#922",
+            "classification": "parallel-product",
+            "decision": "producer qualification may proceed; #924 is the landed artifact dependency"
+        },
+        {
+            "ref": "FS-GG/FS.GG.SDD#923",
+            "classification": "parallel-product",
+            "decision": "producer implementation sequence internal to #924"
+        },
+        {
+            "ref": "FS-GG/.github#2995",
+            "classification": "candidate-input-change",
+            "decision": "re-observe if landed before GS2-10; otherwise defer"
+        },
+        {
+            "ref": "FS-GG/.github#2996",
+            "classification": "cutover-deferred",
+            "decision": "F# authoring retirement resumes after OperatingV2"
+        },
+        {
+            "ref": "FS-GG/.github#2997",
+            "classification": "cutover-deferred",
+            "decision": "workspace-default decision resumes after OperatingV2"
+        },
+        {
+            "ref": "FS-GG/.github#2959",
+            "classification": "parallel-product",
+            "decision": "advisory-only pilot outside critical path"
+        }
+    ],
+    "runtimeDecision": {
+        "posture": "scheduled-audit-authoritative",
+        "hostedBoundary": "rejected-for-cutover",
+        "owner": "FS-GG/.github protected audit workflows until v2 audit adoption",
+        "availability": "fail closed on missed/unreadable/incomplete run",
+        "secrets": "no new hosted secret boundary",
+        "ingress": "no production webhook ingress required",
+        "observability": "Actions runs plus typed audit receipts",
+        "upgrades": "immutable workflow/tool pins",
+        "incidentResponse": "disable mutation, retain reads, repair from complete audit",
+        "retention": "git indexes plus immutable artifacts/releases",
+        "cost": "measure API budget and cadence before GS2-10",
+        "disasterRecovery": "rerun complete audit from immutable candidate; no cursor-only recovery"
+    },
+    "liveProjection": {
+        "epic": "FS-GG/.github#2952 body corrected to GS2 mapping",
+        "blockedBy": {
+            "FS-GG/.github#2963": [
+                "FS-GG/.github#2953",
+                "FS-GG/FS.GG.SDD#924"
+            ],
+            "FS-GG/.github#2964": [
+                "FS-GG/.github#2953",
+                "FS-GG/.github#2963"
+            ],
+            "FS-GG/.github#2965": [
+                "FS-GG/.github#2963",
+                "FS-GG/.github#2964"
+            ]
+        },
+        "pendingBoardWrites": 0
+    },
+    "reviewsRequired": [
+        "architecture",
+        "security",
+        "operations",
+        "crossRepository"
+    ],
+    "reviews": []
+}
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.005666"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.395679"><system-out>{
+  "schemaVersion": 1,
+  "reportVersion": "2.6.0",
+  "toolVersion": "1.2.5",
+  "command": {
+    "name": "analyze",
+    "stage": "analyze"
+  },
+  "context": {
+    "projectRoot": ".",
+    "workId": "2953-gh-modernization-m0-invariants"
+  },
+  "invocation": {
+    "outputFormat": "json",
+    "dryRun": false
+  },
+  "outcome": "noChange",
+  "coherent": true,
+  "changedArtifacts": [
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants",
+      "kind": "directory",
+      "ownership": "sdd",
+      "operation": "noChange",
+      "beforeDigest": null,
+      "afterDigest": null,
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "faee90c90ae69ea5f9c43dd746917d0b589c6d9fee4e5c40bceed442f0913175"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "faee90c90ae69ea5f9c43dd746917d0b589c6d9fee4e5c40bceed442f0913175"
+      },
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    }
+  ],
+  "specification": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "specify",
+    "status": "specified",
+    "storyIds": [
+      "US-001",
+      "US-002",
+      "US-003"
+    ],
+    "requirementIds": [
+      "FR-001",
+      "FR-002",
+      "FR-003",
+      "FR-004",
+      "FR-005",
+      "FR-006",
+      "FR-007",
+      "FR-008",
+      "FR-009"
+    ],
+    "acceptanceScenarioIds": [
+      "AC-001",
+      "AC-002",
+      "AC-003",
+      "AC-004",
+      "AC-005",
+      "AC-006"
+    ],
+    "ambiguityIds": []
+  },
+  "clarification": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "clarify",
+    "status": "clarified",
+    "sourceSpec": "work/2953-gh-modernization-m0-invariants/spec.md",
+    "questionIds": [],
+    "answeredQuestionIds": [],
+    "decisionIds": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007"
+    ],
+    "acceptedDeferralIds": [],
+    "remainingAmbiguityCount": 0,
+    "blockingAmbiguityCount": 0
+  },
+  "checklist": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "checklist",
+    "status": "checklistReady",
+    "sourceSpec": "work/2953-gh-modernization-m0-invariants/spec.md",
+    "sourceClarifications": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+    "itemIds": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ],
+    "resultIds": [
+      "CR-001",
+      "CR-002",
+      "CR-003",
+      "CR-004",
+      "CR-005",
+      "CR-006",
+      "CR-007",
+      "CR-008",
+      "CR-009"
+    ],
+    "passedCount": 9,
+    "failedBlockingCount": 0,
+    "acceptedDeferralCount": 0,
+    "staleResultCount": 0,
+    "advisoryCount": 0
+  },
+  "plan": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "plan",
+    "status": "planned",
+    "sourceSpec": "work/2953-gh-modernization-m0-invariants/spec.md",
+    "sourceClarifications": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+    "sourceChecklist": "work/2953-gh-modernization-m0-invariants/checklist.md",
+    "decisionIds": [
+      "PD-001",
+      "PD-002",
+      "PD-003",
+      "PD-004",
+      "PD-005",
+      "PD-006",
+      "PD-007",
+      "PD-008",
+      "PD-009"
+    ],
+    "contractReferenceIds": [
+      "PC-001",
+      "PC-002"
+    ],
+    "verificationObligationIds": [
+      "VO-001",
+      "VO-002",
+      "VO-003",
+      "VO-004",
+      "VO-005",
+      "VO-006",
+      "VO-007"
+    ],
+    "migrationNoteIds": [
+      "PM-001",
+      "PM-002"
+    ],
+    "generatedViewImpactIds": [
+      "GV-001",
+      "GV-002"
+    ],
+    "acceptedDeferralCount": 0,
+    "staleDecisionCount": 0,
+    "blockingFindingCount": 0,
+    "advisoryCount": 2
+  },
+  "tasks": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "tasks",
+    "status": "tasksReady",
+    "sourceSpec": "work/2953-gh-modernization-m0-invariants/spec.md",
+    "sourceClarifications": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+    "sourceChecklist": "work/2953-gh-modernization-m0-invariants/checklist.md",
+    "sourcePlan": "work/2953-gh-modernization-m0-invariants/plan.md",
+    "taskIds": [
+      "T001",
+      "T002",
+      "T003",
+      "T004",
+      "T005",
+      "T006",
+      "T007",
+      "T008",
+      "T009",
+      "T010",
+      "T011",
+      "T012",
+      "T013",
+      "T014",
+      "T015",
+      "T016",
+      "T017",
+      "T018",
+      "T019",
+      "T020",
+      "T021",
+      "T022",
+      "T023",
+      "T024",
+      "T025",
+      "T026",
+      "T027",
+      "T028",
+      "T029"
+    ],
+    "dependencyCount": 20,
+    "requiredSkillCount": 6,
+    "requiredEvidenceCount": 29,
+    "pendingCount": 29,
+    "inProgressCount": 0,
+    "doneCount": 0,
+    "skippedCount": 0,
+    "staleCount": 0,
+    "acceptedDeferralCount": 0,
+    "blockingFindingCount": 0,
+    "advisoryCount": 1
+  },
+  "analysis": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "stage": "analyze",
+    "status": "implementationReady",
+    "analysisPath": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+    "sourceCount": 8,
+    "sourceRelationshipCount": 74,
+    "readyFindingCount": 74,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0,
+    "readiness": "implementationReady"
+  },
+  "evidence": null,
+  "verification": null,
+  "ship": null,
+  "agentGuidance": null,
+  "refresh": null,
+  "scaffold": null,
+  "doctor": null,
+  "upgrade": null,
+  "lint": null,
+  "surface": null,
+  "dependencySurface": null,
+  "generatedViews": [
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+      "kind": "analysis",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.2.5"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c58ec81b1fccb33e73e9cd7be652320bd35f3c2b6f302d89f24f86dbfc2f6072"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "da052d642cb4bf85effb9dac0941c155f63f395f9ed53843d523e5b6c2054b33"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c1f015e9d3d0ebadc9924ed3a167307f823ce492a9b2b4f44de3613c812cc340"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b45a459ada553cecedc31050f67c272a201db70962fd52be93b5c1beea1e4b92"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "be08461219d87858b03a46ecd782f4a67217b45062cacb3609b46308ba10319b"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.2.5"
+      },
+      "sources": [
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c58ec81b1fccb33e73e9cd7be652320bd35f3c2b6f302d89f24f86dbfc2f6072"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "da052d642cb4bf85effb9dac0941c155f63f395f9ed53843d523e5b6c2054b33"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c1f015e9d3d0ebadc9924ed3a167307f823ce492a9b2b4f44de3613c812cc340"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b45a459ada553cecedc31050f67c272a201db70962fd52be93b5c1beea1e4b92"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "be08461219d87858b03a46ecd782f4a67217b45062cacb3609b46308ba10319b"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        }
+      ],
+      "currency": "missing",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "workId": "2953-gh-modernization-m0-invariants",
+    "reason": "Lifecycle sources are current and ready for implementation.",
+    "requiredArtifacts": [
+      "readiness/2953-gh-modernization-m0-invariants/analysis.json"
+    ],
+    "blockingDiagnosticIds": []
+  },
+  "help": null,
+  "lifecycleStatus": {
+    "workId": "2953-gh-modernization-m0-invariants",
+    "isLifecycleStage": true,
+    "currentOrdinal": 7,
+    "totalStages": 10,
+    "outcome": "noChange",
+    "nextCommand": "evidence",
+    "stages": [
+      {
+        "command": "charter",
+        "ordinal": 1,
+        "state": "done"
+      },
+      {
+        "command": "specify",
+        "ordinal": 2,
+        "state": "done"
+      },
+      {
+        "command": "clarify",
+        "ordinal": 3,
+        "state": "done"
+      },
+      {
+        "command": "checklist",
+        "ordinal": 4,
+        "state": "done"
+      },
+      {
+        "command": "plan",
+        "ordinal": 5,
+        "state": "done"
+      },
+      {
+        "command": "tasks",
+        "ordinal": 6,
+        "state": "done"
+      },
+      {
+        "command": "analyze",
+        "ordinal": 7,
+        "state": "current"
+      },
+      {
+        "command": "evidence",
+        "ordinal": 8,
+        "state": "next"
+      },
+      {
+        "command": "verify",
+        "ordinal": 9,
+        "state": "pending"
+      },
+      {
+        "command": "ship",
+        "ordinal": 10,
+        "state": "pending"
+      }
+    ]
+  }
+}
+</system-out></testcase></testsuite>
