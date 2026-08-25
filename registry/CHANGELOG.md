@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **`FS.GG.Workspace.Template` 0.9.0 published and registry identity reconciled**
+  (templates; [.github#2934](https://github.com/FS-GG/.github/issues/2934),
+  [Templates#432](https://github.com/FS-GG/FS.GG.Templates/issues/432),
+  [release run 32811684105](https://github.com/FS-GG/FS.GG.Templates/actions/runs/32811684105)):
+  advances `fs-gg-workspace-template` source, package, and tag identities to `0.9.0` only after
+  GitHub Packages and nuget.org both exposed the release. The annotated tag and public nuspec bind
+  producer commit `045183ab25d52b5f96feb9804f12e95d54b7de58`; the release asset is
+  `sha256:428109ba503e9e73f1534aeb1ed76a075a334bc05a5039f582f13edd8ed65502` and nuget.org's signed
+  archive is `sha256:3f9cc747ea78088a9235c85df2fbb0e0ef1e75052657bb03c3cf45ca70c8292a`.
+  This is the P4 package carrying additive `typed-sdd` across all four provider identities while
+  preserving omitted/default `sdd`, explicit `sdd`, and explicit `none`.
+
 - **2026-08-25** — **Typed SDD provider-family compiler floor advanced** (sdd/templates; [.github#2928](https://github.com/FS-GG/.github/issues/2928), [SDD#916](https://github.com/FS-GG/FS.GG.SDD/issues/916), [Templates#432](https://github.com/FS-GG/FS.GG.Templates/issues/432)): `fs-gg-ui-template.minimum-fsgg-sdd` was advanced by the producer-first rollout and `fs-gg-workspace-template.minimum-fsgg-sdd` now joins it at the dual-published `1.4.0-preview.1`, the first CLI carrying the Typed Protocol Kernel lifecycle. This enables additive explicit `typed-sdd`; omitted lifecycle remains `sdd`.
 
 - **2026-08-25** — **`FS.GG.NewSddWorkspace` 0.10.0 published and registry identity reconciled**

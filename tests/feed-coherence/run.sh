@@ -596,17 +596,58 @@ echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two
 # here rather than only in a human reviewer's eye.
 ARCH="$REPO_ROOT/docs/architecture.md"
 PROFILE_README="$REPO_ROOT/profile/README.md"
-if grep -qF 'FS.GG.Workspace.Template` 0.8.1' "$ARCH" \
-  && grep -qF 'package-version` **0.8.1**' "$ARCH" \
-  && grep -qF 'package-version` **0.8.0**' "$ARCH" \
+arch_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$ARCH")"
+profile_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$PROFILE_README")"
+workspace_contract_rows="$(grep -F '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")"
+game_skills_contract_rows="$(grep -F '| `game-skills` | FS.GG.Game |' "$ARCH")"
+workspace_contract_map_rows="$(grep -F '| `fs-gg-workspace-template` | Templates |' "$ARCH")"
+new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-workspace-template$/p' "$REPO_ROOT/registry/dependencies.yml")"
+workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
+if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.9.0'* ]] \
+  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.0'* ]] \
+  && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$PROFILE_README")" -eq 1 ] \
+  && [[ "$profile_templates_rows" == *'| `0.9.0` |'* ]] \
+  && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
+  && [[ "$workspace_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
+  && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
+  && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
+  && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
+  && [[ "$workspace_contract_map_rows" == *'registry-active .github#2934'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'wizard `--template` selection published in `new-sdd-workspace` 0.10.0'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.10.0, scaffold-provider@SDD |'* ]] \
+  && [[ "$workspace_contract_map_rows" != *'registry-active .github#2070; wizard `--template` selection pending its own release'* ]] \
+  && [[ "$workspace_contract_map_rows" != *'| `.github` wizard (pending release) |'* ]] \
+  && [[ "$new_sdd_registry_block" == *'release 0.10.0 includes the'* ]] \
+  && [[ "$new_sdd_registry_block" == *'published and selectable, not a pending rollout phase'* ]] \
+  && [[ "$new_sdd_registry_block" != *'stay at the RELEASED 0.9.0'* ]] \
+  && [[ "$workspace_registry_block" == *'phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0'* ]] \
+  && [[ "$workspace_registry_block" == *'registry-active and wizard-selectable through published new-sdd-workspace 0.10.0'* ]] \
+  && [[ "$workspace_registry_block" != *'wizard-selectable only after phase 6'* ]] \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
   && ! grep -qF 'coherent release pending' "$PROFILE_README" \
-  && [ "$(grep -c registry-active "$PROFILE_README")" -ge 4 ] \
   && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
   && grep -qF 'its consumed version' "$ARCH"
 then ok "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
 else bad "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
+fi
+
+WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"
+if python3 - "$WORKFLOW" <<'PY'
+import pathlib, sys, yaml
+
+workflow = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+triggers = workflow.get("on", workflow.get(True, {}))
+required = {"docs/architecture.md", "profile/README.md"}
+for event in ("pull_request", "push"):
+    paths = set(triggers.get(event, {}).get("paths", []))
+    missing = required - paths
+    if missing:
+        raise SystemExit(f"{event} omits prose subjects: {sorted(missing)}")
+PY
+then ok "feed-coherence runs when either asserted prose subject changes"
+else bad "feed-coherence must run when either asserted prose subject changes"
 fi
 
 echo
