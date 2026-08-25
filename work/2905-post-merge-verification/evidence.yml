@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2905-post-merge-verification/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2905-post-merge-verification/analysis.json
-    digest: 5caef4580da521f55bf3dc5e8ce2ea53d14a805a6a061862a136151fa9a5a290
+    digest: 910fe1f6655761a529cd4b09d21978f776e0e468830d7e0ad93442dfa60f3be4
     schemaVersion: 1
   - label: checklist
     path: work/2905-post-merge-verification/checklist.md
