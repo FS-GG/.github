@@ -1,0 +1,53 @@
+{
+  "schema": "fsgg.new-sdd-workspace.release-preflight/v1",
+  "sourceSha": "264725f374e3f05da46d7c3089462076a1f9bf7a",
+  "version": "0.10.1",
+  "tag": {
+    "name": "new-sdd-workspace/v0.10.1",
+    "present": false,
+    "positiveControl": "new-sdd-workspace/v0.10.0"
+  },
+  "feeds": {
+    "githubPackages": {
+      "candidatePresent": false,
+      "positiveControl": "0.10.0"
+    },
+    "nugetOrg": {
+      "candidatePresent": false,
+      "positiveControl": "0.10.0"
+    }
+  },
+  "sourceDiff": {
+    "packageAndReleasePathsChangedAfterSource": false
+  },
+  "selftest": {
+    "passed": 91,
+    "failed": 0,
+    "mutationControlsPassed": 2,
+    "mutationControlsFailed": 0
+  },
+  "build": {
+    "configuration": "Release",
+    "lockedRestore": true,
+    "warnings": 0,
+    "errors": 0
+  },
+  "package": {
+    "id": "FS.GG.NewSddWorkspace",
+    "version": "0.10.1",
+    "nuspecRepositoryCommit": "264725f374e3f05da46d7c3089462076a1f9bf7a"
+  },
+  "cleanLocalInstall": {
+    "packageVersion": "0.10.1",
+    "command": "new-sdd-workspace",
+    "helpSmoke": "pass"
+  },
+  "hostedWriterControl": {
+    "environment": "GITHUB_ACTIONS=true; NO_COLOR absent",
+    "ansiBoldUsageObserved": true,
+    "literalAssertionRefused": true,
+    "normalizedAssertion": "pass"
+  },
+  "publicationPerformed": false,
+  "registryReconciliationPerformed": false
+}
