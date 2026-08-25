@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="typed-sdd-p4-registry" tests="6" failures="0" errors="0" skipped="0" timestamp="2026-08-25T00:24:00Z">
+  <testcase classname="workspace" name="new-sdd-workspace acceptance assertions (90/90)" />
+  <testcase classname="workspace" name="NewSddWorkspace Release build" />
+  <testcase classname="registry" name="feed-coherence fixtures (28/28; nested version cases 41/41)" />
+  <testcase classname="registry" name="live GitHub Packages and nuget.org parity" />
+  <testcase classname="registry" name="fsgg-sdd registry validation" />
+  <testcase classname="registry" name="projection and changelog coherence" />
+</testsuite>
