@@ -1,0 +1,5 @@
+<testsuite name="dotnet" tests="1" failures="0"><testcase name="dotnet"><system-out><![CDATA[Test run for /home/developer/fsgg-driver/worktrees/2905-merlin-f426/tests/FS.GG.Coord.Cli.Lifecycle.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   137, Skipped:     0, Total:   137, Duration: 1 s - FS.GG.Coord.Cli.Lifecycle.Tests.dll (net10.0)
+]]></system-out></testcase></testsuite>

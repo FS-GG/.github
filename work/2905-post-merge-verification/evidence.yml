@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2905-post-merge-verification/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2905-post-merge-verification/analysis.json
-    digest: 4c35c5ebc9b5241cb4a7ec2fffb060757fcc6814cb1edfa04cd34abf28375ea5
+    digest: c305aab0e1cf8697ceb40abf5f607d9363dde06bcba11294ec052abf0c957fd0
     schemaVersion: 1
   - label: checklist
     path: work/2905-post-merge-verification/checklist.md
@@ -51,11 +51,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -76,11 +76,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -101,11 +101,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -126,11 +126,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -151,11 +151,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -176,11 +176,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -201,11 +201,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -226,11 +226,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -251,11 +251,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -276,11 +276,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -301,11 +301,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -326,11 +326,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -351,11 +351,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -376,11 +376,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -401,11 +401,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -426,11 +426,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -451,11 +451,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -471,16 +471,16 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
     obligationRefs: []
-    artifacts: [readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx]
+    artifacts: [readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []
@@ -501,11 +501,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx
-      digest: "sha256:f497f3e142265ef825030a08047ee9f7bcdf6a2a556b0b8c1a3b524571a93938"
+      source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
+      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 137
+      passed: 1
       failed: 0
       skipped: 0
     notes: []

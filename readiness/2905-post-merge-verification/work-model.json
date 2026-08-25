@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "0442f08bae8c6fc4343068453df527af5f96e1378e3083f1d022fc92b0e7f094"
+        "value": "45584c80354eb0242bf93c4781fa4a06890b366618f108468fdba7696698fc80"
       }
     },
     {
@@ -1386,7 +1386,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "readiness/2905-post-merge-verification/test-results/2905-lifecycle.trx"
+        "readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1501,7 +1501,7 @@
           "path": "work/2905-post-merge-verification/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "0442f08bae8c6fc4343068453df527af5f96e1378e3083f1d022fc92b0e7f094"
+            "value": "45584c80354eb0242bf93c4781fa4a06890b366618f108468fdba7696698fc80"
           },
           "schemaVersion": 1
         },
@@ -1532,7 +1532,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "41abffb0a7a0ecf1245c5f6cb854075fcfad904d68538d12d199098a9c034193"
+        "value": "c736292368e5a0a37ac03cb042ec7ea00d0342df8fda55e07cbdc11671370917"
       },
       "currency": "current"
     }
