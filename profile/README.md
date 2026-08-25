@@ -10,24 +10,155 @@ applications and libraries. It combines guided workspace creation, a
 spec-driven development lifecycle, optional governance, UI, game, audio, and
 networking components while keeping each component independently adoptable.
 
-## Create a workspace
+## Quick start: Hello World to a burned-down board
 
-Install the published workspace tool by following its
-[installation guide](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md),
-then launch its interactive wizard:
+You need the [.NET SDK](https://dotnet.microsoft.com/download),
+[Git](https://git-scm.com/downloads), and the
+[GitHub CLI](https://cli.github.com/). Install the two FS-GG tools and give `gh`
+repository and Projects access:
 
 ```console
-new-sdd-workspace
+dotnet tool install --global FS.GG.SDD.Cli
+dotnet tool install --global FS.GG.NewSddWorkspace
+gh auth login
+gh auth refresh -s repo,project,read:project
 ```
 
-Follow the prompts and confirm the preview. `new-sdd-workspace` is the currently
-published command.
+### 1. Create a compatible board
 
-### What the wizard creates
+Set `OWNER` to your GitHub user or organization. Copying the public FS-GG board
+is the shortest path because it brings across the fields and views that
+`work-board` expects, but not FS-GG's issues:
 
-The published wizard creates a runnable rendering workspace with its solution,
-application, tests, pinned dependencies, and `.fsgg/` lifecycle guidance ready
-to continue from specification through shipping.
+```console
+OWNER=octocat
+REPO=hello-fsgg
+BOARD=HelloWorld
+
+PROJECT=$(gh project copy 1 \
+  --source-owner FS-GG \
+  --target-owner "$OWNER" \
+  --title "$BOARD" \
+  --format json --jq '.number')
+```
+
+Keep Project `Write` access limited to trusted people: project writers can add
+draft items that an agent will read. The warning at the top of this page also
+applies to issue writers.
+
+### 2. Scaffold Hello World and publish the repository
+
+The console template is a small, tested F# program. `--board` wires the local
+coordination skills to the Project created above; `--no-governance` keeps this
+first example focused on SDD:
+
+```console
+new-sdd-workspace ./hello-fsgg HelloFsgg \
+  --template console \
+  --lifecycle sdd \
+  --no-governance \
+  --board "$OWNER/$BOARD" \
+  --repo "$OWNER/$REPO"
+
+cd ./hello-fsgg
+git init -b main
+git add .
+git commit -m "Create FS-GG Hello World workspace"
+gh repo create "$OWNER/$REPO" --public --source . --remote origin --push
+gh project link "$PROJECT" --owner "$OWNER" --repo "$OWNER/$REPO"
+new-sdd-workspace secure . --repo "$OWNER/$REPO"
+
+dotnet build
+dotnet test
+dotnet run --project src/HelloFsgg -- "Hello, world!"
+# Hello, world!
+```
+
+The final `secure` command restricts issue creation to repository collaborators.
+Use `--private` instead of `--public` when creating a private repository.
+
+### 3. Drive a roadmap through SDD
+
+Create `docs/roadmap.md` with top-level checklist items as milestones:
+
+```markdown
+# Hello World roadmap
+
+- [ ] M1 — Hello-world behavior
+  - [ ] Print the supplied words
+  - [ ] Keep the existing success test green
+- [ ] M2 — Production hardening
+  - [ ] Document usage and failure behavior
+  - [ ] Add a CI build
+```
+
+Then open Codex in the repository and ask:
+
+```text
+Use $work-roadmap docs/roadmap.md to complete this roadmap milestone by milestone.
+```
+
+`work-roadmap` gives each milestone its own branch and SDD run—charter, specify,
+clarify, checklist, plan, tasks, analyze, implement, evidence, verify, and ship—then
+reviews and merges it before starting the next milestone. The
+[`fsgg-sdd` quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md)
+shows the same lifecycle command by command when you want to drive it manually.
+
+GitHub milestones are optional release groupings. To mirror the example there:
+
+```console
+gh api -X POST "repos/$OWNER/$REPO/milestones" -f title="M1 Hello world"
+gh api -X POST "repos/$OWNER/$REPO/milestones" -f title="M2 Hardening"
+```
+
+### 4. Turn a code review into board work
+
+Ask the agent for analysis only first, so review findings are reproduced and
+deduplicated before any implementation starts:
+
+```text
+Perform a high-effort code-review analysis of this repository. Write the report to
+docs/reports/YYYY-MM-DD-code-review.md. For every reproducible, material, actionable
+finding, create one GitHub issue with acceptance criteria plus Class:, Severity:,
+and Paths: body lines. Add each issue to this workspace's board with
+scripts/fsgg-coord add. Do not implement the findings yet.
+```
+
+The equivalent manual loop for one finding is:
+
+```console
+ISSUE_URL=$(gh issue create \
+  --repo "$OWNER/$REPO" \
+  --title "Handle empty command input" \
+  --milestone "M2 Hardening" \
+  --body $'Class: defect\nSeverity: Medium\nPaths: src/HelloFsgg/Program.fs, tests/HelloFsgg.Tests/ProgramTests.fs\n\nAcceptance: empty input has explicit, tested behavior.')
+
+scripts/fsgg-coord add "$OWNER/$REPO#${ISSUE_URL##*/}"
+```
+
+New rows enter `Backlog`; `work-board` reconciles and triages them before deciding
+what is safe to start.
+
+### 5. Burn down the board
+
+The scaffolder records the board for Claude. When launching Codex, export the same
+values in the shell that starts it:
+
+```console
+export FSGG_COORD_OWNER="$OWNER"
+export FSGG_COORD_PROJECT="$BOARD"
+```
+
+Then ask:
+
+```text
+Use $work-board to burn down this wired product board.
+```
+
+`work-board` refreshes the board, triages the backlog, runs non-overlapping issue
+lanes through SDD and independent review, merges green pull requests, records any
+follow-up findings, and stops only when no actionable work remains. Do this only on
+a board whose issue and Project writers you trust.
 
 ## Workspace templates
 
