@@ -1445,7 +1445,19 @@ else
 fi
 "$ENGINE" release FS.GG.SDD#42 --worker done-guard >/dev/null 2>&1
 
-for done_ref in FS-GG/.github#51 FS.GG.SDD#42 FS.GG.Legacy#60; do
+# .github#2981 — this is the production HTTP route and the exact completion-authority equality boundary.
+# The receipt carries REST's full merge_commit_sha; Done.facts must preserve GraphQL Commit.oid in full.
+# Restoring abbreviatedOid in the fixture or shortening either side turns this named gate red.
+done_full_sha='77abc12000000000000000000000000000000000'
+done_out="$("$ENGINE" "done" FS-GG/.github#51 --worker snipe-733 2>&1)"; done_rc=$?
+if [ "$done_rc" -eq 0 ] && grep -q 'FSGG-DONE' <<<"$done_out" \
+   && grep -q "merged PR #77 @ $done_full_sha" <<<"$done_out"; then
+  ok ".github#2981: production completion replay observes the exact full GraphQL merge oid"
+else
+  bad ".github#2981: completion receipt and closer must agree on the exact full merge oid" "rc=$done_rc output=$done_out"
+fi
+
+for done_ref in FS.GG.SDD#42 FS.GG.Legacy#60; do
   done_out="$("$ENGINE" "done" "$done_ref" --flip --worker snipe-733 2>&1)"; done_rc=$?
   if [ "$done_rc" -ne 0 ] && grep -q 'FSGG-NOT-DONE' <<<"$done_out" && ! grep -qi 'chore' <<<"$done_out"; then
     ok "change-risk: $done_ref cannot complete or offer a chore through standalone done"
