@@ -70,7 +70,7 @@ def pr(number, merged=True, merged_at="", oid="", closes=None):
     if merged_at:
         node["mergedAt"] = merged_at
     if oid:
-        node["mergeCommit"] = {"abbreviatedOid": oid}
+        node["mergeCommit"] = {"oid": oid.ljust(40, "0")}
     node["closingIssuesReferences"] = {"nodes": [
         {"number": c, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}} for c in (closes or [])]}
     return node
@@ -87,7 +87,7 @@ def event_pr(n, merged=True, merged_at="", oid=""):
     if merged_at:
         node["mergedAt"] = merged_at
     if oid:
-        node["mergeCommit"] = {"abbreviatedOid": oid}
+        node["mergeCommit"] = {"oid": oid.ljust(40, "0")}
     return node
 
 

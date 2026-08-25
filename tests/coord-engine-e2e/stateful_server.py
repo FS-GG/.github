@@ -133,7 +133,20 @@ COMMENTS = {
           "updated_at": "2026-01-01T00:00:00Z"}],
     45: [{"id": 650045, "body": "<!-- fsgg:done-receipt v=1 -->\nfixture terminal receipt",
           "updated_at": "2026-01-01T00:00:00Z"}],
-    51: [], 96: [], 1033: []
+    # .github#2981 — a legacy-v1 typed completion receipt is still replay authority. Its full REST
+    # merge SHA must equal the full GraphQL Commit.oid served by Done.facts; an abbreviated value makes
+    # the production `done` boundary refuse instead of silently accepting two different identifiers.
+    51: [{
+        "id": 650051,
+        "body": "<!-- fsgg:delivery-completion/v1 -->\n"
+                "{\"schema\":\"fsgg.coord.delivery-completion/v1\",\"item\":\"FS-GG/.github#51\","
+                "\"pullRequest\":77,\"mergeSha\":\"77abc12000000000000000000000000000000000\","
+                "\"mergeReachable\":true,\"obligationReceipts\":[],\"postMergeVerification\":null,"
+                "\"pendingBoardWrites\":0,\"freshnessToken\":\"fixture-freshness\","
+                "\"actionKey\":\"fixture-action\",\"completedAt\":\"2026-01-01T00:00:00.0000000+00:00\","
+                "\"digest\":\"a4f2617d2d5302b94bb32e0233ea9dafd6053e8f89b821931a349fa81cd9e661\"}",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }], 96: [], 1033: []
 }
 NEXT_COMMENT_ID = [900]
 NEXT_ROOM_NUMBER = [700]
@@ -412,7 +425,7 @@ def graphql(query: str, variables: dict):
                         "state": "CLOSED",
                         "closedByPullRequestsReferences": {"nodes": [
                             {"number": 77, "merged": True, "mergedAt": "2026-02-01T00:00:00Z",
-                             "mergeCommit": {"abbreviatedOid": "77abc12"},
+                             "mergeCommit": {"oid": "77abc12000000000000000000000000000000000"},
                              "closingIssuesReferences": {"nodes": [
                                  {"number": n, "repository": {"nameWithOwner": f"FS-GG/{repo_of(n)}"}}]}}]},
                         "timelineItems": {"nodes": []},

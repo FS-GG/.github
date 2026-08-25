@@ -153,7 +153,7 @@ let ``completion correction evidence is subject-bound unique and digest-verified
 let private closesThis (n: int) =
     """{"number":"""
     + string n
-    + ""","merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"abbreviatedOid":"c"""
+    + ""","merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"oid":"c"""
     + string n
     + """"},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
 
@@ -188,7 +188,7 @@ let ``an UNMERGED PR that references the issue does NOT close it`` () =
     | Error e -> failwith $"parse failed — got %A{e}"
 
 [<Fact>]
-let ``the CLOSED_EVENT closer is read WITH its merge facts, and it is not listed (#928)`` () =
+let ``#2981 the CLOSED_EVENT closer preserves its full merge oid and is not listed`` () =
     // `gh pr create --fill` maps the commit SUBJECT to the PR TITLE, so a commit whose subject carries the
     // keyword puts it where `closingIssuesReferences` never looks. The event's closer is the record of the ACT.
     //
@@ -202,17 +202,17 @@ let ``the CLOSED_EVENT closer is read WITH its merge facts, and it is not listed
             (response
                 "CLOSED"
                 ""
-                """{"closer":{"__typename":"PullRequest","number":399,"merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"abbreviatedOid":"c399"}}}"""
+                """{"closer":{"__typename":"PullRequest","number":399,"merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"oid":"32940aa17c930a0452a1778158b7a5c4d28aa711"}}}"""
                 noSubs
                 "null")
 
     match facts transport board ref with
     | Ok f ->
         Assert.Empty f.ClosingPrs
-        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "c399")
+        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "32940aa17c930a0452a1778158b7a5c4d28aa711")
 
         match verify None None f with
-        | Green(ClosedByPullRequest(399, "c399", _, _)) -> ()
+        | Green(ClosedByPullRequest(399, "32940aa17c930a0452a1778158b7a5c4d28aa711", _, _)) -> ()
         | other -> failwith $"the closing ACT must rescue the stamp — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
@@ -227,7 +227,7 @@ let ``a COMMIT closer resolves through to its associated PR (#558/#928)`` () =
             (response
                 "CLOSED"
                 ""
-                """{"closer":{"__typename":"Commit","oid":"4cf06e10","associatedPullRequests":{"nodes":[{"number":926,"merged":true,"mergedAt":"2026-07-16T20:51:40Z","mergeCommit":{"abbreviatedOid":"4cf06e1"}}]}}}"""
+                """{"closer":{"__typename":"Commit","oid":"4cf06e10","associatedPullRequests":{"nodes":[{"number":926,"merged":true,"mergedAt":"2026-07-16T20:51:40Z","mergeCommit":{"oid":"4cf06e1"}}]}}}"""
                 noSubs
                 "null")
 
@@ -273,7 +273,7 @@ let ``#2427 a closedByPullRequestsReferences node's OWN repository is read into 
     // is what `ClosesThis` already checked before this item). `verify`'s repository preference needs the
     // FORMER, and until this fix nothing on the candidate node carried it at all.
     let node =
-        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
 
     let transport = serving (response "CLOSED" node "" noSubs "null")
 
@@ -295,7 +295,7 @@ let ``#2427 the CLOSED_EVENT PullRequest closer's own repository is read too`` (
             (response
                 "CLOSED"
                 ""
-                """{"closer":{"__typename":"PullRequest","number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}}"""
+                """{"closer":{"__typename":"PullRequest","number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}}"""
                 noSubs
                 "null")
 
@@ -310,7 +310,7 @@ let ``#2427 a COMMIT closer's associated PR carries its own repository too`` () 
             (response
                 "CLOSED"
                 ""
-                """{"closer":{"__typename":"Commit","oid":"938020f","associatedPullRequests":{"nodes":[{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}]}}}"""
+                """{"closer":{"__typename":"Commit","oid":"938020f","associatedPullRequests":{"nodes":[{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}]}}}"""
                 noSubs
                 "null")
 
@@ -323,10 +323,10 @@ let ``#2427 end-to-end: facts read + verify prefer the same-repo closer over the
     // THE INCIDENT, SERVED AS THE REAL SHAPE GITHUB RETURNED. Both are true closers per GitHub's own
     // record; the retrofit merged later; the fix must still name the source PR.
     let sourceFix =
-        """{"number":413,"merged":true,"mergedAt":"2026-08-12T08:06:28Z","mergeCommit":{"abbreviatedOid":"e605d37"},"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+        """{"number":413,"merged":true,"mergedAt":"2026-08-12T08:06:28Z","mergeCommit":{"oid":"e605d37"},"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
 
     let retrofit =
-        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"abbreviatedOid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+        """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
 
     let transport = serving (response "CLOSED" $"{sourceFix},{retrofit}" "" noSubs "null")
 

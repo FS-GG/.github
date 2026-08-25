@@ -347,8 +347,8 @@ module Done =
          repository(owner: $owner, name: $repo) { \
            issue(number: $number) { \
              number state \
-             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { totalCount nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } closingIssuesReferences(first: 10) { totalCount nodes { number repository { nameWithOwner } } } } } \
-             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { totalCount nodes { number merged mergedAt mergeCommit { abbreviatedOid } repository { nameWithOwner } } } } } } } } \
+             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { totalCount nodes { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } closingIssuesReferences(first: 10) { totalCount nodes { number repository { nameWithOwner } } } } } \
+             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } } ... on Commit { oid associatedPullRequests(first: 5) { totalCount nodes { number merged mergedAt mergeCommit { oid } repository { nameWithOwner } } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
              projectItems(first: 20) { totalCount nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
              parent { number repository { name owner { login } } } \
@@ -432,7 +432,7 @@ module Done =
 
             let oidOf (n: JsonElement) =
                 match n.TryGetProperty "mergeCommit" with
-                | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
+                | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "oid"
                 | _ -> ""
 
             // .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a

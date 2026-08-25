@@ -31,7 +31,7 @@ def issue_facts(number, state, closing_prs, sub_total, sub_nodes, status, parent
         "number": number, "state": state,
         "closedByPullRequestsReferences": {"nodes": [
             {"number": pr, "merged": True, "mergedAt": "2026-02-01T00:00:00Z",
-             "mergeCommit": {"abbreviatedOid": f"c{pr:06d}"},
+             "mergeCommit": {"oid": f"c{pr:039d}"},
              "closingIssuesReferences": {"nodes": [
                  {"number": number, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}}]}}
             for pr in closing_prs]},

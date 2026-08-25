@@ -61,7 +61,7 @@ module DoneStderrTests =
         + "\""
         + mergedAt
         + "\""
-        + ""","mergeCommit":{"abbreviatedOid":"""
+        + ""","mergeCommit":{"oid":"""
         + "\""
         + oid
         + "\""
@@ -85,7 +85,7 @@ module DoneStderrTests =
     /// `passedOverForeignNote`/`renderReceipt` exist for.
     let private factsAnswer =
         let closingPrs =
-            trueCloser 413 "FS-GG/.github" "2026-08-10T00:00:00Z" "e605d37"
+            trueCloser 413 "FS-GG/.github" "2026-08-10T00:00:00Z" "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"
             + ","
             + trueCloser 195 "EHotwagner/S.I.R." "2026-08-12T00:00:00Z" "9f9f9f9"
 
@@ -102,10 +102,10 @@ module DoneStderrTests =
               MergeReachable = true
               PostMergeVerification =
                 FS.GG.Coord.Delivery.Verified
-                    { MergeSha = "e605d37"; DefaultBranch = "main"
+                    { MergeSha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"; DefaultBranch = "main"
                       Runs =
                         [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                            Sha = "e605d37"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
+                            Sha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
               IssueClosed = true
               BoardDone = false
               ClaimReleased = false
@@ -117,7 +117,7 @@ module DoneStderrTests =
         FS.GG.Coord.Delivery.createCompletionReceipt
             ref.Canonical
             413
-            "e605d37"
+            "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"
             (DateTimeOffset.Parse "2026-08-22T15:00:00Z")
             "freshness"
             "action"
