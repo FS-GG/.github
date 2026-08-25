@@ -464,9 +464,17 @@
        exact restored assembly, and emits deterministic resolution evidence. Additive routing and
        observability repair; no command, package, member, or identity is removed. -->
   <!-- 0.75.2 -> 0.75.3 (PR #2947): PATCH repack required by the post-merge packaging workflow.
-       The change is documentation-only; package behavior and public surfaces are unchanged. -->
+       Its embedded release notes described only the documentation merge even though the immutable
+       package also contained nine accumulated engine commits. The published bytes remain valid, but
+       their bounded narrative cannot be rewritten under the same NuGet version. -->
+  <!-- 0.75.3 -> 0.75.4 (.github#2941): forward-only PATCH repair on the stable 0.x line. It accurately
+       announces the nine engine commits already present in 0.75.3: atomic serialized Blocked-by set
+       mutations, exact-check landable diagnostics, and exact-default-branch-SHA completion gating.
+       Recutting 0.75.3 would violate immutable package identity, so 0.75.4 is the first version whose
+       own listing tells the complete story. Protocol.fs, package identities, commands, and members
+       remain unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.3</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.4</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

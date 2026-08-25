@@ -130,12 +130,25 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.3 — documentation-only post-merge repack; package behavior and public surfaces are unchanged.
+    <PackageReleaseNotes>0.75.4 — forward-only release-note repair for exact-merge completion and serialized coordination mutations.
 
-WHAT MOVED, AND WHY IT IS A PATCH. PR #2947 changes only the organization landing-page documentation,
-which is outside this package's payload. The patch increment and local artifact are required by the
-repository's post-merge packaging workflow. Runtime behavior, commands, package members, and public
-surfaces are unchanged.
+WHAT MOVED, AND WHY IT IS A PATCH. The engine now gates terminal completion on a qualifying successful
+workflow run for the exact merged default-branch SHA, preserving a visible, resumable state while the
+run is absent, pending, failing, cancelled, stale, or unreadable. Live GitHub reads paginate and select
+that exact run rather than accepting pull-request green as post-merge verification. Landable refusals
+also identify the exact red check instead of collapsing every failure into an unnamed red verdict
+(.github#2905).
+
+Blocked-by dependency updates now use authoritative add/remove/replace/clear set mutations with
+generation-bound compare-and-swap fencing. Direct field writes, ready/dependency projection, and
+deferred flush replay serialize through the same mutation boundary, so concurrent writers preserve
+unrelated live edges and stale snapshots fail closed instead of silently overwriting the set
+(.github#2907).
+
+These compatible correctness, recovery, and observability repairs were already present in immutable
+0.75.3, whose listing incorrectly called the package documentation-only. NuGet bytes cannot be
+repacked under an existing version, so 0.75.4 repairs the public narrative forward-only. `Protocol.fs`,
+command names, package identities, and public members remain unchanged (.github#2941).
 
 $(FsggStandingAdvisories)
 
