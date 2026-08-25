@@ -967,17 +967,12 @@ contracts:
     # here to make a gate happy — the empty list IS the recorded decision.
     surface: "the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool"
     consumers: []             # DELIBERATELY EMPTY — see the block above. A `dotnet new` tool humans install; nothing in the graph restores it, so it has no consumer edge. schemaVersion 2 (.github#1114) makes this a legal, honest value distinct from an OMITTED `consumers`.
-    # .github#2070 (epic #2067 terminal activation), 2026-08-10: --template <rendering|console|web|
-    # fable-game|fable-bindings> merged via .github#2069/PR#2074 (commit 31c4700f, 2026-08-01) and is
-    # ALREADY ON MAIN, but this row's version/package-version stay at the RELEASED 0.9.0 — the release
-    # tag new-sdd-workspace/v0.9.0 points at 1c817c4e, which PREDATES PR#2074. Packing and releasing a
-    # build that actually carries --template is epic .github#2067 rollout phase 6, deliberately NOT
-    # done by this activation: the maintainer reserves the publish decision (this org shipped an
-    # empty-diff immutable tag once already from a misdiagnosed obligation, and a second one was
-    # narrowly avoided the same day — see .github#2070 discussion). Advancing version/package-version
-    # here before that release ships would be exactly the "future artifact advertised" failure this
-    # registry's own culture forbids. Re-flip this row's version/package-version/package-tag ONLY after
-    # the wizard is actually packed, tagged, and independently verified live on both feeds.
+    # .github#2925 completed epic #2067 rollout phase 6 on 2026-08-25: release 0.10.0 includes the
+    # --template <rendering|console|web|fable-game|fable-bindings> selector merged via
+    # .github#2069/PR#2074. Release run 32795601184 published the exact c8fb0382 tree to both feeds
+    # before this row advanced, preserving the future-artifact guard recorded in .github#2070.
+    # The remaining P4 provider implementation then shipped in FS.GG.Workspace.Template 0.9.0;
+    # this wizard identity is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
     version: "0.9.0"   # SOURCE: FS.GG.Templates renamed its planned package `FS.GG.Templates` (frozen at 0.7.1, .github#2070/DEC-001) to `FS.GG.Workspace.Template` per ADR-0072 §1 and published it at 0.8.0 (FS-GG/FS.GG.Templates#349), advanced through 0.8.1/0.8.2, and published the P4 Typed SDD provider/profile adoption at 0.9.0 (FS-GG/FS.GG.Templates#432, tag fs-gg-templates/v0.9.0 -> 045183ab25d52b5f96feb9804f12e95d54b7de58). Four independent identities land together; see `surface` below.
     package-version: "0.9.0"   # FEED: release run 32811684105 completed successfully; GitHub Packages version 1168464584 and nuget.org both serve 0.9.0. The immutable release asset is sha256:428109ba503e9e73f1534aeb1ed76a075a334bc05a5039f582f13edd8ed65502; nuget.org's signed archive is sha256:3f9cc747ea78088a9235c85df2fbb0e0ef1e75052657bb03c3cf45ca70c8292a and its nuspec binds repository commit 045183ab25d52b5f96feb9804f12e95d54b7de58. check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest on the feed for EVERY package-bearing contract — it is not a "what a consumer has adopted" field.
@@ -988,10 +983,9 @@ contracts:
     # HTTP with explicit DTOs replaces Fable.Remoting for fable-game's typed request/response half,
     # because the upstream Fable.Remoting.MsgPack defect blocking the pinned Fable compiler — FS.GG.Templates#370 — is
     # unfixed). One packable dotnet-template package, FOUR independent identities; a generated
-    # workspace selects exactly one. Registry activation of these four rows is epic .github#2067
-    # rollout phase 4/5 (.github#2070) — the WIZARD release that lets `new-sdd-workspace --template`
-    # actually select them is phase 6, deliberately not done here (see the `new-sdd-workspace` row's
-    # comment above).
+    # workspace selects exactly one. Registry activation began in epic .github#2067 rollout phases
+    # 4/5 (.github#2070); phase 6 completed when .github#2925 published `new-sdd-workspace` 0.10.0
+    # with `--template`, and Templates#432 then published this P4 provider family at 0.9.0.
     surface: >
       FS.GG.Workspace.Template package, four `dotnet new` identities: `fs-gg-console` (provider
       `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F#
@@ -1003,7 +997,7 @@ contracts:
       npm package/declaration closure, ADR-0072 §3, first proved by the unreleased
       EHotwagner/babylonjsBindings reference). All four also carry `fs-gg-governance` (the pre-existing
       governance overlay template, folded into this package at the same rename).
-    consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active now, wizard-selectable only after phase 6 (see new-sdd-workspace row).
+    consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.0.
     minimum-fsgg-sdd:
       version: "1.4.0-preview.1" # P4 Typed SDD floor, mirrored by every FS.GG.Templates provider in #432.
       requires: "Typed Protocol Kernel lifecycle selection, compilation, provenance, refresh, upgrade, and diagnostics for every workspace identity"
