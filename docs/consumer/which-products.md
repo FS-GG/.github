@@ -2,7 +2,7 @@
 title: Which FS-GG components do I need?
 category: FS.GG
 categoryindex: 6
-index: 12
+index: 13
 description: A decision guide by goal — render a UI, run a lifecycle, scaffold the full stack, add governance, or pull in a render-independent building block (game-sim, audio, networking).
 ---
 

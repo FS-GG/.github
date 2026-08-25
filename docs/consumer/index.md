@@ -65,16 +65,19 @@ to build, test, or ship. Your inner loop is never blocked by governance.
    in a render-independent building block: game-sim, audio, networking).
 3. **[The development lifecycle](lifecycle.md)** — what each stage from `charter`
    to `ship` reads, writes, and reports.
-4. **[Who drives the lifecycle](who-drives-the-lifecycle.md)** — who runs the
+4. **[Agent setup instructions](agent-setup.md)** — the Codex/Claude Code runbook
+   for GitHub authentication, safe token handoff, workspace and board creation,
+   security checks, and verification.
+5. **[Who drives the lifecycle](who-drives-the-lifecycle.md)** — who runs the
    commands (human, agent, CI), why they're real CLI commands and not Spec Kit
-   slash-commands, and how a Claude Code agent drives them via the seeded skills.
-5. **[Adopting governance](governance.md)** — enabling gates, the
+   slash-commands, and how Codex or Claude Code drives them via seeded skills.
+6. **[Adopting governance](governance.md)** — enabling gates, the
    light/strict/release profiles, the four `.fsgg` files, and the escape hatch.
-6. **[Output, automation & CI](automation.md)** — the JSON automation contract,
+7. **[Output, automation & CI](automation.md)** — the JSON automation contract,
    the `--json` / `--text` / `--rich` projections, and wiring commands into CI.
-7. **[Versions, feeds & updates](versioning-and-updates.md)** — installing from
+8. **[Versions, feeds & updates](versioning-and-updates.md)** — installing from
    the right feeds, pinning, and staying current.
-8. **[FAQ & troubleshooting](faq.md)** — common questions and failure modes.
+9. **[FAQ & troubleshooting](faq.md)** — common questions and failure modes.
 
 ## Per-component authoritative docs
 

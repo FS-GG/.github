@@ -2,7 +2,7 @@
 title: Versions, feeds & updates
 category: FS.GG
 categoryindex: 6
-index: 17
+index: 18
 description: How an FS-GG consumer installs from the right feeds, pins versions, and stays current across the FS-GG components.
 ---
 

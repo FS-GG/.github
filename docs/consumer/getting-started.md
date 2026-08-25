@@ -12,6 +12,12 @@ This takes you from nothing to a running F# UI app under a managed lifecycle, in
 one sitting. By the end you will have a windowed Skia/Elmish app, the
 `.fsgg/` lifecycle skeleton, and one feature driven from charter toward ship.
 
+> **Using a coding agent?** Start with the organization landing page's
+> [agent-first Hello World](https://github.com/FS-GG#quick-start-ask-your-agent-for-hello-world).
+> The separate [agent setup instructions](agent-setup.md) give Codex or Claude
+> Code the GitHub authentication, Project, security, and verification runbook.
+> The command-by-command guide below remains the detailed product walkthrough.
+
 ## Prerequisites
 
 - **.NET SDK with `net10.0`** — the FS-GG components target `net10.0`.

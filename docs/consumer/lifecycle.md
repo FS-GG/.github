@@ -2,7 +2,7 @@
 title: The FS-GG development lifecycle
 category: FS.GG
 categoryindex: 6
-index: 13
+index: 14
 description: What each FS.GG.SDD lifecycle stage from charter to ship reads, writes, and reports — for consumers driving a workspace.
 ---
 

@@ -2,8 +2,8 @@
 title: Who drives the lifecycle — humans, agents & the CLI
 category: FS.GG
 categoryindex: 6
-index: 14
-description: Who is meant to run the fsgg-sdd lifecycle commands, how they differ from Spec Kit slash-commands, and exactly how an agent in Claude Code drives them through the seeded process skills.
+index: 15
+description: Who is meant to run the fsgg-sdd lifecycle commands, how they differ from Spec Kit slash-commands, and how Codex or Claude Code drives them through seeded process skills.
 ---
 
 # Who drives the lifecycle — humans, agents & the CLI
@@ -13,7 +13,7 @@ The lifecycle commands (`charter`, `specify`, `clarify`, `checklist`, `plan`,
 `fsgg-sdd` CLI** — a .NET global tool. They are *not* slash-command skills like
 Spec Kit's `/speckit-plan`. This page explains what that difference means, who is
 supposed to run them, and — the part that surprises people coming from Spec Kit —
-**how an agent inside Claude Code actually drives them.**
+**how an agent inside Codex or Claude Code actually drives them.**
 
 If you just want the stage-by-stage reference, that's
 [The development lifecycle](lifecycle.md); this page is about *who runs them and
@@ -59,7 +59,7 @@ default):
 | Driver | How they invoke it | Projection they read |
 |---|---|---|
 | **Human** | types it at a terminal | `--rich` (Spectre.Console; degrades to zero-ANSI when redirected) |
-| **Agent** (Claude Code / Codex) | shells out via a tool/Bash call | `--json` |
+| **Agent** (Codex / Claude Code) | shells out via a terminal call | `--json` |
 | **CI / scripts** | runs it in a pipeline | `--json` |
 
 > **The JSON is the contract; plain and rich are projections of it.** There is
@@ -74,7 +74,7 @@ and sign off; the agent (A) authors and implements within known patterns; the CL
 
 ---
 
-## Yes — agents drive them from Claude Code. Here's the wiring
+## Yes — agents drive them from Codex or Claude Code
 
 This is the mechanism that isn't obvious. The CLI commands aren't skills, **but a
 scaffolded project ships companion *process skills* that wrap them.**
@@ -92,7 +92,7 @@ skills don't *contain* the lifecycle logic — they **tell the agent when and ho
 shell out to the real `fsgg-sdd` commands**, and which strict authoring-contract
 grammars to respect (see [Load-bearing authoring contracts](lifecycle.md#load-bearing-authoring-contracts)).
 
-The loop inside Claude Code is therefore:
+The loop inside either runtime is therefore:
 
 ```text
  agent reads a seeded fs-gg-sdd-* skill      (process guidance: "to plan, run …")
@@ -111,7 +111,7 @@ CLI's report and acts. Two supporting pieces:
   *= template@pin + `fsgg-sdd` CLI@installed*, and the CLI is what seeds the
   `fs-gg-sdd-*` skills, [ADR-0008](https://github.com/FS-GG/.github/blob/main/docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md)
   makes the CLI a first-class member of the coherent set (the *orchestrator axis*).
-  An old CLI that doesn't seed the current skills leaves the Claude Code agent with
+  An old CLI that doesn't seed the current skills leaves the agent with
   no process guidance — the invisible gap
   [ADR-0009](https://github.com/FS-GG/.github/blob/main/docs/adr/0009-cli-single-orchestrator-detect-and-remediate.md)
   makes detectable (`fsgg-sdd doctor` / `upgrade`; see
@@ -173,11 +173,11 @@ it never *blocks your inner loop* (see [Adopting governance](governance.md)).
 
 ---
 
-## A concrete pass (agent in Claude Code)
+## A concrete agent-driven pass
 
 ```text
 you:    "drive FR-003 through plan and tasks"
-agent:  reads .claude/skills/fs-gg-sdd-plan  (seeded process skill)
+agent:  reads the runtime's seeded fs-gg-sdd-plan skill
         ├─ runs:  fsgg-sdd plan --json
         │         → report: plan scaffolded, 2 open decisions flagged
         ├─ authors the approach + resolves the decisions in work/003/plan.md
