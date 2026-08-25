@@ -29,6 +29,7 @@ import json
 import re
 import sys
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RATE = {"cost": 1, "remaining": 4960}
@@ -47,6 +48,8 @@ FIELD_NAME = {f["id"]: f["name"] for f in FIELDS}
 LOCK = threading.Lock()
 GQL_COUNT = 0           # every POST to /graphql — the `gcount` the corpus reads, one transport over.
 WRITES = []             # every field mutation, in order: {field, op: set|clear, text}
+COMMENTS = []           # ephemeral REST-backed Blocked-by mutation leases
+NEXT_COMMENT_ID = 1000
 
 
 def _is_field_mutation(doc):
@@ -87,6 +90,10 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _send(self, code, payload):
+        if code == 204:
+            self.send_response(code)
+            self.end_headers()
+            return
         b = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -108,6 +115,24 @@ class H(BaseHTTPRequestHandler):
             q = body.get("query", "")
             a = graphql(q, body.get("variables", {}) or {})
             return self._send(200, a if a is not None else {"errors": [{"message": f"unhandled {q[:60]}"}]})
+        if re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p):
+            global NEXT_COMMENT_ID
+            try:
+                body = json.loads(raw).get("body")
+            except json.JSONDecodeError:
+                body = None
+            if not isinstance(body, str):
+                return self._send(422, {"message": "body required"})
+            with LOCK:
+                comment = {
+                    "id": NEXT_COMMENT_ID,
+                    "body": body,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "html_url": f"https://fixture/comments/{NEXT_COMMENT_ID}",
+                }
+                NEXT_COMMENT_ID += 1
+                COMMENTS.append(comment)
+            return self._send(201, comment)
         self._send(500, {"message": f"unhandled POST {p}"})
 
     def do_GET(self):
@@ -120,6 +145,9 @@ class H(BaseHTTPRequestHandler):
         if p.rstrip("/") == "/_writes":
             with LOCK:
                 return self._send(200, {"writes": WRITES, "last": WRITES[-1] if WRITES else None})
+        if re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p):
+            with LOCK:
+                return self._send(200, list(COMMENTS))
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
@@ -127,6 +155,17 @@ class H(BaseHTTPRequestHandler):
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4960, "limit": 5000}}})
         self._send(500, {"message": f"unhandled GET {p}"})
+
+    def do_DELETE(self):
+        p = self.path.split("?", 1)[0]
+        match = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", p)
+        if match:
+            comment_id = int(match.group(1))
+            with LOCK:
+                before = len(COMMENTS)
+                COMMENTS[:] = [comment for comment in COMMENTS if comment["id"] != comment_id]
+            return self._send(204, {}) if len(COMMENTS) < before else self._send(404, {"message": "Not Found"})
+        self._send(500, {"message": f"unhandled DELETE {p}"})
 
 
 def main():

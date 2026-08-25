@@ -191,6 +191,13 @@ module Options =
     /// Every nullary command case, derived from the union rather than maintained as a second list.
     val allCommands: Command list
 
+    /// Explicit set-valued mutation intent for `set-field ... 'Blocked by'`.
+    type BlockedByMutation =
+        | AddBlockedBy of string
+        | RemoveBlockedBy of string
+        | ReplaceBlockedBy of string
+        | ClearBlockedBy
+
     type Options =
         { Command: Command
           Render: Render
@@ -269,6 +276,8 @@ module Options =
           /// FIELD in the SAME call (.github#2079), so a coherent park is one call. Canonicalized exactly
           /// as `set-field <ref> 'Blocked by' <value>` already canonicalizes it.
           BlockedBy: string option
+          /// Exactly one explicit set mutation for `set-field ... 'Blocked by'`, or none.
+          BlockedByMutation: BlockedByMutation option
           /// `--all` (`ready`) — widen past the "not Done" default without naming a column. `ready` is a
           /// TRUTH read (#520), so `--all` shows the whole board — Done, and closed-but-still-columned rows.
           All: bool

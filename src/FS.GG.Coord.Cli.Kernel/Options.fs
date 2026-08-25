@@ -71,6 +71,15 @@ module Options =
         | Json
         | Text
 
+    // Explicit set-valued mutation intent for `set-field ... 'Blocked by'` (.github#2907).
+    // A union makes add/remove/replace/clear mutually exclusive by construction; the parser refuses
+    // a second spelling instead of silently choosing the last one.
+    type BlockedByMutation =
+        | AddBlockedBy of string
+        | RemoveBlockedBy of string
+        | ReplaceBlockedBy of string
+        | ClearBlockedBy
+
     /// WHICH STDOUT PROJECTIONS A COMMAND ACTUALLY HAS (#1523).
     ///
     /// This is the ONE hand-written fact about the renderers, and everything else about `--json`/`--text`
@@ -178,6 +187,8 @@ module Options =
           /// `repo#n`, or an issue URL, and prose or a placeholder is refused before anything is written.
           /// Read ONLY by `release`; every other command refuses it.
           BlockedBy: string option
+          // The explicit `Blocked by` set operation supplied to `set-field`.
+          BlockedByMutation: BlockedByMutation option
           /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
           /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
           All: bool
@@ -473,7 +484,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              default only ever fills an EMPTY column: a row that already
                                              carries a Status keeps it, so re-running `add` cannot overwrite
                                              one somebody set. `--status S` names the column instead
-  set-field <ref> <field> <value>            write one board field (empty value clears)
+  set-field <ref> <field> <value>            write one scalar board field (empty value clears)
+  set-field <ref> 'Blocked by'               mutate the dependency set explicitly:
+            --add REFS | --remove REFS       preserve every other live edge and fail stale on change
+            --replace REFS | --clear         explicitly replace the set or clear it
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   flush  [--dry-run]                         REPLAY the board writes an exhausted budget queued — the verb
                                              every "QUEUED; flush replays it" message names (#862). Replays
@@ -740,6 +754,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FIssue
         | FStatus
         | FBlockedBy
+        | FBlockedByAdd
+        | FBlockedByRemove
+        | FBlockedByReplace
+        | FBlockedByClear
         | FAll
         | FBatch
         | FStrict
@@ -821,6 +839,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `release --blocked-by` (.github#2079) — the ONE call that pairs the `Blocked by` field write
         // with `--status Blocked`, so `release` is its only reader; every other command refuses it.
         | FBlockedBy -> Only [ Release ]
+        | FBlockedByAdd
+        | FBlockedByRemove
+        | FBlockedByReplace
+        | FBlockedByClear -> Only [ SetField ]
 
         | FMint -> Only [ WhoAmI ]
         | FLocal -> Only [ Who ]
@@ -929,6 +951,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FIssue -> "--issue", []
         | FStatus -> "--status", []
         | FBlockedBy -> "--blocked-by", []
+        | FBlockedByAdd -> "--add", []
+        | FBlockedByRemove -> "--remove", []
+        | FBlockedByReplace -> "--replace", []
+        | FBlockedByClear -> "--clear", []
         | FAll -> "--all", []
         | FBatch -> "--batch", []
         | FExplain -> "--explain", []
@@ -1105,6 +1131,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Issue.IsSome then FIssue
           if o.Status.IsSome then FStatus
           if o.BlockedBy.IsSome then FBlockedBy
+          match o.BlockedByMutation with
+          | Some(AddBlockedBy _) -> FBlockedByAdd
+          | Some(RemoveBlockedBy _) -> FBlockedByRemove
+          | Some(ReplaceBlockedBy _) -> FBlockedByReplace
+          | Some ClearBlockedBy -> FBlockedByClear
+          | None -> ()
           if o.All then FAll
           if o.Batch then FBatch
           if o.Strict then FStrict
@@ -1690,6 +1722,24 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--blocked-by" :: value :: t -> flags { acc with BlockedBy = Some value } t
             | [ "--blocked-by" ] -> Error "--blocked-by needs a value"
 
+            | ("--add" | "--remove" | "--replace") as flag :: value :: _ when value.StartsWith "-" ->
+                Error $"%s{flag} needs a value (got flag '%s{value}')"
+            | ("--add" | "--remove" | "--replace") as flag :: value :: t ->
+                match acc.BlockedByMutation with
+                | Some _ -> Error "set-field accepts exactly one of --add, --remove, --replace, or --clear"
+                | None ->
+                    let mutation =
+                        match flag with
+                        | "--add" -> AddBlockedBy value
+                        | "--remove" -> RemoveBlockedBy value
+                        | _ -> ReplaceBlockedBy value
+                    flags { acc with BlockedByMutation = Some mutation } t
+            | [ ("--add" | "--remove" | "--replace") as flag ] -> Error $"%s{flag} needs a value"
+            | "--clear" :: t ->
+                match acc.BlockedByMutation with
+                | Some _ -> Error "set-field accepts exactly one of --add, --remove, --replace, or --clear"
+                | None -> flags { acc with BlockedByMutation = Some ClearBlockedBy } t
+
             // `issues --label` / `--state` — a label may legitimately begin with a hyphen, but a bare
             // trailing `--label` with nothing after it is still an error, so the empty-tail guard stays.
             | "--label" :: value :: t -> flags { acc with Label = Some value } t
@@ -1848,6 +1898,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Issue = None
               Status = None
               BlockedBy = None
+              BlockedByMutation = None
               All = false
               Batch = false
               Explain = false

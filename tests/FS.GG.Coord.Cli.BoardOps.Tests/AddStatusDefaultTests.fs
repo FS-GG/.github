@@ -982,6 +982,21 @@ module AddStatusDefaultTests =
 
         let transport (comments: string list) (mode: Mode) =
             let body42 = "Paths: src/A.fs"
+            let thread = Collections.Generic.Dictionary<int64, string>()
+            let mutable nextComment = 9000L
+
+            do
+                comments
+                |> List.iter (fun body ->
+                    thread.[nextComment] <- body
+                    nextComment <- nextComment + 1L)
+
+            let threadJson () =
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                thread
+                |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+                |> Seq.toArray
+                |> System.Text.Json.JsonSerializer.Serialize
 
             let items =
                 match mode with
@@ -1047,8 +1062,19 @@ module AddStatusDefaultTests =
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body42 |})
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson comments)
-                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok """{"id":9042}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (threadJson ())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = System.Text.Json.JsonDocument.Parse payload
+                        let id = nextComment
+                        nextComment <- nextComment + 1L
+                        thread.[id] <- document.RootElement.GetProperty("body").GetString()
+                        ok (System.Text.Json.JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
+                    ok "{}"
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/8" ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 8; body = "Paths: src/B.fs" |})
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/8/comments" -> ok "[]"

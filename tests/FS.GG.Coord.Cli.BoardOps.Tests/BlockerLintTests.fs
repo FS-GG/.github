@@ -1,7 +1,9 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System
 open System.IO
 open System.Text.RegularExpressions
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -13,6 +15,435 @@ open FS.GG.Coord.Cli.BoardOps
 module BlockerLintTests =
 
     let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
+
+    [<Fact>]
+    let ``#2907 explicit Blocked by flags are mutually exclusive and scoped to set-field`` () =
+        let parsed =
+            Options.parse [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+            |> Result.defaultWith failwith
+
+        Assert.Equal(Some(Options.AddBlockedBy "#299"), parsed.BlockedByMutation)
+
+        Assert.True(
+            (Options.parse [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299"; "--remove"; "#290" ]).IsError
+        )
+
+        Assert.True((Options.parse [ "heartbeat"; "FS.GG.SDD#42"; "--clear" ]).IsError)
+
+    [<Theory>]
+    [<InlineData("", "Blocked by: #290", true)>]
+    [<InlineData("FS-GG/.github#290", "Blocked by: #299", true)>]
+    [<InlineData("FS-GG/.github#290", "Blocked by: #290", false)>]
+    [<InlineData("", "```\nBlocked by: #290\n```", false)>]
+    let ``#2907 lint treats body dependency text as projection only`` (fieldValue: string) (body: string) (expected: bool) =
+        let actual =
+            Client.blockedByBodyProjectionVerdict "FS-GG" ".github" fieldValue body
+            |> Option.isSome
+
+        Assert.Equal(expected, actual)
+
+    module private BlockedBySetMutationFixture =
+
+        let private ok body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        type Outcome =
+            { Code: int
+              Out: string
+              Error: string
+              Mutations: string list
+              IdentityLadderCleared: bool }
+
+        let private identitySessionVars =
+            [ "CLAUDE_CODE_SESSION_ID"
+              "OPENCODE_SESSION_ID"
+              "FSGG_AGENT_SESSION_ID"
+              "FSGG_AGENT_HARNESS" ]
+
+        let private runCore
+            (leaseRaceWinner: bool)
+            (initialValue: string)
+            (secondValue: string)
+            (initialRevision: string)
+            (secondRevision: string)
+            (args: string list) =
+            let mutable observations = 0
+            let mutable leaseReads = 0
+            let mutable leaseBody = ""
+            let mutations = ResizeArray<string>()
+
+            let observation value revision =
+                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"updatedAt":"%s{revision}","project":{{"number":12}},"fieldValueByName":{{"text":"%s{value}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            let transport =
+                Fake.Recorder(fun request ->
+                    match request.Method, request.Path.Trim('/'), request.Body with
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ ->
+                        leaseReads <- leaseReads + 1
+                        if leaseReads < 3 then ok "[]"
+                        else
+                            let now = DateTimeOffset.UtcNow.ToString("o")
+                            let ours = {| id = 200L; body = leaseBody; updated_at = now; html_url = "https://fixture/200" |}
+                            if leaseRaceWinner then
+                                let winner =
+                                    {| id = 100L
+                                       body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=competitor lease=10 -->"
+                                       updated_at = now
+                                       html_url = "https://fixture/100" |}
+                                ok (JsonSerializer.Serialize [| winner; ours |])
+                            else
+                                ok (JsonSerializer.Serialize [| ours |])
+                    | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments", Json payload ->
+                        use document = JsonDocument.Parse payload
+                        leaseBody <- document.RootElement.GetProperty("body").GetString()
+                        ok """{"id":200}"""
+                    | "DELETE", "repos/FS-GG/FS.GG.SDD/issues/comments/200", _ -> ok "{}"
+                    | "GET", "rate_limit", _ -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "projectsV2" ->
+                        ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "fields(first" ->
+                        ok """{"data":{"organization":{"projectV2":{"fields":{"totalCount":1,"nodes":[{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName" ->
+                        observations <- observations + 1
+                        if observations = 1 then ok (observation initialValue initialRevision)
+                        else ok (observation secondValue secondRevision)
+                    | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                    | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                        let text =
+                            variables
+                            |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                            |> Option.defaultValue "<missing>"
+                        mutations.Add text
+                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    | "POST", "graphql", Query(document, _) when document.Contains "clearProjectV2ItemFieldValue" ->
+                        mutations.Add "<cleared>"
+                        ok """{"data":{"clearProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    | method, path, _ -> Error(Errors.NotFound $"fixture serves no %s{method} %s{path}"))
+
+            let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-" + Guid.NewGuid().ToString("N"))
+            let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+            let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+            let previousSessions =
+                identitySessionVars
+                |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
+            let stdout, stderr = Console.Out, Console.Error
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+
+            try
+                Directory.CreateDirectory dir |> ignore
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+                Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", null)
+                Environment.SetEnvironmentVariable("FSGG_AGENT_HARNESS", null)
+                Environment.SetEnvironmentVariable("FSGG_WORKER", null)
+                let identityLadderCleared =
+                    identitySessionVars
+                    |> List.forall (fun variable -> String.IsNullOrEmpty(Environment.GetEnvironmentVariable variable))
+                Console.SetOut capturedOut
+                Console.SetError capturedErr
+                let opts = Options.parse (args @ [ "--worker"; "plover-2907" ]) |> Result.defaultWith failwith
+                let context: Kernel.Context =
+                    { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some "FS.GG.SDD"; ChoreLocks = [] }
+                let code = Handlers.setField context opts
+                Console.Out.Flush()
+                Console.Error.Flush()
+                { Code = code
+                  Out = capturedOut.ToString()
+                  Error = capturedErr.ToString()
+                  Mutations = List.ofSeq mutations
+                  IdentityLadderCleared = identityLadderCleared }
+            finally
+                Console.SetOut stdout
+                Console.SetError stderr
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+                for variable, value in previousSessions do
+                    Environment.SetEnvironmentVariable(variable, value)
+                try Directory.Delete(dir, true) with _ -> ()
+
+        let run initialValue secondValue initialRevision secondRevision args =
+            runCore false initialValue secondValue initialRevision secondRevision args
+
+        let runContended initialValue secondValue initialRevision secondRevision args =
+            runCore true initialValue secondValue initialRevision secondRevision args
+
+    [<Fact>]
+    let ``#2907 add preserves the existing edge while adding the requested edge`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+        Assert.Equal(0, result.Code)
+        Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299" ], result.Mutations)
+
+    [<Fact>]
+    let ``#2907 remove preserves every edge not requested`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299"
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--remove"; "#290" ]
+        Assert.Equal(0, result.Code)
+        Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#299" ], result.Mutations)
+
+    [<Fact>]
+    let ``#2907 concurrent revision change fails stale and sends no mutation`` () =
+        let result =
+            BlockedBySetMutationFixture.run
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#777"
+                "r1"
+                "r2"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("Stale dependency-edge observation", result.Error)
+        Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 lower comment-id contender fences the mutation before any edge read or write`` () =
+        let result =
+            BlockedBySetMutationFixture.runContended
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("lease is held by comment 100", result.Error)
+        Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 batch replacement joins the same lease and cannot bypass an active derived writer`` () =
+        let result =
+            BlockedBySetMutationFixture.runContended
+                "FS-GG/FS.GG.SDD#290"
+                "FS-GG/FS.GG.SDD#290"
+                "r1"
+                "r1"
+                [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Blocked by=#299" ]
+
+        Assert.NotEqual(0, result.Code)
+        Assert.Contains("lease is held by comment 100", result.Error)
+        Assert.Empty(result.Mutations)
+
+    [<Fact>]
+    let ``#2907 flush replay cannot interleave with an active derived writer`` () =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-flush-" + Guid.NewGuid().ToString("N"))
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let mutations = ResizeArray<string>()
+
+        let response body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        let now = DateTimeOffset.UtcNow.ToString("o")
+        let contender =
+            JsonSerializer.Serialize
+                [| {| id = 100L
+                      body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=derived-writer lease=10 -->"
+                      updated_at = now
+                      html_url = "https://fixture/100" |} |]
+
+        let transport =
+            Fake.Recorder(fun request ->
+                match request.Method, request.Path.Trim('/'), request.Body with
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ -> response contender
+                | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
+                    response """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                    variables
+                    |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                    |> Option.defaultValue "<missing>"
+                    |> mutations.Add
+                    response """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                | method, path, _ -> Error(Errors.NotFound $"flush fixture serves no %s{method} %s{path}"))
+
+        let board: Board.BoardMap =
+            { Number = 12
+              Id = "PVT_coord"
+              Owner = "FS-GG"
+              Title = "Coordination"
+              Fields = Map.ofList [ "Blocked by", { Id = "PVTF_blocked"; Type = Board.Text } ] }
+
+        let queued: Cache.Deferred =
+            { Ref = "FS-GG/FS.GG.SDD#42"
+              Field = "Blocked by"
+              Value = "FS-GG/FS.GG.SDD#299"
+              At = now
+              Worker = "plover-2907"
+              Board = Some("FS-GG", "Coordination") }
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Cache.defer (Errors.RateLimited(Errors.GraphQlBudget, None)) queued
+            |> Result.defaultWith (Errors.explain >> failwith)
+
+            let outcome = Board.flush transport board |> Result.defaultWith (Errors.explain >> failwith)
+
+            Assert.Equal(0, outcome.Written)
+            Assert.Equal(0, outcome.Dropped)
+            Assert.Contains("lease is held by comment 100", outcome.Stopped |> Option.map Errors.explain |> Option.defaultValue "")
+            Assert.Empty(mutations)
+            Assert.Single(Cache.pending () |> Result.defaultWith (Errors.explain >> failwith)) |> ignore
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            try Directory.Delete(dir, true) with _ -> ()
+
+    [<Fact>]
+    let ``#2907 two concurrent writers serialize without losing either edge`` () =
+        let sync = obj ()
+        let bothReadyToPost = new Threading.ManualResetEventSlim(false)
+        let bothPosted = new Threading.ManualResetEventSlim(false)
+        let bothElected = new Threading.ManualResetEventSlim(false)
+        let comments = Collections.Generic.Dictionary<int64, string>()
+        let emptyReadsByThread = Collections.Generic.Dictionary<int, int>()
+        let mutable nextComment = 100L
+        let mutable readyToPost = 0
+        let mutable postCount = 0
+        let mutable electionReads = 0
+        let mutable edges = Set.empty<string>
+        let mutable actionsInProgress = 0
+        let mutable maximumConcurrentActions = 0
+
+        let response body : Errors.IoResult<Response> =
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+
+        let commentJson () =
+            lock sync (fun () ->
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                comments
+                |> Seq.sortBy (fun entry -> entry.Key)
+                |> Seq.map (fun entry ->
+                    {| id = entry.Key
+                       body = entry.Value
+                       updated_at = now
+                       html_url = $"https://fixture/%d{entry.Key}" |})
+                |> Seq.toArray
+                |> JsonSerializer.Serialize)
+
+        let transport =
+            { new IGitHubTransport with
+                member _.Send(request: Request) =
+                    match request.Method, request.Path.Trim('/'), request.Body with
+                    | "GET", "repos/FS-GG/.github/issues/42/comments", _ ->
+                        let mustWaitToPost, json =
+                            lock sync (fun () ->
+                                let threadId = Threading.Thread.CurrentThread.ManagedThreadId
+                                let priorReads =
+                                    match emptyReadsByThread.TryGetValue threadId with
+                                    | true, count -> count
+                                    | _ -> 0
+                                let currentReads = priorReads + 1
+                                emptyReadsByThread.[threadId] <- currentReads
+                                let mustWaitToPost = postCount = 0 && currentReads = 2
+                                if mustWaitToPost then
+                                    readyToPost <- readyToPost + 1
+                                    if readyToPost = 2 then bothReadyToPost.Set()
+                                if postCount >= 2 then
+                                    electionReads <- electionReads + 1
+                                    if electionReads >= 2 then bothElected.Set()
+                                mustWaitToPost, commentJson ())
+                        if mustWaitToPost then Assert.True(bothReadyToPost.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not reach the post boundary")
+                        response json
+                    | "POST", "repos/FS-GG/.github/issues/42/comments", Json payload ->
+                        let id, body, mustWait =
+                            use document = JsonDocument.Parse payload
+                            let body = document.RootElement.GetProperty("body").GetString()
+                            lock sync (fun () ->
+                                let id = nextComment
+                                nextComment <- nextComment + 1L
+                                comments.[id] <- body
+                                postCount <- postCount + 1
+                                if postCount = 2 then bothPosted.Set()
+                                id, body, postCount <= 2)
+                        if mustWait then Assert.True(bothPosted.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not post")
+                        response (JsonSerializer.Serialize {| id = id; body = body |})
+                    | "DELETE", path, _ when path.StartsWith "repos/FS-GG/.github/issues/comments/" ->
+                        let id = int64 (path.Substring(path.LastIndexOf('/') + 1))
+                        lock sync (fun () -> comments.Remove id |> ignore)
+                        response "{}"
+                    | method, path, _ -> Error(Errors.NotFound $"race fixture serves no %s{method} %s{path}") }
+
+        let run edge : Errors.IoResult<unit> =
+            Writes.withBlockedByMutationLease transport (ref' 42) (fun () ->
+                lock sync (fun () ->
+                    actionsInProgress <- actionsInProgress + 1
+                    maximumConcurrentActions <- max maximumConcurrentActions actionsInProgress)
+                Assert.True(bothElected.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not complete election reads")
+                lock sync (fun () ->
+                    let observed = edges
+                    edges <- Set.add edge observed
+                    actionsInProgress <- actionsInProgress - 1)
+                Ok())
+
+        let first = Threading.Tasks.Task.Run(fun () -> run "FS-GG/.github#290")
+        let second = Threading.Tasks.Task.Run(fun () -> run "FS-GG/.github#299")
+        Threading.Tasks.Task.WaitAll [| first :> Threading.Tasks.Task; second :> Threading.Tasks.Task |]
+
+        let firstResults = [ first.Result; second.Result ]
+        let firstErrors =
+            firstResults
+            |> List.choose (function | Error error -> Some(Errors.explain error) | Ok() -> None)
+            |> String.concat " | "
+        Assert.True(firstResults |> List.filter Result.isOk |> List.length = 1, firstErrors)
+        Assert.Equal(1, firstResults |> List.filter Result.isError |> List.length)
+        Assert.Equal(1, lock sync (fun () -> edges.Count))
+        Assert.Equal(1, maximumConcurrentActions)
+
+        let losingEdge =
+            if first.Result.IsError then "FS-GG/.github#290" else "FS-GG/.github#299"
+
+        Assert.True((run losingEdge).IsOk)
+        Assert.Equal<string>(Set.ofList [ "FS-GG/.github#290"; "FS-GG/.github#299" ], lock sync (fun () -> edges))
+        Assert.Equal(1, maximumConcurrentActions)
+
+    [<Fact>]
+    let ``#2907 set mutation fixture clears every identity session source before using explicit worker`` () =
+        let sessionVariables =
+            [ "CLAUDE_CODE_SESSION_ID"
+              "OPENCODE_SESSION_ID"
+              "FSGG_AGENT_SESSION_ID"
+              "FSGG_AGENT_HARNESS" ]
+        let previous =
+            sessionVariables
+            |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
+
+        let cases =
+            [ [ "CLAUDE_CODE_SESSION_ID", "shared-claude-session" ]
+              [ "OPENCODE_SESSION_ID", "per-worker-opencode-session" ]
+              [ "FSGG_AGENT_SESSION_ID", "custom-session"; "FSGG_AGENT_HARNESS", "custom-harness" ]
+              [ "FSGG_AGENT_HARNESS", "orphaned-harness-name" ] ]
+
+        try
+            for poisoned in cases do
+                for variable in sessionVariables do
+                    Environment.SetEnvironmentVariable(variable, null)
+                for variable, value in poisoned do
+                    Environment.SetEnvironmentVariable(variable, value)
+
+                let result =
+                    BlockedBySetMutationFixture.run
+                        "FS-GG/FS.GG.SDD#290"
+                        "FS-GG/FS.GG.SDD#290"
+                        "r1"
+                        "r1"
+                        [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
+                Assert.True(result.IdentityLadderCleared, $"identity ladder was not cleared for %A{poisoned}")
+                Assert.Equal(0, result.Code)
+                Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299" ], result.Mutations)
+        finally
+            for variable, value in previous do
+                Environment.SetEnvironmentVariable(variable, value)
 
     /// .github#2698 — a comment ledger holding one current delivery-route receipt for `subject`, as
     /// `Reads.commentBodies` reads it. Any fixture whose command RESOLVES a `Status=Ready` write needs
@@ -73,7 +504,7 @@ module BlockerLintTests =
         let directStatusWrites =
             Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
-        Assert.Equal(12, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(13, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(3, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
@@ -449,9 +880,31 @@ module BlockerLintTests =
         /// resolver read — `None` is the genuinely-empty field; `Some v` is a STALE non-empty value, for
         /// round 1's reproduction: a same-call CLEAR must not trust it.
         let private build (body: string) (liveBlockedBy: string option) =
+            let comments = Collections.Generic.Dictionary<int64, string>()
+            let mutable nextComment = 9000L
+            let commentsJson () =
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                comments
+                |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+                |> Seq.toArray
+                |> JsonSerializer.Serialize
+
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (commentsJson ())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = nextComment
+                        nextComment <- nextComment + 1L
+                        comments.[id] <- document.RootElement.GetProperty("body").GetString()
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    comments.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
+                    ok "{}"
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
                 | "POST", "graphql" ->
@@ -603,6 +1056,18 @@ module BlockerLintTests =
         /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
         /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
         let transport () =
+            let comments = Collections.Generic.Dictionary<int64, string>()
+            let mutable nextComment = 9096L
+            let commentsJson subject =
+                let now = DateTimeOffset.UtcNow.ToString("o")
+                seq {
+                    yield {| id = 7900L; body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None; updated_at = now |}
+                    for entry in comments do
+                        yield {| id = entry.Key; body = entry.Value; updated_at = now |}
+                }
+                |> Seq.toArray
+                |> JsonSerializer.Serialize
+
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
@@ -645,14 +1110,26 @@ module BlockerLintTests =
                 // channel's own coverage lives in `ApplicationServiceTests` and `LifecycleProjectionTests`,
                 // where the receipt is read back by the reconcile pass that used to revert it.
                 | "POST", "repos/FS-GG/rogue3/issues/96/comments"
-                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" -> ok """{"id":9096}"""
+                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = nextComment
+                        nextComment <- nextComment + 1L
+                        comments.[id] <- document.RootElement.GetProperty("body").GetString()
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/rogue3/issues/comments/"
+                                   || p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
+                    comments.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
+                    ok "{}"
                 // .github#2698: `set-field <ref> Status Ready` — both spellings these legs drive — now
                 // requires a CURRENT delivery-route receipt on the row it promotes. The subject is bound to
                 // the canonical owner, so each twin gets its OWN receipt: a fixture that served one for
                 // both would quietly agree with a gate that ignored the subject binding, which is the
                 // failure `validateRouteLedger` exists to catch and the one these legs are already about.
-                | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (routedLedger "FS-GG/rogue3#96")
-                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (routedLedger "EHotwagner/rogue3#96")
+                | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (commentsJson "FS-GG/rogue3#96")
+                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (commentsJson "EHotwagner/rogue3#96")
                 | m, p -> Error(Errors.NotFound $"the receipt fixture serves no %s{m} %s{p}"))
 
     [<Theory>]
@@ -829,8 +1306,8 @@ module BlockerLintTests =
                   ETag = None
                   NextLink = None; Headers = Map.empty }
 
-        /// A live claim marker, or none — `Writes.verifyHeld`'s subject, `ForceStealTests.Thread` scaled
-        /// down to what this fixture needs (no POST, since `release` never adds a comment).
+        /// A live claim marker, or none — `Writes.verifyHeld`'s subject, plus the ephemeral mutation
+        /// lease comment `release --blocked-by` must now post and remove around its field write.
         type private Thread(holder: string option) =
             let comments = System.Collections.Generic.Dictionary<int64, string>()
 
@@ -850,6 +1327,13 @@ module BlockerLintTests =
                 |> sprintf "[%s]"
 
             member _.Remove(id: int64) = comments.Remove id |> ignore
+
+            member _.Add(body: string) =
+                let id =
+                    if comments.Count = 0 then 9000L
+                    else (comments.Keys |> Seq.max) + 1L
+                comments.[id] <- body
+                id
 
         /// The NON-HOLDER fixture. It answers ONLY `rate_limit` and the marker read — every OTHER
         /// endpoint, GraphQL included, is a hard refusal. If the fix is correct, `release` never reaches
@@ -875,6 +1359,13 @@ module BlockerLintTests =
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+                        let id = thread.Add(document.RootElement.GetProperty("body").GetString())
+                        ok (JsonSerializer.Serialize {| id = id |})
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
                 | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
                     thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
                     ok ""
@@ -993,6 +1484,7 @@ module BlockerLintTests =
 
         Assert.Equal(0, code)
         Assert.Contains("released", out)
+        Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
         // The field write DID happen — this is the positive half of the pair, proving the reordering
         // did not turn into an over-correction that refuses a legitimate holder too.
         Assert.True(transport.Logged "updateProjectV2ItemFieldValue" || transport.Logged "item-edit")

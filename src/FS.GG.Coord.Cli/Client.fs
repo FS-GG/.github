@@ -37,6 +37,20 @@ module Client =
     // (.github#2726–#2729) depend on the Kernel rather than on the module they are being cut out of.
     open FS.GG.Coord.Cli.Kernel
 
+    // Every authoritative `Blocked by` writer shares the same issue-comment lease. Projects v2 has no
+    // expected-revision/CAS input, so guarding only add/remove would still let release or reconcile race
+    // between the derived writer's final observation and unconditional mutation.
+    let private withBlockedByLeaseForWrites
+        (ctx: Context)
+        (ref: Ref)
+        (writes: (string * Board.FieldWrite) list)
+        (action: unit -> Errors.IoResult<'value>)
+        : Errors.IoResult<'value> =
+        if writes |> List.exists (fun (field, _) -> field = "Blocked by") then
+            Writes.withBlockedByMutationLease ctx.Transport ref action
+        else
+            action ()
+
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
     /// there is nothing to say. `status` is the already-rendered wire name.
     ///
@@ -50,6 +64,8 @@ module Client =
     let badTouchSetDetail = LintApplication.badTouchSetDetail
 
     let blockedNoReasonVerdict = LintApplication.blockedNoReasonVerdict
+
+    let blockedByBodyProjectionVerdict = LintApplication.blockedByBodyProjectionVerdict
 
     let humanParkResolvedVerdict = LintApplication.humanParkResolvedVerdict
 
@@ -2966,10 +2982,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                       let outcome =
                                           match gate with
                                           | Error _ -> Ok Board.NotOnBoard
-                                          | Ok() when List.length writes > 1 ->
-                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
                                           | Ok() ->
-                                              Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
+                                              withBlockedByLeaseForWrites ctx chore.Subject writes (fun () ->
+                                                  if List.length writes > 1 then
+                                                      Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
+                                                  else
+                                                      Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id)
 
                                       match outcome with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
@@ -5519,7 +5537,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     Error ExitError
                 | Ok board ->
                     match
-                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id
+                        Writes.withBlockedByMutationLease ctx.Transport ref (fun () ->
+                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id)
                     with
                     | Ok Board.Written -> Ok()
                     | Ok Board.Deferred ->
@@ -8736,6 +8755,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     |> Option.map (mk "BLOCKED-NO-REASON" "error" r)
                     |> Option.toList
 
+                let blockedByProjectionFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    blockedByBodyProjectionVerdict r.Ref.Owner r.Ref.Repo r.BlockedByRaw body
+                    |> Option.map (mk "BLOCKED-BY-BODY-INERT" "error" r)
+                    |> Option.toList
+
                 let humanParkFindings (r: Scan.Row) (body: string) : LintFinding list =
                     Map.tryFind r.Ref blockersByRef
                     |> Option.bind (fun blockers -> humanParkResolvedVerdict r.State r.Status blockers body)
@@ -8860,7 +8884,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         // One body read serves the touch-set rules, the human-block rule, and the epic
                         // body-child-refs.
-                        let bodyNeeded = isTouchSetCandidate || isEpic || isHumanBlockCandidate
+                        // Every open non-Done body may carry an inert `Blocked by:` projection. There is
+                        // no authoritative pre-index for body text, so diagnosing it requires reading the
+                        // same body operators would otherwise trust. Closed/Done rows are historical and
+                        // omitted from this live dependency-safety census.
+                        let isBlockedByProjectionCandidate =
+                            r.State = IssueState.Open && r.Status <> BoardStatus.Done
+
+                        let bodyNeeded =
+                            isTouchSetCandidate || isEpic || isHumanBlockCandidate || isBlockedByProjectionCandidate
 
                         let bodyResult =
                             if bodyNeeded then
@@ -8874,6 +8906,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let tsFindings = touchSetFindings r body
 
                             let hbFindings = humanBlockFindings r body
+                            let blockedByProjection = blockedByProjectionFindings r body
                             let humanPark = humanParkFindings r body
                             let clsFindings = classFindings r body
 
@@ -8918,6 +8951,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     (acc
                                      @ tsFindings
                                      @ hbFindings
+                                     @ blockedByProjection
                                      @ humanPark
                                      @ clsFindings
                                      @ statusUnsetFindings

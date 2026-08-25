@@ -1952,8 +1952,16 @@ printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-blocked-2134","
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 blocked_out="$(run intake apply "$INTAKE_BLOCKED_DRAFT" 2>&1)"; blocked_rc=$?
 blocked_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
-if [ "$blocked_rc" -eq 0 ] && printf '%s' "$blocked_out" | jq -e '.status == "Blocked" and (.fields | index("Blocked by"))' >/dev/null 2>&1 \
-  && [ "$(printf '%s' "$blocked_ledger" | jq -r .count)" = "3" ]; then
+if [ "$blocked_rc" -eq 0 ] && printf '%s' "$blocked_out" | jq -e '.status == "Blocked" and .projectionFresh == true and (.fields | index("Blocked by"))' >/dev/null 2>&1 \
+  && printf '%s' "$blocked_ledger" | jq -e '
+      .count == 5 and
+      .requests[0] == {"method":"POST","path":"/repos/FS-GG/FS.GG.SDD/issues","kind":"rest-mutation"} and
+      .requests[1] == {"method":"POST","path":"/graphql","kind":"graphql-mutation"} and
+      .requests[2].method == "POST" and .requests[2].kind == "rest-mutation" and
+      (.requests[2].path | test("^/repos/FS-GG/FS[.]GG[.]SDD/issues/[0-9]+/comments$")) and
+      .requests[3] == {"method":"POST","path":"/graphql","kind":"graphql-mutation"} and
+      .requests[4].method == "DELETE" and .requests[4].kind == "rest-mutation" and
+      (.requests[4].path | test("^/repos/FS-GG/FS[.]GG[.]SDD/issues/comments/[0-9]+$"))' >/dev/null 2>&1; then
   ok "#2134: Blocked intake creates and projects Status plus dependency coherently"
 else
   bad "#2134: Blocked intake must project a coherent dependency" "rc=$blocked_rc output=$blocked_out ledger=$blocked_ledger"
@@ -2418,8 +2426,8 @@ no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.G
 must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
 
 # .github#2157 — the single lifecycle reducer's blocker-clear result is a coupled repair. The JSON receipt
-# names BOTH intended writes and BOTH fresh observations; one GraphQL batch plus its durable receipt are
-# the complete mutation pair.
+# names BOTH intended writes and BOTH fresh observations. The Blocked-by lease POST/DELETE must bracket
+# the one GraphQL batch, and the durable lifecycle receipt is written only after the lease is released.
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 blocker_cleared="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json)"; blocker_cleared_rc=$?
@@ -2430,7 +2438,13 @@ printf '%s' "$blocker_cleared" | jq -e '
   .[0].writes == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}] and
   .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}]' >/dev/null 2>&1 \
   && [ "$blocker_cleared_rc" -eq 0 ] \
-  && printf '%s' "$blocker_mutations" | jq -e '.count == 2 and .requests[0].kind == "graphql-mutation" and .requests[1].kind == "rest-mutation"' >/dev/null 2>&1 \
+  && printf '%s' "$blocker_mutations" | jq -e '
+      .count == 4 and
+      .requests[0] == {"method":"POST","path":"/repos/FS-GG/FS.GG.SDD/issues/47/comments","kind":"rest-mutation"} and
+      .requests[1] == {"method":"POST","path":"/graphql","kind":"graphql-mutation"} and
+      .requests[2].method == "DELETE" and .requests[2].kind == "rest-mutation" and
+      (.requests[2].path | test("^/repos/FS-GG/FS[.]GG[.]SDD/issues/comments/[0-9]+$")) and
+      .requests[3] == {"method":"POST","path":"/repos/FS-GG/FS.GG.SDD/issues/47/comments","kind":"rest-mutation"}' >/dev/null 2>&1 \
   && ok "#2157: reducer result atomically writes/observes Status=Ready plus empty Blocked by and records its receipt" \
   || bad "#2157: lifecycle receipt and atomic batch" "rc=$blocker_cleared_rc receipt=$blocker_cleared mutations=$blocker_mutations"
 

@@ -1435,6 +1435,57 @@ module Board =
                 // REPORTED, NEVER SWALLOWED. A refusal nobody can read is a refusal that did not happen.
                 Error e
 
+    // A revision-guarded single-field write for a value derived from `Blocked by`'s live set
+    // (.github#2907). Unlike `boardWrite`, this path is never deferred: replaying a derived value after
+    // its observation has aged would turn an edge-local intent back into destructive replacement.
+    let boardWriteGuarded
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        (expected: BlockedByObservation)
+        (write: FieldWrite)
+        : IoResult<WriteOutcome> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} guarded Blocked by write"
+
+        let resolved =
+            if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+                itemId transport board owner repo number
+            else
+                itemIdCached transport board owner repo number
+
+        match resolved with
+        | Error e -> Error e
+        | Ok None -> Ok NotOnBoard
+        | Ok(Some item) ->
+            match itemBlockedByObservation transport board owner repo number with
+            | Error e -> Error e
+            | Ok observed when observed <> expected ->
+                Error(
+                    Malformed(
+                        subject,
+                        "Stale dependency-edge observation: the Projects item revision or Blocked by edge changed at the board-write boundary; no mutation was sent. Re-derive and retry."
+                    )
+                )
+            | Ok _ ->
+                match setField transport board item "Blocked by" write with
+                | Error e -> Error e
+                | Ok() ->
+                    Cache.patchScan
+                        board.Owner
+                        board.Title
+                        owner
+                        repo
+                        number
+                        "Blocked by"
+                        (match write with
+                         | Set value -> value
+                         | Clear -> "")
+
+                    Ok Written
+
     // The batch sibling of `boardWrite` (#448): resolve the item, emit N fields in ONE aliased document,
     // and carry the SAME deferral policy the single write does.
     //
@@ -1615,12 +1666,35 @@ module Board =
                     let write =
                         if entry.Value = "" then Clear else Set entry.Value
 
+                    // A queued replacement is still an authoritative `Blocked by` writer. The caller that
+                    // queued it released its lease when the rate-limited first attempt ended, so replaying
+                    // directly through `attempt` would reopen the exact overwrite window the live routes
+                    // close. Reacquire the item-scoped lease for the replay itself. Keep the callback's
+                    // observed result so cleanup uncertainty can be distinguished from contention: if the
+                    // write landed but deleting our ticket failed, the queue entry is already fulfilled and
+                    // must be dropped; otherwise a failed lease/action leaves it queued for an explicit retry.
+                    let mutable attempted: IoResult<WriteOutcome> option = None
+
+                    let replay () =
+                        let result = attempt transport board owner repo number entry.Field write
+                        attempted <- Some result
+                        result
+
+                    let result =
+                        if entry.Field = "Blocked by" then
+                            Writes.withBlockedByMutationLease
+                                transport
+                                { Owner = owner; Repo = repo; Number = number }
+                                replay
+                        else
+                            replay ()
+
                     // REPLAY THROUGH `attempt`, NOT `boardWrite`. `boardWrite` carries the DEFER policy —
                     // it queues on an exhausted budget — and that is exactly right for a FIRST attempt and
                     // exactly wrong for a replay: this entry is ALREADY in the queue, so deferring it again
                     // appends a second copy. Every flush under a dead budget would double the queue,
                     // forever, while reporting that it had written nothing and backing off from nothing.
-                    match attempt transport board owner repo number entry.Field write with
+                    match result with
                     | Ok Written ->
                         Cache.dropPending entry
                         written <- written + 1
@@ -1650,6 +1724,20 @@ module Board =
                         // AN EXHAUSTED BUDGET STOPS THE WHOLE FLUSH. The rest would fail identically, and
                         // spending REST calls to confirm that is exactly the back-off EX_RATE exists to
                         // signal. The remainder STAYS QUEUED — untouched, and not re-appended.
+                        stopped <- Some e
+
+                    | Error e when entry.Field = "Blocked by" ->
+                        match attempted with
+                        | Some(Ok Written) ->
+                            // The mutation landed; only lease cleanup is uncertain. Retaining the queued
+                            // replacement would replay a fulfilled stale value after the ticket expires.
+                            Cache.dropPending entry
+                            written <- written + 1
+                        | _ -> ()
+
+                        // Contention and transport uncertainty are retryable for a queued authoritative
+                        // writer. Stop this pass and retain the current entry unless the action is known to
+                        // have landed; later entries remain untouched and no duplicate is appended.
                         stopped <- Some e
 
                     | Error _ ->
