@@ -294,6 +294,8 @@ expect_fail "stale orchestrator current floor reds despite matching headline/his
   "$(variant stalefloor 's#agree on \*\*`0.6.0`\*\*#agree on **`0.5.0`**#')"
 expect_fail "duplicate contradictory Current authority reds" "must contain exactly one **Current:** authority clause, found 2" \
   "$(variant duplicatecurrent 's#Release history#**Current:** all provider-family floors agree on **`0.5.0`**. Release history#')"
+expect_fail "missing Current authority reds" "must contain exactly one **Current:** authority clause, found 0" \
+  "$(variant missingcurrent 's#\*\*Current:\*\*#**Prior:**#')"
 
 # --- fail-closed corollaries (epic #266): a missing subject must not read as "checked, fine" ---
 expect_fail "version column absent"       "has no 'version' column" \
