@@ -1,0 +1,524 @@
+schemaVersion: 1
+workId: 2871-closed-delivery-paths
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2871-closed-delivery-paths/spec.md
+sourceClarifications: work/2871-closed-delivery-paths/clarifications.md
+sourceChecklist: work/2871-closed-delivery-paths/checklist.md
+sourcePlan: work/2871-closed-delivery-paths/plan.md
+sourceTasks: work/2871-closed-delivery-paths/tasks.yml
+sourceAnalysis: readiness/2871-closed-delivery-paths/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2871-closed-delivery-paths/analysis.json
+    digest: 842d6be3236501704e63d5639ad1be44a4d1d952d95a090a85547233f90107d0
+    schemaVersion: 1
+  - label: checklist
+    path: work/2871-closed-delivery-paths/checklist.md
+    digest: 66c37dd400f3bbb3fc6cb386f677d8af470aada9220fdeffd425521fe1a03e0f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2871-closed-delivery-paths/clarifications.md
+    digest: 1394fd166a483968a50bddb78d5ceba323ec8a7f853782cc2bfcea4dcdfb289c
+    schemaVersion: 1
+  - label: plan
+    path: work/2871-closed-delivery-paths/plan.md
+    digest: 6512245ce645919a9658edd5b628d893d4261aafd2371335fe9362c52e6efe10
+    schemaVersion: 1
+  - label: spec
+    path: work/2871-closed-delivery-paths/spec.md
+    digest: 01cafc3faa8e5a4b103061ffff9197babfec80479d5688421c1b86db19bf333e
+    schemaVersion: 1
+  - label: tasks
+    path: work/2871-closed-delivery-paths/tasks.yml
+    digest: 6c745e56f32f499bb2c603b947a77aca3d7162635e06ab512abfcd27cde483aa
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV013]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV016]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: [src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2871-closed-delivery-paths/verification/lifecycle.trx
+      digest: "sha256:2faa393118f10c820bcd90ce4478f9d6ce4e8b1b6211a8544163cc95270ee28a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 137
+      failed: 0
+      skipped: 0
+    notes: ["Production e2e 189/189; lifecycle tests 137/137; old-source inversion redded the closed and unread #2871 gates while the genuine-absence control remained green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

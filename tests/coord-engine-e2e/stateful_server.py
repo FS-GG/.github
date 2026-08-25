@@ -60,6 +60,11 @@ ISSUES = {
          "state": "CLOSED", "status": "Done", "off_board": True},
     47: {"body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
          "state": "OPEN", "status": "Blocked", "blocked_by": "FS-GG/FS.GG.SDD#48"},
+    # .github#2871 — the source issue is closed and still has its authoritative Paths declaration,
+    # while the closure-sensitive board projection has lost the body. Delivery must read the former;
+    # using the latter reproduces the false "no Paths" terminal refusal.
+    49: {"body": "A closed delivery item.\n\nPaths: src/Closed/**",
+         "projection_body": "", "state": "CLOSED", "status": "In review"},
     # #1087 — the free-refusal control: an UNROSTERED repo (no chore lock at all). All seven FS-GG repos now
     # have one, so the honest "no lock" case is a repo `choreLockRef` does not know. `done` here stamps and
     # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
@@ -170,6 +175,9 @@ DEFER_FIELD_WRITES = [0]
 # without that assertion "failed" and "deferred" are indistinguishable from the outside, and the leg would
 # be re-testing the deferral queue while claiming to test the case the queue cannot reach.
 FAIL_FIELD_WRITES = [0]
+# .github#2871 — fail the next authoritative REST issue-body read for one issue. The board projection
+# remains readable, proving that delivery distinguishes an unread authority from an absent declaration.
+FAIL_NEXT_ISSUE_BODY = set()
 # .github#2772 — fault the two non-atomic force-claim boundaries independently. The POST fault leaves
 # the incumbent untouched. The DELETE fault models a lost replacement plus a failed incumbent deletion,
 # so the authoritative re-read proves `OldHolderStands` rather than confusing it with POST failure.
@@ -271,7 +279,7 @@ def board_items():
                     "title": f"item {n}",
                     "state": issue["state"],
                     "createdAt": "2026-01-01T00:00:00Z",
-                    "body": issue["body"],
+                    "body": issue.get("projection_body", issue["body"]),
                     # REGISTER DEPTH (.github#2712). Served from the SAME comment list this server
                     # already keeps, so the count and the thread cannot disagree — a hand-written
                     # constant here would be a fixture asserting a depth its own data contradicts.
@@ -307,7 +315,7 @@ def graphql(query: str, variables: dict):
                 continue
             data[alias] = {
                 "id": str(raw_id),
-                "body": issue["body"],
+                "body": issue.get("projection_body", issue["body"]),
                 "comments": {"totalCount": len(comments_for(n))},
             }
         return {"data": data}
@@ -801,6 +809,12 @@ class Handler(BaseHTTPRequestHandler):
                 FAIL_FIELD_WRITES[0] += 1
                 return self._send(200, {"failArmed": FAIL_FIELD_WRITES[0]})
 
+        m = re.match(r"^/_fixture/fail-next-issue-body/(\d+)$", path)
+        if m:
+            with LOCK:
+                FAIL_NEXT_ISSUE_BODY.add(int(m.group(1)))
+                return self._send(200, {"issueBodyFailureArmed": int(m.group(1))})
+
         if path.rstrip("/") == "/_fixture/fail-next-claim-post":
             with LOCK:
                 FAIL_NEXT_CLAIM_POST[0] += 1
@@ -964,6 +978,9 @@ class Handler(BaseHTTPRequestHandler):
             if n not in ISSUES:
                 return self._send(404, {"message": "Not Found"})
             with LOCK:
+                if n in FAIL_NEXT_ISSUE_BODY:
+                    FAIL_NEXT_ISSUE_BODY.remove(n)
+                    return self._send(503, {"message": "fixture: authoritative issue body unreadable"})
                 return self._send(200, {"number": n, "id": n + 1000, "body": ISSUES[n]["body"], "state": ISSUES[n]["state"].lower()})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls/(\d+)/files$", path)
