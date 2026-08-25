@@ -218,8 +218,9 @@ def main() -> int:
 
     # The orchestrator floor used to be left as hand-maintained history in this table and drifted
     # from 0.6.0 to 1.4.0-preview.1 while the generic projection gate stayed green. It is a live
-    # compatibility fact, not release-history judgement: require every distinct registry floor in
-    # the row's explicitly labelled **Current:** assertion. Looking anywhere in Summary is too weak:
+    # compatibility fact, not release-history judgement: first require the provider families to
+    # carry one shared registry floor, then require that value in the row's explicitly labelled
+    # **Current:** assertion. Looking anywhere in Summary is too weak:
     # the headline and release-history parenthetical also contain old/current versions and can hide
     # a stale current sentence.
     floor_values: list[str] = []
@@ -234,6 +235,11 @@ def main() -> int:
             elif value not in floor_values:
                 floor_values.append(value)
     if floor_values:
+        if len(floor_values) != 1:
+            errors.append(
+                "provider-family minimum-fsgg-sdd floors disagree in the registry: "
+                f"{', '.join(repr(value) for value in floor_values)} — the projection cannot "
+                "truthfully claim that all provider-family floors agree.")
         axis = coh_rows.get("fsgg-sdd-orchestrator-axis")
         if axis is None:
             errors.append(
@@ -247,7 +253,7 @@ def main() -> int:
                     "fsgg-sdd-orchestrator-axis: Summary must contain exactly one **Current:** "
                     f"authority clause, found {len(current_labels)} — duplicate or absent labelled "
                     "authority is ambiguous.")
-            for value in floor_values:
+            for value in floor_values[:1] if len(floor_values) == 1 else []:
                 current_assertion = re.search(
                     rf"\*\*Current:\*\*[^|\n]*?\bagree on\s+\*\*`{re.escape(value)}`\*\*",
                     summary,

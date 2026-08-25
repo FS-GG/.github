@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f069311b461487e6908ae80f3559c4c168f936793a5e5ba09fc4e20124e79f2d"
+        "value": "a84a2b4df7022fd5580030ff38a4adc1f23dc3a40969fa19d1856fb8410b56a6"
       }
     },
     {
@@ -348,8 +348,11 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
+        ".github/workflows/coherence.yml",
         "docs/registry/compatibility.md",
-        "registry/dependencies.yml"
+        "registry/dependencies.yml",
+        "scripts/check-projection.py",
+        "tests/projection/run.sh"
       ],
       "result": "pass",
       "synthetic": false,
@@ -468,7 +471,7 @@
           "path": "work/typed-sdd-p4-floor/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f069311b461487e6908ae80f3559c4c168f936793a5e5ba09fc4e20124e79f2d"
+            "value": "a84a2b4df7022fd5580030ff38a4adc1f23dc3a40969fa19d1856fb8410b56a6"
           },
           "schemaVersion": 1
         },
@@ -499,7 +502,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "fbb7c06827290755e21b9347950c230fc539da1b38c86c5117da688e3f2e4250"
+        "value": "e768460573b7ec50f397316375e18d54f107438e51c84f1d93403288775e4449"
       },
       "currency": "current"
     }

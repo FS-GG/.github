@@ -11,7 +11,7 @@ sourceAnalysis: readiness/typed-sdd-p4-floor/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/typed-sdd-p4-floor/analysis.json
-    digest: 2f5aab583421fb6f65c03ae98c658161338f7307b06883d79b7fb727e43e9586
+    digest: 6c95534a97c0f9b6fd3959af7e02a54fa70f18ce39b55f0dd63c8db48867bcd7
     schemaVersion: 1
   - label: checklist
     path: work/typed-sdd-p4-floor/checklist.md
@@ -52,10 +52,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Both provider-family floors advance to the published Typed SDD compiler without changing defaults.]
@@ -77,10 +77,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [The registry authority and generated orchestrator-axis projection agree.]
@@ -96,19 +96,19 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV003]
-    artifacts: [docs/registry/compatibility.md, registry/dependencies.yml]
+    artifacts: [".github/workflows/coherence.yml", docs/registry/compatibility.md, registry/dependencies.yml, scripts/check-projection.py, tests/projection/run.sh]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
-    notes: [Typed registry validation, and Templates five-descriptor equality checks pass., changelog, compatibility projection, generated projections]
+    notes: ["Typed registry validation and Templates five-descriptor equality checks pass; the projection fixture runs 38 controls including divergent and ambiguous floor authority and is invoked by coherence CI."]
   - id: EV004
     kind: verification
     subject:
@@ -127,10 +127,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [The minimum advance is recorded with publication provenance and preserves Standard SDD compatibility.]
@@ -152,10 +152,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:15e0242acd53bb563426a56861ef3441858e4b188fdc8d55b058c716ba04aaac"
+      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Generated projections and the normalized work model were refreshed from current sources.]
