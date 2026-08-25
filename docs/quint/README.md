@@ -1,7 +1,8 @@
 # Quint specification experiments
 
-This directory evaluates Quint as a possible canonical authoring language for
-the typed specification kernel, rather than merely as another proof backend.
+This directory contains the experiment that led to
+[ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), which selects Quint as the target
+canonical authoring language for future Typed SDD work rather than merely as another proof backend.
 It models the same two materially different S.I.R. slices used by the adjacent
 F* experiment and keeps source, reproducible checking, typed-IR evidence,
 negative controls, and findings together.
@@ -50,7 +51,7 @@ dependencies and publishes no shrinkwrap. Consequently this experiment is not
 yet a hermetic npm installation. A production decision would need a committed
 lock, a content-addressed bundle/container, or an upstream standalone artifact.
 
-## Authority boundary
+## Accepted authority boundary
 
 Quint 0.32.0 can emit resolved JSON IR plus inferred type and effect maps. That
 makes this architecture technically possible:
@@ -58,12 +59,17 @@ makes this architecture technically possible:
 ```text
 canonical .qnt source
        -> pinned Quint typed IR
-       -> versioned FS-GG lowering
-       -> language-neutral normalized SpecificationModel
-       -> F# bindings, semantic diff, docs, schemas, replay, and proof backends
+       -> versioned FS-GG Quint-profile validation
+       -> small language-neutral compiled contract
+       -> F# bindings, semantic diff, docs, CI impact, schemas, and replay
+
+canonical .qnt source
+       -> Quint run/test/verify
+       -> ITF traces and behavioral proof evidence
 ```
 
-The raw Quint IR is compiler-owned and explicitly not the proposed stable
-FS-GG AST. The experiment does not yet implement that lowering. Until a
-cross-domain lowering spike succeeds and ADR-0076 is amended, the published F#
-specification kernel remains authoritative.
+The raw Quint IR is compiler-owned and is not the stable FS-GG contract. The generated contract contains
+stable integration facts and does not reproduce arbitrary Quint expression semantics. Implementation has
+not started: the published F# specification kernel remains production authority until the
+[migration design](../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) completes its
+qualification, publication, and explicit consumer rollout.

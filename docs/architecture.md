@@ -1030,13 +1030,14 @@ install is what keeps the composition honest. See the
   one tier and not the others, because there are no tiers — which is what **54 vendored copies** of
   the protocol used to guarantee it would.
 
-  **The next boundary is one agent-authored specification kernel, piloted in S.I.R.
-  ([ADR-0076](adr/0076-agent-authored-fsharp-specification-kernel.md), accepted 2026-08-24).**
-  S.I.R. proves the reusable identity, normalization, provenance, evidence, projection, and authoring
-  contracts against its existing executable-rules corpus. FS.GG.SDD then owns and publishes that small
-  substrate; S.I.R. keeps gameplay semantics, while this coordination component consumes process and
-  protocol extensions including observation and mutation algebras. The boundary is explicitly extensible,
-  not one platform-wide closed union, and publication precedes adoption.
+  **The delivered boundary is the Typed SDD kernel; future authority is Quint-first
+  ([ADR-0076](adr/0076-agent-authored-fsharp-specification-kernel.md), delivered 2026-08-24;
+  [ADR-0077](adr/0077-quint-first-typed-specification-authority.md), accepted 2026-08-25).**
+  S.I.R. proved reusable identity, normalization, provenance, evidence, projection, and authoring
+  contracts against its executable-rules corpus. Future behavioral meaning moves to canonical Quint;
+  FS.GG.SDD publishes a small generated integration contract and F#/Fable bindings without recreating
+  Quint expressions. S.I.R. keeps gameplay interpreters, while coordination consumes process and mutation
+  identities after the Quint-capable producer is published. Publication still precedes adoption.
 
   The consumer lifecycle is **Typed SDD** (`typed-sdd`). It will first join Standard SDD (`sdd`) and
   Freeform (`none`) as an explicit option across every supported workspace provider/profile. It is the

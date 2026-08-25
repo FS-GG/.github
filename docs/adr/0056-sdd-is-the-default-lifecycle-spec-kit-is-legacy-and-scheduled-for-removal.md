@@ -6,6 +6,11 @@
 > FS.GG.SDD `1.4.0-preview.1` canonical F# backend; it is neither an alias nor a fallback. Changing
 > the omitted value remains the separate P5 evidence-gated cross-repository decision.
 
+> **Quint-first successor note (2026-08-25):** [ADR-0077](0077-quint-first-typed-specification-authority.md)
+> changes the target authoring backend, not present behavior. The F# description above remains true of the
+> published P4 artifact. The planned Quint backend does not flip the omitted `sdd` default; that still
+> requires the separate fleet-wide decision specified here.
+
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS.GG.Rendering (owns `fs-gg-ui` `.template.config/template.json` — the `lifecycle` symbol default and the raw-template guard); FS.GG.SDD (owns `fsgg-sdd scaffold` and its default, and the migration path); FS-GG/.github (owns `registry/dependencies.yml` `fs-gg-ui-template`, `registry/skills.yml` + the `workRoadmap` driver, this ADR, and governance); FS.GG.Game / FS.GG.Rendering (own `fs-gg-feedback-capture` + the Spec Kit `after_*` hook machinery on the removal path); FS.GG.Templates (composition/provider pins); FS.GG.Governance (constitution/overlay on the now-default lane).

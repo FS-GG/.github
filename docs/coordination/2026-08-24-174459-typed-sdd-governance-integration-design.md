@@ -8,15 +8,21 @@ description: "A deferred successor design for incorporating the complete FS.GG.G
 
 # Design: Typed SDD and complete Governance integration
 
+> **Authoring dependency update:** [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md)
+> replaces canonical F# authoring for future Typed SDD work. This Governance design's normative-versus-
+> operational authority split, one-way handoff, ratification, and no-clobber rules remain. Its future
+> constitutional source must be Quint and its stable subjects must come from the generated compiled
+> contract described by the [migration design](2026-08-25-quint-first-typed-sdd-migration-design.md).
+
 | Field | Value |
 |---|---|
-| Status | Proposed successor; implementation deferred behind Typed SDD P4 |
+| Status | Proposed successor; implementation deferred behind the Quint-first backend and migration |
 | Authored | 2026-08-24T17:44:59+02:00 |
 | Scope | Typed SDD constitutional authority plus the complete Governance configuration, sensing, routing, checking, evidence, enforcement, ship, release, and audit pipeline |
-| Depends on | [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md) and the [Typed SDD P0–P4 implementation](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) |
+| Depends on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), the [Quint-first migration](2026-08-25-quint-first-typed-sdd-migration-design.md), and the historical [Typed SDD P0–P4 implementation](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) |
 | Extends | [Typed protocol kernel design](2026-08-24-typed-protocol-kernel-design.md) |
 | Preserves until activation | [ADR-0004](../adr/0004-constitution-ownership-for-lifecycle-sdd-products.md) and the current `.fsgg/constitution.md` contract |
-| Activation gate | P4 exit receipt: Typed SDD is a supported published opt-in across every provider/profile |
+| Activation gate | Quint backend publication, migration acceptance, and consumer soak; P4 alone no longer qualifies the authoring substrate |
 
 ## Executive decision
 
@@ -562,10 +568,11 @@ principle, add an exemption, lower an obligation, or declare a Governance verdic
 the artifact-layout convention actually published by P4; this successor design intentionally does not
 preempt that pending contract.
 
-For Typed SDD:
+For future Quint-backed Typed SDD:
 
-- canonical F# source is agent-authored through the normal authoring capability;
-- the normalized AST and digest are the comparison/interchange form;
+- canonical Quint source is agent-authored through the normal authoring capability;
+- the generated compiled contract and digest are the comparison/interchange form, while behavioral
+  meaning remains in Quint;
 - `.fsgg/constitution.md` is retained as the stable human-facing location but becomes generated;
 - a machine-readable constitutional manifest records node identities and external bindings;
 - ratification/amendment receipts are immutable readiness evidence; and
@@ -1174,6 +1181,8 @@ In either case, the current Typed SDD implementation finishes first.
 - [ADR-0004: SDD constitution ownership](../adr/0004-constitution-ownership-for-lifecycle-sdd-products.md)
 - [ADR-0058: derive, do not restate](../adr/0058-adopt-one-governing-principle-derive-dont-restate.md)
 - [ADR-0076: agent-authored specification kernel](../adr/0076-agent-authored-fsharp-specification-kernel.md)
+- [ADR-0077: Quint-first specification authority](../adr/0077-quint-first-typed-specification-authority.md)
+- [Quint-first Typed SDD migration design](2026-08-25-quint-first-typed-sdd-migration-design.md)
 - [Current product constitution](../../.fsgg/constitution.md)
 - [Current FS.GG architecture: SDD and Governance](../architecture.md)
 - [FS.GG.Governance system design index](https://github.com/FS-GG/FS.GG.Governance/blob/main/docs/governance-design/index.md)

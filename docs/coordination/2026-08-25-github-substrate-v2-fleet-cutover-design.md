@@ -24,7 +24,7 @@ is not a permanent compatibility burden on the v2 runtime.
 | Execution spine | [Bootstrap/qualify `.github#2963`](https://github.com/FS-GG/.github/issues/2963), [bridge/ledger `.github#2964`](https://github.com/FS-GG/.github/issues/2964), [cutover/retire `.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
 | Execution roadmap | [GitHub Substrate v2 fleet-cutover roadmap](../github-substrate-v2-roadmap.md) |
 | Maintainer direction | Coordinated fleet cutover; breaking changes are allowed when they remove the wrong authority or avoid permanent compatibility machinery |
-| Builds on | [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md), [typed protocol kernel design](2026-08-24-typed-protocol-kernel-design.md), [change-risk design](2026-08-22-coordination-change-risk-mitigation-design.md) |
+| Builds on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), the [Quint-first migration design](2026-08-25-quint-first-typed-sdd-migration-design.md), the historical [typed protocol kernel design](2026-08-24-typed-protocol-kernel-design.md), and the [change-risk design](2026-08-22-coordination-change-risk-mitigation-design.md) |
 | Preserves | Claim CAS and leases, touch-set exclusion, exact-SHA review/delivery evidence, semantic contract registry, and two-feed release recovery |
 
 ## 1. Evidence and implementation baseline
@@ -38,6 +38,11 @@ The generic specification substrate is no longer hypothetical. FS.GG.SDD `1.4.0-
 - typed evidence obligations and receipts;
 - explicit `Migrated | Ambiguous | Unsupported` migration outcomes; and
 - the additive `typed-sdd` lifecycle and authoring, inspection, migration, and rollback commands.
+
+That list describes the current F# P4 artifact. ADR-0077 changes the candidate input for future protocol
+implementation: GS2-02 must not begin against the F# authoring surface. It waits for the published
+Quint-profile/compiled-contract producer artifact, or the program explicitly re-ratifies a different
+candidate. Bootstrap and census work that does not encode protocol semantics may proceed beforehand.
 
 S.I.R. consumes the published generic model for a real rules corpus. The unimplemented portion is the
 coordination-specific protocol extension: external authority observations, process state and events,
@@ -962,8 +967,9 @@ Typed SDD should become the common specification substrate for several other FS-
 must not become the mandatory serialization or authoring syntax for every structured file. There are three
 different adoption modes:
 
-1. **Canonical EDSL** — agent-authored F# is authority when the artifact declares semantic rules,
-   relationships, transitions, or generation behavior and benefits from semantic diff.
+1. **Canonical Quint specification** — agent-authored Quint is authority when the artifact declares
+   semantic rules, relationships, transitions, or generation behavior and benefits from executable
+   examples, model checking, or semantic diff. A generated FS-GG contract exposes stable integration facts.
 2. **Kernel-backed document model** — YAML, JSON, or Markdown remains the appropriate human/external input,
    while a typed extension supplies validation, normalization, fingerprint, migration, and projections.
 3. **Typed observation only** — generated evidence and runtime state use shared identities and evidence
@@ -978,7 +984,7 @@ properties.
 
 | Surface | Adoption | Why and boundary | Sequence |
 |---|---|---|---|
-| Coordination protocol and GitHub desired state | Canonical EDSL | Commands, authorities, relations, settings, mutations, permissions, and cutover transitions are specifications. GitHub observations and receipts remain external facts. | This cutover; first priority |
+| Coordination protocol and GitHub desired state | Canonical Quint specification | Commands, authorities, relations, settings, mutations, permissions, and cutover transitions are specifications. GitHub observations and receipts remain external facts. | This cutover; first priority after the published Quint producer |
 | Cross-repository contract and release topology | Canonical EDSL | `registry/dependencies.yml` already carries stable contract IDs, owners, consumers, compatibility, versions, and coherent-set policy. A `ContractTopologyExtension` should derive the YAML/compatibility view and release-impact plan; feed/package observations remain evidence. | Start after the coordination extension's first vertical slice; do not gate `OpenV2` |
 | Repository catalog and coordination-kit profile | Canonical EDSL | Roster identity, capabilities, external ownership, receiver obligations, and release topology are declarative policy. Derived custom properties and desired repository profiles can share the same subjects. | Develop with desired-state profiles |
 | Skill catalog and delivery predicates | Federated canonical EDSL | Producer manifests remain owner-authored inputs. A `SkillDeliveryExtension` types scope, ownership, file digests, delivery channels, and the current string predicate grammar as an inspectable predicate AST; the central registry is a compiled union, not copied authorship. Skill prose remains Markdown. | Follow repository catalog; migrate one producer family first |
