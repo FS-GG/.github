@@ -4,7 +4,7 @@
   "workId": "2907-blocked-by-set-mutations",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -32,6 +32,16 @@
       "digest": {
         "algorithm": "sha256",
         "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/2907-blocked-by-set-mutations/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "db56994d8c948ccf24af6a447846e8059252e8a02782bd3d3fa4b669d676d176"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -546,7 +556,7 @@
     {
       "path": "readiness/2907-blocked-by-set-mutations/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

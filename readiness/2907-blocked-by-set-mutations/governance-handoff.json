@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.1.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.2.5",
   "workId": "2907-blocked-by-set-mutations",
   "sources": [
     {
       "path": "readiness/2907-blocked-by-set-mutations/ship.json",
-      "digest": "sha256:f76c8a5dfef234d49633c517b7f06dabd54cb054623742f844bf7abf7895e951",
+      "digest": "sha256:15ccda01a5e111e480f6f043942874794f5c2d481f8e8b197862f2c0c23fac98",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2907-blocked-by-set-mutations/verify.json",
-      "digest": "sha256:c6bbc59e78ab9bc3541b1eed807da98abb2eddb30cbd33c364b35c1c824ed02a",
+      "digest": "sha256:3c01ddc13ad6bff9bbecf40db062b2122ca967a695b8496fffe3f706fc4ac886",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2907-blocked-by-set-mutations/work-model.json",
-      "digest": "sha256:66f3025a15363dcf82dfc6a29bc360689c5f6c8123fbf5eeb31ecfbe94001550",
+      "digest": "sha256:db56994d8c948ccf24af6a447846e8059252e8a02782bd3d3fa4b669d676d176",
       "schemaVersion": 1
     }
   ],

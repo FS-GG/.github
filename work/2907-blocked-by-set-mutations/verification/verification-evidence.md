@@ -27,6 +27,12 @@
   `fsgg-sdd` reports 1.1.0 while those controls accept only 1.0.0; all other write assertions passed.
 - `scripts/generate-projections --check` reported every projection current; the signature-doc mutation sweep killed 435/435 mutants.
 - The Release engine build and the 12-entry deterministic package check exited zero.
+- Recovery validation after rebasing onto `origin/main` at `712f0257c15b8027432bbf7d4c1ea3df9b643105`
+  rebuilt the Release CLI with zero warnings/errors, passed BoardOps 257/257 and GitHub 671/671,
+  and confirmed `scripts/generate-projections --check` current. Regenerating the lifecycle views with
+  `fsgg-sdd` 1.2.5 required a second `analyze` pass after the first refreshed `work-model.json`; the
+  second pass returned `implementationReady`, `verify` returned `verificationReady` with all 14
+  obligations backed by observed evidence, and `ship` returned `shipReady`.
 
 ## Gate inversions
 

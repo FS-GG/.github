@@ -4,10 +4,10 @@
   "workId": "2907-blocked-by-set-mutations",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.1.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "02e7c62e11699ec08c9e8a8ea29d2aff2470e7c7ee51071a590b1fcfecd494d0"
+    "value": "00f1473b9a7b16b75f2b89e5acb81a50061e65d74344e37497e3416a8adabe1c"
   },
   "verificationReadiness": {
     "status": "verificationReady",
