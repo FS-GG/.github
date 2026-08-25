@@ -19,6 +19,19 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **three package frontiers reconciled from both public feeds**
+  (rendering, github, templates; [Rendering#1269](https://github.com/FS-GG/FS.GG.Rendering/issues/1269),
+  [.github#2918](https://github.com/FS-GG/.github/pull/2918),
+  [Templates 0.8.4](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.8.4)):
+  publish-before-flip reconciliation advances `fs-gg-ui-template` to framework/package/tag
+  `0.28.0`, `coord-engine.package-version` to `0.75.2`, and
+  `fs-gg-workspace-template.package-version` to `0.8.4`. The package versions were independently
+  observed as the newest matching versions on GitHub Packages and nuget.org. Rendering's 17-member
+  coherent set and all three public tag aliases resolve to source `6f0c46f5`; workspace template
+  0.8.4 was published from its immutable release. Coord engine 0.75.2 packages and component tags
+  resolve to source `0d56bb104da22478dfef72825f8cf19425635ed0`; its coherent-set release remains an
+  unpromoted draft, so this entry records feed reality without claiming completed promotion.
+
 - **2026-08-23** — **`FS.GG.Workspace.Template` 0.8.2 published and registry projections reconciled**
   (templates; [Templates#428](https://github.com/FS-GG/FS.GG.Templates/issues/428),
   [Templates#385](https://github.com/FS-GG/FS.GG.Templates/issues/385),
