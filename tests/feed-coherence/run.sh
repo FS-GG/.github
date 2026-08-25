@@ -603,6 +603,11 @@ game_skills_contract_rows="$(grep -F '| `game-skills` | FS.GG.Game |' "$ARCH")"
 workspace_contract_map_rows="$(grep -F '| `fs-gg-workspace-template` | Templates |' "$ARCH")"
 new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-workspace-template$/p' "$REPO_ROOT/registry/dependencies.yml")"
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
+architecture_template_comparator_is_current() {
+  local subject="$1"
+  grep -qF "registry's newest-tracking 0.10.0 pin above" "$subject" \
+    && ! grep -qF "registry's newest-tracking 0.9.0 pin above" "$subject"
+}
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.10.0'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
@@ -632,9 +637,21 @@ if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
   && ! grep -qF 'coherent release pending' "$PROFILE_README" \
   && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
-  && grep -qF 'its consumed version' "$ARCH"
+  && grep -qF 'its consumed version' "$ARCH" \
+  && architecture_template_comparator_is_current "$ARCH"
 then ok "hand-authored template pins and the five registered template identities agree with the registry"
 else bad "hand-authored template pins and the five registered template identities must agree with the registry"
+fi
+
+STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
+cp "$ARCH" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.10.0 pin above/registry's newest-tracking 0.9.0 pin above/" "$STALE_ARCH"
+if cmp -s "$ARCH" "$STALE_ARCH"; then
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.10.0 comparator was absent"
+elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
+  ok "reverting the current Templates comparator to 0.9.0 makes the prose guard red"
+else
+  bad "reverting the current Templates comparator to 0.9.0 makes the prose guard red"
 fi
 
 WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"

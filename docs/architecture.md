@@ -416,7 +416,7 @@ accessible fable-game browser baseline and corrected Typed SDD release-floor gat
 .github#2941), after verification on both feeds. The
 sibling `EHotwagner/S.I.R.` repository is the first forcing consumer: EHotwagner/S.I.R.#138 (merge
 `b17ac33b`) incorporated the `fs-gg-fable-game` scaffold, pinning `FS.GG.Workspace.Template` 0.8.0
-(its consumed version — distinct from the registry's newest-tracking 0.9.0 pin above; S.I.R. has
+(its consumed version — distinct from the registry's newest-tracking 0.10.0 pin above; S.I.R. has
 not re-pinned) and `FS.GG.Game.Core` 0.13.0 from the public feed with zero sibling-checkout edges;
 S.I.R.-specific rules remain consumer-owned.
 
