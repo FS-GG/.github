@@ -11,7 +11,7 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-25 — record shipped generic kernel, coordination supersession, and the completed #2905 v1 safety checkpoint |
+| Updated | 2026-08-25 — record shipped kernel, AST-first capability boundary, coordination supersession, and the completed #2905 v1 safety checkpoint |
 | Status | P-series historical/current as recorded; coordination M0–M9 superseded as an execution plan |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
@@ -38,6 +38,13 @@ independent bootstrap qualification process.
 The published generic kernel and `typed-sdd` lifecycle now exist. Standard SDD continues to govern work that
 selects that lifecycle, but it does **not** certify the coordination replacement. V2 uses the successor
 design's custom qualification contract so the machinery under replacement is not its own acceptance oracle.
+
+The normalized typed AST is the enduring deliverable of this roadmap and the programmatic corpus consumed
+by agents. Canonical validation and a fingerprinted human projection remain required. Application-building
+tools and additional domain-specific execution, simulation, generation, analysis, and proof capabilities
+consume that corpus without owning it. The roadmap assumes neither that every arbitrary domain has a useful
+proof nor that extraction is desirable; a proof backend earns a place only for a bounded model/property
+pair and never becomes a parallel specification authority.
 
 ## 2026-08-25 coordination supersession boundary
 
@@ -158,6 +165,25 @@ findings is failure.
    become evidence on the relevant model surface unless they establish a new cause.
 6. **Every milestone has deletion criteria.** Adding a model without retiring a shadow representation
    makes the root problem worse.
+
+### Cross-cutting AST-consumer and proof-capability rule
+
+Every remaining milestone and successor program preserves the same capability boundary:
+
+1. Agent skills and application-building tools receive the normalized typed AST through a typed API;
+   they do not reconstruct semantics by scraping its Markdown, JSON, XML, or diagram projections.
+2. Human-readable authoring and review remain mandatory even when the most important consumer is an
+   agent. Surface syntax may be convenient F#, while consumers depend only on the compiled AST.
+3. A domain may declare no executable or proof capability. Concepts, relationships, types/data,
+   requirements, protocols, examples, and explicit unknowns remain complete specification material.
+4. Beyond mandatory compiler validation and human projection, optional domain-specific validators,
+   simulators, generators, model checkers, SMT encodings, theorem provers, and extractors register as
+   versioned AST consumers. Results bind the exact model fingerprint, lowering, toolchain, assumptions,
+   scope, and evidence strength.
+5. Generated code is used only by an explicit runtime adoption decision. Maintaining generated or
+   proof-language code beside an independent implementation does not establish equivalence.
+6. No proof-language-specific construct enters the shared AST merely to make one backend convenient;
+   domain extensions own their vocabulary and unsupported properties remain explicit.
 
 ## Implementation process and break-glass boundary
 
@@ -727,7 +753,7 @@ model produced the answer.
 
 A new protocol behavior cannot merge merely because its raw implementation compiles.
 
-## M8 — Model-based, replay, and bounded formal verification
+## M8 — Model-based, replay, and optional proof capabilities
 
 ### Deliverables
 
@@ -736,6 +762,8 @@ A new protocol behavior cannot merge merely because its raw implementation compi
 - Replay retained production-safe histories on every model/codec change.
 - Add mutation controls for guards, revisions, subjects, authorities, idempotency keys, event ordering,
   and projection ownership.
+- Register verification outputs as typed capability evidence bound to the normalized model fingerprint,
+  toolchain, lowering/correspondence contract, assumptions, scope, and evidence strength.
 - Model at least these bounded protocols in TLA+ or an equivalently checkable state specification:
   - comment-order claim CAS and lease/reacquisition;
   - set-valued concurrent add/remove; and
@@ -748,6 +776,8 @@ A new protocol behavior cannot merge merely because its raw implementation compi
 - The formal checks find injected lost-update, double-apply, stale-authorize, and deadlock controls.
 - Formal artifacts are derived from or explicitly mapped to model IDs and cannot execute production
   writes.
+- A model with no applicable proof capability remains valid, queryable specification material and does
+  not require a placeholder theorem or extraction target.
 
 ### Exit criterion
 
