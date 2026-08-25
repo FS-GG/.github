@@ -130,15 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.2 — caller-CWD-independent tier-4 engine resolution.
+    <PackageReleaseNotes>0.75.3 — documentation-only post-merge repack; package behavior and public surfaces are unchanged.
 
-WHAT MOVED, AND WHY IT IS A PATCH. The receiver wrapper now resolves tier 4 from its own tool manifest
-rather than whichever manifest is discoverable from the caller's current directory. It restores that
-exact manifest when needed, verifies the pinned assembly's reported version, and executes the assembly
-directly while preserving caller cwd and argv. A successful production execution emits one stable JSON
-resolution receipt on stderr with the manifest path, package pin, and resolved assembly. This is an
-additive routing and observability repair with no removed command, package, member, or identity
-(.github#2908; parent .github#2903).
+WHAT MOVED, AND WHY IT IS A PATCH. PR #2947 changes only the organization landing-page documentation,
+which is outside this package's payload. The patch increment and local artifact are required by the
+repository's post-merge packaging workflow. Runtime behavior, commands, package members, and public
+surfaces are unchanged.
 
 $(FsggStandingAdvisories)
 

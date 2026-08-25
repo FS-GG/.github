@@ -10,6 +10,13 @@ applications and libraries. It combines guided workspace creation, a
 spec-driven development lifecycle, optional governance, UI, game, audio, and
 networking components while keeping each component independently adoptable.
 
+> [!NOTE]
+> **Ongoing renovations:** FS-GG is preparing a typed GitHub Substrate v2 and a
+> coordinated fleet cutover. Follow the
+> [implementation and retirement roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md)
+> for current scope, qualification gates, cutover stages, and the retirement of
+> the existing coordination system.
+
 ## Quick start: ask your agent for Hello World
 
 FS-GG assumes you already have a coding agent with terminal access, such as

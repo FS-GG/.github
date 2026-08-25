@@ -10,15 +10,16 @@ description: "One agent-authored F# specification AST, piloted in S.I.R., with t
 
 | Field | Value |
 |---|---|
-| Status | Accepted direction; staged implementation required |
+| Status | Generic kernel direction accepted and implemented; coordination delivery amended by the GitHub Substrate v2 governing design |
 | Authored | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-24T10:19:38+02:00 — name the `typed-sdd` lifecycle and prepare its default transition |
+| Updated | 2026-08-25 — retain the published kernel, replace the coordination migration path with an independently qualified fleet cutover |
 | Evidence snapshot | 2026-08-24T07:26:29Z |
 | Scope | A shared specification kernel, the S.I.R. pilot, and the FS-GG coordination process/protocol extension |
 | Extends | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0040](../adr/0040-port-the-io-layer.md), [ADR-0058](../adr/0058-adopt-one-governing-principle-derive-dont-restate.md) |
 | Cross-repo decision | [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md) |
 | Predecessor design | [Reducing coordination change amplification](2026-08-22-coordination-change-risk-mitigation-design.md) |
 | Delivery plan | [Specification and protocol kernel roadmap](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) |
+| Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
 
 ## Executive decision
 
@@ -57,6 +58,20 @@ change and human projection, validate it, review the semantic diff, and repeat. 
 and tool capability—not trust in an account identity. CI accepts changes only when they pass through the
 canonical compiler, normalizer, provenance record, and generated-view freshness gate. Human-readable
 projections remain first-class review surfaces, but never a second authority.
+
+### Coordination implementation amendment (2026-08-25)
+
+The generic specification-kernel decision, published package boundary, S.I.R. adoption, and Typed SDD
+lifecycle remain in force. The coordination implementation path changes. The former incremental M-series,
+compatibility-adapter strategy, and requirement to certify the replacement through Standard SDD are
+superseded by the later governing design linked above.
+
+V2 is built as a new product in `FS.GG.Coordination` against the published kernel and qualified by a
+purpose-built bootstrap harness independent of v1 coordination status, review, delivery, and done
+machinery. V1 receives a universal epoch bridge fence; preparation and shadow reads may coexist, but normal
+v1 and v2 writers never do. The fleet switches while normal writes are frozen, crosses one explicit
+`OpenV2` point of no return, and deletes v1 production paths afterward. The earlier M0–M9 material remains
+an incident and proof-obligation inventory, not an executable migration sequence.
 
 ## Lifecycle name and default direction
 
@@ -236,8 +251,8 @@ design supplies the shared substrate on which those criteria stop being isolated
 5. Derive every secondary representation from one model or label it explicitly as external evidence.
 6. Make protocol evolution replayable and compatibility-classified.
 7. Detect new unmodelled executable semantics before review or remote mutation.
-8. Preserve the current CLI paths, JSON contracts, rate-limit discipline, and defect corpus during
-   migration.
+8. Preserve rate-limit discipline and the defect corpus, while explicitly mapping or retiring current CLI
+   paths and JSON contracts at the fleet cutover instead of maintaining indefinite compatibility.
 9. Prove agent-authored F# specification ergonomics in S.I.R. before extracting a platform contract.
 10. Let product, lifecycle, process, and protocol models share infrastructure without sharing domain
     vocabulary or interpreters.
@@ -873,8 +888,8 @@ escape cases. Gate executable changes, not reporting.
 - Event and schema evolution require long-term compatibility discipline.
 - Generated outputs can create false confidence; external property gates and fixture adapters must stay
   independent.
-- Migration temporarily runs old and new paths together, increasing surface until each compatibility
-  cutover is complete.
+- Read-only shadow comparison temporarily runs old and new decisions together; production writers remain
+  mutually exclusive under the fleet epoch.
 - Overzealous enforcement can punish discovery. The modelled/exempt/unmodelled distinction must remain
   visible and reviewable.
 

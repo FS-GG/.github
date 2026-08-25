@@ -21,6 +21,15 @@ description: Index for the FS.GG split-repository direction and the documents th
 > since shipped. Read them as a record of intent, not as current instruction; each
 > now carries a status banner pointing at what actually shipped.
 
+## Ongoing renovations
+
+FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
+independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
+the current v1 production machinery after verification. Follow the living
+[GitHub Substrate v2 fleet-cutover roadmap](github-substrate-v2-roadmap.md) for the complete sequence,
+qualification gates, current execution anchors, and definition of live/retired. The existing system remains
+authoritative until the roadmap reaches its protected `OpenV2` transition.
+
 ## Living reference
 
 Kept current — the system as built, and the machinery that keeps it coherent.

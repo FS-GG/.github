@@ -463,8 +463,10 @@
        tier-4 engine selection to its own tool manifest from any caller cwd, verifies and executes the
        exact restored assembly, and emits deterministic resolution evidence. Additive routing and
        observability repair; no command, package, member, or identity is removed. -->
+  <!-- 0.75.2 -> 0.75.3 (PR #2947): PATCH repack required by the post-merge packaging workflow.
+       The change is documentation-only; package behavior and public surfaces are unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.75.3</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
