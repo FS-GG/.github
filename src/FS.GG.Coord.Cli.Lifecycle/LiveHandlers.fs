@@ -397,6 +397,16 @@ module LiveHandlers =
                     | Error error, _ -> fail error
                     | _, Error error -> fail error
                     | Ok marker, Ok pending ->
+                        // Delivery crosses the issue-closure boundary. The board scan still owns status
+                        // and scheduling facts, but its touch-set is a projection that can lose the body
+                        // once the source issue closes (#2871). Read the declaration from its authority
+                        // instead. A failed body read remains typed as Unreadable; it is never replaced by
+                        // an empty body and therefore cannot become a false Undeclared diagnosis.
+                        let deliveryTouchSet =
+                            match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number with
+                            | Ok body -> TouchSet.parse body
+                            | Error error -> Unreadable(Errors.explain error)
+
                         // Preserves the SAME three-way distinction `Schedulability` already draws for
                         // scheduling (`Undeclared -> NoTouchSet`, `DeclaredNone -> DeliberatelyNoTouchSet`)
                         // rather than collapsing every empty-ish case into one `Delivery.Known []`, so a
@@ -406,7 +416,7 @@ module LiveHandlers =
                         // cases: a body nobody read becomes `Delivery.Unread`, so `Delivery.validate` can
                         // name the read, not the item, as the failure.
                         let declaredPaths =
-                            match candidate.Item.TouchSet with
+                            match deliveryTouchSet with
                             | Declared tokens ->
                                 Delivery.Known(
                                     tokens
@@ -435,7 +445,7 @@ module LiveHandlers =
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
                                     let pathsVerified =
-                                        deliveryPathClassifier ctx target candidate.Item.TouchSet files
+                                        deliveryPathClassifier ctx target deliveryTouchSet files
                                         |> projectPathVerdict
                                     let reviewComments =
                                         comments

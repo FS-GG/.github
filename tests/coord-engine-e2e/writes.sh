@@ -2222,6 +2222,52 @@ for delivery_mode in bare apply; do
   fi
 done
 
+# .github#2871 — live delivery crosses closure with two different representations available:
+# the closed board projection deliberately has no body, while the authoritative REST issue still
+# carries `Paths: src/Closed/**`. The production command must use the latter and continue
+# implementation. Reverting LiveHandlers to `candidate.Item.TouchSet` makes this exact leg return the
+# false `declared paths were never declared` no-verdict seen in the release cut.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/activate-issue/49" >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=vole-418 lease=120 -->"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/49/comments" >/dev/null
+closed_delivery="$(run delivery FS.GG.SDD#49 --json 2>&1)"; closed_delivery_rc=$?
+if [ "$closed_delivery_rc" -eq 0 ] \
+   && printf '%s' "$closed_delivery" | jq -e '.verdict == "next" and .stage == "implementation" and .action == "continueImplementation"' >/dev/null; then
+  ok ".github#2871: closed-item delivery reads authoritative Paths instead of the empty board projection"
+else
+  bad ".github#2871: closure must not erase delivery Paths" "rc=$closed_delivery_rc output=$closed_delivery"
+fi
+
+# An unread authority is not an absent declaration. Arm one real REST failure and require the typed
+# unread reason; the old projection reader never makes this request and therefore emits the wrong
+# no-Paths diagnosis, so this is also the producer-route reachability control.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-issue-body/49" >/dev/null
+unread_delivery="$(run delivery FS.GG.SDD#49 --json 2>&1)"; unread_delivery_rc=$?
+if [ "$unread_delivery_rc" -ne 0 ] \
+   && printf '%s' "$unread_delivery" | jq -e '.verdict == "noVerdict" and (.reason | contains("declared paths were not read")) and (.reason | contains("authoritative issue body unreadable"))' >/dev/null; then
+  ok ".github#2871: unread authoritative Paths fail closed without blaming the issue body"
+else
+  bad ".github#2871: unread Paths must remain distinct from undeclared Paths" "rc=$unread_delivery_rc output=$unread_delivery"
+fi
+
+# Positive negative-control: once the authoritative body is successfully read and really contains no
+# declaration, preserve the established undeclared diagnosis. This proves the repair did not merely
+# suppress that refusal.
+curl -fsS -X PATCH -H 'Content-Type: application/json' \
+  -d '{"body":"A genuinely undeclared closed delivery item."}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/49" >/dev/null
+undeclared_delivery="$(run delivery FS.GG.SDD#49 --json 2>&1)"; undeclared_delivery_rc=$?
+if [ "$undeclared_delivery_rc" -ne 0 ] \
+   && printf '%s' "$undeclared_delivery" | jq -e '.verdict == "noVerdict" and (.reason | contains("declared paths were never declared (no Paths: line)"))' >/dev/null; then
+  ok ".github#2871: a readable body with no Paths retains the undeclared diagnosis"
+else
+  bad ".github#2871: genuine undeclared Paths must still refuse" "rc=$undeclared_delivery_rc output=$undeclared_delivery"
+fi
+curl -fsS -X PATCH -H 'Content-Type: application/json' \
+  -d '{"body":"A closed delivery item.\n\nPaths: src/Closed/**"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/49" >/dev/null
+
 # `review --snapshot` (.github#2175) is the hermetic no-IO boundary for the resumable review/repair
 # protocol, unconditionally `writes: never` (unlike `delivery`, it has no `--apply` arm at all), so one
 # invocation against a real snapshot, checked against the wire ledger exactly as `no_mutation` checks
