@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2907-blocked-by-set-mutations/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2907-blocked-by-set-mutations/analysis.json
-    digest: da0cfe7bfea1faff79faefed4b5348fc59992f9dfaa2476ca19414c65c369325
+    digest: efe9dd7d48a92e767121cd19ce304042f36f5660d0b63aa2f7ae9fac126c94b4
     schemaVersion: 1
   - label: checklist
     path: work/2907-blocked-by-set-mutations/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2907-blocked-by-set-mutations/plan.md
-    digest: eb402bc70b5bc52700ab2e0eafa0c226d94aeb6cc9b91c46e5fb48d8fd1ab462
+    digest: 09ec88a8ad050fd481afc03294f9e363f624ea67114ded5c721b0a8978260d58
     schemaVersion: 1
   - label: spec
     path: work/2907-blocked-by-set-mutations/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2907-blocked-by-set-mutations/tasks.yml
-    digest: 20d0c51db57723665e9dcfb875005b0f904e4fa1181aa1e1b8d0da877ad211ad
+    digest: 789088c41b495d64d4bcd30b432b61d31bf8fcdaabaefebe19ba8469b8c2353d
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2907-blocked-by-set-mutations/test-results/boardops.trx
-      digest: "sha256:73b25705c09bae08b6f5f6ee29a1b12e6496b4dbe397682462782f6e64f91ae3"
+      digest: "sha256:9724d53f84255274042f510712f551956cbf19228b4e0fb9a0c22877c340978c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 259

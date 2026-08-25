@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2907-blocked-by-set-mutations/plan.md
-    digest: eb402bc70b5bc52700ab2e0eafa0c226d94aeb6cc9b91c46e5fb48d8fd1ab462
+    digest: 09ec88a8ad050fd481afc03294f9e363f624ea67114ded5c721b0a8978260d58
     schemaVersion: 1
 tasks:
   - id: T001

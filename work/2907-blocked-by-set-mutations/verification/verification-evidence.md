@@ -55,6 +55,12 @@
   `scripts/check-claim-generation.py` against exact head `6cd87934b3dfc239da337e5b6f469b377323fc86`
   and the re-read marker-free body returned 1 with `[missing]`, proving the old election cannot authorize
   the head. No authorization is recreated before the post-acceptance delivery boundary.
+- Hosted coord-engine run `32820976032` provided the red control for the new lease traffic: the Blocked
+  intake route emitted issue-create, board-add, lease POST, atomic GraphQL projection, and lease DELETE,
+  while lifecycle reconcile emitted lease POST, one GraphQL batch, lease DELETE, and its durable receipt.
+  The prior exact-count assertions rejected both successful routes. The repaired checks now require those
+  exact ordered method/path/kind shapes, retain the semantic status/field/fresh-observation assertions,
+  and the complete write corpus passes 186/186 with the vetted `fsgg-sdd` 1.0.0 validator selected.
 
 ## Gate inversions
 
@@ -73,9 +79,13 @@ Each bounded mutation was applied alone, the focused test was observed red, and 
    failed because flush reported one write, emitted the replacement beneath the active lower-ID contender,
    and removed the pending entry; restoring the lease returned zero mutations and preserved exactly one
    queued entry.
+8. The intake lease-acquire method and reconcile lease-acquire method were each inverted from POST to
+   DELETE in their production wire assertions. The full write corpus rejected exactly the two affected
+   routes; restoring POST returned all 186 assertions green.
 
 These inversions discriminate union, subtraction, stale-write refusal, body-projection linting,
-server-ordered mutation fencing, direct-writer lease bypass, and deferred-flush lease bypass independently.
+server-ordered mutation fencing, direct-writer lease bypass, deferred-flush lease bypass, and exact
+production lease-wire ordering independently.
 
 ## Runtime controls
 
