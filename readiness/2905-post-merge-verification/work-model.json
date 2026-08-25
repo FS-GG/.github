@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396"
+        "value": "e125a5eb5345c6bbe3ea10b61c2fc732eaf50f109a6ac0e719dc0ab92717e04e"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "45584c80354eb0242bf93c4781fa4a06890b366618f108468fdba7696698fc80"
+        "value": "22e08eae4d4e6a35217ffc1865255f9defd0d72a9503b9003188f1d843db4cd7"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409"
+        "value": "f0d561a6985da58ba453923ed3aa6bcfd64f2cc88093bf50417918bec1fcae2d"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef"
+        "value": "c1905298c0cdd7b52c48f905804c8202a82cf2344e6306c988d6f994afd23ce4"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678"
+        "value": "f2a65c9b5320b1fb5e8cf29cc58758b8a9f3edcdac0dc00f1a53c57318fbe9a4"
       }
     }
   ],
@@ -151,10 +151,11 @@
     },
     {
       "id": "FR-002",
-      "title": "Completion admission fails closed unless verification is a successful, completed execution for the exact merge SHA on the repository default branch; PR-head success, reachability, an empty run set, mismatched executions, and read failures never imply verification. (Stories: US-001, US-002; Acceptance: AC-001, AC-003)",
-      "text": "Completion admission fails closed unless verification is a successful, completed execution for the exact merge SHA on the repository default branch; PR-head success, reachability, an empty run set, mismatched executions, and read failures never imply verification. (Stories: US-001, US-002; Acceptance: AC-001, AC-003)",
+      "title": "Completion admission fails closed unless at least one successful, completed execution exists for the exact merge SHA on the repository default branch with \u0060event=push\u0060; PR-head success, reachability, an empty or non-success-only matching run set, mismatched executions, and read failures never imply verification, while unrelated matching non-success runs cannot veto an existing qualifying success. (Stories: US-001, US-002; Acceptance: AC-001, AC-002, AC-003)",
+      "text": "Completion admission fails closed unless at least one successful, completed execution exists for the exact merge SHA on the repository default branch with \u0060event=push\u0060; PR-head success, reachability, an empty or non-success-only matching run set, mismatched executions, and read failures never imply verification, while unrelated matching non-success runs cannot veto an existing qualifying success. (Stories: US-001, US-002; Acceptance: AC-001, AC-002, AC-003)",
       "acceptanceCriteria": [
         "AC-001",
+        "AC-002",
         "AC-003"
       ],
       "priority": null,
@@ -174,8 +175,8 @@
     },
     {
       "id": "FR-003",
-      "title": "The live delivery adapter reads post-merge execution evidence only after GitHub reports the PR merged, preserves pending/red/unreadable distinctions, and feeds the same typed fact to both the lifecycle reducer and completion writer. (Stories: US-001, US-002; Acceptance: AC-002, AC-003, AC-004)",
-      "text": "The live delivery adapter reads post-merge execution evidence only after GitHub reports the PR merged, preserves pending/red/unreadable distinctions, and feeds the same typed fact to both the lifecycle reducer and completion writer. (Stories: US-001, US-002; Acceptance: AC-002, AC-003, AC-004)",
+      "title": "The live delivery adapter reads post-merge execution evidence only after GitHub reports the PR merged, preserves the complete matching-run inventory so unrelated red/pending/cancelled diagnostics remain visible, applies qualifying-success precedence, and feeds the same typed fact to both the lifecycle reducer and completion writer. (Stories: US-001, US-002; Acceptance: AC-002, AC-003, AC-004)",
+      "text": "The live delivery adapter reads post-merge execution evidence only after GitHub reports the PR merged, preserves the complete matching-run inventory so unrelated red/pending/cancelled diagnostics remain visible, applies qualifying-success precedence, and feeds the same typed fact to both the lifecycle reducer and completion writer. (Stories: US-001, US-002; Acceptance: AC-002, AC-003, AC-004)",
       "acceptanceCriteria": [
         "AC-002",
         "AC-003",
@@ -243,8 +244,8 @@
     },
     {
       "id": "FR-006",
-      "title": "Focused unit and live-adapter tests prove the inversion: PR-green plus merge/reachability but no qualifying branch run refuses all terminal writes, while adding the exact matching green run enables precisely the existing completion saga. (Stories: US-001, US-002; Acceptance: AC-005)",
-      "text": "Focused unit and live-adapter tests prove the inversion: PR-green plus merge/reachability but no qualifying branch run refuses all terminal writes, while adding the exact matching green run enables precisely the existing completion saga. (Stories: US-001, US-002; Acceptance: AC-005)",
+      "title": "Focused unit, live-adapter, and production-route tests prove the inversion: PR-green plus merge/reachability but no qualifying branch run refuses all terminal writes, while adding one exact matching successful default-branch push run to a mixed inventory containing unrelated non-success runs enables precisely the existing completion saga and retains those diagnostics in its receipt. (Stories: US-001, US-002; Acceptance: AC-005)",
+      "text": "Focused unit, live-adapter, and production-route tests prove the inversion: PR-green plus merge/reachability but no qualifying branch run refuses all terminal writes, while adding one exact matching successful default-branch push run to a mixed inventory containing unrelated non-success runs enables precisely the existing completion saga and retains those diagnostics in its receipt. (Stories: US-001, US-002; Acceptance: AC-005)",
       "acceptanceCriteria": [
         "AC-005"
       ],
@@ -267,8 +268,8 @@
   "decisions": [
     {
       "id": "DEC-001",
-      "title": "Add a closed \u0060PostMergeVerification\u0060 domain value whose verified arm carries an immutable receipt. Derive it from paginated Actions workflow runs filtered to the exact merge SHA, \u0060push\u0060 event, and merged PR base/default branch. At least one matching completed-success run verifies; any matching pending run is pending; a completed matching non-success is failed; no matching run is absent. Partial, malformed, or transport-failed reads are unreadable and never collapse to absent or verified.",
-      "decision": "Add a closed \u0060PostMergeVerification\u0060 domain value whose verified arm carries an immutable receipt. Derive it from paginated Actions workflow runs filtered to the exact merge SHA, \u0060push\u0060 event, and merged PR base/default branch. At least one matching completed-success run verifies; any matching pending run is pending; a completed matching non-success is failed; no matching run is absent. Partial, malformed, or transport-failed reads are unreadable and never collapse to absent or verified.",
+      "title": "Add a closed \u0060PostMergeVerification\u0060 domain value whose verified arm carries an immutable receipt. Derive it from paginated Actions workflow runs filtered to the exact merge SHA, \u0060push\u0060 event, and merged PR base/default branch. On a complete readable inventory, any matching completed-success run verifies and the receipt retains every matching run; only when no qualifying success exists does a matching pending run wait, a completed matching non-success fail, or an empty matching set remain absent. Partial, malformed, or transport-failed reads are unreadable and never collapse to absent or verified.",
+      "decision": "Add a closed \u0060PostMergeVerification\u0060 domain value whose verified arm carries an immutable receipt. Derive it from paginated Actions workflow runs filtered to the exact merge SHA, \u0060push\u0060 event, and merged PR base/default branch. On a complete readable inventory, any matching completed-success run verifies and the receipt retains every matching run; only when no qualifying success exists does a matching pending run wait, a completed matching non-success fail, or an empty matching set remain absent. Partial, malformed, or transport-failed reads are unreadable and never collapse to absent or verified.",
       "requirementRefs": [
         "FR-001",
         "FR-002",
@@ -339,8 +340,8 @@
     },
     {
       "id": "DEC-004",
-      "title": "Tests invert both the exact-match classifier and the completion gate. The bounded control starts with a PR-green merged snapshot and no matching post-merge run, proves terminal writes remain zero, adds one exact matching successful push run to prove completion, then restores production predicates before all affected suites run.",
-      "decision": "Tests invert both the exact-match classifier and the completion gate. The bounded control starts with a PR-green merged snapshot and no matching post-merge run, proves terminal writes remain zero, adds one exact matching successful push run to prove completion, then restores production predicates before all affected suites run.",
+      "title": "Tests invert both the exact-match classifier and the completion gate. The bounded control starts with a PR-green merged snapshot and no matching post-merge success, proves terminal writes remain zero, adds one exact matching successful push run beside unrelated red, pending, and cancelled runs to prove completion and diagnostic retention, then restores production predicates before all affected suites run.",
+      "decision": "Tests invert both the exact-match classifier and the completion gate. The bounded control starts with a PR-green merged snapshot and no matching post-merge success, proves terminal writes remain zero, adds one exact matching successful push run beside unrelated red, pending, and cancelled runs to prove completion and diagnostic retention, then restores production predicates before all affected suites run.",
       "requirementRefs": [
         "FR-006"
       ],
@@ -399,6 +400,7 @@
       "decisions": [],
       "sourceIds": [
         "AC-001",
+        "AC-002",
         "AC-003",
         "FR-002"
       ],
@@ -1493,7 +1495,7 @@
           "path": "work/2905-post-merge-verification/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396"
+            "value": "e125a5eb5345c6bbe3ea10b61c2fc732eaf50f109a6ac0e719dc0ab92717e04e"
           },
           "schemaVersion": 1
         },
@@ -1501,7 +1503,7 @@
           "path": "work/2905-post-merge-verification/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "45584c80354eb0242bf93c4781fa4a06890b366618f108468fdba7696698fc80"
+            "value": "22e08eae4d4e6a35217ffc1865255f9defd0d72a9503b9003188f1d843db4cd7"
           },
           "schemaVersion": 1
         },
@@ -1509,7 +1511,7 @@
           "path": "work/2905-post-merge-verification/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409"
+            "value": "f0d561a6985da58ba453923ed3aa6bcfd64f2cc88093bf50417918bec1fcae2d"
           },
           "schemaVersion": 1
         },
@@ -1517,7 +1519,7 @@
           "path": "work/2905-post-merge-verification/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef"
+            "value": "c1905298c0cdd7b52c48f905804c8202a82cf2344e6306c988d6f994afd23ce4"
           },
           "schemaVersion": 1
         },
@@ -1525,14 +1527,14 @@
           "path": "work/2905-post-merge-verification/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678"
+            "value": "f2a65c9b5320b1fb5e8cf29cc58758b8a9f3edcdac0dc00f1a53c57318fbe9a4"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "c736292368e5a0a37ac03cb042ec7ea00d0342df8fda55e07cbdc11671370917"
+        "value": "dd89ce592b1a53335bcd0b0e5b277e3c648d3b5b4d421c83d752cf49bd95ed5d"
       },
       "currency": "current"
     }

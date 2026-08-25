@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2905-post-merge-verification/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2905-post-merge-verification/analysis.json
-    digest: c305aab0e1cf8697ceb40abf5f607d9363dde06bcba11294ec052abf0c957fd0
+    digest: 5caef4580da521f55bf3dc5e8ce2ea53d14a805a6a061862a136151fa9a5a290
     schemaVersion: 1
   - label: checklist
     path: work/2905-post-merge-verification/checklist.md
@@ -19,19 +19,19 @@ sourceSnapshots:
     schemaVersion: 1
   - label: clarifications
     path: work/2905-post-merge-verification/clarifications.md
-    digest: 69a9961149581906fa32723e30da01dfce29f74e5bd3f6fb588da43452e4f396
+    digest: e125a5eb5345c6bbe3ea10b61c2fc732eaf50f109a6ac0e719dc0ab92717e04e
     schemaVersion: 1
   - label: plan
     path: work/2905-post-merge-verification/plan.md
-    digest: 44c5b2ed94b1693a60d62d3dfa59d4829111ae4881bb28cef856c833ccdc9409
+    digest: f0d561a6985da58ba453923ed3aa6bcfd64f2cc88093bf50417918bec1fcae2d
     schemaVersion: 1
   - label: spec
     path: work/2905-post-merge-verification/spec.md
-    digest: 9009a77bed9e24bc59fa5b4163369580f84de0dbf047d5116e66720be74f5bef
+    digest: c1905298c0cdd7b52c48f905804c8202a82cf2344e6306c988d6f994afd23ce4
     schemaVersion: 1
   - label: tasks
     path: work/2905-post-merge-verification/tasks.yml
-    digest: f596d2451ad98001a01287c57b5fceb67e9f0e727d4337e4cf853e38f3b31678
+    digest: f2a65c9b5320b1fb5e8cf29cc58758b8a9f3edcdac0dc00f1a53c57318fbe9a4
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -77,7 +77,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -102,13 +102,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: []
+    notes: ["Fresh command-produced evidence covers the complete adapter inventory, any-success precedence, retained diagnostics, mismatched-run refusal, and production completion admission."]
   - id: EV004
     kind: verification
     subject:
@@ -127,7 +127,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -152,7 +152,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -177,13 +177,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: []
+    notes: ["Mixed-set reader and core-admission inversions each redded their named focused test; restored predicates pass the full six-project test command recorded in the JUnit receipt."]
   - id: EV007
     kind: verification
     subject:
@@ -202,7 +202,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -227,7 +227,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -252,7 +252,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -277,7 +277,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -302,7 +302,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -327,7 +327,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -352,7 +352,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -377,7 +377,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -402,7 +402,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -427,7 +427,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -452,7 +452,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -477,7 +477,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -502,7 +502,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/2905-post-merge-verification/test-results/2905-lifecycle.junit.xml
-      digest: "sha256:228692ab8c74c9b9061a82af73cb7d9c5f738605088a86aedd29b06aa8ed50e2"
+      digest: "sha256:bd3a7006ae02251b32e96ffcd79552ccc1a1b177d8503c638501813660e94aff"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1

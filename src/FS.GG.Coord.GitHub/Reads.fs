@@ -1933,10 +1933,26 @@ module Reads =
                                             run.Event = "push"
                                             && run.Branch = defaultBranch
                                             && run.Sha = mergeSha)
+                                    let ordered = matching |> List.sortBy (fun run -> run.Id, run.Attempt)
+
                                     if List.isEmpty matching then
                                         Delivery.Awaiting "no exact-merge default-branch push execution has registered"
+                                    elif
+                                        matching
+                                        |> List.exists (fun run ->
+                                            run.Status = "completed" && run.Conclusion = "success")
+                                    then
+                                        // AC-002 is existential: one completed successful exact-SHA/default-
+                                        // branch push execution is the qualifying receipt. Other workflows on
+                                        // the same push are independent observations, not a veto over that
+                                        // receipt. Retain every matching run so their red/pending/cancelled state
+                                        // remains durable and visible instead of disappearing from the audit.
+                                        Delivery.Verified
+                                            { MergeSha = mergeSha
+                                              DefaultBranch = defaultBranch
+                                              Runs = ordered }
                                     elif matching |> List.exists (fun run -> run.Status <> "completed") then
-                                        Delivery.Awaiting "an exact-merge default-branch push execution is still running"
+                                        Delivery.Awaiting "no successful exact-merge default-branch push execution has completed; at least one matching execution is still running"
                                     else
                                         match matching |> List.tryFind (fun run -> run.Conclusion <> "success") with
                                         | Some run ->
@@ -1944,10 +1960,9 @@ module Reads =
                                                 $"workflow run %d{run.Id} completed with conclusion '%s{run.Conclusion}'"
                                             )
                                         | None ->
-                                            Delivery.Verified
-                                                { MergeSha = mergeSha
-                                                  DefaultBranch = defaultBranch
-                                                  Runs = matching |> List.sortBy (fun run -> run.Id, run.Attempt) })
+                                            // Defensive only: every completed success was admitted above and
+                                            // every other completed conclusion is rejected here.
+                                            Delivery.Rejected "no successful exact-merge default-branch push execution was found")
                         | _ -> Error(Malformed(runsSubject, "the Actions response carried no numeric total_count and workflow_runs array"))
 
     // The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.

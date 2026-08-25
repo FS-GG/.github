@@ -66,6 +66,27 @@ module DeliveryTests =
                     Conclusion = "success"
                     Url = "https://github.example/runs/2905" } ] }
 
+    let mixedVerified mergeSha =
+        let run id workflow status conclusion : Delivery.PostMergeRun =
+            { Id = id
+              Attempt = 1
+              Workflow = workflow
+              Event = "push"
+              Branch = "main"
+              Sha = mergeSha
+              Status = status
+              Conclusion = conclusion
+              Url = $"https://github.example/runs/%d{id}" }
+
+        Delivery.Verified
+            { MergeSha = mergeSha
+              DefaultBranch = "main"
+              Runs =
+                [ run 2905L "green" "completed" "success"
+                  run 2906L "red" "completed" "failure"
+                  run 2907L "pending" "in_progress" ""
+                  run 2908L "cancelled" "completed" "cancelled" ] }
+
     let inspectVerified facts =
         Delivery.inspectWithPostMergeVerification (verified "merge-sha") facts
 
@@ -165,6 +186,51 @@ module DeliveryTests =
             Delivery.MergedAwaitingObligations
             Delivery.Complete
             (Delivery.inspectWithPostMergeVerification (verified "merge-sha") merged)
+
+    [<Fact>]
+    let ``#2905 a qualifying success admits completion while mixed diagnostics stay receipt-bound`` () =
+        let merged = { snapshot "pr-head" with Merged = true; MergeReachable = true }
+        let verification = mixedVerified "merge-sha"
+
+        transition
+            Delivery.MergedAwaitingObligations
+            Delivery.Complete
+            (Delivery.inspectWithPostMergeVerification verification merged)
+
+        let facts = Delivery.completionFactsWithPostMergeVerification verification merged
+        match Delivery.decideCompletion facts with
+        | Delivery.CompletionDecision.ProjectCompletion -> ()
+        | decision -> failwithf "expected mixed receipt to admit completion, got %A" decision
+
+        let transitionReceipt =
+            match Delivery.inspectWithPostMergeVerification verification merged with
+            | Delivery.Next value when value.Action = Delivery.Complete -> value
+            | decision -> failwithf "expected mixed completion transition, got %A" decision
+
+        let durable =
+            Delivery.createCompletionReceipt
+                merged.Freshness.ItemRef
+                merged.Freshness.PullRequest.Value
+                "merge-sha"
+                (DateTimeOffset.Parse "2026-08-25T13:00:00Z")
+                transitionReceipt.FreshnessToken
+                transitionReceipt.ActionKey
+                facts
+            |> Result.defaultWith (String.concat "; " >> failwith)
+
+        Assert.Equal(4, durable.PostMergeVerification.Value.Runs.Length)
+        Assert.Equal(Ok(Some durable), durable |> Delivery.encodeCompletionReceipt |> Delivery.tryDecodeCompletionReceipt)
+
+        let mismatched =
+            match verification with
+            | Delivery.Verified receipt ->
+                let first = receipt.Runs.Head
+                Delivery.Verified { receipt with Runs = { first with Sha = "other-sha" } :: receipt.Runs.Tail }
+            | _ -> failwith "the fixture is verified"
+
+        match Delivery.decideCompletion (Delivery.completionFactsWithPostMergeVerification mismatched merged) with
+        | Delivery.CompletionDecision.Refused reason -> Assert.Contains("not an exact-merge", reason)
+        | decision -> failwithf "expected mismatched retained diagnostic refusal, got %A" decision
 
     [<Fact>]
     let ``#2905 red and unreadable post-merge observations remain visible and recoverable`` () =

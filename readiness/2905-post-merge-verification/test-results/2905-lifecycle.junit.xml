@@ -1,5 +1,55 @@
-<testsuite name="dotnet" tests="1" failures="0"><testcase name="dotnet"><system-out><![CDATA[Test run for /home/developer/fsgg-driver/worktrees/2905-merlin-f426/tests/FS.GG.Coord.Cli.Lifecycle.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.Tests.dll (.NETCoreApp,Version=v10.0)
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.Core.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   930, Skipped:     0, Total:   930, Duration: 1 s - FS.GG.Coord.Core.Tests.dll (net10.0)
+  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.GitHub.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.GitHub.Tests/bin/Release/net10.0/FS.GG.Coord.GitHub.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.GitHub.Tests/bin/Release/net10.0/FS.GG.Coord.GitHub.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   680, Skipped:     0, Total:   680, Duration: 1 s - FS.GG.Coord.GitHub.Tests.dll (net10.0)
+  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.Lifecycle -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Lifecycle/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.dll
+  FS.GG.Coord.Cli.BoardOps -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.BoardOps/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.dll
+  FS.GG.Coord.Cli -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll
+  FS.GG.Coord.Cli.Lifecycle.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Lifecycle.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Lifecycle.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
 
 Passed!  - Failed:     0, Passed:   137, Skipped:     0, Total:   137, Duration: 1 s - FS.GG.Coord.Cli.Lifecycle.Tests.dll (net10.0)
+  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.Lifecycle -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Lifecycle/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.dll
+  FS.GG.Coord.Cli.BoardOps -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.BoardOps/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.dll
+  FS.GG.Coord.Cli -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll
+  FS.GG.Coord.Cli.BoardOps.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.BoardOps.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   259, Skipped:     0, Total:   259, Duration: 1 s - FS.GG.Coord.Cli.BoardOps.Tests.dll (net10.0)
+  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.Lifecycle -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Lifecycle/bin/Release/net10.0/FS.GG.Coord.Cli.Lifecycle.dll
+  FS.GG.Coord.Cli.BoardOps -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.BoardOps/bin/Release/net10.0/FS.GG.Coord.Cli.BoardOps.dll
+  FS.GG.Coord.Cli -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll
+  FS.GG.Coord.Cli.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   397, Skipped:     0, Total:   397, Duration: 1 s - FS.GG.Coord.Cli.Tests.dll (net10.0)
+  FS.GG.Coord.Core -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.GitHub -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll
+  FS.GG.Coord.Cli.Kernel -> /tmp/fsgg-2905-repair.MXRcVm/src/FS.GG.Coord.Cli.Kernel/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.dll
+  FS.GG.Coord.Cli.Kernel.Tests -> /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Kernel.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.Tests.dll
+Test run for /tmp/fsgg-2905-repair.MXRcVm/tests/FS.GG.Coord.Cli.Kernel.Tests/bin/Release/net10.0/FS.GG.Coord.Cli.Kernel.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   182, Skipped:     0, Total:   182, Duration: 157 ms - FS.GG.Coord.Cli.Kernel.Tests.dll (net10.0)
 ]]></system-out></testcase></testsuite>
