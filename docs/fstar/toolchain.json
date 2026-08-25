@@ -1,0 +1,14 @@
+{
+  "fstarVersion": "2026.08.23",
+  "fstarCommit": "f3dd580cd58cdc5ccc0a64e4697c8cdad5a9e208",
+  "platform": "Linux-x86_64",
+  "archive": "fstar-v2026.08.23-Linux-x86_64.tar.gz",
+  "sha256": "4d53a5e591e6a22248093e2b3d1f243f57e8d5c1b1b329dd94706db4f0f7abb3",
+  "download": "https://github.com/FStarLang/FStar/releases/download/v2026.08.23/fstar-v2026.08.23-Linux-x86_64.tar.gz",
+  "verificationOptions": [
+    "--cache_checked_modules",
+    "--ext",
+    "fly_deps=false"
+  ],
+  "extractionBackend": "FSharp"
+}
