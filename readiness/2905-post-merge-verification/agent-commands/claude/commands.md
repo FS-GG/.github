@@ -10,8 +10,8 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 
 ## T002 — Implement requirement FR-002
 - Stage: specify
-- Purpose: Carry out lifecycle task T002 (done) covering AC-001, AC-003, FR-002.
-- Related: AC-001, AC-003, FR-002
+- Purpose: Carry out lifecycle task T002 (done) covering AC-001, AC-002, AC-003, FR-002.
+- Related: AC-001, AC-002, AC-003, FR-002
 
 ## T003 — Implement requirement FR-003
 - Stage: specify

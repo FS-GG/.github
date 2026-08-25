@@ -3012,6 +3012,12 @@ let private postMergeTransport runsBody =
 let private postMergeRun status conclusion =
     $"""{{"total_count":1,"workflow_runs":[{{"id":2905,"run_attempt":1,"path":".github/workflows/ci.yml","event":"push","head_branch":"main","head_sha":"merge-2905","status":"%s{status}","conclusion":%s{conclusion},"html_url":"https://github.example/runs/2905"}}]}}"""
 
+let private postMergeRunObject id path event branch sha status conclusion =
+    $"""{{"id":%d{id},"run_attempt":1,"path":"%s{path}","event":"%s{event}","head_branch":"%s{branch}","head_sha":"%s{sha}","status":"%s{status}","conclusion":%s{conclusion},"html_url":"https://github.example/runs/%d{id}"}}"""
+
+let private postMergeRuns (runs: string list) =
+    $"""{{"total_count":%d{runs.Length},"workflow_runs":[%s{String.concat "," runs}]}}"""
+
 [<Fact>]
 let ``#2905 exact merge green push on the default branch verifies`` () =
     let transport = postMergeTransport (postMergeRun "completed" "\"success\"")
@@ -3023,11 +3029,66 @@ let ``#2905 exact merge green push on the default branch verifies`` () =
     | result -> failwithf "expected exact-merge verification, got %A" result
 
 [<Fact>]
+let ``#2905 one exact green verifies a mixed inventory and retains unrelated diagnostics`` () =
+    let runs =
+        [ postMergeRunObject 2908 ".github/workflows/pending.yml" "push" "main" "merge-2905" "in_progress" "null"
+          postMergeRunObject 2907 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\""
+          postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
+          postMergeRunObject 2906 ".github/workflows/cancelled.yml" "push" "main" "merge-2905" "completed" "\"cancelled\"" ]
+
+    match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
+    | Ok(Delivery.Verified receipt) ->
+        Assert.Equal<int64 list>([ 2905L; 2906L; 2907L; 2908L ], receipt.Runs |> List.map _.Id)
+        Assert.Contains(receipt.Runs, fun run -> run.Conclusion = "failure")
+        Assert.Contains(receipt.Runs, fun run -> run.Status = "in_progress")
+        Assert.Contains(receipt.Runs, fun run -> run.Conclusion = "cancelled")
+    | result -> failwithf "expected mixed exact-merge inventory to verify, got %A" result
+
+[<Fact>]
+let ``#2905 production completion admission accepts the mixed adapter receipt`` () =
+    let runs =
+        [ postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
+          postMergeRunObject 2906 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\"" ]
+
+    let verification =
+        match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
+        | Ok observed -> observed
+        | Error error -> failwithf "production adapter read failed: %A" error
+
+    let facts: Delivery.CompletionFacts =
+        { HeadSha = "pr-head"
+          Merged = true
+          MergeReachable = true
+          PostMergeVerification = verification
+          IssueClosed = false
+          BoardDone = false
+          ClaimReleased = false
+          PendingWrites = 0
+          CleanupEligible = false
+          ObligationsDeclared = true
+          Obligations = [] }
+
+    match Delivery.decideCompletion facts with
+    | Delivery.CompletionDecision.ProjectCompletion -> ()
+    | decision -> failwithf "expected production completion admission, got %A" decision
+
+[<Fact>]
 let ``#2905 no qualifying run cannot verify completion`` () =
     let transport = postMergeTransport """{"total_count":0,"workflow_runs":[]}"""
     match Reads.postMergeVerification transport "FS-GG" ".github" 2905 with
     | Ok(Delivery.Awaiting reason) -> Assert.Contains("no exact-merge", reason)
     | result -> failwithf "expected an observable wait, got %A" result
+
+[<Fact>]
+let ``#2905 mismatched success does not qualify`` () =
+    let runs =
+        [ postMergeRunObject 2905 ".github/workflows/pr.yml" "pull_request" "main" "merge-2905" "completed" "\"success\""
+          postMergeRunObject 2906 ".github/workflows/branch.yml" "push" "other" "merge-2905" "completed" "\"success\""
+          postMergeRunObject 2907 ".github/workflows/sha.yml" "push" "main" "other-sha" "completed" "\"success\"" ]
+
+    match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
+    | Ok(Delivery.Awaiting reason) -> Assert.Contains("no exact-merge", reason)
+    | result -> failwithf "expected mismatched successes to remain non-qualifying, got %A" result
 
 [<Fact>]
 let ``#2905 pending and red exact-merge runs stay nonterminal`` () =

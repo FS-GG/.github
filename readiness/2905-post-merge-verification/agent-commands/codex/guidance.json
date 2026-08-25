@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "2b93bd66cf2207dd1a1644d6f243b6acf4abbe5e469df99fdab15b65786648d8"
+        "value": "ec54125f49965f3b14c3a3de4fe0ee86ccdd873bda98f4978c41181658566361"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,7 +19,7 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "84fe7785f664eecb6caf2d95472683dbd655fab28a23514e7c8f7180078d0b3e"
+    "value": "25ec13239b1ccef1747cf5a0892943d9d2f06325e8c26fff9bcda1d6370a725f"
   },
   "commands": [
     {
@@ -37,9 +37,10 @@
       "id": "T002",
       "title": "Implement requirement FR-002",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T002 (done) covering AC-001, AC-003, FR-002.",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-001, AC-002, AC-003, FR-002.",
       "relatedIds": [
         "AC-001",
+        "AC-002",
         "AC-003",
         "FR-002"
       ]
