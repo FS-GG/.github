@@ -1,0 +1,730 @@
+---
+title: "Roadmap: GitHub Substrate v2 fleet cutover"
+category: Design
+categoryindex: 4
+index: 26
+description: "The complete execution sequence for independently building and qualifying FS.GG.Coordination, cutting the fleet to GitHub Substrate v2, and retiring v1."
+---
+
+# Roadmap: GitHub Substrate v2 fleet cutover
+
+This is the living execution roadmap for replacing the current FS-GG coordination system. V2 is built in
+a new `FS.GG.Coordination` repository, consumes the published FS.GG.SDD specification kernel, and is
+qualified independently of the v1 lifecycle it replaces. The fleet is prepared additively, frozen once,
+switched and verified while normal writes remain closed, opened at one explicit point of no return, and
+then stripped of every v1 production authority. This document owns cross-repository sequence and exit
+gates; the [governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) owns the
+architecture and rationale.
+
+| Field | Value |
+|---|---|
+| Status | Ongoing renovation; design and execution spine filed, implementation not started |
+| Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
+| Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
+| Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
+| Bridge and cutover ledger | [`.github#2964`](https://github.com/FS-GG/.github/issues/2964) |
+| Fleet cutover and retirement | [`.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
+| Point of no return | Authoritative `OpenV2` transition in the protected cutover ledger |
+| Current production authority | v1 until `OpenV2`; preparation and shadow reads do not change that |
+
+## 1. How work is executed
+
+The three program issues are too large to hand directly to a general worker. They are durable anchors for
+ownership, roll-up, and cross-repository sequencing. Actual work is performed as one bounded roadmap unit
+at a time.
+
+### 1.1 Before `FS.GG.Coordination` exists
+
+Only `GS2-00` and the repository-bootstrap portion of `GS2-01` are assignable. The instruction to an agent
+must name one unit and its permitted effects, for example:
+
+> Execute `GS2-00.2` from the GitHub Substrate v2 roadmap. Produce the proposed ADR and authority census;
+> do not create the new repository, modify live GitHub configuration, or start v2 implementation.
+
+Creating the repository, installing the GitHub App, creating environments, or changing organization
+settings requires explicit organization-administrator authority. A worker may prepare and verify an exact
+plan, but must not infer that authority from the roadmap.
+
+### 1.2 After the bootstrap repository exists
+
+`GS2-01` creates a repository-owned `github-substrate-v2-work` skill and a small roadmap command. That
+command reads this document's stable unit IDs and the new repository's typed specification/evidence index,
+then reports the next unit whose prerequisites are satisfied. It never schedules directly from mutable
+Project status.
+
+The normal instruction becomes:
+
+> In `FS.GG.Coordination`, use `github-substrate-v2-work` to execute the next ready unit. Work only that
+> unit, publish its required qualification evidence, and stop at its named exit gate.
+
+Every unit must have:
+
+- one owning repository;
+- an explicit touch-set or administrative target set;
+- prerequisite unit IDs and issue references;
+- an exact candidate/source revision;
+- positive acceptance cases and independent negative controls;
+- a permission ceiling;
+- a rollback or no-write boundary;
+- generated and independently authored evidence; and
+- a merged PR or protected administrative receipt before it is marked complete.
+
+### 1.3 Evidence and status
+
+The Coordination Project is a visibility projection. V1 claim, review, delivery, verification, and done
+records do not qualify v2. Completion authority is the custom qualification receipt stored against the
+exact source and artifact fingerprints in `FS.GG.Coordination`.
+
+Each unit has these states:
+
+```text
+Planned -> Ready -> Implementing -> Candidate -> Qualified -> Accepted
+                    |                 |
+                    +-> Refused       +-> Rejected
+```
+
+- `Ready` means every prerequisite receipt is accepted.
+- `Candidate` means code or a settings plan exists but has no authority to enter production.
+- `Qualified` means all generated and independent controls pass against exact artifacts.
+- `Accepted` means the owning PR is merged or the protected administrative operation is verified.
+- `Refused` and `Rejected` retain evidence and return to design or implementation; they are not failures
+  hidden by a retry.
+
+Roadmap checkboxes are updated only from accepted receipts. They are a human projection, not proof.
+
+## 2. Non-negotiable program invariants
+
+1. The published FS.GG.SDD specification kernel is consumed as a package; no source-project shortcut or
+   copied generic kernel is permitted.
+2. GitHub owns facts it can represent with the required identity, revision, completeness, and relation
+   semantics. FS-GG owns only the missing process, concurrency, evidence, and transaction semantics.
+3. V2 is implemented in `FS.GG.Coordination`; `.github` retains organization policy, registries, designs,
+   the cutover ledger, desired-state instances, and thin reusable workflow entry points.
+4. The v1 engine receives only the universal epoch bridge, necessary security fixes, and retirement work.
+5. Preparation may create inert schema and read-only projections. V1 and v2 normal production writers are
+   never enabled together.
+6. Every write is a typed, revision-bound, idempotent mutation plan with a durable outcome that includes
+   partial and indeterminate states.
+7. Generated model tests are necessary but insufficient. Every safety-critical invariant has at least one
+   independently authored black-box oracle.
+8. Failure, absence, incomplete reads, unsupported capabilities, insufficient permission, stale data,
+   contradiction, partial success, and indeterminate success remain distinct.
+9. Before `OpenV2`, rollback restores the bridge v1 authority while writes remain controlled. At and after
+   `OpenV2`, recovery is roll-forward and v1 never resumes.
+10. No compatibility reader, migration adapter, workflow, command, field, or exception survives without a
+    deletion unit and observable deletion test.
+
+## 3. Program dependency map
+
+```text
+GS2-00 Ratify design and freeze authority census
+   |
+   +-------------------------+
+   |                         |
+   v                         v
+GS2-01 Bootstrap repo     GS2-08 Specify v1 bridge/ledger contract
+   |                         |
+   v                         |
+GS2-02 Protocol core         |
+   |                         |
+   +----------+--------------+
+   |          |              |
+   v          v              v
+GS2-03      GS2-04         GS2-08 Implement/publish/adopt bridge
+Qualification GitHub IO       |
+   |          |               |
+   +----+-----+               |
+        |                     |
+        v                     |
+   GS2-05 Work model          |
+        |                     |
+        +---------+-----------+
+        |         |
+        v         v
+   GS2-06       GS2-07
+   Settings/CI  Events/queue
+        |         |
+        +----+----+
+             |
+             v
+        GS2-09 Migration/archive tooling
+             |
+             v
+        GS2-10 Qualify exact candidate and prepare fleet
+             |
+             v
+        GS2-11 Freeze and snapshot
+             |
+             v
+        GS2-12 Switch and verify while closed
+             |
+             v
+        GS2-13 Open v2 and retire v1
+             |
+             v
+        GS2-14 Observe, normalize, and close
+```
+
+`GS2-03` and `GS2-04` may proceed in parallel after the protocol envelope is frozen. `GS2-06` and
+`GS2-07` may proceed in parallel after the work model and adapter boundaries are qualified. The bridge may
+be developed in parallel with v2, but it cannot publish until the epoch wire contract is frozen. No fleet
+preparation begins from an unqualified candidate.
+
+## 4. Qualification gates
+
+These gates replace the existing coordination validation/verification process for v2.
+
+| Gate | Proves | Required evidence |
+|---|---|---|
+| Q0 Architecture | Authorities and boundaries are coherent | Accepted ADR, authority/mutation/deletion census, threat model, independent review |
+| Q1 Compiler | Typed source is deterministic and complete | Canonical bytes/fingerprint, semantic diff, schema/projection freshness, wrong-model controls |
+| Q2 Pure model | State and decisions obey invariants | Unit, property, model, bounded formal, and independently authored transition tests |
+| Q3 Adapter | External observations and writes preserve meaning | Recorded fixtures, pagination/completeness, revision, idempotency, partial/indeterminate controls |
+| Q4 Sandbox | Real GitHub behavior matches the adapter contract | Isolated repositories/project, destructive test identities, API/permission/rate evidence |
+| Q5 Shadow | V2 reads the live fleet without changing it | Complete snapshots, v1/v2 decision comparison, explained divergence ledger, zero v2 write permission |
+| Q6 Recovery | Every multi-step path resumes safely | Failure after every step, receipt replay, compensation/roll-forward, rollback rehearsal |
+| Q7 Supply chain | The exact candidate can be trusted and installed | Reproducible build, package hashes, SBOM, attestations, both-feed/public-read verification |
+| Q8 Closed fleet | The switched fleet works before normal writes open | Schema/settings/receiver proof, isolated canary journeys, injected wrong paths, rollback readiness |
+| Q9 Retirement | V1 can no longer author production state | Static/runtime writer census, deletion ledger, old-client refusal, sealed-history verification |
+| Q10 Operations | V2 is stable after opening | 0/7/14/30-day SLOs, incidents, repair lag, API cost, queue/CI/release measurements |
+
+No single test generator may satisfy both sides of a safety claim. For example, the protocol compiler may
+generate all legal epoch transitions, but an independent black-box suite must still attempt an old-client
+write after freeze and reject a forged or rewound ledger.
+
+## 5. Detailed milestones
+
+### GS2-00 — Ratify architecture and freeze the v1 corpus
+
+**Parent:** `.github#2953`
+**Owner:** `.github`
+**Exit gate:** Q0
+
+- [ ] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
+  mechanism, GitHub plan/API limitation, permission boundary, and rollback claim in the governing design.
+- [ ] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
+  new-only writer policy, independent qualification lane, protected Git epoch ledger, native/custom
+  authority table, and `OpenV2` boundary. Keep status Proposed until independent review is complete.
+- [ ] **GS2-00.3 — Complete the v1 authority census.** Enumerate every issue/body/Project/registry/comment,
+  workflow, command, JSON contract, environment variable, file, package, schedule, and setting that can
+  affect a coordination decision.
+- [ ] **GS2-00.4 — Complete the mutation census.** Name every always-writing and conditionally writing
+  command, workflow, App route, repair script, release route, and administrative path; bind each to its
+  current precondition and eventual v2 disposition.
+- [ ] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
+  touch-set, dependency, hierarchy, intake, review, delivery, merge, release, pagination, rate-limit,
+  partial-write, stale-read, and self-hosting incidents.
+- [ ] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
+  marker schemas, package IDs/versions, reusable workflow inputs/outputs/job IDs, required contexts, and
+  receiver pins. Classify each `Preserve`, `Migrate`, `Seal`, or `Retire`.
+- [ ] **GS2-00.7 — Freeze the deletion ledger.** Every v1 source tree, parser, projection, field, schedule,
+  workflow, exception, and package must have a later deletion unit and a test proving absence.
+- [ ] **GS2-00.8 — Accept Q0.** Architecture, security, operations, and cross-repository reviewers sign the
+  exact design/census fingerprints; unresolved material questions block `GS2-01`.
+- [ ] **GS2-00.9 — Decide runtime operations.** Select or reject a deployment boundary for the App/webhook
+  host, including ownership, availability target, secrets, ingress verification, logs/metrics, upgrades,
+  incident response, data retention, cost, and disaster recovery. If no acceptable host is approved,
+  scheduled audits remain authoritative and `.github#2961` is removed from the cutover critical path by an
+  explicit amendment rather than by shipping an unowned service.
+
+### GS2-01 — Bootstrap `FS.GG.Coordination`
+
+**Parent:** `.github#2963`
+**Owner:** organization administrator, then `FS.GG.Coordination`
+**Depends on:** GS2-00
+**Exit:** independently buildable empty product and executable qualification skeleton
+
+- [ ] **GS2-01.1 — Provision the repository.** Create the repository with least-privilege teams, branch
+  ruleset, signed/immutable tag policy, secret scanning, dependency graph, Dependabot alerts, Actions
+  policy, auto-merge policy, and default branch settings. Record the exact settings receipt.
+- [ ] **GS2-01.2 — Register the component.** Add the repository and ownership/release topology to the
+  reviewed registry, architecture map, custom-property projection, GitHub App installation scope, and
+  Coordination Project membership rules.
+- [ ] **GS2-01.3 — Establish the solution boundary.** Create packages/projects for protocol specification,
+  pure core, GitHub adapters, CLI host, App/webhook host, qualification contracts, and tests. Enforce
+  one-way dependencies and keep GitHub SDK/HTTP concerns out of the pure core.
+- [ ] **GS2-01.4 — Pin the published kernel.** Restore the exact published FS.GG.SDD artifact from the
+  supported read feed, verify its identity, and prohibit source-project or checkout-relative references.
+- [ ] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
+  compiler/unit tests, dependency/security checks, package/install smoke, and evidence-manifest validation.
+  Do not import v1 coordination completion gates.
+- [ ] **GS2-01.6 — Create the work skill.** Add `github-substrate-v2-work` with commands to inspect this
+  roadmap, check unit prerequisites, create a unit evidence manifest, run the relevant Q gates, and stop at
+  the unit boundary.
+- [ ] **GS2-01.7 — Create evidence storage.** Version schemas and directories for corpus inputs, external
+  observations, independent oracles, generated cases, test results, artifact manifests, reviews, and
+  accepted qualification receipts. Generated bulky output remains in immutable CI artifacts/releases;
+  compact indexes and digests remain in git.
+- [ ] **GS2-01.8 — Prove bootstrap recovery.** A clean machine clones, restores, builds, tests, packs,
+  installs, and validates an empty candidate using published dependencies only.
+- [ ] **GS2-01.9 — Provision non-production runtime.** If GS2-00.9 accepts a hosted App/webhook boundary,
+  provision its development and qualification environments, deployment identity, secret rotation,
+  observability, backup/recovery, and kill switch before any production event subscription exists.
+
+### GS2-02 — Implement the typed coordination specification
+
+**Parent:** `.github#2963`
+**Owner:** `FS.GG.Coordination`
+**Depends on:** GS2-01
+**Exit gates:** Q1 and the pure portion of Q2
+
+- [ ] **GS2-02.1 — Define stable identities.** Specify subjects, authorities, codecs, commands, events,
+  mutations, projections, observation plans, settings profiles, evidence obligations, and version IDs.
+- [ ] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
+  stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
+  completeness contracts.
+- [ ] **GS2-02.3 — Implement observations.** Distinguish observed, proven absent, contradictory,
+  unreadable, unsupported, unauthorized, incomplete, stale, and rate-limited outcomes.
+- [ ] **GS2-02.4 — Implement lifecycle intent.** Separate human scheduling intent from claims, blockers,
+  PR/review/delivery observations and derived lifecycle status.
+- [ ] **GS2-02.5 — Implement native relation algebra.** Represent parent/child and blocking relations as
+  typed edge sets with idempotent add/remove intent rather than scalar replacement.
+- [ ] **GS2-02.6 — Implement protocol streams.** Type claim/lease/touch-set, operation-lock/election,
+  review, delivery, and operation-receipt envelopes; classify ephemeral retention versus durable
+  checkpointing.
+- [ ] **GS2-02.7 — Implement mutation algebra.** Cover create, append, add/remove edge, set, clear,
+  transition, and compensate with expected revision, idempotency, and all terminal/uncertain outcomes.
+- [ ] **GS2-02.8 — Implement durable plans.** Compile decisions into ordered resumable steps with
+  causation/correlation, receipt re-read, compensation boundary, and roll-forward classification.
+- [ ] **GS2-02.9 — Implement desired-state specifications.** Type issue schema, Projects, repository
+  profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
+- [ ] **GS2-02.10 — Implement compiler outputs.** Derive schemas, command metadata, permission census,
+  mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
+- [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent authoring forms normalize identically;
+  semantic changes produce stable, reviewable diffs; unsupported schema versions fail before execution.
+
+### GS2-03 — Build the independent qualification system
+
+**Parent:** `.github#2963`
+**Owner:** `FS.GG.Coordination`
+**Depends on:** GS2-02.1–GS2-02.8
+**Exit gates:** Q1, Q2, Q6, and Q7 harness capability
+
+- [ ] **GS2-03.1 — Define the qualification manifest.** Bind source, model, compiler, dependencies,
+  generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
+- [ ] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
+  ambiguity, and current-v1 result; never normalize away the defect being tested.
+- [ ] **GS2-03.3 — Add generated structural tests.** Derive vocabulary completeness, transition coverage,
+  command/mutation registration, permission coverage, schema round-trip, and projection freshness cases.
+- [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
+  projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
+  exact-head review, post-merge verification, and dual-feed release recovery.
+- [ ] **GS2-03.5 — Add model/property/formal tests.** Explore claim/election, relation mutation, lifecycle,
+  operation saga, epoch, and rollback state spaces with bounded counterexample output.
+- [ ] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
+  duplicate/reorder events; return partial pages; exhaust rate budgets; revoke permission; mutate concurrent
+  revisions; and require convergence or typed refusal.
+- [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Pack once, compare bytes, generate SBOM
+  and attestations, publish candidate artifacts to the allowed pre-production channel, and install them in
+  clean consumers.
+- [ ] **GS2-03.8 — Add review gates.** Architecture, security, adapter, migration, and cutover reviewers
+  sign independent findings against exact candidate fingerprints; no self-authored green roll-up suffices.
+- [ ] **GS2-03.9 — Prove the harness can fail.** Mutation-test or invert every gate class so a vacuous,
+  absent, stale, truncated, forged, or generated-only evidence set is red.
+
+### GS2-04 — Implement GitHub authority adapters and interpreters
+
+**Parent:** `.github#2963`
+**Owner:** `FS.GG.Coordination`
+**Depends on:** GS2-02; GS2-03 manifest contract
+**Exit gates:** Q3 and Q4
+
+- [ ] **GS2-04.1 — Transport foundation.** Implement typed REST/GraphQL requests, response envelopes,
+  retries that respect idempotency, ETags/revisions, rate budgets, pagination, node/connection completeness,
+  API-version headers, redaction, and deterministic fixture capture.
+- [ ] **GS2-04.2 — Issue/type/field adapter.** Resolve semantic identities to live IDs, verify type and
+  option sets, read complete values, and plan guarded create/update/clear operations.
+- [ ] **GS2-04.3 — Native relation adapter.** Read complete hierarchy/dependency sets and perform
+  add/remove with stale re-read and post-state verification.
+- [ ] **GS2-04.4 — Project adapter.** Treat membership and Status as projections; handle archived,
+  duplicated, external, draft, missing, and unreadable items without inventing absence.
+- [ ] **GS2-04.5 — Comment/protocol adapter.** Preserve server-issued identity/order, validate marker JSON
+  and digest chains, distinguish edit/delete/tamper, and checkpoint durable evidence outside mutable comments.
+- [ ] **GS2-04.6 — Git ledger adapter.** Perform expected-parent commits, verify ancestry, create protected
+  phase anchors, detect rewind/deletion/divergence, and project state to the control issue.
+- [ ] **GS2-04.7 — Repository/settings adapter.** Inspect and plan custom properties, rulesets, merge
+  policies, Actions policy, environments, releases, tags, security, and dependency features with supported,
+  unauthorized, and unavailable outcomes.
+- [ ] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
+  attestations, packages, and public downloads without treating upload responses as served artifacts.
+- [ ] **GS2-04.9 — Sandbox qualification.** Exercise destructive create/update/delete/rollback behavior in
+  isolated test repositories and a test Project using non-production identities and quotas.
+
+### GS2-05 — Implement the native work and roadmap model
+
+**Parents:** `.github#2954`, `.github#2960`, `.github#2963`
+**Owner:** `FS.GG.Coordination`, with `.github` schema instances
+**Depends on:** GS2-02–GS2-04
+**Exit:** complete work lifecycle passes Q2–Q5 without production writes
+
+- [ ] **GS2-05.1 — Finalize taxonomy.** Ratify native issue types and eliminate parallel Class/Kind
+  authority. Define exact migration for every current combination and refuse ambiguity.
+- [ ] **GS2-05.2 — Finalize organization issue fields.** Specify scheduling, hold reason, priority,
+  effort, dates, severity, phase, workstream, contract, and touch-set projection with minimal vocabularies.
+- [ ] **GS2-05.3 — Implement intake.** Provide pure validate/plan, exact-plan apply, and live inspect for
+  issues, fields, Project membership, hierarchy, dependencies, and protocol initialization.
+- [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
+  parent edges, dependency edges, dates/fields, and drift inspection without making Project fields the
+  execution ledger.
+- [ ] **GS2-05.5 — Implement claims/touch sets.** Retain comment-order claim CAS and leases, bind touch-set
+  revisions to claim generation, use native field projection only as a candidate prefilter, and re-prove
+  exclusion before grant.
+- [ ] **GS2-05.6 — Implement review/delivery.** Retain exact-head independent review, distinguish merged
+  from protected post-merge verification, and generate durable delivery/done receipts.
+- [ ] **GS2-05.7 — Implement lifecycle projection.** Derive Status from scheduling intent, holds,
+  dependencies, claim, PR/review, delivery, and issue state; no operator writes derived state as intent.
+- [ ] **GS2-05.8 — Shadow the complete live fleet.** Compare v1 and v2 read-only decisions, record every
+  divergence, and reach zero unexplained divergence without granting v2 mutation permission.
+
+### GS2-06 — Implement desired state, CI, release, and supply-chain policy
+
+**Parents:** `.github#2955`, `.github#2956`, `.github#2957`, `.github#2958`, `.github#2963`
+**Owner:** `FS.GG.Coordination` model; `.github` instances and reusable entry points
+**Depends on:** GS2-02–GS2-05
+**Exit:** every rostered repository has a verified plan and rollback, not yet necessarily applied
+
+- [ ] **GS2-06.1 — Repository profiles.** Derive expected settings from the reviewed roster and project
+  selected attributes into native custom properties; retain external rows and rich registry authority.
+- [ ] **GS2-06.2 — Required-check census.** Union classic protection and rulesets, classify every check,
+  prove unconditional PR/merge-group production, and reduce the external contract to stable aggregates.
+- [ ] **GS2-06.3 — Ruleset plans.** Define branch/tag protection, reviews, conversations, merge methods,
+  auto-merge/queue, branch deletion, bypass principals, and expiring exceptions per profile.
+- [ ] **GS2-06.4 — Immutable execution pins.** Move reusable workflows and third-party Actions to full
+  commit SHAs, define immutable workflow publication, and retain Renovate as the sole automated update path.
+- [ ] **GS2-06.5 — Permission compilation.** Derive App and workflow permissions from registered
+  interpreters; separate normal coordination, admin/cutover, and release principals/environments.
+- [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
+  environments, immutable releases/tags, one pack, SBOMs, attestations, dependency submission/review, and
+  public-download verification.
+- [ ] **GS2-06.7 — Workflow consolidation.** Replace duplicated policy jobs with typed inventory,
+  composite steps, reusable job contracts, and stable aggregate outputs. Record every removed workflow and
+  obligation.
+- [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
+  settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
+
+### GS2-07 — Implement event reconciliation and merge readiness
+
+**Parents:** `.github#2961`, `.github#2962`, `.github#2963`
+**Owner:** `FS.GG.Coordination`
+**Depends on:** GS2-04–GS2-06
+**Exit:** events and audits converge; merge-group policy is qualified before any production queue
+
+- [ ] **GS2-07.1 — Event envelope and cursor.** Normalize source, delivery/event identity, subject,
+  revision, causation, correlation, and receipt; duplicate and reordered delivery is idempotent.
+- [ ] **GS2-07.2 — Narrow reconciliation.** Route supported issue, relation, Project, repository, ruleset,
+  run/check, release, and installation events to subject-bounded observations and plans.
+- [ ] **GS2-07.3 — Audit repair.** Retain a complete scheduled audit as authority for dropped deliveries,
+  preview gaps, external repositories, and schema drift; prove event/audit convergence under replay.
+- [ ] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
+  payload/API disagreement, and least privilege; events schedule reconciliation but never directly mutate
+  derived state.
+- [ ] **GS2-07.5 — Merge-group support.** Ensure every aggregate required check runs on merge groups and
+  re-evaluates temporal claim, review, head, dependency, and release obligations.
+- [ ] **GS2-07.6 — Queue sandbox/pilot.** Exercise queue admission, base movement, check growth, expiry,
+  failure recovery, and rollback in a low-volume isolated or representative repository before fleet enablement.
+- [ ] **GS2-07.7 — Measure event benefit.** Record latency, dropped-event repair, API cost, schedule count,
+  and false/unknown outcomes; reduce polling only from evidence.
+- [ ] **GS2-07.8 — Qualify runtime operations.** Exercise deploy, rollback, secret rotation, outage,
+  replay/backlog recovery, regional/provider failure where applicable, log redaction, alert routing, and
+  emergency disable. A webhook host that cannot be operated safely does not enter the production plan.
+
+### GS2-08 — Ship the universal v1 bridge and protected epoch ledger
+
+**Parent:** `.github#2964`
+**Owner:** `.github` for v1; `FS.GG.Coordination` for contract and independent tests
+**Depends on:** GS2-00; GS2-02 epoch/manifest vocabulary before publication
+**Exit:** every released v1 writer is fenced fleet-wide
+
+- [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define states, legal transitions, manifest binding,
+  ledger/ref/tag layout, ancestry proof, failure semantics, caching ceiling, and issue projection.
+- [ ] **GS2-08.2 — Provision ledger protections.** Create the dedicated ref/tag rulesets, protected
+  `fleet-cutover` environment, App bypass boundary, control issue, and tamper/rewind monitoring.
+- [ ] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
+  unknown or dynamically discovered write entry points fail the bridge build.
+- [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
+  fresh ledger epoch before its first effect. Unreadable, contradictory, frozen, switched, or v2-open state
+  refuses before write.
+- [ ] **GS2-08.5 — Preserve OperatingV1 behavior.** Current regression/corpus behavior remains unchanged
+  when the verified epoch is `OperatingV1`; the bridge adds no second semantic authority.
+- [ ] **GS2-08.6 — Independently attack the fence.** From outside the v1 test generator, attempt every
+  write class under all epochs, stale cache, lost response, ledger rewind, missing tag, wrong manifest,
+  permission loss, and older client versions.
+- [ ] **GS2-08.7 — Publish the bridge.** Build once, sign/attest, publish to required feeds, verify public
+  installation, and record exact tool/kit/workflow identities.
+- [ ] **GS2-08.8 — Adopt all receivers.** Update `.github`, SDD, Rendering, Governance, Templates, Game,
+  Audio, and Net; resolve superseded dependency-update PRs; prove each live route uses the exact bridge.
+- [ ] **GS2-08.9 — Seal unfenceable clients.** If an old writer cannot read the epoch, disable/revoke its
+  dispatch, credential, schedule, or installation before freeze and record that as its fence proof.
+
+### GS2-09 — Build migration, archive, and rollback tooling
+
+**Parents:** `.github#2954`, `.github#2963`, `.github#2965`
+**Owner:** `FS.GG.Coordination`
+**Depends on:** GS2-05–GS2-08
+**Exit gates:** Q5 and Q6 over full snapshots
+
+- [ ] **GS2-09.1 — Implement complete discovery.** Read every open and relevant closed issue, Project
+  item, field, hierarchy/dependency edge, claim/event stream, review/delivery/release record, repository
+  setting, workflow pin, and receiver identity with completeness proof.
+- [ ] **GS2-09.2 — Implement the immutable manifest.** Bind old/new model and artifact fingerprints,
+  global IDs, old bytes/values, v2 results, live operations, receiver heads, settings plans, archive digests,
+  dispositions, phase plans, reviewers, and rollback inputs.
+- [ ] **GS2-09.3 — Implement typed transforms.** Map taxonomy, planning fields, repo scope, body metadata,
+  blockers, hierarchy, scheduling holds, touch sets, lifecycle receipts, and desired settings as
+  `Migrated`, `Ambiguous`, or `Unsupported`.
+- [ ] **GS2-09.4 — Implement live-operation handling.** For each claim, queued write, review, delivery,
+  release, and cutover-adjacent operation, choose drain, migrate, park, or explicit invalid disposition.
+- [ ] **GS2-09.5 — Implement sealed history.** Preserve source schema/bytes/digests, verifier artifact,
+  expected outcomes, and lookup index without putting permanent v1 upcasters in the v2 production closure.
+- [ ] **GS2-09.6 — Implement rollback plans.** Restore settings, receiver pins, v1 projections, schedules,
+  and authority snapshot through `VerifiedV2`; make each step resumable from receipts.
+- [ ] **GS2-09.7 — Rehearse on representative copies.** Run migrate, interrupt every step, retry,
+  rollback, re-run, and archive verification in isolated repositories/Project snapshots.
+- [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
+  adding one unknown live subject or losing one page prevents qualification.
+
+### GS2-10 — Qualify the exact candidate and prepare the fleet
+
+**Parent:** `.github#2965`
+**Owner:** `FS.GG.Coordination`, `.github`, and every receiver
+**Depends on:** GS2-03–GS2-09
+**Exit gates:** Q0–Q7 accepted against one immutable candidate
+
+- [ ] **GS2-10.1 — Freeze candidate identities.** Record source commits, dependency locks, model/compiler
+  fingerprints, packages, container/tool assets if any, workflows, App build, and verifier artifacts.
+- [ ] **GS2-10.2 — Run the full qualification matrix.** No selective rerun may replace a failed full
+  result; repairs create a new candidate identity.
+- [ ] **GS2-10.3 — Complete live shadow comparison.** Read the complete fleet repeatedly over a bounded
+  operational window, explain all v1/v2 differences, and prove v2 has no production write permission.
+- [ ] **GS2-10.4 — Generate the cutover manifest.** Capture the complete live source, transformations,
+  archive, prepared receiver heads, settings plans, exact phase operations, and rollback plans.
+- [ ] **GS2-10.5 — Prepare receiver changes.** Create exact-head, green PRs or protected plans for pins,
+  workflows, rulesets, settings, environments, and permissions; do not merge/apply switch changes yet.
+- [ ] **GS2-10.6 — Drain backlog hazards.** Resolve or disposition obsolete Renovate PRs, coordination-tool
+  adoption PRs, release candidates, conflicting settings changes, and work expected to cross the window.
+- [ ] **GS2-10.7 — Rehearse the whole cutover.** Execute freeze through rollback and freeze through
+  simulated `OpenV2` in isolated fleet replicas; record durations, API budgets, operator decisions, and all
+  manual steps.
+- [ ] **GS2-10.8 — Approve readiness.** Independent architecture, security, operations, migration, and
+  receiver reviewers accept the exact candidate/manifest. Any source or plan change invalidates approval.
+
+### GS2-11 — Freeze the production fleet
+
+**Parent:** `.github#2965`
+**Owner:** protected cutover operators
+**Depends on:** GS2-10; approved cutover window
+**Exit:** authoritative `Frozen(snapshot)`; all normal writes demonstrably closed
+
+- [ ] **GS2-11.1 — Announce and verify the window.** Confirm operators, approvers, communication channel,
+  status page, abort criteria, rate budget, credentials, backups, and candidate/manifest fingerprints.
+- [ ] **GS2-11.2 — Acquire the cutover grant.** Enter the protected environment and commit/anchor
+  `FreezeRequested(manifest)` with exact expected parent.
+- [ ] **GS2-11.3 — Stop ingress.** Refuse new claims, intake/roadmap applies, board mutations, review and
+  delivery advances, coordination merges/dispatches, settings reconciles, and releases.
+- [ ] **GS2-11.4 — Drain active work.** Complete, release, or explicitly park every claim, queued write,
+  review, delivery, merge election, operation lock, and release saga. Active count must reach zero.
+- [ ] **GS2-11.5 — Restrict repositories temporarily.** Apply the approved update restrictions with only
+  the cutover App/operator bypass; verify every repository and exception.
+- [ ] **GS2-11.6 — Prove the fence.** Attempt representative operations through every client/workflow/App
+  generation; all normal writes must refuse for the epoch reason before external effect.
+- [ ] **GS2-11.7 — Take the frozen snapshot.** Perform two complete reads, prove no intervening mutation,
+  bind the result to the manifest, and commit/anchor `Frozen(snapshot)`.
+- [ ] **GS2-11.8 — Decide continue or rollback.** Any active writer, unreadable authority, manifest drift,
+  unplanned head/settings change, or unsettled operation executes the rollback plan before switch.
+
+### GS2-12 — Switch and verify while the fleet remains closed
+
+**Parent:** `.github#2965`
+**Owner:** protected cutover operators
+**Depends on:** authoritative Frozen state
+**Exit gate:** Q8 and authoritative `VerifiedV2(evidence)`
+
+- [ ] **GS2-12.1 — Activate exact v2 artifacts.** Promote/install only the accepted candidate; verify
+  package bytes, model identity, App build, workflow SHAs, and receiver resolution.
+- [ ] **GS2-12.2 — Apply receiver switch changes.** Merge/apply prepared heads in the recorded dependency
+  order and refuse any changed head, run set, or settings precondition.
+- [ ] **GS2-12.3 — Migrate authority.** Apply issue types/fields, native hierarchy/dependencies, scheduling
+  holds, touch-set streams/projections, Project membership/status, and other authoritative transformations.
+- [ ] **GS2-12.4 — Apply desired settings.** Install custom properties, rulesets, aggregate checks,
+  immutable pins, App permissions, environments, release/security features, and event routes.
+- [ ] **GS2-12.5 — Disable v1 execution.** Turn off old schedules, dispatch routes, workflows, credentials,
+  and writers without deleting rollback assets; commit/anchor `SwitchedV2(candidate)`.
+- [ ] **GS2-12.6 — Verify schema and migration.** Re-read every migrated subject, relation, field,
+  projection, archive digest, repository setting, receiver, and phase receipt against the manifest.
+- [ ] **GS2-12.7 — Run closed-fleet canaries.** In the isolated cutover program, exercise intake,
+  roadmap, hierarchy, dependency, claim/touch set, review, delivery/done, settings, event repair, merge group,
+  and release observation without opening ordinary production writes.
+- [ ] **GS2-12.8 — Inject wrong paths.** Test stale/missing/contradictory/partial/rate-limited/unauthorized
+  observations, lost webhooks, altered fields, wrong receiver, missing check, package-not-served, and ledger
+  tamper; each must refuse, repair, or remain explicitly indeterminate.
+- [ ] **GS2-12.9 — Rehearse rollback from the switched state.** Verify every rollback precondition and
+  operation without deleting v2 evidence. If any rollback step is not executable, do not open.
+- [ ] **GS2-12.10 — Commit verification.** Independent reviewers accept Q8 and the operator commits/anchors
+  `VerifiedV2(evidence)`. Failure chooses repair-and-reverify or rollback while writes remain closed.
+
+### GS2-13 — Open v2 and retire v1
+
+**Parent:** `.github#2965`
+**Owner:** protected cutover operators followed by repository maintainers
+**Depends on:** authoritative VerifiedV2 state and final human approval
+**Exit gate:** Q9
+
+- [ ] **GS2-13.1 — Present the irreversible decision.** Show exact manifest/candidate, Q0–Q8 roll-up,
+  open risks, rollback status, operational ownership, and the consequence that v1 cannot resume afterward.
+- [ ] **GS2-13.2 — Commit `OpenV2`.** Obtain protected human approval, commit/anchor
+  `OpenV2(acceptance)`, verify it independently, then enable only v2 normal writers.
+- [ ] **GS2-13.3 — Complete one bounded real journey.** Take a low-risk work item from intake through
+  native hierarchy/dependency, claim/touch set, review, delivery, merge/post-merge verification, and done.
+- [ ] **GS2-13.4 — Establish operational watch.** Monitor errors, indeterminate operations, repair lag,
+  event backlog, API budget, queue/CI latency, release state, and old-client attempts; recovery is roll-forward.
+- [ ] **GS2-13.5 — Delete v1 runtime code.** Remove v1 readers/writers, public generic mutation routes,
+  compatibility adapters, old event/schema decoders from production, and source packages/workflows.
+- [ ] **GS2-13.6 — Delete v1 data authorities.** Remove Class/Kind/Repo Scope/Blocked-by Project fields,
+  body sentinels/metadata parsers, old status writers, schedules, control comments used as authority, and
+  temporary backfill projections after exact deletion checks.
+- [ ] **GS2-13.7 — Delete v1 operational infrastructure.** Remove old dispatch routes, credentials,
+  App permissions, environments, moving-ref exceptions, branch/ruleset exemptions, caches, and rollback
+  assets that are unsafe after the point of no return.
+- [ ] **GS2-13.8 — Seal audit assets.** Publish the content-addressed v1 archive, verifier, manifest,
+  lookup guide, and retention policy outside the v2 production dependency closure.
+- [ ] **GS2-13.9 — Normalize repository policies.** Remove temporary freeze restrictions, enable approved
+  merge queues/settings, and re-inspect every repository profile.
+- [ ] **GS2-13.10 — Commit `OperatingV2`.** After deletion and immediate Q9 proof, commit/anchor
+  `OperatingV2(report)`; later observations append to the report rather than changing the epoch.
+
+### GS2-14 — Observe, improve, and close the renovation
+
+**Parent:** `.github#2965` and Epic `.github#2952`
+**Owner:** `FS.GG.Coordination` and `.github`
+**Depends on:** OperatingV2
+**Exit gate:** Q10 and closed Epic
+
+- [ ] **GS2-14.1 — Record the immediate reading.** At 0 days capture journey success, incident count,
+  partial/indeterminate operations, old-client attempts, API cost, event repair, queue/CI/release latency,
+  and remaining deletion debt.
+- [ ] **GS2-14.2 — Record 7-, 14-, and 30-day readings.** Use identical definitions and source-bound
+  evidence; do not hide failures by changing denominators or suppressing findings.
+- [ ] **GS2-14.3 — Complete remaining roll-forward repairs.** Each incident receives a typed cause,
+  bounded fix, regression oracle, and evidence; recurring missing concepts return to the specification.
+- [ ] **GS2-14.4 — Verify deletion and sealed-history access.** A clean checkout/install contains no v1
+  production path, while a maintainer can still explain and verify every archived operation.
+- [ ] **GS2-14.5 — Reconcile public architecture and operations docs.** Update the component map,
+  coordination guide, recovery guide, security model, release guide, skills, and website status from v2
+  authority; remove renovation warnings only when the 30-day gate passes.
+- [ ] **GS2-14.6 — Close children and Epic.** Verify every child issue and native subissue relationship,
+  accept Q10, publish the final report, and close `.github#2952` only when no legacy production authority or
+  unowned follow-up remains.
+
+## 6. Work intentionally outside the cutover critical path
+
+The following work may use the same kernel or GitHub capabilities, but it is not necessary to make v2 live
+or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites are qualified:
+
+- [`.github#2959`](https://github.com/FS-GG/.github/issues/2959), the advisory-only GitHub Agentic
+  Workflows pilot;
+- migration of the ADR corpus to a future typed `DecisionExtension`;
+- broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
+  composition, and executable TestSpecs;
+- a later decision to make `typed-sdd` the default lifecycle; and
+- convenience UI, reports, or projections that do not authorize a coordination decision.
+
+These may proceed independently with their own evidence. If one becomes a real prerequisite, the governing
+design and this dependency map must be amended before it can block the fleet cutover.
+
+## 7. Fleet-by-fleet adoption checklist
+
+For `.github`, SDD, Rendering, Governance, Templates, Game, Audio, and Net, the cutover manifest must carry
+one row proving all applicable obligations:
+
+- [ ] bridge artifact and epoch behavior;
+- [ ] exact v2 tool/kit/workflow pins;
+- [ ] repository custom properties and desired profile;
+- [ ] required aggregate checks on pull requests and merge groups;
+- [ ] immutable Actions/reusable-workflow references;
+- [ ] App installation and least permissions;
+- [ ] branch/tag rulesets, merge policy, bypass, and temporary freeze restriction;
+- [ ] release environment, OIDC, immutable release/tag, SBOM, attestation, and feed behavior where publishing;
+- [ ] webhook/event coverage and scheduled audit repair;
+- [ ] open claims, reviews, deliveries, releases, queues, and dependency-update PR disposition;
+- [ ] migration and rollback receipts; and
+- [ ] post-retirement absence of v1 writers and configuration.
+
+External roster rows are observed and reported. They change only through their owner and an explicit
+disposition; the FS-GG cutover must not silently assume administrative authority over them.
+
+## 8. Mandatory failure matrix
+
+The qualification corpus must include at least these independent controls:
+
+- an old client attempts every write class after `FreezeRequested`;
+- the epoch ref, ancestry, phase tag, manifest digest, or issue projection disagrees;
+- a page truncates while total count or terminal cursor claims more data;
+- GitHub returns success but authoritative re-read is absent or contradictory;
+- a relation changes concurrently between plan and apply;
+- a Project item is missing, duplicated, archived, draft, external, or unreadable;
+- an issue field exists under the wrong data type or option vocabulary;
+- a claim/touch-set projection is stale, edited, deleted, or from another generation;
+- two workers or executors race claim, operation-lock, relation, review, and delivery decisions;
+- a webhook is duplicated, reordered, dropped, forged, or outside installation scope;
+- a required check is absent, path-filtered, renamed, stale-green, or missing on merge group;
+- a receiver resolves the wrong package, workflow SHA, model fingerprint, or settings profile;
+- a ruleset/settings plan partially applies or loses permission mid-operation;
+- a package upload succeeds but either feed or public download does not serve the exact bytes;
+- an immutable release/tag rejects an attempted rewrite needed by a mistaken recovery path;
+- rollback is interrupted after every step through `VerifiedV2`;
+- `OpenV2` is attempted without exact protected approval or complete Q8 evidence;
+- v1 deletion starts before `OpenV2`, or a v1 production path survives Q9; and
+- a generated test set is self-consistent while an independent black-box oracle disagrees.
+
+## 9. Stop and return to design when
+
+- a unit requires an untyped authority, mutation, or permission escape hatch;
+- GitHub cannot provide the revision/completeness semantics assigned to a native authority;
+- a v1 writer cannot be fenced, disabled, or credential-revoked before freeze;
+- a normal v1 and v2 writer must be active simultaneously;
+- the candidate changes after qualification without receiving a new identity and full rerun;
+- migration needs a heuristic default for an ambiguous semantic fact;
+- live work cannot be drained or migrated without rewriting accepted evidence;
+- rollback through `VerifiedV2` depends on deleting new evidence;
+- merge queue can bypass or omit a temporal required check;
+- a cutover operation exceeds its measured API/permission/time envelope with no reviewed alternative;
+- the new repository starts copying generic kernel or another component's private domain union; or
+- added compatibility, workflow, command, and parser surface exceeds the accepted deletion ledger.
+
+## 10. Definition of live and retired
+
+The new system is **live** only when:
+
+1. the protected ledger is at `OperatingV2` descending from the accepted manifest;
+2. only exact qualified v2 artifacts can perform normal coordination mutations;
+3. native issue types/fields/relations and desired repository settings match the compiled model;
+4. claims, touch sets, reviews, delivery, releases, and repair paths retain their required custom guarantees;
+5. event and full-audit reconciliation converge;
+6. every receiver resolves the expected immutable artifacts and required checks; and
+7. the first bounded real journey and immediate operational reading are accepted.
+
+V1 is **retired** only when:
+
+1. no executable, workflow, schedule, App route, credential, public command, or admin recipe can author v1
+   production state;
+2. old Project fields and issue-body semantic parsers no longer influence decisions;
+3. compatibility and migration code is absent from the production dependency closure;
+4. temporary cutover bypasses and restrictions are removed;
+5. historical state is sealed with independently runnable verification;
+6. old clients fail closed against the v2 epoch; and
+7. Q9 and the 30-day Q10 reading report no unowned legacy authority.
+
+Closing an issue, merging the last implementation PR, or setting a Project card to Done is not by itself
+evidence that either definition holds.
+
+## 11. Updating this roadmap
+
+- Architecture changes require the governing design and ADR to change first.
+- Sequence, prerequisites, unit boundaries, and exit-gate changes update this file.
+- Implementation semantics live in the typed `FS.GG.Coordination` specification and are projected here by
+  stable unit/subject links once that compiler exists; do not copy union cases into this roadmap.
+- Accepted unit receipts append their source/artifact/evidence links to the unit; they do not replace its
+  acceptance text.
+- A newly discovered requirement is recorded even if the vocabulary is missing. It blocks the affected
+  transition until the specification is extended; discovery itself is never suppressed.
+- The “Ongoing renovations” website notice remains until `GS2-14.5` and the 30-day Q10 gate are accepted.

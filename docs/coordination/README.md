@@ -35,6 +35,16 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > [delivery roadmap](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) stages pilot,
 > extraction, adoption, and deletion of every shadow representation.
 
+> **GitHub Substrate v2 and fleet cutover.** The proposed
+> [governing design](2026-08-25-github-substrate-v2-fleet-cutover-design.md) applies the published typed
+> specification kernel to a new-only GitHub authority model. It builds v2 in a dedicated
+> `FS.GG.Coordination` repository under an independent bootstrap qualification contract, fences every v1
+> writer, switches the fleet while normal writes are closed, and names `OpenV2` as the point after which
+> recovery is roll-forward only. It also records which other FS-GG specification-like surfaces should—and
+> should not—adopt the Typed SDD EDSL approach. The living
+> [execution roadmap](../github-substrate-v2-roadmap.md) decomposes that design into agent-sized units,
+> independent qualification gates, protected cutover operations, and explicit v1 deletion proofs.
+
 ## Requests and responses → cross-repo issues
 
 A "mailbox message" is a **GitHub issue in the target repo**.

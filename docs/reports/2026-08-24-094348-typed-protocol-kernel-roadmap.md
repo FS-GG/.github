@@ -11,9 +11,10 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-24T10:51:16+02:00 — bind implementation to Standard SDD and bound break-glass repairs |
-| Status | Planned; no implementation milestone is implied complete |
+| Updated | 2026-08-25 — record shipped generic kernel and supersede the coordination M-series with the independently qualified fleet cutover |
+| Status | P-series historical/current as recorded; coordination M0–M9 superseded as an execution plan |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
+| Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
 | Starting point | `main` at `0d56bb104da22478dfef72825f8cf19425635ed0` |
 | Evidence window | 2026-08-21T07:26:29Z through 2026-08-24T07:26:29Z |
 
@@ -29,12 +30,27 @@ The consumer-facing process is **Typed SDD**, machine value `typed-sdd`. It will
 beside Standard SDD (`sdd`) and Freeform (`none`) before it is eligible to replace `sdd` as the workspace
 default. The roadmap treats option introduction and default selection as separate contract changes.
 
-The roadmap is intentionally incremental. Each milestone must land independently, keep `main` green,
-and leave the old path removable rather than creating a permanent dual authority.
+The P-series was intentionally incremental and remains the record for kernel and Typed SDD delivery. The
+coordination M-series below is retained as a technical inventory, but no longer governs implementation:
+maintainer direction selected a new-only fleet cutover, a dedicated `FS.GG.Coordination` repository, and an
+independent bootstrap qualification process.
 
-Until the published `typed-sdd` lifecycle exists, **Standard SDD governs implementation of this roadmap**.
-The project therefore builds Typed SDD through the currently authoritative `sdd` process rather than
-claiming its unfinished successor can validate itself.
+The published generic kernel and `typed-sdd` lifecycle now exist. Standard SDD continues to govern work that
+selects that lifecycle, but it does **not** certify the coordination replacement. V2 uses the successor
+design's custom qualification contract so the machinery under replacement is not its own acceptance oracle.
+
+## 2026-08-25 coordination supersession boundary
+
+The following remain authoritative inputs to v2: the M-series vocabulary census, observation distinctions,
+mutation algebra, operation receipts, event/process semantics, compiler surface, schemas/fingerprints,
+protocol-surface controls, replay/model/formal proof obligations, and deletion measurements.
+
+The following are superseded: per-surface production strangling, compatibility adapters as the normal v2
+route, preserving all public coordination commands until individually migrated, implementation inside
+`.github`, Standard SDD/v1 completion evidence as v2 qualification, and multiple production cutovers. Their
+replacement is the successor design's F0–F9 sequence: independently build and qualify v2, ship one universal
+v1 bridge fence, prepare and shadow-read, freeze all normal writers, switch and verify the closed fleet,
+open v2 once, then retire v1. Preparation may be additive; production authorship may not be dual.
 
 ## Baseline and success measures
 
@@ -69,12 +85,12 @@ findings is failure.
 
 ## Delivery principles
 
-1. **Strangle, do not rewrite.** Put a new typed seam beside one live path, compare, switch, then delete
-   the old path before starting the next broad migration.
+1. **P-series: land bounded producer/consumer slices. Coordination: qualify separately and switch once.**
+   The coordination replacement does not enter production one adapter at a time.
 2. **One source at cutover.** Shadow comparison is temporary evidence, never a permanent second
    authority.
-3. **Compatibility before elegance.** Existing CLI paths, JSON schemas, exit codes, issue markers, and
-   receipts remain stable until a versioned migration is proved.
+3. **Classify every compatibility surface.** Preserve only the v1 bridge and sealed audit readability;
+   migrate or explicitly retire CLI paths, JSON schemas, exit codes, markers, and receipts at cutover.
 4. **Cheap closure first.** Model compilation and protocol-surface checks run before expensive CI and
    review.
 5. **No automatic row explosion.** Milestones use existing class rows and bounded children. Findings
@@ -84,10 +100,10 @@ findings is failure.
 
 ## Implementation process and break-glass boundary
 
-Standard SDD owns the feature lifecycle: specify, clarify, plan, task, implement, verify, and ship. Each
-milestone or independently landable vertical slice records its intent, acceptance, evidence, compatibility
-boundary, and unresolved decisions through the installed `sdd` lifecycle. It must not use an ad hoc
-`typed-sdd` approximation as authority before P4 publishes and proves that lifecycle.
+This section records the process used for the P-series and ordinary lifecycle work. It does not govern the
+superseding coordination v2 program. That program records intent, acceptance, evidence, compatibility,
+adversarial controls, and unresolved decisions through its approved bootstrap qualification contract; v1
+board status, review transitions, delivery receipts, and done stamps are projections rather than evidence.
 
 `$chainsaw` is not an alternative implementation process. It is an explicitly invoked, bounded
 break-glass operation inside the governing SDD lifecycle and is admissible only when evidence establishes
@@ -343,6 +359,13 @@ path and derived compatibility receipt; it is not yet the default.
 
 Typed SDD is the coherent workspace default across all consumer entry points. Standard SDD and Freeform
 remain explicit supported choices, and any later retirement decision is outside this roadmap.
+
+## Historical coordination M-series inventory
+
+The M0–M9 sections below are retained because their vocabulary, incidents, deliverables, and proof
+obligations remain useful inputs. They are **not schedulable milestones** and their incremental adapters,
+compatibility promises, and per-surface cutovers are superseded by the linked GitHub Substrate v2 F0–F9
+fleet-cutover plan.
 
 ## M0 — Ratify vocabulary and produce the protocol census
 
