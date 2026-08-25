@@ -223,10 +223,19 @@ def main() -> int:
     # **Current:** assertion. Looking anywhere in Summary is too weak:
     # the headline and release-history parenthetical also contain old/current versions and can hide
     # a stale current sentence.
+    contract_ids = {str(contract.get("id", "")).strip() for contract in doc.get("contracts") or []}
+    production_floor_contracts = {"fs-gg-ui-template", "fs-gg-workspace-template"}
+    # The fixture uses demo/quad as compact stand-ins for the two production provider families.
+    required_floor_contracts = (production_floor_contracts if contract_ids & production_floor_contracts
+                                else {"demo", "quad"})
     floor_values: list[str] = []
+    found_floor_contracts: set[str] = set()
     for contract in doc.get("contracts") or []:
         floor = contract.get("minimum-fsgg-sdd")
         if isinstance(floor, dict) and floor.get("version") is not None:
+            contract_id = str(contract.get("id", "")).strip()
+            if contract_id in required_floor_contracts:
+                found_floor_contracts.add(contract_id)
             value = floor.get("version")
             if not isinstance(value, str):
                 errors.append(
@@ -234,6 +243,12 @@ def main() -> int:
                     f"string in {reg_path}.")
             elif value not in floor_values:
                 floor_values.append(value)
+    missing_floor_contracts = sorted(required_floor_contracts - found_floor_contracts)
+    if missing_floor_contracts:
+        errors.append(
+            "required provider-family contracts declare no minimum-fsgg-sdd.version: "
+            f"{', '.join(repr(value) for value in missing_floor_contracts)} — both rendering and "
+            "workspace-template authorities must be present before their shared floor can be projected.")
     if floor_values:
         if len(floor_values) != 1:
             errors.append(

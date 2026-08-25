@@ -52,10 +52,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
+      digest: "sha256:c1f446da2246a0709c872c49a00e84e64e720ff616958d3360a4e41d863410bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 8
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Both provider-family floors advance to the published Typed SDD compiler without changing defaults.]
@@ -77,10 +77,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
+      digest: "sha256:c1f446da2246a0709c872c49a00e84e64e720ff616958d3360a4e41d863410bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 8
+      passed: 10
       failed: 0
       skipped: 0
     notes: [The registry authority and generated orchestrator-axis projection agree.]
@@ -102,13 +102,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
+      digest: "sha256:c1f446da2246a0709c872c49a00e84e64e720ff616958d3360a4e41d863410bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 8
+      passed: 10
       failed: 0
       skipped: 0
-    notes: ["Typed registry validation and Templates five-descriptor equality checks pass; the projection fixture runs 38 controls including divergent and ambiguous floor authority and is invoked by coherence CI."]
+    notes: ["Typed registry validation and Templates five-descriptor equality checks pass; the projection fixture runs 40 controls including divergent, missing, and ambiguous floor authority and is invoked by coherence CI."]
   - id: EV004
     kind: verification
     subject:
@@ -127,10 +127,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
+      digest: "sha256:c1f446da2246a0709c872c49a00e84e64e720ff616958d3360a4e41d863410bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 8
+      passed: 10
       failed: 0
       skipped: 0
     notes: [The minimum advance is recorded with publication provenance and preserves Standard SDD compatibility.]
@@ -152,10 +152,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/typed-sdd-p4-floor/registry-validation.junit.xml
-      digest: "sha256:52e2b400dbd64a8768b9c2fa857ce2bbee15bf5954741296c48f5906fe93c1e0"
+      digest: "sha256:c1f446da2246a0709c872c49a00e84e64e720ff616958d3360a4e41d863410bc"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 8
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Generated projections and the normalized work model were refreshed from current sources.]

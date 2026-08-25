@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a84a2b4df7022fd5580030ff38a4adc1f23dc3a40969fa19d1856fb8410b56a6"
+        "value": "2acd849bcc8970609508ac28fc4e7ffae91cc423f174cb35f68e638a08247d5c"
       }
     },
     {
@@ -471,7 +471,7 @@
           "path": "work/typed-sdd-p4-floor/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a84a2b4df7022fd5580030ff38a4adc1f23dc3a40969fa19d1856fb8410b56a6"
+            "value": "2acd849bcc8970609508ac28fc4e7ffae91cc423f174cb35f68e638a08247d5c"
           },
           "schemaVersion": 1
         },
@@ -502,7 +502,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "e768460573b7ec50f397316375e18d54f107438e51c84f1d93403288775e4449"
+        "value": "cb0dd06aa2b69109195c27bfc6b3dd747dffdf275b744b3c00c91dfdaaeb6e74"
       },
       "currency": "current"
     }

@@ -59,6 +59,8 @@ contracts:
     consumers: []
   - id: quad
     version: "1.2.1.1"
+    minimum-fsgg-sdd:
+      version: "0.6.0"
     owner: governance
     surface: "four-segment version (ADR-0007)"
     consumers: []
@@ -300,12 +302,28 @@ expect_fail "missing Current authority reds" "must contain exactly one **Current
 # A projection cannot make divergent registry facts coherent merely by mentioning every value in one
 # authoritative sentence. The equality claim belongs to the registry first; prose is only its view.
 REG_DIVERGENT_FLOORS="$WORK/registry-divergent-floors.yml"
-sed '0,/    version: "1.2.1.1"/s//    version: "1.2.1.1"\n    minimum-fsgg-sdd:\n      version: "0.7.0"/' \
+sed '/^  - id: quad$/,/^  - id: bare$/ s/version: "0.6.0"/version: "0.7.0"/' \
   "$REG" > "$REG_DIVERGENT_FLOORS"
 expect_fail "divergent provider-family floors red even when Current mentions both" \
   "provider-family minimum-fsgg-sdd floors disagree in the registry" \
   "$(variant divergentfloor 's#floors agree on \*\*`0.6.0`\*\*\.#floors agree on **`0.6.0`** and workspace floors agree on **`0.7.0`**.#')" \
   "$REG_DIVERGENT_FLOORS"
+
+# Agreement over an empty or incomplete set is vacuous. The production registry's two provider
+# families are rendering (`fs-gg-ui-template`) and Templates (`fs-gg-workspace-template`); deleting
+# either authority must red even when the remaining/prose value still agrees with itself.
+REG_MISSING_WORKSPACE_FLOOR="$WORK/registry-missing-workspace-floor.yml"
+sed '/^  - id: quad$/,/^  - id: bare$/ { /minimum-fsgg-sdd:/,+1 d; }' \
+  "$REG" > "$REG_MISSING_WORKSPACE_FLOOR"
+expect_fail "missing workspace provider-family floor reds" \
+  "required provider-family contracts declare no minimum-fsgg-sdd.version" \
+  "$BASE" "$REG_MISSING_WORKSPACE_FLOOR"
+
+REG_MISSING_ALL_FLOORS="$WORK/registry-missing-all-floors.yml"
+sed '/minimum-fsgg-sdd:/,+1 d' "$REG" > "$REG_MISSING_ALL_FLOORS"
+expect_fail "missing all provider-family floors reds" \
+  "required provider-family contracts declare no minimum-fsgg-sdd.version" \
+  "$BASE" "$REG_MISSING_ALL_FLOORS"
 
 # --- fail-closed corollaries (epic #266): a missing subject must not read as "checked, fine" ---
 expect_fail "version column absent"       "has no 'version' column" \

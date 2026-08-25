@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="typed-sdd-p4-floor" tests="8" failures="0" errors="0" skipped="0">
+<testsuite name="typed-sdd-p4-floor" tests="10" failures="0" errors="0" skipped="0">
   <testcase classname="registry" name="typed registry validation" />
   <testcase classname="registry" name="compatibility projection" />
   <testcase classname="registry" name="registry changelog protocol" />
@@ -7,5 +7,7 @@
   <testcase classname="templates" name="five provider floors equal registry" />
   <testcase classname="projection" name="stale orchestrator floor mutation is rejected" />
   <testcase classname="projection" name="divergent provider-family floor mutation is rejected" />
+  <testcase classname="projection" name="missing workspace provider-family floor mutation is rejected" />
+  <testcase classname="projection" name="missing all provider-family floors mutation is rejected" />
   <testcase classname="projection" name="negative controls are invoked by coherence CI" />
 </testsuite>
