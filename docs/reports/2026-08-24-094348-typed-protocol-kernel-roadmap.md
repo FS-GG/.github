@@ -11,7 +11,7 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
-| Updated | 2026-08-25 — record shipped generic kernel and supersede the coordination M-series with the independently qualified fleet cutover |
+| Updated | 2026-08-25 — record shipped generic kernel, coordination supersession, and the completed #2905 v1 safety checkpoint |
 | Status | P-series historical/current as recorded; coordination M0–M9 superseded as an execution plan |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
@@ -165,6 +165,91 @@ This section records the process used for the P-series and ordinary lifecycle wo
 superseding coordination v2 program. That program records intent, acceptance, evidence, compatibility,
 adversarial controls, and unresolved decisions through its approved bootstrap qualification contract; v1
 board status, review transitions, delivery receipts, and done stamps are projections rather than evidence.
+
+### Visible progress checkpoint
+
+Legend: 🟩 complete · 🟨 active/pending evidence · 🟥 blocked · ⬜ not started. The color is redundant with
+the checked state so the status remains readable without color.
+
+- 🟩 [x] **P0 — S.I.R. baseline and pilot charter:** completed historical producer evidence.
+- 🟩 [x] **P1 — agent-authored S.I.R. specification pilot:** completed historical authoring evidence.
+- 🟩 [x] **P2 — shared FS.GG.SDD specification kernel:** published.
+- 🟩 [x] **P3 — published-kernel re-adoption:** completed with producer/consumer receipts.
+- 🟩 [x] **P4 — additive Typed SDD option:** published and supported across the provider/profile matrix.
+- ⬜ [ ] **P5 — evidence-gated default flip:** planned, not started; it remains subject to the P5/GS2
+  sequencing boundary above.
+- 🟩 [x] **Residual v1 safety checkpoint — `.github#2905`:** merged as `.github#2973` at
+  `3d1e6b186397f807163ed144290bee6a7c20343c`; exact default-branch push successes established the
+  post-merge verification fact, the issue is Closed, the board row is Done, and the claim is released.
+
+The final checkbox is **not M4 progress**. It is a bounded v1 correctness repair whose evidence joins the
+frozen defect corpus. M0–M9 remain historical inventory and are not schedulable merely because their old
+board rows are Ready.
+
+### Milestone recipe — how the work is done
+
+1. **Work the roadmap, not the Coordination board.** Read this roadmap and its design authority first,
+   select the next dependency-ready roadmap milestone, and use the board only to claim, route, and record
+   that already-selected work. A Ready board row cannot override supersession, dependency, or stop
+   boundaries.
+2. **Bind one SDD package before implementation.** Carry the work id, canonical `work/<id>/` source, and
+   `readiness/<id>/` projections through `charter → specify → clarify → checklist → plan → tasks → analyze`;
+   implement only after `implementationReady`.
+3. **Keep claim, branch, and touch-set aligned.** Use one minted identity, one canonical item branch, and
+   the declared paths. Coordinate overlaps before editing; widen before touching any additional path.
+4. **Prove the change can fail.** Run focused tests and a bounded inversion for each changed refusal gate,
+   then regenerate `evidence → agents → verify → ship`. Commit the complete digest chain and prove a fresh
+   detached second pass makes no tracked changes.
+5. **Review immutable evidence.** A fresh critic reviews the exact head and production route. Any repair
+   moves the head and requires the engine-derived successor wait. Never translate prose into acceptance.
+6. **Recover authority by creating a fresh identity, not rewriting history.** If a claim generation has
+   already elected another PR, or a moved-head review wait remains bound to a retired claim, rotate the
+   claim legitimately and use a fresh canonical successor PR. Prove its raw diff and stable patch ID match
+   the reviewed repair; close the unusable predecessor unmerged with cross-links.
+7. **Make the delivery handoff self-contained before merge.** Put `Closes #<item>.` on a line by itself;
+   bind exact-head obligations; copy the exact `Paths:` declaration into the PR body when terminal recovery
+   must reconstruct the handoff from a merged PR; and issue only the typed delivery action the engine names.
+8. **Gate, merge, and rebuild.** Wait for exact-head landability, merge only the accepted head, and rebuild
+   the shared Coordination engine immediately from fresh `origin/main` before the next board mutation.
+9. **Verify post-merge without rewriting history.** Read existing runs for the exact merge SHA, default
+   branch, `push` event, completed status, and successful conclusion. One qualifying success establishes
+   verification; red, cancelled, pending, and unreadable runs remain diagnostics and do not veto that
+   success. Never rerun historical workflows merely to manufacture a clean set.
+10. **Complete, checkpoint, and stop.** Apply the terminal typed receipt, verify Closed/Done/claim-release
+    projections, update this recipe with the milestone evidence and lessons, and stop at the requested
+    milestone rather than starting the next dependency-ready unit.
+
+### Checkpoint lessons from `.github#2905`
+
+What went right:
+
+- 🟩 [x] The functional classifier used existential success while preserving every non-success run as
+  diagnostic evidence; mixed success/failure/pending/cancelled controls and 2,585 tests stayed green.
+- 🟩 [x] Independent review found the stale Standard SDD digest chain; regeneration with `fsgg-sdd` 1.2.5
+  and a second detached no-change pass restored a real fixed point.
+- 🟩 [x] Canonical-successor recovery preserved semantic evidence: predecessor and successor had identical
+  raw binary diff digest and stable patch ID, while claim, election, and review identities were fresh.
+- 🟩 [x] The host rebuilt the merged Coordination engine with zero warnings/errors before terminal reads,
+  and completion used existing exact-main push successes without rerunning history.
+
+What went wrong, and the retained rule:
+
+- 🟩 [x] Work initially drifted toward burning down the Coordination board. **Retained rule:** the roadmap
+  chooses the work; the board coordinates that work and never becomes the roadmap.
+- 🟩 [x] A stale generated digest chain survived the first implementation handoff. **Retained rule:** commit
+  every regenerated SDD artifact and require a second detached full-sequence no-change proof.
+- 🟩 [x] `Closes #2905.` was first embedded in prose, and an old claim generation had already elected the
+  predecessor PR. **Retained rule:** use a standalone closing line and rotate claim/PR identities rather
+  than contesting append-only election history.
+- 🟩 [x] Claim rotation left the prior review wait bound to retired authority. **Retained rule:** create a
+  fresh canonical successor PR and enter an engine-derived initial wait; never edit durable review history.
+- 🟩 [x] GitHub auto-closed the issue before the terminal reader could reconstruct declared paths from the
+  merged PR. **Retained rule:** make the merged PR handoff self-contained, then use metadata-only
+  reopen/reclaim recovery if the typed reader refuses.
+- 🟨 [ ] A known completion-receipt edge can compare a short merge SHA with the full SHA after the Done
+  projection. **Retained rule:** treat that mismatch as a typed defect, preserve the already-written
+  projection, and do not retry terminal mutation blindly. The same caution applies when terminal replay
+  reports `FSGG-NOT-DONE` after projecting Done but before explicit issue closure.
 
 `$chainsaw` is not an alternative implementation process. It is an explicitly invoked, bounded
 break-glass operation inside the governing SDD lifecycle and is admissible only when evidence establishes
