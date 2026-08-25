@@ -76,6 +76,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
+      # The fixture carries the subject mutations that prove the production checker can refuse
+      # stale, ambiguous, missing, and internally divergent authority. Running only the checker on
+      # today's coherent files would leave those negative controls unreachable in CI.
+      - name: Run projection gate negative controls
+        run: bash tests/projection/run.sh
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
 

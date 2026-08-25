@@ -1,0 +1,512 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "typed-sdd-p4-floor",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "9f3ab77066fad099991b7923acc79c8a60a0020153361bdc4fb0ba8129f99344"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "6554a35b720fa67aecd2bb06997f1bc2a3af62004f9ba0fcc17b0ef2a0c610cd"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "2acd849bcc8970609508ac28fc4e7ffae91cc423f174cb35f68e638a08247d5c"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "791b5e09eb7a7e2048f681e2424b8738440e23c348680e59973f6d54d0afd441"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "aa5761716839581bec012bfa418ada0b6372ee84b6e1cd1dfd00b25e02ce6eed"
+      }
+    },
+    {
+      "path": "work/typed-sdd-p4-floor/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fd9deaad7208d5eb770de391163945d91f957fa0dd761c7a6a1fade0252789db"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "typed-sdd-p4-floor",
+    "title": "P4 Typed SDD registry floor",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Registry validation and projections pass with both provider families declaring 1.4.0-preview.1, and FS.GG.Templates five-descriptor equality validation becomes green. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Registry validation and projections pass with both provider families declaring 1.4.0-preview.1, and FS.GG.Templates five-descriptor equality validation becomes green. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/typed-sdd-p4-floor/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/typed-sdd-p4-floor/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/typed-sdd-p4-floor/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/typed-sdd-p4-floor/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/typed-sdd-p4-floor/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/typed-sdd-p4-floor/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "docs/coordination/2026-08-24-typed-protocol-kernel-design.md",
+        "registry/dependencies.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/typed-sdd-p4-floor/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/architecture.md",
+        "registry/dependencies.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/typed-sdd-p4-floor/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".github/workflows/coherence.yml",
+        "docs/registry/compatibility.md",
+        "registry/dependencies.yml",
+        "scripts/check-projection.py",
+        "tests/projection/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/typed-sdd-p4-floor/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/CHANGELOG.md",
+        "registry/dependencies.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/typed-sdd-p4-floor/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "docs/architecture.md",
+        "readiness/typed-sdd-p4-floor/work-model.json"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/typed-sdd-p4-floor/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/typed-sdd-p4-floor/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.4.0-preview.1"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9f3ab77066fad099991b7923acc79c8a60a0020153361bdc4fb0ba8129f99344"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "6554a35b720fa67aecd2bb06997f1bc2a3af62004f9ba0fcc17b0ef2a0c610cd"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "2acd849bcc8970609508ac28fc4e7ffae91cc423f174cb35f68e638a08247d5c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "791b5e09eb7a7e2048f681e2424b8738440e23c348680e59973f6d54d0afd441"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "aa5761716839581bec012bfa418ada0b6372ee84b6e1cd1dfd00b25e02ce6eed"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/typed-sdd-p4-floor/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fd9deaad7208d5eb770de391163945d91f957fa0dd761c7a6a1fade0252789db"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "cb0dd06aa2b69109195c27bfc6b3dd747dffdf275b744b3c00c91dfdaaeb6e74"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

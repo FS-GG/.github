@@ -52,11 +52,15 @@ contracts:
   - id: demo
     version: "0.4.0"
     package-version: "0.4.0"
+    minimum-fsgg-sdd:
+      version: "0.6.0"
     owner: sdd
     surface: "demo surface"
     consumers: []
   - id: quad
     version: "1.2.1.1"
+    minimum-fsgg-sdd:
+      version: "0.6.0"
     owner: governance
     surface: "four-segment version (ADR-0007)"
     consumers: []
@@ -68,6 +72,7 @@ contracts:
 coherence:
   - { id: demo-coh, coherent: true,  owner: sdd }
   - { id: bad-coh,  coherent: false, owner: sdd }
+  - { id: fsgg-sdd-orchestrator-axis, coherent: true, owner: sdd }
 YAML
 
 # The well-formed projection. The gate reads the GENERATED `## Contract version literals` table (each
@@ -83,6 +88,7 @@ cat > "$BASE" <<'MD'
 |---|---|---|---|
 | `demo-coh` | ✅ yes | SDD | holds |
 | `bad-coh` | ❌ no | SDD | standing request |
+| `fsgg-sdd-orchestrator-axis` | ✅ yes | SDD | **Coherent — provider-family minimum at `0.6.0`.** **Current:** all provider-family floors agree on **`0.6.0`**. Release history (0.3.0 → 0.4.0 → 0.6.0). |
 
 ## Versioned contracts
 
@@ -286,6 +292,38 @@ expect_fail "missing contract row"        "has no row"          "$(variant nocon
 expect_fail "missing coherence row"       "has no row"          "$(variant nocoh      's#^| `demo-coh` |.*$##')"
 expect_fail "coherent flag contradicts"   "registry says coherent=True" \
   "$(variant flagflip  's#| `demo-coh` | ✅ yes |#| `demo-coh` | ❌ no |#')"
+expect_fail "stale orchestrator current floor reds despite matching headline/history" "Current:** assertion does not say all provider-family floors agree on minimum-fsgg-sdd '0.6.0'" \
+  "$(variant stalefloor 's#agree on \*\*`0.6.0`\*\*#agree on **`0.5.0`**#')"
+expect_fail "duplicate contradictory Current authority reds" "must contain exactly one **Current:** authority clause, found 2" \
+  "$(variant duplicatecurrent 's#Release history#**Current:** all provider-family floors agree on **`0.5.0`**. Release history#')"
+expect_fail "missing Current authority reds" "must contain exactly one **Current:** authority clause, found 0" \
+  "$(variant missingcurrent 's#\*\*Current:\*\*#**Prior:**#')"
+
+# A projection cannot make divergent registry facts coherent merely by mentioning every value in one
+# authoritative sentence. The equality claim belongs to the registry first; prose is only its view.
+REG_DIVERGENT_FLOORS="$WORK/registry-divergent-floors.yml"
+sed '/^  - id: quad$/,/^  - id: bare$/ s/version: "0.6.0"/version: "0.7.0"/' \
+  "$REG" > "$REG_DIVERGENT_FLOORS"
+expect_fail "divergent provider-family floors red even when Current mentions both" \
+  "provider-family minimum-fsgg-sdd floors disagree in the registry" \
+  "$(variant divergentfloor 's#floors agree on \*\*`0.6.0`\*\*\.#floors agree on **`0.6.0`** and workspace floors agree on **`0.7.0`**.#')" \
+  "$REG_DIVERGENT_FLOORS"
+
+# Agreement over an empty or incomplete set is vacuous. The production registry's two provider
+# families are rendering (`fs-gg-ui-template`) and Templates (`fs-gg-workspace-template`); deleting
+# either authority must red even when the remaining/prose value still agrees with itself.
+REG_MISSING_WORKSPACE_FLOOR="$WORK/registry-missing-workspace-floor.yml"
+sed '/^  - id: quad$/,/^  - id: bare$/ { /minimum-fsgg-sdd:/,+1 d; }' \
+  "$REG" > "$REG_MISSING_WORKSPACE_FLOOR"
+expect_fail "missing workspace provider-family floor reds" \
+  "required provider-family contracts declare no minimum-fsgg-sdd.version" \
+  "$BASE" "$REG_MISSING_WORKSPACE_FLOOR"
+
+REG_MISSING_ALL_FLOORS="$WORK/registry-missing-all-floors.yml"
+sed '/minimum-fsgg-sdd:/,+1 d' "$REG" > "$REG_MISSING_ALL_FLOORS"
+expect_fail "missing all provider-family floors reds" \
+  "required provider-family contracts declare no minimum-fsgg-sdd.version" \
+  "$BASE" "$REG_MISSING_ALL_FLOORS"
 
 # --- fail-closed corollaries (epic #266): a missing subject must not read as "checked, fine" ---
 expect_fail "version column absent"       "has no 'version' column" \

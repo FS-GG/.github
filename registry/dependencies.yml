@@ -1005,19 +1005,12 @@ contracts:
       governance overlay template, folded into this package at the same rename).
     consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active now, wizard-selectable only after phase 6 (see new-sdd-workspace row).
     minimum-fsgg-sdd:
-      version: "0.6.0"   # MIRRORS FS.GG.Templates' own providers/*.providers.yml (all four identities currently declare minimumFsggSdd.version: "0.6.0"; the registry mirrors the descriptor, it does not lead it — same discipline as the fs-gg-ui-template row above).
-      requires: "SDD lifecycle and scaffold provenance support (FS.GG.Templates providers/*.providers.yml, all four identities)"
+      version: "1.4.0-preview.1" # P4 Typed SDD floor, mirrored by every FS.GG.Templates provider in #432.
+      requires: "Typed Protocol Kernel lifecycle selection, compilation, provenance, refresh, upgrade, and diagnostics for every workspace identity"
       adr: "docs/adr/0071-two-web-workspace-providers-one-template-package.md; docs/adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md"
       provider-descriptor: "FS.GG.Templates providers/console.providers.yml, providers/web.providers.yml, providers/fable-game.providers.yml, providers/fable-bindings.providers.yml"
-      # KNOWN GAP, NOT SILENTLY RAISED HERE (.github#2070 DEC-004 / clarifications.md DEC-001): the
-      # `fable-game` identity's owner-sourced Game skill (FS.GG.Game.Skills, see the `game-skills`
-      # contract row below) is only correctly materialized by an FS.GG.SDD.Cli build containing SDD
-      # PR#819's merge commit aa1d6d4c — first published at 1.0.0 (`git compare v0.32.0...aa1d6d4c` =
-      # ahead_by 2 behind_by 0; `git compare aa1d6d4c...v1.0.0` = ahead_by 12 behind_by 0; nuget.org's
-      # newest fs.gg.sdd.cli is 1.0.0). FS.GG.Templates' fable-game.providers.yml still declares 0.6.0.
-      # This row mirrors that descriptor rather than silently correcting it; the fix belongs to
-      # FS.GG.Templates and is filed as a distinct cross-repo finding, not applied here:
-      # FS-GG/FS.GG.Templates#407.
+      # This advance also subsumes the former fable-game materializer gap recorded at #407: the
+      # selected compiler is newer than the 1.0.0 release that first carried that fix.
   - id: game-skills
     version: "0.8.0"   # SOURCE: FS-GG/FS.GG.Game#552 published 0.7.0 (closed via PR#554, merge 7fa79f29023468a6bcd4ef7ef5b696abeba508ec, tag skills/v0.7.0), then 0.8.0 (tag skills/v0.8.0 -> 7b8d24479a83b64a68645f47dd943f9b615e7064; `gh api compare/skills/v0.7.0...skills/v0.8.0` = two unrelated docs-only commits, #557/#558 — no fs-gg-game-fable change).
     package-version: "0.8.0"   # FEED: check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest live on the feed for every package-bearing contract, unconditionally — it is NOT a "what a consumer has adopted" field. .github#2070's first cut pinned 0.7.0 (the version FS.GG.SDD#817/PR#819 explicitly proved materializes) reasoning by consumer-adoption, and the gate correctly reddened (BEHIND the feed) on PR#2344 head 824c4c2f; this is the repair. Independently re-downloaded fs.gg.game.skills.0.8.0.nupkg (SHA-256 e058642649510e730da168d97610fe96d12805870112127227a64b15e9b1b9f0) and re-extracted game-skills/skills/fs-gg-game-fable/SKILL.md: sha256sum 443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50 — IDENTICAL to 0.7.0's, so SDD#817/PR#819's materializer proof (against that exact digest) still holds at 0.8.0; nothing about the proven skill body changed between the two versions. Also matches the digest already recorded at registry/skills.yml:207.
@@ -1278,31 +1271,18 @@ coherence:
     coherent: true
     owner: sdd
     summary: >
-      ADR-0008 (.github#87, sub-issue of #85): the fsgg-sdd CLI is a first-class member of the
-      coherent set — its THIRD, orchestrator axis alongside template and framework. A scaffolded
-      product = template@<pin> (governed) + fsgg-sdd CLI@<installed> (was ungoverned). The CLI seeds
-      artifacts a product on the fs-gg-ui-template pin is EXPECTED to contain: the fs-gg-sdd-* process
-      skills (FS.GG.SDD Feature 051/056), .fsgg/early-stage-guidance.md (Feature 049), and a .gitignore
-      for regenerable output (Feature 073). The fs-gg-ui-template contract entry therefore carries a
-      `minimum-fsgg-sdd` block (the oldest coherent CLI).
-      RE-COHERED coherent:false->true 2026-07-07 (this change): both halves are now in lockstep at 0.6.0.
-      HISTORY — the 2026-07-04 re-open (feature 073, transient-artifact taxonomy): FS.GG.SDD published v0.6.0
-      whose seeded .gitignore for regenerable output grew the expected seeded surface, so per FR-011 the
-      minimum coherent CLI advanced `minimum-fsgg-sdd.version: 0.4.0->0.6.0` (0.6.0 is the oldest published CLI
-      that seeds the .gitignore; 0.5.0 did not), flipping this row false until both halves re-mirrored.
-      (registry half — DONE 2026-07-04) FS.GG.SDD.Cli 0.6.0 LIVE on the org feed (release run 28720216874,
-      "Pack + publish FS.GG.SDD.Cli" green; publish-before-flip FR-007) + nuget.org (OIDC); this registry
-      pins minimum-fsgg-sdd 0.6.0.
-      (provider half — DONE 2026-07-05, FS.GG.Templates#99 CLOSED) providers/rendering.providers.yml re-mirrored
-      `minimumFsggSdd.version: 0.4.0->0.6.0` via FS.GG.Templates PR#100 (merge eb3cbeb); descriptor == registry ==
-      0.6.0, and the Templates composition gate is green on main across every subsequent commit (latest 033d85f,
-      2026-07-06 — the FS.GG.Game-extraction 0.2.0 source re-pin), verifying a full-stack scaffold with the
-      pinned-minimum CLI. Both halves at 0.6.0 ⇒ the axis is coherent.
-      PRIOR: reached coherent:true 2026-07-02 with both halves in lockstep at 0.4.0 (feature 056 3-root skill
-      union; FS.GG.Templates#49/PR#51, 574e90c); originally 0.3.0 (epic #85).
-    resolved_by: "FS.GG.Templates#99 CLOSED via PR#100 (merge eb3cbeb, 2026-07-05 — re-mirror providers/rendering.providers.yml minimumFsggSdd 0.4.0->0.6.0); Templates composition gate green on main (latest 033d85f, 2026-07-06). Registry half: FS.GG.SDD v0.6.0 published (FS.GG.SDD.Cli 0.6.0 on the feed via PR FS.GG.SDD#121 + tag v0.6.0) + minimum-fsgg-sdd pinned 0.6.0."
-    impact: "Extends ADR-0001 coherence to the orchestrator: a newest-pin product built with a pre-0.6.0 CLI is a DETECTED incoherence (scaffold.cliBehindMinimum + provenance stamp; it lacks the seeded .gitignore). Lockstep HELD: minimum-fsgg-sdd (registry) == minimumFsggSdd (provider descriptor) == 0.6.0."
-    tracking: "https://github.com/FS-GG/FS.GG.Templates/issues/99 (provider re-mirror 0.4.0->0.6.0 — CLOSED via PR#100); https://github.com/FS-GG/FS.GG.SDD/issues/57 (prior 0.4.0 axis advance); https://github.com/FS-GG/.github/issues/85 (epic — original 0.3.0 resolution); .github#87 (registry field — done)"
+      ADR-0008 (.github#87, sub-issue of #85) makes fsgg-sdd a first-class third axis beside
+      template and framework. P4 of the Typed Protocol Kernel rollout advances both provider-family
+      minimum-fsgg-sdd contracts and all five Templates descriptors to dual-published
+      1.4.0-preview.1 (FS.GG.SDD#916, .github#2928, Templates#432). This is the oldest CLI carrying
+      explicit typed-sdd selection, canonical F# specification authority, normalized AST and
+      projection receipts, migration analysis, refresh/upgrade/doctor, and readiness enforcement.
+      Omitted lifecycle remains sdd. A product below the declared minimum is rejected with
+      scaffold.cliBehindMinimum and the exact requirement is recorded in scaffold provenance.
+      Prior floors 0.3.0, 0.4.0, and 0.6.0 remain recorded in registry/CHANGELOG.md.
+    resolved_by: "FS.GG.SDD#916 published FS.GG.SDD.Cli 1.4.0-preview.1 to both feeds; .github#2928 advanced the registry floors; FS.GG.Templates#432 mirrors and verifies every provider/profile."
+    impact: "A pre-1.4.0-preview.1 CLI is a detected incoherence for the current provider family; registry floors, all provider descriptors, installed-package lifecycle matrices, and scaffold provenance agree."
+    tracking: "https://github.com/FS-GG/.github/issues/2928; https://github.com/FS-GG/FS.GG.SDD/issues/916; https://github.com/FS-GG/FS.GG.Templates/issues/432; original rollout .github#85/#87"
   - id: governance-overlay-populated
     coherent: true
     owner: governance
