@@ -19,6 +19,59 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-25** — **`FS.GG.NewSddWorkspace` 0.10.1 published and registry identity reconciled**
+  (github; [.github#2968](https://github.com/FS-GG/.github/issues/2968),
+  [release run 32858342782](https://github.com/FS-GG/.github/actions/runs/32858342782)):
+  advances source and package identities from `0.10.0` to the forward patch `0.10.1`. Annotated tag
+  `new-sdd-workspace/v0.10.1` peels to exact source
+  `264725f374e3f05da46d7c3089462076a1f9bf7a`; both feeds expose nuspec version `0.10.1` at that
+  commit. The org/public archives are `sha256:7eede495377db5a0b11d7aaaae2387761d85309cf2044af6249668f324d85cd8`
+  and `sha256:1f2a63cc63386574e307cdcf08dd013151393156c6f875ba00ea09c7e81c4ea7` respectively, differing
+  only by nuget.org's signature; all 26 normalized files share payload-manifest identity
+  `sha256:69c7f9e0ab09076dfed201eb1b57e803829386cb8a2de4bd63a0b841fd964ace`. A clean public-only tool
+  install and the hosted ANSI help route pass.
+
+- **2026-08-25** — **`FS.GG.Workspace.Template` 0.10.0 published and registry identity reconciled**
+  (templates; [Templates#437](https://github.com/FS-GG/FS.GG.Templates/pull/437),
+  [release run 32857268949](https://github.com/FS-GG/FS.GG.Templates/actions/runs/32857268949),
+  [immutable release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.10.0)):
+  advances source, package, and tag identities from `0.9.0` to `0.10.0`. The annotated tag peels to
+  exact source `565ad45d2dda386e9d1673071cc0b424cfd02be6`; the release carries the accessible fable-game
+  browser baseline and corrected Typed SDD release-floor gate. One canonical pack
+  (`sha256:3c5477ecd3cacba95fd0ea6b3047ea926fc834f779943c1dd93c62c61582b2e6`) is byte-identical to
+  GitHub Packages; nuget.org's signed archive
+  (`sha256:69cbed30447e6bd4d221e0ce78060c8245d2744fc3993b4c27368aeeb48d11c8`) adds only
+  `.signature.p7s`. All 154 normalized payload files share manifest identity
+  `sha256:859a831b4d69d6568c6716565544b6f36a06c0e7f7bfc52c22b8b39136d90f74`; the identical nuspec
+  (`sha256:7467b12789b433374ec9c95c4d1d81a962363dae1c9bdbe71e6d54264c0962c8`) binds the exact source.
+  Fresh isolated installs from both served archives register all five template identities.
+
+- **2026-08-25** — **coordination coherent set `github:0.75.4` published and fully reconciled**
+  (github; [.github#2941](https://github.com/FS-GG/.github/issues/2941),
+  [source PR #2967](https://github.com/FS-GG/.github/pull/2967),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.75.4)):
+  advances the coord-engine source, package, generated projections, and distributed tool pin to
+  `0.75.4` after promotion run
+  [32850612346](https://github.com/FS-GG/.github/actions/runs/32850612346) observed all three packages
+  on GitHub Packages and nuget.org. The release binds exact source `8d7204710d08d1cbeed76b74ae0afe089b6ea4e1`,
+  content `sha256:18444dd1c84386de62ce324728c0f6b42343789eac6e747e858469aefa25a378`,
+  and identical unsigned payloads across feeds: Coord.Cli
+  `sha256:315ebfb276f76a62f81eb9285f84ce9a59e5585af9c2b735037df3b7b28fc8e4`, Drivers
+  `sha256:d470f549150b792e5c52b0466f20785dc57d8c340b5dc95bdfe3bd896f09b58d`, and Kit
+  `sha256:f486dc1746691419630d23745bdfea72a0d7dcec5555dce8a511731855df9ac3`.
+  Prepare run 32849407503 packed once; exact-source recoveries 32850378589/32850382204/32850385224
+  resumed the durable journals after public-feed indexing without repacking or duplicate pushes.
+
+- **2026-08-25** — **Game Core/Render/Harness coherent set `0.14.0` published and reconciled**
+  (game; [Game#606](https://github.com/FS-GG/FS.GG.Game/issues/606),
+  [Game PR #607](https://github.com/FS-GG/FS.GG.Game/pull/607),
+  [release run 32849207929](https://github.com/FS-GG/FS.GG.Game/actions/runs/32849207929)):
+  advances `game-sim-core` and `game-scene-adapter` source/package identities from `0.13.0` to the
+  coherent additive MINOR `0.14.0`. Tag `v0.14.0` resolves to exact merged source
+  `f1ef2297e90997ab51e82c02bc810e140008f8cb`; the workflow packed the Core/Render/Harness set once,
+  published GitHub Packages before nuget.org, and preserved every non-signature payload byte.
+  The release adds the Harness action-coverage public surface while retaining one coherent scalar.
+
 - **2026-08-25** — **`FS.GG.Workspace.Template` 0.9.0 published and registry identity reconciled**
   (templates; [.github#2934](https://github.com/FS-GG/.github/issues/2934),
   [Templates#432](https://github.com/FS-GG/FS.GG.Templates/issues/432),
