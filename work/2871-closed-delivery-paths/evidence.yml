@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2871-closed-delivery-paths/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2871-closed-delivery-paths/analysis.json
-    digest: 0bced30b773ed0bab9b8ee036774548f579686c708c185cfd44f4cc8240b3b6e
+    digest: 0e7d77fcadfc714614a462472bb703920dbc9954cc34e4bee252aca38f1bd456
     schemaVersion: 1
   - label: checklist
     path: work/2871-closed-delivery-paths/checklist.md
