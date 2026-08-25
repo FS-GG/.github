@@ -130,25 +130,28 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.75.4 — forward-only release-note repair for exact-merge completion and serialized coordination mutations.
+    <PackageReleaseNotes>0.75.5 — full merge provenance and correct post-merge success classification.
 
-WHAT MOVED, AND WHY IT IS A PATCH. The engine now gates terminal completion on a qualifying successful
-workflow run for the exact merged default-branch SHA, preserving a visible, resumable state while the
-run is absent, pending, failing, cancelled, stale, or unreadable. Live GitHub reads paginate and select
-that exact run rather than accepting pull-request green as post-merge verification. Landable refusals
-also identify the exact red check instead of collapsing every failure into an unnamed red verdict
-(.github#2905).
+WHAT MOVED, AND WHY IT IS A PATCH. Post-merge verification now recognizes a completed successful
+default-branch push run as success instead of leaving a correctly published merge stranded behind a
+false non-success classification. The correction changes no workflow selection, required run shape,
+package identity, command, flag, schema, exit code, or public member (.github#2905).
 
-Blocked-by dependency updates now use authoritative add/remove/replace/clear set mutations with
-generation-bound compare-and-swap fencing. Direct field writes, ready/dependency projection, and
-deferred flush replay serialize through the same mutation boundary, so concurrent writers preserve
-unrelated live edges and stale snapshots fail closed instead of silently overwriting the set
-(.github#2907).
+Completion provenance now requests and parses GitHub GraphQL `Commit.oid`, preserving the full merge
+object id. Typed completion receipts and REST post-merge verification already carry the full
+`merge_commit_sha`; both authorities therefore compare the same 40-character identifier instead of
+refusing after the work had already printed FSGG-DONE. The production HTTP route and exact inversion
+pin the equality boundary (.github#2981).
 
-These compatible correctness, recovery, and observability repairs were already present in immutable
-0.75.3, whose listing incorrectly called the package documentation-only. NuGet bytes cannot be
-repacked under an existing version, so 0.75.4 repairs the public narrative forward-only. `Protocol.fs`,
-command names, package identities, and public members remain unchanged (.github#2941).
+Both fixes are compatible lifecycle correctness repairs above immutable `0.75.4`. `Protocol.fs` is
+unchanged across the release span. Typed SDD P0-P4 remain complete and P5's default flip remains
+deferred until OperatingV2; this cut changes no provider or receiver contract (.github#2983).
+
+The content-only FS.GG.Kit project now disables the SDK's default embedded-resource glob. SDK
+10.0.400 otherwise preserves the unmatched `**/*.resx` pattern as a literal missing resource and
+aborts Pack before the kit staging target runs. The explicit disable changes no packed member,
+destination, mode, package identity, or materialization behavior; it restores the existing package
+contract on the repository's allowed latest-feature SDK roll-forward (.github#2983).
 
 $(FsggStandingAdvisories)
 
