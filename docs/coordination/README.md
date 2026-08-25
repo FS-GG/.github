@@ -29,11 +29,11 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > completion.
 
 > **Typed specification and protocol kernel.** [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md)
-> and the accepted-direction [kernel design](2026-08-24-typed-protocol-kernel-design.md) place the S.I.R.
-> executable-rules pilot, reusable agent-authored specification AST, and coordination process/mutation
-> extension under one umbrella. Its
-> [delivery roadmap](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) stages pilot,
-> extraction, adoption, and deletion of every shadow representation.
+> and the historical [kernel design](2026-08-24-typed-protocol-kernel-design.md) record the delivered F#
+> P0–P4 substrate. [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md) and the
+> [Quint-first migration design](2026-08-25-quint-first-typed-sdd-migration-design.md) govern future
+> canonical authoring: Quint owns behavior and native verification; a small generated FS-GG contract owns
+> stable integration facts. The `typed-sdd` token and current `sdd` default remain unchanged.
 
 > **GitHub Substrate v2 and fleet cutover.** The proposed
 > [governing design](2026-08-25-github-substrate-v2-fleet-cutover-design.md) applies the published typed
@@ -41,7 +41,7 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > `FS.GG.Coordination` repository under an independent bootstrap qualification contract, fences every v1
 > writer, switches the fleet while normal writes are closed, and names `OpenV2` as the point after which
 > recovery is roll-forward only. It also records which other FS-GG specification-like surfaces should—and
-> should not—adopt the Typed SDD EDSL approach. The living
+> should not—adopt the Quint-first Typed SDD approach. The living
 > [execution roadmap](../github-substrate-v2-roadmap.md) decomposes that design into agent-sized units,
 > independent qualification gates, protected cutover operations, and explicit v1 deletion proofs.
 

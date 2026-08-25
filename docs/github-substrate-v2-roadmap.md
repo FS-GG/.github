@@ -16,6 +16,12 @@ then stripped of every v1 production authority. This document owns cross-reposit
 gates; the [governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) owns the
 architecture and rationale.
 
+> **Quint-first candidate dependency:** [ADR-0077](adr/0077-quint-first-typed-specification-authority.md)
+> and the [migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) require the
+> behavioral protocol in GS2-02 to be canonical Quint source consumed through the published FS.GG
+> compiled-contract boundary. Census/bootstrap work may proceed, but protocol implementation must wait for
+> that producer artifact. The current F# P4 package remains production authority meanwhile.
+
 | Field | Value |
 |---|---|
 | Status | Ongoing renovation; design and execution spine filed, implementation not started |
@@ -287,8 +293,10 @@ write after freeze and reject a forged or rewound ledger.
 - [ ] **GS2-01.3 — Establish the solution boundary.** Create packages/projects for protocol specification,
   pure core, GitHub adapters, CLI host, App/webhook host, qualification contracts, and tests. Enforce
   one-way dependencies and keep GitHub SDK/HTTP concerns out of the pure core.
-- [ ] **GS2-01.4 — Pin the published kernel.** Restore the exact published FS.GG.SDD artifact from the
-  supported read feed, verify its identity, and prohibit source-project or checkout-relative references.
+- [ ] **GS2-01.4 — Pin the published Quint-capable kernel.** Restore the exact published FS.GG.SDD artifact
+  carrying the accepted Quint profile and compiled-contract boundary from the supported read feed, verify
+  its identity and bundle digest, and prohibit source-project or checkout-relative references. An earlier
+  bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02.
 - [ ] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
   compiler/unit tests, dependency/security checks, package/install smoke, and evidence-manifest validation.
   Do not import v1 coordination completion gates.
@@ -309,11 +317,13 @@ write after freeze and reject a forged or rewound ledger.
 
 **Parent:** `.github#2963`
 **Owner:** `FS.GG.Coordination`
-**Depends on:** GS2-01
+**Depends on:** GS2-01, including the final Quint-capable GS2-01.4 pin
 **Exit gates:** Q1 and the pure portion of Q2
 
-- [ ] **GS2-02.1 — Define stable identities.** Specify subjects, authorities, codecs, commands, events,
-  mutations, projections, observation plans, settings profiles, evidence obligations, and version IDs.
+- [ ] **GS2-02.1 — Author the canonical Quint protocol.** Specify subjects, authorities, codecs, commands,
+  events, mutations, projections, observation plans, settings profiles, evidence obligations, and version
+  IDs under the published FS-GG Quint profile. Generate stable integration identities through the compiled
+  contract; do not author a parallel F# protocol AST.
 - [ ] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
   stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
   completeness contracts.
@@ -332,7 +342,7 @@ write after freeze and reject a forged or rewound ledger.
   causation/correlation, receipt re-read, compensation boundary, and roll-forward classification.
 - [ ] **GS2-02.9 — Implement desired-state specifications.** Type issue schema, Projects, repository
   profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
-- [ ] **GS2-02.10 — Implement compiler outputs.** Derive schemas, command metadata, permission census,
+- [ ] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
   mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
 - [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent authoring forms normalize identically;
   semantic changes produce stable, reviewable diffs; unsupported schema versions fail before execution.

@@ -8,18 +8,25 @@ description: "One agent-authored F# specification AST, piloted in S.I.R., with t
 
 # Design: Agent-authored F# specification kernel and canonical mutation algebra
 
+> **Future-authoring successor:** [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md)
+> and the [Quint-first migration design](2026-08-25-quint-first-typed-sdd-migration-design.md) replace this
+> document's F# authoring and full-expression normalized-AST direction for future work. This document
+> remains the truthful P0–P4 design/delivery record and the source of the still-valid identity, evidence,
+> observation, decision, mutation, receipt, and projection algebra. No production backend has changed.
+
 | Field | Value |
 |---|---|
-| Status | Generic kernel direction accepted and implemented; coordination delivery amended by the GitHub Substrate v2 governing design |
+| Status | P0–P4 implemented; future authoring superseded by ADR-0077; coordination delivery superseded by GitHub Substrate v2 |
 | Authored | 2026-08-24T09:43:48+02:00 |
 | Updated | 2026-08-25 — retain the published kernel, clarify the AST-first capability boundary, and replace the coordination migration path with an independently qualified fleet cutover |
 | Evidence snapshot | 2026-08-24T07:26:29Z |
 | Scope | A shared specification kernel, the S.I.R. pilot, and the FS-GG coordination process/protocol extension |
 | Extends | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0040](../adr/0040-port-the-io-layer.md), [ADR-0058](../adr/0058-adopt-one-governing-principle-derive-dont-restate.md) |
-| Cross-repo decision | [ADR-0076](../adr/0076-agent-authored-fsharp-specification-kernel.md) |
+| Cross-repo decisions | [ADR-0076 delivery record](../adr/0076-agent-authored-fsharp-specification-kernel.md); [ADR-0077 future authority](../adr/0077-quint-first-typed-specification-authority.md) |
 | Predecessor design | [Reducing coordination change amplification](2026-08-22-coordination-change-risk-mitigation-design.md) |
 | Delivery plan | [Specification and protocol kernel roadmap](../reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md) |
 | Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
+| Authoring successor | [Quint-first Typed SDD migration and feature preparation](2026-08-25-quint-first-typed-sdd-migration-design.md) |
 
 ## Executive decision
 

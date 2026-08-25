@@ -1,11 +1,16 @@
 # ADR-0076: Agent-authored F# specification kernel, piloted in S.I.R.
 
-- **Status:** Accepted
+- **Status:** Superseded for future canonical authoring by [ADR-0077](0077-quint-first-typed-specification-authority.md); retained as the Typed SDD P0–P4 decision and delivery record
 - **Date:** 2026-08-24
 - **Decision owners:** FS-GG/.github, FS.GG.SDD, and S.I.R. maintainers
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, future FS-GG consumers, and the EHotwagner/S.I.R. pilot
 - **Related design:** [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md)
 - **Amended:** 2026-08-24 — name the consumer lifecycle `typed-sdd` and establish its staged default direction
+
+> **Successor (2026-08-25):** [ADR-0077](0077-quint-first-typed-specification-authority.md) selects
+> canonical Quint source plus a small generated FS-GG compiled contract for future Typed SDD work. This
+> does not reinterpret the F# backend, packages, migrations, or P0–P4 evidence delivered under this ADR.
+> They remain current production behavior until the successor is implemented, published, and adopted.
 
 ## Context
 

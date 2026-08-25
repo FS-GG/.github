@@ -1,6 +1,20 @@
 # Quint-first specification-authoring assessment
 
-## Bottom line
+## Decision update
+
+[ADR-0077](../../adr/0077-quint-first-typed-specification-authority.md) accepts Quint-first as the target
+direction and the
+[migration design](../../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) prepares its
+qualification and rollout. This report remains the experiment record. The decision does not put Quint
+into production: `fsharp-specification-v1` remains authoritative until the successor is implemented,
+published, and explicitly adopted.
+
+The accepted design narrows one recommendation below. FS-GG will not lower arbitrary Quint expressions
+into a second normalized behavioral language. It will validate a constrained profile and extract a small
+compiled contract containing stable identities, relationships, provenance, evidence, bindings, and CI
+impact. Quint source and Quint-native verification retain behavioral meaning.
+
+## Bottom line at the time of the experiment
 
 Quint 0.32.0 is a credible replacement for the F# EDSL authoring surface, not
 just a complementary model checker. The experiment proves that Quint source can
@@ -8,13 +22,13 @@ be parsed and typechecked into machine-readable IR with inferred types and
 effects, while the same source supplies executable examples, symbolic
 invariants, and replayable counterexamples.
 
-It does **not** yet justify changing authority. These two slices cover executable
+It did **not by itself** justify changing production authority. These two slices cover executable
 semantics but not the kernel's general requirements, provenance, evidence,
 extension, projection, compatibility, or semantic-diff corpus. The next
 experiment should implement a real lowering into a language-neutral normalized
 `SpecificationModel` and author one complete Typed SDD package in Quint.
 
-The promising target is:
+The experiment originally proposed:
 
 ```text
 Quint source is canonical authoring authority
@@ -32,10 +46,9 @@ Quint source is canonical authoring authority
  F# bindings    projections    proof/model backends
 ```
 
-If that cross-domain experiment passes, ADR-0076 should be amended and the F#
-EDSL authoring surface retired. Maintaining both as canonical inputs would
-recreate the duplicate-authority problem the specification kernel exists to
-remove.
+ADR-0077 subsequently accepted a narrower target: profile validation and extraction of stable integration
+facts, without duplicating Quint expression semantics. Maintaining F# and Quint as permanent canonical
+inputs would still recreate the duplicate-authority problem the specification kernel exists to remove.
 
 ## How the experiment went
 
@@ -88,12 +101,12 @@ model-checker data would be a regression even if it typechecks.
 
 ## Typed AST finding
 
-There is no technical obstacle to producing a typed AST from Quint. The CLI's
+There is no technical obstacle to producing typed data from Quint. The CLI's
 `typecheck --out` result contains resolved module IR plus type and effect maps
-keyed by source identities. A lowering can consume that structure and emit a
-small FS-GG-owned normal form.
+keyed by source identities. An adapter can consume that structure, validate the FS-GG profile, and emit a
+small FS-GG-owned compiled contract.
 
-The stable AST should be language-neutral. “Typed” means that its schema,
+The stable contract should be language-neutral. “Typed” means that its schema,
 variants, references, validation, canonical encoding, and migrations are
 defined; it does not mean its authority must be an F# discriminated union.
 Generated F# bindings can preserve exhaustive matching for current consumers.
@@ -145,11 +158,11 @@ Do not expand the F# authoring EDSL merely to reproduce facilities Quint already
 provides. Also do not immediately install Quint beside it as a permanent second
 authority.
 
-Run one replacement-oriented milestone with these exit criteria:
+The replacement-oriented qualification milestone has these exit criteria:
 
-1. define a versioned, language-neutral FS-GG `SpecificationModel` encoding;
-2. lower typed Quint IR into it with source locations and deterministic
-   canonical bytes;
+1. define a versioned FS-GG Quint profile and small language-neutral compiled contract;
+2. validate typed Quint IR and extract stable integration facts with source locations and deterministic
+   canonical bytes, without lowering arbitrary expressions;
 3. author one complete requirements/evidence package, one executable S.I.R.
    rule, and one concurrent coordination protocol;
 4. generate the current Markdown, schema, semantic diff, and F# consumer API;
@@ -161,8 +174,7 @@ Run one replacement-oriented milestone with these exit criteria:
 8. exercise safety and liveness plus injected lost-update, stale-authorize,
    double-apply, and deadlock controls.
 
-If all three domains pass, select Quint as canonical source, amend ADR-0076, and
-delete the F# EDSL authoring path in the same migration program. If the general
-Typed SDD package is unnatural or the lowering becomes a second compiler of
-Quint semantics, retain the language-neutral AST and the existing F# surface,
-using Quint only as a generated bounded-verification target.
+If all three domains pass, implement and publish the successor backend, migrate consumers explicitly, and
+retire new F# authoring after the compatibility window. If the general Typed SDD package is unnatural or
+the adapter becomes a second compiler of Quint semantics, refuse implementation and revisit ADR-0077
+before changing production authority.

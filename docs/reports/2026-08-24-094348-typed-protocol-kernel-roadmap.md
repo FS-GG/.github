@@ -8,13 +8,20 @@ description: "A S.I.R.-first roadmap to a reusable F# specification AST and the 
 
 # Roadmap: Agent-authored F# specification and protocol kernel
 
+> **Successor program:** P0–P4 below remain completed historical delivery. Future canonical authoring,
+> backend migration, S.I.R. re-adoption, coordination qualification, provider rollout, F# retirement, and
+> any later default decision are governed by [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md)
+> and the [Quint-first migration design](../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md).
+> The published F# backend remains current until that producer-first sequence lands.
+
 | Field | Value |
 |---|---|
 | Created | 2026-08-24T09:43:48+02:00 |
 | Updated | 2026-08-25 — record shipped kernel, AST-first capability boundary, coordination supersession, and the completed #2905 v1 safety checkpoint |
-| Status | P-series historical/current as recorded; coordination M0–M9 superseded as an execution plan |
+| Status | P-series completed historical delivery; future authoring and coordination execution superseded |
 | Design authority | [Agent-authored F# specification kernel and canonical mutation algebra](../coordination/2026-08-24-typed-protocol-kernel-design.md) |
 | Coordination successor | [GitHub Substrate v2 and coordinated fleet cutover](../coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) |
+| Authoring successor | [Quint-first Typed SDD migration and feature preparation](../coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) |
 | Starting point | `main` at `0d56bb104da22478dfef72825f8cf19425635ed0` |
 | Evidence window | 2026-08-21T07:26:29Z through 2026-08-24T07:26:29Z |
 
@@ -39,12 +46,11 @@ The published generic kernel and `typed-sdd` lifecycle now exist. Standard SDD c
 selects that lifecycle, but it does **not** certify the coordination replacement. V2 uses the successor
 design's custom qualification contract so the machinery under replacement is not its own acceptance oracle.
 
-The normalized typed AST is the enduring deliverable of this roadmap and the programmatic corpus consumed
-by agents. Canonical validation and a fingerprinted human projection remain required. Application-building
-tools and additional domain-specific execution, simulation, generation, analysis, and proof capabilities
-consume that corpus without owning it. The roadmap assumes neither that every arbitrary domain has a useful
-proof nor that extraction is desirable; a proof backend earns a place only for a bounded model/property
-pair and never becomes a parallel specification authority.
+The enduring P0–P4 deliverables are stable identity, provenance, evidence, validation, fingerprints,
+semantic diff, projections, migrations, bindings, and the `typed-sdd` lifecycle. ADR-0077 supersedes the
+claim that one normalized typed AST should remain the future behavioral corpus: Quint source owns future
+behavioral meaning, while a small generated contract supplies stable integration facts. Proof remains
+bounded to a named model/property pair and never becomes a parallel authority.
 
 ## 2026-08-25 coordination supersession boundary
 
