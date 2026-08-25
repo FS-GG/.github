@@ -99,11 +99,15 @@ check_tool_help_literal() {
 
 release_subject_changed() {
   test "$#" -eq 3 || fail "release-subject requires repository, base, and head"
-  local repo="$1" base="$2" head="$3"
+  local repo="$1" base="$2" head="$3" changed_paths
   git -C "$repo" cat-file -e "${base}^{commit}" 2>/dev/null || fail "release-subject base is unreadable"
   git -C "$repo" cat-file -e "${head}^{commit}" 2>/dev/null || fail "release-subject head is unreadable"
-  if git -C "$repo" diff --name-only "$base" "$head" \
-    | grep -Eq '^(work|readiness)/2968-new-sdd-workspace-0-10-1-release/'; then
+  if ! changed_paths="$(git -C "$repo" diff --name-only "$base" "$head")"; then
+    fail "release-subject diff is unreadable"
+  fi
+  # A here-string is materialized before grep reads it, so pipefail cannot
+  # misread a killed live writer as a negative subject verdict.
+  if grep -Eq '^(work|readiness)/2968-new-sdd-workspace-0-10-1-release/' <<<"$changed_paths"; then
     printf 'true\n'
   else
     printf 'false\n'
