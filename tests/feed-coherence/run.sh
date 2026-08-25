@@ -596,17 +596,43 @@ echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two
 # here rather than only in a human reviewer's eye.
 ARCH="$REPO_ROOT/docs/architecture.md"
 PROFILE_README="$REPO_ROOT/profile/README.md"
-if grep -qF 'FS.GG.Workspace.Template` 0.9.0' "$ARCH" \
-  && grep -qF 'package-version` **0.9.0**' "$ARCH" \
-  && grep -qF 'package-version` **0.8.0**' "$ARCH" \
+arch_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$ARCH")"
+profile_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$PROFILE_README")"
+workspace_contract_rows="$(grep -F '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")"
+game_skills_contract_rows="$(grep -F '| `game-skills` | FS.GG.Game |' "$ARCH")"
+if [ "$(printf '%s\n' "$arch_templates_rows" | grep -c .)" -eq 1 ] \
+  && printf '%s\n' "$arch_templates_rows" | grep -qF 'FS.GG.Workspace.Template` 0.9.0' \
+  && printf '%s\n' "$arch_templates_rows" | grep -qF '`new-sdd-workspace` 0.10.0' \
+  && [ "$(printf '%s\n' "$profile_templates_rows" | grep -c .)" -eq 1 ] \
+  && printf '%s\n' "$profile_templates_rows" | grep -qF '| `0.9.0` |' \
+  && [ "$(printf '%s\n' "$workspace_contract_rows" | grep -c .)" -eq 1 ] \
+  && printf '%s\n' "$workspace_contract_rows" | grep -qF '| `0.9.0` | `0.9.0` |' \
+  && [ "$(printf '%s\n' "$game_skills_contract_rows" | grep -c .)" -eq 1 ] \
+  && printf '%s\n' "$game_skills_contract_rows" | grep -qF '| `0.8.0` | `0.8.0` |' \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
   && ! grep -qF 'coherent release pending' "$PROFILE_README" \
-  && [ "$(grep -c registry-active "$PROFILE_README")" -ge 4 ] \
   && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
   && grep -qF 'its consumed version' "$ARCH"
 then ok "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
 else bad "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
+fi
+
+WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"
+if python3 - "$WORKFLOW" <<'PY'
+import pathlib, sys, yaml
+
+workflow = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+triggers = workflow.get("on", workflow.get(True, {}))
+required = {"docs/architecture.md", "profile/README.md"}
+for event in ("pull_request", "push"):
+    paths = set(triggers.get(event, {}).get("paths", []))
+    missing = required - paths
+    if missing:
+        raise SystemExit(f"{event} omits prose subjects: {sorted(missing)}")
+PY
+then ok "feed-coherence runs when either asserted prose subject changes"
+else bad "feed-coherence must run when either asserted prose subject changes"
 fi
 
 echo
