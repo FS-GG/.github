@@ -33,6 +33,10 @@
   `fsgg-sdd` 1.2.5 required a second `analyze` pass after the first refreshed `work-model.json`; the
   second pass returned `implementationReady`, `verify` returned `verificationReady` with all 14
   obligations backed by observed evidence, and `ship` returned `shipReady`.
+- The superseding PR's hosted parity-fixture gate then caught `_send(204, {})` writing a forbidden body
+  on its kept-alive HTTP/1.1 connection. Guarding 204 before serialization made
+  `scripts/check-parity-fixtures.py` green across all 46 fixtures and the full parity corpus green at
+  616/616 with zero not-measured results. The hosted red is the negative control for the framing fix.
 
 ## Gate inversions
 

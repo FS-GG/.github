@@ -90,6 +90,10 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _send(self, code, payload):
+        if code == 204:
+            self.send_response(code)
+            self.end_headers()
+            return
         b = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
