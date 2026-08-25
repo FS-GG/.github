@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2905-post-merge-verification/ship.json",
-      "digest": "sha256:b907cf894f108d9cfcf0c034e925edca2b2a5c1e6628c748ef0ebd25af05de12",
+      "digest": "sha256:a6c15a8979561fcce8c88f37e1618888f428d5d221fff66f5d0683efdd1d1b3e",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2905-post-merge-verification/verify.json",
-      "digest": "sha256:aa2d108e02cab25717ec8dda586fb2b0b9d8fbe883e4117b5ff9544c80ca46dd",
+      "digest": "sha256:187f1744d9116f86f0022c2c0137c234345f5e4156542859164393705050c2db",
       "schemaVersion": 1
     },
     {
