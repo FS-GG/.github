@@ -147,12 +147,6 @@ Both fixes are compatible lifecycle correctness repairs above immutable `0.75.4`
 unchanged across the release span. Typed SDD P0-P4 remain complete and P5's default flip remains
 deferred until OperatingV2; this cut changes no provider or receiver contract (.github#2983).
 
-The content-only FS.GG.Kit project now disables the SDK's default embedded-resource glob. SDK
-10.0.400 otherwise preserves the unmatched `**/*.resx` pattern as a literal missing resource and
-aborts Pack before the kit staging target runs. The explicit disable changes no packed member,
-destination, mode, package identity, or materialization behavior; it restores the existing package
-contract on the repository's allowed latest-feature SDK roll-forward (.github#2983).
-
 $(FsggStandingAdvisories)
 
 FULL PER-VERSION HISTORY IS SERVED BY THE REGISTRY, NOT REPEATED HERE (`.github#2579`). Every

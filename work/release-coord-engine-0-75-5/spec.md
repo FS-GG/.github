@@ -24,8 +24,6 @@ with package bytes, source tags, registry authority, and consumer pins that agre
   architecture disposition, and release/freshness evidence.
 - SB-003: Feed-facing public projections advance to `0.75.5` only after both feeds serve the prepared
   bytes; preparation may advance only source-owned candidate facts.
-- SB-006: Keep the content-only Kit packable on the repository's allowed SDK 10.0 latest-feature
-  roll-forward without changing its packed member set or receiver behavior.
 
 ## Non-Goals
 - SB-004: Do not redesign or rename release workflows, package identities, command names, tag
@@ -44,8 +42,7 @@ with package bytes, source tags, registry authority, and consumer pins that agre
 ## Acceptance Scenarios
 - AC-001 [US-001] [FR-001]: Given both feeds and all three sibling tags coherently serve immutable
   `0.75.4`, when preparation is reviewed, then the shared source and every evaluated package select
-  unused stable `0.75.5` with accurate bounded release notes and unchanged identities, and SDK
-  10.0.400 can pack the content-only Kit without treating the unmatched resource glob as a file.
+  unused stable `0.75.5` with accurate bounded release notes and unchanged identities.
 - AC-002 [US-002] [US-003] [FR-002]: Given the preparation PR is accepted and merged, when the existing
   coherent-release saga runs, then it packs once from that exact merge, records one manifest-bound
   artifact set, and resolves `kit/v0.75.5`, `drivers/v0.75.5`, and `coord-engine/v0.75.5` to that source.
@@ -62,8 +59,8 @@ with package bytes, source tags, registry authority, and consumer pins that agre
 ## Functional Requirements
 - FR-001: The reviewed preparation MUST advance the single coherent-set source and all evaluated (covers AC-001)
   package versions from immutable public `0.75.4` to unused stable `0.75.5`, accurately describe the
-  compatible release frontier, preserve package identities and command surfaces, and explicitly
-  disable default embedded-resource discovery for the content-only Kit. (Stories: US-001; Acceptance: AC-001)
+  compatible release frontier, and preserve package identities and command surfaces. (Stories: US-001;
+  Acceptance: AC-001)
 - FR-002: Publication MUST use the existing repository coherent-release saga from the exact merged (covers AC-002)
   source, prepare one manifest-bound artifact set, and require all three sibling component tags to
   resolve to that same commit before publication. (Stories: US-002, US-003; Acceptance: AC-002)
@@ -85,8 +82,7 @@ No material ambiguities recorded.
 
 ## Public Or Tool-Facing Impact
 - The public stable package version advances to `0.75.5`; package identities, commands, workflow
-  filenames, tag namespaces, packed Kit members, and protocol schemas remain unchanged. This is a
-  compatible patch release.
+  filenames, tag namespaces, and protocol schemas remain unchanged. This is a compatible patch release.
 
 ## Lifecycle Notes
 - Next lifecycle action: `fsgg-sdd clarify --work release-coord-engine-0-75-5`.

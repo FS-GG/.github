@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/release-coord-engine-0-75-5/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "4a20309d75c856c9002e4a62c7db84d52edcd78706b95d15d221d1f5e6e687fd"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/release-coord-engine-0-75-5/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623"
+        "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401"
+        "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "37e28677f950aaf322def3c638af1e7a77a389bca13d2cdbdcb4b1531e0c0471"
+        "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -616,7 +626,7 @@
     {
       "path": "readiness/release-coord-engine-0-75-5/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

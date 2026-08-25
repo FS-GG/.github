@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "0571fe0cdd3abdce6ea0cfabbc323166c692cd7deef58fe96edd8266904c0e7b"
+        "value": "04d83fd947e53a03c2a83ad32e79771de4838aad6feb550e81654dbcbe4d4b99"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623"
+        "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401"
+        "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "37e28677f950aaf322def3c638af1e7a77a389bca13d2cdbdcb4b1531e0c0471"
+        "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/release-coord-engine-0-75-5/spec.md",
       "sourceLocation": {
-        "line": 63,
+        "line": 60,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/release-coord-engine-0-75-5/spec.md",
       "sourceLocation": {
-        "line": 67,
+        "line": 64,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/release-coord-engine-0-75-5/spec.md",
       "sourceLocation": {
-        "line": 70,
+        "line": 67,
         "column": 1
       },
       "linkedTaskIds": [
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/release-coord-engine-0-75-5/spec.md",
       "sourceLocation": {
-        "line": 74,
+        "line": 71,
         "column": 1
       },
       "linkedTaskIds": [
@@ -221,7 +221,7 @@
       "classification": [],
       "source": "work/release-coord-engine-0-75-5/spec.md",
       "sourceLocation": {
-        "line": 78,
+        "line": 75,
         "column": 1
       },
       "linkedTaskIds": [
@@ -832,7 +832,7 @@
   "evidence": [
     {
       "id": "EV001",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T001",
       "taskRefs": [
@@ -842,12 +842,12 @@
         "FR-001"
       ],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 1,
@@ -856,7 +856,7 @@
     },
     {
       "id": "EV002",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T002",
       "taskRefs": [
@@ -866,12 +866,12 @@
         "FR-002"
       ],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 2,
@@ -880,7 +880,7 @@
     },
     {
       "id": "EV003",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T003",
       "taskRefs": [
@@ -890,12 +890,12 @@
         "FR-003"
       ],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 3,
@@ -904,7 +904,7 @@
     },
     {
       "id": "EV004",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T004",
       "taskRefs": [
@@ -914,12 +914,12 @@
         "FR-004"
       ],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 4,
@@ -928,7 +928,7 @@
     },
     {
       "id": "EV005",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T005",
       "taskRefs": [
@@ -938,12 +938,12 @@
         "FR-005"
       ],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 5,
@@ -952,7 +952,7 @@
     },
     {
       "id": "EV006",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T006",
       "taskRefs": [
@@ -960,12 +960,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 6,
@@ -974,7 +974,7 @@
     },
     {
       "id": "EV007",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T007",
       "taskRefs": [
@@ -982,12 +982,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 7,
@@ -996,7 +996,7 @@
     },
     {
       "id": "EV008",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T008",
       "taskRefs": [
@@ -1004,12 +1004,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 8,
@@ -1018,7 +1018,7 @@
     },
     {
       "id": "EV009",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T009",
       "taskRefs": [
@@ -1026,12 +1026,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 9,
@@ -1040,7 +1040,7 @@
     },
     {
       "id": "EV010",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T010",
       "taskRefs": [
@@ -1048,12 +1048,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 10,
@@ -1062,7 +1062,7 @@
     },
     {
       "id": "EV011",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T011",
       "taskRefs": [
@@ -1070,12 +1070,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 11,
@@ -1084,7 +1084,7 @@
     },
     {
       "id": "EV012",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T012",
       "taskRefs": [
@@ -1092,12 +1092,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 12,
@@ -1106,7 +1106,7 @@
     },
     {
       "id": "EV013",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T013",
       "taskRefs": [
@@ -1114,12 +1114,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 13,
@@ -1128,7 +1128,7 @@
     },
     {
       "id": "EV014",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T014",
       "taskRefs": [
@@ -1136,12 +1136,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 14,
@@ -1150,7 +1150,7 @@
     },
     {
       "id": "EV015",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T015",
       "taskRefs": [
@@ -1158,12 +1158,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 15,
@@ -1172,7 +1172,7 @@
     },
     {
       "id": "EV016",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T016",
       "taskRefs": [
@@ -1180,12 +1180,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 16,
@@ -1194,7 +1194,7 @@
     },
     {
       "id": "EV017",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T017",
       "taskRefs": [
@@ -1202,12 +1202,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 17,
@@ -1216,7 +1216,7 @@
     },
     {
       "id": "EV018",
-      "kind": "verification",
+      "kind": "deferral",
       "subjectType": "task",
       "subjectId": "T018",
       "taskRefs": [
@@ -1224,12 +1224,12 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "pass",
+      "result": "deferred",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
       "performanceMeasurements": [],
-      "rationale": null,
+      "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence.",
       "source": "work/release-coord-engine-0-75-5/evidence.yml",
       "sourceLocation": {
         "line": 18,
@@ -1291,7 +1291,7 @@
           "path": "work/release-coord-engine-0-75-5/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "0571fe0cdd3abdce6ea0cfabbc323166c692cd7deef58fe96edd8266904c0e7b"
+            "value": "04d83fd947e53a03c2a83ad32e79771de4838aad6feb550e81654dbcbe4d4b99"
           },
           "schemaVersion": 1
         },
@@ -1299,7 +1299,7 @@
           "path": "work/release-coord-engine-0-75-5/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623"
+            "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
           },
           "schemaVersion": 1
         },
@@ -1307,7 +1307,7 @@
           "path": "work/release-coord-engine-0-75-5/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401"
+            "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
           },
           "schemaVersion": 1
         },
@@ -1315,14 +1315,14 @@
           "path": "work/release-coord-engine-0-75-5/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "37e28677f950aaf322def3c638af1e7a77a389bca13d2cdbdcb4b1531e0c0471"
+            "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "73f2b98bc678a30e8993bf631f9029cfce057e7d616461cc29aa985019aa66e7"
+        "value": "2e9879714b22b5c989424d34792c386e3bae1e3fbebf64b2a1ea57d9cbc823a4"
       },
       "currency": "current"
     }

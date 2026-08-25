@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/release-coord-engine-0-75-5/spec.md
-    digest: bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401
+    digest: e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb
     schemaVersion: 1
   - label: clarifications
     path: work/release-coord-engine-0-75-5/clarifications.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/release-coord-engine-0-75-5/plan.md
-    digest: 39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623
+    digest: c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2
     schemaVersion: 1
 tasks:
   - id: T001

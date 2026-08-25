@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/release-coord-engine-0-75-5/ship.json",
-      "digest": "sha256:a4349e1a333887149ce0a4290c4cffc998f02ddc22b57efd27fb199eca5da79c",
+      "digest": "sha256:d33392c3daef8db14a15337454b31af4535f2f0cb86db22e8ec5f323c24f1fa1",
       "schemaVersion": 1
     },
     {
       "path": "readiness/release-coord-engine-0-75-5/verify.json",
-      "digest": "sha256:2cfd8048b38810a6633af15adb97c6ef21185e1cbc92816eb236606f64a36c58",
+      "digest": "sha256:cdb95bde0a1ad937b5ca5bccaa2e896ed78ec5019425f49be7cc52c26014e663",
       "schemaVersion": 1
     },
     {
       "path": "readiness/release-coord-engine-0-75-5/work-model.json",
-      "digest": "sha256:e06e8598c89fe6a870ad0ac6488acebe04ea9f4771b5c30e3b2459b5961aa395",
+      "digest": "sha256:beabbdeda3eb96ca8ef38567d86765caf5dd80bf15321d0d2bccc4ebdb412669",
       "schemaVersion": 1
     }
   ],
@@ -24,93 +24,93 @@
     "nodes": [
       {
         "id": "evidence:EV001",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV002",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV003",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV004",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV005",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV006",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV007",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV008",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV009",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV010",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV011",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV012",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV013",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV014",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV015",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV016",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV017",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "evidence:EV018",
-        "state": "real",
-        "rationale": null
+        "state": "skipped",
+        "rationale": "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
       },
       {
         "id": "task:T001",

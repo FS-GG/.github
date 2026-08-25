@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "f2fe3b35e8a3511ad0b9395d89dc560815a614494836a96e19063b026aada434"
+        "value": "fb0e283bc5aabf5402f04de8d728e5cd93d0c828863295502f6e796e1ef08376"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "e06e8598c89fe6a870ad0ac6488acebe04ea9f4771b5c30e3b2459b5961aa395"
+        "value": "beabbdeda3eb96ca8ef38567d86765caf5dd80bf15321d0d2bccc4ebdb412669"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "1a1c3d803895b374b41021354061e2bf8b0ed91fec5598d1a1ff46ee1110cd11"
+        "value": "49ae74ab8fd072244a78bac6fc5f9a2579208ee6eaf88f2ffb94a8326125c7fe"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623"
+        "value": "c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401"
+        "value": "e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "37e28677f950aaf322def3c638af1e7a77a389bca13d2cdbdcb4b1531e0c0471"
+        "value": "eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -161,8 +161,8 @@
     {
       "id": "ED-EV001",
       "obligationId": "EV001",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -177,15 +177,15 @@
         "FR-001",
         "PD-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV001."
     },
     {
       "id": "ED-EV002",
       "obligationId": "EV002",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -200,15 +200,15 @@
         "FR-002",
         "PD-002"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV002."
     },
     {
       "id": "ED-EV003",
       "obligationId": "EV003",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -223,15 +223,15 @@
         "FR-003",
         "PD-003"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV003."
     },
     {
       "id": "ED-EV004",
       "obligationId": "EV004",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -246,15 +246,15 @@
         "FR-004",
         "PD-004"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV004."
     },
     {
       "id": "ED-EV005",
       "obligationId": "EV005",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -269,15 +269,15 @@
         "FR-005",
         "PD-005"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV005."
     },
     {
       "id": "ED-EV006",
       "obligationId": "EV006",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -290,15 +290,15 @@
       "affectedSourceIds": [
         "DEC-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV006."
     },
     {
       "id": "ED-EV007",
       "obligationId": "EV007",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -311,15 +311,15 @@
       "affectedSourceIds": [
         "DEC-002"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV007."
     },
     {
       "id": "ED-EV008",
       "obligationId": "EV008",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -332,15 +332,15 @@
       "affectedSourceIds": [
         "DEC-003"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV008."
     },
     {
       "id": "ED-EV009",
       "obligationId": "EV009",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -353,15 +353,15 @@
       "affectedSourceIds": [
         "DEC-004"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV009."
     },
     {
       "id": "ED-EV010",
       "obligationId": "EV010",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -374,15 +374,15 @@
       "affectedSourceIds": [
         "DEC-005"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV010."
     },
     {
       "id": "ED-EV011",
       "obligationId": "EV011",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -395,15 +395,15 @@
       "affectedSourceIds": [
         "DEC-006"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV011."
     },
     {
       "id": "ED-EV012",
       "obligationId": "EV012",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -418,15 +418,15 @@
         "PD-001",
         "PD-002"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV012."
     },
     {
       "id": "ED-EV013",
       "obligationId": "EV013",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -441,15 +441,15 @@
         "PD-001",
         "VO-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV013."
     },
     {
       "id": "ED-EV014",
       "obligationId": "EV014",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -464,15 +464,15 @@
         "PD-003",
         "VO-002"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV014."
     },
     {
       "id": "ED-EV015",
       "obligationId": "EV015",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -487,15 +487,15 @@
         "PD-005",
         "VO-003"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV015."
     },
     {
       "id": "ED-EV016",
       "obligationId": "EV016",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -509,15 +509,15 @@
         "PC-001",
         "PM-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV016."
     },
     {
       "id": "ED-EV017",
       "obligationId": "EV017",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -531,15 +531,15 @@
         "GV-001",
         "PD-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV017."
     },
     {
       "id": "ED-EV018",
       "obligationId": "EV018",
-      "state": "supported",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "classifiedRequirement": false,
       "journeyRequirement": false,
       "recordRequirement": false,
@@ -553,17 +553,17 @@
         "GV-002",
         "PD-004"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Resolve evidence obligation EV018."
     }
   ],
   "testDispositions": [
     {
       "id": "TD-EV001",
       "obligationId": "EV001",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV001"
@@ -574,15 +574,15 @@
       "affectedRequirementIds": [
         "FR-001"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV001."
     },
     {
       "id": "TD-EV002",
       "obligationId": "EV002",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV002"
@@ -593,15 +593,15 @@
       "affectedRequirementIds": [
         "FR-002"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV002."
     },
     {
       "id": "TD-EV003",
       "obligationId": "EV003",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV003"
@@ -612,15 +612,15 @@
       "affectedRequirementIds": [
         "FR-003"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV003."
     },
     {
       "id": "TD-EV004",
       "obligationId": "EV004",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV004"
@@ -631,15 +631,15 @@
       "affectedRequirementIds": [
         "FR-004"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV004."
     },
     {
       "id": "TD-EV005",
       "obligationId": "EV005",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV005"
@@ -650,15 +650,15 @@
       "affectedRequirementIds": [
         "FR-005"
       ],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV005."
     },
     {
       "id": "TD-EV006",
       "obligationId": "EV006",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV006"
@@ -667,15 +667,15 @@
         "T006"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV006."
     },
     {
       "id": "TD-EV007",
       "obligationId": "EV007",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV007"
@@ -684,15 +684,15 @@
         "T007"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV007."
     },
     {
       "id": "TD-EV008",
       "obligationId": "EV008",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV008"
@@ -701,15 +701,15 @@
         "T008"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV008."
     },
     {
       "id": "TD-EV009",
       "obligationId": "EV009",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV009"
@@ -718,15 +718,15 @@
         "T009"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV009."
     },
     {
       "id": "TD-EV010",
       "obligationId": "EV010",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV010"
@@ -735,15 +735,15 @@
         "T010"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV010."
     },
     {
       "id": "TD-EV011",
       "obligationId": "EV011",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV011"
@@ -752,15 +752,15 @@
         "T011"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV011."
     },
     {
       "id": "TD-EV012",
       "obligationId": "EV012",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV012"
@@ -769,15 +769,15 @@
         "T012"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV012."
     },
     {
       "id": "TD-EV013",
       "obligationId": "EV013",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV013"
@@ -786,15 +786,15 @@
         "T013"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV013."
     },
     {
       "id": "TD-EV014",
       "obligationId": "EV014",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV014"
@@ -803,15 +803,15 @@
         "T014"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV014."
     },
     {
       "id": "TD-EV015",
       "obligationId": "EV015",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV015"
@@ -820,15 +820,15 @@
         "T015"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV015."
     },
     {
       "id": "TD-EV016",
       "obligationId": "EV016",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV016"
@@ -837,15 +837,15 @@
         "T016"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV016."
     },
     {
       "id": "TD-EV017",
       "obligationId": "EV017",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV017"
@@ -854,15 +854,15 @@
         "T017"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV017."
     },
     {
       "id": "TD-EV018",
       "obligationId": "EV018",
-      "state": "satisfied",
-      "observed": true,
+      "state": "deferred",
+      "observed": false,
       "recordRequirement": false,
       "evidenceIds": [
         "EV018"
@@ -871,9 +871,9 @@
         "T018"
       ],
       "affectedRequirementIds": [],
-      "severity": "ready",
+      "severity": "advisory",
       "diagnosticIds": [],
-      "correction": ""
+      "correction": "Record a verifying test for EV018."
     }
   ],
   "skillVisibility": [

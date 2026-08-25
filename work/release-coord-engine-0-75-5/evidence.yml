@@ -11,7 +11,7 @@ sourceAnalysis: readiness/release-coord-engine-0-75-5/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/release-coord-engine-0-75-5/analysis.json
-    digest: f2fe3b35e8a3511ad0b9395d89dc560815a614494836a96e19063b026aada434
+    digest: fb0e283bc5aabf5402f04de8d728e5cd93d0c828863295502f6e796e1ef08376
     schemaVersion: 1
   - label: checklist
     path: work/release-coord-engine-0-75-5/checklist.md
@@ -23,19 +23,19 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/release-coord-engine-0-75-5/plan.md
-    digest: 39005e3e5d9df748ba7fa9dc9df634a0ef45b819917c16137a87801ae021c623
+    digest: c6320ff6883adb05a8b95ce9b79306e9a41024665e18cc2916bae4c065d0cbf2
     schemaVersion: 1
   - label: spec
     path: work/release-coord-engine-0-75-5/spec.md
-    digest: bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401
+    digest: e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb
     schemaVersion: 1
   - label: tasks
     path: work/release-coord-engine-0-75-5/tasks.yml
-    digest: 37e28677f950aaf322def3c638af1e7a77a389bca13d2cdbdcb4b1531e0c0471
+    digest: eb717da1eae34703e0882a0a83abec6229ca6d371d031a791c2b95f831356fb5
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T001
@@ -47,22 +47,16 @@ evidence:
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV002
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T002
@@ -74,22 +68,16 @@ evidence:
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV003
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T003
@@ -101,22 +89,16 @@ evidence:
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV004
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T004
@@ -128,22 +110,16 @@ evidence:
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV005
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T005
@@ -155,22 +131,16 @@ evidence:
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV006
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T006
@@ -182,22 +152,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV006]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV007
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T007
@@ -209,22 +173,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV007]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV008
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T008
@@ -236,22 +194,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV008]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV009
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T009
@@ -263,22 +215,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV009]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV010
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T010
@@ -290,22 +236,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV010]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV011
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T011
@@ -317,22 +257,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV011]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV012
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T012
@@ -344,22 +278,16 @@ evidence:
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV012]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV013
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T013
@@ -371,22 +299,16 @@ evidence:
     planDecisionRefs: [PD-001]
     obligationRefs: [EV013]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV014
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T014
@@ -398,22 +320,16 @@ evidence:
     planDecisionRefs: [PD-002, PD-003]
     obligationRefs: [EV014]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV015
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T015
@@ -425,22 +341,16 @@ evidence:
     planDecisionRefs: [PD-004, PD-005]
     obligationRefs: [EV015]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV016
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T016
@@ -452,22 +362,16 @@ evidence:
     planDecisionRefs: []
     obligationRefs: [EV016]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV017
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T017
@@ -479,22 +383,16 @@ evidence:
     planDecisionRefs: [PD-001]
     obligationRefs: [EV017]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
   - id: EV018
-    kind: verification
+    kind: deferral
     subject:
       type: task
       id: T018
@@ -506,19 +404,13 @@ evidence:
     planDecisionRefs: [PD-004]
     obligationRefs: [EV018]
     artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/coord-engine-e2e/writes.sh
-    result: pass
+    sourceRefs: []
+    result: deferred
     synthetic: false
-    observedRun:
-      source: readiness/release-coord-engine-0-75-5/release-preparation.trx
-      digest: "sha256:7ecc79302fb3c4d893fa6779dcb90e3221c80739acbe5a8b7fe9be33c5f93375"
-      digestContract: exact-bytes-v1
-      outcome: passed
-      passed: 680
-      failed: 0
-      skipped: 0
-    notes: [Evidence required before verify.]
+    rationale: "The preparation is directly gated and listed on PR #2990, but no obligation-specific TRX/JUnit report exists; publication, feed, reconciliation, promotion, and final-freshness facts can only be observed after the exact reviewed merge. This is deliberately not recorded as observed evidence."
+    owner: github
+    scope: pre-merge preparation or exact-merge post-delivery evidence
+    laterLifecycleVisibility: "Hosted PR gates verify preparation; the typed delivery obligations on PR #2990 require post-merge release and reconciliation receipts before item completion."
+    notes: ["Direct checks are reported in the PR; post-merge facts remain pending and unobserved until the release saga runs."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

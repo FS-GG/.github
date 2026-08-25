@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/release-coord-engine-0-75-5/spec.md sha256:bacd3a03ee8754e1eca42aabeba55e996741dcc969e1d84071c5a6d95de4f401 schemaVersion:1
+- spec: work/release-coord-engine-0-75-5/spec.md sha256:e498163a3e805d806073f52ed8ba9430566eb372fb718836ca33503fa516eacb schemaVersion:1
 - clarifications: work/release-coord-engine-0-75-5/clarifications.md sha256:5416785afedc037f1971c11ef56d5b22d4618b6320442dcfdcc668c9c9faad06 schemaVersion:1
 - checklist: work/release-coord-engine-0-75-5/checklist.md sha256:63588e54fb6afac34efe5faab3ea1e242d8869db461901018d49b5c3dd2a250c schemaVersion:1
 

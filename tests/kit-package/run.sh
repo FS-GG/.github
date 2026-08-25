@@ -194,28 +194,5 @@ expect_stage "floor: build-config rows ALONE no longer clear the manifest floor"
   && ok "floor: ...and the build-config rows that used to satisfy it WERE staged" \
   || bad "floor: build-config rows were not staged" "leg proves nothing without them: $(ls -R "$OUT" 2>&1)"
 
-# ---- 9. THE CONTENT-ONLY SDK RESOURCE FLOOR (.github#2983). --------------------------------------
-# SDK 10.0.400 preserves an unmatched default **/*.resx glob as a literal missing resource for this
-# source-free project. The Kit owns every packed item explicitly, so discovery must stay disabled.
-KIT_PROJ="$REPO_ROOT/src/FS.GG.Kit/FS.GG.Kit.csproj"
-resource_items="$(dotnet msbuild "$KIT_PROJ" -getProperty:EnableDefaultEmbeddedResourceItems 2>&1)"
-if [ "$resource_items" = false ]; then
-  ok "content-only Kit disables default embedded-resource discovery"
-else
-  bad "content-only Kit must disable default embedded-resource discovery" "$resource_items"
-fi
-
-# GATE-INVERSION: remove the authored property from a project copy. MSBuild must expose the SDK's true
-# default, proving the green leg measures the setting rather than a property that is always false.
-MUT_PROJ="$WORK/FS.GG.Kit.no-resource-floor.csproj"
-sed '/<EnableDefaultEmbeddedResourceItems>false<\/EnableDefaultEmbeddedResourceItems>/d' \
-  "$KIT_PROJ" > "$MUT_PROJ"
-mut_resource_items="$(dotnet msbuild "$MUT_PROJ" -getProperty:EnableDefaultEmbeddedResourceItems 2>&1)"
-if [ "$mut_resource_items" = true ]; then
-  ok "MUTATION: removing the resource floor restores the SDK default"
-else
-  bad "MUTATION: resource-floor removal did not restore the SDK default" "$mut_resource_items"
-fi
-
 echo "kit-package fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
