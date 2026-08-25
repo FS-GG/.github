@@ -9,6 +9,9 @@ Organization-level files for the [FS-GG](https://github.com/FS-GG) org.
 - [`docs/consumer/`](docs/consumer/index.md) — the **consumer guide**: install,
   scaffold, run, drive the lifecycle, and optionally govern a workspace built with
   FS-GG (cross-component processes for people *using* FS-GG).
+- [`docs/consumer/agent-setup.md`](docs/consumer/agent-setup.md) — the setup
+  runbook a user's Codex or Claude Code agent follows to authenticate GitHub,
+  create and secure the workspace and Project, and verify Hello World.
 - [`docs/`](docs/) — cross-repo split decision and implementation plans (the
   shared decision record for people *developing* FS-GG). Start at
   [`docs/index.md`](docs/index.md).

@@ -2,7 +2,7 @@
 title: Output, automation & CI
 category: FS.GG
 categoryindex: 6
-index: 16
+index: 17
 description: The FS-GG output model — JSON is the contract, plain and rich are projections — and how to wire the CLIs into scripts and CI.
 ---
 
