@@ -189,7 +189,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-08-10
+updated: 2026-08-25
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
