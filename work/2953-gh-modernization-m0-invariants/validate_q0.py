@@ -47,6 +47,12 @@ REQUIRED_THREAT_BOUNDARIES = {
 }
 REQUIRED_REVIEW_ROLES = {"architecture", "security", "operations", "crossRepository"}
 REVIEW_EVIDENCE = re.compile(r"^https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*$")
+REVIEW_ROLE_TEXT = {
+    "architecture": "architecture",
+    "security": "security",
+    "operations": "operations",
+    "crossRepository": "cross-repository",
+}
 
 
 def digest_bytes(value: bytes) -> str:
@@ -59,7 +65,32 @@ def canonical_digest(value: Any) -> str:
 
 
 def run_bytes(command: list[str]) -> bytes:
-    return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE).stdout
+    return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+
+
+def verify_live_review(row: dict[str, Any], fingerprint: str) -> list[str]:
+    """Resolve the claimed immutable GitHub comment; syntax alone is never evidence."""
+    match = REVIEW_EVIDENCE.fullmatch(str(row.get("evidenceRef", "")))
+    if not match:
+        return [f"reviews[{row.get('role')}]: evidence URL is not canonical"]
+    comment_id = row["evidenceRef"].rsplit("-", 1)[-1]
+    try:
+        raw = run_bytes(["gh", "api", f"repos/FS-GG/.github/issues/comments/{comment_id}"])
+        comment = json.loads(raw)
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        return [f"reviews[{row.get('role')}]: evidence comment cannot be resolved: {error}"]
+    errors: list[str] = []
+    if comment.get("html_url") != row.get("evidenceRef"):
+        errors.append(f"reviews[{row.get('role')}]: resolved comment URL mismatch")
+    if comment.get("created_at") != comment.get("updated_at"):
+        errors.append(f"reviews[{row.get('role')}]: evidence comment was edited")
+    body = str(comment.get("body", ""))
+    body_lower = body.lower()
+    role_text = REVIEW_ROLE_TEXT.get(str(row.get("role")), "missing-role")
+    required_fragments = [role_text, str(row.get("reviewer", "")), fingerprint, str(row.get("headSha", "")), "verdict", "accepted"]
+    if any(fragment.lower() not in body_lower for fragment in required_fragments):
+        errors.append(f"reviews[{row.get('role')}]: live comment does not attest role, reviewer, head, fingerprint, and accepted verdict")
+    return errors
 
 
 def git_paths(commit: str, root: str) -> list[str]:
@@ -193,8 +224,8 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
             errors.append("corpusArtifact: digest does not match source bytes")
         try:
             decoded_corpus = json.loads(raw_corpus)
-            if decoded_corpus.get("schema") != "fsgg.github-substrate.q0-corpus-originals/v1" or decoded_corpus.get("encoding") != "UTF-8":
-                errors.append("corpusArtifact: unsupported schema or encoding")
+            if decoded_corpus.get("schema") != "fsgg.github-substrate.q0-corpus-originals/v2" or decoded_corpus.get("sourceCommit") != source_base:
+                errors.append("corpusArtifact: unsupported schema or source commit")
             entries = decoded_corpus.get("entries", [])
             originals = {entry.get("id"): entry for entry in entries}
             if len(originals) != len(entries) or set(originals) != {row.get("id") for row in corpus}:
@@ -207,15 +238,30 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         original = originals.get(row.get("id"))
         if not isinstance(original, dict):
             continue
-        original_digest = digest_bytes(str(original.get("bytesUtf8", "")).encode())
-        if not original.get("mediaType") or original.get("sourceRef") != row.get("source"):
+        path = str(original.get("path", ""))
+        source_ref = f"git:{source_base}:{path}"
+        try:
+            original_bytes = run_bytes(["git", "show", f"{source_base}:{path}"])
+            blob_sha = run_bytes(["git", "rev-parse", f"{source_base}:{path}"]).decode().strip()
+        except subprocess.CalledProcessError:
+            errors.append(f"corpus[{row.get('id')}]: immutable git provenance is unreadable")
+            continue
+        original_digest = digest_bytes(original_bytes)
+        if not original.get("mediaType") or original.get("sourceRef") != source_ref or row.get("source") != source_ref:
             errors.append(f"corpus[{row.get('id')}]: provenance metadata does not match typed row")
+        if original.get("gitBlobSha1") != blob_sha or original.get("byteLength") != len(original_bytes):
+            errors.append(f"corpus[{row.get('id')}]: git blob identity or byte length mismatch")
         if original.get("sha256") != original_digest or row.get("originalBytesSha256") != original_digest:
             errors.append(f"corpus[{row.get('id')}]: original bytes are not digest-bound")
         if row.get("artifact") != f"q0-corpus-originals.json#{row.get('id')}":
             errors.append(f"corpus[{row.get('id')}]: artifact locator mismatch")
         if not SHA256.fullmatch(str(row.get("originalBytesSha256", ""))):
             errors.append(f"corpus[{row.get('id')}]: invalid SHA-256")
+        expected = row.get("expected")
+        allowed_decisions = {"Accept", "Refuse", "Converge", "Preserve", "Indeterminate"}
+        allowed_authorities = {"protocol", "adapter", "release", "corpus"}
+        if not isinstance(expected, dict) or set(expected) != {"decisionClass", "predicateId", "authority", "detail"} or expected.get("decisionClass") not in allowed_decisions or expected.get("authority") not in allowed_authorities or not expected.get("predicateId") or not expected.get("detail"):
+            errors.append(f"corpus[{row.get('id')}]: expected result is not a complete typed verdict")
 
     deletion = data.get("compatibilityDeletion", [])
     ids_unique(deletion, "compatibilityDeletion", errors)
@@ -287,19 +333,30 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
 
     if acceptance:
         reviews = data.get("reviews", [])
-        require_fields(reviews, {"role", "verdict", "fingerprint", "evidenceRef", "reviewer"}, "reviews", errors)
+        require_fields(reviews, {"role", "verdict", "fingerprint", "evidenceRef", "reviewer", "headSha"}, "reviews", errors)
         accepted = {row.get("role") for row in reviews if row.get("verdict") == "accepted"}
         if required_reviews != accepted or len(reviews) != len(required_reviews):
             errors.append(f"reviews: acceptance mismatch missing={sorted(required_reviews-accepted)} extra={sorted(accepted-required_reviews)}")
         for row in reviews:
             if row.get("fingerprint") != expected_review_fingerprint or not SHA256.fullmatch(str(row.get("fingerprint", ""))):
                 errors.append(f"reviews[{row.get('role')}]: fingerprint does not bind the canonical Q0 subject")
+            if not GIT_SHA.fullmatch(str(row.get("headSha", ""))):
+                errors.append(f"reviews[{row.get('role')}]: invalid reviewed head")
         reviewers = [row.get("reviewer") for row in reviews]
         if len(set(reviewers)) != len(REQUIRED_REVIEW_ROLES):
             errors.append("reviews: every role requires a distinct independent reviewer")
         evidence_refs = [row.get("evidenceRef") for row in reviews]
         if len(set(evidence_refs)) != len(REQUIRED_REVIEW_ROLES) or any(not REVIEW_EVIDENCE.fullmatch(str(ref)) for ref in evidence_refs):
             errors.append("reviews: every role requires a distinct canonical PR-comment evidence URL")
+        structurally_live = len(reviews) == len(REQUIRED_REVIEW_ROLES) and all(
+            row.get("fingerprint") == expected_review_fingerprint
+            and GIT_SHA.fullmatch(str(row.get("headSha", "")))
+            and REVIEW_EVIDENCE.fullmatch(str(row.get("evidenceRef", "")))
+            for row in reviews
+        )
+        if structurally_live:
+            for row in reviews:
+                errors.extend(verify_live_review(row, expected_review_fingerprint))
     return errors
 
 
@@ -342,6 +399,15 @@ def self_test(data: dict[str, Any]) -> list[str]:
     ]
     if not validate(forged, acceptance=True):
         failures.append("mutation survived: forged or non-independent role reviews")
+    nonexistent = copy.deepcopy(data)
+    nonexistent["reviews"] = [
+        {"role": role, "verdict": "accepted", "fingerprint": data["reviewFingerprint"],
+         "evidenceRef": f"https://github.com/FS-GG/.github/pull/3001#issuecomment-{index}",
+         "reviewer": f"invented-{index}", "headSha": "0" * 40}
+        for index, role in enumerate(nonexistent["reviewsRequired"], start=1)
+    ]
+    if not validate(nonexistent, acceptance=True):
+        failures.append("mutation survived: nonexistent canonical-looking role comments")
     return failures
 
 

@@ -21,8 +21,8 @@ webhook, or event subscription was enabled by bootstrap.
 |---|---|---|
 | Repository | Public; default branch `main`; current user has Admin | [General](https://github.com/FS-GG/FS.GG.Coordination/settings) |
 | Merge policy | Merge commits, squash, and rebase all allowed; auto-merge off; branch deletion off | [Pull Requests / General](https://github.com/FS-GG/FS.GG.Coordination/settings) |
-| Security | Vulnerability alerts readable; secret scanning, push protection, validity checks, and Dependabot security updates disabled | [Code security](https://github.com/FS-GG/FS.GG.Coordination/settings/security_analysis) |
-| Actions | Enabled; all actions allowed; SHA pinning not required | [Actions / General](https://github.com/FS-GG/FS.GG.Coordination/settings/actions) |
+| Security | Dependency graph/vulnerability alerts enabled (alerts endpoint returned 204); automated Dependabot security updates, secret scanning, push protection, validity checks, and non-provider patterns disabled | [Code security](https://github.com/FS-GG/FS.GG.Coordination/settings/security_analysis) |
+| Actions | Enabled; all actions allowed; SHA pinning not required; workflow token defaults to `write`; workflows may approve pull-request reviews | [Actions / General](https://github.com/FS-GG/FS.GG.Coordination/settings/actions) |
 | Rulesets | None | [Rules / Rulesets](https://github.com/FS-GG/FS.GG.Coordination/settings/rules) |
 | Environments | None | [Environments](https://github.com/FS-GG/FS.GG.Coordination/settings/environments) |
 | Webhooks | None | [Webhooks](https://github.com/FS-GG/FS.GG.Coordination/settings/hooks) |
@@ -38,8 +38,13 @@ Re-observe every row before applying it. A stale screenshot or this timestamp ca
 These changes do not activate v2 coordination or constrain an as-yet-uncreated check name.
 
 - [ ] In [Code security](https://github.com/FS-GG/FS.GG.Coordination/settings/security_analysis), enable
-  the dependency graph, Dependabot alerts, Dependabot security updates, secret scanning, push protection,
-  validity checks, and non-provider patterns wherever GitHub exposes them for this public repository.
+  automated Dependabot security updates, secret scanning, push protection, validity checks, and
+  non-provider patterns wherever GitHub exposes them for this public repository. Dependency graph and
+  vulnerability alerts are already enabled; verify rather than toggle them blindly.
+- [ ] In [Actions / General](https://github.com/FS-GG/FS.GG.Coordination/settings/actions), set the
+  workflow-token default to **Read repository contents and packages permissions** and disable **Allow
+  GitHub Actions to create and approve pull requests**. A workflow may never approve its own change;
+  later write permissions belong only on the smallest named job.
 - [ ] In [General](https://github.com/FS-GG/FS.GG.Coordination/settings), enable auto-merge and
   automatically delete head branches after merge.
 - [ ] Select **squash merge** as the only ordinary merge method. Disable merge commits and rebase merges.
