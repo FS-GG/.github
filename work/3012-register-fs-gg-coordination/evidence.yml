@@ -178,7 +178,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json, work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx]
     sourceRefs:
       - kind: verification
         path: work/3012-register-fs-gg-coordination/verify-independent-review.sh
@@ -186,10 +186,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
-      digest: "sha256:74dc6ba36db288d9b34b8165ae734ca3ecdaf7009e1c8eabb59713cbbff81c81"
+      digest: "sha256:6346b858708573f618942844ca6b9c1b3fba5293e2d81bf7e0ea5cc651f19444"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: ["Independent successor critic plover-d91f passed exact head b3b07078b14c8dda05616fe6cdb71697149c83d9 with no unresolved material finding: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426871942", "Structured revision 2 confirmation digest 4614ec49f2aceb212290d69ea1b6c8a030447c009c24fb8b47849d912ee612d5: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426876370"]
@@ -634,7 +634,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV019]
-    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json, work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx]
     sourceRefs:
       - kind: verification
         path: work/3012-register-fs-gg-coordination/verify-independent-review.sh
@@ -642,10 +642,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
-      digest: "sha256:74dc6ba36db288d9b34b8165ae734ca3ecdaf7009e1c8eabb59713cbbff81c81"
+      digest: "sha256:6346b858708573f618942844ca6b9c1b3fba5293e2d81bf7e0ea5cc651f19444"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: ["Narrative and structured receipts: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426871942 and https://github.com/FS-GG/.github/pull/3013#issuecomment-5426876370", "The independent successor review verified frozen Q0 report identity and self-test, both complete 321-item Project receipts, 86 assigned plus 235 unassigned states with zero changes, the exact +coordination option delta, focused tests, live settings/App scope, and the FS.GG.SDD 1.4.0 producer."]

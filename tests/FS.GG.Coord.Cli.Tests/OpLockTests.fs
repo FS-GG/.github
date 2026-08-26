@@ -61,9 +61,10 @@ let rec private repoRoot (dir: string) =
 
 let private root = repoRoot (Directory.GetCurrentDirectory())
 
-// ---- Criterion 1: the table covers ALL EIGHT roster repositories, proved mechanically ---------------
+// ---- Criterion 1: the table covers every operation receiver, proved mechanically -------------------
 
-/// Every `FS-GG`-owned row of `registry/repos.yml`'s `repos:` block, read from the roster itself.
+/// Every `FS-GG`-owned row of `registry/repos.yml`'s `repos:` block, including its role, read from the
+/// roster itself.
 ///
 /// DERIVED, NEVER RESTATED, AND THAT IS THE ENTIRE POINT OF THIS FIXTURE. The acceptance criterion asks
 /// for "a test that fails when a roster repo has no lock ref, not a hand-checked list that will rot the
@@ -71,14 +72,14 @@ let private root = repoRoot (Directory.GetCurrentDirectory())
 /// hand-checked list, one file further away — it would agree with the table forever, including on the day
 /// the org onboards a ninth repository and the new receiver silently has no lock.
 ///
-/// `registry/repos.yml` is the roster's own authority ("the single authoritative list of the framework
-/// repos the org-level fabrics iterate"), so a repository that exists for the fleet is a row here, and a
-/// row here with no operation lock is precisely the defect this asserts against.
+/// `registry/repos.yml` is the roster's own authority. Authority/framework rows are v1 operation
+/// receivers and therefore require locks. A `non-participant` explicitly participates in no fabric; giving
+/// one an operation lock would invent dispatch eligibility instead of fencing an admitted receiver.
 ///
 /// Rows under another owner are excluded because the embedded table is owner-gated by design: its numbers
 /// are FS-GG's issues, and handing a foreign owner one would be a lock naming an unrelated issue. The one
 /// such row today is `EHotwagner/S.I.R.`, a `non-participant`.
-let private rosterRepos: string list =
+let private fsGgRosterRows: (string * string) list =
     let text = File.ReadAllLines(Path.Combine(root, "registry", "repos.yml"))
 
     let block =
@@ -88,17 +89,34 @@ let private rosterRepos: string list =
         // The block ends at the next top-level key — a line starting in column 0 that is not a comment.
         |> Array.takeWhile (fun line ->
             let trimmed = line.TrimStart()
-            line.StartsWith " " || line.StartsWith "\t" || trimmed = "" || trimmed.StartsWith "#")
+
+            line.StartsWith " "
+            || line.StartsWith "\t"
+            || trimmed = ""
+            || trimmed.StartsWith "#")
 
     block
     |> Array.choose (fun line ->
-        let m = Regex.Match(line, @"^\s*-\s*\{[^}]*?full:\s*([\w.-]+)/([\w.-]+)")
+        let m =
+            Regex.Match(line, @"^\s*-\s*\{[^}]*?full:\s*([\w.-]+)/([\w.-]+),\s*role:\s*([\w-]+)")
 
         if m.Success && m.Groups.[1].Value.ToLowerInvariant() = "fs-gg" then
-            Some m.Groups.[2].Value
+            Some(m.Groups.[2].Value, m.Groups.[3].Value)
         else
             None)
     |> Array.toList
+
+let private operationLockRepos =
+    fsGgRosterRows
+    |> List.choose (fun (repo, role) ->
+        if role = "authority" || role = "framework" then
+            Some repo
+        else
+            None)
+
+let private nonParticipantRepos =
+    fsGgRosterRows
+    |> List.choose (fun (repo, role) -> if role = "non-participant" then Some repo else None)
 
 [<Fact>]
 let ``the roster parse is NON-VACUOUS - a fixture that reads nothing proves nothing`` () =
@@ -111,32 +129,41 @@ let ``the roster parse is NON-VACUOUS - a fixture that reads nothing proves noth
     // must not red THIS leg — it must red the completeness leg below, which is the one that means "the new
     // receiver has no lock".
     Assert.True(
-        List.length rosterRepos >= 8,
-        $"parsed only %d{List.length rosterRepos} FS-GG roster rows from registry/repos.yml — the parse, not the roster, is what broke"
+        List.length operationLockRepos >= 8,
+        $"parsed only %d{List.length operationLockRepos} FS-GG operation-receiver rows from registry/repos.yml — the parse or role projection, not the roster, is what broke"
     )
 
     // And it found the specific row whose ABSENCE from the chore-lock table is this slice's subject.
-    Assert.Contains("FS.GG.Net", rosterRepos)
+    Assert.Contains("FS.GG.Net", operationLockRepos)
+    Assert.Contains("FS.GG.Coordination", nonParticipantRepos)
 
 [<Fact>]
-let ``opLockRef covers EVERY roster repository - including FS.GG.Net, the eighth row`` () =
+let ``opLockRef covers EVERY rostered operation receiver - including FS.GG.Net`` () =
     // Criterion 1. The chore-lock table inherited a hole in exactly the repository the incident reached;
     // this asserts the operation-lock table did not inherit it, and keeps asserting it for every repository
     // the org adds later.
     let missing =
-        rosterRepos |> List.filter (fun repo -> (Options.opLockRef [] "FS-GG" repo).IsNone)
+        operationLockRepos
+        |> List.filter (fun repo -> (Options.opLockRef [] "FS-GG" repo).IsNone)
 
     Assert.True(
         List.isEmpty missing,
-        $"""roster repositories with NO operation-lock ref: %s{String.concat ", " missing}. A receiver with no lock cannot be fenced, and design §4.1 makes that a refusal rather than a licence to dispatch."""
+        $"""rostered operation receivers with NO operation-lock ref: %s{String.concat ", " missing}. A receiver with no lock cannot be fenced, and design §4.1 makes that a refusal rather than a licence to dispatch."""
     )
+
+[<Fact>]
+let ``non-participants receive no operation-lock authority`` () =
+    Assert.NotEmpty(nonParticipantRepos)
+
+    for repo in nonParticipantRepos do
+        Assert.Equal(None, Options.opLockRef [] "FS-GG" repo)
 
 [<Fact>]
 let ``each op-lock ref is CANONICAL and names its own repository`` () =
     // A ref built from the caller's spelling rather than the table's would be structurally unequal to the
     // canonical one while `Short` rendered both alike — two locks that compare different and print the same,
     // which is the split a CAS cannot survive and no log would show.
-    for repo in rosterRepos do
+    for repo in operationLockRepos do
         match Options.opLockRef [] "FS-GG" repo with
         | Some r ->
             Assert.Equal("FS-GG", r.Owner)
@@ -150,7 +177,7 @@ let ``the operation lock and the chore lock are DIFFERENT subjects wherever both
     // would make a chore drain and a dispatch operation serialise against each other — two questions
     // answered in one colour. `FS.GG.Net` legitimately has no chore lock and is skipped rather than
     // special-cased into a pass.
-    for repo in rosterRepos do
+    for repo in operationLockRepos do
         match Options.opLockRef [] "FS-GG" repo, Options.choreLockRef [] "FS-GG" repo with
         | Some op, Some chore ->
             Assert.True(
@@ -330,11 +357,21 @@ let private orderingIdiom =
 
     Regex(
         // 1. sort by id, then take the first
-        coll + @"\.sortBy\s*" + selector + @"\s*\|>\s*" + takeFirst
+        coll
+        + @"\.sortBy\s*"
+        + selector
+        + @"\s*\|>\s*"
+        + takeFirst
         // 2. minBy on id
-        + "|" + coll + @"\.minBy\s*" + selector
+        + "|"
+        + coll
+        + @"\.minBy\s*"
+        + selector
         // 3. sortWith over a comparison mentioning .Id, then take the first
-        + "|" + coll + @"\.sortWith\s*\([^()]*\.Id[^()]*\)\s*\|>\s*" + takeFirst
+        + "|"
+        + coll
+        + @"\.sortWith\s*\([^()]*\.Id[^()]*\)\s*\|>\s*"
+        + takeFirst
     )
 
 /// Spellings that MUST be caught, and lookalikes that must NOT be.
@@ -352,8 +389,7 @@ let private mustMatch =
       "the Seq flavour", "markers |> Seq.sortBy _.Id |> Seq.tryHead"
       "the Array flavour", "markers |> Array.sortBy _.Id |> Array.tryHead"
       "a hand-rolled comparator", "markers |> List.sortWith (fun a b -> compare a.Id b.Id) |> List.tryHead"
-      "split across lines, as a formatter would leave it",
-      "markers\n    |> List.sortBy _.Id\n    |> List.tryHead" ]
+      "split across lines, as a formatter would leave it", "markers\n    |> List.sortBy _.Id\n    |> List.tryHead" ]
 
 let private mustNotMatch =
     [ // `Reads.fs`'s own marker scan: it returns the WHOLE sorted list, which is ordering, not election.
@@ -400,8 +436,7 @@ let ``the CLI layer contains NO second implementation of lowest-id-wins`` () =
     let offenders =
         Directory.GetFiles(Path.Combine(root, "src/FS.GG.Coord.Cli"), "*.fs")
         |> Array.map (fun full -> Path.GetFileName full)
-        |> Array.filter (fun name ->
-            orderingIdiom.IsMatch(code (Path.Combine("src/FS.GG.Coord.Cli", name))))
+        |> Array.filter (fun name -> orderingIdiom.IsMatch(code (Path.Combine("src/FS.GG.Coord.Cli", name))))
         |> Array.toList
 
     Assert.True(

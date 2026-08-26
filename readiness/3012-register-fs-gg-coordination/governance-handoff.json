@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3012-register-fs-gg-coordination/ship.json",
-      "digest": "sha256:1d821389cc225db2719bca7dc6bbfd462e36f59effe3c97e3cc722a03ed26494",
+      "digest": "sha256:881e7245b592eb7d7cc6c0dec6918368610f1800c0e00cd374df370f0f2ff4b5",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3012-register-fs-gg-coordination/verify.json",
-      "digest": "sha256:958555e25f81a45bd2e0e4fbfc7b0b35142c1aebb12bbb0f767d3e8d32f7aead",
+      "digest": "sha256:fa8bc684344dc28f03976abc4955060860094bf9cedea9aa9d2e670aab1d4de3",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3012-register-fs-gg-coordination/work-model.json",
-      "digest": "sha256:e641c4ae9fa5a6734727701516172ad62f980b8d849f43dde649575da1c9174f",
+      "digest": "sha256:73acd03fd31e69892fa1a5074d0e1e3eaf26d79f3e035d2d5b420bd4ea859d9b",
       "schemaVersion": 1
     }
   ],

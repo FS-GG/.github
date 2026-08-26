@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bac27f0ffed2e71722bb399b8e546bc9eead7ac1a36b6c7b0a71460e16c2416a"
+        "value": "e9e23ffecd1203bad480b3d7b063ba370c25463a4337d6b3b3d7b072bb407248"
       }
     },
     {
@@ -972,7 +972,8 @@
       "artifactRefs": [
         "docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md",
         "work/3012-register-fs-gg-coordination/project-migration-after.json",
-        "work/3012-register-fs-gg-coordination/project-migration-before.json"
+        "work/3012-register-fs-gg-coordination/project-migration-before.json",
+        "work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1362,7 +1363,8 @@
       "artifactRefs": [
         "docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md",
         "work/3012-register-fs-gg-coordination/project-migration-after.json",
-        "work/3012-register-fs-gg-coordination/project-migration-before.json"
+        "work/3012-register-fs-gg-coordination/project-migration-before.json",
+        "work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx"
       ],
       "result": "pass",
       "synthetic": false,
@@ -1431,7 +1433,7 @@
           "path": "work/3012-register-fs-gg-coordination/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "bac27f0ffed2e71722bb399b8e546bc9eead7ac1a36b6c7b0a71460e16c2416a"
+            "value": "e9e23ffecd1203bad480b3d7b063ba370c25463a4337d6b3b3d7b072bb407248"
           },
           "schemaVersion": 1
         },
@@ -1462,7 +1464,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "eb2b9f71a0e5e811d18315dcb83fdadc7a29b6878829158fefed45bc494c5a07"
+        "value": "95a9594d83ce33bfafcc895ee38e5b2fa2999a9b264b6096e0ce838545e79bd4"
       },
       "currency": "current"
     }

@@ -39,17 +39,22 @@ test "$(sha256sum docs/2026-08-26-fs-gg-coordination-admin-settings-report.md | 
 python3 work/2953-gh-modernization-m0-invariants/validate_q0.py \
   work/2953-gh-modernization-m0-invariants/q0-evidence.json --self-test >/dev/null
 
+cli_receipt=work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx
+grep -q '<Counters total="399" executed="399" passed="399" failed="0"' "$cli_receipt"
+grep -q 'OpLockTests.non-participants receive no operation-lock authority.*outcome="Passed"' "$cli_receipt"
+
 mkdir -p "$(dirname "$out")"
 cat > "$out" <<'XML'
 <?xml version="1.0" encoding="utf-8"?>
-<testsuite name="GS2-01.2 independent review receipt" tests="6" failures="0" errors="0" skipped="0">
+<testsuite name="GS2-01.2 independent review receipt" tests="7" failures="0" errors="0" skipped="0">
   <testcase classname="review" name="structured successor decision is live, unedited, and authorized" />
   <testcase classname="review" name="successor decision passes the exact repaired head" />
   <testcase classname="project-migration" name="before and after snapshots are complete and integrity sealed" />
   <testcase classname="project-migration" name="321 item states preserve 86 assigned and 235 unassigned values" />
   <testcase classname="project-migration" name="before and after item-state arrays are identical" />
   <testcase classname="q0" name="frozen administrator report and complete Q0 mutation self-test remain green" />
+  <testcase classname="operation-lock" name="399-test CLI receipt proves non-participants receive no dispatch lock" />
 </testsuite>
 XML
 
-printf 'GS2-01.2-REVIEW-RECEIPT-GREEN: 6/6\n'
+printf 'GS2-01.2-REVIEW-RECEIPT-GREEN: 7/7\n'
