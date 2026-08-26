@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/ship.json",
-      "digest": "sha256:0e0830c5056602b7e94e8e3a0becaf741ae1f767cef47c47f5d9ff99daa82c34",
+      "digest": "sha256:f82d315699c6a1cfb1d7fbc3dbc4bc0a65d43fcb3b94c527f75c95598b9ad007",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/verify.json",
-      "digest": "sha256:106bfa15e6fcf7b24031a320cf9908901a30e74c925471e7c1832680afd1c488",
+      "digest": "sha256:8d27435474d3e8a3524db20aa5b4521ece8e0e6426acd86b3d5191822c7d0f7d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
-      "digest": "sha256:b4696ddf628b9053c4f011165b964d0a42cebb9d5f2bda4c405c8654bf7ebabe",
+      "digest": "sha256:7d3aa93ab9054cc350089eb59470cff3482205d91adfbcc614a8b7e1b3dc3bf8",
       "schemaVersion": 1
     }
   ],
