@@ -186,7 +186,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
-      digest: "sha256:6346b858708573f618942844ca6b9c1b3fba5293e2d81bf7e0ea5cc651f19444"
+      digest: "sha256:70e50a1a092df07daa10f9fff2c78c9b791e27bc8036d6d89b47ac92a50ca268"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -642,7 +642,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
-      digest: "sha256:6346b858708573f618942844ca6b9c1b3fba5293e2d81bf7e0ea5cc651f19444"
+      digest: "sha256:70e50a1a092df07daa10f9fff2c78c9b791e27bc8036d6d89b47ac92a50ca268"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7

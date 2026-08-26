@@ -4,10 +4,10 @@
   "workId": "3012-register-fs-gg-coordination",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.4.0",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "06037c51f50692aebca0101cae60e77dc12cd6792184d80bed6d434be15a9935"
+    "value": "d0425973b926eb5cb41a0ba0bf12fec3e1bf2e330c0f92c1f692ddedc57f4e46"
   },
   "verificationReadiness": {
     "status": "verificationReady",

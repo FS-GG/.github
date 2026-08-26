@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "e9e23ffecd1203bad480b3d7b063ba370c25463a4337d6b3b3d7b072bb407248"
+        "value": "f5c288bd7d6364b3cb569f5d01b831a91db42eda3ec444a34a6c9bcb323b969d"
       }
     },
     {
@@ -1386,7 +1386,7 @@
       "schemaVersion": 1,
       "generator": {
         "id": "FS.GG.SDD.Artifacts",
-        "version": "1.4.0"
+        "version": "1.2.5"
       },
       "sources": [
         {
@@ -1433,7 +1433,7 @@
           "path": "work/3012-register-fs-gg-coordination/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "e9e23ffecd1203bad480b3d7b063ba370c25463a4337d6b3b3d7b072bb407248"
+            "value": "f5c288bd7d6364b3cb569f5d01b831a91db42eda3ec444a34a6c9bcb323b969d"
           },
           "schemaVersion": 1
         },
@@ -1464,7 +1464,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "95a9594d83ce33bfafcc895ee38e5b2fa2999a9b264b6096e0ce838545e79bd4"
+        "value": "f28c7f97b1a4fc4b3237ba71d0073d5778a04d2be2f4eea50f4a2e6eb3440af2"
       },
       "currency": "current"
     }

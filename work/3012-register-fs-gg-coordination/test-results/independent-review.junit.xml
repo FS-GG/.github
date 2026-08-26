@@ -6,5 +6,5 @@
   <testcase classname="project-migration" name="321 item states preserve 86 assigned and 235 unassigned values" />
   <testcase classname="project-migration" name="before and after item-state arrays are identical" />
   <testcase classname="q0" name="frozen administrator report and complete Q0 mutation self-test remain green" />
-  <testcase classname="operation-lock" name="399-test CLI receipt proves non-participants receive no dispatch lock" />
+  <testcase classname="operation-lock" name="401-test CLI receipt proves non-participants receive no dispatch lock and roster shape changes fail closed" />
 </testsuite>
