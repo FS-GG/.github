@@ -40,9 +40,13 @@ The generic specification substrate is no longer hypothetical. FS.GG.SDD `1.4.0-
 - the additive `typed-sdd` lifecycle and authoring, inspection, migration, and rollback commands.
 
 That list describes the current F# P4 artifact. ADR-0077 changes the candidate input for future protocol
-implementation: GS2-02 must not begin against the F# authoring surface. It waits for the published
+implementation: GS2-02 must not begin against the F# authoring surface. It waits for successful Q1
+literate-Quint qualification, the resulting ADR-0077 amendment, and the published
 Quint-profile/compiled-contract producer artifact, or the program explicitly re-ratifies a different
-candidate. Bootstrap and census work that does not encode protocol semantics may proceed beforehand.
+candidate. The authored candidate is literate Markdown whose named Quint blocks are deterministically
+extracted; embedded Quint is behavioral authority, prose is review context, and generated `.qnt` modules
+are not a second authored surface. Bootstrap and census work that does not encode protocol semantics may
+proceed beforehand.
 
 S.I.R. consumes the published generic model for a real rules corpus. The unimplemented portion is the
 coordination-specific protocol extension: external authority observations, process state and events,
@@ -868,6 +872,10 @@ receipts; it is never a shell checklist presumed complete.
 ### 12.1 Model and compiler
 
 - stable IDs and fingerprints are deterministic;
+- literate extraction is deterministic and source-located, and missing, reordered, duplicate, stale, or
+  hand-edited generated modules fail closed;
+- prose cannot introduce a requirement, transition, invariant, evidence obligation, or binding absent
+  from the compiled Quint/FS-GG contract;
 - every fact has one authority and codec;
 - every projection has one source and freshness proof;
 - every mutation has one interpreter, precondition, and idempotency identity;

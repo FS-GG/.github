@@ -1037,7 +1037,10 @@ install is what keeps the composition honest. See the
   ([ADR-0076](adr/0076-agent-authored-fsharp-specification-kernel.md), delivered 2026-08-24;
   [ADR-0077](adr/0077-quint-first-typed-specification-authority.md), accepted 2026-08-25).**
   S.I.R. proved reusable identity, normalization, provenance, evidence, projection, and authoring
-  contracts against its executable-rules corpus. Future behavioral meaning moves to canonical Quint;
+  contracts against its executable-rules corpus. The candidate future authoring unit is literate Markdown:
+  ordered, named Quint blocks own behavioral meaning, surrounding prose supplies human review context,
+  and a pinned extractor produces non-authoritative `.qnt` modules. Q1 must qualify that split and amend
+  ADR-0077 before implementation; until then the published F# backend remains authority. After acceptance,
   FS.GG.SDD publishes a small generated integration contract and F#/Fable bindings without recreating
   Quint expressions. Model-based testing follows the same boundary: FS.GG.SDD owns generic Quint/ITF
   mechanics, while each product owns its canonical model, real-operation adapter, observable-state

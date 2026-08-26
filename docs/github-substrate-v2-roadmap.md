@@ -18,9 +18,10 @@ architecture and rationale.
 
 > **Quint-first candidate dependency:** [ADR-0077](adr/0077-quint-first-typed-specification-authority.md)
 > and the [migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) require the
-> behavioral protocol in GS2-02 to be canonical Quint source consumed through the published FS.GG
+> behavioral protocol in GS2-02 to be a literate Quint source consumed through the published FS.GG
 > compiled-contract boundary. Census/bootstrap work may proceed, but protocol implementation must wait for
-> that producer artifact. The current F# P4 package remains production authority meanwhile.
+> successful Q1 qualification, the post-qualification ADR-0077 amendment, and that producer artifact. The
+> current F# P4 package remains production authority meanwhile.
 
 > **Model-based-testing siting:** FS.GG.SDD supplies the published Quint/ITF and generic replay contract;
 > `FS.GG.Coordination` owns its canonical protocol model, adapter, observable-state projection, and replay
@@ -168,6 +169,8 @@ GS2-00 Ratify design and freeze authority census
    v                         v
 GS2-01 Bootstrap repo     GS2-08 Specify v1 bridge/ledger contract
    |                         |
+   | waits for Quint Q1      |
+   | + ADR-0077 amendment    |
    v                         |
 GS2-02 Protocol core         |
    |                         |
@@ -221,8 +224,8 @@ These gates replace the existing coordination validation/verification process fo
 | Gate | Proves | Required evidence |
 |---|---|---|
 | Q0 Architecture | Authorities and boundaries are coherent | Accepted ADR, authority/mutation/deletion census, threat model, independent review |
-| Q1 Compiler | Typed source is deterministic and complete | Canonical bytes/fingerprint, semantic diff, schema/projection freshness, wrong-model controls |
-| Q2 Pure model | State and decisions obey invariants | Unit, property, model, bounded formal, and independently authored transition tests |
+| Q1 Compiler | Literate Quint source extracts, typechecks, and compiles deterministically and completely | Literate-source and extracted-module fingerprints, pinned extractor/Quint/profile identities, Quint type/effect results, compiled-contract canonical bytes, semantic diff, source mapping, schema/projection freshness, and wrong-source/extraction/model controls |
+| Q2 Pure model | The canonical Quint model's state and decisions obey invariants | Quint examples, simulation, property and bounded model checking, safety/liveness witnesses and counterexamples, plus independently authored transition tests |
 | Q3 Adapter | External observations and writes preserve meaning | Consumer-owned ITF replay adapter, observable-state projection, recorded fixtures, pagination/completeness, revision, idempotency, partial/indeterminate and mapping-mutation controls |
 | Q4 Sandbox | Real GitHub behavior matches the adapter contract | Isolated repositories/project, destructive test identities, API/permission/rate evidence |
 | Q5 Shadow | V2 reads the live fleet without changing it | Complete snapshots, v1/v2 decision comparison, explained divergence ledger, zero v2 write permission |
@@ -241,6 +244,11 @@ model. Q3 replays fingerprinted ITF traces through the real pure implementation 
 declared model-observable state. Q4 exercises the same adapter boundary against isolated GitHub behavior.
 Passing one gate cannot substitute for either of the others, and `.github` may not host a fake v2
 implementation merely to make replay pass.
+
+Q1 and Q2 also cannot be split across different authored models. Q1 qualifies the exact literate Quint
+source and extracted module set whose behavior Q2 explores; an F#-only reducer suite, generated shadow
+model, or separately authored formal model cannot substitute for native Quint type/effect checking and
+model checking. F# tests remain required implementation evidence and enter correspondence through Q3.
 
 ## 5. Detailed milestones
 
@@ -298,6 +306,11 @@ implementation merely to make replay pass.
 **Depends on:** GS2-00
 **Exit:** independently buildable empty product and executable qualification skeleton
 
+**Producer route:** ADR-0077's successor backend is implemented through
+[Q1–Q3 of the Quint-first migration sequence](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md#7-prepared-feature-sequence).
+`GS2-01.4` consumes that route's published artifact; the bootstrap worker must not recreate its extractor,
+profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`.
+
 - [ ] **GS2-01.1 — Provision the repository.** Create the repository with least-privilege teams, branch
   ruleset, signed/immutable tag policy, secret scanning, dependency graph, Dependabot alerts, Actions
   policy, auto-merge policy, and default branch settings. Record the exact settings receipt.
@@ -310,7 +323,9 @@ implementation merely to make replay pass.
 - [ ] **GS2-01.4 — Pin the published Quint-capable kernel.** Restore the exact published FS.GG.SDD artifact
   carrying the accepted Quint profile and compiled-contract boundary from the supported read feed, verify
   its identity and bundle digest, and prohibit source-project or checkout-relative references. An earlier
-  bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02.
+  bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02. This
+  unit is not ready until Q1 has succeeded and ADR-0077 has been amended with the accepted literate source,
+  extraction, authority, fingerprint, and compatibility contract.
 - [ ] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
   compiler/unit tests, dependency/security checks, package/install smoke, and evidence-manifest validation.
   Do not import v1 coordination completion gates.
@@ -334,10 +349,28 @@ implementation merely to make replay pass.
 **Depends on:** GS2-01, including the final Quint-capable GS2-01.4 pin
 **Exit gates:** Q1 and the pure portion of Q2
 
-- [ ] **GS2-02.1 — Author the canonical Quint protocol.** Specify subjects, authorities, codecs, commands,
+**Implementation references, in authority order:**
+
+1. [ADR-0077](adr/0077-quint-first-typed-specification-authority.md) owns the authoring and authority
+   decision, including the mandatory post-Q1 amendment.
+2. The [Quint-first migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md)
+   owns literate extraction, the FS-GG Quint profile, compiled-contract boundary, ITF replay ownership, and
+   producer-before-consumer sequence; its Q5 is the direct GS2 handoff.
+3. The [Quint experiment](quint/README.md) and
+   [assessment](quint/reports/assessment.md) are the executable baseline and recorded limitations, not
+   production authority.
+4. The [governing cutover design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md)
+   owns the coordination domain, proof obligations, authority boundaries, and cutover semantics that the
+   Quint protocol must express.
+5. Quint's [literate-specification documentation](https://quint.sh/docs/literate) defines the upstream
+   workflow being qualified; only the pinned profile/toolchain accepted by ADR-0077 may enter CI.
+
+- [ ] **GS2-02.1 — Author the canonical literate Quint protocol.** Keep reviewer-oriented Markdown prose
+  beside deterministically extracted, named Quint blocks that specify subjects, authorities, codecs, commands,
   events, mutations, projections, observation plans, settings profiles, evidence obligations, and version
   IDs under the published FS-GG Quint profile. Generate stable integration identities through the compiled
-  contract; do not author a parallel F# protocol AST.
+  contract; prose cannot add hidden semantics, extracted `.qnt` files cannot be edited independently, and
+  no parallel F# protocol AST is permitted.
 - [ ] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
   stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
   completeness contracts.
@@ -358,8 +391,9 @@ implementation merely to make replay pass.
   profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
 - [ ] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
   mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
-- [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent authoring forms normalize identically;
-  semantic changes produce stable, reviewable diffs; unsupported schema versions fail before execution.
+- [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent literate Quint authoring forms extract and
+  normalize identically; semantic changes produce stable, reviewable diffs; prose-only changes cannot alter
+  behavioral identity; unsupported source, extractor, Quint, profile, or schema versions fail before execution.
 
 ### GS2-03 — Build the independent qualification system
 
@@ -372,13 +406,16 @@ implementation merely to make replay pass.
   generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
 - [ ] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
   ambiguity, and current-v1 result; never normalize away the defect being tested.
-- [ ] **GS2-03.3 — Add generated structural tests.** Derive vocabulary completeness, transition coverage,
-  command/mutation registration, permission coverage, schema round-trip, and projection freshness cases.
+- [ ] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
+  derive vocabulary completeness, transition coverage, command/mutation registration, permission coverage,
+  schema round-trip, and projection freshness cases without creating a second behavioral model.
 - [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
   projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
   exact-head review, post-merge verification, and dual-feed release recovery.
-- [ ] **GS2-03.5 — Add model/property/formal tests.** Explore claim/election, relation mutation, lifecycle,
-  operation saga, epoch, and rollback state spaces with bounded counterexample output.
+- [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
+  witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
+  relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
+  Quint/ITF counterexamples.
 - [ ] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
   duplicate/reorder events; return partial pages; exhaust rate budgets; revoke permission; mutate concurrent
   revisions; and require convergence or typed refusal.
