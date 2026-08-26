@@ -604,7 +604,7 @@ coordination_row="$(grep -c '^  - { id: coordination, *full: FS-GG/FS\.GG\.Coord
 [ "$coordination_row" = "1" ] && ok "GS2-01.2 records one inert coordination non-participant row" \
   || bad "the inert coordination repository is not represented exactly once" "got $coordination_row match(es)"
 for realcap in labels coordination-kit build-config lockfile-sync contract-coherence skill-union; do
-  if bash "$REPOS_SH" list --receives "$realcap" | grep -qx 'FS-GG/FS.GG.Coordination'; then
+  if grep -qx 'FS-GG/FS.GG.Coordination' <<<"$(bash "$REPOS_SH" list --receives "$realcap")"; then
     bad "the coordination row receives '$realcap'" "GS2-01.2 must not grant a v1 fabric or writer"
   fi
 done
