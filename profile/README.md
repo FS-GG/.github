@@ -15,7 +15,9 @@ networking components while keeping each component independently adoptable.
 > coordinated fleet cutover. Follow the
 > [implementation and retirement roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md)
 > for current scope, qualification gates, cutover stages, and the retirement of
-> the existing coordination system.
+> the existing coordination system. For a shorter orientation, start with the
+> [current design goals](https://github.com/FS-GG/.github/blob/main/docs/design-goals/README.md),
+> which distinguish the accepted target from what is already shipped.
 
 ## Quick start: ask your agent for Hello World
 
