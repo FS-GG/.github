@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2953-gh-modernization-m0-invariants/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2953-gh-modernization-m0-invariants/analysis.json
-    digest: aff8a32c961786787832c798f028e23c54ba56a050f4db8eddad89705e3d6ee5
+    digest: 2a0490437c61c4fbfc4eb867ac27b7473ef6300b5c294980f623d692cf6580c4
     schemaVersion: 1
   - label: checklist
     path: work/2953-gh-modernization-m0-invariants/checklist.md

@@ -326,6 +326,11 @@ model checking. F# tests remain required implementation evidence and enter corre
   and [cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419636584)
   diagnose and authorize correction of the provenance contradiction; they make no future acceptance claim.
   Every changed head/fingerprint still requires fresh live role attestations.
+  The later [revision-6 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419728195)
+  and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419704123) diagnose
+  stale downstream `analysis.json` digests and authorize repair; they are not acceptance. Q0 additionally
+  hashes every evidence source snapshot and every top-level verify, ship, and governance-handoff source
+  against current bytes and carries a stale-analysis inversion before asserting a clean tracked tree.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

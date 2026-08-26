@@ -105,6 +105,12 @@ diagnoses and authorizes correction of that provenance contradiction; the indepe
 [cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419636584)
 corroborates it. Neither record is a future acceptance claim, and fresh live role attestations remain
 mandatory for every changed head and fingerprint.
+The [revision-6 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419728195)
+and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419704123) diagnose a
+later stale `analysis.json` digest in evidence, verification, and ship projections and authorize repair;
+they are not acceptance. Q0 therefore also independently hashes every declared evidence snapshot and
+every top-level verify, ship, and governance-handoff source against current bytes, with a stale-analysis
+inversion, before the tracked-tree assertion.
 
 ## Consequences
 

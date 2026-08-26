@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,11 @@ ROOT = Path(__file__).resolve().parents[3]
 WORK = ROOT / "work/2953-gh-modernization-m0-invariants"
 EVIDENCE = WORK / "q0-evidence.json"
 OUTPUT = WORK / "artifacts/q0-verification.junit.xml"
+DOWNSTREAM_JSON = [
+    ROOT / "readiness/2953-gh-modernization-m0-invariants/verify.json",
+    ROOT / "readiness/2953-gh-modernization-m0-invariants/ship.json",
+    ROOT / "readiness/2953-gh-modernization-m0-invariants/governance-handoff.json",
+]
 
 
 @dataclass
@@ -111,6 +117,77 @@ def sdd_analysis_mutation_self_test() -> int:
     return 0
 
 
+def exact_source_digest(path: str) -> str | None:
+    subject = ROOT / path
+    if not subject.is_file():
+        return None
+    return hashlib.sha256(subject.read_bytes()).hexdigest()
+
+
+def downstream_source_errors(
+    evidence_text: str | None = None, json_documents: dict[Path, dict[str, object]] | None = None,
+) -> list[str]:
+    errors: list[str] = []
+    text = evidence_text if evidence_text is not None else (WORK / "evidence.yml").read_text(encoding="utf-8")
+    snapshot = re.search(r"(?ms)^sourceSnapshots:\n(?P<body>.*?)^evidence:\n", text)
+    if snapshot is None:
+        errors.append("evidence.yml: sourceSnapshots block is missing")
+    else:
+        rows = re.findall(
+            r"(?m)^  - label: ([^\n]+)\n    path: ([^\n]+)\n    digest: ([0-9a-f]{64})\n",
+            snapshot.group("body"),
+        )
+        if not rows:
+            errors.append("evidence.yml: no exact source snapshots")
+        for label, path, claimed in rows:
+            actual = exact_source_digest(path)
+            if actual != claimed:
+                errors.append(f"evidence.yml[{label}]: {path} digest is stale")
+
+    documents = json_documents or {path: json.loads(path.read_text(encoding="utf-8")) for path in DOWNSTREAM_JSON}
+    for artifact, document in documents.items():
+        rows = document.get("sources")
+        if not isinstance(rows, list) or not rows:
+            errors.append(f"{artifact.relative_to(ROOT)}: top-level sources are missing")
+            continue
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict) or not isinstance(row.get("path"), str):
+                errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: malformed")
+                continue
+            digest = row.get("digest")
+            if isinstance(digest, dict):
+                claimed = digest.get("value") if digest.get("algorithm") == "sha256" else None
+            elif isinstance(digest, str) and digest.startswith("sha256:"):
+                claimed = digest.removeprefix("sha256:")
+            else:
+                claimed = None
+            actual = exact_source_digest(row["path"])
+            if not isinstance(claimed, str) or actual != claimed:
+                errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: {row['path']} digest is stale")
+    return errors
+
+
+def downstream_source_digest_check() -> int:
+    errors = downstream_source_errors()
+    if errors:
+        for error in errors:
+            print(f"DOWNSTREAM-RED: {error}")
+        return 1
+    print("DOWNSTREAM-GREEN: every declared evidence/verify/ship/handoff source matches exact bytes")
+    return 0
+
+
+def stale_analysis_digest_mutation_self_test() -> int:
+    evidence = (WORK / "evidence.yml").read_text(encoding="utf-8")
+    analysis = str(ROOT / "readiness/2953-gh-modernization-m0-invariants/analysis.json")
+    actual = hashlib.sha256(Path(analysis).read_bytes()).hexdigest()
+    mutated = evidence.replace(f"    digest: {actual}\n", f"    digest: {'0' * 64}\n", 1)
+    if mutated == evidence or not downstream_source_errors(evidence_text=mutated):
+        return 1
+    print("stale analysis source digest mutation rejected")
+    return 0
+
+
 def main() -> int:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     validator_spec = importlib.util.spec_from_file_location("q0_validator", WORK / "validate_q0.py")
@@ -131,6 +208,8 @@ def main() -> int:
         Case("source-diff-whitespace-mutation", [sys.executable, str(Path(__file__)), "--whitespace-mutation-self-test"], contains="committed whitespace mutation rejected"),
         Case("sdd-coherent-implementation-ready", [sys.executable, str(Path(__file__)), "--sdd-analysis-check"], contains="SDD-GREEN: noChange, coherent"),
         Case("sdd-incoherent-readiness-mutation", [sys.executable, str(Path(__file__)), "--sdd-analysis-mutation-self-test"], contains="incoherent readiness-string"),
+        Case("sdd-downstream-source-digests", [sys.executable, str(Path(__file__)), "--downstream-source-digest-check"], contains="DOWNSTREAM-GREEN"),
+        Case("sdd-stale-analysis-digest-mutation", [sys.executable, str(Path(__file__)), "--stale-analysis-digest-mutation-self-test"], contains="stale analysis source digest mutation rejected"),
         Case("source-tree-clean-after-gates", ["git", "diff", "--exit-code"]),
     ]
 
@@ -165,4 +244,8 @@ if __name__ == "__main__":
         raise SystemExit(sdd_analysis_check())
     if "--sdd-analysis-mutation-self-test" in sys.argv:
         raise SystemExit(sdd_analysis_mutation_self_test())
+    if "--downstream-source-digest-check" in sys.argv:
+        raise SystemExit(downstream_source_digest_check())
+    if "--stale-analysis-digest-mutation-self-test" in sys.argv:
+        raise SystemExit(stale_analysis_digest_mutation_self_test())
     raise SystemExit(main())

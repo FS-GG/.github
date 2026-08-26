@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/ship.json",
-      "digest": "sha256:f54959d61a5758d99cc5074b2451b0c4f7ec20a3f10be7fde6b6d00fc2824fa5",
+      "digest": "sha256:0e0830c5056602b7e94e8e3a0becaf741ae1f767cef47c47f5d9ff99daa82c34",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/verify.json",
-      "digest": "sha256:b5478ce8be69e4e18a63dd158b3f1eac7cf9f5d3297cb9e7be66a62c1e046a08",
+      "digest": "sha256:106bfa15e6fcf7b24031a320cf9908901a30e74c925471e7c1832680afd1c488",
       "schemaVersion": 1
     },
     {
