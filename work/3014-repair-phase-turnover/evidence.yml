@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3014-repair-phase-turnover/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3014-repair-phase-turnover/analysis.json
-    digest: 7ff597ab6778363a3ed6351850cc36d1bfe34c1b3fb5f49b60b415c5867af65c
+    digest: 4a8a48356f1be71bd2384673f48adc7a45bdf20b30971ce2d1569155225e4207
     schemaVersion: 1
   - label: checklist
     path: work/3014-repair-phase-turnover/checklist.md
@@ -53,11 +53,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Stateful exact-shape acceptance binds the derived round-4 terminal escalation.]
@@ -80,11 +80,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [The unchanged round-3 turnover path passes in the same stateful suite.]
@@ -107,11 +107,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: ["Wrong terminal binding refuses before write; the full mutation suite is green."]
@@ -134,11 +134,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Fresh PR entry consumes the seven-field receipt after the predecessor closes unmerged.]
@@ -161,11 +161,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Stateful old/new marker cases cover the conditional terminal field documented in-tree.]
@@ -184,15 +184,15 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: work/3014-repair-phase-turnover/test-results/lifecycle.trx
+        path: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
+      digest: "sha256:207b64a41e5547db531052490834090d435ddcb46bc7b672020b5a29b77e528f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 137
       failed: 0
       skipped: 0
     notes: [Lifecycle tests cover derived terminal authority and structured writer behavior.]
@@ -211,12 +211,12 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: work/3014-repair-phase-turnover/test-results/core.trx
+        path: work/3014-repair-phase-turnover/test-results/core.junit.xml
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/core.junit.xml
+      digest: "sha256:6eb5c7e8918f2a75a6b383776f89796534f2f423adef1c46cdfc97330e6ccd50"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 934
@@ -242,11 +242,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Receipt-bearing repair entry remains independently gated after escalation.]
@@ -265,15 +265,15 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: work/3014-repair-phase-turnover/test-results/lifecycle.trx
+        path: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
+      digest: "sha256:207b64a41e5547db531052490834090d435ddcb46bc7b672020b5a29b77e528f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 137
       failed: 0
       skipped: 0
     notes: [Full lifecycle suite observes the compatible live review writer contract.]
@@ -296,11 +296,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Stateful old/new exhaustion marker spellings are both exercised.]
@@ -323,11 +323,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Only typed escalation plus the seven-field receipt enters repair phase.]
@@ -346,12 +346,12 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: work/3014-repair-phase-turnover/test-results/core.trx
+        path: work/3014-repair-phase-turnover/test-results/core.junit.xml
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/core.junit.xml
+      digest: "sha256:6eb5c7e8918f2a75a6b383776f89796534f2f423adef1c46cdfc97330e6ccd50"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 934
@@ -377,11 +377,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Historical exact-round-3 stateful regression remains green.]
@@ -404,11 +404,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Fresh closed-predecessor repair-phase entry passes end to end.]
@@ -431,11 +431,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Wrong terminal marker mutation and valid extended marker are both measured.]
@@ -458,11 +458,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+      digest: "sha256:56a04e1f672bfe7ec481aa7487c31df46e5f48918f84a6d42641309ec44b5947"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 3
       failed: 0
       skipped: 0
     notes: [Existing markers need no rewrite and remain accepted.]
@@ -485,11 +485,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/3014-repair-phase-turnover/test-results/core.trx
-      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      source: work/3014-repair-phase-turnover/test-results/sdd-views.junit.xml
+      digest: "sha256:b984a7d95a2b7cf364ec57b42213c1262ea9bfe0a1357739da223b6aa0d84fe4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 934
+      passed: 2
       failed: 0
       skipped: 0
     notes: [Vetted SDD 1.4.0 regenerates an implementationReady current work model.]

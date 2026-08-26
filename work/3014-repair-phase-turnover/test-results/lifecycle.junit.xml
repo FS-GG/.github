@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="FS.GG.Coord.Cli.Lifecycle full regression" tests="137" failures="0" errors="0" skipped="0">
+  <properties>
+    <property name="command" value="dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests -c Release --no-restore" />
+    <property name="source-trx-sha256" value="884ee2d521960636f0246635bd23c79762d81fab261305c28a281dd9b62185bf" />
+  </properties>
+  <testcase classname="aggregate" name="137 lifecycle tests passed" />
+</testsuite>
