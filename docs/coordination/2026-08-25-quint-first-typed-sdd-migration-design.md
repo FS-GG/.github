@@ -18,9 +18,9 @@ compiler IR or a generated AST into a second authority.
 |---|---|
 | Status | Accepted design; feature preparation only; implementation not started |
 | Authored | 2026-08-25 |
-| Amended | 2026-08-26 — model-based testing ownership and Q1 consumer split |
+| Amended | 2026-08-26 — model-based testing ownership, Q1 consumer split, and literate Quint qualification |
 | Current authority | `fsharp-specification-v1` as published by Typed SDD P4 |
-| Target authority | Canonical Quint modules under a versioned FS-GG Quint profile |
+| Target authority | Literate Markdown with canonical embedded Quint under a versioned FS-GG Quint profile |
 | Stable lifecycle token | `typed-sdd` |
 | Target backend identity | `quint-specification-v1` (provisional until producer ratification) |
 | Default lifecycle | Unchanged: omitted selection remains `sdd` |
@@ -50,7 +50,11 @@ contract and lifecycle machinery around it, not a rich F# authoring language.
 ## 2. Authority and compilation boundary
 
 ```text
-canonical .qnt module set
+canonical literate Markdown
+          |
+          | pinned deterministic extraction of named Quint blocks
+          v
+generated .qnt module set (never edited or coequal)
           |
           | pinned Quint parse, resolve, typecheck
           v
@@ -66,14 +70,17 @@ small generated FS-GG compiled contract
           +--> evidence, provenance, and projection receipts
           +--> deterministic CI impact index
 
-consumer-owned canonical .qnt + generated ITF
+consumer-owned literate source + generated .qnt/ITF
           |
           v
 consumer replay adapter --> real implementation --> model-observable state comparison
 ```
 
-Quint source owns behavioral meaning: types, pure calculations, state, actions, nondeterministic choices,
-invariants, temporal properties, and executable examples. Quint's compiler owns its raw typed IR.
+The embedded Quint source owns behavioral meaning: types, pure calculations, state, actions,
+nondeterministic choices, invariants, temporal properties, and executable examples. The surrounding
+Markdown owns human explanation and navigation, not additional semantics. The literate source is the
+authored artifact; extraction output is ephemeral or freshness-checked generated material and is never
+edited independently. Quint's compiler owns its raw typed IR.
 
 The generated FS-GG contract owns only stable integration facts:
 
@@ -102,11 +109,22 @@ The producer qualification feature defines a closed, versioned profile before im
 7. canonical rules for ordered and semantically unordered collections;
 8. allowed language features and verification modes;
 9. unsupported or unstable constructs that fail closed with source-located diagnostics; and
-10. docstring/projection conventions that keep document-shaped Typed SDD packages readable.
+10. the literate Markdown fence syntax, output targets, ordering, import boundary, and source-map rules;
+11. deterministic extraction under an exactly pinned, content-addressed extractor with wrong-order,
+    missing-block, duplicate-target, stale-output, and hand-edited-output controls; and
+12. prose/docstring/projection conventions that keep document-shaped Typed SDD packages readable while
+    preventing prose from becoming hidden semantic authority.
 
 The profile prefers declarations-as-data where structural reflection is required. The compiler verifies a
 catalogue against resolved/typechecked declarations; it never guesses stable identity from a Quint AST
 node number.
+
+Quint's documented candidate extractor is [`lmt`](https://quint.sh/docs/literate). Q1 must pin and review
+an exact `lmt` source/artifact identity, its Go closure, license, output-path behavior, and source-location
+fidelity. The documentation's moving `go install ...@latest` recipe is suitable for exploration but cannot
+satisfy an FS-GG qualification receipt. If `lmt` cannot meet the hermeticity or diagnostic contract, Q1 may
+qualify another bounded extractor, but it must record the incompatibility and cannot silently introduce a
+home-grown Markdown grammar.
 
 ## 4. Compatibility and artifacts
 
@@ -124,8 +142,9 @@ The successor is a distinct versioned contract:
 ```text
 lifecycle: typed-sdd
 backend: quint-specification-v1
-compiler: quint/<version> + fsgg-quint-profile/<version> + bundle digest
-canonical source: work/<id>/specification.qnt plus an exact declared module set
+compiler: literate-extractor/<version> + quint/<version> + fsgg-quint-profile/<version> + bundle digest
+canonical source: work/<id>/specification.<ratified-literate-suffix> plus an exact declared block/module set
+generated modules: ephemeral or freshness-checked; never hand-authored authority
 compiled contract: readiness/<id>/typed-specification.contract.json
 manifest schema: v2
 ```
@@ -241,14 +260,23 @@ Exit: the decision and issue graph are merged; no implementation or live contrac
 
 ### Q1 — Cross-domain authoring qualification (FS.GG.SDD plus test-only `S.I.R.#353`)
 
-Author three non-production vertical slices: a complete requirements/evidence package, one S.I.R. rule with
+Author three non-production vertical slices as literate Quint documents: a complete requirements/evidence
+package, one S.I.R. rule with
 runtime/ITF correspondence, and one concurrent coordination process with retry, stale observation, lost
 update, double apply, ordering, deadlock, safety, and liveness controls. Measure readability, diagnostics,
-size, time, dependencies, upgrade sensitivity, and semantic-diff usefulness. Draft the profile and contract
-only from demonstrated needs. Run the same corpus through a pinned `quint-llm-kit` workflow and an
+size, time, dependencies, upgrade sensitivity, semantic-diff usefulness, and whether a reviewer can follow
+each requirement from prose to executable declaration, property, example, and counterexample. Prove that
+extraction is deterministic, source-located, and red for missing, reordered, duplicated, stale, or
+independently edited generated modules. Draft the profile and contract only from demonstrated needs. Run
+the same corpus through a pinned `quint-llm-kit` workflow and an
 FS-GG-minimal workflow; evaluate the standalone language/modeling/execution skills, witnesses, trace
 explanations, transition labels, type/listener coverage, and Choreo/plain-Quint choice. Record which pieces
 are adopted, adapted, or rejected and why.
+
+At least one independent domain reviewer and one independent architecture/tooling reviewer inspect all
+three literate documents and their semantic diffs without relying on the authors' explanation. Their
+findings must distinguish prose clarity, traceability to embedded Quint, counterexample readability, and
+any fact that exists only in prose. An author-scored readability claim is measurement input, not acceptance.
 
 FS.GG.SDD proves the generic replay protocol without referencing consumer source projects. The S.I.R.
 child binds the exact candidate to the real combat interpreter through an initialize/apply/observe adapter,
@@ -256,12 +284,15 @@ checks the first divergent transition, and proves injected implementation or map
 The child owns product fixtures and state normalization; it does not move canonical rule authority.
 
 Exit: accept or refuse implementation only after the producer experiment and S.I.R. child agree on exact
-model, trace, adapter, and implementation fingerprints. Refusal changes no authority.
+literate source, extracted module, model, trace, adapter, and implementation fingerprints. Success amends
+ADR-0077 with the accepted authoring and authority contract before Q2 starts. Refusal changes no authority
+and returns to decision rather than permitting plain Quint or F# as an undeclared fallback.
 
 ### Q2 — Hermetic toolchain, validator, and compiled contract (FS.GG.SDD)
 
-Qualify a content-addressed Quint/Node closure and separately cached Apalache/JRE toolchain. Implement the
-pinned IR adapter, profile validation, contract codec, canonical bytes, diagnostics, semantic diff,
+Qualify a content-addressed literate extractor plus Quint/Node closure and separately cached Apalache/JRE
+toolchain. Implement deterministic extraction and source mapping, the pinned IR adapter, profile validation,
+contract codec, canonical bytes, diagnostics, semantic diff,
 projections, generated bindings, golden IR fixtures, version refusal, mutation controls, ITF decoding, and
 the language-neutral replay protocol/evidence envelope. Product adapters remain consumer-owned.
 

@@ -2,7 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-25
-- **Amended:** 2026-08-26 — locate model-based testing at the producer/consumer boundary
+- **Amended:** 2026-08-26 — locate model-based testing at the producer/consumer boundary and require a
+  post-qualification authority amendment
+- **Qualification:** Pending Q1; this record accepts the target direction but does not yet authorize the
+  successor backend or GS2-02 protocol implementation
 - **Decision owners:** FS-GG/.github, FS.GG.SDD, and S.I.R. maintainers
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, future FS-GG consumers, and EHotwagner/S.I.R.
 - **Supersedes:** [ADR-0076](0076-agent-authored-fsharp-specification-kernel.md) for future canonical authoring; its P0–P4 delivery record remains historical fact
@@ -29,7 +32,15 @@ than a reason to maintain an FS-GG-authored programming language.
 
 ## Decision
 
-Future Typed SDD canonical sources will be authored in Quint. The public lifecycle value remains
+Future Typed SDD canonical sources will be authored as literate Quint specifications. The candidate
+authoring container is Markdown with ordered, named `quint` blocks following Quint's
+[literate-specification workflow](https://quint.sh/docs/literate). A pinned extractor deterministically
+tangles those blocks into the module set consumed by Quint; generated `.qnt` files are never a separately
+authored or coequal source. The embedded Quint owns behavioral semantics. Surrounding prose supplies human
+review context, rationale, and navigation, but it cannot introduce an undeclared requirement, transition,
+invariant, evidence obligation, or implementation binding.
+
+The public lifecycle value remains
 `typed-sdd`; Standard SDD (`sdd`), Freeform (`none`), and the separately retiring `spec-kit` compatibility
 token retain their present meanings. This decision does not change the omitted lifecycle default.
 
@@ -71,6 +82,14 @@ installing the latest Quint conflicts with FS-GG reproducibility; both are expli
 If the requirements package is not readable, the profile needs a second authored authority, or extraction
 requires reimplementing Quint semantics, the milestone is refused and this decision is revisited before
 any lifecycle authority changes.
+
+Successful Q1 qualification does not silently activate this record. It must produce an amendment to this
+ADR that names the accepted literate source layout, extractor and Quint/profile identities, generated
+module boundary, semantic-fingerprint rule, prose/semantics boundary, qualification receipts, and
+compatibility disposition, including independent human readability findings over all three vertical
+slices. Q2 producer implementation and GS2-02 protocol implementation remain blocked until that amendment
+is independently accepted. A refused Q1 leaves `fsharp-specification-v1`
+authoritative and requires a new decision rather than weakening the gate.
 
 The current `fsharp-specification-v1` backend remains supported as shipped until an explicit migration.
 The successor uses a new manifest schema and backend identity, provisionally `quint-specification-v1`.
