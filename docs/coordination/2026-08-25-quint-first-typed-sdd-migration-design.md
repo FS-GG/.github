@@ -16,9 +16,9 @@ compiler IR or a generated AST into a second authority.
 
 | Field | Value |
 |---|---|
-| Status | Accepted design; Q1 qualification complete; Q2 implementation authorized but not started |
+| Status | Accepted design; feature preparation only; implementation not started |
 | Authored | 2026-08-25 |
-| Amended | 2026-08-26 — model-based testing ownership, Q1 consumer split, literate Quint qualification, and Q1 acceptance |
+| Amended | 2026-08-26 — model-based testing ownership, Q1 consumer split, and literate Quint qualification |
 | Current authority | `fsharp-specification-v1` as published by Typed SDD P4 |
 | Target authority | Literate Markdown with canonical embedded Quint under a versioned FS-GG Quint profile |
 | Stable lifecycle token | `typed-sdd` |
@@ -287,13 +287,6 @@ Exit: accept or refuse implementation only after the producer experiment and S.I
 literate source, extracted module, model, trace, adapter, and implementation fingerprints. Success amends
 ADR-0077 with the accepted authoring and authority contract before Q2 starts. Refusal changes no authority
 and returns to decision rather than permitting plain Quint or F# as an undeclared fallback.
-
-**Accepted 2026-08-26.** FS.GG.SDD PR #925 merged the exact accepted producer head as
-`60351fd0614a5c8e4bdf286c21f185196116fd69`; S.I.R. PR #354 merged the real-interpreter response as
-`77e56d11867a5e2e7ad99f4d61b0f0c9fff61a5f`. The post-Q1 amendment in ADR-0077 ratifies the exact source
-layout, profile/tool identities, fingerprint and authority boundaries, receipts, compatibility disposition,
-and independent findings. Q2 is unblocked. Production authority, Q3 publication, downstream pins, provider
-floors, F# retirement, and the workspace-default decision remain blocked on their named later gates.
 
 ### Q2 — Hermetic toolchain, validator, and compiled contract (FS.GG.SDD)
 
