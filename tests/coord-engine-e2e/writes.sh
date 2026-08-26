@@ -1088,7 +1088,6 @@ extended_legacy_body="${extended_legacy_body/terminal-confirmation: $extended_ba
 patch_turnover_comment "$extended_legacy_id" "$extended_legacy_body"
 extended_escalation_out="$("$ENGINE" review record FS.GG.SDD#45 "$turnover_draft" --pr 45 --worker "$extended_turnover_worker" --json 2>&1)"; extended_escalation_rc=$?
 extended_escalation_id="$(printf '%s' "$extended_escalation_out" | jq -r '.commentId // empty')"
-extended_escalation_url="$(printf '%s' "$extended_escalation_out" | jq -r '.commentUrl // empty')"
 [ -n "$extended_escalation_id" ] && extended_ids+=("45:$extended_escalation_id")
 
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr/45" >/dev/null
@@ -1128,7 +1127,7 @@ else
 fi
 
 for extended_ref in "${extended_ids[@]}"; do
-  extended_issue="${extended_ref%%:*}"; extended_id="${extended_ref#*:}"
+  extended_id="${extended_ref#*:}"
   curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$extended_id" >/dev/null 2>&1 || true
 done
 while IFS= read -r extended_pr_id; do
