@@ -18,9 +18,10 @@ architecture and rationale.
 
 > **Quint-first candidate dependency:** [ADR-0077](adr/0077-quint-first-typed-specification-authority.md)
 > and the [migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) require the
-> behavioral protocol in GS2-02 to be canonical Quint source consumed through the published FS.GG
+> behavioral protocol in GS2-02 to be a literate Quint source consumed through the published FS.GG
 > compiled-contract boundary. Census/bootstrap work may proceed, but protocol implementation must wait for
-> that producer artifact. The current F# P4 package remains production authority meanwhile.
+> successful Q1 qualification, the post-qualification ADR-0077 amendment, and that producer artifact. The
+> current F# P4 package remains production authority meanwhile.
 
 > **Model-based-testing siting:** FS.GG.SDD supplies the published Quint/ITF and generic replay contract;
 > `FS.GG.Coordination` owns its canonical protocol model, adapter, observable-state projection, and replay
@@ -168,6 +169,8 @@ GS2-00 Ratify design and freeze authority census
    v                         v
 GS2-01 Bootstrap repo     GS2-08 Specify v1 bridge/ledger contract
    |                         |
+   | waits for Quint Q1      |
+   | + ADR-0077 amendment    |
    v                         |
 GS2-02 Protocol core         |
    |                         |
@@ -308,7 +311,9 @@ implementation merely to make replay pass.
 - [ ] **GS2-01.4 — Pin the published Quint-capable kernel.** Restore the exact published FS.GG.SDD artifact
   carrying the accepted Quint profile and compiled-contract boundary from the supported read feed, verify
   its identity and bundle digest, and prohibit source-project or checkout-relative references. An earlier
-  bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02.
+  bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02. This
+  unit is not ready until Q1 has succeeded and ADR-0077 has been amended with the accepted literate source,
+  extraction, authority, fingerprint, and compatibility contract.
 - [ ] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
   compiler/unit tests, dependency/security checks, package/install smoke, and evidence-manifest validation.
   Do not import v1 coordination completion gates.
@@ -332,10 +337,12 @@ implementation merely to make replay pass.
 **Depends on:** GS2-01, including the final Quint-capable GS2-01.4 pin
 **Exit gates:** Q1 and the pure portion of Q2
 
-- [ ] **GS2-02.1 — Author the canonical Quint protocol.** Specify subjects, authorities, codecs, commands,
+- [ ] **GS2-02.1 — Author the canonical literate Quint protocol.** Keep reviewer-oriented Markdown prose
+  beside deterministically extracted, named Quint blocks that specify subjects, authorities, codecs, commands,
   events, mutations, projections, observation plans, settings profiles, evidence obligations, and version
   IDs under the published FS-GG Quint profile. Generate stable integration identities through the compiled
-  contract; do not author a parallel F# protocol AST.
+  contract; prose cannot add hidden semantics, extracted `.qnt` files cannot be edited independently, and
+  no parallel F# protocol AST is permitted.
 - [ ] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
   stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
   completeness contracts.
