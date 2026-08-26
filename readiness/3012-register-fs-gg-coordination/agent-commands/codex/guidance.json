@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3012-register-fs-gg-coordination",
+  "targetId": "codex",
+  "generator": "FS.GG.SDD.Artifacts/1.4.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/3012-register-fs-gg-coordination/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7432f135680a5a2908ffa24d28f2c7137e8cc1bad13d742333e2709e02fff81d"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "ba992bbba9e7f66378c2a066b53db1735921a9cf70c1dcb58a5e544587e0e33e"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (pending) covering AC-001, FR-001, PD-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (pending) covering AC-001, FR-002, PD-002.",
+      "relatedIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (pending) covering AC-001, FR-003, PD-003.",
+      "relatedIds": [
+        "AC-001",
+        "FR-003",
+        "PD-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (pending) covering AC-001, FR-004, PD-004.",
+      "relatedIds": [
+        "AC-001",
+        "FR-004",
+        "PD-004"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (pending) covering AC-001, FR-005, PD-005.",
+      "relatedIds": [
+        "AC-001",
+        "FR-005",
+        "PD-005"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Update contract surface PC-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T006 (pending) covering PC-001, PD-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Record verification evidence VO-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T007 (pending) covering PC-001, PD-001, VO-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "Handle migration posture PM-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T008 (pending) covering PC-001, PM-001.",
+      "relatedIds": [
+        "PC-001",
+        "PM-001"
+      ]
+    },
+    {
+      "id": "T009",
+      "title": "Refresh generated view impact GV-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T009 (pending) covering GV-001, PD-001.",
+      "relatedIds": [
+        "GV-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "Implement clarification decision DEC-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T010 (pending) covering DEC-001.",
+      "relatedIds": [
+        "DEC-001"
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "Implement clarification decision DEC-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T011 (pending) covering DEC-002.",
+      "relatedIds": [
+        "DEC-002"
+      ]
+    },
+    {
+      "id": "T012",
+      "title": "Implement clarification decision DEC-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T012 (pending) covering DEC-003.",
+      "relatedIds": [
+        "DEC-003"
+      ]
+    },
+    {
+      "id": "T013",
+      "title": "Implement clarification decision DEC-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T013 (pending) covering DEC-004.",
+      "relatedIds": [
+        "DEC-004"
+      ]
+    },
+    {
+      "id": "T014",
+      "title": "Implement clarification decision DEC-005",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T014 (pending) covering DEC-005.",
+      "relatedIds": [
+        "DEC-005"
+      ]
+    },
+    {
+      "id": "T015",
+      "title": "Update contract surface PC-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T015 (pending) covering PC-002, PD-002.",
+      "relatedIds": [
+        "PC-002",
+        "PD-002"
+      ]
+    },
+    {
+      "id": "T016",
+      "title": "Record verification evidence VO-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T016 (pending) covering PC-002, PD-002, VO-002.",
+      "relatedIds": [
+        "PC-002",
+        "PD-002",
+        "VO-002"
+      ]
+    },
+    {
+      "id": "T017",
+      "title": "Record verification evidence VO-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T017 (pending) covering PD-003, VO-003.",
+      "relatedIds": [
+        "PD-003",
+        "VO-003"
+      ]
+    },
+    {
+      "id": "T018",
+      "title": "Record verification evidence VO-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T018 (pending) covering PD-004, VO-004.",
+      "relatedIds": [
+        "PD-004",
+        "VO-004"
+      ]
+    },
+    {
+      "id": "T019",
+      "title": "Record verification evidence VO-005",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T019 (pending) covering PD-005, VO-005.",
+      "relatedIds": [
+        "PD-005",
+        "VO-005"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "automated-tests",
+      "title": "automated-tests",
+      "capability": "Required by tasks: T007, T016, T017, T018, T019.",
+      "relatedIds": [
+        "T007",
+        "T016",
+        "T017",
+        "T018",
+        "T019"
+      ]
+    },
+    {
+      "id": "deterministic-json",
+      "title": "deterministic-json",
+      "capability": "Required by tasks: T009.",
+      "relatedIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "fsharp",
+      "title": "fsharp",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006, T010, T011, T012, T013, T014, T015.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T010",
+        "T011",
+        "T012",
+        "T013",
+        "T014",
+        "T015"
+      ]
+    },
+    {
+      "id": "implementation",
+      "title": "implementation",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T010, T011, T012, T013, T014.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T010",
+        "T011",
+        "T012",
+        "T013",
+        "T014"
+      ]
+    },
+    {
+      "id": "readiness-evidence",
+      "title": "readiness-evidence",
+      "capability": "Required by tasks: T007, T016, T017, T018, T019.",
+      "relatedIds": [
+        "T007",
+        "T016",
+        "T017",
+        "T018",
+        "T019"
+      ]
+    },
+    {
+      "id": "schema-versioning",
+      "title": "schema-versioning",
+      "capability": "Required by tasks: T008.",
+      "relatedIds": [
+        "T008"
+      ]
+    }
+  ],
+  "renderedFiles": [
+    {
+      "path": "readiness/3012-register-fs-gg-coordination/agent-commands/codex/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/3012-register-fs-gg-coordination/agent-commands/codex/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": []
+}

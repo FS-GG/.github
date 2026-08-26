@@ -1,0 +1,649 @@
+schemaVersion: 1
+workId: 3012-register-fs-gg-coordination
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/3012-register-fs-gg-coordination/spec.md
+sourceClarifications: work/3012-register-fs-gg-coordination/clarifications.md
+sourceChecklist: work/3012-register-fs-gg-coordination/checklist.md
+sourcePlan: work/3012-register-fs-gg-coordination/plan.md
+sourceTasks: work/3012-register-fs-gg-coordination/tasks.yml
+sourceAnalysis: readiness/3012-register-fs-gg-coordination/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3012-register-fs-gg-coordination/analysis.json
+    digest: 693cffb2ca676b4477c237a58d889fbbbf14fc60e1aebbb9d8f4cd1fe6c77c82
+    schemaVersion: 1
+  - label: checklist
+    path: work/3012-register-fs-gg-coordination/checklist.md
+    digest: 3d093897a956fc3ef6613b87cd52cc3a20084b5658076a13e6c21d7ce53543a4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3012-register-fs-gg-coordination/clarifications.md
+    digest: 49d7b753afac7a78289fc0fc0f927d97fae2f76bd57ac9fa58b444454d941d02
+    schemaVersion: 1
+  - label: plan
+    path: work/3012-register-fs-gg-coordination/plan.md
+    digest: 3ada070ab200ee3997535f8c23c234b5c773cc09013ff2ae5e579266c26558d8
+    schemaVersion: 1
+  - label: spec
+    path: work/3012-register-fs-gg-coordination/spec.md
+    digest: 774c9e46b19972d9fdb219a0a1473f50aef717e2afb1e09fbae7d15068feaa7d
+    schemaVersion: 1
+  - label: tasks
+    path: work/3012-register-fs-gg-coordination/tasks.yml
+    digest: d8057be05c1dce8564cc2c6e9eeb10d9aa28be272c35d09a4a8e298d28eef01b
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV005
+    kind: missing
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: missing
+    synthetic: false
+    notes: [Independent exact-head cross-repository review is required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV016]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV017]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV018]
+    artifacts: [docs/2026-08-26-fs-gg-coordination-admin-settings-report.md, docs/coordination/board-schema.md, registry/repos.yml, work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx, work/3012-register-fs-gg-coordination/test-results/repo-scope-core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/repo-scope-cli.trx
+      digest: "sha256:e2516ba66a4a26b52bb7befc36cf6f423567c6413592593aec19406620751d2e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
+  - id: EV019
+    kind: missing
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/repos-registry/run.sh
+      - kind: verification
+        path: tests/project-field-options/run.sh
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
+    result: missing
+    synthetic: false
+    notes: [Independent exact-head cross-repository review is required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

@@ -35,6 +35,48 @@ Re-observe every row before applying it. A stale screenshot or this timestamp ca
 
 ## 2. Safe now: inert repository hygiene
 
+### 2.1 GS2-01.2 live reconciliation (2026-08-26T14:00Z)
+
+The operator batch has been re-read through the GitHub APIs rather than inferred from the checkboxes above:
+
+- merge commits and rebase merges are disabled; squash is the only ordinary merge method;
+- auto-merge and automatic head-branch deletion are enabled;
+- Issues remain enabled while repository Projects and the wiki are disabled;
+- issue intake is restricted to collaborators (`issueCreationPolicy: COLLABORATORS_ONLY`), as required
+  for every rostered repository;
+- the default workflow token is read-only and workflows cannot approve pull-request reviews;
+- dependency graph/alerts, Dependabot security updates, secret scanning, and push protection are enabled;
+- `coordination-maintainers` has `Maintain`, not `Admin`, and no outside collaborator was observed;
+- no ruleset, environment, webhook, or production event subscription exists; and
+- the repository remains public on `main` at node id `R_kgDOUEVTyg`.
+
+GitHub accepted neither `secret_scanning_validity_checks=enabled` nor
+`secret_scanning_non_provider_patterns=enabled`: an immediate authoritative reread still returned both as
+`disabled`. They are recorded as unavailable/unsupported controls for this repository tier, not as completed
+settings.
+
+Both organization App installations currently report `repository_selection: all`. Renovate therefore already
+includes `FS.GG.Coordination`, satisfying the dependency-maintenance disposition. The
+`fs-gg-cross-repo-dispatch` installation also includes it implicitly and currently carries repository
+administration/content/issue/pull-request write permissions. That is broader than the GS2 new-only boundary:
+the repository has no dispatch listener or production writer, but an organization owner must change the
+installation from **All repositories** to an exact selected-repository set that excludes
+`FS.GG.Coordination` until a later qualified dispatch contract names it. GitHub exposes no repository-local
+toggle that can narrow an installation configured for all repositories, so this remains a visible
+organization-administrator action rather than a false checked box here.
+
+The producer prerequisite is complete: `FS.GG.SDD` release
+[`v1.4.0`](https://github.com/FS-GG/FS.GG.SDD/releases/tag/v1.4.0) is anchored at merge commit
+`7fec4dd4549789bca67aae004b3dad8ee0b7a4fd`; [run 32975483123](https://github.com/FS-GG/FS.GG.SDD/actions/runs/32975483123)
+passed clean public installs, dual-feed payload comparison, public-package Q2 (10/10), and Q3 (13/13).
+
+The guarded `Repo Scope` migration added `coordination` and preserved all 321 prior Project assignments
+with zero restore writes. The complete before snapshot reported canonical digest
+`10f66690950621e2d37d7a2bc2deab9a270b18306850bfdfa1e5717e41e2a6b0`; the complete after snapshot
+reported `254d5a06cab54ac8f6cd89206121609da6188a6e0ec2da8b3e77449249b6c79c`. Both snapshots passed their
+integrity verifier, and the live roster/schema/resolver check reports 10 roster identities plus only the
+deliberate `cross-repo` aggregate option.
+
 These changes do not activate v2 coordination or constrain an as-yet-uncreated check name.
 
 - [ ] In [Code security](https://github.com/FS-GG/FS.GG.Coordination/settings/security_analysis), enable

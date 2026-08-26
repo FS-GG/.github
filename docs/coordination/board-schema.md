@@ -22,6 +22,7 @@ Every `repos:` row in `registry/repos.yml` must have a same-named option. The
 | `game` | roster |
 | `audio` | roster |
 | `net` | roster |
+| `coordination` | roster |
 | `sir` | roster |
 | `cross-repo` | board-only aggregate |
 <!-- repo-scope-options:end -->
@@ -54,11 +55,14 @@ repo; every other rostered product maps as follows.
 | `game` | `P6 Game` |
 | `audio` | `P7 Audio` |
 | `net` | `P8 Net` |
+| `coordination` | `P0 Decisions` |
 <!-- repo-phase-map:end -->
 
 The coordination-kit protocol carries the same mapping. In particular, `net`
 is `P8 Net`; it must not be filed under `P1 Rendering` merely because a caller
-may eventually render network state.
+may eventually render network state. `coordination` remains in `P0 Decisions`
+until the v2 project schema replaces this v1 phase projection; that assignment
+does not grant the new repository production authority.
 
 The board's complete `Phase` vocabulary is a separate table. The mapping above
 cannot serve as this list: `P5 Versioning` is a board-wide phase and therefore
