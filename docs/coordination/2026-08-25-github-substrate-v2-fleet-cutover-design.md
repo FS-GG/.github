@@ -560,6 +560,14 @@ operator repair uses the same plan and receipt contract.
 
 ### 6.4 Event-driven reconciliation with audit repair
 
+**Q0 runtime decision (2026-08-26, delegated maintainer authority).** Scheduled complete audits are authoritative for this cutover. A
+continuously hosted App/webhook boundary is rejected from the critical path because no complete operational
+owner, availability target, secret/ingress posture, observability, upgrade/incident process, retention,
+cost, and disaster-recovery evidence has been accepted. Event ingestion may still be implemented and
+qualified as an optional accelerator, but no event or cursor can authorize a transition and GS2-01 does not
+provision a hosted runtime. Reconsidering that boundary requires a separate accepted amendment after
+`OperatingV2`.
+
 Webhooks normalize into immutable event envelopes keyed by source and delivery/event ID. They schedule a
 narrow subject reconciliation; they do not directly mutate derived state. Duplicate and reordered events
 are idempotent. The durable cursor records what has been processed.
@@ -714,6 +722,21 @@ evidence designed for this cutover:
 8. reproducible package/tool builds, API compatibility classification, immutable artifact identity, SBOM,
    attestation, and install-from-feed tests; and
 9. an independent architecture/security/cutover review over exact candidate artifacts and evidence.
+
+The Q0 security artifact is the source-bound
+[threat model](../../work/2953-gh-modernization-m0-invariants/threat-model.md). It enumerates actors,
+assets, the protected epoch, administrative principal, mutable GitHub state, package/supply-chain, and
+cross-repository receiver boundaries, their abuse cases, mitigations, incident posture, and residual
+risk. The Q0 validator independently recomputes its byte digest and the canonical non-circular review
+fingerprint; every architecture, security, operations, and cross-repository verdict must bind that exact
+fingerprint.
+Each role first posts a distinct unedited narrative comment, then an exact unedited current-head
+attestation whose sole final `Evidence` line cites that earlier repair-PR comment. Live discovery requires
+the same authorized GitHub `User`, strict temporal ordering, and authorization by either an allowed live
+association or the exact login in the fingerprint-bound reviewer allowlist. It rejects Bots, missing users,
+non-allowlisted contributors, self, later, edited, wrong-author, wrong-PR, or trailing records.
+The same canonical login predicate runs before both association and allowlist authorization: 1–39 ASCII
+characters, alphanumeric endpoints, and only alphanumerics or isolated internal hyphens.
 
 The typed model may generate exhaustive structural and transition cases, but at least one black-box oracle
 for every safety-critical invariant must be maintained outside that generator. Otherwise a defect in the

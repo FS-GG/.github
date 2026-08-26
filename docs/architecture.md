@@ -31,11 +31,13 @@ the versions, generated from the registry. **Seven framework components**, plus 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 
-> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the eight
+> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the current eight
 > repositories below (seven framework components + `.github`; the sixth,
 > **FS.GG.Game**, was extracted under ADR-0022 and published at P5; the seventh,
 > **FS.GG.Audio**, was onboarded as a standalone component under ADR-0023; the eighth,
-> **FS.GG.Net**, the transport component, under ADR-0052). Each repository is a
+> **FS.GG.Net**, the transport component, under ADR-0052). ADR-0078 approves a
+> ninth, early-provisioned but inert component, **FS.GG.Coordination**, for the independently
+> qualified v2 coordination runtime. Each repository is a
 > **component**. What a consumer *scaffolds* with the platform is a **workspace** —
 > the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
 > optional governance. This page uses those words precisely; see
@@ -101,6 +103,7 @@ published *at*:
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
+| [**FS.GG.Coordination**](https://github.com/FS-GG/FS.GG.Coordination) *(approved by ADR-0078; inert repository created early by explicit operator authorization)* | The new-only GitHub Substrate v2 coordination component. It consumes the published FS.GG.SDD Quint-profile/compiled-contract producer, owns the canonical coordination model and GitHub adapters, and qualifies independently of v1. GS2-01 owns its active bootstrap and qualification; the existing README-only repository has no production authority before the protected `OpenV2` transition. | Planned v2 CLI/qualification packages; nothing published or production-authorized at Q0 |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
 ---

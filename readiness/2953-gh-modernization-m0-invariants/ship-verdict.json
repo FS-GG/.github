@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2953-gh-modernization-m0-invariants",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "24f1e91f6ca7af8815662bea12583668efa07a6ab986151e72fb02090d4f3286"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 29,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 29
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

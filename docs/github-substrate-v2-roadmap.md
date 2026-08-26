@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | Ongoing renovation; design and execution spine filed, implementation not started |
+| Status | Ongoing renovation; GS2-00/Q0 accepted, later implementation units not started |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -46,17 +46,19 @@ The three program issues are too large to hand directly to a general worker. The
 ownership, roll-up, and cross-repository sequencing. Actual work is performed as one bounded roadmap unit
 at a time.
 
-### 1.1 Before `FS.GG.Coordination` exists
+### 1.1 Before active `FS.GG.Coordination` bootstrap
 
-Only `GS2-00` and the repository-bootstrap portion of `GS2-01` are assignable. The instruction to an agent
+The README-only repository exists at the explicitly authorized inert bootstrap commit
+`ce22e4d10f2efae7aa09018521487b598c082350`; it has no v2 code or production authority. Only `GS2-00`
+and preparation for the active-bootstrap portion of `GS2-01` are assignable. The instruction to an agent
 must name one unit and its permitted effects, for example:
 
 > Execute `GS2-00.2` from the GitHub Substrate v2 roadmap. Produce the proposed ADR and authority census;
-> do not create the new repository, modify live GitHub configuration, or start v2 implementation.
+> preserve the inert repository, do not modify live GitHub configuration, and do not start v2 implementation.
 
-Creating the repository, installing the GitHub App, creating environments, or changing organization
-settings requires explicit organization-administrator authority. A worker may prepare and verify an exact
-plan, but must not infer that authority from the roadmap.
+Any active bootstrap beyond that inert creation, installing the GitHub App, creating environments, or
+changing organization settings requires explicit organization-administrator authority. A worker may
+prepare and verify an exact plan, but must not infer that authority from the roadmap.
 
 ### 1.2 After the bootstrap repository exists
 
@@ -258,7 +260,7 @@ model checking. F# tests remain required implementation evidence and enter corre
 **Owner:** `.github`
 **Exit gate:** Q0
 
-- [ ] **GS2-00.0 — Accept the program handoff.** Finish or explicitly disposition Typed SDD P4
+- [x] **GS2-00.0 — Accept the program handoff.** Finish or explicitly disposition Typed SDD P4
   release/tag/feed/registry residue (including `.github#2968` while it remains open); amend or resolve
   `.github#2932` as superseded and map each retained clause to this roadmap; record whether P5 is not
   started, readiness-only, finishing before `GS2-10`, or deferred until `OperatingV2`; classify every
@@ -268,34 +270,93 @@ model checking. F# tests remain required implementation evidence and enter corre
   work; the superseded edge itself is not a v2 prerequisite.
   Repair the modernization Epic's task-line acceptance and place dependencies for `.github#2964` and
   `.github#2965` in the authoritative Project `Blocked by` field rather than inert issue-body lines.
-- [ ] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
+- [x] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
   mechanism, GitHub plan/API limitation, permission boundary, and rollback claim in the governing design.
-- [ ] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
+- [x] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
   new-only writer policy, independent qualification lane, protected Git epoch ledger, native/custom
   authority table, and `OpenV2` boundary. Keep status Proposed until independent review is complete.
-- [ ] **GS2-00.3 — Complete the v1 authority census.** Enumerate every issue/body/Project/registry/comment,
+- [x] **GS2-00.3 — Complete the v1 authority census.** Enumerate every issue/body/Project/registry/comment,
   workflow, command, JSON contract, environment variable, file, package, schedule, and setting that can
   affect a coordination decision.
-- [ ] **GS2-00.4 — Complete the mutation census.** Name every always-writing and conditionally writing
+- [x] **GS2-00.4 — Complete the mutation census.** Name every always-writing and conditionally writing
   command, workflow, App route, repair script, release route, and administrative path; bind each to its
   current precondition and eventual v2 disposition.
-- [ ] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
+- [x] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
   touch-set, dependency, hierarchy, intake, review, delivery, merge, release, pagination, rate-limit,
   partial-write, stale-read, and self-hosting incidents. Import `.github#2932`'s reproducible 72-hour
   churn, mutation-entry, protocol-string, replay, omission, and misclassification baselines without
   importing its superseded v1 implementation plan.
-- [ ] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
+- [x] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
   marker schemas, package IDs/versions, reusable workflow inputs/outputs/job IDs, required contexts, and
   receiver pins. Classify each `Preserve`, `Migrate`, `Seal`, or `Retire`.
-- [ ] **GS2-00.7 — Freeze the deletion ledger.** Every v1 source tree, parser, projection, field, schedule,
+- [x] **GS2-00.7 — Freeze the deletion ledger.** Every v1 source tree, parser, projection, field, schedule,
   workflow, exception, and package must have a later deletion unit and a test proving absence.
-- [ ] **GS2-00.8 — Accept Q0.** Architecture, security, operations, and cross-repository reviewers sign the
+- [x] **GS2-00.8 — Accept Q0.** Architecture, security, operations, and cross-repository reviewers sign the
   exact design/census fingerprints; unresolved material questions block `GS2-01`.
-- [ ] **GS2-00.9 — Decide runtime operations.** Select or reject a deployment boundary for the App/webhook
+- [x] **GS2-00.9 — Decide runtime operations.** Select or reject a deployment boundary for the App/webhook
   host, including ownership, availability target, secrets, ingress verification, logs/metrics, upgrades,
   incident response, data retention, cost, and disaster recovery. If no acceptable host is approved,
   scheduled audits remain authoritative and `.github#2961` is removed from the cutover critical path by an
   explicit amendment rather than by shipping an unowned service.
+  **Q0 decision recorded 2026-08-26 under delegated maintainer authority:** reject a hosted boundary for
+  this cutover. The complete operational evidence has no accepted owner/service boundary, availability
+  target, secret/ingress design, observability, upgrade and incident process, retention policy, cost
+  envelope, or disaster-recovery proof. Scheduled complete audits therefore remain authoritative; events
+  are an optional post-`OperatingV2` accelerator and `.github#2961` is not on the critical path.
+
+  **Q0 acceptance evidence:** repair PR #3002 head
+  `d07cc9daeef46f6f034e2e4cf23dcf3deeea6da0`, fingerprint
+  `febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668`, exact role attestations
+  ([architecture](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419411396),
+  [security](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419418539),
+  [operations](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419407467),
+  [cross-repository](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419406435)), and the final
+  [repair-phase confirmation](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
+  Ratification evidence additionally requires structural SDD analysis with exact `noChange`,
+  `coherent: true`, `implementationReady`, zero stale/generated-view findings, no diagnostics, and a clean
+  tracked tree after all gates. The immutable
+  [revision-4 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809)
+  diagnoses the stale substring-only verifier at old head `b0b63507f115f0de9e488c9f68dcde22b6992c67`
+  and authorizes repair; it does not close the finding. Commits
+  [0ced1901](https://github.com/FS-GG/.github/commit/0ced1901) and
+  [c9e82ef](https://github.com/FS-GG/.github/commit/c9e82ef) implement and seal the fix, while the independent
+  [c9 architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419650173)
+  verifies that the stale-SDD defect is fixed and separately requires this provenance correction. The
+  [revision-5 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419655595)
+  and [cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419636584)
+  diagnose and authorize correction of the provenance contradiction; they make no future acceptance claim.
+  Every changed head/fingerprint still requires fresh live role attestations.
+  The later [revision-6 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419728195)
+  and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419704123) diagnose
+  stale downstream `analysis.json` digests and authorize repair; they are not acceptance. Q0 additionally
+  hashes every evidence source snapshot and every top-level verify, ship, and governance-handoff source
+  against current bytes and carries a stale-analysis inversion before asserting a clean tracked tree.
+  The [revision-7 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419837439)
+  and [architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419807264)
+  diagnose and authorize correction of source-set omission; they are not acceptance. Q0 requires exact,
+  duplicate-free per-artifact label/path multisets and rejects malformed, missing, duplicate, unexpected,
+  or stale rows, with independent omission, duplicate, and extra-row mutations.
+  The [revision-8 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419940163)
+  and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419915373)
+  diagnose and authorize repair of the remaining source-row schema gap; they are not acceptance. Q0 now
+  binds exact per-path kinds, required/allowed row and nested digest keys, integer schema version, current
+  schema status where applicable, and one canonical lowercase SHA-256 representation per projection.
+  Table-driven controls reject missing/wrong kind, missing/wrong schema or status, unexpected keys,
+  alternate digest forms, malformed types, and invalid digest casing/length across evidence, verify, ship,
+  and governance handoff while retaining all source-set and stale-byte inversions.
+  Hosted [run 32925218156](https://github.com/FS-GG/.github/actions/runs/32925218156) / job
+  [98048225279](https://github.com/FS-GG/.github/actions/runs/32925218156/job/98048225279) then proved that
+  `author_association` is viewer-dependent for private organization membership: the maintainer view
+  reported `MEMBER`, while the workflow token reported the same immutable comments as `CONTRIBUTOR` and
+  rejected all four roles. Q0 therefore binds an exact unique GitHub User login allowlist into the signed
+  fingerprint and accepts a User when either its live association is allowed or its login is allowlisted;
+  Bots, missing users, and non-allowlisted `CONTRIBUTOR`/`NONE` records remain fail-closed.
+  The later [revision-10 diagnosis](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420215570),
+  [security evidence](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420187392), and
+  [cross-repository evidence](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420206908) require
+  one login grammar before both authorization routes: 1–39 ASCII characters, alphanumeric endpoints,
+  and only alphanumerics or single internal hyphens. Empty, whitespace, leading/trailing/double hyphen,
+  overlength, non-string, underscore, dot, and Unicode identities fail even with an allowed association.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 
@@ -309,9 +370,10 @@ model checking. F# tests remain required implementation evidence and enter corre
 `GS2-01.4` consumes that route's published artifact; the bootstrap worker must not recreate its extractor,
 profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`.
 
-- [ ] **GS2-01.1 — Provision the repository.** Create the repository with least-privilege teams, branch
-  ruleset, signed/immutable tag policy, secret scanning, dependency graph, Dependabot alerts, Actions
-  policy, auto-merge policy, and default branch settings. Record the exact settings receipt.
+- [ ] **GS2-01.1 — Complete repository provisioning.** Preserve the explicitly authorized README-only
+  creation receipt, then apply least-privilege teams, branch ruleset, signed/immutable tag policy, secret
+  scanning, dependency graph, Dependabot alerts, Actions policy, auto-merge policy, and default branch
+  settings. Record the exact settings receipt; the early inert creation alone does not complete this unit.
 - [ ] **GS2-01.2 — Register the component.** Add the repository and ownership/release topology to the
   reviewed registry, architecture map, custom-property projection, GitHub App installation scope, and
   Coordination Project membership rules.
