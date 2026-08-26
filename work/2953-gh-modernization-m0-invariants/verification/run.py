@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import copy
 import re
 import subprocess
 import sys
@@ -25,6 +26,44 @@ DOWNSTREAM_JSON = [
     ROOT / "readiness/2953-gh-modernization-m0-invariants/ship.json",
     ROOT / "readiness/2953-gh-modernization-m0-invariants/governance-handoff.json",
 ]
+EXPECTED_EVIDENCE_SNAPSHOTS = {
+    "analysis": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+    "checklist": "work/2953-gh-modernization-m0-invariants/checklist.md",
+    "clarifications": "work/2953-gh-modernization-m0-invariants/clarifications.md",
+    "plan": "work/2953-gh-modernization-m0-invariants/plan.md",
+    "spec": "work/2953-gh-modernization-m0-invariants/spec.md",
+    "tasks": "work/2953-gh-modernization-m0-invariants/tasks.yml",
+}
+EXPECTED_DOWNSTREAM_SOURCES = {
+    DOWNSTREAM_JSON[0]: {
+        ".fsgg/agents.yml", ".fsgg/project.yml", ".fsgg/sdd.yml",
+        "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+        "work/2953-gh-modernization-m0-invariants/checklist.md",
+        "work/2953-gh-modernization-m0-invariants/clarifications.md",
+        "work/2953-gh-modernization-m0-invariants/evidence.yml",
+        "work/2953-gh-modernization-m0-invariants/plan.md",
+        "work/2953-gh-modernization-m0-invariants/spec.md",
+        "work/2953-gh-modernization-m0-invariants/tasks.yml",
+    },
+    DOWNSTREAM_JSON[1]: {
+        ".fsgg/agents.yml", ".fsgg/project.yml", ".fsgg/sdd.yml",
+        "readiness/2953-gh-modernization-m0-invariants/analysis.json",
+        "readiness/2953-gh-modernization-m0-invariants/verify.json",
+        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+        "work/2953-gh-modernization-m0-invariants/checklist.md",
+        "work/2953-gh-modernization-m0-invariants/clarifications.md",
+        "work/2953-gh-modernization-m0-invariants/evidence.yml",
+        "work/2953-gh-modernization-m0-invariants/plan.md",
+        "work/2953-gh-modernization-m0-invariants/spec.md",
+        "work/2953-gh-modernization-m0-invariants/tasks.yml",
+    },
+    DOWNSTREAM_JSON[2]: {
+        "readiness/2953-gh-modernization-m0-invariants/ship.json",
+        "readiness/2953-gh-modernization-m0-invariants/verify.json",
+        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+    },
+}
 
 
 @dataclass
@@ -133,12 +172,27 @@ def downstream_source_errors(
     if snapshot is None:
         errors.append("evidence.yml: sourceSnapshots block is missing")
     else:
-        rows = re.findall(
-            r"(?m)^  - label: ([^\n]+)\n    path: ([^\n]+)\n    digest: ([0-9a-f]{64})\n",
-            snapshot.group("body"),
-        )
-        if not rows:
-            errors.append("evidence.yml: no exact source snapshots")
+        rows: list[tuple[str, str, str]] = []
+        chunks = re.findall(r"(?ms)^  - (?P<row>.*?)(?=^  - |\Z)", snapshot.group("body"))
+        for index, chunk in enumerate(chunks):
+            parsed = re.fullmatch(
+                r"label: ([^\n]+)\n    path: ([^\n]+)\n    digest: ([0-9a-f]{64})\n    schemaVersion: 1\n?",
+                chunk,
+            )
+            if parsed is None:
+                errors.append(f"evidence.yml sourceSnapshots[{index}]: malformed")
+            else:
+                rows.append((parsed.group(1), parsed.group(2), parsed.group(3)))
+        labels = [label for label, _, _ in rows]
+        paths = [path for _, path, _ in rows]
+        if len(labels) != len(set(labels)) or len(paths) != len(set(paths)):
+            errors.append("evidence.yml: duplicate source snapshot label or path")
+        actual_pairs = {(label, path) for label, path, _ in rows}
+        expected_pairs = set(EXPECTED_EVIDENCE_SNAPSHOTS.items())
+        for label, path in sorted(expected_pairs - actual_pairs):
+            errors.append(f"evidence.yml: missing source snapshot {label}={path}")
+        for label, path in sorted(actual_pairs - expected_pairs):
+            errors.append(f"evidence.yml: unexpected source snapshot {label}={path}")
         for label, path, claimed in rows:
             actual = exact_source_digest(path)
             if actual != claimed:
@@ -150,10 +204,12 @@ def downstream_source_errors(
         if not isinstance(rows, list) or not rows:
             errors.append(f"{artifact.relative_to(ROOT)}: top-level sources are missing")
             continue
+        paths: list[str] = []
         for index, row in enumerate(rows):
             if not isinstance(row, dict) or not isinstance(row.get("path"), str):
                 errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: malformed")
                 continue
+            paths.append(row["path"])
             digest = row.get("digest")
             if isinstance(digest, dict):
                 claimed = digest.get("value") if digest.get("algorithm") == "sha256" else None
@@ -164,6 +220,13 @@ def downstream_source_errors(
             actual = exact_source_digest(row["path"])
             if not isinstance(claimed, str) or actual != claimed:
                 errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: {row['path']} digest is stale")
+        expected_paths = EXPECTED_DOWNSTREAM_SOURCES.get(artifact, set())
+        if len(paths) != len(set(paths)):
+            errors.append(f"{artifact.relative_to(ROOT)}: duplicate source path")
+        for path in sorted(expected_paths - set(paths)):
+            errors.append(f"{artifact.relative_to(ROOT)}: missing source {path}")
+        for path in sorted(set(paths) - expected_paths):
+            errors.append(f"{artifact.relative_to(ROOT)}: unexpected source {path}")
     return errors
 
 
@@ -185,6 +248,41 @@ def stale_analysis_digest_mutation_self_test() -> int:
     if mutated == evidence or not downstream_source_errors(evidence_text=mutated):
         return 1
     print("stale analysis source digest mutation rejected")
+    return 0
+
+
+def downstream_source_set_mutation_self_test() -> int:
+    evidence = (WORK / "evidence.yml").read_text(encoding="utf-8")
+    documents = {path: json.loads(path.read_text(encoding="utf-8")) for path in DOWNSTREAM_JSON}
+    analysis_path = "readiness/2953-gh-modernization-m0-invariants/analysis.json"
+    evidence_omission = re.sub(
+        r"(?m)^  - label: analysis\n    path: readiness/2953-gh-modernization-m0-invariants/analysis\.json\n"
+        r"    digest: [0-9a-f]{64}\n    schemaVersion: 1\n", "", evidence,
+    )
+    omission_documents = copy.deepcopy(documents)
+    for artifact in DOWNSTREAM_JSON[:2]:
+        omission_documents[artifact]["sources"] = [
+            row for row in omission_documents[artifact]["sources"] if row.get("path") != analysis_path
+        ]
+    duplicate_documents = copy.deepcopy(documents)
+    duplicate_documents[DOWNSTREAM_JSON[0]]["sources"].append(
+        copy.deepcopy(duplicate_documents[DOWNSTREAM_JSON[0]]["sources"][0])
+    )
+    extra_documents = copy.deepcopy(documents)
+    extra_path = "work/2953-gh-modernization-m0-invariants/q0-evidence.json"
+    extra_documents[DOWNSTREAM_JSON[2]]["sources"].append({
+        "path": extra_path, "digest": f"sha256:{exact_source_digest(extra_path)}", "schemaVersion": 1,
+    })
+    mutations = [
+        ("omission", evidence_omission, omission_documents),
+        ("duplicate", evidence, duplicate_documents),
+        ("extra", evidence, extra_documents),
+    ]
+    failures = [name for name, text, docs in mutations if not downstream_source_errors(text, docs)]
+    if failures:
+        print(f"source-set mutations survived: {','.join(failures)}")
+        return 1
+    print("downstream omission, duplicate, and extra source-set mutations rejected")
     return 0
 
 
@@ -210,6 +308,7 @@ def main() -> int:
         Case("sdd-incoherent-readiness-mutation", [sys.executable, str(Path(__file__)), "--sdd-analysis-mutation-self-test"], contains="incoherent readiness-string"),
         Case("sdd-downstream-source-digests", [sys.executable, str(Path(__file__)), "--downstream-source-digest-check"], contains="DOWNSTREAM-GREEN"),
         Case("sdd-stale-analysis-digest-mutation", [sys.executable, str(Path(__file__)), "--stale-analysis-digest-mutation-self-test"], contains="stale analysis source digest mutation rejected"),
+        Case("sdd-downstream-source-set-mutations", [sys.executable, str(Path(__file__)), "--downstream-source-set-mutation-self-test"], contains="omission, duplicate, and extra"),
         Case("source-tree-clean-after-gates", ["git", "diff", "--exit-code"]),
     ]
 
@@ -248,4 +347,6 @@ if __name__ == "__main__":
         raise SystemExit(downstream_source_digest_check())
     if "--stale-analysis-digest-mutation-self-test" in sys.argv:
         raise SystemExit(stale_analysis_digest_mutation_self_test())
+    if "--downstream-source-set-mutation-self-test" in sys.argv:
+        raise SystemExit(downstream_source_set_mutation_self_test())
     raise SystemExit(main())

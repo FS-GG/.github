@@ -4,9 +4,9 @@
   "observedAt": "2026-08-26T00:00:00+02:00",
   "governingArtifacts": [
     {"path":"docs/adr/0077-quint-first-typed-specification-authority.md","sha256":"f256b612fef047a95f9c36c762bb1cafc30364c9bbed4a883d9f457f425175a3"},
-    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"baf3794f899ddf97fe47dd04e3009beeb8e856d5f8046dc9c2565efc5c195a3d"},
+    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"d45a5ea3f42da8be0cec32f622021245663f8ba95affde8468873021944d8df3"},
     {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"149559d18ba62d942b56b065c84faf44b7adfb6d1b904922d3033248bc353a1d"},
-    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"97f8b3a02536cfa7984fa395fea2bfbcd99827beaeba60c271f20e196f8d637c"}
+    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"4c1ba42ddd8ae5798540016a5d265ea2a85ab21266deefed510a714267a378d4"}
   ],
   "corpusArtifact": {"path":"work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json","sha256":"5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"},
   "inventories": [
@@ -108,7 +108,7 @@
   "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","bootstrapRepository":{"ref":"FS-GG/FS.GG.Coordination","visibility":"PUBLIC","defaultBranch":"main","initialHead":"ce22e4d10f2efae7aa09018521487b598c082350","state":"inert"},"blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"childBoundaryCitations":["FS-GG/.github#2954","FS-GG/.github#2955","FS-GG/.github#2956","FS-GG/.github#2957","FS-GG/.github#2958","FS-GG/.github#2959","FS-GG/.github#2960","FS-GG/.github#2961","FS-GG/.github#2962","FS-GG/.github#2963","FS-GG/.github#2964","FS-GG/.github#2965"],"pendingBoardWrites":0},
   "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"38c6acad9435e0c5b0f3e4da57374a912c1d4de63592688d109eae441e8a6f38","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
   "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"},
-  "reviewFingerprint": "59d368b4a3b13521fc7ff5028f2bafe7681afab17a8805c6ac5c089415fd571e",
+  "reviewFingerprint": "707b163e206f64b8ddef6f408c88bb4fbac33697a619555bb33ebdf5069ac534",
   "reviewAuthority":"live-unedited-current-head-pr-comments",
   "reviewsRequired":["architecture","security","operations","crossRepository"],
   "reviews":[]

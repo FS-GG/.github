@@ -111,6 +111,12 @@ later stale `analysis.json` digest in evidence, verification, and ship projectio
 they are not acceptance. Q0 therefore also independently hashes every declared evidence snapshot and
 every top-level verify, ship, and governance-handoff source against current bytes, with a stale-analysis
 inversion, before the tracked-tree assertion.
+The [revision-7 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419837439)
+and [architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419807264) diagnose
+that digest checks alone could accept omitted sources; they authorize repair and are not acceptance. The
+downstream gate therefore requires exact, duplicate-free label/path multisets for evidence, verify, ship,
+and governance handoff and rejects malformed, missing, duplicate, unexpected, and stale rows. Independent
+omission, duplication, and extra-row mutations exercise that completeness contract.
 
 ## Consequences
 

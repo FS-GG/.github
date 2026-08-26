@@ -331,6 +331,11 @@ model checking. F# tests remain required implementation evidence and enter corre
   stale downstream `analysis.json` digests and authorize repair; they are not acceptance. Q0 additionally
   hashes every evidence source snapshot and every top-level verify, ship, and governance-handoff source
   against current bytes and carries a stale-analysis inversion before asserting a clean tracked tree.
+  The [revision-7 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419837439)
+  and [architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419807264)
+  diagnose and authorize correction of source-set omission; they are not acceptance. Q0 requires exact,
+  duplicate-free per-artifact label/path multisets and rejects malformed, missing, duplicate, unexpected,
+  or stale rows, with independent omission, duplicate, and extra-row mutations.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 
