@@ -189,7 +189,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-08-25
+updated: 2026-08-26
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -215,6 +215,7 @@ repos:
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
   - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
   - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
+  - { id: coordination, full: FS-GG/FS.GG.Coordination, role: non-participant, receives: [], reason: "ADR-0078 new-only v2 product at inert bootstrap: organization-owned; no release exists and no v1 fabric, App writer, hosted runtime, webhook, or production authority is admitted before its qualified roadmap units and protected OpenV2 transition" }
   # THE ROW #2245 ACCEPTANCE 6 WITHHELD, NOW LANDED. `.github#2206`'s maintainer decision (comment
   # 5178235203, revised 2026-08-04) rosters `EHotwagner/S.I.R.`. It was parked `Blocked` on
   # EHotwagner/S.I.R.#139 rather than committed here, because the collaborator-only intake boundary

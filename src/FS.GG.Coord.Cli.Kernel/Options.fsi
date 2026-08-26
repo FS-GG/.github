@@ -415,10 +415,12 @@ module Options =
     /// REFUSES and never proceeds (#266, #421). The embedded FS-GG table stays gated to owner `FS-GG`, so a
     /// foreign owner is never handed a real-but-unrelated ref.
     ///
-    /// UNLIKE `choreLockRef`, THIS COVERS ALL EIGHT ROSTER REPOSITORIES — `FS.GG.Net` included, which the
+    /// UNLIKE `choreLockRef`, THIS COVERS ALL EIGHT OPERATION RECEIVERS — `FS.GG.Net` included, which the
     /// chore-lock table omits and which is one of the repositories the `.github#1858` incident reached.
-    /// `OpLockTests` proves that completeness against `registry/repos.yml` rather than against a
-    /// hand-checked list.
+    /// The canonical roster currently has nine FS-GG-owned rows: eight `authority`/`framework` receivers
+    /// and the intentionally lock-free `FS.GG.Coordination` `non-participant`. `OpLockTests` derives those
+    /// sets by role from `registry/repos.yml`, proves receiver completeness, and proves non-participants
+    /// receive no operation-lock authority.
     ///
     /// `extra` is the per-deployment roster a vendored tenant may inject, matched on (owner, repo) under ANY
     /// owner and consulted BEFORE the embedded table. Pass `[]` for the default FS-GG deployment.

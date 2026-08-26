@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="GS2-01.2 independent review receipt" tests="7" failures="0" errors="0" skipped="0">
+  <testcase classname="review" name="structured successor decision is live, unedited, and authorized" />
+  <testcase classname="review" name="successor decision passes the exact repaired head" />
+  <testcase classname="project-migration" name="before and after snapshots are complete and integrity sealed" />
+  <testcase classname="project-migration" name="321 item states preserve 86 assigned and 235 unassigned values" />
+  <testcase classname="project-migration" name="before and after item-state arrays are identical" />
+  <testcase classname="q0" name="frozen administrator report and complete Q0 mutation self-test remain green" />
+  <testcase classname="operation-lock" name="401-test CLI receipt proves non-participants receive no dispatch lock and roster shape changes fail closed" />
+</testsuite>

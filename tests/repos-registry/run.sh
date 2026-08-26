@@ -599,6 +599,19 @@ sir_full="$(bash "$REPOS_SH" list --all | grep -c '^EHotwagner/S.I.R.$' || true)
 [ "$sir_full" = "1" ] && ok "list --all yields the user-owned row, so every sweep starting there sees it" \
   || bad "list --all does not yield EHotwagner/S.I.R." "got $sir_full match(es)"
 
+# GS2-01.2: the new-only coordination product has one roster identity but takes no v1 fabric.
+coordination_row="$(grep -c '^  - { id: coordination, *full: FS-GG/FS\.GG\.Coordination, *role: non-participant, *receives: \[\],' "$REPO_ROOT/registry/repos.yml" || true)"
+[ "$coordination_row" = "1" ] && ok "GS2-01.2 records one inert coordination non-participant row" \
+  || bad "the inert coordination repository is not represented exactly once" "got $coordination_row match(es)"
+for realcap in labels coordination-kit build-config lockfile-sync contract-coherence skill-union; do
+  if grep -qx 'FS-GG/FS.GG.Coordination' <<<"$(bash "$REPOS_SH" list --receives "$realcap")"; then
+    bad "the coordination row receives '$realcap'" "GS2-01.2 must not grant a v1 fabric or writer"
+  fi
+done
+coordination_full="$(bash "$REPOS_SH" list --all | grep -c '^FS-GG/FS.GG.Coordination$' || true)"
+[ "$coordination_full" = "1" ] && ok "list --all yields FS.GG.Coordination for complete roster audits" \
+  || bad "list --all does not yield FS.GG.Coordination exactly once" "got $coordination_full match(es)"
+
 # --- list --all (the unrostered-adopter sweep starts from every repo, not from a declaration) ---
 all_repos="$(bash "$REPOS_SH" list --all --field id --registry "$BASE" | tr '\n' ',')"
 [ "$all_repos" = ".github,sdd," ] && ok "list --all -> every rostered repo, receives or not" \

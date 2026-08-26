@@ -45,6 +45,7 @@ module RepoScopeTests =
     [<InlineData("game", "FS.GG.Game")>]
     [<InlineData("audio", "FS.GG.Audio")>]
     [<InlineData("net", "FS.GG.Net")>]
+    [<InlineData("coordination", "FS.GG.Coordination")>]
     [<InlineData("Governance", "FS.GG.Governance")>] // never a casing bug — the map is case-insensitive
     [<InlineData("FS-GG/FS.GG.SDD", "FS.GG.SDD")>] // owner/repo -> the repo part
     [<InlineData("FS.GG.SDD", "FS.GG.SDD")>] // a literal name passes through
@@ -153,7 +154,9 @@ module RepoScopeTests =
     [<InlineData("templates", "FS.GG.Templates", 252)>]
     [<InlineData("game", "FS.GG.Game", 406)>]
     [<InlineData("audio", "FS.GG.Audio", 183)>]
-    let ``every receiver's chore lock resolves to its closed lock issue`` (repo: string, canonicalRepo: string, number: int) =
+    let ``every receiver's chore lock resolves to its closed lock issue``
+        (repo: string, canonicalRepo: string, number: int)
+        =
         let expected: FS.GG.Coord.Types.Ref =
             { Owner = "FS-GG"
               Repo = canonicalRepo

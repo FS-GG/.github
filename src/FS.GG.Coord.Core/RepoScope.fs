@@ -15,6 +15,7 @@ module RepoScope =
         | "game" -> Repository "FS.GG.Game"
         | "audio" -> Repository "FS.GG.Audio"
         | "net" -> Repository "FS.GG.Net"
+        | "coordination" -> Repository "FS.GG.Coordination"
         | "sir" -> Repository "S.I.R."
         // THE ONE DELIBERATE NON-ROSTER VALUE (`docs/coordination/board-schema.md`). Matched on the
         // lowercased token, same as every roster spelling above, but tagged `NonRepository` rather than

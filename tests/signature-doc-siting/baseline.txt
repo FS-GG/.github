@@ -104,7 +104,7 @@
 
 58 src/FS.GG.Coord.Cli.Kernel/Identity.fs
 161 src/FS.GG.Coord.Cli.Kernel/Kernel.fs
-436 src/FS.GG.Coord.Cli.Kernel/Options.fs
+439 src/FS.GG.Coord.Cli.Kernel/Options.fs
 159 src/FS.GG.Coord.Cli.Kernel/Render.fs
 1250 src/FS.GG.Coord.Cli/Client.fs
 15 src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs
