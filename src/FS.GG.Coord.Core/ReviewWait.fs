@@ -57,13 +57,23 @@ module ReviewWait =
 
     let private kindName = function InitialReview -> "initial-review" | RepairConfirmation -> "repair-confirmation"
     let generationToken head kind round = $"%s{head}:%s{kindName kind}:%d{round}"
-    let private isOrdinaryExhaustionReceipt (receipt: WaitReceipt) =
-        let suffix = ":repair-confirmation:3"
-        if receipt.Kind <> RepairConfirmation || not (receipt.ReviewGeneration.EndsWith(suffix, StringComparison.Ordinal)) then
+    // The same wire boundary this function historically spelled as the literal suffix
+    // `:repair-confirmation:3`. `ReviewWait.fs` precedes `Protocol.fs` in F# compile order, so it cannot
+    // consume the projected policy value; the live writer remains the authoritative exhaustion check.
+    let private ordinaryExhaustionFloor = 3
+    let private isPotentialOrdinaryExhaustionReceipt (receipt: WaitReceipt) =
+        let separator = ":repair-confirmation:"
+        let separatorAt = receipt.ReviewGeneration.LastIndexOf(separator, StringComparison.Ordinal)
+        if receipt.Kind <> RepairConfirmation || separatorAt <> 40 then
             false
         else
-            let head = receipt.ReviewGeneration.Substring(0, receipt.ReviewGeneration.Length - suffix.Length)
-            head.Length = 40 && head |> Seq.forall Uri.IsHexDigit
+            let head = receipt.ReviewGeneration.Substring(0, separatorAt)
+            let roundText = receipt.ReviewGeneration.Substring(separatorAt + separator.Length)
+            match Int32.TryParse(roundText, NumberStyles.None, CultureInfo.InvariantCulture) with
+            | true, round ->
+                round >= ordinaryExhaustionFloor
+                && head |> Seq.forall Uri.IsHexDigit
+            | _ -> false
     let private instant (value: DateTimeOffset) = value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
 
     let encode event =
@@ -171,14 +181,16 @@ module ReviewWait =
                     | Timeout (g, at, evidence) when g = receipt.ReviewGeneration -> Some(2, at, evidence)
                     | _ -> None)
             match currentClaimGeneration, terminal with
-            // A completed ordinary round-three wait is historical exhaustion evidence, not an active
-            // mutation capability. Preserve that exact terminal fact across the required claim turnover;
-            // the live writer separately proves the fresh current claimant and grants only one
-            // `escalation` record. Every other changed-claim wait remains recoverable and therefore
-            // authorizes no mutation (.github#2797).
+            // A completed ordinary confirmation at or beyond the configured exhaustion boundary is
+            // POTENTIAL historical exhaustion evidence, not an active mutation capability. Round three
+            // is the normal shape; `.github#3014` proved the engine can also admit a later contiguous
+            // terminal after a prior pass/head move. Preserve only the completed wait across the required
+            // claim turnover. The live writer still validates the complete ledger, derives the terminal
+            // record, proves actual exhaustion and the fresh claimant, and grants only one `escalation`.
+            // Earlier rounds and malformed generation tokens remain recoverable and authorize nothing.
             | generation, Some (0, at, evidence)
                 when generation <> Some receipt.ClaimGeneration
-                     && isOrdinaryExhaustionReceipt receipt
+                     && isPotentialOrdinaryExhaustionReceipt receipt
                      && at >= receipt.EnteredAt
                      && at <= receipt.ExpiresAt ->
                 Completed(receipt, evidence)

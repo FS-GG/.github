@@ -1,0 +1,497 @@
+schemaVersion: 1
+workId: 3014-repair-phase-turnover
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3014-repair-phase-turnover/spec.md
+sourceClarifications: work/3014-repair-phase-turnover/clarifications.md
+sourceChecklist: work/3014-repair-phase-turnover/checklist.md
+sourcePlan: work/3014-repair-phase-turnover/plan.md
+sourceTasks: work/3014-repair-phase-turnover/tasks.yml
+sourceAnalysis: readiness/3014-repair-phase-turnover/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3014-repair-phase-turnover/analysis.json
+    digest: 7ff597ab6778363a3ed6351850cc36d1bfe34c1b3fb5f49b60b415c5867af65c
+    schemaVersion: 1
+  - label: checklist
+    path: work/3014-repair-phase-turnover/checklist.md
+    digest: 23046b6a28464d0131cc5ae775d24d87c38b52417d69d6d26562bf29389b60a5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3014-repair-phase-turnover/clarifications.md
+    digest: cb8eec9c18d4e808dc871f6ab2d74ed1606a3170f99a7acf3bfa71ade5665996
+    schemaVersion: 1
+  - label: plan
+    path: work/3014-repair-phase-turnover/plan.md
+    digest: 4f0914120629d4df4bb8e23caccaaec2bb54efab079b7b9aa40037946717cd33
+    schemaVersion: 1
+  - label: spec
+    path: work/3014-repair-phase-turnover/spec.md
+    digest: 00ff25bc22b8d8b7e375aed58a83adc1dfcf715fec546284add124becedd18fa
+    schemaVersion: 1
+  - label: tasks
+    path: work/3014-repair-phase-turnover/tasks.yml
+    digest: 7522327739e37fb78f730e42bc26c6345da35bbee08843aef6c496258ba8681d
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Stateful exact-shape acceptance binds the derived round-4 terminal escalation.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [The unchanged round-3 turnover path passes in the same stateful suite.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: ["Wrong terminal binding refuses before write; the full mutation suite is green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Fresh PR entry consumes the seven-field receipt after the predecessor closes unmerged.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Stateful old/new marker cases cover the conditional terminal field documented in-tree.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/lifecycle.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Lifecycle tests cover derived terminal authority and structured writer behavior.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/core.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Core exhaustive model keeps reducer and writer exhaustion decisions aligned.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Receipt-bearing repair entry remains independently gated after escalation.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/lifecycle.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Full lifecycle suite observes the compatible live review writer contract.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-005]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Stateful old/new exhaustion marker spellings are both exercised.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Only typed escalation plus the seven-field receipt enters repair phase.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/core.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Core suite includes a 5400-history reducer/writer equivalence model.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Historical exact-round-3 stateful regression remains green.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Fresh closed-predecessor repair-phase entry passes end to end.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Wrong terminal marker mutation and valid extended marker are both measured.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/stateful-turnover.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Existing markers need no rewrite and remain accepted.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/3014-repair-phase-turnover/test-results/sdd-views.junit.xml
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3014-repair-phase-turnover/test-results/core.trx
+      digest: "sha256:f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 934
+      failed: 0
+      skipped: 0
+    notes: [Vetted SDD 1.4.0 regenerates an implementationReady current work model.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

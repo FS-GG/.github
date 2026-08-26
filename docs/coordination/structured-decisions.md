@@ -136,6 +136,21 @@ and asserts nothing about its authenticity. And a grant is bound to one exact he
 `Review.criticSuccessionValid`, so a moved head needs a new grant; nothing here makes a grant reusable
 across heads.
 
+### Ordinary-exhaustion terminal binding
+
+The compatibility marker `<!-- fsgg:independent-review-escalation:v1 -->` retains its historical
+`exhausted-head`, `initial-review`, `confirmation-1`, `confirmation-2`, `confirmation-3`, `critic`, and
+`verdict: ordinary-chain-exhausted` fields. For the normal three-confirmation chain, those fields are the
+complete authority and `terminal-confirmation` is absent.
+
+If the engine has admitted a later contiguous confirmation after an earlier pass/head movement, the
+marker additionally carries exactly one `terminal-confirmation: <structured-comment-url>` naming the
+actual last confirmation. The typed escalation must bind that record's round, head, digest, critic,
+backlinks, and completed durable wait. Missing, duplicate, or stale terminal binding fails before write.
+This compatibility spelling does not raise the ordinary-round ceiling: it only keeps the single repair
+phase reachable for a longer chain the engine already admitted, and the live exhaustion classifier still
+decides whether that chain is genuinely terminal.
+
 ## New-only authority
 
 M6 removed v1 body hashes, locator/subsequence matching, evidence classifications, and prose review-marker

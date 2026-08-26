@@ -1044,7 +1044,7 @@ class Handler(BaseHTTPRequestHandler):
                 "head": {"ref": ("item/43-repair-phase" if pr == 44 else f"item/{issue_number}-the-work"), "sha": head_sha},
                 "base": {"ref": "main", "sha": "9" * 40},
             }
-            if pr in (43, 44):
+            if pr in (43, 44, 45, 46):
                 response.update({
                     "mergeable": True,
                     "mergeable_state": "unstable",
