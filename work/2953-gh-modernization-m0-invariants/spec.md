@@ -21,12 +21,12 @@ FS-GG operators receive one reviewable authority, rollback, deletion, and runtim
 - SB-003: Preserve `.github#2932` and the completed Standard Typed SDD P0-P4 artifacts as historical/corpus inputs, never as a parallel v2 implementation lane or qualification authority.
 
 ## Non-Goals
-- SB-004: Do not provision `FS.GG.Coordination`, install an App, create production environments, change production schema/settings, or enable/disable a writer.
+- SB-004: Preserve the explicit user-authorized README-only `FS.GG.Coordination` repository created early at `ce22e4d10f2efae7aa09018521487b598c082350`, but do not begin its active bootstrap or qualification, install an App, create production environments, change production schema/settings, or enable/disable a writer.
 - SB-005: Do not implement GS2-01 or later units, close program anchors early, or accept roadmap checkboxes/project status as proof.
 - SB-006: Do not make the advisory Agentic Workflows pilot or the later Typed SDD default flip a hidden cutover prerequisite.
 
 ## User Stories
-- US-001 (P1): As a cutover operator, I can identify one authority for each coordination fact and one fence or deletion disposition for every v1 writer before repository bootstrap begins.
+- US-001 (P1): As a cutover operator, I can identify one authority for each coordination fact and one fence or deletion disposition for every v1 writer before active repository bootstrap and qualification begin.
 - US-002 (P1): As an independent reviewer, I can reproduce every Q0 census and verify that omissions, stale Project projections, and incompatible authority assignments fail closed.
 - US-003 (P1): As a receiver maintainer, I can distinguish work that blocks v2 from parallel product work, frozen-candidate inputs, superseded inventory, and work deferred until `OperatingV2`.
 

@@ -4,7 +4,7 @@
 **Repository:** [`FS-GG/FS.GG.Coordination`](https://github.com/FS-GG/FS.GG.Coordination)  
 **Program:** [GitHub Substrate v2 roadmap](github-substrate-v2-roadmap.md)  
 **Boundary:** [ADR-0078](adr/0078-github-substrate-v2-new-only-coordination-authority.md)  
-**Ratification PR:** [FS-GG/.github#3001](https://github.com/FS-GG/.github/pull/3001)
+**Ratification PR:** [FS-GG/.github#3002](https://github.com/FS-GG/.github/pull/3002)
 
 This is the administrator/operator projection of the complete settings work required by GS2-01,
 GS2-04, GS2-06, GS2-08, and the fleet cutover. It says where each control lives, when it may be applied,

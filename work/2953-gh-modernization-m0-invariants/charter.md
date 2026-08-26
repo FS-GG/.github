@@ -29,7 +29,7 @@ policyPointers:
 ## Scope Boundaries
 - In: finish the Typed SDD handoff; ratify authority, mutation, compatibility, and deletion boundaries; create the organization ADR and evidence-backed Q0 package; decide the runtime boundary; correct the Epic and dependency projection.
 - In: classify P4/P5 and active adjacent work as `v2-unit`, `v2-blocker`, `parallel-product`, `candidate-input-change`, `superseded-inventory`, or `cutover-deferred`.
-- Out: repository provisioning, v2 implementation, live schema/settings mutation, installing an App, freezing or switching the fleet, and any production writer change.
+- Out: active repository bootstrap or qualification beyond the explicitly authorized README-only repository at `ce22e4d10f2efae7aa09018521487b598c082350`, v2 implementation, live schema/settings mutation, installing an App, freezing or switching the fleet, and any production writer change.
 - Out: treating the Coordination Project, v1 completion records, or roadmap checkboxes as qualification authority.
 
 ## Policy Pointers

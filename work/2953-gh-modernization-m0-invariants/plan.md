@@ -24,7 +24,7 @@ Prose status: planned
 - Complete only `GS2-00`, using `.github#2953` as the merged acceptance anchor and this SDD package as authored implementation evidence.
 - Generate machine-readable, content-addressed census/corpus/review indexes in the work package; keep the organization decision in `docs/adr`, and reconcile the design, roadmap, architecture map, and live issue/Project projections.
 - Read live GitHub state through paginated REST and the budgeted coordination client; never infer absence from a partial page or convert unreadable state into absence.
-- Keep production unchanged. Administrative or repository provisioning begins only in `GS2-01` after Q0 acceptance.
+- Keep production unchanged. The explicit user-authorized README-only repository at `ce22e4d10f2efae7aa09018521487b598c082350` remains inert; active bootstrap, qualification, and further administrative provisioning begin only in `GS2-01` after Q0 acceptance.
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Derive the authority census from repository search, registry/roster data, workflow and command inventories, live issue/Project schemas, and explicit external-authority rows. Store each row with subject, authority, revision/completeness, owner, v2 disposition, and source anchor.

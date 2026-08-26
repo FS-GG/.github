@@ -54,6 +54,8 @@ REVIEW_ROLE_TEXT = {
 }
 REVIEW_REPOSITORY = "FS-GG/.github"
 REVIEW_PULL_REQUEST = 3002
+AUTHORIZED_REVIEW_AUTHORS = {"EHotwagner"}
+AUTHORIZED_REVIEW_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 # These hashes bind the independently adjudicated semantic baseline, not merely its
 # presence in the role-signed subject. Recomputing reviewFingerprint after weakening a
 # verdict or deletion obligation therefore remains red before another review is sought.
@@ -78,6 +80,14 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
     """Parse exact positive fields; negated prose and arbitrary substrings have no authority."""
     if comment.get("created_at") != comment.get("updated_at"):
         return None
+    author = comment.get("user")
+    if (
+        not isinstance(author, dict)
+        or author.get("login") not in AUTHORIZED_REVIEW_AUTHORS
+        or author.get("type") != "User"
+        or comment.get("author_association") not in AUTHORIZED_REVIEW_ASSOCIATIONS
+    ):
+        return None
     body = str(comment.get("body", ""))
     parsed: dict[str, str] | None = None
     for role, heading in REVIEW_ROLE_TEXT.items():
@@ -87,7 +97,7 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
             rf"- Role: `{re.escape(role)}`\n"
             rf"- Verdict: \*\*accepted\*\*\n"
             rf"- Exact PR head: `{re.escape(live_head)}`\n"
-            rf"- Canonical Q0 fingerprint: `{re.escape(fingerprint)}`(?:\n|\Z)"
+            rf"- Canonical Q0 fingerprint: `{re.escape(fingerprint)}`\n?\Z"
         )
         match = re.match(pattern, body)
         if match:
@@ -462,6 +472,8 @@ def self_test(data: dict[str, Any]) -> list[str]:
         "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-1",
         "created_at": "2026-08-26T00:00:00Z",
         "updated_at": "2026-08-26T00:00:00Z",
+        "user": {"login": "EHotwagner", "type": "User"},
+        "author_association": "MEMBER",
     }
     if parse_role_comment(parser_comment, parser_head, parser_fingerprint) is None:
         failures.append("review parser rejected an exact accepted attestation")
@@ -471,6 +483,16 @@ def self_test(data: dict[str, Any]) -> list[str]:
     }
     if parse_role_comment(exhausted_pr, parser_head, parser_fingerprint) is not None:
         failures.append("review parser accepted an attestation from the exhausted PR")
+    outsider = {
+        **parser_comment,
+        "user": {"login": "public-outsider", "type": "User"},
+        "author_association": "NONE",
+    }
+    if parse_role_comment(outsider, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted an outsider-authored attestation")
+    retracted = {**parser_comment, "body": parser_body + "This is not an attestation.\n"}
+    if parse_role_comment(retracted, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted a trailing retraction")
     negated = {**parser_comment, "body": parser_body.replace("**accepted**", "**not accepted**")}
     if parse_role_comment(negated, parser_head, parser_fingerprint) is not None:
         failures.append("review parser accepted a negated verdict")
