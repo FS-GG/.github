@@ -92,10 +92,19 @@ attestations are [architecture](https://github.com/FS-GG/.github/pull/3002#issue
 repair-phase confirmation is [revision 3](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
 The subsequent ratification projection is guarded by a structural SDD check: Q0 accepts only exact JSON
 analysis reporting `outcome: noChange`, `coherent: true`, `implementationReady`, zero stale/generated-view
-findings, and no diagnostics, followed by a clean tracked-tree assertion. The
-[revision-4 repair record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809) closes the
-former substring-only check and adds an incoherent-readiness inversion; fresh live role attestations are
-still required for every changed head and fingerprint.
+findings, and no diagnostics, followed by a clean tracked-tree assertion. The immutable
+[revision-4 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809)
+diagnosed the stale, substring-only verifier at head `b0b63507f115f0de9e488c9f68dcde22b6992c67` and
+authorized repair; it is not repair closure. The actual implementation is
+[0ced1901](https://github.com/FS-GG/.github/commit/0ced1901) plus the sealed evidence commit
+[c9e82ef](https://github.com/FS-GG/.github/commit/c9e82ef), and the independent
+[c9 repaired-head architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419650173)
+explicitly verifies that the stale-SDD defect is fixed while requiring the provenance wording correction.
+The later [revision-5 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419655595)
+diagnoses and authorizes correction of that provenance contradiction; the independent
+[cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419636584)
+corroborates it. Neither record is a future acceptance claim, and fresh live role attestations remain
+mandatory for every changed head and fingerprint.
 
 ## Consequences
 

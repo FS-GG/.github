@@ -314,9 +314,18 @@ model checking. F# tests remain required implementation evidence and enter corre
   [repair-phase confirmation](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
   Ratification evidence additionally requires structural SDD analysis with exact `noChange`,
   `coherent: true`, `implementationReady`, zero stale/generated-view findings, no diagnostics, and a clean
-  tracked tree after all gates. The [revision-4 repair](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809)
-  adds an incoherent-readiness mutation so a readiness string inside a stale or mutating projection cannot
-  satisfy Q0; every changed head/fingerprint still requires fresh live role attestations.
+  tracked tree after all gates. The immutable
+  [revision-4 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809)
+  diagnoses the stale substring-only verifier at old head `b0b63507f115f0de9e488c9f68dcde22b6992c67`
+  and authorizes repair; it does not close the finding. Commits
+  [0ced1901](https://github.com/FS-GG/.github/commit/0ced1901) and
+  [c9e82ef](https://github.com/FS-GG/.github/commit/c9e82ef) implement and seal the fix, while the independent
+  [c9 architecture narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419650173)
+  verifies that the stale-SDD defect is fixed and separately requires this provenance correction. The
+  [revision-5 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419655595)
+  and [cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419636584)
+  diagnose and authorize correction of the provenance contradiction; they make no future acceptance claim.
+  Every changed head/fingerprint still requires fresh live role attestations.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 
