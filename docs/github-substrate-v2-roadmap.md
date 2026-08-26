@@ -304,6 +304,11 @@ model checking. F# tests remain required implementation evidence and enter corre
 **Depends on:** GS2-00
 **Exit:** independently buildable empty product and executable qualification skeleton
 
+**Producer route:** ADR-0077's successor backend is implemented through
+[Q1–Q3 of the Quint-first migration sequence](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md#7-prepared-feature-sequence).
+`GS2-01.4` consumes that route's published artifact; the bootstrap worker must not recreate its extractor,
+profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`.
+
 - [ ] **GS2-01.1 — Provision the repository.** Create the repository with least-privilege teams, branch
   ruleset, signed/immutable tag policy, secret scanning, dependency graph, Dependabot alerts, Actions
   policy, auto-merge policy, and default branch settings. Record the exact settings receipt.
@@ -341,6 +346,22 @@ model checking. F# tests remain required implementation evidence and enter corre
 **Owner:** `FS.GG.Coordination`
 **Depends on:** GS2-01, including the final Quint-capable GS2-01.4 pin
 **Exit gates:** Q1 and the pure portion of Q2
+
+**Implementation references, in authority order:**
+
+1. [ADR-0077](adr/0077-quint-first-typed-specification-authority.md) owns the authoring and authority
+   decision, including the mandatory post-Q1 amendment.
+2. The [Quint-first migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md)
+   owns literate extraction, the FS-GG Quint profile, compiled-contract boundary, ITF replay ownership, and
+   producer-before-consumer sequence; its Q5 is the direct GS2 handoff.
+3. The [Quint experiment](quint/README.md) and
+   [assessment](quint/reports/assessment.md) are the executable baseline and recorded limitations, not
+   production authority.
+4. The [governing cutover design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md)
+   owns the coordination domain, proof obligations, authority boundaries, and cutover semantics that the
+   Quint protocol must express.
+5. Quint's [literate-specification documentation](https://quint.sh/docs/literate) defines the upstream
+   workflow being qualified; only the pinned profile/toolchain accepted by ADR-0077 may enter CI.
 
 - [ ] **GS2-02.1 — Author the canonical literate Quint protocol.** Keep reviewer-oriented Markdown prose
   beside deterministically extracted, named Quint blocks that specify subjects, authorities, codecs, commands,
