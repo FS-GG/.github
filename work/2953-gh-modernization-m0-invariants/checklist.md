@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2953-gh-modernization-m0-invariants/clarifications.md
 
 ## Source Snapshot
-- spec: work/2953-gh-modernization-m0-invariants/spec.md sha256:1c25010366f159e3e06c4dab973dc153ab242f128b9031f6dfdc9c8ac707d49f schemaVersion:1
-- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:fadfc55f0c7b5fa69e282a47db3d0c0fdc47253b8f532740540d12ad9ba7692c schemaVersion:1
+- spec: work/2953-gh-modernization-m0-invariants/spec.md sha256:01ce360adedf1dc17d32cb8b894977342a0e013f9ab8fe589003988403c18c02 schemaVersion:1
+- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

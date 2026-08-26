@@ -1,9 +1,9 @@
 # FS.GG.Coordination administrator settings report
 
-**Observed:** 2026-08-26T01:42:00+02:00  
-**Repository:** [`FS-GG/FS.GG.Coordination`](https://github.com/FS-GG/FS.GG.Coordination)  
-**Program:** [GitHub Substrate v2 roadmap](github-substrate-v2-roadmap.md)  
-**Boundary:** [ADR-0078](adr/0078-github-substrate-v2-new-only-coordination-authority.md)  
+**Observed:** 2026-08-26T01:42:00+02:00
+**Repository:** [`FS-GG/FS.GG.Coordination`](https://github.com/FS-GG/FS.GG.Coordination)
+**Program:** [GitHub Substrate v2 roadmap](github-substrate-v2-roadmap.md)
+**Boundary:** [ADR-0078](adr/0078-github-substrate-v2-new-only-coordination-authority.md)
 **Ratification PR:** [FS-GG/.github#3002](https://github.com/FS-GG/.github/pull/3002)
 
 This is the administrator/operator projection of the complete settings work required by GS2-01,

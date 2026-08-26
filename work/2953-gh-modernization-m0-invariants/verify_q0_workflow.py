@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 from pathlib import Path
 
+REQUIRED_WORKFLOW_SHA256 = "e87e3c6435a1f174b42b0e43b43e217bce4140a3bcc7f1be4b77e839496aed43"
 
 REQUIRED_STEP = """      - name: Require exact live role-bound acceptance
         run: >-
@@ -39,6 +41,8 @@ RETIRED_GATES = (
 
 def errors(text: str) -> list[str]:
     findings: list[str] = []
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != REQUIRED_WORKFLOW_SHA256:
+        findings.append("the complete Q0 workflow bytes differ from the independently pinned authority")
     if text.count(REQUIRED_STEP) != 1:
         findings.append("the exact unconditional live-acceptance step must occur once")
     trigger_match = re.search(r"(?ms)^  pull_request:\n(?P<pull>.*?)^  push:\n(?P<push>.*?)^  workflow_dispatch:\s*$", text)
@@ -103,6 +107,11 @@ def self_test(text: str) -> list[str]:
             "defaults:\n  run:\n    shell: bash {0} || true\n\npermissions:\n",
             1,
         ),
+        "workflow-default-shell-mask-separated-colon": text.replace(
+            "permissions:\n",
+            "defaults :\n  run:\n    shell: bash {0} || true\n\npermissions:\n",
+            1,
+        ),
         "trailing-conditional-authority-job": text.rstrip("\n")
         + "\n      - name: Harmless trailing step\n        run: echo reached\n    if: ${{ false }}\n",
         "trailing-authority-needs": text.rstrip("\n") + "\n    needs: prerequisite\n",
@@ -147,7 +156,7 @@ def main() -> int:
         for finding in findings:
             print(f"Q0-WORKFLOW-RED: {finding}")
         return 1
-    print("Q0-WORKFLOW-GREEN: live acceptance is independently reachable; 17/17 inversions rejected")
+    print("Q0-WORKFLOW-GREEN: live acceptance is independently reachable; 18/18 inversions rejected")
     return 0
 
 

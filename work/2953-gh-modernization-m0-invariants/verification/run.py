@@ -8,6 +8,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -36,6 +37,31 @@ def run(case: Case) -> tuple[bool, str, float]:
     return ok, completed.stdout, elapsed
 
 
+def whitespace_mutation_self_test() -> int:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory)
+        def git(*args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["git", *args], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if git("init", "-q").returncode != 0:
+            return 1
+        git("config", "user.name", "Q0 mutation")
+        git("config", "user.email", "q0-mutation@example.invalid")
+        subject = repo / "subject.md"
+        subject.write_text("clean\n", encoding="utf-8")
+        git("add", "subject.md")
+        if git("commit", "-qm", "baseline").returncode != 0:
+            return 1
+        subject.write_text("committed trailing whitespace  \n", encoding="utf-8")
+        git("add", "subject.md")
+        if git("commit", "-qm", "mutation").returncode != 0:
+            return 1
+        measured = git("diff", "--check", "HEAD~1...HEAD")
+        if measured.returncode == 0 or "trailing whitespace" not in measured.stdout:
+            return 1
+        print("committed whitespace mutation rejected by exact commit range")
+        return 0
+
+
 def main() -> int:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     validator_spec = importlib.util.spec_from_file_location("q0_validator", WORK / "validate_q0.py")
@@ -52,7 +78,8 @@ def main() -> int:
         Case("q0-review-boundary", [sys.executable, str(WORK / "validate_q0.py"), str(EVIDENCE), "--acceptance"], expected=acceptance_expected, contains=acceptance_text),
         Case("adr-corpus-coherence", [sys.executable, "scripts/check-adr-coherence.py"], contains="adr-coherence: OK"),
         Case("q0-json-parse", [sys.executable, "-m", "json.tool", str(EVIDENCE)]),
-        Case("source-diff-whitespace", ["git", "diff", "--check"]),
+        Case("source-diff-whitespace", ["git", "diff", "--check", "origin/main...HEAD"]),
+        Case("source-diff-whitespace-mutation", [sys.executable, str(Path(__file__)), "--whitespace-mutation-self-test"], contains="committed whitespace mutation rejected"),
         Case("sdd-implementation-ready", ["fsgg-sdd", "analyze", "--work", "2953-gh-modernization-m0-invariants", "--json"], contains='"readiness": "implementationReady"'),
     ]
 
@@ -81,4 +108,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--whitespace-mutation-self-test" in sys.argv:
+        raise SystemExit(whitespace_mutation_self_test())
     raise SystemExit(main())

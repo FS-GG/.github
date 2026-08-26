@@ -77,6 +77,10 @@ package introduced or retained for cutover has a named deletion unit and an obse
 The Q0 threat model defines the protected assets, actors, five trust boundaries, abuse cases, controls,
 residual risks, security acceptance, and pre/post-`OpenV2` incident posture. Its exact bytes and the
 authority/mutation/corpus/deletion subject are bound into one independently recomputed review fingerprint.
+Every Q0 role review uses two unedited repair-PR comments: an earlier distinct narrative from the
+authorized reviewer, followed by an exact current-head attestation whose sole final `Evidence` line cites
+that narrative. Live discovery requires the same GitHub author and allowed association, strict temporal
+ordering, and rejects missing, self, later, edited, wrong-author, outsider, wrong-PR, or trailing records.
 
 ## Consequences
 

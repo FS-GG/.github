@@ -76,20 +76,28 @@ def run_bytes(command: list[str]) -> bytes:
     return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
 
 
-def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str) -> dict[str, str] | None:
-    """Parse exact positive fields; negated prose and arbitrary substrings have no authority."""
-    if comment.get("created_at") != comment.get("updated_at"):
-        return None
+def authorized_review_author(comment: dict[str, Any]) -> tuple[str, str] | None:
     author = comment.get("user")
+    association = comment.get("author_association")
     if (
         not isinstance(author, dict)
         or author.get("login") not in AUTHORIZED_REVIEW_AUTHORS
         or author.get("type") != "User"
-        or comment.get("author_association") not in AUTHORIZED_REVIEW_ASSOCIATIONS
+        or association not in AUTHORIZED_REVIEW_ASSOCIATIONS
     ):
         return None
+    return str(author["login"]), str(association)
+
+
+def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str) -> dict[str, Any] | None:
+    """Parse exact positive fields; negated prose and arbitrary substrings have no authority."""
+    if comment.get("created_at") != comment.get("updated_at"):
+        return None
+    author = authorized_review_author(comment)
+    if author is None:
+        return None
     body = str(comment.get("body", ""))
-    parsed: dict[str, str] | None = None
+    parsed: dict[str, Any] | None = None
     for role, heading in REVIEW_ROLE_TEXT.items():
         pattern = (
             rf"\A## Q0 {re.escape(heading)} role review\n\n"
@@ -97,13 +105,14 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
             rf"- Role: `{re.escape(role)}`\n"
             rf"- Verdict: \*\*accepted\*\*\n"
             rf"- Exact PR head: `{re.escape(live_head)}`\n"
-            rf"- Canonical Q0 fingerprint: `{re.escape(fingerprint)}`\n?\Z"
+            rf"- Canonical Q0 fingerprint: `{re.escape(fingerprint)}`\n"
+            rf"- Evidence: `(https://github\.com/FS-GG/\.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-[1-9][0-9]*)`\n?\Z"
         )
         match = re.match(pattern, body)
         if match:
             parsed = {
                 "reviewer": match.group(1), "role": role, "verdict": "accepted",
-                "headSha": live_head, "fingerprint": fingerprint,
+                "headSha": live_head, "fingerprint": fingerprint, "evidenceRef": match.group(2),
             }
             break
     if parsed is None:
@@ -112,8 +121,33 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
     expected_url = rf"https://github\.com/FS-GG/\.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-[1-9][0-9]*"
     if not re.fullmatch(expected_url, url):
         return None
-    parsed["evidenceRef"] = url
+    parsed["attestationRef"] = url
+    parsed["authorLogin"] = author[0]
+    parsed["authorAssociation"] = author[1]
+    parsed["attestationCreatedAt"] = str(comment.get("created_at", ""))
     return parsed
+
+
+def resolve_role_evidence(review: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, str] | None:
+    evidence_ref = str(review["evidenceRef"])
+    attestation_ref = str(review["attestationRef"])
+    if evidence_ref == attestation_ref:
+        return None
+    evidence = next((comment for comment in comments if comment.get("html_url") == evidence_ref), None)
+    if evidence is None or evidence.get("created_at") != evidence.get("updated_at"):
+        return None
+    evidence_author = authorized_review_author(evidence)
+    if evidence_author is None or evidence_author[0] != review["authorLogin"]:
+        return None
+    evidence_id = int(evidence_ref.rsplit("-", 1)[1])
+    attestation_id = int(attestation_ref.rsplit("-", 1)[1])
+    evidence_created = str(evidence.get("created_at", ""))
+    if evidence_id >= attestation_id or not evidence_created or evidence_created >= review["attestationCreatedAt"]:
+        return None
+    narrative = str(evidence.get("body", "")).strip()
+    if not narrative or re.match(r"\A## Q0 (?:architecture|security|operations|cross-repository) role review\n", narrative):
+        return None
+    return {key: str(value) for key, value in review.items() if key not in {"authorLogin", "authorAssociation", "attestationCreatedAt"}}
 
 
 def discover_live_reviews(fingerprint: str) -> tuple[list[dict[str, str]], list[str]]:
@@ -127,7 +161,12 @@ def discover_live_reviews(fingerprint: str) -> tuple[list[dict[str, str]], list[
     except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as error:
         return [], [f"reviews: complete live PR/comment ledger is unreadable: {error}"]
     comments = [comment for page in pages for comment in page]
-    parsed = [review for comment in comments if (review := parse_role_comment(comment, live_head, fingerprint)) is not None]
+    parsed = [
+        resolved
+        for comment in comments
+        if (review := parse_role_comment(comment, live_head, fingerprint)) is not None
+        if (resolved := resolve_role_evidence(review, comments)) is not None
+    ]
     by_role: dict[str, list[dict[str, str]]] = {
         role: [review for review in parsed if review["role"] == role] for role in REQUIRED_REVIEW_ROLES
     }
@@ -136,7 +175,9 @@ def discover_live_reviews(fingerprint: str) -> tuple[list[dict[str, str]], list[
     if len({row["reviewer"] for row in winners}) != len(winners):
         errors.append("reviews: role attestations do not use distinct independent reviewer identities")
     if len({row["evidenceRef"] for row in winners}) != len(winners):
-        errors.append("reviews: role attestations do not use distinct live comments")
+        errors.append("reviews: role attestations do not use distinct narrative evidence comments")
+    if len({row["attestationRef"] for row in winners}) != len(winners):
+        errors.append("reviews: role attestations do not use distinct live attestation comments")
     return winners, errors
 
 
@@ -469,17 +510,54 @@ def self_test(data: dict[str, Any]) -> list[str]:
         "- Verdict: **accepted**\n"
         f"- Exact PR head: `{parser_head}`\n"
         f"- Canonical Q0 fingerprint: `{parser_fingerprint}`\n"
+        f"- Evidence: `https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-1`\n"
     )
+    narrative_comment = {
+        "body": "Independent security analysis and reproduced verification evidence.\n",
+        "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-1",
+        "created_at": "2026-08-26T00:00:00Z", "updated_at": "2026-08-26T00:00:00Z",
+        "user": {"login": "EHotwagner", "type": "User"}, "author_association": "MEMBER",
+    }
     parser_comment = {
         "body": parser_body,
-        "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-1",
-        "created_at": "2026-08-26T00:00:00Z",
-        "updated_at": "2026-08-26T00:00:00Z",
+        "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-2",
+        "created_at": "2026-08-26T00:01:00Z", "updated_at": "2026-08-26T00:01:00Z",
         "user": {"login": "EHotwagner", "type": "User"},
         "author_association": "MEMBER",
     }
-    if parse_role_comment(parser_comment, parser_head, parser_fingerprint) is None:
+    parsed_review = parse_role_comment(parser_comment, parser_head, parser_fingerprint)
+    if parsed_review is None or resolve_role_evidence(parsed_review, [narrative_comment, parser_comment]) is None:
         failures.append("review parser rejected an exact accepted attestation")
+    missing_line = {**parser_comment, "body": parser_body.rsplit("- Evidence:", 1)[0]}
+    if parse_role_comment(missing_line, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted a missing evidence line")
+    self_reference = {**parser_comment, "body": parser_body.replace("issuecomment-1", "issuecomment-2")}
+    self_review = parse_role_comment(self_reference, parser_head, parser_fingerprint)
+    if self_review is not None and resolve_role_evidence(self_review, [narrative_comment, self_reference]) is not None:
+        failures.append("review resolver accepted a self reference")
+    later_narrative = {**narrative_comment,
+        "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-3",
+        "created_at": "2026-08-26T00:02:00Z", "updated_at": "2026-08-26T00:02:00Z"}
+    later_attestation = {**parser_comment, "body": parser_body.replace("issuecomment-1", "issuecomment-3")}
+    later_review = parse_role_comment(later_attestation, parser_head, parser_fingerprint)
+    if later_review is not None and resolve_role_evidence(later_review, [later_attestation, later_narrative]) is not None:
+        failures.append("review resolver accepted later narrative evidence")
+    missing_reference = {**parser_comment, "body": parser_body.replace("issuecomment-1", "issuecomment-99")}
+    missing_review = parse_role_comment(missing_reference, parser_head, parser_fingerprint)
+    if missing_review is not None and resolve_role_evidence(missing_review, [missing_reference]) is not None:
+        failures.append("review resolver accepted a missing narrative reference")
+    edited_narrative = {**narrative_comment, "updated_at": "2026-08-26T00:00:30Z"}
+    if parsed_review is not None and resolve_role_evidence(parsed_review, [edited_narrative, parser_comment]) is not None:
+        failures.append("review resolver accepted edited narrative evidence")
+    wrong_author_narrative = {**narrative_comment, "user": {"login": "public-outsider", "type": "User"}}
+    if parsed_review is not None and resolve_role_evidence(parsed_review, [wrong_author_narrative, parser_comment]) is not None:
+        failures.append("review resolver accepted wrong-author narrative evidence")
+    wrong_association_narrative = {**narrative_comment, "author_association": "NONE"}
+    if parsed_review is not None and resolve_role_evidence(parsed_review, [wrong_association_narrative, parser_comment]) is not None:
+        failures.append("review resolver accepted outsider narrative evidence")
+    wrong_pr_evidence = {**parser_comment, "body": parser_body.replace("pull/3002", "pull/3001")}
+    if parse_role_comment(wrong_pr_evidence, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted wrong-PR narrative evidence")
     exhausted_pr = {
         **parser_comment,
         "html_url": "https://github.com/FS-GG/.github/pull/3001#issuecomment-1",
@@ -501,7 +579,7 @@ def self_test(data: dict[str, Any]) -> list[str]:
         failures.append("review parser accepted a negated verdict")
     if parse_role_comment(parser_comment, "0" * 40, parser_fingerprint) is not None:
         failures.append("review parser accepted an arbitrary non-current head")
-    edited = {**parser_comment, "updated_at": "2026-08-26T00:01:00Z"}
+    edited = {**parser_comment, "updated_at": "2026-08-26T00:02:00Z"}
     if parse_role_comment(edited, parser_head, parser_fingerprint) is not None:
         failures.append("review parser accepted an edited attestation")
     fenced = {**parser_comment, "body": "```markdown\n" + parser_body + "```\n"}

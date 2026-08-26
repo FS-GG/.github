@@ -730,6 +730,10 @@ cross-repository receiver boundaries, their abuse cases, mitigations, incident p
 risk. The Q0 validator independently recomputes its byte digest and the canonical non-circular review
 fingerprint; every architecture, security, operations, and cross-repository verdict must bind that exact
 fingerprint.
+Each role first posts a distinct unedited narrative comment, then an exact unedited current-head
+attestation whose sole final `Evidence` line cites that earlier repair-PR comment. Live discovery requires
+the same authorized GitHub author and allowed association, strict temporal ordering, and rejects missing,
+self, later, edited, wrong-author, outsider, wrong-PR, or trailing records.
 
 The typed model may generate exhaustive structural and transition cases, but at least one black-box oracle
 for every safety-critical invariant must be maintained outside that generator. Otherwise a defect in the

@@ -4,8 +4,8 @@
   "observedAt": "2026-08-26T00:00:00+02:00",
   "governingArtifacts": [
     {"path":"docs/adr/0077-quint-first-typed-specification-authority.md","sha256":"f256b612fef047a95f9c36c762bb1cafc30364c9bbed4a883d9f457f425175a3"},
-    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"97618b4a6832eb86eafcd757d2a6d148b2bd38212f34d465cabdcaf2fdfb451c"},
-    {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"1e27be684a8baee1d18fb77e79de3856aa39f6d1c3aa6cf82075bc8279373b14"},
+    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"b309da65755808157d6dd1e49788b58f5248828ced2ac2d8678169324b96eedf"},
+    {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"149559d18ba62d942b56b065c84faf44b7adfb6d1b904922d3033248bc353a1d"},
     {"path":"docs/github-substrate-v2-roadmap.md","sha256":"caa005cd4422a1dcea1c162afe8d3125c0b92458ec1100690a2ffb6dacd40f10"}
   ],
   "corpusArtifact": {"path":"work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json","sha256":"5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"},
@@ -106,9 +106,9 @@
   ],
   "runtimeDecision": {"posture":"scheduled-audit-authoritative","hostedBoundary":"rejected-for-cutover","decisionRecordedAt":"2026-08-26T02:58:00+02:00","decisionAuthority":"delegated-maintainer-q0","decisionEvidence":["work/2953-gh-modernization-m0-invariants/clarifications.md#dec-003","docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#64-event-driven-reconciliation-with-audit-repair","docs/github-substrate-v2-roadmap.md#gs2-00--ratify-boundaries-before-any-build"],"owner":"FS-GG/.github protected audit workflows until v2 audit adoption","availability":"fail closed on missed/unreadable/incomplete run","secrets":"no new hosted secret boundary","ingress":"no production webhook ingress required","observability":"Actions runs plus typed audit receipts","upgrades":"immutable workflow/tool pins","incidentResponse":"disable mutation, retain reads, repair from complete audit","retention":"git indexes plus immutable artifacts/releases","cost":"measure API budget and cadence before GS2-10","disasterRecovery":"rerun complete audit from immutable candidate; no cursor-only recovery"},
   "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","bootstrapRepository":{"ref":"FS-GG/FS.GG.Coordination","visibility":"PUBLIC","defaultBranch":"main","initialHead":"ce22e4d10f2efae7aa09018521487b598c082350","state":"inert"},"blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"childBoundaryCitations":["FS-GG/.github#2954","FS-GG/.github#2955","FS-GG/.github#2956","FS-GG/.github#2957","FS-GG/.github#2958","FS-GG/.github#2959","FS-GG/.github#2960","FS-GG/.github#2961","FS-GG/.github#2962","FS-GG/.github#2963","FS-GG/.github#2964","FS-GG/.github#2965"],"pendingBoardWrites":0},
-  "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"c42700acc4d0ccc21999c6ceb8c07a6f4caa2dec7d07637adad9018b2bd4ce81","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
-  "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"0e6a2b7413fe94fba62f675463134234666dde7b351e0dd04e07b43b6742cb2c"},
-  "reviewFingerprint": "5eab3ceff0fb5693a3a30a83f8c6d87e895fadb310e30a630655b2511df0066b",
+  "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"38c6acad9435e0c5b0f3e4da57374a912c1d4de63592688d109eae441e8a6f38","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
+  "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"},
+  "reviewFingerprint": "febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668",
   "reviewAuthority":"live-unedited-current-head-pr-comments",
   "reviewsRequired":["architecture","security","operations","crossRepository"],
   "reviews":[]
