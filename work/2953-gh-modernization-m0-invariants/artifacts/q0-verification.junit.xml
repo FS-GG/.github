@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="7" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.816902"><testcase name="q0-candidate-and-mutation-controls" time="6.651273"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="1.595598"><system-out>Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
+<testsuite name="GS2-00-Q0" tests="7" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.884972"><testcase name="q0-candidate-and-mutation-controls" time="6.634338"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.619388"><system-out>Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.116342"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.032651"><system-out>{
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.114926"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.031998"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -16,7 +16,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
         },
         {
             "path": "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
-            "sha256": "b309da65755808157d6dd1e49788b58f5248828ced2ac2d8678169324b96eedf"
+            "sha256": "9dbc542214215549db54a86b574422bd68dc7898db6e7be37848e213dbf13237"
         },
         {
             "path": "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
@@ -24,7 +24,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
         },
         {
             "path": "docs/github-substrate-v2-roadmap.md",
-            "sha256": "caa005cd4422a1dcea1c162afe8d3125c0b92458ec1100690a2ffb6dacd40f10"
+            "sha256": "8fa8b4627edeb77586c0d2802e669e6f2b625fd250c14e698e560a3adcd15596"
         }
     ],
     "corpusArtifact": {
@@ -947,7 +947,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
         "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
         "sha256": "6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"
     },
-    "reviewFingerprint": "febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668",
+    "reviewFingerprint": "71a2eff7437682b545a7f40ad52c0e4e6742655af6bdd1c12c4639460cb98d37",
     "reviewAuthority": "live-unedited-current-head-pr-comments",
     "reviewsRequired": [
         "architecture",
@@ -957,8 +957,8 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.005861"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.071072"><system-out>committed whitespace mutation rejected by exact commit range
-</system-out></testcase><testcase name="sdd-implementation-ready" time="0.344105"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.005835"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.071281"><system-out>committed whitespace mutation rejected by exact commit range
+</system-out></testcase><testcase name="sdd-implementation-ready" time="0.407205"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
@@ -974,9 +974,19 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
     "outputFormat": "json",
     "dryRun": false
   },
-  "outcome": "noChange",
-  "coherent": true,
+  "outcome": "succeeded",
+  "coherent": false,
   "changedArtifacts": [
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants",
+      "kind": "directory",
+      "ownership": "sdd",
+      "operation": "noChange",
+      "beforeDigest": null,
+      "afterDigest": null,
+      "safeWriteDecision": "preserveExisting",
+      "diagnosticIds": []
+    },
     {
       "path": "readiness/2953-gh-modernization-m0-invariants",
       "kind": "directory",
@@ -991,14 +1001,30 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
       "path": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
       "kind": "generatedView",
       "ownership": "generated",
-      "operation": "noChange",
+      "operation": "update",
       "beforeDigest": {
         "algorithm": "sha256",
         "value": "e84b8d81b33f49fc9ea0d5faa6e8b75a92f9d7d88719e9b5e849beea0cb122fe"
       },
       "afterDigest": {
         "algorithm": "sha256",
-        "value": "e84b8d81b33f49fc9ea0d5faa6e8b75a92f9d7d88719e9b5e849beea0cb122fe"
+        "value": "6df5af9883229e45b2a802bf2715310d0ea2a7d1eaca03071ebef7ab26f6d8c7"
+      },
+      "safeWriteDecision": "refreshGeneratedView",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+      "kind": "generatedView",
+      "ownership": "generated",
+      "operation": "noChange",
+      "beforeDigest": {
+        "algorithm": "sha256",
+        "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
+      },
+      "afterDigest": {
+        "algorithm": "sha256",
+        "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
       },
       "safeWriteDecision": "preserveExisting",
       "diagnosticIds": []
@@ -1174,9 +1200,9 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
     "dependencyCount": 20,
     "requiredSkillCount": 6,
     "requiredEvidenceCount": 29,
-    "pendingCount": 29,
+    "pendingCount": 0,
     "inProgressCount": 0,
-    "doneCount": 0,
+    "doneCount": 29,
     "skippedCount": 0,
     "staleCount": 0,
     "acceptedDeferralCount": 0,
@@ -1188,7 +1214,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
     "stage": "analyze",
     "status": "implementationReady",
     "analysisPath": "readiness/2953-gh-modernization-m0-invariants/analysis.json",
-    "sourceCount": 8,
+    "sourceCount": 9,
     "sourceRelationshipCount": 74,
     "readyFindingCount": 74,
     "advisoryCount": 0,
@@ -1250,6 +1276,15 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
           "schemaStatus": "current"
         },
         {
+          "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
           "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
           "digest": {
             "algorithm": "sha256",
@@ -1289,7 +1324,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "4d7c6cc6872931967a476422d1a76691be1c2f1342adacc58fb62a914213386f"
+            "value": "7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1308,6 +1343,33 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
       },
       "sources": [
         {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
           "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
           "digest": {
             "algorithm": "sha256",
@@ -1321,6 +1383,15 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
           "digest": {
             "algorithm": "sha256",
             "value": "85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2"
+          },
+          "schemaVersion": 1,
+          "schemaStatus": "current"
+        },
+        {
+          "path": "work/2953-gh-modernization-m0-invariants/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "46557050a83eae3a3ea329f6fe3081790e5a2b856684f10306f95ebf2905407c"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1347,13 +1418,13 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "4d7c6cc6872931967a476422d1a76691be1c2f1342adacc58fb62a914213386f"
+            "value": "7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
         }
       ],
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
@@ -1397,8 +1468,8 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
     "isLifecycleStage": true,
     "currentOrdinal": 7,
     "totalStages": 10,
-    "outcome": "noChange",
-    "nextCommand": "evidence",
+    "outcome": "succeeded",
+    "nextCommand": null,
     "stages": [
       {
         "command": "charter",
@@ -1438,7 +1509,7 @@ Q0-RED: reviews[security]: expected exactly one unedited accepted current-head a
       {
         "command": "evidence",
         "ordinal": 8,
-        "state": "next"
+        "state": "done"
       },
       {
         "command": "verify",

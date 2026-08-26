@@ -1,6 +1,6 @@
 # ADR-0078: GitHub Substrate v2 is a new-only coordination authority
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-26
 - **Decision owners:** FS-GG organization maintainers and receiver maintainers
 - **Affects:** FS-GG/.github, FS-GG/FS.GG.SDD, FS-GG/FS.GG.Rendering, FS-GG/FS.GG.Governance, FS-GG/FS.GG.Templates, FS-GG/FS.GG.Game, FS-GG/FS.GG.Audio, FS-GG/FS.GG.Net, and the new FS-GG/FS.GG.Coordination component
@@ -81,6 +81,15 @@ Every Q0 role review uses two unedited repair-PR comments: an earlier distinct n
 authorized reviewer, followed by an exact current-head attestation whose sole final `Evidence` line cites
 that narrative. Live discovery requires the same GitHub author and allowed association, strict temporal
 ordering, and rejects missing, self, later, edited, wrong-author, outsider, wrong-PR, or trailing records.
+
+Q0 was accepted on 2026-08-26 against repair PR #3002 head
+`d07cc9daeef46f6f034e2e4cf23dcf3deeea6da0` and canonical fingerprint
+`febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668`. The exact unedited role
+attestations are [architecture](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419411396),
+[security](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419418539),
+[operations](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419407467), and
+[cross-repository](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419406435). The final bounded
+repair-phase confirmation is [revision 3](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
 
 ## Consequences
 

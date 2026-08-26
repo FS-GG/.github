@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2781c5c6e123078a2375d4d30735c5097587932c2c57ef51f3a17d1da6c9a008"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "4d7c6cc6872931967a476422d1a76691be1c2f1342adacc58fb62a914213386f"
+        "value": "7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -846,7 +856,7 @@
     {
       "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

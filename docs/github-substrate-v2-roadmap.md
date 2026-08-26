@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | Ongoing renovation; design and execution spine filed, implementation not started |
+| Status | Ongoing renovation; GS2-00/Q0 accepted, later implementation units not started |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -260,7 +260,7 @@ model checking. F# tests remain required implementation evidence and enter corre
 **Owner:** `.github`
 **Exit gate:** Q0
 
-- [ ] **GS2-00.0 — Accept the program handoff.** Finish or explicitly disposition Typed SDD P4
+- [x] **GS2-00.0 — Accept the program handoff.** Finish or explicitly disposition Typed SDD P4
   release/tag/feed/registry residue (including `.github#2968` while it remains open); amend or resolve
   `.github#2932` as superseded and map each retained clause to this roadmap; record whether P5 is not
   started, readiness-only, finishing before `GS2-10`, or deferred until `OperatingV2`; classify every
@@ -270,30 +270,30 @@ model checking. F# tests remain required implementation evidence and enter corre
   work; the superseded edge itself is not a v2 prerequisite.
   Repair the modernization Epic's task-line acceptance and place dependencies for `.github#2964` and
   `.github#2965` in the authoritative Project `Blocked by` field rather than inert issue-body lines.
-- [ ] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
+- [x] **GS2-00.1 — Resolve review questions.** Review every authority assignment, retained custom
   mechanism, GitHub plan/API limitation, permission boundary, and rollback claim in the governing design.
-- [ ] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
+- [x] **GS2-00.2 — Author the org ADR.** Record the dedicated repository, published-kernel dependency,
   new-only writer policy, independent qualification lane, protected Git epoch ledger, native/custom
   authority table, and `OpenV2` boundary. Keep status Proposed until independent review is complete.
-- [ ] **GS2-00.3 — Complete the v1 authority census.** Enumerate every issue/body/Project/registry/comment,
+- [x] **GS2-00.3 — Complete the v1 authority census.** Enumerate every issue/body/Project/registry/comment,
   workflow, command, JSON contract, environment variable, file, package, schedule, and setting that can
   affect a coordination decision.
-- [ ] **GS2-00.4 — Complete the mutation census.** Name every always-writing and conditionally writing
+- [x] **GS2-00.4 — Complete the mutation census.** Name every always-writing and conditionally writing
   command, workflow, App route, repair script, release route, and administrative path; bind each to its
   current precondition and eventual v2 disposition.
-- [ ] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
+- [x] **GS2-00.5 — Freeze the defect and behavior corpus.** Content-address representative claim,
   touch-set, dependency, hierarchy, intake, review, delivery, merge, release, pagination, rate-limit,
   partial-write, stale-read, and self-hosting incidents. Import `.github#2932`'s reproducible 72-hour
   churn, mutation-entry, protocol-string, replay, omission, and misclassification baselines without
   importing its superseded v1 implementation plan.
-- [ ] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
+- [x] **GS2-00.6 — Freeze public compatibility surfaces.** Inventory CLI verbs/flags/exit codes, JSON and
   marker schemas, package IDs/versions, reusable workflow inputs/outputs/job IDs, required contexts, and
   receiver pins. Classify each `Preserve`, `Migrate`, `Seal`, or `Retire`.
-- [ ] **GS2-00.7 — Freeze the deletion ledger.** Every v1 source tree, parser, projection, field, schedule,
+- [x] **GS2-00.7 — Freeze the deletion ledger.** Every v1 source tree, parser, projection, field, schedule,
   workflow, exception, and package must have a later deletion unit and a test proving absence.
-- [ ] **GS2-00.8 — Accept Q0.** Architecture, security, operations, and cross-repository reviewers sign the
+- [x] **GS2-00.8 — Accept Q0.** Architecture, security, operations, and cross-repository reviewers sign the
   exact design/census fingerprints; unresolved material questions block `GS2-01`.
-- [ ] **GS2-00.9 — Decide runtime operations.** Select or reject a deployment boundary for the App/webhook
+- [x] **GS2-00.9 — Decide runtime operations.** Select or reject a deployment boundary for the App/webhook
   host, including ownership, availability target, secrets, ingress verification, logs/metrics, upgrades,
   incident response, data retention, cost, and disaster recovery. If no acceptable host is approved,
   scheduled audits remain authoritative and `.github#2961` is removed from the cutover critical path by an
@@ -303,6 +303,15 @@ model checking. F# tests remain required implementation evidence and enter corre
   target, secret/ingress design, observability, upgrade and incident process, retention policy, cost
   envelope, or disaster-recovery proof. Scheduled complete audits therefore remain authoritative; events
   are an optional post-`OperatingV2` accelerator and `.github#2961` is not on the critical path.
+
+  **Q0 acceptance evidence:** repair PR #3002 head
+  `d07cc9daeef46f6f034e2e4cf23dcf3deeea6da0`, fingerprint
+  `febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668`, exact role attestations
+  ([architecture](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419411396),
+  [security](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419418539),
+  [operations](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419407467),
+  [cross-repository](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419406435)), and the final
+  [repair-phase confirmation](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

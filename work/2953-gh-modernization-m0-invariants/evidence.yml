@@ -1,0 +1,821 @@
+schemaVersion: 1
+workId: 2953-gh-modernization-m0-invariants
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2953-gh-modernization-m0-invariants/spec.md
+sourceClarifications: work/2953-gh-modernization-m0-invariants/clarifications.md
+sourceChecklist: work/2953-gh-modernization-m0-invariants/checklist.md
+sourcePlan: work/2953-gh-modernization-m0-invariants/plan.md
+sourceTasks: work/2953-gh-modernization-m0-invariants/tasks.yml
+sourceAnalysis: readiness/2953-gh-modernization-m0-invariants/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2953-gh-modernization-m0-invariants/analysis.json
+    digest: 1b340a19c9217ac973a0059d671a2ddf38bb3bf8a3ffd061504b995be80a9e79
+    schemaVersion: 1
+  - label: checklist
+    path: work/2953-gh-modernization-m0-invariants/checklist.md
+    digest: 467a8baf63ec473d4e24093ace0a60564ab83a8be31449db3b2009ba0810eca2
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2953-gh-modernization-m0-invariants/clarifications.md
+    digest: 85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2
+    schemaVersion: 1
+  - label: plan
+    path: work/2953-gh-modernization-m0-invariants/plan.md
+    digest: 80e4c372c3264868f107d01706148963d26ad6801cd4199a798cf1d2f46882ce
+    schemaVersion: 1
+  - label: spec
+    path: work/2953-gh-modernization-m0-invariants/spec.md
+    digest: 01ce360adedf1dc17d32cb8b894977342a0e013f9ab8fe589003988403c18c02
+    schemaVersion: 1
+  - label: tasks
+    path: work/2953-gh-modernization-m0-invariants/tasks.yml
+    digest: 7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-007]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-008]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: work/2953-gh-modernization-m0-invariants/verification/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
+      digest: "sha256:c585db4c11ac54fa06bb5083e3f14c5f2ceb5fd39dffb309daefcf9a8fe51ff5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
