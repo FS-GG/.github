@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="7" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.884972"><testcase name="q0-candidate-and-mutation-controls" time="6.634338"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="1.619388"><system-out>Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
+<testsuite name="GS2-00-Q0" tests="7" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.946482"><testcase name="q0-candidate-and-mutation-controls" time="6.663453"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.645435"><system-out>Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.114926"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.031998"><system-out>{
+Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.118082"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.032392"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -957,8 +957,8 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.005835"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.071281"><system-out>committed whitespace mutation rejected by exact commit range
-</system-out></testcase><testcase name="sdd-implementation-ready" time="0.407205"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.006495"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.061978"><system-out>committed whitespace mutation rejected by exact commit range
+</system-out></testcase><testcase name="sdd-implementation-ready" time="0.418646"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
@@ -1004,11 +1004,11 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
       "operation": "update",
       "beforeDigest": {
         "algorithm": "sha256",
-        "value": "e84b8d81b33f49fc9ea0d5faa6e8b75a92f9d7d88719e9b5e849beea0cb122fe"
+        "value": "1b340a19c9217ac973a0059d671a2ddf38bb3bf8a3ffd061504b995be80a9e79"
       },
       "afterDigest": {
         "algorithm": "sha256",
-        "value": "6df5af9883229e45b2a802bf2715310d0ea2a7d1eaca03071ebef7ab26f6d8c7"
+        "value": "2253b2688e932e9d77cf50181cd20edf15dbb2dfd79727055e72e08d846c505c"
       },
       "safeWriteDecision": "refreshGeneratedView",
       "diagnosticIds": []
@@ -1020,11 +1020,11 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
       "operation": "noChange",
       "beforeDigest": {
         "algorithm": "sha256",
-        "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
+        "value": "f0d90337efa20cd19f298b9bc9a54ba11f89bcd26b5910b668a6e10e823b2c75"
       },
       "afterDigest": {
         "algorithm": "sha256",
-        "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
+        "value": "f0d90337efa20cd19f298b9bc9a54ba11f89bcd26b5910b668a6e10e823b2c75"
       },
       "safeWriteDecision": "preserveExisting",
       "diagnosticIds": []
@@ -1279,7 +1279,7 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
           "path": "readiness/2953-gh-modernization-m0-invariants/work-model.json",
           "digest": {
             "algorithm": "sha256",
-            "value": "56d2892bf9e541d032db9a06a326795f65ccf4996f27e175a557192e7c83ca1e"
+            "value": "f0d90337efa20cd19f298b9bc9a54ba11f89bcd26b5910b668a6e10e823b2c75"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1391,7 +1391,7 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
           "path": "work/2953-gh-modernization-m0-invariants/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "46557050a83eae3a3ea329f6fe3081790e5a2b856684f10306f95ebf2905407c"
+            "value": "3042b7bdd22db56aaff7d4358a653a272357db15fd14f39da0e82373a11b0e32"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1514,12 +1514,12 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
       {
         "command": "verify",
         "ordinal": 9,
-        "state": "pending"
+        "state": "done"
       },
       {
         "command": "ship",
         "ordinal": 10,
-        "state": "pending"
+        "state": "done"
       }
     ]
   }
