@@ -52,6 +52,8 @@ REVIEW_ROLE_TEXT = {
     "operations": "operations",
     "crossRepository": "cross-repository",
 }
+REVIEW_REPOSITORY = "FS-GG/.github"
+REVIEW_PULL_REQUEST = 3002
 # These hashes bind the independently adjudicated semantic baseline, not merely its
 # presence in the role-signed subject. Recomputing reviewFingerprint after weakening a
 # verdict or deletion obligation therefore remains red before another review is sought.
@@ -97,7 +99,8 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
     if parsed is None:
         return None
     url = str(comment.get("html_url", ""))
-    if not re.fullmatch(r"https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*", url):
+    expected_url = rf"https://github\.com/FS-GG/\.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-[1-9][0-9]*"
+    if not re.fullmatch(expected_url, url):
         return None
     parsed["evidenceRef"] = url
     return parsed
@@ -105,9 +108,12 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
 
 def discover_live_reviews(fingerprint: str) -> tuple[list[dict[str, str]], list[str]]:
     try:
-        pull = json.loads(run_bytes(["gh", "api", "repos/FS-GG/.github/pulls/3001"]))
+        pull = json.loads(run_bytes(["gh", "api", f"repos/{REVIEW_REPOSITORY}/pulls/{REVIEW_PULL_REQUEST}"]))
         live_head = str(pull["head"]["sha"])
-        pages = json.loads(run_bytes(["gh", "api", "--paginate", "--slurp", "repos/FS-GG/.github/issues/3001/comments?per_page=100"]))
+        pages = json.loads(run_bytes([
+            "gh", "api", "--paginate", "--slurp",
+            f"repos/{REVIEW_REPOSITORY}/issues/{REVIEW_PULL_REQUEST}/comments?per_page=100",
+        ]))
     except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as error:
         return [], [f"reviews: complete live PR/comment ledger is unreadable: {error}"]
     comments = [comment for page in pages for comment in page]
@@ -435,7 +441,7 @@ def self_test(data: dict[str, Any]) -> list[str]:
     nonexistent = copy.deepcopy(data)
     nonexistent["reviews"] = [
         {"role": role, "verdict": "accepted", "fingerprint": data["reviewFingerprint"],
-         "evidenceRef": f"https://github.com/FS-GG/.github/pull/3001#issuecomment-{index}",
+         "evidenceRef": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-{index}",
          "reviewer": f"invented-{index}", "headSha": "0" * 40}
         for index, role in enumerate(nonexistent["reviewsRequired"], start=1)
     ]
@@ -453,12 +459,18 @@ def self_test(data: dict[str, Any]) -> list[str]:
     )
     parser_comment = {
         "body": parser_body,
-        "html_url": "https://github.com/FS-GG/.github/pull/3001#issuecomment-1",
+        "html_url": f"https://github.com/FS-GG/.github/pull/{REVIEW_PULL_REQUEST}#issuecomment-1",
         "created_at": "2026-08-26T00:00:00Z",
         "updated_at": "2026-08-26T00:00:00Z",
     }
     if parse_role_comment(parser_comment, parser_head, parser_fingerprint) is None:
         failures.append("review parser rejected an exact accepted attestation")
+    exhausted_pr = {
+        **parser_comment,
+        "html_url": "https://github.com/FS-GG/.github/pull/3001#issuecomment-1",
+    }
+    if parse_role_comment(exhausted_pr, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted an attestation from the exhausted PR")
     negated = {**parser_comment, "body": parser_body.replace("**accepted**", "**not accepted**")}
     if parse_role_comment(negated, parser_head, parser_fingerprint) is not None:
         failures.append("review parser accepted a negated verdict")
