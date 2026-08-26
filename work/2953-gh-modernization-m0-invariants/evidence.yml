@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2953-gh-modernization-m0-invariants/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2953-gh-modernization-m0-invariants/analysis.json
-    digest: f29914d06f901020e74fc9a01e7a94020018df17d384b843b2e7afaa26b83296
+    digest: fa07d971e9b7cb695ffb5174339eeffac1b99417758de7197af4bd7dd702c4e9
     schemaVersion: 1
   - label: checklist
     path: work/2953-gh-modernization-m0-invariants/checklist.md
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -567,10 +567,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -594,10 +594,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -648,10 +648,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -675,10 +675,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -702,10 +702,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -729,10 +729,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -756,10 +756,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -783,10 +783,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -810,10 +810,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2953-gh-modernization-m0-invariants/artifacts/q0-verification.junit.xml
-      digest: "sha256:cdae11af566375a16c98f5458eb8202a0ec400e8da40f76922f8121925e78f0a"
+      digest: "sha256:55d0dc73bf9ca6e069003a2c32e8e33e4be2075279cef90b28d58ec5e65963f5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
