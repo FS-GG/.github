@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="13" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="11.392438"><testcase name="q0-candidate-and-mutation-controls" time="8.536435"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="1.926846"><system-out>Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
+<testsuite name="GS2-00-Q0" tests="13" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="15.624577"><testcase name="q0-candidate-and-mutation-controls" time="12.762668"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.924493"><system-out>Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.111226"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.031937"><system-out>{
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.115740"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.032671"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -16,15 +16,15 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
         },
         {
             "path": "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
-            "sha256": "21e650855ad4fb8520c88ac55b63b05c7e898792404fe833e0188e639c1875ec"
+            "sha256": "da3c5651b68053ab82e0a234d9463991834cb6be16d94d95c7f0bb14e5e3353a"
         },
         {
             "path": "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
-            "sha256": "8c8527a27d44e8852cf898b352a8c8f2aae90dcd5eae04988a888047c095ff1e"
+            "sha256": "3afc99a545c81ce8784a1dbeff4b5a1609098382c76d7867e05f794f9ddf6891"
         },
         {
             "path": "docs/github-substrate-v2-roadmap.md",
-            "sha256": "5941bc632866fc8266bba4eb8d7494e001f7514183904f0dc64cad9048e86337"
+            "sha256": "61bc9c74eada6fecfc9f2bca3b0f7cff6ec87b76659a42ca0a8c6d2e92d647ae"
         }
     ],
     "corpusArtifact": {
@@ -934,7 +934,7 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
     },
     "threatModel": {
         "path": "work/2953-gh-modernization-m0-invariants/threat-model.md",
-        "sha256": "c920fcdec0cee8c88faf9a5d7d3c4ac18d271a03cee12bbce37dff9850ae6dba",
+        "sha256": "2496cb2bd47a2106091c52ab1e8c41b00b06b3fde05d39b964ce4f466fb0f079",
         "boundaries": [
             "protectedEpoch",
             "administrativePrincipal",
@@ -947,7 +947,7 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
         "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
         "sha256": "6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"
     },
-    "reviewFingerprint": "e20694079e813aaad7c5006bdc82e7cdd9714ebc6eaa9369cf649df420d3166d",
+    "reviewFingerprint": "b917b96b71a4cf53fa561bcd2be018425baea2914ca3c1a6a0c7c2fedba286c2",
     "reviewAuthority": "live-unedited-current-head-pr-comments",
     "reviewAuthorAllowlist": [
         "EHotwagner"
@@ -960,11 +960,11 @@ Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-he
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.006960"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.073996"><system-out>committed whitespace mutation rejected by exact commit range
-</system-out></testcase><testcase name="sdd-coherent-implementation-ready" time="0.478385"><system-out>SDD-GREEN: noChange, coherent, implementationReady, diagnostic-free
-</system-out></testcase><testcase name="sdd-incoherent-readiness-mutation" time="0.032475"><system-out>incoherent readiness-string and mutating analysis payloads rejected
-</system-out></testcase><testcase name="sdd-downstream-source-digests" time="0.032787"><system-out>DOWNSTREAM-GREEN: every declared evidence/verify/ship/handoff source matches exact bytes
-</system-out></testcase><testcase name="sdd-stale-analysis-digest-mutation" time="0.034974"><system-out>stale analysis source digest mutation rejected
-</system-out></testcase><testcase name="sdd-downstream-source-set-mutations" time="0.038882"><system-out>downstream omission, duplicate, and extra source-set mutations rejected
-</system-out></testcase><testcase name="sdd-downstream-source-schema-mutations" time="0.084215"><system-out>canonical source-row baseline passed; 43 schema mutations rejected across every projection
-</system-out></testcase><testcase name="source-tree-clean-after-gates" time="0.003321"><system-out /></testcase></testsuite>
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.013240"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.065100"><system-out>committed whitespace mutation rejected by exact commit range
+</system-out></testcase><testcase name="sdd-coherent-implementation-ready" time="0.476467"><system-out>SDD-GREEN: noChange, coherent, implementationReady, diagnostic-free
+</system-out></testcase><testcase name="sdd-incoherent-readiness-mutation" time="0.035031"><system-out>incoherent readiness-string and mutating analysis payloads rejected
+</system-out></testcase><testcase name="sdd-downstream-source-digests" time="0.036753"><system-out>DOWNSTREAM-GREEN: every declared evidence/verify/ship/handoff source matches exact bytes
+</system-out></testcase><testcase name="sdd-stale-analysis-digest-mutation" time="0.034216"><system-out>stale analysis source digest mutation rejected
+</system-out></testcase><testcase name="sdd-downstream-source-set-mutations" time="0.036909"><system-out>downstream omission, duplicate, and extra source-set mutations rejected
+</system-out></testcase><testcase name="sdd-downstream-source-schema-mutations" time="0.087829"><system-out>canonical source-row baseline passed; 43 schema mutations rejected across every projection
+</system-out></testcase><testcase name="source-tree-clean-after-gates" time="0.003461"><system-out /></testcase></testsuite>
