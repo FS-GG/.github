@@ -732,8 +732,9 @@ fingerprint; every architecture, security, operations, and cross-repository verd
 fingerprint.
 Each role first posts a distinct unedited narrative comment, then an exact unedited current-head
 attestation whose sole final `Evidence` line cites that earlier repair-PR comment. Live discovery requires
-the same authorized GitHub author and allowed association, strict temporal ordering, and rejects missing,
-self, later, edited, wrong-author, outsider, wrong-PR, or trailing records.
+the same authorized GitHub `User`, strict temporal ordering, and authorization by either an allowed live
+association or the exact login in the fingerprint-bound reviewer allowlist. It rejects Bots, missing users,
+non-allowlisted contributors, self, later, edited, wrong-author, wrong-PR, or trailing records.
 
 The typed model may generate exhaustive structural and transition cases, but at least one black-box oracle
 for every safety-critical invariant must be maintained outside that generator. Otherwise a defect in the

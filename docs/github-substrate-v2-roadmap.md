@@ -344,6 +344,13 @@ model checking. F# tests remain required implementation evidence and enter corre
   Table-driven controls reject missing/wrong kind, missing/wrong schema or status, unexpected keys,
   alternate digest forms, malformed types, and invalid digest casing/length across evidence, verify, ship,
   and governance handoff while retaining all source-set and stale-byte inversions.
+  Hosted [run 32925218156](https://github.com/FS-GG/.github/actions/runs/32925218156) / job
+  [98048225279](https://github.com/FS-GG/.github/actions/runs/32925218156/job/98048225279) then proved that
+  `author_association` is viewer-dependent for private organization membership: the maintainer view
+  reported `MEMBER`, while the workflow token reported the same immutable comments as `CONTRIBUTOR` and
+  rejected all four roles. Q0 therefore binds an exact unique GitHub User login allowlist into the signed
+  fingerprint and accepts a User when either its live association is allowed or its login is allowlisted;
+  Bots, missing users, and non-allowlisted `CONTRIBUTOR`/`NONE` records remain fail-closed.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

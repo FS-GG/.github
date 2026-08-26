@@ -79,8 +79,10 @@ residual risks, security acceptance, and pre/post-`OpenV2` incident posture. Its
 authority/mutation/corpus/deletion subject are bound into one independently recomputed review fingerprint.
 Every Q0 role review uses two unedited repair-PR comments: an earlier distinct narrative from the
 authorized reviewer, followed by an exact current-head attestation whose sole final `Evidence` line cites
-that narrative. Live discovery requires the same GitHub author and allowed association, strict temporal
-ordering, and rejects missing, self, later, edited, wrong-author, outsider, wrong-PR, or trailing records.
+that narrative. Live discovery requires the same GitHub `User`, strict temporal ordering, and authorization
+by either an allowed association or an exact login in the fingerprint-bound `reviewAuthorAllowlist`.
+It rejects Bots, missing users, non-allowlisted contributors, self, later, edited, wrong-author, wrong-PR,
+or trailing records.
 
 Q0 was accepted on 2026-08-26 against repair PR #3002 head
 `d07cc9daeef46f6f034e2e4cf23dcf3deeea6da0` and canonical fingerprint
@@ -128,6 +130,12 @@ requires its exact prefixed lowercase digest string. Independent mutations cover
 missing and wrong schemas/statuses, unexpected row and digest keys, alternate digest forms, malformed
 types, and non-lowercase or non-64-hex values across every projection, in addition to the earlier
 missing/duplicate/extra/path/stale controls.
+Hosted [run 32925218156](https://github.com/FS-GG/.github/actions/runs/32925218156) / job
+[98048225279](https://github.com/FS-GG/.github/actions/runs/32925218156/job/98048225279) subsequently proved
+the association-only review check was not workflow-portable: the maintainer view reported the immutable
+review author's private membership as `MEMBER`, while the workflow token reported `CONTRIBUTOR` and found
+zero roles. The fingerprint-bound exact User login allowlist is the repair authority for that parity defect;
+changing it invalidates every existing attestation and requires fresh exact-head review.
 
 ## Consequences
 

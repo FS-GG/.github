@@ -390,7 +390,9 @@ def main() -> int:
         raise RuntimeError("cannot load Q0 validator")
     validator = importlib.util.module_from_spec(validator_spec)
     validator_spec.loader.exec_module(validator)
-    _, review_errors = validator.discover_live_reviews(evidence["reviewFingerprint"])
+    _, review_errors = validator.discover_live_reviews(
+        evidence["reviewFingerprint"], set(evidence["reviewAuthorAllowlist"]),
+    )
     reviews_complete = not review_errors
     acceptance_expected = 0 if reviews_complete else 1
     acceptance_text = "Q0-GREEN: acceptance" if reviews_complete else "expected exactly one unedited accepted current-head attestation"
