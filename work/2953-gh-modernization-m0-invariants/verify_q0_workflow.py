@@ -13,43 +13,44 @@ REQUIRED_STEP = """      - name: Require exact live role-bound acceptance
           python3 work/2953-gh-modernization-m0-invariants/validate_q0.py
           work/2953-gh-modernization-m0-invariants/q0-evidence.json --acceptance
 """
+REQUIRED_TRIGGER_BODY = """    paths:
+      - ".github/workflows/github-substrate-q0.yml"
+      - "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md"
+      - "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md"
+      - "docs/github-substrate-v2-roadmap.md"
+      - "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md"
+      - "work/2953-gh-modernization-m0-invariants/**"
+"""
+REQUIRED_JOB_PREFIX = """  authority-census-is-bound:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+"""
 
 RETIRED_GATES = (
     "jq '.reviews | length'",
     "jq '.reviewsRequired | length'",
     'if [ "$reviews"',
 )
-REQUIRED_PR_PATHS = {
-    ".github/workflows/github-substrate-q0.yml",
-    "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
-    "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
-    "docs/github-substrate-v2-roadmap.md",
-    "work/2953-gh-modernization-m0-invariants/**",
-}
-
-
 def errors(text: str) -> list[str]:
     findings: list[str] = []
     if text.count(REQUIRED_STEP) != 1:
         findings.append("the exact unconditional live-acceptance step must occur once")
-    trigger_match = re.search(r"(?ms)^  pull_request:\n(?P<body>.*?)^  push:\n", text)
-    if trigger_match is None:
-        findings.append("the pull_request trigger is absent or unreadable")
-    else:
-        trigger_paths = set(re.findall(r'^      - "([^"]+)"$', trigger_match.group("body"), re.MULTILINE))
-        if trigger_paths != REQUIRED_PR_PATHS:
-            findings.append("the pull_request trigger does not cover the exact Q0 subject")
-    job_match = re.search(r"(?ms)^  authority-census-is-bound:\n(?P<body>.*)\Z", text)
-    if job_match is None:
-        findings.append("the authority-census-is-bound job is absent or unreadable")
-    elif re.search(r"(?m)^    (?:if|continue-on-error):", job_match.group("body")):
-        findings.append("the authority-census-is-bound job is conditional or non-blocking")
+    trigger_match = re.search(r"(?ms)^  pull_request:\n(?P<pull>.*?)^  push:\n(?P<push>.*?)^  workflow_dispatch:\s*$", text)
+    if trigger_match is None or trigger_match.group("pull") != REQUIRED_TRIGGER_BODY or trigger_match.group("push") != "    branches: [main]\n" + REQUIRED_TRIGGER_BODY:
+        findings.append("pull_request/push triggers do not exactly cover the complete Q0 subject")
+    jobs_tail = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
+    job_ids = re.findall(r"(?m)^  ([A-Za-z0-9_-]+):\s*$", jobs_tail)
+    if job_ids != ["authority-census-is-bound"] or text.count(REQUIRED_JOB_PREFIX) != 1:
+        findings.append("the authority job has an extra dependency, wrapper, default, or job")
     step_start = text.find("      - name: Require exact live role-bound acceptance\n")
     if step_start >= 0:
         step_end = text.find("\n      - ", step_start + 1)
-        step = text[step_start:] if step_end < 0 else text[step_start:step_end]
-        if re.search(r"(?m)^        (?:if|continue-on-error):", step):
-            findings.append("the live-acceptance step is conditional or non-blocking")
+        step = text[step_start:] if step_end < 0 else text[step_start:step_end] + "\n"
+        if step != REQUIRED_STEP:
+            findings.append("the live-acceptance step has an extra condition, wrapper, shell, or continuation")
     for retired in RETIRED_GATES:
         if retired in text:
             findings.append(f"retired checked-in review gate remains: {retired}")
@@ -70,9 +71,24 @@ def self_test(text: str) -> list[str]:
             "      - name: Require exact live role-bound acceptance\n        continue-on-error: true\n",
             1,
         ),
+        "folded-exit-mask": text.replace(
+            "          work/2953-gh-modernization-m0-invariants/q0-evidence.json --acceptance\n",
+            "          work/2953-gh-modernization-m0-invariants/q0-evidence.json --acceptance\n          || true\n",
+            1,
+        ),
         "conditional-authority-job": text.replace(
             "  authority-census-is-bound:\n",
             "  authority-census-is-bound:\n    if: ${{ false }}\n",
+            1,
+        ),
+        "job-default-shell-mask": text.replace(
+            "    runs-on: ubuntu-latest\n",
+            "    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: bash {0} || true\n",
+            1,
+        ),
+        "skipped-prerequisite": text.replace(
+            "  authority-census-is-bound:\n",
+            "  prerequisite:\n    if: ${{ false }}\n    runs-on: ubuntu-latest\n    steps: [{run: true}]\n  authority-census-is-bound:\n    needs: prerequisite\n",
             1,
         ),
         "nonmatching-pull-request-trigger": text.replace(
@@ -80,6 +96,14 @@ def self_test(text: str) -> list[str]:
             '      - "unrelated/**"\n',
             1,
         ),
+        "narrow-pull-request-types": text.replace("  pull_request:\n", "  pull_request:\n    types: [closed]\n", 1),
+        "narrow-pull-request-branches": text.replace("  pull_request:\n", "  pull_request:\n    branches: [never]\n", 1),
+        "missing-admin-report-pull-path": text.replace(
+            '      - "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md"\n', "", 1
+        ),
+        "missing-admin-report-push-path": text.rsplit(
+            '      - "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md"\n', 1
+        )[0] + text.rsplit('      - "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md"\n', 1)[1],
         "checked-in-row-gate": text + "\n# jq '.reviews | length'\n",
     }
     for name, mutant in mutants.items():
@@ -101,7 +125,7 @@ def main() -> int:
         for finding in findings:
             print(f"Q0-WORKFLOW-RED: {finding}")
         return 1
-    print("Q0-WORKFLOW-GREEN: live acceptance is independently reachable; 6/6 inversions rejected")
+    print("Q0-WORKFLOW-GREEN: live acceptance is independently reachable; 13/13 inversions rejected")
     return 0
 
 
