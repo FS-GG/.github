@@ -2,7 +2,6 @@
 <testsuite name="FS.GG.Coord.Core full regression" tests="934" failures="0" errors="0" skipped="0">
   <properties>
     <property name="command" value="dotnet test tests/FS.GG.Coord.Core.Tests -c Release --no-restore" />
-    <property name="source-trx-sha256" value="f6543fe49c09fd50d43a1c30bdd86b04ce316fef404b7839057226b39f5ce8a1" />
   </properties>
   <testcase classname="aggregate" name="934 core tests passed" />
 </testsuite>

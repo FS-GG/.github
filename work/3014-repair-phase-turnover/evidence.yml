@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3014-repair-phase-turnover/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3014-repair-phase-turnover/analysis.json
-    digest: 4a8a48356f1be71bd2384673f48adc7a45bdf20b30971ce2d1569155225e4207
+    digest: 34878565c82fc0b4d2876eed9a324d27ef2f4755ed4575432ad9fd9cc1e26f69
     schemaVersion: 1
   - label: checklist
     path: work/3014-repair-phase-turnover/checklist.md
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
-      digest: "sha256:207b64a41e5547db531052490834090d435ddcb46bc7b672020b5a29b77e528f"
+      digest: "sha256:745cb80e4198ffa5caa0641e55a18bd8079e157108ec6a21789894318f42e8a9"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 137
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3014-repair-phase-turnover/test-results/core.junit.xml
-      digest: "sha256:6eb5c7e8918f2a75a6b383776f89796534f2f423adef1c46cdfc97330e6ccd50"
+      digest: "sha256:230feada47895d69dfafb37704fd94b2ad8da7a659b99f2535ae2a6107298504"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 934
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3014-repair-phase-turnover/test-results/lifecycle.junit.xml
-      digest: "sha256:207b64a41e5547db531052490834090d435ddcb46bc7b672020b5a29b77e528f"
+      digest: "sha256:745cb80e4198ffa5caa0641e55a18bd8079e157108ec6a21789894318f42e8a9"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 137
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3014-repair-phase-turnover/test-results/core.junit.xml
-      digest: "sha256:6eb5c7e8918f2a75a6b383776f89796534f2f423adef1c46cdfc97330e6ccd50"
+      digest: "sha256:230feada47895d69dfafb37704fd94b2ad8da7a659b99f2535ae2a6107298504"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 934
