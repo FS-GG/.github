@@ -67,5 +67,14 @@ grep -Fq 'timeout-minutes: 5' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'workflow encodes the five-minute target' \
   || bad 'five-minute target is not encoded'
 
+# This unfiltered required context independently proves the Q0 job is reachable. A checker
+# that only runs inside the checked job cannot detect its own job/trigger being disabled.
+if python3 "$ROOT/work/2953-gh-modernization-m0-invariants/verify_q0_workflow.py" \
+  "$ROOT/.github/workflows/github-substrate-q0.yml" --self-test; then
+  ok 'independent gate proves Q0 live acceptance is trigger-, job-, and step-reachable'
+else
+  bad 'Q0 live acceptance can be skipped outside its own job'
+fi
+
 printf '\nchange-completeness fixture: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
