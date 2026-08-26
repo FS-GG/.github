@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3012-register-fs-gg-coordination/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3012-register-fs-gg-coordination/analysis.json
-    digest: 693cffb2ca676b4477c237a58d889fbbbf14fc60e1aebbb9d8f4cd1fe6c77c82
+    digest: 0c2c7165ea8e50323baa048b00a6fda65ffd6d2b84725c03a480f8893d23a4f6
     schemaVersion: 1
   - label: checklist
     path: work/3012-register-fs-gg-coordination/checklist.md

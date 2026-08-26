@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/3012-register-fs-gg-coordination/ship.json",
-      "digest": "sha256:a249dbde7f41bb917baaf4367a32c37187504bada45dabf9f7bf2aba4b0a704b",
+      "digest": "sha256:993b513f70edd0a1101d99301b8556c827c3cc0389579bc4a65c380dd1e6519f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3012-register-fs-gg-coordination/verify.json",
-      "digest": "sha256:0231a194cf330e3b31eb53df5a337be79b419d4e66d77d00a2c61ca3bf5c335d",
+      "digest": "sha256:4a907ac6c18e2feb7c70eeba012a6822ad8827bc8de063a9e08d584dfa6e9503",
       "schemaVersion": 1
     },
     {

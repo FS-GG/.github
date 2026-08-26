@@ -4,8 +4,8 @@
        - readiness/3012-register-fs-gg-coordination/agent-commands/claude/guidance.json  digest:101b50f6e8ca2eaa5ff6ac368b795fb97f30ad908c883eb6e82924fc6e0bc984  schema:1(current)
        - readiness/3012-register-fs-gg-coordination/agent-commands/codex/guidance.json  digest:1efcb8c032a4c0a81290e16d9ae00339a19a1c81383b4ae950e9448adc1e030a  schema:1(current)
        - readiness/3012-register-fs-gg-coordination/analysis.json  digest:0c2c7165ea8e50323baa048b00a6fda65ffd6d2b84725c03a480f8893d23a4f6  schema:1(current)
-       - readiness/3012-register-fs-gg-coordination/ship.json  digest:a249dbde7f41bb917baaf4367a32c37187504bada45dabf9f7bf2aba4b0a704b  schema:1(current)
-       - readiness/3012-register-fs-gg-coordination/verify.json  digest:0231a194cf330e3b31eb53df5a337be79b419d4e66d77d00a2c61ca3bf5c335d  schema:1(current)
+       - readiness/3012-register-fs-gg-coordination/ship.json  digest:993b513f70edd0a1101d99301b8556c827c3cc0389579bc4a65c380dd1e6519f  schema:1(current)
+       - readiness/3012-register-fs-gg-coordination/verify.json  digest:4a907ac6c18e2feb7c70eeba012a6822ad8827bc8de063a9e08d584dfa6e9503  schema:1(current)
        - readiness/3012-register-fs-gg-coordination/work-model.json  digest:67d59650d13395c95e8c7b12fcd9f11ffc94b3c089d6db4b77c11092b2bb4cfa  schema:1(current)
      outputDigest: 6a437caf8c063af24e7b428950bb76d0e3bb15fc8f710473a2070c17c21cb208 -->
 
