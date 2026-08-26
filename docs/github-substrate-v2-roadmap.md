@@ -312,6 +312,11 @@ model checking. F# tests remain required implementation evidence and enter corre
   [operations](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419407467),
   [cross-repository](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419406435)), and the final
   [repair-phase confirmation](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
+  Ratification evidence additionally requires structural SDD analysis with exact `noChange`,
+  `coherent: true`, `implementationReady`, zero stale/generated-view findings, no diagnostics, and a clean
+  tracked tree after all gates. The [revision-4 repair](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809)
+  adds an incoherent-readiness mutation so a readiness string inside a stale or mutating projection cannot
+  satisfy Q0; every changed head/fingerprint still requires fresh live role attestations.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

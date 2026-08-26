@@ -62,6 +62,55 @@ def whitespace_mutation_self_test() -> int:
         return 0
 
 
+def coherent_sdd_analysis(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    analysis = payload.get("analysis")
+    return (
+        payload.get("outcome") == "noChange"
+        and payload.get("coherent") is True
+        and isinstance(analysis, dict)
+        and analysis.get("status") == "implementationReady"
+        and analysis.get("readiness") == "implementationReady"
+        and analysis.get("blockingCount") == 0
+        and analysis.get("staleSourceCount") == 0
+        and analysis.get("generatedViewFindingCount") == 0
+        and payload.get("diagnostics") == []
+    )
+
+
+def sdd_analysis_check() -> int:
+    completed = subprocess.run(
+        ["fsgg-sdd", "analyze", "--work", "2953-gh-modernization-m0-invariants", "--json"],
+        cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        print(completed.stdout)
+        print("SDD-RED: analysis output is not exact JSON")
+        return 1
+    if completed.returncode != 0 or not coherent_sdd_analysis(payload):
+        print(completed.stdout)
+        print("SDD-RED: analysis must be noChange, coherent, implementationReady, and diagnostic-free")
+        return 1
+    print("SDD-GREEN: noChange, coherent, implementationReady, diagnostic-free")
+    return 0
+
+
+def sdd_analysis_mutation_self_test() -> int:
+    incoherent = {
+        "outcome": "noChange", "coherent": False, "diagnostics": [],
+        "analysis": {"status": "implementationReady", "readiness": "implementationReady",
+                     "blockingCount": 0, "staleSourceCount": 0, "generatedViewFindingCount": 0},
+    }
+    mutating = {**incoherent, "coherent": True, "outcome": "succeeded"}
+    if coherent_sdd_analysis(incoherent) or coherent_sdd_analysis(mutating):
+        return 1
+    print("incoherent readiness-string and mutating analysis payloads rejected")
+    return 0
+
+
 def main() -> int:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     validator_spec = importlib.util.spec_from_file_location("q0_validator", WORK / "validate_q0.py")
@@ -80,7 +129,9 @@ def main() -> int:
         Case("q0-json-parse", [sys.executable, "-m", "json.tool", str(EVIDENCE)]),
         Case("source-diff-whitespace", ["git", "diff", "--check", "origin/main...HEAD"]),
         Case("source-diff-whitespace-mutation", [sys.executable, str(Path(__file__)), "--whitespace-mutation-self-test"], contains="committed whitespace mutation rejected"),
-        Case("sdd-implementation-ready", ["fsgg-sdd", "analyze", "--work", "2953-gh-modernization-m0-invariants", "--json"], contains='"readiness": "implementationReady"'),
+        Case("sdd-coherent-implementation-ready", [sys.executable, str(Path(__file__)), "--sdd-analysis-check"], contains="SDD-GREEN: noChange, coherent"),
+        Case("sdd-incoherent-readiness-mutation", [sys.executable, str(Path(__file__)), "--sdd-analysis-mutation-self-test"], contains="incoherent readiness-string"),
+        Case("source-tree-clean-after-gates", ["git", "diff", "--exit-code"]),
     ]
 
     suite = ET.Element("testsuite", name="GS2-00-Q0", tests=str(len(cases)), timestamp="2026-08-26T00:00:00+02:00")
@@ -110,4 +161,8 @@ def main() -> int:
 if __name__ == "__main__":
     if "--whitespace-mutation-self-test" in sys.argv:
         raise SystemExit(whitespace_mutation_self_test())
+    if "--sdd-analysis-check" in sys.argv:
+        raise SystemExit(sdd_analysis_check())
+    if "--sdd-analysis-mutation-self-test" in sys.argv:
+        raise SystemExit(sdd_analysis_mutation_self_test())
     raise SystemExit(main())

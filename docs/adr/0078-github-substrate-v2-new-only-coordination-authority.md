@@ -90,6 +90,12 @@ attestations are [architecture](https://github.com/FS-GG/.github/pull/3002#issue
 [operations](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419407467), and
 [cross-repository](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419406435). The final bounded
 repair-phase confirmation is [revision 3](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419425110).
+The subsequent ratification projection is guarded by a structural SDD check: Q0 accepts only exact JSON
+analysis reporting `outcome: noChange`, `coherent: true`, `implementationReady`, zero stale/generated-view
+findings, and no diagnostics, followed by a clean tracked-tree assertion. The
+[revision-4 repair record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419558809) closes the
+former substring-only check and adds an incoherent-readiness inversion; fresh live role attestations are
+still required for every changed head and fingerprint.
 
 ## Consequences
 
