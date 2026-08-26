@@ -224,8 +224,8 @@ These gates replace the existing coordination validation/verification process fo
 | Gate | Proves | Required evidence |
 |---|---|---|
 | Q0 Architecture | Authorities and boundaries are coherent | Accepted ADR, authority/mutation/deletion census, threat model, independent review |
-| Q1 Compiler | Typed source is deterministic and complete | Canonical bytes/fingerprint, semantic diff, schema/projection freshness, wrong-model controls |
-| Q2 Pure model | State and decisions obey invariants | Unit, property, model, bounded formal, and independently authored transition tests |
+| Q1 Compiler | Literate Quint source extracts, typechecks, and compiles deterministically and completely | Literate-source and extracted-module fingerprints, pinned extractor/Quint/profile identities, Quint type/effect results, compiled-contract canonical bytes, semantic diff, source mapping, schema/projection freshness, and wrong-source/extraction/model controls |
+| Q2 Pure model | The canonical Quint model's state and decisions obey invariants | Quint examples, simulation, property and bounded model checking, safety/liveness witnesses and counterexamples, plus independently authored transition tests |
 | Q3 Adapter | External observations and writes preserve meaning | Consumer-owned ITF replay adapter, observable-state projection, recorded fixtures, pagination/completeness, revision, idempotency, partial/indeterminate and mapping-mutation controls |
 | Q4 Sandbox | Real GitHub behavior matches the adapter contract | Isolated repositories/project, destructive test identities, API/permission/rate evidence |
 | Q5 Shadow | V2 reads the live fleet without changing it | Complete snapshots, v1/v2 decision comparison, explained divergence ledger, zero v2 write permission |
@@ -244,6 +244,11 @@ model. Q3 replays fingerprinted ITF traces through the real pure implementation 
 declared model-observable state. Q4 exercises the same adapter boundary against isolated GitHub behavior.
 Passing one gate cannot substitute for either of the others, and `.github` may not host a fake v2
 implementation merely to make replay pass.
+
+Q1 and Q2 also cannot be split across different authored models. Q1 qualifies the exact literate Quint
+source and extracted module set whose behavior Q2 explores; an F#-only reducer suite, generated shadow
+model, or separately authored formal model cannot substitute for native Quint type/effect checking and
+model checking. F# tests remain required implementation evidence and enter correspondence through Q3.
 
 ## 5. Detailed milestones
 
@@ -363,8 +368,9 @@ implementation merely to make replay pass.
   profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
 - [ ] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
   mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
-- [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent authoring forms normalize identically;
-  semantic changes produce stable, reviewable diffs; unsupported schema versions fail before execution.
+- [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent literate Quint authoring forms extract and
+  normalize identically; semantic changes produce stable, reviewable diffs; prose-only changes cannot alter
+  behavioral identity; unsupported source, extractor, Quint, profile, or schema versions fail before execution.
 
 ### GS2-03 — Build the independent qualification system
 
@@ -377,13 +383,16 @@ implementation merely to make replay pass.
   generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
 - [ ] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
   ambiguity, and current-v1 result; never normalize away the defect being tested.
-- [ ] **GS2-03.3 — Add generated structural tests.** Derive vocabulary completeness, transition coverage,
-  command/mutation registration, permission coverage, schema round-trip, and projection freshness cases.
+- [ ] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
+  derive vocabulary completeness, transition coverage, command/mutation registration, permission coverage,
+  schema round-trip, and projection freshness cases without creating a second behavioral model.
 - [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
   projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
   exact-head review, post-merge verification, and dual-feed release recovery.
-- [ ] **GS2-03.5 — Add model/property/formal tests.** Explore claim/election, relation mutation, lifecycle,
-  operation saga, epoch, and rollback state spaces with bounded counterexample output.
+- [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
+  witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
+  relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
+  Quint/ITF counterexamples.
 - [ ] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
   duplicate/reorder events; return partial pages; exhaust rate budgets; revoke permission; mutate concurrent
   revisions; and require convergence or typed refusal.
