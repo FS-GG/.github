@@ -17,7 +17,7 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2953-gh-modernization-m0-invariants/spec.md sha256:01ce360adedf1dc17d32cb8b894977342a0e013f9ab8fe589003988403c18c02 schemaVersion:1
-- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2 schemaVersion:1
+- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd schemaVersion:1
 - checklist: work/2953-gh-modernization-m0-invariants/checklist.md sha256:467a8baf63ec473d4e24093ace0a60564ab83a8be31449db3b2009ba0810eca2 schemaVersion:1
 
 ## Plan Scope

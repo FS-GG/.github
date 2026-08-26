@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2"
+        "value": "6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "80e4c372c3264868f107d01706148963d26ad6801cd4199a798cf1d2f46882ce"
+        "value": "6a1d8046abb34f52d2c107fda9c4766a0db5dc90c43a6ad82fbb89099afff522"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb"
+        "value": "c8b21b0552be628e773a01ea818e7be012663b27cf489dc0a0eec76d64a3528f"
       }
     }
   ],
@@ -409,8 +409,8 @@
     },
     {
       "id": "DEC-006",
-      "title": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub author and allowed association. Missing, self, later, edited, wrong-author, outsider, or wrong-PR evidence fails closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
-      "decision": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub author and allowed association. Missing, self, later, edited, wrong-author, outsider, or wrong-PR evidence fails closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
+      "title": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Authorization is an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
+      "decision": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Authorization is an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
       "requirementRefs": [
         "FR-008"
       ],
@@ -1950,7 +1950,7 @@
           "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2"
+            "value": "6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd"
           },
           "schemaVersion": 1
         },
@@ -1966,7 +1966,7 @@
           "path": "work/2953-gh-modernization-m0-invariants/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "80e4c372c3264868f107d01706148963d26ad6801cd4199a798cf1d2f46882ce"
+            "value": "6a1d8046abb34f52d2c107fda9c4766a0db5dc90c43a6ad82fbb89099afff522"
           },
           "schemaVersion": 1
         },
@@ -1982,14 +1982,14 @@
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "7a264570fd6db18ab8ab60bc50f227e31a7b350ac0d5635d7a618e7d177d32eb"
+            "value": "c8b21b0552be628e773a01ea818e7be012663b27cf489dc0a0eec76d64a3528f"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "61f41402ee0454bf132a907d6934f2dee213e8573dba52b479cfc9605bcac3b2"
+        "value": "2bcc56232261d672a493c60b79881990574bc03831c60792e4fa530499cab17e"
       },
       "currency": "current"
     }
