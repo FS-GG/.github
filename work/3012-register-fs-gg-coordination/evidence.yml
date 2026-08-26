@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 3012-register-fs-gg-coordination
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/3012-register-fs-gg-coordination/spec.md
 sourceClarifications: work/3012-register-fs-gg-coordination/clarifications.md
 sourceChecklist: work/3012-register-fs-gg-coordination/checklist.md
@@ -167,7 +167,7 @@ evidence:
       skipped: 0
     notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
   - id: EV005
-    kind: missing
+    kind: review
     subject:
       type: task
       id: T005
@@ -178,19 +178,21 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json]
     sourceRefs:
       - kind: verification
-        path: tests/repos-registry/run.sh
-      - kind: verification
-        path: tests/project-field-options/run.sh
-      - kind: verification
-        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
-    result: missing
+        path: work/3012-register-fs-gg-coordination/verify-independent-review.sh
+    result: pass
     synthetic: false
-    notes: [Independent exact-head cross-repository review is required before verify.]
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
+      digest: "sha256:74dc6ba36db288d9b34b8165ae734ca3ecdaf7009e1c8eabb59713cbbff81c81"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["Independent successor critic plover-d91f passed exact head b3b07078b14c8dda05616fe6cdb71697149c83d9 with no unresolved material finding: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426871942", "Structured revision 2 confirmation digest 4614ec49f2aceb212290d69ea1b6c8a030447c009c24fb8b47849d912ee612d5: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426876370"]
   - id: EV006
     kind: verification
     subject:
@@ -621,7 +623,7 @@ evidence:
       skipped: 0
     notes: [Project-field 27/27, Roster 184/184, and exact live settings/Project rereads passed., projection currency, resolver 76/76]
   - id: EV019
-    kind: missing
+    kind: review
     subject:
       type: task
       id: T019
@@ -632,18 +634,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV019]
-    artifacts: []
+    artifacts: [docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md, work/3012-register-fs-gg-coordination/project-migration-after.json, work/3012-register-fs-gg-coordination/project-migration-before.json]
     sourceRefs:
       - kind: verification
-        path: tests/repos-registry/run.sh
-      - kind: verification
-        path: tests/project-field-options/run.sh
-      - kind: verification
-        path: tests/FS.GG.Coord.Cli.Tests/RepoScopeTests.fs
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/RepoScopeTests.fs
-    result: missing
+        path: work/3012-register-fs-gg-coordination/verify-independent-review.sh
+    result: pass
     synthetic: false
-    notes: [Independent exact-head cross-repository review is required before verify.]
+    observedRun:
+      source: work/3012-register-fs-gg-coordination/test-results/independent-review.junit.xml
+      digest: "sha256:74dc6ba36db288d9b34b8165ae734ca3ecdaf7009e1c8eabb59713cbbff81c81"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: ["Narrative and structured receipts: https://github.com/FS-GG/.github/pull/3013#issuecomment-5426871942 and https://github.com/FS-GG/.github/pull/3013#issuecomment-5426876370", "The independent successor review verified frozen Q0 report identity and self-test, both complete 321-item Project receipts, 86 assigned plus 235 unassigned states with zero changes, the exact +coordination option delta, focused tests, live settings/App scope, and the FS.GG.SDD 1.4.0 producer."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

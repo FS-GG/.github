@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d598ed82bb677984341c676fe37784c7d951089519c87725a18e7e3220e64d9a"
+        "value": "bac27f0ffed2e71722bb399b8e546bc9eead7ac1a36b6c7b0a71460e16c2416a"
       }
     },
     {
@@ -960,7 +960,7 @@
     },
     {
       "id": "EV005",
-      "kind": "missing",
+      "kind": "review",
       "subjectType": "task",
       "subjectId": "T005",
       "taskRefs": [
@@ -969,8 +969,12 @@
       "requirementRefs": [
         "FR-005"
       ],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md",
+        "work/3012-register-fs-gg-coordination/project-migration-after.json",
+        "work/3012-register-fs-gg-coordination/project-migration-before.json"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -1348,15 +1352,19 @@
     },
     {
       "id": "EV019",
-      "kind": "missing",
+      "kind": "review",
       "subjectType": "task",
       "subjectId": "T019",
       "taskRefs": [
         "T019"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "docs/2026-08-26-fs-gg-coordination-gs2-01-2-reconciliation-report.md",
+        "work/3012-register-fs-gg-coordination/project-migration-after.json",
+        "work/3012-register-fs-gg-coordination/project-migration-before.json"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -1423,7 +1431,7 @@
           "path": "work/3012-register-fs-gg-coordination/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "d598ed82bb677984341c676fe37784c7d951089519c87725a18e7e3220e64d9a"
+            "value": "bac27f0ffed2e71722bb399b8e546bc9eead7ac1a36b6c7b0a71460e16c2416a"
           },
           "schemaVersion": 1
         },
@@ -1454,7 +1462,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "fc01107438211f172eaadbdc0bf5132f5b097e79832c98fbcdf67addaa130618"
+        "value": "eb2b9f71a0e5e811d18315dcb83fdadc7a29b6878829158fefed45bc494c5a07"
       },
       "currency": "current"
     }
