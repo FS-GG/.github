@@ -1,10 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="9.087704"><testcase name="q0-candidate-and-mutation-controls" time="8.064206"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="0.562338"><system-out>Q0-RED: reviews: acceptance mismatch missing=['architecture', 'crossRepository', 'operations', 'security'] extra=[]
-Q0-RED: reviews: every role requires a distinct independent reviewer
-Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence URL
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.097873"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.026270"><system-out>{
+<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="9.035844"><testcase name="q0-candidate-and-mutation-controls" time="6.755442"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.747964"><system-out>Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.112663"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.033650"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -24,7 +25,7 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
     ],
     "corpusArtifact": {
         "path": "work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json",
-        "sha256": "6b5b8900d6bb66db8df93557c12be0aa915ff211256b0a41266e958045cf3f37"
+        "sha256": "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
     },
     "inventories": [
         {
@@ -487,16 +488,16 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
         {
             "id": "C-merge",
             "kind": "merge",
-            "source": "git:95de1c77674b9dd8d7a9ce568d1ee175a7797e5e:tests/merge-guard/run.sh",
+            "source": "git:95de1c77674b9dd8d7a9ce568d1ee175a7797e5e:tests/claim-fence/run.sh",
             "historicalContext": "claim fence/election/landable fixtures",
             "expected": {
                 "decisionClass": "Refuse",
                 "predicateId": "merge-current-authorization",
                 "authority": "protocol",
-                "detail": "exact head and current authorization are mandatory"
+                "detail": "exact head, live claim, winning election, and current authorization are mandatory"
             },
             "artifact": "q0-corpus-originals.json#C-merge",
-            "originalBytesSha256": "7a64862d8b79f9d78b545196c72b50931bc98f3d0669981f4a3723926154174a"
+            "originalBytesSha256": "a736a5509e46477f52f12d3b79e57ca96f9df7709bb40f1c2822cf6df8406dcb"
         },
         {
             "id": "C-release",
@@ -585,16 +586,23 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
         {
             "id": "C-churn",
             "kind": "churn72h",
-            "source": "git:95de1c77674b9dd8d7a9ce568d1ee175a7797e5e:tests/FS.GG.Coord.Core.Tests/fixtures/churn-readings/worked-2026-08-15.json",
-            "historicalContext": ".github#2932 transferred baseline",
+            "source": "git:95de1c77674b9dd8d7a9ce568d1ee175a7797e5e:docs/reports/2026-08-24-094348-typed-protocol-kernel-roadmap.md",
+            "historicalContext": ".github#2932 transferred reproducible baseline",
             "expected": {
                 "decisionClass": "Preserve",
                 "predicateId": "churn-historical-baseline",
                 "authority": "corpus",
-                "detail": "measured 72-hour reading remains context, not v2 proof"
+                "detail": "measured 72-hour reading remains context, not v2 proof",
+                "metrics": {
+                    "windowHours": 72,
+                    "opened": 54,
+                    "closed": 32,
+                    "net": 22,
+                    "commits": 156
+                }
             },
             "artifact": "q0-corpus-originals.json#C-churn",
-            "originalBytesSha256": "f25acdcdb3b4c88b476d9e09e396259fbd0f9f1ebed091897756281f5d4fb7e3"
+            "originalBytesSha256": "c161eead094e8e3536c4ba9f56d6d7e351327884684a0c31084eb137ee2487f2"
         },
         {
             "id": "C-mutation-entry",
@@ -928,7 +936,8 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
         "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
         "sha256": "484e2c0e9e63b6905bf0503941af445daef947f34f8947d21c85a09fbccd75cf"
     },
-    "reviewFingerprint": "6fe7d1b96bff93d3c1014495f4a86fa466f6e840a3693cdca098e7165db83fc2",
+    "reviewFingerprint": "5e68301b94cb0262100cb6fa56a3be0131b5313e3a8eeeac96efa5ea79f8681f",
+    "reviewAuthority": "live-unedited-current-head-pr-comments",
     "reviewsRequired": [
         "architecture",
         "security",
@@ -937,7 +946,7 @@ Q0-RED: reviews: every role requires a distinct canonical PR-comment evidence UR
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.005276"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.331741"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.004945"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.381179"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",

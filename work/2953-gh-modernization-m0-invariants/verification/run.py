@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -37,9 +38,15 @@ def run(case: Case) -> tuple[bool, str, float]:
 
 def main() -> int:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-    reviews_complete = len(evidence.get("reviews", [])) == len(evidence.get("reviewsRequired", []))
+    validator_spec = importlib.util.spec_from_file_location("q0_validator", WORK / "validate_q0.py")
+    if validator_spec is None or validator_spec.loader is None:
+        raise RuntimeError("cannot load Q0 validator")
+    validator = importlib.util.module_from_spec(validator_spec)
+    validator_spec.loader.exec_module(validator)
+    _, review_errors = validator.discover_live_reviews(evidence["reviewFingerprint"])
+    reviews_complete = not review_errors
     acceptance_expected = 0 if reviews_complete else 1
-    acceptance_text = "Q0-GREEN: acceptance" if reviews_complete else "reviews: acceptance mismatch"
+    acceptance_text = "Q0-GREEN: acceptance" if reviews_complete else "expected exactly one unedited accepted current-head attestation"
     cases = [
         Case("q0-candidate-and-mutation-controls", [sys.executable, str(WORK / "validate_q0.py"), str(EVIDENCE), "--self-test"], contains="Q0-GREEN: candidate"),
         Case("q0-review-boundary", [sys.executable, str(WORK / "validate_q0.py"), str(EVIDENCE), "--acceptance"], expected=acceptance_expected, contains=acceptance_text),

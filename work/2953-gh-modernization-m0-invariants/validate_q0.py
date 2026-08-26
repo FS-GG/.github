@@ -46,7 +46,6 @@ REQUIRED_THREAT_BOUNDARIES = {
     "packageSupplyChain", "crossRepositoryReceiver",
 }
 REQUIRED_REVIEW_ROLES = {"architecture", "security", "operations", "crossRepository"}
-REVIEW_EVIDENCE = re.compile(r"^https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*$")
 REVIEW_ROLE_TEXT = {
     "architecture": "architecture",
     "security": "security",
@@ -68,29 +67,55 @@ def run_bytes(command: list[str]) -> bytes:
     return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
 
 
-def verify_live_review(row: dict[str, Any], fingerprint: str) -> list[str]:
-    """Resolve the claimed immutable GitHub comment; syntax alone is never evidence."""
-    match = REVIEW_EVIDENCE.fullmatch(str(row.get("evidenceRef", "")))
-    if not match:
-        return [f"reviews[{row.get('role')}]: evidence URL is not canonical"]
-    comment_id = row["evidenceRef"].rsplit("-", 1)[-1]
-    try:
-        raw = run_bytes(["gh", "api", f"repos/FS-GG/.github/issues/comments/{comment_id}"])
-        comment = json.loads(raw)
-    except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
-        return [f"reviews[{row.get('role')}]: evidence comment cannot be resolved: {error}"]
-    errors: list[str] = []
-    if comment.get("html_url") != row.get("evidenceRef"):
-        errors.append(f"reviews[{row.get('role')}]: resolved comment URL mismatch")
+def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str) -> dict[str, str] | None:
+    """Parse exact positive fields; negated prose and arbitrary substrings have no authority."""
     if comment.get("created_at") != comment.get("updated_at"):
-        errors.append(f"reviews[{row.get('role')}]: evidence comment was edited")
+        return None
     body = str(comment.get("body", ""))
-    body_lower = body.lower()
-    role_text = REVIEW_ROLE_TEXT.get(str(row.get("role")), "missing-role")
-    required_fragments = [role_text, str(row.get("reviewer", "")), fingerprint, str(row.get("headSha", "")), "verdict", "accepted"]
-    if any(fragment.lower() not in body_lower for fragment in required_fragments):
-        errors.append(f"reviews[{row.get('role')}]: live comment does not attest role, reviewer, head, fingerprint, and accepted verdict")
-    return errors
+    patterns = {
+        "reviewer": r"^- Reviewer identity: `([^`]+)`$",
+        "role": r"^- Role: `(architecture|security|operations|crossRepository)`$",
+        "verdict": r"^- Verdict: \*\*(accepted)\*\*$",
+        "headSha": r"^- Exact PR head: `([0-9a-f]{40})`$",
+        "fingerprint": r"^- Canonical Q0 fingerprint: `([0-9a-f]{64})`$",
+    }
+    parsed: dict[str, str] = {}
+    for name, pattern in patterns.items():
+        matches = re.findall(pattern, body, flags=re.MULTILINE)
+        if len(matches) != 1:
+            return None
+        parsed[name] = matches[0]
+    if parsed["headSha"] != live_head or parsed["fingerprint"] != fingerprint:
+        return None
+    role_heading = f"## Q0 {REVIEW_ROLE_TEXT[parsed['role']]} role review"
+    if role_heading not in body:
+        return None
+    url = str(comment.get("html_url", ""))
+    if not re.fullmatch(r"https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*", url):
+        return None
+    parsed["evidenceRef"] = url
+    return parsed
+
+
+def discover_live_reviews(fingerprint: str) -> tuple[list[dict[str, str]], list[str]]:
+    try:
+        pull = json.loads(run_bytes(["gh", "api", "repos/FS-GG/.github/pulls/3001"]))
+        live_head = str(pull["head"]["sha"])
+        pages = json.loads(run_bytes(["gh", "api", "--paginate", "--slurp", "repos/FS-GG/.github/issues/3001/comments?per_page=100"]))
+    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as error:
+        return [], [f"reviews: complete live PR/comment ledger is unreadable: {error}"]
+    comments = [comment for page in pages for comment in page]
+    parsed = [review for comment in comments if (review := parse_role_comment(comment, live_head, fingerprint)) is not None]
+    by_role: dict[str, list[dict[str, str]]] = {
+        role: [review for review in parsed if review["role"] == role] for role in REQUIRED_REVIEW_ROLES
+    }
+    errors = [f"reviews[{role}]: expected exactly one unedited accepted current-head attestation, found {len(rows)}" for role, rows in by_role.items() if len(rows) != 1]
+    winners = [rows[0] for rows in by_role.values() if len(rows) == 1]
+    if len({row["reviewer"] for row in winners}) != len(winners):
+        errors.append("reviews: role attestations do not use distinct independent reviewer identities")
+    if len({row["evidenceRef"] for row in winners}) != len(winners):
+        errors.append("reviews: role attestations do not use distinct live comments")
+    return winners, errors
 
 
 def git_paths(commit: str, root: str) -> list[str]:
@@ -105,6 +130,7 @@ def review_subject(data: dict[str, Any]) -> dict[str, Any]:
             "sourceBase", "inventories", "authorities", "mutations", "corpus",
             "compatibilityDeletion", "handoff", "runtimeDecision", "liveProjection", "threatModel",
             "adminSettingsReport", "governingArtifacts", "corpusArtifact",
+            "reviewAuthority",
         )
     }
 
@@ -260,8 +286,15 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         expected = row.get("expected")
         allowed_decisions = {"Accept", "Refuse", "Converge", "Preserve", "Indeterminate"}
         allowed_authorities = {"protocol", "adapter", "release", "corpus"}
-        if not isinstance(expected, dict) or set(expected) != {"decisionClass", "predicateId", "authority", "detail"} or expected.get("decisionClass") not in allowed_decisions or expected.get("authority") not in allowed_authorities or not expected.get("predicateId") or not expected.get("detail"):
+        expected_fields = {"decisionClass", "predicateId", "authority", "detail"}
+        allowed_fields = expected_fields | ({"metrics"} if row.get("id") == "C-churn" else set())
+        if not isinstance(expected, dict) or set(expected) != allowed_fields or expected.get("decisionClass") not in allowed_decisions or expected.get("authority") not in allowed_authorities or not expected.get("predicateId") or not expected.get("detail"):
             errors.append(f"corpus[{row.get('id')}]: expected result is not a complete typed verdict")
+        if row.get("id") == "C-churn":
+            required_metrics = {"windowHours": 72, "opened": 54, "closed": 32, "net": 22, "commits": 156}
+            required_phrases = [b"starting 72-hour board window", b"54 issues opened", b"32 issues closed", b"net row growth of 22", b"156 repository commits"]
+            if expected.get("metrics") != required_metrics or any(phrase not in original_bytes for phrase in required_phrases):
+                errors.append("corpus[C-churn]: immutable source does not prove the typed 72-hour baseline")
 
     deletion = data.get("compatibilityDeletion", [])
     ids_unique(deletion, "compatibilityDeletion", errors)
@@ -328,35 +361,18 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         errors.append("reviewFingerprint: does not bind the canonical Q0 subject")
 
     required_reviews = set(data.get("reviewsRequired", []))
+    if data.get("reviewAuthority") != "live-unedited-current-head-pr-comments":
+        errors.append("reviewAuthority: live current-head PR ledger is mandatory")
     if required_reviews != REQUIRED_REVIEW_ROLES or len(data.get("reviewsRequired", [])) != len(REQUIRED_REVIEW_ROLES):
         errors.append("reviewsRequired: exact independent role policy is mandatory")
 
     if acceptance:
         reviews = data.get("reviews", [])
-        require_fields(reviews, {"role", "verdict", "fingerprint", "evidenceRef", "reviewer", "headSha"}, "reviews", errors)
-        accepted = {row.get("role") for row in reviews if row.get("verdict") == "accepted"}
-        if required_reviews != accepted or len(reviews) != len(required_reviews):
-            errors.append(f"reviews: acceptance mismatch missing={sorted(required_reviews-accepted)} extra={sorted(accepted-required_reviews)}")
-        for row in reviews:
-            if row.get("fingerprint") != expected_review_fingerprint or not SHA256.fullmatch(str(row.get("fingerprint", ""))):
-                errors.append(f"reviews[{row.get('role')}]: fingerprint does not bind the canonical Q0 subject")
-            if not GIT_SHA.fullmatch(str(row.get("headSha", ""))):
-                errors.append(f"reviews[{row.get('role')}]: invalid reviewed head")
-        reviewers = [row.get("reviewer") for row in reviews]
-        if len(set(reviewers)) != len(REQUIRED_REVIEW_ROLES):
-            errors.append("reviews: every role requires a distinct independent reviewer")
-        evidence_refs = [row.get("evidenceRef") for row in reviews]
-        if len(set(evidence_refs)) != len(REQUIRED_REVIEW_ROLES) or any(not REVIEW_EVIDENCE.fullmatch(str(ref)) for ref in evidence_refs):
-            errors.append("reviews: every role requires a distinct canonical PR-comment evidence URL")
-        structurally_live = len(reviews) == len(REQUIRED_REVIEW_ROLES) and all(
-            row.get("fingerprint") == expected_review_fingerprint
-            and GIT_SHA.fullmatch(str(row.get("headSha", "")))
-            and REVIEW_EVIDENCE.fullmatch(str(row.get("evidenceRef", "")))
-            for row in reviews
-        )
-        if structurally_live:
-            for row in reviews:
-                errors.extend(verify_live_review(row, expected_review_fingerprint))
+        if reviews:
+            errors.append("reviews: checked-in review claims are not authority; leave rows empty and resolve the live unedited PR ledger")
+        if required_reviews == REQUIRED_REVIEW_ROLES and not reviews and expected_review_fingerprint:
+            _, live_errors = discover_live_reviews(expected_review_fingerprint)
+            errors.extend(live_errors)
     return errors
 
 
@@ -408,6 +424,32 @@ def self_test(data: dict[str, Any]) -> list[str]:
     ]
     if not validate(nonexistent, acceptance=True):
         failures.append("mutation survived: nonexistent canonical-looking role comments")
+    parser_head = "1" * 40
+    parser_fingerprint = "2" * 64
+    parser_body = (
+        "## Q0 security role review\n\n"
+        "- Reviewer identity: `parser-reviewer`\n"
+        "- Role: `security`\n"
+        "- Verdict: **accepted**\n"
+        f"- Exact PR head: `{parser_head}`\n"
+        f"- Canonical Q0 fingerprint: `{parser_fingerprint}`\n"
+    )
+    parser_comment = {
+        "body": parser_body,
+        "html_url": "https://github.com/FS-GG/.github/pull/3001#issuecomment-1",
+        "created_at": "2026-08-26T00:00:00Z",
+        "updated_at": "2026-08-26T00:00:00Z",
+    }
+    if parse_role_comment(parser_comment, parser_head, parser_fingerprint) is None:
+        failures.append("review parser rejected an exact accepted attestation")
+    negated = {**parser_comment, "body": parser_body.replace("**accepted**", "**not accepted**")}
+    if parse_role_comment(negated, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted a negated verdict")
+    if parse_role_comment(parser_comment, "0" * 40, parser_fingerprint) is not None:
+        failures.append("review parser accepted an arbitrary non-current head")
+    edited = {**parser_comment, "updated_at": "2026-08-26T00:01:00Z"}
+    if parse_role_comment(edited, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted an edited attestation")
     return failures
 
 
