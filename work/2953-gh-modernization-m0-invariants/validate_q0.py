@@ -72,23 +72,24 @@ def parse_role_comment(comment: dict[str, Any], live_head: str, fingerprint: str
     if comment.get("created_at") != comment.get("updated_at"):
         return None
     body = str(comment.get("body", ""))
-    patterns = {
-        "reviewer": r"^- Reviewer identity: `([^`]+)`$",
-        "role": r"^- Role: `(architecture|security|operations|crossRepository)`$",
-        "verdict": r"^- Verdict: \*\*(accepted)\*\*$",
-        "headSha": r"^- Exact PR head: `([0-9a-f]{40})`$",
-        "fingerprint": r"^- Canonical Q0 fingerprint: `([0-9a-f]{64})`$",
-    }
-    parsed: dict[str, str] = {}
-    for name, pattern in patterns.items():
-        matches = re.findall(pattern, body, flags=re.MULTILINE)
-        if len(matches) != 1:
-            return None
-        parsed[name] = matches[0]
-    if parsed["headSha"] != live_head or parsed["fingerprint"] != fingerprint:
-        return None
-    role_heading = f"## Q0 {REVIEW_ROLE_TEXT[parsed['role']]} role review"
-    if role_heading not in body:
+    parsed: dict[str, str] | None = None
+    for role, heading in REVIEW_ROLE_TEXT.items():
+        pattern = (
+            rf"\A## Q0 {re.escape(heading)} role review\n\n"
+            rf"- Reviewer identity: `([^`\n]+)`\n"
+            rf"- Role: `{re.escape(role)}`\n"
+            rf"- Verdict: \*\*accepted\*\*\n"
+            rf"- Exact PR head: `{re.escape(live_head)}`\n"
+            rf"- Canonical Q0 fingerprint: `{re.escape(fingerprint)}`(?:\n|\Z)"
+        )
+        match = re.match(pattern, body)
+        if match:
+            parsed = {
+                "reviewer": match.group(1), "role": role, "verdict": "accepted",
+                "headSha": live_head, "fingerprint": fingerprint,
+            }
+            break
+    if parsed is None:
         return None
     url = str(comment.get("html_url", ""))
     if not re.fullmatch(r"https://github\.com/FS-GG/\.github/pull/3001#issuecomment-[1-9][0-9]*", url):
@@ -450,6 +451,12 @@ def self_test(data: dict[str, Any]) -> list[str]:
     edited = {**parser_comment, "updated_at": "2026-08-26T00:01:00Z"}
     if parse_role_comment(edited, parser_head, parser_fingerprint) is not None:
         failures.append("review parser accepted an edited attestation")
+    fenced = {**parser_comment, "body": "```markdown\n" + parser_body + "```\n"}
+    if parse_role_comment(fenced, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted a fenced historical example")
+    disclaimed = {**parser_comment, "body": "This is not an attestation.\n\n" + parser_body}
+    if parse_role_comment(disclaimed, parser_head, parser_fingerprint) is not None:
+        failures.append("review parser accepted a disclaimed copied attestation")
     return failures
 
 
