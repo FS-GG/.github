@@ -68,16 +68,12 @@ jobs:
           python3 work/2953-gh-modernization-m0-invariants/validate_q0.py
           work/2953-gh-modernization-m0-invariants/q0-evidence.json --self-test
 
-      - name: Require exact role-bound acceptance once review rows exist
-        run: |
-          evidence=work/2953-gh-modernization-m0-invariants/q0-evidence.json
-          validator=work/2953-gh-modernization-m0-invariants/validate_q0.py
-          reviews="$(jq '.reviews | length' "$evidence")"
-          required="$(jq '.reviewsRequired | length' "$evidence")"
-          if [ "$reviews" -gt 0 ] && [ "$reviews" -ne "$required" ]; then
-            echo "partial Q0 review set is not admissible" >&2
-            exit 1
-          fi
-          if [ "$reviews" -eq "$required" ]; then
-            python3 "$validator" "$evidence" --acceptance
-          fi
+      - name: Prove live Q0 acceptance cannot be skipped or gated by checked-in rows
+        run: >-
+          python3 work/2953-gh-modernization-m0-invariants/verify_q0_workflow.py
+          .github/workflows/github-substrate-q0.yml --self-test
+
+      - name: Require exact live role-bound acceptance
+        run: >-
+          python3 work/2953-gh-modernization-m0-invariants/validate_q0.py
+          work/2953-gh-modernization-m0-invariants/q0-evidence.json --acceptance

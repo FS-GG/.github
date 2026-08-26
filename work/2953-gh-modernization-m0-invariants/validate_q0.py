@@ -52,6 +52,11 @@ REVIEW_ROLE_TEXT = {
     "operations": "operations",
     "crossRepository": "cross-repository",
 }
+# These hashes bind the independently adjudicated semantic baseline, not merely its
+# presence in the role-signed subject. Recomputing reviewFingerprint after weakening a
+# verdict or deletion obligation therefore remains red before another review is sought.
+REQUIRED_CORPUS_CONTRACT_SHA256 = "654902d795efc673353df4778f65fd43546b970e831a78f087e367dd6b9e59ef"
+REQUIRED_DELETION_CONTRACT_SHA256 = "17a05d11c1378ab9dc44c535c3d25f80b5e44e93eea3ae20f6cb5a179ea6161d"
 
 
 def digest_bytes(value: bytes) -> str:
@@ -239,6 +244,9 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     corpus_kinds = {row.get("kind") for row in corpus}
     if corpus_kinds != REQUIRED_CORPUS:
         errors.append(f"corpus: kind mismatch missing={sorted(REQUIRED_CORPUS-corpus_kinds)} extra={sorted(corpus_kinds-REQUIRED_CORPUS)}")
+    corpus_contract = [{key: row.get(key) for key in ("id", "kind", "expected")} for row in corpus]
+    if canonical_digest(corpus_contract) != REQUIRED_CORPUS_CONTRACT_SHA256:
+        errors.append("corpus: typed verdict contract differs from the adjudicated baseline")
     corpus_artifact = data.get("corpusArtifact", {})
     require_fields([corpus_artifact], {"path", "sha256"}, "corpusArtifact", errors)
     corpus_path = ROOT / str(corpus_artifact.get("path", ""))
@@ -303,6 +311,12 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     classifications = {row.get("classification") for row in deletion}
     if classifications != REQUIRED_CLASSIFICATIONS:
         errors.append(f"compatibilityDeletion: classification mismatch missing={sorted(REQUIRED_CLASSIFICATIONS-classifications)} extra={sorted(classifications-REQUIRED_CLASSIFICATIONS)}")
+    deletion_contract = [
+        {key: row.get(key) for key in ("id", "surface", "classification", "deleteUnit", "absenceTest")}
+        for row in deletion
+    ]
+    if canonical_digest(deletion_contract) != REQUIRED_DELETION_CONTRACT_SHA256:
+        errors.append("compatibilityDeletion: contract differs from the adjudicated deletion baseline")
 
     handoff = data.get("handoff", [])
     require_fields(handoff, {"ref", "classification", "decision"}, "handoff", errors)
@@ -383,7 +397,7 @@ def self_test(data: dict[str, Any]) -> list[str]:
         ("inventory digest", lambda d: d["inventories"][0].__setitem__("pathListSha256", "not-a-digest")),
         ("governing artifact", lambda d: d["governingArtifacts"][0].__setitem__("sha256", "0" * 64)),
         ("unknown writer", lambda d: d["mutations"].append({**d["mutations"][0], "id": "M-unknown", "class": "unknownWriter"})),
-        ("corpus subject", lambda d: d["corpus"][0].__setitem__("expected", "weakened")),
+        ("corpus subject", lambda d: d["corpus"][0]["expected"].__setitem__("decisionClass", "Accept")),
         ("corpus original bytes", lambda d: d["corpus"][0].__setitem__("originalBytesSha256", "0" * 64)),
         ("deletion unit", lambda d: d["compatibilityDeletion"][0].__setitem__("deleteUnit", "GS2-never")),
         ("threat source", lambda d: d["threatModel"].__setitem__("sha256", "0" * 64)),
@@ -393,6 +407,8 @@ def self_test(data: dict[str, Any]) -> list[str]:
     for name, mutate in candidate_mutations:
         candidate = copy.deepcopy(data)
         mutate(candidate)
+        if name in {"corpus subject", "deletion unit"}:
+            candidate["reviewFingerprint"] = canonical_digest(review_subject(candidate))
         if not validate(candidate):
             failures.append(f"mutation survived: {name}")
 
