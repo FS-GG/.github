@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="6" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.627171"><testcase name="q0-candidate-and-mutation-controls" time="6.652178"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="1.473111"><system-out>Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
+<testsuite name="GS2-00-Q0" tests="7" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="8.816902"><testcase name="q0-candidate-and-mutation-controls" time="6.651273"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.595598"><system-out>Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.117166"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.032509"><system-out>{
+Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.116342"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.032651"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -16,11 +16,11 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
         },
         {
             "path": "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
-            "sha256": "97618b4a6832eb86eafcd757d2a6d148b2bd38212f34d465cabdcaf2fdfb451c"
+            "sha256": "b309da65755808157d6dd1e49788b58f5248828ced2ac2d8678169324b96eedf"
         },
         {
             "path": "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
-            "sha256": "1e27be684a8baee1d18fb77e79de3856aa39f6d1c3aa6cf82075bc8279373b14"
+            "sha256": "149559d18ba62d942b56b065c84faf44b7adfb6d1b904922d3033248bc353a1d"
         },
         {
             "path": "docs/github-substrate-v2-roadmap.md",
@@ -934,7 +934,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
     },
     "threatModel": {
         "path": "work/2953-gh-modernization-m0-invariants/threat-model.md",
-        "sha256": "c42700acc4d0ccc21999c6ceb8c07a6f4caa2dec7d07637adad9018b2bd4ce81",
+        "sha256": "38c6acad9435e0c5b0f3e4da57374a912c1d4de63592688d109eae441e8a6f38",
         "boundaries": [
             "protectedEpoch",
             "administrativePrincipal",
@@ -945,9 +945,9 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
     },
     "adminSettingsReport": {
         "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
-        "sha256": "0e6a2b7413fe94fba62f675463134234666dde7b351e0dd04e07b43b6742cb2c"
+        "sha256": "6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"
     },
-    "reviewFingerprint": "5eab3ceff0fb5693a3a30a83f8c6d87e895fadb310e30a630655b2511df0066b",
+    "reviewFingerprint": "febaa98f354fcad88f50c4c17e7592f3d46d9e6c1d0c381831b6a705e4d68668",
     "reviewAuthority": "live-unedited-current-head-pr-comments",
     "reviewsRequired": [
         "architecture",
@@ -957,7 +957,8 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.005626"><system-out /></testcase><testcase name="sdd-implementation-ready" time="0.346580"><system-out>{
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.005861"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.071072"><system-out>committed whitespace mutation rejected by exact commit range
+</system-out></testcase><testcase name="sdd-implementation-ready" time="0.344105"><system-out>{
   "schemaVersion": 1,
   "reportVersion": "2.6.0",
   "toolVersion": "1.2.5",
@@ -993,11 +994,11 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
       "operation": "noChange",
       "beforeDigest": {
         "algorithm": "sha256",
-        "value": "fd8fa3eb6a2e9a3a4a87dbe9b063829ec3ccbd1fcade396cdddaac4d9d53ad33"
+        "value": "e84b8d81b33f49fc9ea0d5faa6e8b75a92f9d7d88719e9b5e849beea0cb122fe"
       },
       "afterDigest": {
         "algorithm": "sha256",
-        "value": "fd8fa3eb6a2e9a3a4a87dbe9b063829ec3ccbd1fcade396cdddaac4d9d53ad33"
+        "value": "e84b8d81b33f49fc9ea0d5faa6e8b75a92f9d7d88719e9b5e849beea0cb122fe"
       },
       "safeWriteDecision": "preserveExisting",
       "diagnosticIds": []
@@ -1252,7 +1253,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "62e690964dd10f9ce9e143c082b4df983e45b640e0875f46dccea1097085dd80"
+            "value": "467a8baf63ec473d4e24093ace0a60564ab83a8be31449db3b2009ba0810eca2"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1261,7 +1262,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "fadfc55f0c7b5fa69e282a47db3d0c0fdc47253b8f532740540d12ad9ba7692c"
+            "value": "85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1270,7 +1271,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "296d5de5420b0d7b54b3ad52e7445fcb037137185de9249e782caa146136393a"
+            "value": "80e4c372c3264868f107d01706148963d26ad6801cd4199a798cf1d2f46882ce"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1279,7 +1280,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "1c25010366f159e3e06c4dab973dc153ab242f128b9031f6dfdc9c8ac707d49f"
+            "value": "01ce360adedf1dc17d32cb8b894977342a0e013f9ab8fe589003988403c18c02"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1288,7 +1289,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "73e3008d9af9755f2e92a426a713b842110ed616cb6a6ec2af819eeaf146d159"
+            "value": "4d7c6cc6872931967a476422d1a76691be1c2f1342adacc58fb62a914213386f"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1310,7 +1311,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "62e690964dd10f9ce9e143c082b4df983e45b640e0875f46dccea1097085dd80"
+            "value": "467a8baf63ec473d4e24093ace0a60564ab83a8be31449db3b2009ba0810eca2"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1319,7 +1320,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "fadfc55f0c7b5fa69e282a47db3d0c0fdc47253b8f532740540d12ad9ba7692c"
+            "value": "85a3c11aff3daee06e00d9fa5f22ecccca2b9c95c6ac9a639be875453ee419f2"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1328,7 +1329,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "296d5de5420b0d7b54b3ad52e7445fcb037137185de9249e782caa146136393a"
+            "value": "80e4c372c3264868f107d01706148963d26ad6801cd4199a798cf1d2f46882ce"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1337,7 +1338,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "1c25010366f159e3e06c4dab973dc153ab242f128b9031f6dfdc9c8ac707d49f"
+            "value": "01ce360adedf1dc17d32cb8b894977342a0e013f9ab8fe589003988403c18c02"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
@@ -1346,7 +1347,7 @@ Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "73e3008d9af9755f2e92a426a713b842110ed616cb6a6ec2af819eeaf146d159"
+            "value": "4d7c6cc6872931967a476422d1a76691be1c2f1342adacc58fb62a914213386f"
           },
           "schemaVersion": 1,
           "schemaStatus": "current"
