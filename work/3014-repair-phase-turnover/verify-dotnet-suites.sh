@@ -7,6 +7,8 @@ raw_dir="$(mktemp -d)"
 trap 'rm -rf "$raw_dir"' EXIT
 
 cd "$root"
+dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
+dotnet restore tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --locked-mode
 dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj \
   -c Release --no-restore --results-directory "$raw_dir/core" \
   --logger 'trx;LogFileName=core.trx'
