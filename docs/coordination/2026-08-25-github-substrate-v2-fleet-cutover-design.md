@@ -735,6 +735,8 @@ attestation whose sole final `Evidence` line cites that earlier repair-PR commen
 the same authorized GitHub `User`, strict temporal ordering, and authorization by either an allowed live
 association or the exact login in the fingerprint-bound reviewer allowlist. It rejects Bots, missing users,
 non-allowlisted contributors, self, later, edited, wrong-author, wrong-PR, or trailing records.
+The same canonical login predicate runs before both association and allowlist authorization: 1–39 ASCII
+characters, alphanumeric endpoints, and only alphanumerics or isolated internal hyphens.
 
 The typed model may generate exhaustive structural and transition cases, but at least one black-box oracle
 for every safety-critical invariant must be maintained outside that generator. Otherwise a defect in the

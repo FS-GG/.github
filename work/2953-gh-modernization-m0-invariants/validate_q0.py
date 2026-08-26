@@ -75,13 +75,22 @@ def run_bytes(command: list[str]) -> bytes:
     return subprocess.run(command, cwd=ROOT, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
 
 
+def canonical_github_login(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and 1 <= len(value) <= 39
+        and value.isascii()
+        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}", value) is not None
+    )
+
+
 def authorized_review_author(comment: dict[str, Any], allowlist: set[str]) -> tuple[str, str] | None:
     author = comment.get("user")
     association = comment.get("author_association")
     if (
         not isinstance(author, dict)
         or author.get("type") != "User"
-        or not isinstance(author.get("login"), str)
+        or not canonical_github_login(author.get("login"))
         or not (
             association in AUTHORIZED_REVIEW_ASSOCIATIONS
             or author["login"] in allowlist
@@ -452,7 +461,7 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     if (
         not isinstance(raw_allowlist, list)
         or not raw_allowlist
-        or any(not isinstance(login, str) or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", login) for login in raw_allowlist)
+        or any(not canonical_github_login(login) for login in raw_allowlist)
         or len(raw_allowlist) != len(allowlist)
         or raw_allowlist != sorted(raw_allowlist, key=str.casefold)
     ):
@@ -499,6 +508,12 @@ def self_test(data: dict[str, Any]) -> list[str]:
         candidate["reviewFingerprint"] = canonical_digest(review_subject(candidate))
         if not validate(candidate):
             failures.append(f"mutation survived: {name} reviewer allowlist")
+    for value in ["a b", "-ab", "ab-", "a--b", "a" * 40, 7, "a_b", "a.b", "ümlaut"]:
+        candidate = copy.deepcopy(data)
+        candidate["reviewAuthorAllowlist"] = [value]
+        candidate["reviewFingerprint"] = canonical_digest(review_subject(candidate))
+        if not validate(candidate):
+            failures.append(f"mutation survived: invalid reviewer login {value!r}")
 
     acceptance = copy.deepcopy(data)
     acceptance["reviews"] = [
@@ -532,6 +547,14 @@ def self_test(data: dict[str, Any]) -> list[str]:
     parser_head = "1" * 40
     parser_fingerprint = "2" * 64
     parser_allowlist = set(data["reviewAuthorAllowlist"])
+    valid_logins = ["a", "a" * 39, "a-b", "A1-b2"]
+    invalid_logins: list[object] = [
+        "", "a b", "-ab", "ab-", "a--b", "a" * 40, 7, "a_b", "a.b", "ümlaut",
+    ]
+    if any(not canonical_github_login(login) for login in valid_logins):
+        failures.append("canonical GitHub login predicate rejected a valid boundary")
+    if any(canonical_github_login(login) for login in invalid_logins):
+        failures.append("canonical GitHub login predicate accepted an invalid boundary")
     parser_body = (
         "## Q0 security role review\n\n"
         "- Reviewer identity: `parser-reviewer`\n"
@@ -606,6 +629,14 @@ def self_test(data: dict[str, Any]) -> list[str]:
     bot = {**parser_comment, "user": {"login": "EHotwagner", "type": "Bot"}}
     if parse_role_comment(bot, parser_head, parser_fingerprint, parser_allowlist) is not None:
         failures.append("review parser accepted an allowlist-spoofing Bot")
+    for invalid_login in invalid_logins:
+        association_spoof = {
+            **parser_comment,
+            "user": {"login": invalid_login, "type": "User"},
+            "author_association": "MEMBER",
+        }
+        if parse_role_comment(association_spoof, parser_head, parser_fingerprint, parser_allowlist) is not None:
+            failures.append(f"review parser accepted association-authorized invalid login {invalid_login!r}")
     retracted = {**parser_comment, "body": parser_body + "This is not an attestation.\n"}
     if parse_role_comment(retracted, parser_head, parser_fingerprint, parser_allowlist) is not None:
         failures.append("review parser accepted a trailing retraction")

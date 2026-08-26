@@ -351,6 +351,12 @@ model checking. F# tests remain required implementation evidence and enter corre
   rejected all four roles. Q0 therefore binds an exact unique GitHub User login allowlist into the signed
   fingerprint and accepts a User when either its live association is allowed or its login is allowlisted;
   Bots, missing users, and non-allowlisted `CONTRIBUTOR`/`NONE` records remain fail-closed.
+  The later [revision-10 diagnosis](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420215570),
+  [security evidence](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420187392), and
+  [cross-repository evidence](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420206908) require
+  one login grammar before both authorization routes: 1–39 ASCII characters, alphanumeric endpoints,
+  and only alphanumerics or single internal hyphens. Empty, whitespace, leading/trailing/double hyphen,
+  overlength, non-string, underscore, dot, and Unicode identities fail even with an allowed association.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 

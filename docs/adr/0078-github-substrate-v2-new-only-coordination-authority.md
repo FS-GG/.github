@@ -136,6 +136,12 @@ the association-only review check was not workflow-portable: the maintainer view
 review author's private membership as `MEMBER`, while the workflow token reported `CONTRIBUTOR` and found
 zero roles. The fingerprint-bound exact User login allowlist is the repair authority for that parity defect;
 changing it invalidates every existing attestation and requires fresh exact-head review.
+The [revision-10 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420215570),
+[security narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420187392), and
+[cross-repository narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5420206908) diagnose
+the remaining divergent-login-parser risk and authorize repair; they are not acceptance. One canonical
+predicate now precedes both association and allowlist authorization and validates the allowlist itself:
+1–39 ASCII characters, alphanumeric endpoints, and only alphanumerics or isolated internal hyphens.
 
 ## Consequences
 
