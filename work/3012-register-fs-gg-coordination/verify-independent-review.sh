@@ -40,7 +40,7 @@ python3 work/2953-gh-modernization-m0-invariants/validate_q0.py \
   work/2953-gh-modernization-m0-invariants/q0-evidence.json --self-test >/dev/null
 
 cli_receipt=work/3012-register-fs-gg-coordination/test-results/cli-full-after-oplock.trx
-grep -q '<Counters total="399" executed="399" passed="399" failed="0"' "$cli_receipt"
+grep -q '<Counters total="400" executed="400" passed="400" failed="0"' "$cli_receipt"
 grep -q 'OpLockTests.non-participants receive no operation-lock authority.*outcome="Passed"' "$cli_receipt"
 
 mkdir -p "$(dirname "$out")"
@@ -53,7 +53,7 @@ cat > "$out" <<'XML'
   <testcase classname="project-migration" name="321 item states preserve 86 assigned and 235 unassigned values" />
   <testcase classname="project-migration" name="before and after item-state arrays are identical" />
   <testcase classname="q0" name="frozen administrator report and complete Q0 mutation self-test remain green" />
-  <testcase classname="operation-lock" name="399-test CLI receipt proves non-participants receive no dispatch lock" />
+  <testcase classname="operation-lock" name="400-test CLI receipt proves non-participants receive no dispatch lock and parses reordered roster fields" />
 </testsuite>
 XML
 

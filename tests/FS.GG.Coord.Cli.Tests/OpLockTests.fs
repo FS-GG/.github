@@ -79,7 +79,21 @@ let private root = repoRoot (Directory.GetCurrentDirectory())
 /// Rows under another owner are excluded because the embedded table is owner-gated by design: its numbers
 /// are FS-GG's issues, and handing a foreign owner one would be a lock naming an unrelated issue. The one
 /// such row today is `EHotwagner/S.I.R.`, a `non-participant`.
-let private fsGgRosterRows: (string * string) list =
+let private parseRosterRow (line: string) =
+    // Parse each required field independently. YAML inline-map field order is not semantic, so coupling
+    // `role` to the position after `full` would make a legal reorder silently remove a repository from the
+    // completeness proof.
+    let full =
+        Regex.Match(line, @"(?:^|[,\{]\s*)full:\s*([\w.-]+)/([\w.-]+)(?:\s*,|\s*\})")
+
+    let role = Regex.Match(line, @"(?:^|[,\{]\s*)role:\s*([\w-]+)(?:\s*,|\s*\})")
+
+    if full.Success && role.Success then
+        Some(full.Groups.[1].Value, full.Groups.[2].Value, role.Groups.[1].Value)
+    else
+        None
+
+let private rosterRows, unparsedRosterRows =
     let text = File.ReadAllLines(Path.Combine(root, "registry", "repos.yml"))
 
     let block =
@@ -95,16 +109,27 @@ let private fsGgRosterRows: (string * string) list =
             || trimmed = ""
             || trimmed.StartsWith "#")
 
-    block
-    |> Array.choose (fun line ->
-        let m =
-            Regex.Match(line, @"^\s*-\s*\{[^}]*?full:\s*([\w.-]+)/([\w.-]+),\s*role:\s*([\w-]+)")
+    let candidates =
+        block |> Array.filter (fun line -> Regex.IsMatch(line, @"^\s*-\s*\{"))
 
-        if m.Success && m.Groups.[1].Value.ToLowerInvariant() = "fs-gg" then
-            Some(m.Groups.[2].Value, m.Groups.[3].Value)
+    let parsed, unparsed =
+        candidates
+        |> Array.fold
+            (fun (parsed, unparsed) line ->
+                match parseRosterRow line with
+                | Some row -> row :: parsed, unparsed
+                | None -> parsed, line :: unparsed)
+            ([], [])
+
+    List.rev parsed, List.rev unparsed
+
+let private fsGgRosterRows: (string * string) list =
+    rosterRows
+    |> List.choose (fun (owner, repo, role) ->
+        if owner.ToLowerInvariant() = "fs-gg" then
+            Some(repo, role)
         else
             None)
-    |> Array.toList
 
 let private operationLockRepos =
     fsGgRosterRows
@@ -125,9 +150,18 @@ let ``the roster parse is NON-VACUOUS - a fixture that reads nothing proves noth
     // moved — would turn the completeness assertion into a green that asserts nothing at all. That is the
     // failure mode this whole file exists to prevent, arriving through the test rather than the table.
     //
-    // Eight is the roster as measured today; the assertion is `>=` because onboarding a ninth repository
-    // must not red THIS leg — it must red the completeness leg below, which is the one that means "the new
-    // receiver has no lock".
+    let unparsed = String.concat " | " unparsedRosterRows
+
+    Assert.True(List.isEmpty unparsedRosterRows, $"roster rows missing a parseable full or role field: %s{unparsed}")
+
+    // Nine is the FS-GG-owned roster as measured today: eight operation receivers and one intentionally
+    // lock-free non-participant. The assertions are `>=` because onboarding a new repository must red the
+    // applicable completeness leg below, not this parser-sanity leg.
+    Assert.True(
+        List.length fsGgRosterRows >= 9,
+        $"parsed only %d{List.length fsGgRosterRows} FS-GG rows from registry/repos.yml — the parse or owner projection, not the roster, is what broke"
+    )
+
     Assert.True(
         List.length operationLockRepos >= 8,
         $"parsed only %d{List.length operationLockRepos} FS-GG operation-receiver rows from registry/repos.yml — the parse or role projection, not the roster, is what broke"
@@ -136,6 +170,13 @@ let ``the roster parse is NON-VACUOUS - a fixture that reads nothing proves noth
     // And it found the specific row whose ABSENCE from the chore-lock table is this slice's subject.
     Assert.Contains("FS.GG.Net", operationLockRepos)
     Assert.Contains("FS.GG.Coordination", nonParticipantRepos)
+
+[<Fact>]
+let ``the roster parser is independent of inline-map field order`` () =
+    let reordered =
+        "  - { role: framework, receives: [], full: FS-GG/FS.GG.Future, id: future }"
+
+    Assert.Equal(Some("FS-GG", "FS.GG.Future", "framework"), parseRosterRow reordered)
 
 [<Fact>]
 let ``opLockRef covers EVERY rostered operation receiver - including FS.GG.Net`` () =
@@ -247,7 +288,7 @@ let ``acquire is the item CAS on the op-lock subject - and NEVER touches the boa
     //      future edit reaching for a board read to resolve, validate or record a grant reds this leg.
     //   2. THE LOCK ISSUE IS NOT ON THE BOARD — which this test canNOT pin, and must not pretend to. That
     //      is a fact about GitHub, and a scripted transport answers whatever the fixture tells it to. It
-    //      was verified out-of-band by reading all eight lock issues back from the API (`projectItems`
+    //      was verified out-of-band by reading all eight receiver lock issues back from the API (`projectItems`
     //      empty on every one) and is maintained by the rule in each issue's body.
     //
     // Stating them separately is the point: (1) alone does not imply (2), and a green here would otherwise
