@@ -117,6 +117,17 @@ that digest checks alone could accept omitted sources; they authorize repair and
 downstream gate therefore requires exact, duplicate-free label/path multisets for evidence, verify, ship,
 and governance handoff and rejects malformed, missing, duplicate, unexpected, and stale rows. Independent
 omission, duplication, and extra-row mutations exercise that completeness contract.
+The later [revision-8 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419940163)
+and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419915373) diagnose
+that path-and-digest checks could still accept a misclassified or malformed source row; they authorize
+repair and are not acceptance. Q0 therefore binds the exact per-path kind, required and allowed source-row
+keys, integer schema version, current schema status where the projection defines it, and the projection's
+single canonical SHA-256 representation. Evidence snapshots require an exact label/path row with a bare
+lowercase digest; verify and ship require an exact two-key `sha256` digest object; governance handoff
+requires its exact prefixed lowercase digest string. Independent mutations cover missing and wrong kinds,
+missing and wrong schemas/statuses, unexpected row and digest keys, alternate digest forms, malformed
+types, and non-lowercase or non-64-hex values across every projection, in addition to the earlier
+missing/duplicate/extra/path/stale controls.
 
 ## Consequences
 

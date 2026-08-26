@@ -34,36 +34,35 @@ EXPECTED_EVIDENCE_SNAPSHOTS = {
     "spec": "work/2953-gh-modernization-m0-invariants/spec.md",
     "tasks": "work/2953-gh-modernization-m0-invariants/tasks.yml",
 }
+COMMON_SDD_SOURCE_KINDS = {
+    ".fsgg/agents.yml": "agentsConfig",
+    ".fsgg/project.yml": "projectConfig",
+    ".fsgg/sdd.yml": "sddConfig",
+    "readiness/2953-gh-modernization-m0-invariants/analysis.json": "analysis",
+    "readiness/2953-gh-modernization-m0-invariants/work-model.json": "workModel",
+    "work/2953-gh-modernization-m0-invariants/checklist.md": "checklist",
+    "work/2953-gh-modernization-m0-invariants/clarifications.md": "clarification",
+    "work/2953-gh-modernization-m0-invariants/evidence.yml": "evidence",
+    "work/2953-gh-modernization-m0-invariants/plan.md": "plan",
+    "work/2953-gh-modernization-m0-invariants/spec.md": "specification",
+    "work/2953-gh-modernization-m0-invariants/tasks.yml": "tasks",
+}
 EXPECTED_DOWNSTREAM_SOURCES = {
-    DOWNSTREAM_JSON[0]: {
-        ".fsgg/agents.yml", ".fsgg/project.yml", ".fsgg/sdd.yml",
-        "readiness/2953-gh-modernization-m0-invariants/analysis.json",
-        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
-        "work/2953-gh-modernization-m0-invariants/checklist.md",
-        "work/2953-gh-modernization-m0-invariants/clarifications.md",
-        "work/2953-gh-modernization-m0-invariants/evidence.yml",
-        "work/2953-gh-modernization-m0-invariants/plan.md",
-        "work/2953-gh-modernization-m0-invariants/spec.md",
-        "work/2953-gh-modernization-m0-invariants/tasks.yml",
-    },
+    DOWNSTREAM_JSON[0]: COMMON_SDD_SOURCE_KINDS,
     DOWNSTREAM_JSON[1]: {
-        ".fsgg/agents.yml", ".fsgg/project.yml", ".fsgg/sdd.yml",
-        "readiness/2953-gh-modernization-m0-invariants/analysis.json",
-        "readiness/2953-gh-modernization-m0-invariants/verify.json",
-        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
-        "work/2953-gh-modernization-m0-invariants/checklist.md",
-        "work/2953-gh-modernization-m0-invariants/clarifications.md",
-        "work/2953-gh-modernization-m0-invariants/evidence.yml",
-        "work/2953-gh-modernization-m0-invariants/plan.md",
-        "work/2953-gh-modernization-m0-invariants/spec.md",
-        "work/2953-gh-modernization-m0-invariants/tasks.yml",
+        **COMMON_SDD_SOURCE_KINDS,
+        "readiness/2953-gh-modernization-m0-invariants/verify.json": "source",
     },
+    # The governance-handoff schema deliberately has no kind or schemaStatus.
     DOWNSTREAM_JSON[2]: {
-        "readiness/2953-gh-modernization-m0-invariants/ship.json",
-        "readiness/2953-gh-modernization-m0-invariants/verify.json",
-        "readiness/2953-gh-modernization-m0-invariants/work-model.json",
+        "readiness/2953-gh-modernization-m0-invariants/ship.json": None,
+        "readiness/2953-gh-modernization-m0-invariants/verify.json": None,
+        "readiness/2953-gh-modernization-m0-invariants/work-model.json": None,
     },
 }
+SDD_SOURCE_ROW_KEYS = frozenset({"path", "kind", "digest", "schemaVersion", "schemaStatus"})
+HANDOFF_SOURCE_ROW_KEYS = frozenset({"path", "digest", "schemaVersion"})
+LOWER_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass
@@ -205,22 +204,48 @@ def downstream_source_errors(
             errors.append(f"{artifact.relative_to(ROOT)}: top-level sources are missing")
             continue
         paths: list[str] = []
+        expected_rows = EXPECTED_DOWNSTREAM_SOURCES.get(artifact, {})
+        handoff = artifact == DOWNSTREAM_JSON[2]
         for index, row in enumerate(rows):
-            if not isinstance(row, dict) or not isinstance(row.get("path"), str):
-                errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: malformed")
+            prefix = f"{artifact.relative_to(ROOT)} sources[{index}]"
+            if not isinstance(row, dict):
+                errors.append(f"{prefix}: malformed")
                 continue
-            paths.append(row["path"])
+            expected_keys = HANDOFF_SOURCE_ROW_KEYS if handoff else SDD_SOURCE_ROW_KEYS
+            if set(row) != expected_keys:
+                errors.append(f"{prefix}: keys are not canonical")
+            path = row.get("path")
+            if not isinstance(path, str):
+                errors.append(f"{prefix}: malformed")
+                continue
+            paths.append(path)
+            expected_kind = expected_rows.get(path)
+            if not handoff and (not isinstance(row.get("kind"), str) or row.get("kind") != expected_kind):
+                errors.append(f"{prefix}: kind is not canonical")
+            schema_version = row.get("schemaVersion")
+            if type(schema_version) is not int or schema_version != 1:
+                errors.append(f"{prefix}: schemaVersion is not canonical")
+            if not handoff and (not isinstance(row.get("schemaStatus"), str) or row.get("schemaStatus") != "current"):
+                errors.append(f"{prefix}: schemaStatus is not canonical")
             digest = row.get("digest")
-            if isinstance(digest, dict):
-                claimed = digest.get("value") if digest.get("algorithm") == "sha256" else None
-            elif isinstance(digest, str) and digest.startswith("sha256:"):
-                claimed = digest.removeprefix("sha256:")
+            if handoff:
+                claimed = digest.removeprefix("sha256:") if (
+                    isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+                ) else None
             else:
-                claimed = None
-            actual = exact_source_digest(row["path"])
-            if not isinstance(claimed, str) or actual != claimed:
-                errors.append(f"{artifact.relative_to(ROOT)} sources[{index}]: {row['path']} digest is stale")
-        expected_paths = EXPECTED_DOWNSTREAM_SOURCES.get(artifact, set())
+                claimed = digest.get("value") if (
+                    isinstance(digest, dict)
+                    and set(digest) == {"algorithm", "value"}
+                    and digest.get("algorithm") == "sha256"
+                    and isinstance(digest.get("value"), str)
+                    and LOWER_SHA256.fullmatch(digest["value"])
+                ) else None
+            actual = exact_source_digest(path)
+            if claimed is None:
+                errors.append(f"{prefix}: digest shape is not canonical")
+            elif actual != claimed:
+                errors.append(f"{prefix}: {path} digest is stale")
+        expected_paths = set(expected_rows)
         if len(paths) != len(set(paths)):
             errors.append(f"{artifact.relative_to(ROOT)}: duplicate source path")
         for path in sorted(expected_paths - set(paths)):
@@ -286,6 +311,78 @@ def downstream_source_set_mutation_self_test() -> int:
     return 0
 
 
+def downstream_source_schema_mutation_self_test() -> int:
+    evidence = (WORK / "evidence.yml").read_text(encoding="utf-8")
+    documents = {path: json.loads(path.read_text(encoding="utf-8")) for path in DOWNSTREAM_JSON}
+    if downstream_source_errors(evidence, documents):
+        print("canonical source-row baseline failed")
+        return 1
+
+    evidence_mutations = {
+        "evidence-missing-kind": evidence.replace("  - label: analysis\n", "  - path: analysis\n", 1),
+        "evidence-wrong-kind": evidence.replace("  - label: analysis\n", "  - label: not-analysis\n", 1),
+        "evidence-missing-schema": evidence.replace("    schemaVersion: 1\n", "", 1),
+        "evidence-wrong-schema": evidence.replace("    schemaVersion: 1\n", "    schemaVersion: 2\n", 1),
+        "evidence-unexpected-key": evidence.replace("    schemaVersion: 1\n", "    schemaVersion: 1\n    extra: true\n", 1),
+        "evidence-alternate-digest": re.sub(
+            r"(?m)^    digest: ([0-9a-f]{64})$", r"    digest: sha256:\1", evidence, count=1,
+        ),
+        "evidence-uppercase-digest": re.sub(
+            r"(?m)^    digest: ([0-9a-f]{64})$", lambda match: f"    digest: {match.group(1).upper()}",
+            evidence, count=1,
+        ),
+        "evidence-malformed-type": evidence.replace("    schemaVersion: 1\n", "    schemaVersion: '1'\n", 1),
+    }
+    mutations: list[tuple[str, str, dict[Path, dict[str, object]]]] = [
+        (name, text, documents) for name, text in evidence_mutations.items()
+    ]
+
+    for artifact in DOWNSTREAM_JSON:
+        projection = artifact.stem
+        handoff = artifact == DOWNSTREAM_JSON[2]
+        variants: dict[str, dict[Path, dict[str, object]]] = {}
+
+        def variant(name: str, mutate: object) -> None:
+            candidate = copy.deepcopy(documents)
+            row = candidate[artifact]["sources"][0]
+            mutate(row)  # type: ignore[operator]
+            variants[f"{projection}-{name}"] = candidate
+
+        if handoff:
+            variant("missing-kind", lambda row: row.update({"kind": None}))
+            variant("wrong-kind", lambda row: row.update({"kind": "source"}))
+        else:
+            variant("missing-kind", lambda row: row.pop("kind"))
+            variant("wrong-kind", lambda row: row.update({"kind": "not-canonical"}))
+        variant("missing-schema", lambda row: row.pop("schemaVersion"))
+        variant("wrong-schema", lambda row: row.update({"schemaVersion": 999}))
+        variant("unexpected-key", lambda row: row.update({"unexpected": True}))
+        if handoff:
+            variant(
+                "alternate-digest",
+                lambda row: row.update({"digest": {"algorithm": "sha256", "value": row["digest"][7:]}}),
+            )
+            variant("wrong-algorithm", lambda row: row.update({"digest": row["digest"].replace("sha256:", "SHA256:")}))
+            variant("uppercase-digest", lambda row: row.update({"digest": f"sha256:{row['digest'][7:].upper()}"}))
+        else:
+            variant("alternate-digest", lambda row: row.update({"digest": f"sha256:{row['digest']['value']}"}))
+            variant("wrong-algorithm", lambda row: row["digest"].update({"algorithm": "SHA256"}))
+            variant("digest-extra-key", lambda row: row["digest"].update({"encoding": "hex"}))
+            variant("digest-missing-key", lambda row: row["digest"].pop("algorithm"))
+            variant("uppercase-digest", lambda row: row["digest"].update({"value": row["digest"]["value"].upper()}))
+            variant("missing-status", lambda row: row.pop("schemaStatus"))
+            variant("wrong-status", lambda row: row.update({"schemaStatus": "stale"}))
+        variant("malformed-type", lambda row: row.update({"schemaVersion": "1"}))
+        mutations.extend((name, evidence, docs) for name, docs in variants.items())
+
+    failures = [name for name, text, docs in mutations if not downstream_source_errors(text, docs)]
+    if failures:
+        print(f"source-row schema mutations survived: {','.join(failures)}")
+        return 1
+    print(f"canonical source-row baseline passed; {len(mutations)} schema mutations rejected across every projection")
+    return 0
+
+
 def main() -> int:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     validator_spec = importlib.util.spec_from_file_location("q0_validator", WORK / "validate_q0.py")
@@ -309,6 +406,7 @@ def main() -> int:
         Case("sdd-downstream-source-digests", [sys.executable, str(Path(__file__)), "--downstream-source-digest-check"], contains="DOWNSTREAM-GREEN"),
         Case("sdd-stale-analysis-digest-mutation", [sys.executable, str(Path(__file__)), "--stale-analysis-digest-mutation-self-test"], contains="stale analysis source digest mutation rejected"),
         Case("sdd-downstream-source-set-mutations", [sys.executable, str(Path(__file__)), "--downstream-source-set-mutation-self-test"], contains="omission, duplicate, and extra"),
+        Case("sdd-downstream-source-schema-mutations", [sys.executable, str(Path(__file__)), "--downstream-source-schema-mutation-self-test"], contains="schema mutations rejected across every projection"),
         Case("source-tree-clean-after-gates", ["git", "diff", "--exit-code"]),
     ]
 
@@ -349,4 +447,6 @@ if __name__ == "__main__":
         raise SystemExit(stale_analysis_digest_mutation_self_test())
     if "--downstream-source-set-mutation-self-test" in sys.argv:
         raise SystemExit(downstream_source_set_mutation_self_test())
+    if "--downstream-source-schema-mutation-self-test" in sys.argv:
+        raise SystemExit(downstream_source_schema_mutation_self_test())
     raise SystemExit(main())

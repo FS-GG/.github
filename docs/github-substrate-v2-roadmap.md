@@ -336,6 +336,14 @@ model checking. F# tests remain required implementation evidence and enter corre
   diagnose and authorize correction of source-set omission; they are not acceptance. Q0 requires exact,
   duplicate-free per-artifact label/path multisets and rejects malformed, missing, duplicate, unexpected,
   or stale rows, with independent omission, duplicate, and extra-row mutations.
+  The [revision-8 changes-required record](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419940163)
+  and [operations narrative](https://github.com/FS-GG/.github/pull/3002#issuecomment-5419915373)
+  diagnose and authorize repair of the remaining source-row schema gap; they are not acceptance. Q0 now
+  binds exact per-path kinds, required/allowed row and nested digest keys, integer schema version, current
+  schema status where applicable, and one canonical lowercase SHA-256 representation per projection.
+  Table-driven controls reject missing/wrong kind, missing/wrong schema or status, unexpected keys,
+  alternate digest forms, malformed types, and invalid digest casing/length across evidence, verify, ship,
+  and governance handoff while retaining all source-set and stale-byte inversions.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 
