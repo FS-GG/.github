@@ -41,6 +41,7 @@
     <Compile Include="SchedulingCostTests.fs" />
     <Compile Include="ClaimOverlapTests.fs" />
     <Compile Include="ClaimLifecycleDestinationTests.fs" />
+    <Compile Include="ReviewWaitEvidenceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

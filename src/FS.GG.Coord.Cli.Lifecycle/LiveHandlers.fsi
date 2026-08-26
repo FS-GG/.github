@@ -4,6 +4,17 @@ module LiveHandlers =
 
     open FS.GG.Coord.Cli
 
+    /// Resolve a review-wait completion's exact structured evidence inside its canonical generation.
+    /// Repair-phase turnover can legitimately put the entry and its successor confirmation on the
+    /// same moved-head generation, so the supplied immutable URL, comment id, or digest selects the
+    /// authoritative record before ambiguity is judged. No match and a genuinely non-unique match
+    /// remain fail-closed.
+    val selectCompletionEvidence:
+      generation: string ->
+        evidence: string ->
+        candidates: (FS.GG.Coord.GitHub.Reads.CommentBody * FS.GG.Coord.StructuredDecision.ReviewRecord) list ->
+        Result<string, string>
+
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
     /// an attempted-but-invalid review into the distinct fact that no review was posted.
