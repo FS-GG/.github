@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3014-repair-phase-turnover",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.4.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b6f53d87a178fd7bdad6d9ba014e702aaafde9c0643b97895b569c527c65006b"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 17,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 17
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

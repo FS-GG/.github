@@ -216,6 +216,26 @@ module ReviewHeadDivergenceTests =
         | action -> failwithf "expected an exhaustion park, got %A" action
 
     [<Fact>]
+    let ``3014 shared exhaustion decision binds an admitted round-four terminal and its exact wait`` () =
+        let chain = ordinaryRoundFourSuccessorChain StructuredDecision.ChangesRequired
+        let receipt =
+            { exhaustionWait "old-claim" movedHead with
+                ReviewGeneration =
+                    ReviewWait.generationToken movedHead ReviewWait.RepairConfirmation 4
+                EvidenceRef = "https://review/5" }
+
+        let decision =
+            Review.decideOrdinaryExhaustion
+                { Phase = Review.Ordinary
+                  HeadSha = movedHead
+                  CurrentClaimGeneration = "fresh-claim"
+                  Checks = Types.PrGreen
+                  Comments = chain
+                  WaitState = Some(ReviewWait.Completed(receipt, receipt.EvidenceRef)) }
+
+        Assert.Equal(Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion, decision)
+
+    [<Fact>]
     let ``complete ordinary exhaustion decision owns checks wait generation and claim turnover`` () =
         let receipt: ReviewWait.WaitReceipt =
             { Item = "FS-GG/.github#2819"
@@ -251,12 +271,7 @@ module ReviewHeadDivergenceTests =
     let ``bounded ordinary exhaustion model keeps reducer projection and writer admission identical`` () =
         let oldClaim = "old-claim"
         let receipt = exhaustionWait oldClaim reviewedHead
-        let waitStates =
-            [ "waiting", ReviewWait.Waiting receipt
-              "completed", ReviewWait.Completed(receipt, receipt.EvidenceRef)
-              "cancelled", ReviewWait.Cancelled(receipt, "https://cancel")
-              "expired", ReviewWait.Recoverable(receipt, "expired")
-              "malformed", ReviewWait.Invalid [ "malformed wait" ] ]
+        let waitNames = [ "waiting"; "completed"; "cancelled"; "expired"; "malformed" ]
         let claims = [ "same", oldClaim; "renewed", "renewed-claim"; "fresh", "fresh-claim" ]
         let checks = [ Types.PrPending; Types.PrGreen; Types.PrRed; Types.PrUnknown ]
         let verdicts =
@@ -277,12 +292,26 @@ module ReviewHeadDivergenceTests =
                 for round in 0..(Protocol.reviewPolicy.MaxAutomatedRepairRounds + 1) do
                     for check in checks do
                         for matchingHead in [ true; false ] do
-                            for waitName, waitState in waitStates do
+                            for waitName in waitNames do
                                 for claimName, currentClaim in claims do
                                     histories <- histories + 1
                                     let currentHead = if matchingHead then reviewedHead else movedHead
                                     let comments =
                                         boundedOrdinaryChain initialVerdict terminalVerdict round reviewedHead
+                                    let terminalReceipt =
+                                        { receipt with
+                                            ReviewGeneration =
+                                                ReviewWait.generationToken
+                                                    reviewedHead
+                                                    ReviewWait.RepairConfirmation
+                                                    round }
+                                    let waitState =
+                                        match waitName with
+                                        | "waiting" -> ReviewWait.Waiting terminalReceipt
+                                        | "completed" -> ReviewWait.Completed(terminalReceipt, terminalReceipt.EvidenceRef)
+                                        | "cancelled" -> ReviewWait.Cancelled(terminalReceipt, "https://cancel")
+                                        | "expired" -> ReviewWait.Recoverable(terminalReceipt, "expired")
+                                        | _ -> ReviewWait.Invalid [ "malformed wait" ]
                                     let decision =
                                         Review.decideOrdinaryExhaustion
                                             { Phase = Review.Ordinary
@@ -292,21 +321,21 @@ module ReviewHeadDivergenceTests =
                                               Comments = comments
                                               WaitState = Some waitState }
 
-                                    let exactShape =
+                                    let passingTerminal =
                                         initialVerdict = StructuredDecision.ChangesRequired
                                         && terminalVerdict = StructuredDecision.Pass
-                                        && round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                        && round >= Protocol.reviewPolicy.MaxAutomatedRepairRounds
                                         && matchingHead
                                     let terminalChanges =
                                         initialVerdict = StructuredDecision.ChangesRequired
                                         && terminalVerdict = StructuredDecision.ChangesRequired
-                                        && round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                        && round >= Protocol.reviewPolicy.MaxAutomatedRepairRounds
                                         && matchingHead
-                                    let terminal = terminalChanges || (exactShape && check = Types.PrRed)
+                                    let terminal = terminalChanges || (passingTerminal && check = Types.PrRed)
                                     let expected =
                                         if terminal && waitName = "completed" && currentClaim <> oldClaim then "completed"
-                                        elif exactShape && check = Types.PrPending then "awaitChecks"
-                                        elif exactShape && check = Types.PrGreen then "hostAcceptanceEligible"
+                                        elif passingTerminal && check = Types.PrPending then "awaitChecks"
+                                        elif passingTerminal && check = Types.PrGreen then "hostAcceptanceEligible"
                                         else "notExhausted"
 
                                     let context =

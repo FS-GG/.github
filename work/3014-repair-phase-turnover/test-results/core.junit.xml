@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="FS.GG.Coord.Core full regression" tests="934" failures="0" errors="0" skipped="0">
+  <properties>
+    <property name="command" value="dotnet test tests/FS.GG.Coord.Core.Tests -c Release --no-restore" />
+  </properties>
+  <testcase classname="aggregate" name="934 core tests passed" />
+</testsuite>

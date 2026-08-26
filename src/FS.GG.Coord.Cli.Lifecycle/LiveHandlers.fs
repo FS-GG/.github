@@ -1076,14 +1076,14 @@ module LiveHandlers =
                     let legacyMarkerCount =
                         ordered
                         |> List.sumBy (fun comment -> lines comment.Body |> List.filter ((=) legacyMarker) |> List.length)
-                    let legacyField name body =
+                    let legacyFieldValues name body =
                         let prefix = name + ": "
                         lines body
                         |> List.choose (fun line ->
                             if line.StartsWith(prefix, StringComparison.Ordinal) then
                                 Some(line.Substring(prefix.Length).Trim())
                             else None)
-                        |> List.tryExactlyOne
+                    let legacyField name body = legacyFieldValues name body |> List.tryExactlyOne
                     let completionIds =
                         ordered
                         |> List.choose (fun comment ->
@@ -1109,31 +1109,37 @@ module LiveHandlers =
                         let detail = String.concat "; " decodeErrors
                         Error($"the exhausted structured review ledger is unreadable: %s{detail}")
                     | Ok _ ->
-                        match generationPairs, legacyComments, completionIds, terminalIds with
-                        | [ (initialComment, initial)
-                            (roundOneComment, roundOne)
-                            (roundTwoComment, roundTwo)
-                            (roundThreeComment, roundThree) ],
+                        let generation =
+                            match generationPairs with
+                            | initial :: confirmations when List.length confirmations >= Protocol.reviewPolicy.MaxAutomatedRepairRounds ->
+                                Some(initial, confirmations, confirmations[0], confirmations[1], confirmations[2])
+                            | _ -> None
+                        match generation, legacyComments, completionIds, terminalIds with
+                        | Some((initialComment, initial), confirmationPairs, (roundOneComment, roundOne), (roundTwoComment, roundTwo), (roundThreeComment, roundThree)),
                           [ legacy ],
                           [ completedCommentId ],
                           [ terminalCommentId ] when completedCommentId = terminalCommentId ->
+                            let terminalComment, terminal = List.last confirmationPairs
                             let expectedKinds =
                                 initial.Kind = StructuredDecision.Initial && initial.Round = 0
-                                && roundOne.Kind = StructuredDecision.Confirmation && roundOne.Round = 1
-                                && roundTwo.Kind = StructuredDecision.Confirmation && roundTwo.Round = 2
-                                && roundThree.Kind = StructuredDecision.Confirmation && roundThree.Round = 3
+                                && (confirmationPairs
+                                    |> List.mapi (fun index (_, record) ->
+                                        record.Kind = StructuredDecision.Confirmation
+                                        && record.Round = index + 1)
+                                    |> List.forall id)
                             // `.github#2807`: repairs advance the pull-request head. The structured-ledger
                             // validator above already exact-binds every record to its own 40-hex head and
                             // preserves the ordered revision/digest/backlink/round chain. Requiring every
                             // historical head to equal the terminal draft therefore rejects the ordinary
-                            // multi-round shape. Terminal authority remains exact below: round three, the
-                            // escalation draft, completed wait, legacy marker, and live PR all bind one head.
+                            // multi-round shape. `.github#3014` observed a later contiguous confirmation the
+                            // same engine admitted after a prior pass/head move, so terminal authority is
+                            // DERIVED from the validated generation, never assumed to be round three.
                             let reviewComments =
                                 ordered
                                 |> List.map (fun comment ->
                                     ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
                             let terminalChecks =
-                                if roundThree.Verdict = StructuredDecision.Pass then
+                                if terminal.Verdict = StructuredDecision.Pass then
                                     Reads.prLandable ctx.Transport target.Owner target.Repo pr
                                 else
                                     Types.PrUnknown
@@ -1146,6 +1152,12 @@ module LiveHandlers =
                                       Comments = reviewComments
                                       WaitState = Some state }
                             let legacyBody = legacy.Body
+                            let terminalBindings = legacyFieldValues "terminal-confirmation" legacyBody
+                            let terminalBindingMatches =
+                                if terminal.Round = Protocol.reviewPolicy.MaxAutomatedRepairRounds then
+                                    List.isEmpty terminalBindings
+                                else
+                                    terminalBindings = [ terminalComment.Url ]
                             let legacyMatches =
                                 legacyMarkerCount = 1
                                 && legacy.Id > completedCommentId
@@ -1154,34 +1166,35 @@ module LiveHandlers =
                                 && legacyField "confirmation-1" legacyBody = Some roundOneComment.Url
                                 && legacyField "confirmation-2" legacyBody = Some roundTwoComment.Url
                                 && legacyField "confirmation-3" legacyBody = Some roundThreeComment.Url
-                                && legacyField "critic" legacyBody = Some roundThree.Critic
+                                && terminalBindingMatches
+                                && legacyField "critic" legacyBody = Some terminal.Critic
                                 && legacyField "verdict" legacyBody = Some "ordinary-chain-exhausted"
                             let exactDraft =
-                                draft.Round = Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                draft.Round = terminal.Round
                                 && draft.Verdict = StructuredDecision.ChangesRequired
-                                && draft.HeadSha = roundThree.HeadSha
-                                && draft.PreviousDigest = Some roundThree.Digest
+                                && draft.HeadSha = terminal.HeadSha
+                                && draft.PreviousDigest = Some terminal.Digest
                                 && draft.InitialReview = Some initialComment.Url
-                                && draft.PrecedingReview = Some roundThreeComment.Url
-                                && draft.Critic = roundThree.Critic
+                                && draft.PrecedingReview = Some terminalComment.Url
+                                && draft.Critic = terminal.Critic
                                 && draft.Succession.IsNone
                             let exactWait =
                                 receipt.Item = target.Canonical
-                                && evidence = roundThreeComment.Url
+                                && evidence = terminalComment.Url
                             let freshClaim = claim.Id > legacy.Id
                             match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr with
                             | Error error -> Error($"the exhausted pull request head could not be read: %A{error}")
                             | Ok liveHead when liveHead <> draft.HeadSha ->
                                 Error($"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}")
-                            | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires exactly initial plus confirmation rounds 1, 2, and 3"
+                            | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires an initial plus contiguous confirmation rounds including 1, 2, and 3"
                             | Ok _ when terminalDecision <> Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion ->
-                                Error "ordinary exhaustion requires changes-required through round 2 and either round-3 changes-required or an exact-head round-3 pass with settled red checks"
+                                Error "the validated terminal confirmation is not classified as completed ordinary exhaustion"
                             | Ok _ when not legacyMatches -> Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
                             | Ok _ when not exactDraft -> Error "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
-                            | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim ordinary round-3 generation"
+                            | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim terminal ordinary generation"
                             | Ok _ when not freshClaim -> Error "the current claimant is not a fresh post-exhaustion claim generation"
                             | Ok _ -> Ok ()
-                        | _ -> Error "ordinary exhaustion requires one exact initial+confirmation1/2/3 chain, one completed round-3 wait, and one legacy escalation"
+                        | _ -> Error "ordinary exhaustion requires one exact contiguous generation, one completed terminal wait, and one legacy escalation"
                 match draft.Kind, state with
                 | StructuredDecision.Escalation, ReviewWait.Completed (receipt, evidence) ->
                     authorizeExhaustedClaimTurnover receipt evidence

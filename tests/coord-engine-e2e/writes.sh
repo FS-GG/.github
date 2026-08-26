@@ -994,6 +994,147 @@ for turnover_id in "${turnover_comment_ids[@]}"; do
 done
 rm -f "$turnover_draft" "$turnover_wait"
 
+# .github#3014: the live engine admitted a contiguous confirmation round 4 after earlier pass/head
+# movement, projected that exact five-record generation as ordinaryExhaustion, then its writer wedged:
+# turnover destructured exactly initial+1/2/3 and could not author the typed escalation a repair-phase
+# receipt requires. Reproduce that observed shape on a separate issue/PR. The historical three-round
+# case above stays unchanged; this leg proves the compatible extended marker binds the ACTUAL terminal
+# confirmation, refuses a wrong binding without a write, and feeds the unchanged seven-field entry gate.
+extended_draft="$(mktemp)"
+extended_wait="$(mktemp)"
+extended_ids=()
+extended_head="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+extended_old_worker="fixture-extended-old"
+extended_turnover_worker="fixture-extended-turnover"
+extended_repair_worker="fixture-extended-repair"
+extended_critic="critic-extended-ordinary"
+extended_old_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-extended-old lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq -r '.id')"
+extended_ids+=("45:$extended_old_claim_id")
+
+write_extended_wait() {
+  local event="$1" generation="$2" evidence="$3" claim="$4"
+  python3 - "$extended_wait" "$event" "$generation" "$evidence" "$claim" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+path, event, generation, evidence, claim = sys.argv[1:]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+if event == "enter":
+    value = {"schema":"fsgg.coord.review-wait/v1","event":"enter","item":"FS-GG/FS.GG.SDD#45",
+             "claimGeneration":claim,"reviewGeneration":generation,
+             "kind":"initial-review" if generation.endswith(":initial-review:0") else "repair-confirmation",
+             "enteredAt":now.isoformat().replace("+00:00", "Z"),
+             "expiresAt":(now + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+             "evidenceRef":"https://fixture.invalid/3014/dispatch"}
+else:
+    value = {"schema":"fsgg.coord.review-wait/v1","event":"complete","reviewGeneration":generation,
+             "at":now.isoformat().replace("+00:00", "Z"),"evidenceRef":evidence}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(value, stream, separators=(",", ":"))
+PY
+}
+
+extended_initial_url=""; extended_preceding_url=""; extended_previous_digest=""
+extended_confirmation_urls=()
+turnover_critic="$extended_critic"
+for extended_round in 0 1 2 3 4; do
+  if [ "$extended_round" -eq 0 ]; then
+    extended_kind="initial"; extended_generation="$extended_head:initial-review:0"
+  else
+    extended_kind="confirmation"; extended_generation="$extended_head:repair-confirmation:$extended_round"
+  fi
+  # Exact live shape: the first two successors passed; later exact-head reviews found more material work.
+  extended_verdict="changes-required"
+  [ "$extended_round" -eq 1 ] || [ "$extended_round" -eq 2 ] && extended_verdict="pass"
+  write_extended_wait enter "$extended_generation" "" "$extended_old_claim_id"
+  "$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 45 --worker "$extended_old_worker" --json >/dev/null 2>&1; extended_wait_rc=$?
+  write_turnover_draft "$extended_kind" "$extended_round" "$extended_previous_digest" "$extended_initial_url" "$extended_preceding_url" "$extended_head" "FS-GG/FS.GG.SDD#45/pr/45" "$extended_verdict"
+  extended_record_out="$("$ENGINE" review record FS.GG.SDD#45 "$turnover_draft" --pr 45 --worker "$extended_old_worker" --json 2>&1)"; extended_record_rc=$?
+  extended_record_id="$(printf '%s' "$extended_record_out" | jq -r '.commentId // empty')"
+  extended_record_url="$(printf '%s' "$extended_record_out" | jq -r '.commentUrl // empty')"
+  extended_previous_digest="$(printf '%s' "$extended_record_out" | jq -r '.digest // empty')"
+  [ -n "$extended_record_id" ] && extended_ids+=("45:$extended_record_id")
+  [ "$extended_round" -eq 0 ] && extended_initial_url="$extended_record_url"
+  [ "$extended_round" -gt 0 ] && extended_confirmation_urls+=("$extended_record_url")
+  extended_preceding_url="$extended_record_url"
+  write_extended_wait complete "$extended_generation" "$extended_record_url" "$extended_old_claim_id"
+  "$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 45 --worker "$extended_old_worker" --json >/dev/null 2>&1; extended_complete_rc=$?
+  if [ "$extended_wait_rc" -ne 0 ] || [ "$extended_record_rc" -ne 0 ] || [ "$extended_complete_rc" -ne 0 ]; then
+    bad ".github#3014: fixture must establish the admitted five-record chain" "round=$extended_round wait=$extended_wait_rc record=$extended_record_rc:$extended_record_out complete=$extended_complete_rc"
+  fi
+done
+
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$extended_old_claim_id" >/dev/null
+extended_bad_terminal="https://fixture.invalid/3014/wrong-terminal"
+extended_legacy_body="$(jq -n -r --arg h "$extended_head" --arg i "$extended_initial_url" \
+  --arg c1 "${extended_confirmation_urls[0]}" --arg c2 "${extended_confirmation_urls[1]}" \
+  --arg c3 "${extended_confirmation_urls[2]}" --arg terminal "$extended_bad_terminal" --arg critic "$extended_critic" '
+  "<!-- fsgg:independent-review-escalation:v1 -->\nexhausted-head: \($h)\ninitial-review: \($i)\nconfirmation-1: \($c1)\nconfirmation-2: \($c2)\nconfirmation-3: \($c3)\nterminal-confirmation: \($terminal)\ncritic: \($critic)\nverdict: ordinary-chain-exhausted\n\nExtended turnover evidence."')"
+extended_legacy_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg body "$extended_legacy_body" '{body:$body}')" \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq -r '.id')"
+extended_ids+=("45:$extended_legacy_id")
+extended_turnover_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-extended-turnover lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq -r '.id')"
+extended_ids+=("45:$extended_turnover_claim_id")
+write_turnover_draft escalation 4 "$extended_previous_digest" "$extended_initial_url" "$extended_preceding_url" "$extended_head" "FS-GG/FS.GG.SDD#45/pr/45" changes-required
+extended_wrong_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq length)"
+extended_wrong_out="$("$ENGINE" review record FS.GG.SDD#45 "$turnover_draft" --pr 45 --worker "$extended_turnover_worker" --json 2>&1)"; extended_wrong_rc=$?
+extended_wrong_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq length)"
+
+extended_legacy_body="${extended_legacy_body/terminal-confirmation: $extended_bad_terminal/terminal-confirmation: ${extended_confirmation_urls[3]}}"
+patch_turnover_comment "$extended_legacy_id" "$extended_legacy_body"
+extended_escalation_out="$("$ENGINE" review record FS.GG.SDD#45 "$turnover_draft" --pr 45 --worker "$extended_turnover_worker" --json 2>&1)"; extended_escalation_rc=$?
+extended_escalation_id="$(printf '%s' "$extended_escalation_out" | jq -r '.commentId // empty')"
+[ -n "$extended_escalation_id" ] && extended_ids+=("45:$extended_escalation_id")
+
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr/45" >/dev/null
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$extended_turnover_claim_id" >/dev/null
+extended_repair_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-extended-repair lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/45/comments" | jq -r '.id')"
+extended_ids+=("45:$extended_repair_claim_id")
+turnover_critic="critic-extended-repair"
+write_extended_wait enter "$extended_head:initial-review:0" "" "$extended_repair_claim_id"
+"$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_initial_wait_rc=$?
+write_turnover_draft initial 0 "" "" "" "$extended_head" "FS-GG/FS.GG.SDD#45/pr/46" changes-required
+extended_initial_out="$("$ENGINE" review record FS.GG.SDD#45 "$turnover_draft" --pr 46 --worker "$extended_repair_worker" --json 2>&1)"; extended_initial_rc=$?
+extended_repair_initial_url="$(printf '%s' "$extended_initial_out" | jq -r '.commentUrl // empty')"
+extended_repair_initial_digest="$(printf '%s' "$extended_initial_out" | jq -r '.digest // empty')"
+write_extended_wait complete "$extended_head:initial-review:0" "$extended_repair_initial_url" "$extended_repair_claim_id"
+"$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_initial_complete_rc=$?
+write_extended_wait enter "$extended_head:repair-confirmation:0" "" "$extended_repair_claim_id"
+"$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_entry_wait_rc=$?
+write_turnover_draft repair-phase 0 "$extended_repair_initial_digest" "$extended_repair_initial_url" "$extended_repair_initial_url" "$extended_head" "FS-GG/FS.GG.SDD#45/pr/46" changes-required
+jq --argjson exhausted 45 --argjson escalation "$extended_escalation_id" --arg claim "$extended_repair_claim_id" --arg branch '46' --arg implementer "$extended_repair_worker" --arg critic "$turnover_critic" --arg head "$extended_head" \
+  '.repairPhaseReceipt={exhaustedPr:$exhausted,escalationCommentId:$escalation,newClaimGeneration:$claim,newBranchOrPr:$branch,newImplementerIdentity:$implementer,newCriticIdentity:$critic,candidateHeadSha:$head}' \
+  "$turnover_draft" >"$extended_draft"
+extended_entry_out="$("$ENGINE" review record FS.GG.SDD#45 "$extended_draft" --pr 46 --worker "$extended_repair_worker" --json 2>&1)"; extended_entry_rc=$?
+
+if [ "$extended_wrong_rc" -ne 0 ] && [ "$extended_wrong_before" = "$extended_wrong_after" ] \
+   && [[ "$extended_wrong_out" == *"legacy ordinary-exhaustion evidence"* ]] \
+   && [ "$extended_escalation_rc" -eq 0 ] \
+   && printf '%s' "$extended_escalation_out" | jq -e '.revision == 6 and (.digest | length) == 64' >/dev/null \
+   && [ "$extended_initial_wait_rc" -eq 0 ] && [ "$extended_initial_rc" -eq 0 ] \
+   && [ "$extended_initial_complete_rc" -eq 0 ] && [ "$extended_entry_wait_rc" -eq 0 ] \
+   && [ "$extended_entry_rc" -eq 0 ]; then
+  ok ".github#3014: admitted round-4 exhaustion binds its terminal record and enters one typed repair phase"
+else
+  bad ".github#3014: post-ceiling turnover must bind the actual terminal record without weakening repair entry" \
+    "wrong=$extended_wrong_rc:$extended_wrong_before->$extended_wrong_after:$extended_wrong_out escalation=$extended_escalation_rc:$extended_escalation_out initial=$extended_initial_wait_rc/$extended_initial_rc/$extended_initial_complete_rc entry=$extended_entry_wait_rc/$extended_entry_rc:$extended_entry_out"
+fi
+
+for extended_ref in "${extended_ids[@]}"; do
+  extended_id="${extended_ref#*:}"
+  curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$extended_id" >/dev/null 2>&1 || true
+done
+while IFS= read -r extended_pr_id; do
+  curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$extended_pr_id" >/dev/null 2>&1 || true
+done < <(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/46/comments" | jq -r '.[].id')
+rm -f "$extended_draft" "$extended_wait"
+
 # Remove the review leg's live-claim setup marker. The claim-CAS cases below deliberately start
 # unclaimed and prove their own POST/re-read winner rather than inheriting review authorization.
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$review_claim_id" >/dev/null

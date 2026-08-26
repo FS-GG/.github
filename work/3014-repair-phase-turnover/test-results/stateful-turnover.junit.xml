@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="repair-phase turnover stateful acceptance" tests="3" failures="0" errors="0" skipped="0">
+  <testcase classname="repair-phase-turnover" name="admitted round-4 terminal binds typed escalation and repair-phase receipt" />
+  <testcase classname="repair-phase-turnover" name="historical exact round-3 turnover remains accepted" />
+  <testcase classname="repair-phase-turnover" name="full stateful engine write suite passes 190 assertions" />
+</testsuite>

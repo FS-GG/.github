@@ -178,14 +178,14 @@ module Review =
         | Ordinary -> Protocol.reviewPolicy.MaxAutomatedRepairRounds
         | Repair -> Protocol.reviewPolicy.RepairPhaseMaxRounds
 
-    // The complete terminal-chain predicate shared by the read-side projection and the live
-    // escalation writer. Ordinary exhaustion requires an initial plus rounds one and two that all
-    // requested changes; a pre-round pass cannot be reclassified as exhaustion merely because a
-    // later round-three verdict is terminal. A round-three `changes-required` record is terminal
-    // regardless of check state. A round-three `pass` joins that set only after exact-head checks
-    // settle red: pending checks still have a reason to wait, while green checks remain eligible for
-    // host acceptance.
-    let isOrdinaryExhaustionTerminal headSha checks comments =
+    // The complete terminal-chain projection shared by the read-side reducer and live escalation
+    // writer. At the configured boundary, the historical rule remains exact: initial plus rounds one
+    // and two all requested changes, so a pre-round pass cannot be reclassified as exhaustion merely
+    // because round three is terminal. `.github#3014` exposed the distinct later shape the reducer itself
+    // admits after a pass/head move: a contiguous confirmation beyond that boundary. Once such a record
+    // exists, the ACTUAL terminal record owns exhaustion. A changes-required terminal is independent of
+    // check state; a pass joins the set only after exact-head checks settle red.
+    let private ordinaryExhaustionTerminal headSha checks comments =
         let live = Driver.liveReviewComments headSha comments
         let marker = "<!-- fsgg:review-decision/v2 -->"
         let reviewRecords =
@@ -217,17 +217,35 @@ module Review =
             |> List.filter (fun record -> record.Kind = StructuredDecision.Confirmation)
         let latest = reviewRecords |> List.tryLast
 
-        List.isEmpty live.StructuredErrors
-        && precedingChangesRequired
-        && confirmations.Length = Protocol.reviewPolicy.MaxAutomatedRepairRounds
-        &&
-            match latest |> Option.map (fun record -> record.HeadSha, record.Verdict), checks with
-            | Some (latestHead, StructuredDecision.ChangesRequired), _ when latestHead = headSha -> true
-            | Some (latestHead, StructuredDecision.Pass), PrRed when latestHead = headSha -> true
-            | _ -> false
+        let prefixAdmitted =
+            (reviewRecords
+             |> List.tryHead
+             |> Option.exists (fun record ->
+                 record.Kind = StructuredDecision.Initial
+                 && record.Round = 0
+                 && record.Verdict = StructuredDecision.ChangesRequired))
+            && (confirmations.Length > Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                || precedingChangesRequired)
+
+        if List.isEmpty live.StructuredErrors
+           && prefixAdmitted
+           && confirmations.Length >= Protocol.reviewPolicy.MaxAutomatedRepairRounds then
+            match latest, checks with
+            | Some terminal, _
+                when terminal.HeadSha = headSha
+                     && terminal.Verdict = StructuredDecision.ChangesRequired -> Some terminal
+            | Some terminal, PrRed
+                when terminal.HeadSha = headSha
+                     && terminal.Verdict = StructuredDecision.Pass -> Some terminal
+            | _ -> None
+        else
+            None
+
+    let isOrdinaryExhaustionTerminal headSha checks comments =
+        ordinaryExhaustionTerminal headSha checks comments |> Option.isSome
 
     let decideOrdinaryExhaustion (facts: OrdinaryExhaustionFacts) =
-        let completedWait () =
+        let completedWait (terminal: StructuredDecision.ReviewRecord) =
             match facts.WaitState with
             | Some (ReviewWait.Completed (receipt, _))
                 when receipt.Kind = ReviewWait.RepairConfirmation
@@ -236,7 +254,7 @@ module Review =
                         ReviewWait.generationToken
                             facts.HeadSha
                             ReviewWait.RepairConfirmation
-                            Protocol.reviewPolicy.MaxAutomatedRepairRounds ->
+                            terminal.Round ->
                 OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
             | Some (ReviewWait.Completed _) ->
                 OrdinaryExhaustionDecision.NotExhausted "the completed wait does not bind the terminal head, round, or prior claim generation"
@@ -248,15 +266,17 @@ module Review =
 
         if facts.Phase <> Ordinary then
             OrdinaryExhaustionDecision.NotExhausted "repair-phase review cannot be reclassified as ordinary exhaustion"
-        elif isOrdinaryExhaustionTerminal facts.HeadSha facts.Checks facts.Comments then
-            completedWait ()
-        elif isOrdinaryExhaustionTerminal facts.HeadSha PrRed facts.Comments then
-            match facts.Checks with
-            | PrPending -> OrdinaryExhaustionDecision.AwaitChecks
-            | PrGreen -> OrdinaryExhaustionDecision.HostAcceptanceEligible
-            | _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal pass has neither settled red nor remained eligible for host acceptance"
         else
-            OrdinaryExhaustionDecision.NotExhausted "the ordinary review ledger has not reached the bounded terminal set"
+            match ordinaryExhaustionTerminal facts.HeadSha facts.Checks facts.Comments with
+            | Some terminal -> completedWait terminal
+            | None ->
+                match ordinaryExhaustionTerminal facts.HeadSha PrRed facts.Comments with
+                | Some terminal when terminal.Verdict = StructuredDecision.Pass ->
+                    match facts.Checks with
+                    | PrPending -> OrdinaryExhaustionDecision.AwaitChecks
+                    | PrGreen -> OrdinaryExhaustionDecision.HostAcceptanceEligible
+                    | _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal pass has neither settled red nor remained eligible for host acceptance"
+                | _ -> OrdinaryExhaustionDecision.NotExhausted "the ordinary review ledger has not reached the bounded terminal set"
 
     let private ordinaryExhaustionOutcome (facts: Facts) =
         match facts.RepairPhaseGranted with

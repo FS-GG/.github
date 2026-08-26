@@ -117,33 +117,37 @@ module ReviewWaitTests =
         | ReviewWait.Waiting active -> Assert.Equal(second.ReviewGeneration, active.ReviewGeneration)
         | other -> failwithf "the consumed predecessor blocked the next generation: %A" other
 
-    [<Fact>]
-    let ``2797 completed ordinary round three survives claim turnover as exhaustion evidence`` () =
+    [<Theory>]
+    [<InlineData(3)>]
+    [<InlineData(4)>]
+    [<InlineData(10)>]
+    let ``3014 completed potential exhaustion wait survives claim turnover for the live writer to validate`` round =
         let exhaustedHead = "847fa413d013df600c1dde084b66154ba86ece28"
-        let ordinaryRoundThree =
+        let terminalWait =
             { receipt with
                 Item = "EHotwagner/S.I.R.#231"
                 ClaimGeneration = "5365192535"
-                ReviewGeneration = ReviewWait.generationToken exhaustedHead ReviewWait.RepairConfirmation 3
+                ReviewGeneration = ReviewWait.generationToken exhaustedHead ReviewWait.RepairConfirmation round
                 EvidenceRef = "https://github.com/EHotwagner/S.I.R./pull/238#issuecomment-5366363585" }
         let completed =
             ReviewWait.Complete(
-                ordinaryRoundThree.ReviewGeneration,
-                ordinaryRoundThree.EnteredAt.AddMinutes 1.0,
-                ordinaryRoundThree.EvidenceRef)
+                terminalWait.ReviewGeneration,
+                terminalWait.EnteredAt.AddMinutes 1.0,
+                terminalWait.EvidenceRef)
 
         match
-            ReviewWait.project ordinaryRoundThree.Item (Some "5366404068") false (entered.AddHours 1.0)
-                [ ReviewWait.Enter ordinaryRoundThree; completed ]
+            ReviewWait.project terminalWait.Item (Some "5366404068") false (entered.AddHours 1.0)
+                [ ReviewWait.Enter terminalWait; completed ]
         with
         | ReviewWait.Completed (preserved, evidence) ->
-            Assert.Equal(ordinaryRoundThree, preserved)
-            Assert.Equal(ordinaryRoundThree.EvidenceRef, evidence)
-        | other -> failwithf "completed round-three exhaustion evidence was hidden by claim turnover: %A" other
+            Assert.Equal(terminalWait, preserved)
+            Assert.Equal(terminalWait.EvidenceRef, evidence)
+        | other -> failwithf "completed potential exhaustion evidence was hidden by claim turnover: %A" other
 
     [<Theory>]
     [<InlineData("847fa413d013df600c1dde084b66154ba86ece28:repair-confirmation:2")>]
-    [<InlineData("847fa413d013df600c1dde084b66154ba86ece28:repair-confirmation:4")>]
+    [<InlineData("847fa413d013df600c1dde084b66154ba86ece28:repair-confirmation:+4")>]
+    [<InlineData("847fa413d013df600c1dde084b66154ba86ece28:repair-confirmation:four")>]
     [<InlineData("short:repair-confirmation:3")>]
     [<InlineData("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:repair-confirmation:3")>]
     let ``2797 claim turnover preserves no non-exhaustion generation`` generation =
