@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 implementing; Q0 evidence and ADR proposed, scheduled-audit runtime selected |
+| Status | Ongoing renovation; design and execution spine filed, implementation not started |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -46,17 +46,19 @@ The three program issues are too large to hand directly to a general worker. The
 ownership, roll-up, and cross-repository sequencing. Actual work is performed as one bounded roadmap unit
 at a time.
 
-### 1.1 Before `FS.GG.Coordination` exists
+### 1.1 Before active `FS.GG.Coordination` bootstrap
 
-Only `GS2-00` and the repository-bootstrap portion of `GS2-01` are assignable. The instruction to an agent
+The README-only repository exists at the explicitly authorized inert bootstrap commit
+`ce22e4d10f2efae7aa09018521487b598c082350`; it has no v2 code or production authority. Only `GS2-00`
+and preparation for the active-bootstrap portion of `GS2-01` are assignable. The instruction to an agent
 must name one unit and its permitted effects, for example:
 
 > Execute `GS2-00.2` from the GitHub Substrate v2 roadmap. Produce the proposed ADR and authority census;
-> do not create the new repository, modify live GitHub configuration, or start v2 implementation.
+> preserve the inert repository, do not modify live GitHub configuration, and do not start v2 implementation.
 
-Creating the repository, installing the GitHub App, creating environments, or changing organization
-settings requires explicit organization-administrator authority. A worker may prepare and verify an exact
-plan, but must not infer that authority from the roadmap.
+Any active bootstrap beyond that inert creation, installing the GitHub App, creating environments, or
+changing organization settings requires explicit organization-administrator authority. A worker may
+prepare and verify an exact plan, but must not infer that authority from the roadmap.
 
 ### 1.2 After the bootstrap repository exists
 
@@ -296,8 +298,11 @@ model checking. F# tests remain required implementation evidence and enter corre
   incident response, data retention, cost, and disaster recovery. If no acceptable host is approved,
   scheduled audits remain authoritative and `.github#2961` is removed from the cutover critical path by an
   explicit amendment rather than by shipping an unowned service.
-  **Decision:** reject a hosted boundary for this cutover. Scheduled complete audits remain authoritative;
-  events are an optional post-`OperatingV2` accelerator and `.github#2961` is not on the critical path.
+  **Q0 decision recorded 2026-08-26 under delegated maintainer authority:** reject a hosted boundary for
+  this cutover. The complete operational evidence has no accepted owner/service boundary, availability
+  target, secret/ingress design, observability, upgrade and incident process, retention policy, cost
+  envelope, or disaster-recovery proof. Scheduled complete audits therefore remain authoritative; events
+  are an optional post-`OperatingV2` accelerator and `.github#2961` is not on the critical path.
 
 ### GS2-01 — Bootstrap `FS.GG.Coordination`
 
@@ -311,9 +316,10 @@ model checking. F# tests remain required implementation evidence and enter corre
 `GS2-01.4` consumes that route's published artifact; the bootstrap worker must not recreate its extractor,
 profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`.
 
-- [ ] **GS2-01.1 — Provision the repository.** Create the repository with least-privilege teams, branch
-  ruleset, signed/immutable tag policy, secret scanning, dependency graph, Dependabot alerts, Actions
-  policy, auto-merge policy, and default branch settings. Record the exact settings receipt.
+- [ ] **GS2-01.1 — Complete repository provisioning.** Preserve the explicitly authorized README-only
+  creation receipt, then apply least-privilege teams, branch ruleset, signed/immutable tag policy, secret
+  scanning, dependency graph, Dependabot alerts, Actions policy, auto-merge policy, and default branch
+  settings. Record the exact settings receipt; the early inert creation alone does not complete this unit.
 - [ ] **GS2-01.2 — Register the component.** Add the repository and ownership/release topology to the
   reviewed registry, architecture map, custom-property projection, GitHub App installation scope, and
   Coordination Project membership rules.

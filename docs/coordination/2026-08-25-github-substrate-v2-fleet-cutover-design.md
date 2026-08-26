@@ -560,7 +560,7 @@ operator repair uses the same plan and receipt contract.
 
 ### 6.4 Event-driven reconciliation with audit repair
 
-**Q0 runtime decision (2026-08-26).** Scheduled complete audits are authoritative for this cutover. A
+**Q0 runtime decision (2026-08-26, delegated maintainer authority).** Scheduled complete audits are authoritative for this cutover. A
 continuously hosted App/webhook boundary is rejected from the critical path because no complete operational
 owner, availability target, secret/ingress posture, observability, upgrade/incident process, retention,
 cost, and disaster-recovery evidence has been accepted. Event ingestion may still be implemented and

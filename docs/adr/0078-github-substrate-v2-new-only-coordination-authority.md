@@ -21,13 +21,15 @@ the system being replaced and would require v1 and v2 precedence rules. A fleet 
 one exact candidate, stop every normal writer, migrate and verify while closed, open once, and delete the
 old authority.
 
-ADR-0077 selects canonical Quint specifications plus a small generated FS-GG compiled contract. The v2
-coordination model depends on the published Quint-profile/compiled-contract producer; it must consume that
-package rather than copy or reference FS.GG.SDD source.
+ADR-0077 selects a canonical literate Quint source plus a small generated FS-GG compiled contract. The v2
+coordination model depends on the exact source and extracted modules that pass producer Q1, the resulting
+post-Q1 ADR-0077 amendment, and the published Quint-profile/compiled-contract artifact. Protocol
+implementation must wait for those three authorities and consume the package rather than copy or reference
+FS.GG.SDD source.
 
 ## Decision
 
-FS-GG will create a dedicated `FS.GG.Coordination` component. It owns the canonical Quint coordination
+FS-GG will use the dedicated, currently inert `FS.GG.Coordination` component. It owns the canonical literate Quint coordination
 specification, pure process model, GitHub adapters and mutation interpreters, CLI host, qualification
 contracts, audit reconciliation, and published v2 artifacts. `.github` keeps organization policy,
 registries, desired-state instances, the protected cutover ledger, the v1 bridge/retirement work, and thin
@@ -58,14 +60,16 @@ authored black-box controls bind exact source, model, dependency, package, workf
 and evidence fingerprints. A merged PR, v1 review/delivery record, Project status, or roadmap checkbox is
 not a v2 qualification receipt.
 
-Runtime reconciliation for this cutover is scheduled-audit authoritative. No continuously hosted
+The Q0 runtime decision, recorded on 2026-08-26 under delegated maintainer authority, makes runtime
+reconciliation for this cutover scheduled-audit authoritative. No continuously hosted
 App/webhook service has an accepted owner, availability target, secret/ingress design, observability,
 upgrade/incident process, retention policy, cost envelope, and disaster-recovery proof. Webhook handling
 may be built and qualified as an optional accelerator, but it cannot authorize a transition and is not on
 the critical path. A future hosted boundary requires a separate accepted operational decision.
 
-The later Typed SDD workspace-default flip is deferred until `OperatingV2`. The published
-Quint-profile/compiled-contract producer is a real prerequisite for the v2 protocol model; later consumer
+The later Typed SDD workspace-default flip is deferred until `OperatingV2`. Successful producer Q1 over
+the exact literate source/extracted module set, its post-Q1 ADR-0077 amendment, and the published
+Quint-profile/compiled-contract artifact are real ordered prerequisites for the v2 protocol model; later consumer
 adoption, provider/default, and retirement rows are not hidden prerequisites for the cutover.
 
 Every compatibility reader, migration adapter, workflow, command, field, parser, schedule, exception, and
@@ -76,8 +80,9 @@ authority/mutation/corpus/deletion subject are bound into one independently reco
 
 ## Consequences
 
-Repository bootstrap and all v2 implementation can be qualified without circular trust in the v1
-lifecycle. The cutover carries a larger up-front census, corpus, migration manifest, failure matrix, and
+The already-created README-only repository and later active bootstrap can be qualified without circular
+trust in the v1 lifecycle. Protocol implementation still waits for the ordered producer Q1, ADR amendment,
+and published-artifact boundary. The cutover carries a larger up-front census, corpus, migration manifest, failure matrix, and
 closed-fleet rehearsal, but it has one authority at every phase and an explicit irreversible boundary.
 
 Scheduled audits impose bounded reconciliation latency and API cost. Those limits must be measured before

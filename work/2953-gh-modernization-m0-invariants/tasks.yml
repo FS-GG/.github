@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/2953-gh-modernization-m0-invariants/spec.md
-    digest: b45a459ada553cecedc31050f67c272a201db70962fd52be93b5c1beea1e4b92
+    digest: 1c25010366f159e3e06c4dab973dc153ab242f128b9031f6dfdc9c8ac707d49f
     schemaVersion: 1
   - label: clarifications
     path: work/2953-gh-modernization-m0-invariants/clarifications.md
-    digest: da052d642cb4bf85effb9dac0941c155f63f395f9ed53843d523e5b6c2054b33
+    digest: fadfc55f0c7b5fa69e282a47db3d0c0fdc47253b8f532740540d12ad9ba7692c
     schemaVersion: 1
   - label: checklist
     path: work/2953-gh-modernization-m0-invariants/checklist.md
-    digest: c58ec81b1fccb33e73e9cd7be652320bd35f3c2b6f302d89f24f86dbfc2f6072
+    digest: 62e690964dd10f9ce9e143c082b4df983e45b640e0875f46dccea1097085dd80
     schemaVersion: 1
   - label: plan
     path: work/2953-gh-modernization-m0-invariants/plan.md
-    digest: c1f015e9d3d0ebadc9924ed3a167307f823ce492a9b2b4f44de3613c812cc340
+    digest: 296d5de5420b0d7b54b3ad52e7445fcb037137185de9249e782caa146136393a
     schemaVersion: 1
 tasks:
   - id: T001

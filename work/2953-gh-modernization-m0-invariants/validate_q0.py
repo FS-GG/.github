@@ -188,6 +188,7 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
     require_fields(governing, {"path", "sha256"}, "governingArtifacts", errors)
     governing_by_path = {row.get("path"): row for row in governing}
     required_governing = {
+        "docs/adr/0077-quint-first-typed-specification-authority.md",
         "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md",
         "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md",
         "docs/github-substrate-v2-roadmap.md",
@@ -345,9 +346,11 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         errors.append("handoff: required disposition class absent")
 
     runtime = data.get("runtimeDecision", {})
-    require_fields([runtime], {"posture", "hostedBoundary", "owner", "availability", "secrets", "ingress", "observability", "upgrades", "incidentResponse", "retention", "cost", "disasterRecovery"}, "runtimeDecision", errors)
+    require_fields([runtime], {"posture", "hostedBoundary", "decisionRecordedAt", "decisionAuthority", "decisionEvidence", "owner", "availability", "secrets", "ingress", "observability", "upgrades", "incidentResponse", "retention", "cost", "disasterRecovery"}, "runtimeDecision", errors)
     if runtime.get("posture") != "scheduled-audit-authoritative" or runtime.get("hostedBoundary") != "rejected-for-cutover":
         errors.append("runtimeDecision: unratified cutover posture")
+    if runtime.get("decisionAuthority") != "delegated-maintainer-q0" or not isinstance(runtime.get("decisionEvidence"), list) or len(runtime["decisionEvidence"]) != 3:
+        errors.append("runtimeDecision: Q0 decision provenance is incomplete")
 
     threat = data.get("threatModel", {})
     require_fields([threat], {"path", "sha256", "boundaries"}, "threatModel", errors)

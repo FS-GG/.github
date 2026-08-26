@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2953-gh-modernization-m0-invariants/spec.md sha256:b45a459ada553cecedc31050f67c272a201db70962fd52be93b5c1beea1e4b92 schemaVersion:1
-- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:da052d642cb4bf85effb9dac0941c155f63f395f9ed53843d523e5b6c2054b33 schemaVersion:1
-- checklist: work/2953-gh-modernization-m0-invariants/checklist.md sha256:c58ec81b1fccb33e73e9cd7be652320bd35f3c2b6f302d89f24f86dbfc2f6072 schemaVersion:1
+- spec: work/2953-gh-modernization-m0-invariants/spec.md sha256:1c25010366f159e3e06c4dab973dc153ab242f128b9031f6dfdc9c8ac707d49f schemaVersion:1
+- clarifications: work/2953-gh-modernization-m0-invariants/clarifications.md sha256:fadfc55f0c7b5fa69e282a47db3d0c0fdc47253b8f532740540d12ad9ba7692c schemaVersion:1
+- checklist: work/2953-gh-modernization-m0-invariants/checklist.md sha256:62e690964dd10f9ce9e143c082b4df983e45b640e0875f46dccea1097085dd80 schemaVersion:1
 
 ## Plan Scope
 - Complete only `GS2-00`, using `.github#2953` as the merged acceptance anchor and this SDD package as authored implementation evidence.
@@ -31,8 +31,8 @@ Prose status: planned
 - PD-002 [AC-001] [FR-002] complete: Derive the mutation census from commands, workflows, schedules, release paths, settings/admin routes, and dynamically registered interpreters. A validator compares the declared entries with independent search categories and rejects an injected omission.
 - PD-003 [AC-002] [FR-003] complete: Freeze only compact indexes and source digests in git. Preserve remote URLs/IDs and original artifact hashes; immutable bulky outputs belong to CI artifacts/releases in later units.
 - PD-004 [AC-002] [FR-004] complete: Combine compatibility and deletion inventories so every preserved/migrated/sealed/retired surface has one later unit and every retired surface names a static or runtime absence proof.
-- PD-005 [AC-003] [FR-005] complete: Record a typed handoff table covering P4 residue, `.github#2932`, declared dependencies, Quint Q1-Q7 rows, active claims/reviews/deliveries/releases, and receiver changes. Only `FS-GG.SDD#924` blocks `GS2-02`.
-- PD-006 [AC-004] [FR-006] complete: Ratify scheduled audits as the owned runtime posture; amend the design and roadmap to remove hosted events from the critical path while retaining an optional, separately qualified future event accelerator.
+- PD-005 [AC-003] [FR-005] complete: Record a typed handoff table covering P4 residue, `.github#2932`, declared dependencies, Quint Q1-Q7 rows, active claims/reviews/deliveries/releases, and receiver changes. Only the `FS-GG.SDD#924` sequence—exact-source Q1, post-Q1 ADR-0077 amendment, then published artifact—blocks `GS2-01.4` and `GS2-02`.
+- PD-006 [AC-004] [FR-006] complete: Record the Q0 delegated-maintainer decision selecting scheduled complete audits as the authoritative runtime posture; amend the design and roadmap to remove hosted events from the critical path while retaining an optional, separately qualified future event accelerator.
 - PD-007 [AC-005] [FR-007] complete: Add one Proposed organization ADR with authority table, repository boundary, epoch states, protected transition authority, rollback/roll-forward boundary, permission separation, qualification model, and supersession links.
 - PD-008 [AC-005] [FR-008] complete: Add a Q0 manifest that hashes the governing design, ADR, all censuses/indexes, plan/spec, and independent review records. Negative controls mutate copies and must produce a non-zero validator result.
 - PD-009 [AC-006] [FR-009] complete: Update the roadmap status/receipts and Epic checklist, then use typed Project set mutation for `.github#2964` and `.github#2965`; re-read both issues and board fields before claiming projection coherence.

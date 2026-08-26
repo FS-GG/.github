@@ -15,6 +15,7 @@ REQUIRED_STEP = """      - name: Require exact live role-bound acceptance
 """
 REQUIRED_TRIGGER_BODY = """    paths:
       - ".github/workflows/github-substrate-q0.yml"
+      - "docs/adr/0077-quint-first-typed-specification-authority.md"
       - "docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md"
       - "docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md"
       - "docs/github-substrate-v2-roadmap.md"

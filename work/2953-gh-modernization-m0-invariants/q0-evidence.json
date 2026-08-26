@@ -3,9 +3,10 @@
   "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
   "observedAt": "2026-08-26T00:00:00+02:00",
   "governingArtifacts": [
-    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"f88ecf371105f06d3595cf8367268e621f71d552010937cfc1a03f07ba5b1290"},
-    {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"d4e448e18851264e32f30749de46fd1b4797360f6c4f5d07385c885adb887478"},
-    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"5e5b44231701dfc72e42b4f2b633a1c26fdacb4b2713a8d6e83e8e76ba9296eb"}
+    {"path":"docs/adr/0077-quint-first-typed-specification-authority.md","sha256":"f256b612fef047a95f9c36c762bb1cafc30364c9bbed4a883d9f457f425175a3"},
+    {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"97618b4a6832eb86eafcd757d2a6d148b2bd38212f34d465cabdcaf2fdfb451c"},
+    {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"1e27be684a8baee1d18fb77e79de3856aa39f6d1c3aa6cf82075bc8279373b14"},
+    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"caa005cd4422a1dcea1c162afe8d3125c0b92458ec1100690a2ffb6dacd40f10"}
   ],
   "corpusArtifact": {"path":"work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json","sha256":"5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"},
   "inventories": [
@@ -95,7 +96,7 @@
     {"ref":"FS-GG/.github#2841","classification":"parallel-product","decision":"current v1 touch-set defect and corpus input; not a v2 prerequisite"},
     {"ref":"FS-GG/.github#2850","classification":"parallel-product","decision":"parked v1 hardening with no current executable scope; not a v2 prerequisite"},
     {"ref":"FS-GG/.github#2903","classification":"parallel-product","decision":"current v1 defects/corpus; no superseded M0 dependency edge"},
-    {"ref":"FS-GG/FS.GG.SDD#924","classification":"v2-blocker","decision":"publish Quint-backed Typed SDD v2 before GS2-02"},
+    {"ref":"FS-GG/FS.GG.SDD#924","classification":"v2-blocker","decision":"qualify the exact literate Quint source/extracted modules at Q1, record the post-Q1 ADR-0077 amendment, then publish the accepted artifact before GS2-01.4 and GS2-02"},
     {"ref":"FS-GG/FS.GG.SDD#922","classification":"parallel-product","decision":"producer qualification may proceed; #924 is the landed artifact dependency"},
     {"ref":"FS-GG/FS.GG.SDD#923","classification":"parallel-product","decision":"producer implementation sequence internal to #924"},
     {"ref":"FS-GG/.github#2995","classification":"candidate-input-change","decision":"re-observe if landed before GS2-10; otherwise defer"},
@@ -103,11 +104,11 @@
     {"ref":"FS-GG/.github#2997","classification":"cutover-deferred","decision":"workspace-default decision resumes after OperatingV2"},
     {"ref":"FS-GG/.github#2959","classification":"parallel-product","decision":"advisory-only pilot outside critical path"}
   ],
-  "runtimeDecision": {"posture":"scheduled-audit-authoritative","hostedBoundary":"rejected-for-cutover","owner":"FS-GG/.github protected audit workflows until v2 audit adoption","availability":"fail closed on missed/unreadable/incomplete run","secrets":"no new hosted secret boundary","ingress":"no production webhook ingress required","observability":"Actions runs plus typed audit receipts","upgrades":"immutable workflow/tool pins","incidentResponse":"disable mutation, retain reads, repair from complete audit","retention":"git indexes plus immutable artifacts/releases","cost":"measure API budget and cadence before GS2-10","disasterRecovery":"rerun complete audit from immutable candidate; no cursor-only recovery"},
+  "runtimeDecision": {"posture":"scheduled-audit-authoritative","hostedBoundary":"rejected-for-cutover","decisionRecordedAt":"2026-08-26T02:58:00+02:00","decisionAuthority":"delegated-maintainer-q0","decisionEvidence":["work/2953-gh-modernization-m0-invariants/clarifications.md#dec-003","docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#64-event-driven-reconciliation-with-audit-repair","docs/github-substrate-v2-roadmap.md#gs2-00--ratify-boundaries-before-any-build"],"owner":"FS-GG/.github protected audit workflows until v2 audit adoption","availability":"fail closed on missed/unreadable/incomplete run","secrets":"no new hosted secret boundary","ingress":"no production webhook ingress required","observability":"Actions runs plus typed audit receipts","upgrades":"immutable workflow/tool pins","incidentResponse":"disable mutation, retain reads, repair from complete audit","retention":"git indexes plus immutable artifacts/releases","cost":"measure API budget and cadence before GS2-10","disasterRecovery":"rerun complete audit from immutable candidate; no cursor-only recovery"},
   "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","bootstrapRepository":{"ref":"FS-GG/FS.GG.Coordination","visibility":"PUBLIC","defaultBranch":"main","initialHead":"ce22e4d10f2efae7aa09018521487b598c082350","state":"inert"},"blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"childBoundaryCitations":["FS-GG/.github#2954","FS-GG/.github#2955","FS-GG/.github#2956","FS-GG/.github#2957","FS-GG/.github#2958","FS-GG/.github#2959","FS-GG/.github#2960","FS-GG/.github#2961","FS-GG/.github#2962","FS-GG/.github#2963","FS-GG/.github#2964","FS-GG/.github#2965"],"pendingBoardWrites":0},
   "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"c42700acc4d0ccc21999c6ceb8c07a6f4caa2dec7d07637adad9018b2bd4ce81","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
-  "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"484e2c0e9e63b6905bf0503941af445daef947f34f8947d21c85a09fbccd75cf"},
-  "reviewFingerprint": "5e68301b94cb0262100cb6fa56a3be0131b5313e3a8eeeac96efa5ea79f8681f",
+  "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"0e6a2b7413fe94fba62f675463134234666dde7b351e0dd04e07b43b6742cb2c"},
+  "reviewFingerprint": "5eab3ceff0fb5693a3a30a83f8c6d87e895fadb310e30a630655b2511df0066b",
   "reviewAuthority":"live-unedited-current-head-pr-comments",
   "reviewsRequired":["architecture","security","operations","crossRepository"],
   "reviews":[]

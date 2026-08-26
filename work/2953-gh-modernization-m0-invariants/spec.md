@@ -17,7 +17,7 @@ FS-GG operators receive one reviewable authority, rollback, deletion, and runtim
 
 ## Scope
 - SB-001: Ratify GS2-00 only: handoff dispositions, organization ADR, v1 authority/mutation/compatibility/deletion censuses, frozen corpus index, runtime boundary, Epic/dependency repairs, and exact-fingerprint Q0 review evidence.
-- SB-002: Treat the published Quint-profile/compiled-contract producer tracked by `FS-GG/FS.GG.SDD#924` as a real `GS2-02` prerequisite; treat the later lifecycle-default decision as `cutover-deferred` until `OperatingV2`.
+- SB-002: Treat successful producer Q1 over the exact literate Quint source/extracted module set, the post-Q1 ADR-0077 amendment, and the published Quint-profile/compiled-contract artifact tracked by `FS-GG/FS.GG.SDD#924` as ordered `GS2-01.4`/`GS2-02` prerequisites; treat the later lifecycle-default decision as `cutover-deferred` until `OperatingV2`.
 - SB-003: Preserve `.github#2932` and the completed Standard Typed SDD P0-P4 artifacts as historical/corpus inputs, never as a parallel v2 implementation lane or qualification authority.
 
 ## Non-Goals
@@ -43,8 +43,8 @@ FS-GG operators receive one reviewable authority, rollback, deletion, and runtim
 - FR-002: The mutation census must enumerate every always/conditional writer, bind its current precondition and permission, and assign `Preserve`, `Bridge`, `Migrate`, `Seal`, or `Retire` plus an exact later unit. Unknown writers fail validation. (Stories: US-001; Acceptance: AC-001)
 - FR-003: The frozen corpus must content-address representative success and failure cases, including `.github#2932`'s churn, mutation-entry, protocol-string, replay, omission, misclassification, and byte-compatibility evidence without importing its superseded implementation plan. (Stories: US-002; Acceptance: AC-002)
 - FR-004: The compatibility/deletion inventory must cover CLI verbs/flags/exit codes, JSON/marker schemas, package IDs/versions, reusable workflow contracts, required contexts, receiver pins, parsers, projections, exceptions, schedules, packages, and source trees, with observable absence tests for retirement. (Stories: US-001, US-002; Acceptance: AC-002)
-- FR-005: P4 residue is complete; `.github#2932` is `superseded-inventory`; `.github#2841`, `.github#2850`, and `.github#2903` are current-v1 defects or corpus inputs, not v2 prerequisites; `FS-GG.SDD#924` is a `v2-blocker`; subsequent Quint adoption/default rows are candidate-input changes or cutover-deferred. (Stories: US-003; Acceptance: AC-003)
-- FR-006: Scheduled audit is selected as the authoritative runtime posture for cutover unless a separately provisioned hosted boundary passes the complete operational acceptance in GS2-00.9; `.github#2961` is outside the critical path under that choice. (Stories: US-001; Acceptance: AC-004)
+- FR-005: P4 residue is complete; `.github#2932` is `superseded-inventory`; `.github#2841`, `.github#2850`, and `.github#2903` are current-v1 defects or corpus inputs, not v2 prerequisites; `FS-GG.SDD#924` is a `v2-blocker` until exact-source Q1, the post-Q1 ADR-0077 amendment, and publication complete; subsequent adoption/default rows are candidate-input changes or cutover-deferred. (Stories: US-003; Acceptance: AC-003)
+- FR-006: The Q0 decision selects scheduled complete audits as the authoritative runtime posture and rejects a hosted App/webhook boundary for this cutover because the required ownership, availability, secrets, ingress, telemetry, upgrades, incident response, retention, cost, and recovery evidence is absent; `.github#2961` is outside the critical path under that recorded choice. (Stories: US-001; Acceptance: AC-004)
 - FR-007: The organization ADR must record the dedicated repository, published-kernel dependency, new-only writer policy, independent qualification lane, protected Git epoch ledger, native/custom authority table, and irreversible `OpenV2` boundary, remaining Proposed until independent acceptance. (Stories: US-001, US-002; Acceptance: AC-005)
 - FR-008: Q0 acceptance must bind exact design, ADR, census, corpus-index, and operational-decision fingerprints and include independent architecture, security, operations, and cross-repository findings; generated validation alone is insufficient. (Stories: US-002; Acceptance: AC-005)
 - FR-009: The roadmap, Epic acceptance, issue hierarchy, Project status, and `Blocked by` fields must agree with the accepted GS2 sequence, while explicitly remaining projections rather than completion authority. (Stories: US-003; Acceptance: AC-006)
@@ -53,7 +53,7 @@ FS-GG operators receive one reviewable authority, rollback, deletion, and runtim
 No material ambiguities recorded.
 
 ## Public Or Tool-Facing Impact
-- The ADR changes organization-wide coordination authority and rollback policy. The roadmap and Project fields change scheduling projections, but no production writer, public CLI, schema, workflow, package, or setting changes in this unit.
+- The ADR changes organization-wide coordination authority and rollback policy. The roadmap and Project fields change scheduling projections, and an exact Q0 validation workflow gates this evidence; no production writer, public CLI, production schema, package, or live setting changes in this unit.
 
 ## Lifecycle Notes
 - Next lifecycle action: `fsgg-sdd clarify --work 2953-gh-modernization-m0-invariants`.
