@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/1.2.5",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.4.0",
   "workId": "3012-register-fs-gg-coordination",
   "sources": [
     {
       "path": "readiness/3012-register-fs-gg-coordination/ship.json",
-      "digest": "sha256:993b513f70edd0a1101d99301b8556c827c3cc0389579bc4a65c380dd1e6519f",
+      "digest": "sha256:349f448f29a1fed85345c95d43cb79294e490f57753bb60838cd48cf4ee4f373",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3012-register-fs-gg-coordination/verify.json",
-      "digest": "sha256:4a907ac6c18e2feb7c70eeba012a6822ad8827bc8de063a9e08d584dfa6e9503",
+      "digest": "sha256:ab210628ae0c22a60e659b02aadfe75042a326bf4bc32aef164914015903cb81",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3012-register-fs-gg-coordination/work-model.json",
-      "digest": "sha256:67d59650d13395c95e8c7b12fcd9f11ffc94b3c089d6db4b77c11092b2bb4cfa",
+      "digest": "sha256:196cbb8ec10182fd11246f047077ca93c6d77840961bccdf1ed4f6f5d3c4d78b",
       "schemaVersion": 1
     }
   ],

@@ -4,7 +4,7 @@
   "workId": "3012-register-fs-gg-coordination",
   "stage": "analyze",
   "status": "implementationReady",
-  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "generator": "FS.GG.SDD.Artifacts/1.4.0",
   "sources": [
     {
       "path": ".fsgg/agents.yml",
@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "67d59650d13395c95e8c7b12fcd9f11ffc94b3c089d6db4b77c11092b2bb4cfa"
+        "value": "196cbb8ec10182fd11246f047077ca93c6d77840961bccdf1ed4f6f5d3c4d78b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
