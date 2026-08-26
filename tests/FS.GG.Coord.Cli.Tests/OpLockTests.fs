@@ -93,24 +93,12 @@ let private parseRosterRow (line: string) =
     else
         None
 
-let private rosterRows, unparsedRosterRows =
-    let text = File.ReadAllLines(Path.Combine(root, "registry", "repos.yml"))
-
-    let block =
-        text
-        |> Array.skipWhile (fun line -> line.TrimEnd() <> "repos:")
-        |> Array.skip 1
-        // The block ends at the next top-level key — a line starting in column 0 that is not a comment.
-        |> Array.takeWhile (fun line ->
-            let trimmed = line.TrimStart()
-
-            line.StartsWith " "
-            || line.StartsWith "\t"
-            || trimmed = ""
-            || trimmed.StartsWith "#")
-
+let private parseRosterBlock (block: string array) =
+    // Every YAML sequence item is a candidate, not only a `{ ... }` flow-map item. The current roster
+    // deliberately uses flow maps, but a legal block-map rewrite must fail closed here until this parser
+    // learns that representation; otherwise the rewritten receiver vanishes from the lock proof.
     let candidates =
-        block |> Array.filter (fun line -> Regex.IsMatch(line, @"^\s*-\s*\{"))
+        block |> Array.filter (fun line -> Regex.IsMatch(line, @"^\s*-\s*"))
 
     let parsed, unparsed =
         candidates
@@ -122,6 +110,22 @@ let private rosterRows, unparsedRosterRows =
             ([], [])
 
     List.rev parsed, List.rev unparsed
+
+let private rosterRows, unparsedRosterRows =
+    let text = File.ReadAllLines(Path.Combine(root, "registry", "repos.yml"))
+
+    text
+    |> Array.skipWhile (fun line -> line.TrimEnd() <> "repos:")
+    |> Array.skip 1
+    // The block ends at the next top-level key — a line starting in column 0 that is not a comment.
+    |> Array.takeWhile (fun line ->
+        let trimmed = line.TrimStart()
+
+        line.StartsWith " "
+        || line.StartsWith "\t"
+        || trimmed = ""
+        || trimmed.StartsWith "#")
+    |> parseRosterBlock
 
 let private fsGgRosterRows: (string * string) list =
     rosterRows
@@ -177,6 +181,18 @@ let ``the roster parser is independent of inline-map field order`` () =
         "  - { role: framework, receives: [], full: FS-GG/FS.GG.Future, id: future }"
 
     Assert.Equal(Some("FS-GG", "FS.GG.Future", "framework"), parseRosterRow reordered)
+
+[<Fact>]
+let ``a legal block-style roster receiver FAILS CLOSED instead of escaping the proof`` () =
+    let blockStyle =
+        [| "  - id: future"
+           "    full: FS-GG/FS.GG.Future"
+           "    role: framework"
+           "    receives: []" |]
+
+    let parsed, unparsed = parseRosterBlock blockStyle
+    Assert.Empty(parsed)
+    Assert.Equal<string list>([ "  - id: future" ], unparsed)
 
 [<Fact>]
 let ``opLockRef covers EVERY rostered operation receiver - including FS.GG.Net`` () =
