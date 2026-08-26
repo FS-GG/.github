@@ -701,6 +701,41 @@ module LiveHandlers =
                    | true, round when round >= 0 -> true
                    | _ -> false))
 
+    let selectCompletionEvidence
+        (generation: string)
+        (evidence: string)
+        (candidates: (Reads.CommentBody * StructuredDecision.ReviewRecord) list)
+        : Result<string, string> =
+        match candidates with
+        | [] ->
+            Error($"completion requires the structured review-decision record for generation '%s{generation}', but no such record is present")
+        | candidates ->
+            let normalized = evidence.Trim()
+            let identifies (comment: Reads.CommentBody, record: StructuredDecision.ReviewRecord) =
+                let digest = record.Digest
+                normalized = comment.Url
+                || normalized = string comment.Id
+                || normalized.Equals(digest, StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals($"sha256:%s{digest}", StringComparison.OrdinalIgnoreCase)
+            match candidates |> List.filter identifies with
+            | [ requiredComment, _ ] -> Ok requiredComment.Url
+            | [] ->
+                match candidates with
+                | [ requiredComment, requiredRecord ] ->
+                    Error(
+                        $"completion evidenceRef must identify structured review-decision record %s{requiredComment.Url} "
+                        + $"(comment %d{requiredComment.Id}, digest sha256:%s{requiredRecord.Digest}); the supplied reference '%s{evidence}' does not"
+                    )
+                | matches ->
+                    let urls = matches |> List.map (fst >> _.Url) |> String.concat ", "
+                    Error(
+                        $"completion evidenceRef does not identify one structured review-decision record in generation "
+                        + $"'%s{generation}'; candidates: %s{urls}; supplied reference '%s{evidence}'"
+                    )
+            | matches ->
+                let urls = matches |> List.map (fst >> _.Url) |> String.concat ", "
+                Error($"completion evidence is ambiguous: the supplied reference '%s{evidence}' matches multiple structured review-decision records in generation '%s{generation}': %s{urls}")
+
     let private normalizeCompletionEvidence
         (comments: Reads.CommentBody list)
         (receipt: ReviewWait.WaitReceipt)
@@ -731,26 +766,7 @@ module LiveHandlers =
                         | comment, Ok record when reviewRecordGeneration record = Some receipt.ReviewGeneration ->
                             Some(comment, record)
                         | _ -> None)
-                match expected with
-                | [] ->
-                    Error($"completion requires the structured review-decision record for generation '%s{receipt.ReviewGeneration}', but no such record is present")
-                | [ requiredComment, requiredRecord ] ->
-                    let normalized = evidence.Trim()
-                    let digest = requiredRecord.Digest
-                    let digestRef = $"sha256:%s{digest}"
-                    if normalized = requiredComment.Url
-                       || normalized = string requiredComment.Id
-                       || normalized.Equals(digest, StringComparison.OrdinalIgnoreCase)
-                       || normalized.Equals(digestRef, StringComparison.OrdinalIgnoreCase) then
-                        Ok requiredComment.Url
-                    else
-                        Error(
-                            $"completion evidenceRef must identify structured review-decision record %s{requiredComment.Url} "
-                            + $"(comment %d{requiredComment.Id}, digest sha256:%s{digest}); the supplied reference '%s{evidence}' does not"
-                        )
-                | matches ->
-                    let urls = matches |> List.map (fst >> _.Url) |> String.concat ", "
-                    Error($"completion evidence is ambiguous: generation '%s{receipt.ReviewGeneration}' matches multiple structured review-decision records: %s{urls}")
+                selectCompletionEvidence receipt.ReviewGeneration evidence expected
 
     let private appendReviewWait
         (ctx: Context)
