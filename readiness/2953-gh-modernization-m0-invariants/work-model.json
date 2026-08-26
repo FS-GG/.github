@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd"
+        "value": "f2b70c831538ab3d4757b386c75b679f492f71ef87d737504b879dfc5e6fedf8"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6a1d8046abb34f52d2c107fda9c4766a0db5dc90c43a6ad82fbb89099afff522"
+        "value": "a131333d59683f3ea615ee33e419f2211b3435c452a528ed13e728e06b6bb463"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c8b21b0552be628e773a01ea818e7be012663b27cf489dc0a0eec76d64a3528f"
+        "value": "572be0e4c92a632f7016158507c3d399f52c66ee2c4df3c400a15145c4e4444f"
       }
     }
   ],
@@ -409,8 +409,8 @@
     },
     {
       "id": "DEC-006",
-      "title": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Authorization is an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
-      "decision": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Authorization is an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
+      "title": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Before either association or allowlist authorization, the login must be canonical: 1\u201339 ASCII characters, alphanumeric endpoints, and only alphanumerics or single internal hyphens. Authorization is then an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, malformed/missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
+      "decision": "Q0 requires independently authored architecture, security, operations, and cross-repository review against exact fingerprints. Each authorized reviewer first posts a distinct, unedited narrative comment on the repair PR, then posts an exact, unedited attestation whose canonical final \u0060Evidence\u0060 line names that earlier comment; both comments must have the same GitHub \u0060User\u0060. Before either association or allowlist authorization, the login must be canonical: 1\u201339 ASCII characters, alphanumeric endpoints, and only alphanumerics or single internal hyphens. Authorization is then an allowed live association or an exact login in the fingerprint-bound, unique, nonempty \u0060reviewAuthorAllowlist\u0060. This avoids viewer-dependent private-membership results while keeping Bots, malformed/missing users, non-allowlisted \u0060CONTRIBUTOR\u0060/\u0060NONE\u0060, missing, self, later, edited, wrong-author, and wrong-PR evidence fail-closed. A generated roll-up or v1 review/delivery record cannot satisfy those roles.",
       "requirementRefs": [
         "FR-008"
       ],
@@ -1950,7 +1950,7 @@
           "path": "work/2953-gh-modernization-m0-invariants/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd"
+            "value": "f2b70c831538ab3d4757b386c75b679f492f71ef87d737504b879dfc5e6fedf8"
           },
           "schemaVersion": 1
         },
@@ -1966,7 +1966,7 @@
           "path": "work/2953-gh-modernization-m0-invariants/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "6a1d8046abb34f52d2c107fda9c4766a0db5dc90c43a6ad82fbb89099afff522"
+            "value": "a131333d59683f3ea615ee33e419f2211b3435c452a528ed13e728e06b6bb463"
           },
           "schemaVersion": 1
         },
@@ -1982,14 +1982,14 @@
           "path": "work/2953-gh-modernization-m0-invariants/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c8b21b0552be628e773a01ea818e7be012663b27cf489dc0a0eec76d64a3528f"
+            "value": "572be0e4c92a632f7016158507c3d399f52c66ee2c4df3c400a15145c4e4444f"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "3c183576f6436297ffb0c5180a15befa1342b7cbfa34d3926a955d6dcd78403c"
+        "value": "ded05e5a2c8315cbdfe55d3a7b3e983225428bda52fc3fa03b3e01d4aebee9f6"
       },
       "currency": "current"
     }

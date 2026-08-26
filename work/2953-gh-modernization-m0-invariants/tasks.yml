@@ -17,7 +17,7 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/2953-gh-modernization-m0-invariants/clarifications.md
-    digest: 6424671fa68b71702d4648bbd6bbe7d8e451da1b8decdda1edffa496a8e8e8cd
+    digest: f2b70c831538ab3d4757b386c75b679f492f71ef87d737504b879dfc5e6fedf8
     schemaVersion: 1
   - label: checklist
     path: work/2953-gh-modernization-m0-invariants/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2953-gh-modernization-m0-invariants/plan.md
-    digest: 6a1d8046abb34f52d2c107fda9c4766a0db5dc90c43a6ad82fbb89099afff522
+    digest: a131333d59683f3ea615ee33e419f2211b3435c452a528ed13e728e06b6bb463
     schemaVersion: 1
 tasks:
   - id: T001
