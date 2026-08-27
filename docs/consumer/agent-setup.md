@@ -222,6 +222,71 @@ correct, and the coordination kit exists in both `.claude/skills/` and
 `.agents/skills/`. Do not report success with uncommitted generated files or an
 unresolved security obligation.
 
+## Troubleshoot current release gaps
+
+The following consumer-visible gaps were reproduced against the published tools.
+Use these workarounds only when the described symptom is present, and preserve
+the verification boundaries above.
+
+### A personal Project cannot be secured
+
+Published `FS.GG.NewSddWorkspace` 0.10.1 can fail while reading or updating a
+personal Project. Typical messages include `ProjectV2 visibility could not be
+read`, `Project writer allowlist mutation failed`, or a GraphQL error requiring a
+`first` or `last` value. The repository issue-policy step is independent, so
+still apply it:
+
+```sh
+new-sdd-workspace secure . --repo "OWNER/REPOSITORY"
+```
+
+Then inspect the Project and make the requested visibility change explicitly:
+
+```sh
+gh project view PROJECT_NUMBER --owner "OWNER" --format json
+gh project edit PROJECT_NUMBER --owner "OWNER" --visibility PUBLIC
+gh project view PROJECT_NUMBER --owner "OWNER" --format json --jq .public
+```
+
+Use `PRIVATE` instead of `PUBLIC` when that is the user's choice. Set base
+permission to `Read` and grant `Write` only to the requested allowlist in
+**Project → Settings → Manage access**. This manual workaround does not create
+the scaffolder's typed access receipt: leave that obligation pending, do not edit
+`.fsgg/scaffold-provenance.json` by hand, and do not claim setup complete. Upgrade
+to a release containing the personal-Project security fix and rerun the recorded
+`new-sdd-workspace secure` resume command when it is available.
+
+### A copied Project is private unexpectedly
+
+`gh project copy` can create a private Project even when the source Project is
+public. Never infer the copy's visibility from its source. Read the copied
+Project's JSON immediately and, when the user requested a public board, correct
+and re-read it:
+
+```sh
+gh project view PROJECT_NUMBER --owner "OWNER" --format json --jq .public
+gh project edit PROJECT_NUMBER --owner "OWNER" --visibility PUBLIC
+gh project view PROJECT_NUMBER --owner "OWNER" --format json --jq .public
+```
+
+The access check in **Manage access** is still required after changing
+visibility.
+
+### The generated NuGet cache appears as untracked files
+
+The current SDD scaffold can create a workspace-local `.nuget/` package cache
+without ignoring it. Add this entry to the generated repository's `.gitignore`
+before staging files:
+
+```gitignore
+.nuget/
+```
+
+Run `git status --short --untracked-files=all` again and confirm that it reports
+no `.nuget/` paths. Do not commit the cache or force-add its contents. The
+generator-side correction is tracked in
+[FS.GG.SDD issue 936](https://github.com/FS-GG/FS.GG.SDD/issues/936).
+
 Finish with a short handoff containing:
 
 - repository and Project links;
