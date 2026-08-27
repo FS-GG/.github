@@ -15,6 +15,46 @@ The repository was created early by explicit user instruction at initial `main` 
 `ce22e4d10f2efae7aa09018521487b598c082350`. It is inert: no v2 writer, App route, environment, secret,
 webhook, or event subscription was enabled by bootstrap.
 
+## 2026-08-27 GS2-01.1 blocking administrator action
+
+**Observed:** 2026-08-27T08:56:29+02:00
+
+**Repository id:** `1346720714`
+
+**Source boundary:** [`FS-GG/FS.GG.Coordination#21`](https://github.com/FS-GG/FS.GG.Coordination/pull/21),
+squash commit `ab2e2f38f7fa8b5ffd4c7de6eb95fef94d25b11e`
+
+The source contract is merged and its exact-main qualification run passed all six jobs. Most earlier
+operator settings are live: squash-only merge, auto-merge, delete-branch-on-merge, read-only workflow
+tokens, no workflow self-approval, Maintain access for `coordination-maintainers`, secret scanning, push
+protection, Dependabot alerts/security updates, and the dependency graph. Actions are now restricted to
+selected GitHub-owned actions only.
+
+One organization-owned attachment is still required before the reviewed branch/tag rulesets may be
+applied. Repository `PATCH security_and_analysis` returned 200 but authoritatively reread both
+`secret_scanning_validity_checks` and `secret_scanning_non_provider_patterns` as `disabled`. The repository
+configuration endpoint returns 204: no organization code-security configuration is attached. The existing
+organization configuration **GitHub recommended** (configuration id `17`) already sets both controls to
+`enabled`, but attaching it requires an organization administrator/security manager and `write:org`; the
+roadmap credential has only `read:org`.
+
+Apply this exact selected-repository attachment:
+
+- Open [Organization settings → Code security → Configurations](https://github.com/organizations/FS-GG/settings/security_products/configurations).
+- Open [GitHub recommended, configuration 17](https://github.com/organizations/FS-GG/settings/security_products/configurations/view/17), choose **Apply to repositories**, choose **Selected repositories**, and select only
+  `FS-GG/FS.GG.Coordination`.
+- The equivalent REST operation is `POST /orgs/FS-GG/code-security/configurations/17/attach` with
+  `{"scope":"selected","selected_repository_ids":[1346720714]}`. Do not select all repositories.
+- Wait for GitHub's asynchronous apply to finish. Completion requires
+  `GET /repos/FS-GG/FS.GG.Coordination/code-security-configuration` to change from 204 to 200 and the
+  repository security reread to report both advanced scanning fields `enabled`.
+
+Do not create a second organization configuration, weaken the desired contract, or apply the no-bypass
+`main` ruleset while this post-state is incomplete. After the attachment verifies, automation can safely
+create the reviewed immutable signed `v*` tag ruleset and the no-bypass `main` ruleset, capture the exact
+settings receipt, and open its protected receipt PR. That final PR will require an approval from an
+eligible person other than its author because the reviewed ruleset intentionally has no bypass.
+
 ## 1. Current observed state
 
 | Surface | Observed state | Direct settings page |
