@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | Ongoing renovation; GS2-00/Q0 accepted, later implementation units not started |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.2 accepted; GS2-01.9 not applicable; GS2-02.3 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -370,7 +370,7 @@ model checking. F# tests remain required implementation evidence and enter corre
 `GS2-01.4` consumes that route's published artifact; the bootstrap worker must not recreate its extractor,
 profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`.
 
-- [ ] **GS2-01.1 — Complete repository provisioning.** Preserve the explicitly authorized README-only
+- [x] **GS2-01.1 — Complete repository provisioning.** Preserve the explicitly authorized README-only
   creation receipt, then apply least-privilege teams, branch ruleset, signed/immutable tag policy, secret
   scanning, dependency graph, Dependabot alerts, Actions policy, auto-merge policy, and default branch
   settings. Record the exact settings receipt; the early inert creation alone does not complete this unit.
@@ -392,15 +392,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [x] **GS2-01.6 — Create the work skill.** Add `github-substrate-v2-work` with commands to inspect this
   roadmap, check unit prerequisites, create a unit evidence manifest, run the relevant Q gates, and stop at
   the unit boundary.
-- [ ] **GS2-01.7 — Create evidence storage.** Version schemas and directories for corpus inputs, external
+- [x] **GS2-01.7 — Create evidence storage.** Version schemas and directories for corpus inputs, external
   observations, independent oracles, generated cases, test results, artifact manifests, reviews, and
   accepted qualification receipts. Generated bulky output remains in immutable CI artifacts/releases;
   compact indexes and digests remain in git.
-- [ ] **GS2-01.8 — Prove bootstrap recovery.** A clean machine clones, restores, builds, tests, packs,
+- [x] **GS2-01.8 — Prove bootstrap recovery.** A clean machine clones, restores, builds, tests, packs,
   installs, and validates an empty candidate using published dependencies only.
-- [ ] **GS2-01.9 — Provision non-production runtime.** If GS2-00.9 accepts a hosted App/webhook boundary,
-  provision its development and qualification environments, deployment identity, secret rotation,
-  observability, backup/recovery, and kill switch before any production event subscription exists.
+- **GS2-01.9 — Provision non-production runtime (not applicable to this cutover).** Accepted GS2-00.9
+  rejected a hosted App/webhook boundary, so this historical conditional branch is not a pending checkpoint.
+  If a future ratification accepts that boundary, it must provision development and qualification
+  environments, deployment identity, secret rotation, observability, backup/recovery, and a kill switch
+  before any production event subscription exists.
 
 ### GS2-02 — Implement the typed coordination specification
 
@@ -425,13 +427,13 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 5. Quint's [literate-specification documentation](https://quint.sh/docs/literate) defines the upstream
    workflow being qualified; only the pinned profile/toolchain accepted by ADR-0077 may enter CI.
 
-- [ ] **GS2-02.1 — Author the canonical literate Quint protocol.** Keep reviewer-oriented Markdown prose
+- [x] **GS2-02.1 — Author the canonical literate Quint protocol.** Keep reviewer-oriented Markdown prose
   beside deterministically extracted, named Quint blocks that specify subjects, authorities, codecs, commands,
   events, mutations, projections, observation plans, settings profiles, evidence obligations, and version
   IDs under the published FS-GG Quint profile. Generate stable integration identities through the compiled
   contract; prose cannot add hidden semantics, extracted `.qnt` files cannot be edited independently, and
   no parallel F# protocol AST is permitted.
-- [ ] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
+- [x] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
   stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
   completeness contracts.
 - [ ] **GS2-02.3 — Implement observations.** Distinguish observed, proven absent, contradictory,
