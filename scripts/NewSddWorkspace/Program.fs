@@ -445,12 +445,15 @@ let private secureRepository (repository: string) : RepositoryPolicyReceipt =
 /// the caller, rather than substituted with viewerCanUpdate or a browser scrape.
 let private inspectProject (owner: string) (title: string) : ProjectAccessReceipt =
     let project = sprintf "%s/%s" owner title
-    let query = "query($owner:String!){viewer{login} organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}"
+    // Project owners may be organizations or personal accounts. Resolve the common
+    // RepositoryOwner interface first so the default active-user quickstart does not
+    // send a user login through organization(login:), which GitHub rejects outright.
+    let query = "query($owner:String!){viewer{login} repositoryOwner(login:$owner){__typename ... on Organization{projectsV2(first:100){nodes{id title public}}} ... on User{projectsV2(first:100){nodes{id title public}}}}}"
     let code, output = graphql query [ "owner", owner ]
     if code <> 0 then ProjectPending(project, "ProjectV2 visibility could not be read")
     else
         try
-            let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["organization"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
+            let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["repositoryOwner"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
             let actor = JsonNode.Parse(output).AsObject().["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
             match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
             | None -> ProjectPending(project, "configured Project does not exist yet")
@@ -514,7 +517,7 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
             ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
         else
             let resolved = collaborators |> List.choose (fun writer -> writer)
-            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators{totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
+            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators(first:100){totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
             let code, output = graphqlProjectCollaborators mutation id resolved
             if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
             else

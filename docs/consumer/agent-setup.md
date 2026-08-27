@@ -9,7 +9,7 @@ description: Instructions for a Codex or Claude Code agent to create, authentica
 # Agent setup instructions for FS-GG
 
 This page is for the user's coding agent. It is the operational companion to the
-[Hello World experience](https://github.com/FS-GG#quick-start-ask-your-agent-for-hello-world).
+[Todo experience](https://github.com/FS-GG#quick-start-ask-your-agent-for-a-todo-app).
 Follow it when asked to create or wire an FS-GG workspace. It applies equally to
 Codex and Claude Code.
 
@@ -47,9 +47,9 @@ Infer safe defaults, then ask only for facts that remain ambiguous:
 | Repository visibility | ask; do not infer public versus private |
 | Project visibility | match the repository unless the user says otherwise |
 | Trusted Project writers | the active user for a personal Project; ask for an organization Project |
-| Template | `console` for Hello World |
+| Template | `console` for the Todo quickstart |
 | Lifecycle | `sdd` |
-| Governance | off for Hello World; ask for real products |
+| Governance | off for the Todo quickstart; ask for other products |
 
 Creating a repository or Project is an external mutation. Confirm any choice that
 the user's request did not already settle before doing it.
@@ -143,33 +143,35 @@ Do not copy draft items.
 
 ## 4. Scaffold, publish, and link the workspace
 
-For the Hello World request, use the console provider, SDD, and no governance.
+For the Todo request, use the console provider, SDD, and no governance.
 Supply the repository and board identities so the scaffolder seeds both Claude
 Code and Codex skills and records the coordination target:
 
 ```sh
-new-sdd-workspace ./hello-fsgg HelloFsgg \
+new-sdd-workspace ./todo-fsgg TodoFsgg \
   --template console \
   --lifecycle sdd \
   --no-governance \
   --board "OWNER/PROJECT" \
-  --repo "OWNER/REPOSITORY"
+  --repo "OWNER/REPOSITORY" \
+  --public-board \
+  --trusted-writers "OWNER"
 ```
 
-For a public Project, also pass `--public-board --trusted-writers "ALLOWLIST"`.
-For a private Project, pass `--private-board`; pass `--trusted-writers` when the
-user named additional writers. Treat warnings about a repository that does not
-exist yet as a pending obligation, not a successful security result.
+When adapting this flow to a private Project, replace the last two arguments
+with `--private-board`; pass `--trusted-writers` when the user named additional
+writers. Treat warnings about a repository that does not exist yet as a pending
+obligation, not a successful security result.
 
 After a successful scaffold, initialize and inspect the local repository before
 publishing it. Then use GitHub CLI to create the requested remote and push:
 
 ```sh
-cd ./hello-fsgg
+cd ./todo-fsgg
 git init -b main
 git add .
 git diff --cached --check
-git commit -m "Create FS-GG Hello World workspace"
+git commit -m "Create FS-GG Todo workspace"
 gh repo create "OWNER/REPOSITORY" --VISIBILITY --source . --remote origin --push
 gh project link PROJECT_NUMBER --owner "OWNER" --repo "OWNER/REPOSITORY"
 ```
@@ -201,12 +203,17 @@ do not weaken the check or silently broaden the allowlist.
 
 ## 6. Verify the user-visible result
 
-For Hello World:
+For the Todo quickstart, run the template's executable test entry point and a
+real persistence demonstration. The generated Expecto project is a standalone
+executable, so a bare `dotnet test` only restores/builds it and executes no tests.
 
 ```sh
 dotnet build
-dotnet test
-dotnet run --project src/HelloFsgg -- "Hello, world!"
+dotnet fsi build.fsx test
+dotnet run --project src/TodoFsgg -- add "Try FS-GG"
+dotnet run --project src/TodoFsgg -- list
+dotnet run --project src/TodoFsgg -- complete 1
+dotnet run --project src/TodoFsgg -- list
 git status --short
 ```
 
