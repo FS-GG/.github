@@ -27,7 +27,7 @@ on:
       - "scripts/registry_packages.py"   # the shared contract->package map (.github#1260)
       - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
       - "docs/architecture.md"   # hand-authored package identity prose asserted by the fixture
-      - "profile/README.md"      # generated component row asserted by the same fixture
+      - "docs/components.md"     # generated component row asserted by the same fixture
       - "tests/feed-coherence/**"
       - ".github/workflows/feed-coherence.yml"
   push:
@@ -38,7 +38,7 @@ on:
       - "scripts/registry_packages.py"   # the shared contract->package map (.github#1260)
       - "scripts/fsgg_feed.py"
       - "docs/architecture.md"
-      - "profile/README.md"
+      - "docs/components.md"
       - "tests/feed-coherence/**"
       - ".github/workflows/feed-coherence.yml"
   schedule:

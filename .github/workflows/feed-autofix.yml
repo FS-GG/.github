@@ -260,7 +260,7 @@ jobs:
       # registry/dependencies.yml and nothing else — correctly; #748 forbids it prose. But the registry
       # feeds four GENERATED projection files: docs/architecture.md's `fsgg-versions` region,
       # docs/registry/compatibility.md's `fsgg-contract-versions` region, and the component inventory
-      # in both profile/README.md and docs/consumer/versioning-and-updates.md. A flip that leaves any
+      # in both docs/components.md and docs/consumer/versioning-and-updates.md. A flip that leaves any
       # stale is red on the REQUIRED `projection` gate and on
       # `projections` — which is why every flip this bot opened before #1125 could never merge (#1081).
       # Regenerating is mechanical (the literal is machine-owned now), so the bot does it; the authored
