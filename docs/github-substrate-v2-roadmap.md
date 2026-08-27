@@ -374,22 +374,22 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   creation receipt, then apply least-privilege teams, branch ruleset, signed/immutable tag policy, secret
   scanning, dependency graph, Dependabot alerts, Actions policy, auto-merge policy, and default branch
   settings. Record the exact settings receipt; the early inert creation alone does not complete this unit.
-- [ ] **GS2-01.2 — Register the component.** Add the repository and ownership/release topology to the
+- [x] **GS2-01.2 — Register the component.** Add the repository and ownership/release topology to the
   reviewed registry, architecture map, custom-property projection, GitHub App installation scope, and
   Coordination Project membership rules.
-- [ ] **GS2-01.3 — Establish the solution boundary.** Create packages/projects for protocol specification,
+- [x] **GS2-01.3 — Establish the solution boundary.** Create packages/projects for protocol specification,
   pure core, GitHub adapters, CLI host, App/webhook host, qualification contracts, and tests. Enforce
   one-way dependencies and keep GitHub SDK/HTTP concerns out of the pure core.
-- [ ] **GS2-01.4 — Pin the published Quint-capable kernel.** Restore the exact published FS.GG.SDD artifact
+- [x] **GS2-01.4 — Pin the published Quint-capable kernel.** Restore the exact published FS.GG.SDD artifact
   carrying the accepted Quint profile and compiled-contract boundary from the supported read feed, verify
   its identity and bundle digest, and prohibit source-project or checkout-relative references. An earlier
   bootstrap may temporarily pin P4 for non-semantic scaffolding, but that pin cannot qualify GS2-02. This
   unit is not ready until Q1 has succeeded and ADR-0077 has been amended with the accepted literate source,
   extraction, authority, fingerprint, and compatibility contract.
-- [ ] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
+- [x] **GS2-01.5 — Establish custom CI.** Add only bootstrap qualification jobs: deterministic build,
   compiler/unit tests, dependency/security checks, package/install smoke, and evidence-manifest validation.
   Do not import v1 coordination completion gates.
-- [ ] **GS2-01.6 — Create the work skill.** Add `github-substrate-v2-work` with commands to inspect this
+- [x] **GS2-01.6 — Create the work skill.** Add `github-substrate-v2-work` with commands to inspect this
   roadmap, check unit prerequisites, create a unit evidence manifest, run the relevant Q gates, and stop at
   the unit boundary.
 - [ ] **GS2-01.7 — Create evidence storage.** Version schemas and directories for corpus inputs, external
