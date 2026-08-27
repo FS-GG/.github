@@ -175,6 +175,7 @@ case "$all" in
     case "${PROJECT_MODE:-success}" in
       mutation-failure) echo 'TOKEN-SHOULD-NOT-LEAK' >&2; exit 1 ;;
       grant-payload-mismatch) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"U_bad","login":"mallory"}]}}}}' ;;
+      personal) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":1,"nodes":[{"id":"U_1","login":"alice"}]}}}}' ;;
       *) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"T_1","slug":"platform"}]}}}}' ;;
     esac ;;
   *'teams(first:100)'*) printf '%s\n' '{"data":{"organization":{"teams":{"nodes":[{"id":"T_1","slug":"platform"}]}}}}' ;;
@@ -182,11 +183,12 @@ case "$all" in
   *'projectsV2(first:100)'*)
     case "${PROJECT_MODE:-success}" in
       unreadable) exit 1 ;;
-      missing) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[]}}}}' ;;
-      private) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
-      visibility-change) [ -f "${PROJECT_STATE:?}" ] && public=true || public=false; printf '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":%s}]}}}}\n' "$public" ;;
-      visibility-stale) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
-      *) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
+      missing) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[]}}}}' ;;
+      private) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
+      personal) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
+      visibility-change) [ -f "${PROJECT_STATE:?}" ] && public=true || public=false; printf '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":%s}]}}}}\n' "$public" ;;
+      visibility-stale) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
+      *) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
     esac ;;
   *) echo 'unexpected GraphQL route' >&2; exit 74 ;;
 esac
@@ -216,6 +218,7 @@ run_project() {
 
 project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
 if [ "$project_rc" -eq 1 ] && grep -q 'partial verified receipt:' "$WORK/project.out" \
+  && grep -qF 'collaborators(first:100)' "$WORK/project.log" \
   && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification" and .target=="acme/Roadmap")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
   && [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="partial" and .basePermission=="unverified")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
   && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .unverifiedFacts | index("effective-exclusive-writer-set")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
@@ -224,6 +227,18 @@ if [ "$project_rc" -eq 1 ] && grep -q 'partial verified receipt:' "$WORK/project
   ok "secure Project uses typed variables and persists one partial receipt plus exact human obligation"
 else
   bad "secure Project production route must persist typed partial provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+fi
+
+# The public quickstart defaults to the active personal account. Its Project must
+# travel through the same typed visibility and writer route as an organization board.
+PERSONAL_WORK="$WORK/project-personal"; mkdir -p "$PERSONAL_WORK/.fsgg"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"alice/Roadmap"}]}' > "$PERSONAL_WORK/.fsgg/scaffold-provenance.json"
+project_rc=0; run_project personal secure "$PERSONAL_WORK" --project alice/Roadmap --public-board --trusted-writers alice || project_rc=$?
+if [ "$project_rc" -eq 1 ] \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .project=="alice/Roadmap" and .observedVisibility=="public" and (.trustedWriters | length)==1)' "$PERSONAL_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  ok "secure Project supports the active personal-account quickstart"
+else
+  bad "personal Project must use the typed RepositoryOwner route" "rc=$project_rc: $(cat "$WORK/project.out")"
 fi
 
 # A second partial run replaces the receipt/obligation instead of appending. The human completion
