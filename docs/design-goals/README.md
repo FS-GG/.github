@@ -17,6 +17,8 @@ when extending the platform itself.
 - [Consumer guide](../consumer/index.md) — choose, create, and operate an FS.GG workspace.
 - [Getting started](../consumer/getting-started.md) — install the tools and create a first product.
 - [Agent setup](../consumer/agent-setup.md) — authenticate GitHub, create a repository and Project, and wire the workspace safely.
+- [Components](../components.md) — independently adoptable framework packages and their current versions.
+- [Tools](../tools.md) — workspace creation, lifecycle, coordination, and governance entry points.
 - [Architecture](../architecture.md) — repositories, components, dependency direction, contracts, and composition.
 - [Implementation status](implementation-status.md) — what is shipped, pending, or deliberately not yet the default.
 

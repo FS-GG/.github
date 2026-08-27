@@ -588,16 +588,16 @@ echo "    fs-gg-workspace-template/game-skills versions still agree with the reg
 echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two commits? ---"
 # Round 1 of #2070 pinned fs-gg-workspace-template/game-skills at the wrong field's discipline
 # (consumer-adopted, not feed-newest); round 3 corrected the registry rows to 0.8.1/0.8.0 but left
-# docs/architecture.md and profile/README.md asserting the superseded 0.8.0/0.7.0 for two more
+# docs/architecture.md and docs/components.md asserting the superseded 0.8.0/0.7.0 for two more
 # commits — a silent self-contradiction three lines from architecture.md's own generated versions
 # table, exactly the failure class closed issue .github#913 predicted for this kind of hand-authored
 # site. Checks the REAL committed files, not a synthetic fixture (same shape as the mapping-
 # completeness leg immediately above), so a future version bump that forgets the prose sites reds
 # here rather than only in a human reviewer's eye.
 ARCH="$REPO_ROOT/docs/architecture.md"
-PROFILE_README="$REPO_ROOT/profile/README.md"
+COMPONENTS="$REPO_ROOT/docs/components.md"
 arch_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$ARCH")"
-profile_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$PROFILE_README")"
+component_templates_rows="$(grep -F '| [**FS.GG.Templates**]' "$COMPONENTS")"
 workspace_contract_rows="$(grep -F '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")"
 game_skills_contract_rows="$(grep -F '| `game-skills` | FS.GG.Game |' "$ARCH")"
 workspace_contract_map_rows="$(grep -F '| `fs-gg-workspace-template` | Templates |' "$ARCH")"
@@ -611,8 +611,8 @@ architecture_template_comparator_is_current() {
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.10.0'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
-  && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$PROFILE_README")" -eq 1 ] \
-  && [[ "$profile_templates_rows" == *'| `0.10.0` |'* ]] \
+  && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
+  && [[ "$component_templates_rows" == *'| `0.10.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
   && [[ "$workspace_contract_rows" == *'| `0.10.0` | `0.10.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
@@ -635,7 +635,7 @@ if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [[ "$workspace_registry_block" != *'wizard-selectable only after phase 6'* ]] \
   && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
   && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
-  && ! grep -qF 'coherent release pending' "$PROFILE_README" \
+  && ! grep -qF 'coherent release pending' "$COMPONENTS" \
   && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
   && grep -qF 'its consumed version' "$ARCH" \
   && architecture_template_comparator_is_current "$ARCH"
@@ -660,7 +660,7 @@ import pathlib, sys, yaml
 
 workflow = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 triggers = workflow.get("on", workflow.get(True, {}))
-required = {"docs/architecture.md", "profile/README.md"}
+required = {"docs/architecture.md", "docs/components.md"}
 for event in ("pull_request", "push"):
     paths = set(triggers.get(event, {}).get("paths", []))
     missing = required - paths

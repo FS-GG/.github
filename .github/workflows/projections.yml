@@ -35,7 +35,7 @@ on:
       - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - "registry/repos.yml"
-      - "profile/README.md"
+      - "docs/components.md"
       - "docs/consumer/versioning-and-updates.md"
       - ".claude/skills/**"
       - ".agents/skills/**"
@@ -60,7 +60,7 @@ on:
       - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - "registry/repos.yml"
-      - "profile/README.md"
+      - "docs/components.md"
       - "docs/consumer/versioning-and-updates.md"
       - ".claude/skills/**"
       - ".agents/skills/**"
@@ -136,9 +136,9 @@ jobs:
           # 22 → 23: `contract-versions` in docs/registry/compatibility.md (#1081 option 2 slice A).
           # 23 → 24: `skill-registry-counts` in docs/registry/compatibility.md (#1206 — the hand-maintained
           #          skill-registry row counts become a generated projection off registry/skills.yml).
-          # 24 → 25: `component-count` in profile/README.md (#1313 — the hand-typed component/repo COUNT
+          # 24 → 25: `component-count` in docs/components.md (#1313 — the hand-typed component/repo COUNT
           #          becomes a projection off registry/repos.yml's roster).
-          # 25 → 27: `component-inventory` in profile/README.md AND docs/consumer/versioning-and-updates.md
+          # 25 → 27: `component-inventory` in docs/components.md AND docs/consumer/versioning-and-updates.md
           #          (#1313 — the hand-maintained component table becomes a projection off the roster +
           #          registry/dependencies.yml).
           # 27 → 37: M3 routes ten skill projections into focused references and emits each one to the

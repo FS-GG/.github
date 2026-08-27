@@ -134,8 +134,8 @@ TARGETS=(
   "versions:docs/architecture.md"
   "contract-versions:docs/registry/compatibility.md"
   "skill-registry-counts:docs/registry/compatibility.md"
-  "component-count:profile/README.md"
-  "component-inventory:profile/README.md"
+  "component-count:docs/components.md"
+  "component-inventory:docs/components.md"
   "component-inventory:docs/consumer/versioning-and-updates.md"
 )
 
