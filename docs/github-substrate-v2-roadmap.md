@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.2 accepted; GS2-01.9 not applicable; GS2-02.3 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.3 accepted; GS2-01.9 not applicable; GS2-02.4 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -436,7 +436,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [x] **GS2-02.2 — Implement authority bindings.** Model native GitHub, repository registry, protocol
   stream, git ledger, Actions, package feed, and other external authorities with explicit revision and
   completeness contracts.
-- [ ] **GS2-02.3 — Implement observations.** Distinguish observed, proven absent, contradictory,
+- [x] **GS2-02.3 — Implement observations.** Distinguish observed, proven absent, contradictory,
   unreadable, unsupported, unauthorized, incomplete, stale, and rate-limited outcomes.
 - [ ] **GS2-02.4 — Implement lifecycle intent.** Separate human scheduling intent from claims, blockers,
   PR/review/delivery observations and derived lifecycle status.
