@@ -15,11 +15,75 @@ networking components while keeping each component independently adoptable.
 > coordinated fleet cutover. Follow the
 > [implementation and retirement roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md)
 > for current scope, qualification gates, cutover stages, and the retirement of
-> the existing coordination system. For a shorter orientation, start with the
-> [current design goals](https://github.com/FS-GG/.github/blob/main/docs/design-goals/README.md),
-> which distinguish the accepted target from what is already shipped.
+> the existing coordination system. For a shorter status summary, see
+> [what is shipped and pending](https://github.com/FS-GG/.github/blob/main/docs/design-goals/implementation-status.md).
 
-## Quick start: ask your agent for Hello World
+Start with the **[documentation index](https://github.com/FS-GG/.github/blob/main/docs/design-goals/README.md)**
+for guides, architecture, design direction, coordination, and reference material.
+
+## On this page
+
+- [Features](#features)
+- [Quick start](#quick-start-ask-your-agent-for-a-todo-app)
+- [Workspace templates](#workspace-templates)
+- [Spec-driven development](#spec-driven-development)
+- [Components](#the-components)
+- [Tools and deeper documentation](#tools-and-deeper-documentation)
+
+## Features
+
+Available today:
+
+- **GitHub-native workspace setup** — an agent can create and secure a repository,
+  create its GitHub Project, scaffold the selected product, and verify the result.
+- **Projects-based roadmaps** — boards carry backlog items, epics, sub-issues,
+  dependencies, phases, priorities, effort, and delivery state.
+- **Board orchestration** — trusted board work can move through triage, SDD,
+  implementation, independent review, repair, merge, and verified completion.
+- **Safe parallel execution** — worker identities, issue claims, leases, isolated
+  worktrees, and declared file touch sets divide compatible work into parallel waves.
+- **Cross-repository coordination** — issues, dependency edges, coordination rooms,
+  operation locks, and versioned contracts sequence changes across FS-GG components.
+- **Roadmap-driven SDD** — each milestone can run through charter, specification,
+  clarification, planning, tasks, implementation, evidence, verification, and shipping.
+- **Portable agent skills** — the same governed process and product skills are
+  materialized for Codex and Claude Code from one versioned source.
+- **Optional governance** — workspace-owned rules, evidence checks, and release gates
+  can be added without making the UI, lifecycle, or application depend on Governance.
+- **Reproducible delivery** — typed contracts, deterministic reports, locked
+  dependencies, coherent package sets, and publish-before-adopt sequencing reduce drift.
+- **Composable products** — focused templates and independently usable UI, game,
+  audio, networking, lifecycle, and governance packages can be adopted together or alone.
+
+In progress:
+
+- **Quint-backed workspace models** — one formal model for requirements, decisions,
+  proposed changes, implementation obligations, and evidence, with readable semantic
+  diffs and tools to reconcile the model with the implementation.
+- **GitHub Substrate v2** — a separately qualified coordination product that moves
+  more identity, relationships, presentation, eventing, and enforcement onto native
+  GitHub capabilities while retaining FS-GG's concurrency and evidence guarantees.
+- **Polyglot workspaces** — descriptor-driven providers are being extended beyond the
+  current F#-centred set to TypeScript, JavaScript, Rust, Go, Python, OCaml, C#,
+  Haskell, Java, and Scala.
+- **Externally maintained templates** — consumers will be able to add their own
+  provider/template definitions from local directories or immutable URLs without
+  registering them in an FS-GG-owned catalog.
+
+### What is Quint?
+
+[Quint](https://quint-lang.org/) is an executable specification language from
+[Informal Systems](https://github.com/informalsystems/quint), inspired by TLA+.
+It describes a system as typed state, legal transitions, and properties that can be
+simulated, tested, and model-checked before or alongside implementation. FS-GG's
+accepted direction is to embed Quint in readable Markdown so people review the prose
+and semantic diff while tools check the precise model; it is an active migration, not
+yet the default for every workspace. See the
+[FS-GG Quint overview](https://github.com/FS-GG/.github/blob/main/docs/design-goals/quint-backed-workspaces.md),
+[ADR-0077](https://github.com/FS-GG/.github/blob/main/docs/adr/0077-quint-first-typed-specification-authority.md),
+and [implementation status](https://github.com/FS-GG/.github/blob/main/docs/design-goals/implementation-status.md).
+
+## Quick start: ask your agent for a Todo app
 
 FS-GG assumes you already have a coding agent with terminal access, such as
 [Codex](https://openai.com/codex/) or
@@ -30,10 +94,12 @@ machinery, creates and secures the repository and Project, and verifies the resu
 Start a session in the directory where you keep projects and ask:
 
 ```text
-Set up a new FS-GG Hello World workspace for me. Use my active GitHub account
-unless I name a different owner. Create a public repository named hello-fsgg and
-a Project named HelloWorld, scaffold the console template with the SDD lifecycle
-and no governance, then build, test, and run it with "Hello, world!".
+Set up a new FS-GG Todo workspace for me. Use my active GitHub account unless I
+name a different owner. Create a public repository named todo-fsgg and a Project
+named Todo, then scaffold the console template with the SDD lifecycle and no
+governance. Build a small Todo application that can add, list, and complete tasks,
+persists them in a local JSON file, and has tests for its core behavior. Build,
+test, and run a short add/list/complete demonstration.
 
 Follow the FS-GG agent setup guide:
 https://github.com/FS-GG/.github/blob/main/docs/consumer/agent-setup.md
@@ -49,11 +115,11 @@ not a page of setup commands:
 
 ```text
 Ready
-Repository  https://github.com/you/hello-fsgg
+Repository  https://github.com/you/todo-fsgg
 Project     https://github.com/users/you/projects/...
 Build       passed
 Tests       passed
-Run         Hello, world!
+Run         Added "Try FS-GG" → listed open → completed
 ```
 
 The separate [agent setup guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/agent-setup.md)
@@ -67,8 +133,8 @@ Ask the agent to add a roadmap:
 
 ```text
 Create docs/roadmap.md with two milestones: first preserve and test the supplied
-hello-world behavior; then document usage and add a CI build. Review it with me,
-then drive it milestone by milestone through FS-GG's SDD workflow.
+Todo add/list/complete behavior; then document usage and add a CI build. Review it
+with me, then drive it milestone by milestone through FS-GG's SDD workflow.
 ```
 
 The agent uses the process skills scaffolded for its runtime. Each milestone gets
