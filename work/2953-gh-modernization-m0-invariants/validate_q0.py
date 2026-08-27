@@ -54,6 +54,8 @@ REVIEW_ROLE_TEXT = {
 }
 REVIEW_REPOSITORY = "FS-GG/.github"
 REVIEW_PULL_REQUEST = 3002
+ROADMAP_PROJECTION_PATH = "docs/github-substrate-v2-roadmap.md"
+ROADMAP_AUTHORITY_REVISION = "0bca8c283f7ac35b4ad48a18ba6500eacc86b93a"
 AUTHORIZED_REVIEW_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 # These hashes bind the independently adjudicated semantic baseline, not merely its
 # presence in the role-signed subject. Recomputing reviewFingerprint after weakening a
@@ -255,8 +257,18 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
         artifact_path = ROOT / str(path)
         if not artifact_path.is_file():
             errors.append(f"governingArtifacts[{path}]: source file missing")
-        elif row.get("sha256") != digest_bytes(artifact_path.read_bytes()):
-            errors.append(f"governingArtifacts[{path}]: digest does not match source bytes")
+        else:
+            try:
+                authority_bytes = (
+                    run_bytes(["git", "show", f"{ROADMAP_AUTHORITY_REVISION}:{path}"])
+                    if path == ROADMAP_PROJECTION_PATH
+                    else artifact_path.read_bytes()
+                )
+            except subprocess.CalledProcessError:
+                errors.append(f"governingArtifacts[{path}]: accepted authority snapshot is unavailable")
+                authority_bytes = b""
+            if row.get("sha256") != digest_bytes(authority_bytes):
+                errors.append(f"governingArtifacts[{path}]: digest does not match authority bytes")
         if not SHA256.fullmatch(str(row.get("sha256", ""))):
             errors.append(f"governingArtifacts[{path}]: invalid SHA-256")
 
@@ -481,9 +493,17 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
 
 def self_test(data: dict[str, Any]) -> list[str]:
     failures: list[str] = []
+
+    def corrupt_roadmap_authority(candidate: dict[str, Any]) -> None:
+        roadmap = next(
+            row for row in candidate["governingArtifacts"] if row["path"] == ROADMAP_PROJECTION_PATH
+        )
+        roadmap["sha256"] = "0" * 64
+
     candidate_mutations = [
         ("inventory digest", lambda d: d["inventories"][0].__setitem__("pathListSha256", "not-a-digest")),
         ("governing artifact", lambda d: d["governingArtifacts"][0].__setitem__("sha256", "0" * 64)),
+        ("roadmap authority snapshot", corrupt_roadmap_authority),
         ("unknown writer", lambda d: d["mutations"].append({**d["mutations"][0], "id": "M-unknown", "class": "unknownWriter"})),
         ("corpus subject", lambda d: d["corpus"][0]["expected"].__setitem__("decisionClass", "Accept")),
         ("corpus original bytes", lambda d: d["corpus"][0].__setitem__("originalBytesSha256", "0" * 64)),

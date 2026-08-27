@@ -6,7 +6,7 @@
     {"path":"docs/adr/0077-quint-first-typed-specification-authority.md","sha256":"f256b612fef047a95f9c36c762bb1cafc30364c9bbed4a883d9f457f425175a3"},
     {"path":"docs/adr/0078-github-substrate-v2-new-only-coordination-authority.md","sha256":"da3c5651b68053ab82e0a234d9463991834cb6be16d94d95c7f0bb14e5e3353a"},
     {"path":"docs/coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md","sha256":"3afc99a545c81ce8784a1dbeff4b5a1609098382c76d7867e05f794f9ddf6891"},
-    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"3db255515c9b9eae66f8b07d7aa1714b218b546ab0f85ccad5236b30d7b789a0"}
+    {"path":"docs/github-substrate-v2-roadmap.md","sha256":"f47baa5b8f912a1d77074cc76e5d41bf7862dbf6fe3e1b0d21027bd2adefe946"}
   ],
   "corpusArtifact": {"path":"work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json","sha256":"5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"},
   "inventories": [
@@ -108,7 +108,7 @@
   "liveProjection": {"epic":"FS-GG/.github#2952 body corrected to GS2 mapping","bootstrapRepository":{"ref":"FS-GG/FS.GG.Coordination","visibility":"PUBLIC","defaultBranch":"main","initialHead":"ce22e4d10f2efae7aa09018521487b598c082350","state":"inert"},"blockedBy":{"FS-GG/.github#2963":["FS-GG/.github#2953","FS-GG/FS.GG.SDD#924"],"FS-GG/.github#2964":["FS-GG/.github#2953","FS-GG/.github#2963"],"FS-GG/.github#2965":["FS-GG/.github#2963","FS-GG/.github#2964"]},"childBoundaryCitations":["FS-GG/.github#2954","FS-GG/.github#2955","FS-GG/.github#2956","FS-GG/.github#2957","FS-GG/.github#2958","FS-GG/.github#2959","FS-GG/.github#2960","FS-GG/.github#2961","FS-GG/.github#2962","FS-GG/.github#2963","FS-GG/.github#2964","FS-GG/.github#2965"],"pendingBoardWrites":0},
   "threatModel": {"path":"work/2953-gh-modernization-m0-invariants/threat-model.md","sha256":"2496cb2bd47a2106091c52ab1e8c41b00b06b3fde05d39b964ce4f466fb0f079","boundaries":["protectedEpoch","administrativePrincipal","githubMutableState","packageSupplyChain","crossRepositoryReceiver"]},
   "adminSettingsReport": {"path":"docs/2026-08-26-fs-gg-coordination-admin-settings-report.md","sha256":"6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"},
-  "reviewFingerprint": "7c35278854186a843682688df828752e1aaa3d9b2c55133aac34130c97ab4eb2",
+  "reviewFingerprint": "ed2d4afa2825354dc3d3e7773ee5bd97e4120d7103040fec78f5b8d9e8ab131c",
   "reviewAuthority":"live-unedited-current-head-pr-comments",
   "reviewAuthorAllowlist":["EHotwagner"],
   "reviewsRequired":["architecture","security","operations","crossRepository"],
