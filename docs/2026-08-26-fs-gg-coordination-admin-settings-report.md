@@ -34,20 +34,39 @@ One organization-owned attachment is still required before the reviewed branch/t
 applied. Repository `PATCH security_and_analysis` returned 200 but authoritatively reread both
 `secret_scanning_validity_checks` and `secret_scanning_non_provider_patterns` as `disabled`. The repository
 configuration endpoint returns 204: no organization code-security configuration is attached. The existing
-organization configuration **GitHub recommended** (configuration id `17`) already sets both controls to
-`enabled`, but attaching it requires an organization administrator/security manager and `write:org`; the
-roadmap credential has only `read:org`.
+organization configuration **GitHub recommended** (configuration id `17`) sets both controls to `enabled`,
+but attaching it requires an organization administrator/security manager and `write:org`; the roadmap
+credential has only `read:org`.
+
+This is not a two-toggle change. Configuration 17 currently has target `global`, enforcement `unenforced`,
+and enables Advanced Security, dependency graph, Dependabot alerts, CodeQL default setup, secret scanning,
+push protection, non-provider patterns, validity checks, extended secret metadata, and private vulnerability
+reporting. Dependency auto-submission, Dependabot security updates, delegated dismissals/bypass, and generic
+secret scanning are `not_set`; the repository's already-enabled Dependabot security updates therefore remain
+a separate repository setting. CodeQL default setup is currently `state=not-configured`, so the attachment
+will create that scanning boundary. GitHub also warns that when insufficient GHAS licenses are available,
+only free features are enabled; a 202 attachment response is therefore not proof that every desired feature
+landed.
 
 Apply this exact selected-repository attachment:
 
-- Open [Organization settings → Code security → Configurations](https://github.com/organizations/FS-GG/settings/security_products/configurations).
-- Open [GitHub recommended, configuration 17](https://github.com/organizations/FS-GG/settings/security_products/configurations/view/17), choose **Apply to repositories**, choose **Selected repositories**, and select only
-  `FS-GG/FS.GG.Coordination`.
+- Open [Organization settings → Code security → Configurations](https://github.com/organizations/FS-GG/settings/security_products/configurations), open **GitHub recommended**, then select its **Repositories** tab.
+- Select only `FS-GG/FS.GG.Coordination`, choose **Apply configuration**, choose **GitHub recommended**,
+  review the displayed feature and licensing impact, and choose **Apply**. Do not use an all-repositories
+  scope.
 - The equivalent REST operation is `POST /orgs/FS-GG/code-security/configurations/17/attach` with
   `{"scope":"selected","selected_repository_ids":[1346720714]}`. Do not select all repositories.
-- Wait for GitHub's asynchronous apply to finish. Completion requires
-  `GET /repos/FS-GG/FS.GG.Coordination/code-security-configuration` to change from 204 to 200 and the
-  repository security reread to report both advanced scanning fields `enabled`.
+- The REST operation must return 202. Wait for GitHub's asynchronous apply to finish; pending or failed is
+  not completion.
+- Completion requires `GET /repos/FS-GG/FS.GG.Coordination/code-security-configuration` to return 200 with
+  `status=attached` and `configuration.id=17`, and the complete paginated
+  `GET /orgs/FS-GG/code-security/configurations/17/repositories` response to contain repository id
+  `1346720714` with `status=attached`.
+- Re-read configuration 17 and bind every non-`not_set` value listed above, including its `unenforced`
+  enforcement. Then verify CodeQL default setup is configured, dependency graph/SBOM returns 200,
+  Dependabot alerts returns 204, existing Dependabot security updates remains enabled, and every secret
+  scanning control named above is enabled. Any license-limited, missing, changed, pending, or contradictory
+  result keeps GS2-01.1 unaccepted.
 
 Do not create a second organization configuration, weaken the desired contract, or apply the no-bypass
 `main` ruleset while this post-state is incomplete. After the attachment verifies, automation can safely
