@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "202b63d68bdd110c857100e3599207fcb77de5eec7640219a01129bbcc16e92d"
+        "value": "e414c56cec9d87c978eaf92b57241d5e8f422a2e57447cc18d1d9e5b735f3a1c"
       }
     },
     {
@@ -1958,7 +1958,7 @@
           "path": "work/2953-gh-modernization-m0-invariants/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "202b63d68bdd110c857100e3599207fcb77de5eec7640219a01129bbcc16e92d"
+            "value": "e414c56cec9d87c978eaf92b57241d5e8f422a2e57447cc18d1d9e5b735f3a1c"
           },
           "schemaVersion": 1
         },
@@ -1989,7 +1989,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "0880534da773cf44795e63c5a21ccb0efc3587682657c1cfc8677cc6d346f895"
+        "value": "ff9a0000460e43226485e7e7564c14b21e23b42cdc77fe3489411bb384b7db48"
       },
       "currency": "current"
     }

@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<testsuite name="GS2-00-Q0" tests="13" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="15.624577"><testcase name="q0-candidate-and-mutation-controls" time="12.762668"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
-</system-out></testcase><testcase name="q0-review-boundary" time="1.924493"><system-out>Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
-Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
+<testsuite name="GS2-00-Q0" tests="13" timestamp="2026-08-26T00:00:00+02:00" failures="0" errors="0" skipped="0" time="15.752985"><testcase name="q0-candidate-and-mutation-controls" time="12.902000"><system-out>Q0-GREEN: candidate; authorities=13; mutations=9; corpus=21; deletions=15; controls=on
+</system-out></testcase><testcase name="q0-review-boundary" time="1.924339"><system-out>Q0-RED: reviews[security]: expected exactly one unedited accepted current-head attestation, found 0
 Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current-head attestation, found 0
-</system-out></testcase><testcase name="adr-corpus-coherence" time="0.115740"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
-</system-out></testcase><testcase name="q0-json-parse" time="0.032671"><system-out>{
+Q0-RED: reviews[operations]: expected exactly one unedited accepted current-head attestation, found 0
+Q0-RED: reviews[architecture]: expected exactly one unedited accepted current-head attestation, found 0
+</system-out></testcase><testcase name="adr-corpus-coherence" time="0.118718"><system-out>adr-coherence: OK — 77 records, 78 index rows, 35 amendment link(s), all bidirectional.
+</system-out></testcase><testcase name="q0-json-parse" time="0.032125"><system-out>{
     "schema": "fsgg.github-substrate.q0-evidence/v1",
     "sourceBase": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
     "observedAt": "2026-08-26T00:00:00+02:00",
@@ -24,7 +24,7 @@ Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current
         },
         {
             "path": "docs/github-substrate-v2-roadmap.md",
-            "sha256": "61bc9c74eada6fecfc9f2bca3b0f7cff6ec87b76659a42ca0a8c6d2e92d647ae"
+            "sha256": "f47baa5b8f912a1d77074cc76e5d41bf7862dbf6fe3e1b0d21027bd2adefe946"
         }
     ],
     "corpusArtifact": {
@@ -947,7 +947,7 @@ Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current
         "path": "docs/2026-08-26-fs-gg-coordination-admin-settings-report.md",
         "sha256": "6bbb303da20bab8b3be50dd1a170fc90c9f1931e425f70516393dbc177baf032"
     },
-    "reviewFingerprint": "b917b96b71a4cf53fa561bcd2be018425baea2914ca3c1a6a0c7c2fedba286c2",
+    "reviewFingerprint": "ed2d4afa2825354dc3d3e7773ee5bd97e4120d7103040fec78f5b8d9e8ab131c",
     "reviewAuthority": "live-unedited-current-head-pr-comments",
     "reviewAuthorAllowlist": [
         "EHotwagner"
@@ -960,11 +960,11 @@ Q0-RED: reviews[crossRepository]: expected exactly one unedited accepted current
     ],
     "reviews": []
 }
-</system-out></testcase><testcase name="source-diff-whitespace" time="0.013240"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.065100"><system-out>committed whitespace mutation rejected by exact commit range
-</system-out></testcase><testcase name="sdd-coherent-implementation-ready" time="0.476467"><system-out>SDD-GREEN: noChange, coherent, implementationReady, diagnostic-free
-</system-out></testcase><testcase name="sdd-incoherent-readiness-mutation" time="0.035031"><system-out>incoherent readiness-string and mutating analysis payloads rejected
-</system-out></testcase><testcase name="sdd-downstream-source-digests" time="0.036753"><system-out>DOWNSTREAM-GREEN: every declared evidence/verify/ship/handoff source matches exact bytes
-</system-out></testcase><testcase name="sdd-stale-analysis-digest-mutation" time="0.034216"><system-out>stale analysis source digest mutation rejected
-</system-out></testcase><testcase name="sdd-downstream-source-set-mutations" time="0.036909"><system-out>downstream omission, duplicate, and extra source-set mutations rejected
-</system-out></testcase><testcase name="sdd-downstream-source-schema-mutations" time="0.087829"><system-out>canonical source-row baseline passed; 43 schema mutations rejected across every projection
-</system-out></testcase><testcase name="source-tree-clean-after-gates" time="0.003461"><system-out /></testcase></testsuite>
+</system-out></testcase><testcase name="source-diff-whitespace" time="0.003252"><system-out /></testcase><testcase name="source-diff-whitespace-mutation" time="0.072440"><system-out>committed whitespace mutation rejected by exact commit range
+</system-out></testcase><testcase name="sdd-coherent-implementation-ready" time="0.472155"><system-out>SDD-GREEN: noChange, coherent, implementationReady, diagnostic-free
+</system-out></testcase><testcase name="sdd-incoherent-readiness-mutation" time="0.034278"><system-out>incoherent readiness-string and mutating analysis payloads rejected
+</system-out></testcase><testcase name="sdd-downstream-source-digests" time="0.033918"><system-out>DOWNSTREAM-GREEN: every declared evidence/verify/ship/handoff source matches exact bytes
+</system-out></testcase><testcase name="sdd-stale-analysis-digest-mutation" time="0.034084"><system-out>stale analysis source digest mutation rejected
+</system-out></testcase><testcase name="sdd-downstream-source-set-mutations" time="0.036667"><system-out>downstream omission, duplicate, and extra source-set mutations rejected
+</system-out></testcase><testcase name="sdd-downstream-source-schema-mutations" time="0.085333"><system-out>canonical source-row baseline passed; 43 schema mutations rejected across every projection
+</system-out></testcase><testcase name="source-tree-clean-after-gates" time="0.003676"><system-out /></testcase></testsuite>
