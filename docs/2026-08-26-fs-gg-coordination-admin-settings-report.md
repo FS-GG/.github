@@ -50,7 +50,7 @@ landed.
 
 Apply this exact selected-repository attachment:
 
-- Open [Organization settings → Code security → Configurations](https://github.com/organizations/FS-GG/settings/security_products/configurations), open **GitHub recommended**, then select its **Repositories** tab.
+- Open [Organization settings → Code security → Configurations](https://github.com/organizations/FS-GG/settings/security_products/configurations), then select the page's **Repositories** tab.
 - Select only `FS-GG/FS.GG.Coordination`, choose **Apply configuration**, choose **GitHub recommended**,
   review the displayed feature and licensing impact, and choose **Apply**. Do not use an all-repositories
   scope.
