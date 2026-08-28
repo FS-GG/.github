@@ -817,6 +817,18 @@ OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed_messa
   && ok ".github#3053: a non-string diagnostic message is malformed, not a confident finding" \
   || bad ".github#3053: rendered ShellCheck fields must be type-checked" "rc=$RC\n$OUT"
 
+malformed_level="$WORK/malformed-level-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" --version "*) exec "$REAL_SHELLCHECK" "$@" ;; esac' \
+  'printf "%s\n" '\''{"comments":[{"file":"bad.sh","line":1,"column":1,"level":["warning"],"code":2086,"message":"text"}]}'\''' \
+  'exit 1' >"$malformed_level"
+chmod +x "$malformed_level"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed_level" bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
+  && ! grep -q 'Traceback' <<<"$OUT" \
+  && ok ".github#3053: a non-string diagnostic level is malformed without a traceback" \
+  || bad ".github#3053: level type validation must precede severity lookup" "rc=$RC\n$OUT"
+
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1

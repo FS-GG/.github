@@ -124,7 +124,8 @@ def select(args: argparse.Namespace) -> int:
         path = finding["file"]
         level = finding["level"]
         code_number = finding["code"]
-        if (not isinstance(path, str) or not path or level not in LEVELS
+        if (not isinstance(path, str) or not path
+                or not isinstance(level, str) or level not in LEVELS
                 or not isinstance(code_number, int) or isinstance(code_number, bool)
                 or not 1 <= code_number <= 9999
                 or not isinstance(finding["message"], str)):
