@@ -13,7 +13,9 @@ name: Archive terminal rows off the Coordination board
 # `.github#2314`, `.github#2352`, and the still-open `.github#2356` ("too small for THIS BOARD'S actual
 # scan cost"). Each made the scan cheaper; none made the board smaller, so the cause outlived every
 # repair. The one-off sweep took 2,206 -> 36 rows and a full scan 23 pages -> 1 (`ready` 23 pts -> 1).
-# This workflow is what stops it regrowing.
+# This workflow is what stops it regrowing. Age remains the ordinary retention policy, while the
+# explicit 100-row bound prevents a high-throughput month from recreating a multi-page scan before
+# any row becomes 30 days old (.github#3052).
 #
 # WHY NOT GITHUB'S BUILT-IN AUTO-ARCHIVE
 # ======================================
@@ -27,7 +29,7 @@ on:
   schedule:
     # Daily, deliberately off the hour and well clear of `coord-board-reconcile`'s ':17' so the two
     # never contend for the same budget window. This job is never urgent: it is a floor sweeper, and
-    # anything it misses today it takes tomorrow.
+    # anything safety prevents it taking today remains visible and is explained in the report.
     - cron: '43 4 * * *'
   workflow_dispatch:
     inputs:
@@ -39,6 +41,10 @@ on:
         description: 'Keep Done+closed rows closed more recently than this many days'
         type: string
         default: '30'
+      max_visible:
+        description: 'Archive oldest safe terminal rows until at most this many remain visible'
+        type: string
+        default: '100'
 
 permissions:
   contents: read
@@ -93,6 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           retention='${{ inputs.retention_days || '30' }}'
+          max_visible='${{ inputs.max_visible || '100' }}'
 
           # A scheduled run always executes; a manual run defaults to a DRY RUN, so a human reaching for
           # this workflow to "have a look" cannot archive 2,000 rows by pressing the obvious button.
@@ -105,6 +112,7 @@ jobs:
 
           python3 scripts/coord-board-archive.py \
             --retention-days "$retention" \
+            --max-visible "$max_visible" \
             --manifest "$RUNNER_TEMP/archived.jsonl" \
             $mode | tee "$RUNNER_TEMP/archive.log"
 
