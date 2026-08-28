@@ -207,7 +207,7 @@ printf '%s' "$SC2251_BAD" > "$d/bare.sh"; git -C "$d" add -A
 run_gate "$d"
 sc2251_named=0
 case "$OUT" in *SC2251*) sc2251_named=1 ;; esac
-[ "$RC" = 1 ] && [ "$sc2251_named" = 1 ] \
+[ "$RC" = 1 ] && [ "$sc2251_named" = 1 ] && grep -q ': note: This ! is not on a condition and skips errexit\.' <<<"$OUT" \
   && ok ".github#2689: a bare '! cmd' statement under errexit REDS the gate, named as SC2251" \
   || bad ".github#2689: a bare '! cmd' statement under errexit must red as SC2251" "rc=$RC
 $OUT"
@@ -483,7 +483,7 @@ run_gate "$d"
   && ok "#2493: a genuine SC2050 typo with NO \${{ }} involvement still REDS the gate" \
   || bad "#2493: a real SC2050 defect unrelated to GitHub-expression substitution must not be hidden" "rc=$RC
 $OUT"
-printf '%s' "$OUT" | grep -q 'SC2050' \
+printf '%s' "$OUT" | grep -q ': warning: .*\[SC2050\]' \
   && ok "#2493: ...and the finding is specifically identified as SC2050" \
   || bad "#2493: the real typo's finding should be reported as SC2050" "$OUT"
 
@@ -689,6 +689,145 @@ printf '%s' "$IOUT" | grep -qi 'checksum mismatch' \
 [ -x "$d/extracted/shellcheck-v${inst_ver}/shellcheck" ] \
   && bad "#2501: a checksum-mismatched artifact must never be extracted/installed" \
   || ok "#2501: ...and nothing was extracted from the unverified artifact"
+
+# ---- 11. ONE ANALYSIS PER PROJECTION + DETERMINISTIC MANIFEST/RECEIPT (.github#3053). ------------
+d="$(newrepo single-analysis)"
+mkdir -p "$d/.github/workflows"
+printf '%s' "$CLEAN_SHELL" >"$d/clean.sh"
+printf '%s\n' 'name: fixture' 'on: push' 'jobs:' '  one:' '    runs-on: ubuntu-latest' \
+  '    steps:' '      - run: echo clean' >"$d/.github/workflows/ci.yml"
+git -C "$d" add -A
+
+counting="$WORK/counting-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" -f json1 "*) printf "%s\n" "$*" >>"$SHELLCHECK_COUNT_LOG" ;; esac' \
+  'exec "$REAL_SHELLCHECK" "$@"' >"$counting"
+chmod +x "$counting"
+count_log="$WORK/shellcheck-invocations.log"
+manifest="$WORK/shell-lint-manifest.json"
+receipt="$WORK/shell-lint-receipt.json"
+: >"$count_log"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK_COUNT_LOG="$count_log" \
+  SHELLCHECK="$counting" SHELL_LINT_MANIFEST="$manifest" SHELL_LINT_RECEIPT="$receipt" \
+  bash "$GATE" 2>&1)"; RC=$?
+analysis_calls="$(wc -l <"$count_log" | tr -d ' ')"
+file_calls="$(grep -c -- '-x -S info -f json1' "$count_log" || true)"
+workflow_calls="$(grep -c -- '-S warning -f json1' "$count_log" || true)"
+[ "$RC" = 0 ] && [ "$analysis_calls" = 2 ] && [ "$file_calls" = 1 ] && [ "$workflow_calls" = 1 ] \
+  && ok ".github#3053: exactly one structured ShellCheck analysis runs for each non-empty projection" \
+  || bad ".github#3053: file/workflow projections must each be analyzed once" "rc=$RC calls=$analysis_calls file=$file_calls workflow=$workflow_calls\n$OUT"
+
+manifest_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$manifest")"
+if python3 - "$manifest" "$receipt" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1], encoding="utf-8"))
+r = json.load(open(sys.argv[2], encoding="utf-8"))
+assert m["schema"] == "fsgg.shell-lint-manifest/v1"
+assert [row["path"] for row in m["subjects"]["files"]] == ["clean.sh"]
+assert len(m["subjects"]["workflowEmbedded"]) == 1
+assert all(len(row["sha256"]) == 64 for rows in m["subjects"].values() for row in rows)
+assert set(m["implementation"]) == {"extractor", "occurrenceFilter", "selector", "lint"}
+assert r["schema"] == "fsgg.shell-lint-receipt/v1"
+assert r["manifestDigest"] == m["digest"]
+assert r["subjectCounts"] == {"files": 1, "workflowEmbedded": 1}
+assert r["invocationCounts"] == {"files": 1, "workflowEmbedded": 1, "total": 2}
+assert set(r["phaseDurationsMs"]) == {"discovery", "manifest", "fileShellcheck", "fileSelection", "workflowShellcheck", "workflowSelection", "total"}
+assert r["verdict"] == {"exitCode": 0, "name": "clean"}
+PY
+then
+  ok ".github#3053: manifest membership/config hashes and the critical-path receipt are complete"
+else
+  bad ".github#3053: manifest or receipt is incomplete" "$OUT"
+fi
+
+bad_receipt="$WORK/invalid-invocation-receipt.json"
+durations='{"discovery":0,"manifest":0,"fileShellcheck":0,"fileSelection":0,"workflowShellcheck":0,"workflowSelection":0,"total":0}'
+empty_manifest="$WORK/empty-subject-manifest.json"
+python3 - "$manifest" "$empty_manifest" <<'PY'
+import hashlib, json, sys
+source, target = sys.argv[1:]
+doc = json.load(open(source, encoding="utf-8"))
+doc["subjects"] = {"files": [], "workflowEmbedded": []}
+doc.pop("digest")
+payload = json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+doc["digest"] = hashlib.sha256(payload).hexdigest()
+open(target, "w", encoding="utf-8").write(json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+for invalid_spec in \
+  "$manifest|2|1|duplicate file analysis" \
+  "$manifest|0|1|missing file analysis" \
+  "$manifest|1|0|missing workflow analysis" \
+  "$empty_manifest|1|0|analysis over an empty file projection"; do
+  IFS='|' read -r invalid_manifest file_count workflow_count invalid_label <<<"$invalid_spec"
+  python3 "$REPO_ROOT/scripts/lib/select-shellcheck-findings.py" receipt \
+    --manifest "$invalid_manifest" --output "$bad_receipt" --durations "$durations" \
+    --file-invocations "$file_count" --workflow-invocations "$workflow_count" \
+    --exit-code 0 --verdict clean >"$WORK/invalid-invocation.out" 2>&1
+  invalid_invocation_rc=$?
+  [ "$invalid_invocation_rc" = 2 ] \
+    && ok ".github#3053: receipt emission refuses $invalid_label" \
+    || bad ".github#3053: invocation counts must match subject nonemptiness exactly ($invalid_label)" "rc=$invalid_invocation_rc\n$(cat "$WORK/invalid-invocation.out")"
+done
+
+: >"$count_log"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK_COUNT_LOG="$count_log" \
+  SHELLCHECK="$counting" SHELL_LINT_MANIFEST="$manifest" SHELL_LINT_RECEIPT="$receipt" \
+  bash "$GATE" 2>&1)"; RC=$?
+stable_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$manifest")"
+[ "$RC" = 0 ] && [ "$stable_digest" = "$manifest_digest" ] \
+  && ok ".github#3053: unchanged subjects and policy reproduce the same canonical manifest digest" \
+  || bad ".github#3053: unchanged input must keep the manifest digest stable" "before=$manifest_digest after=$stable_digest\n$OUT"
+
+printf '\necho changed\n' >>"$d/clean.sh"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK_COUNT_LOG="$count_log" \
+  SHELLCHECK="$counting" SHELL_LINT_MANIFEST="$manifest" SHELL_LINT_RECEIPT="$receipt" \
+  bash "$GATE" 2>&1)"; RC=$?
+content_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$manifest")"
+[ "$RC" = 0 ] && [ "$content_digest" != "$stable_digest" ] \
+  && ok ".github#3053: changing subject bytes invalidates the manifest digest" \
+  || bad ".github#3053: content changes must invalidate the manifest" "before=$stable_digest after=$content_digest\n$OUT"
+
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK_COUNT_LOG="$count_log" \
+  SHELLCHECK="$counting" SEVERITY=error SHELL_LINT_MANIFEST="$manifest" SHELL_LINT_RECEIPT="$receipt" \
+  bash "$GATE" 2>&1)"; RC=$?
+config_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$manifest")"
+[ "$RC" = 0 ] && [ "$config_digest" != "$content_digest" ] \
+  && ok ".github#3053: changing severity policy invalidates the manifest digest" \
+  || bad ".github#3053: config changes must invalidate the manifest" "before=$content_digest after=$config_digest\n$OUT"
+
+malformed="$WORK/malformed-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" --version "*) exec "$REAL_SHELLCHECK" "$@" ;; esac' \
+  'printf "%s\n" '\''{"comments":[{"file":"incomplete"}]}'\''' \
+  'exit 1' >"$malformed"
+chmod +x "$malformed"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed" bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
+  && ok ".github#3053: malformed or incomplete ShellCheck JSON is a no-verdict, never clean" \
+  || bad ".github#3053: malformed structured output must fail closed" "rc=$RC\n$OUT"
+
+malformed_message="$WORK/malformed-message-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" --version "*) exec "$REAL_SHELLCHECK" "$@" ;; esac' \
+  'printf "%s\n" '\''{"comments":[{"file":"bad.sh","line":1,"column":1,"level":"warning","code":2086,"message":["not","text"]}]}'\''' \
+  'exit 1' >"$malformed_message"
+chmod +x "$malformed_message"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed_message" bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
+  && ok ".github#3053: a non-string diagnostic message is malformed, not a confident finding" \
+  || bad ".github#3053: rendered ShellCheck fields must be type-checked" "rc=$RC\n$OUT"
+
+malformed_level="$WORK/malformed-level-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" --version "*) exec "$REAL_SHELLCHECK" "$@" ;; esac' \
+  'printf "%s\n" '\''{"comments":[{"file":"bad.sh","line":1,"column":1,"level":["warning"],"code":2086,"message":"text"}]}'\''' \
+  'exit 1' >"$malformed_level"
+chmod +x "$malformed_level"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed_level" bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
+  && ! grep -q 'Traceback' <<<"$OUT" \
+  && ok ".github#3053: a non-string diagnostic level is malformed without a traceback" \
+  || bad ".github#3053: level type validation must precede severity lookup" "rc=$RC\n$OUT"
 
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"
