@@ -207,7 +207,7 @@ printf '%s' "$SC2251_BAD" > "$d/bare.sh"; git -C "$d" add -A
 run_gate "$d"
 sc2251_named=0
 case "$OUT" in *SC2251*) sc2251_named=1 ;; esac
-[ "$RC" = 1 ] && [ "$sc2251_named" = 1 ] && printf '%s' "$OUT" | grep -q ': note: This ! is not on a condition and skips errexit\.' \
+[ "$RC" = 1 ] && [ "$sc2251_named" = 1 ] && grep -q ': note: This ! is not on a condition and skips errexit\.' <<<"$OUT" \
   && ok ".github#2689: a bare '! cmd' statement under errexit REDS the gate, named as SC2251" \
   || bad ".github#2689: a bare '! cmd' statement under errexit must red as SC2251" "rc=$RC
 $OUT"
@@ -784,7 +784,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   'exit 1' >"$malformed"
 chmod +x "$malformed"
 OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed" bash "$GATE" 2>&1)"; RC=$?
-[ "$RC" = 2 ] && printf '%s' "$OUT" | grep -q 'structured-output boundary refused input' \
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
   && ok ".github#3053: malformed or incomplete ShellCheck JSON is a no-verdict, never clean" \
   || bad ".github#3053: malformed structured output must fail closed" "rc=$RC\n$OUT"
 
