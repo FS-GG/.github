@@ -742,14 +742,32 @@ fi
 
 bad_receipt="$WORK/invalid-invocation-receipt.json"
 durations='{"discovery":0,"manifest":0,"fileShellcheck":0,"fileSelection":0,"workflowShellcheck":0,"workflowSelection":0,"total":0}'
-python3 "$REPO_ROOT/scripts/lib/select-shellcheck-findings.py" receipt \
-  --manifest "$manifest" --output "$bad_receipt" --durations "$durations" \
-  --file-invocations 2 --workflow-invocations 1 --exit-code 0 --verdict clean \
-  >"$WORK/invalid-invocation.out" 2>&1
-invalid_invocation_rc=$?
-[ "$invalid_invocation_rc" = 2 ] \
-  && ok ".github#3053: receipt emission refuses more than one analysis per projection" \
-  || bad ".github#3053: invocation-count enforcement must fail closed" "rc=$invalid_invocation_rc\n$(cat "$WORK/invalid-invocation.out")"
+empty_manifest="$WORK/empty-subject-manifest.json"
+python3 - "$manifest" "$empty_manifest" <<'PY'
+import hashlib, json, sys
+source, target = sys.argv[1:]
+doc = json.load(open(source, encoding="utf-8"))
+doc["subjects"] = {"files": [], "workflowEmbedded": []}
+doc.pop("digest")
+payload = json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+doc["digest"] = hashlib.sha256(payload).hexdigest()
+open(target, "w", encoding="utf-8").write(json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+for invalid_spec in \
+  "$manifest|2|1|duplicate file analysis" \
+  "$manifest|0|1|missing file analysis" \
+  "$manifest|1|0|missing workflow analysis" \
+  "$empty_manifest|1|0|analysis over an empty file projection"; do
+  IFS='|' read -r invalid_manifest file_count workflow_count invalid_label <<<"$invalid_spec"
+  python3 "$REPO_ROOT/scripts/lib/select-shellcheck-findings.py" receipt \
+    --manifest "$invalid_manifest" --output "$bad_receipt" --durations "$durations" \
+    --file-invocations "$file_count" --workflow-invocations "$workflow_count" \
+    --exit-code 0 --verdict clean >"$WORK/invalid-invocation.out" 2>&1
+  invalid_invocation_rc=$?
+  [ "$invalid_invocation_rc" = 2 ] \
+    && ok ".github#3053: receipt emission refuses $invalid_label" \
+    || bad ".github#3053: invocation counts must match subject nonemptiness exactly ($invalid_label)" "rc=$invalid_invocation_rc\n$(cat "$WORK/invalid-invocation.out")"
+done
 
 : >"$count_log"
 OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK_COUNT_LOG="$count_log" \
@@ -787,6 +805,17 @@ OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed" bash
 [ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
   && ok ".github#3053: malformed or incomplete ShellCheck JSON is a no-verdict, never clean" \
   || bad ".github#3053: malformed structured output must fail closed" "rc=$RC\n$OUT"
+
+malformed_message="$WORK/malformed-message-shellcheck"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'case " $* " in *" --version "*) exec "$REAL_SHELLCHECK" "$@" ;; esac' \
+  'printf "%s\n" '\''{"comments":[{"file":"bad.sh","line":1,"column":1,"level":"warning","code":2086,"message":["not","text"]}]}'\''' \
+  'exit 1' >"$malformed_message"
+chmod +x "$malformed_message"
+OUT="$(cd "$d" && env REAL_SHELLCHECK="$SHELLCHECK" SHELLCHECK="$malformed_message" bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 2 ] && grep -q 'structured-output boundary refused input' <<<"$OUT" \
+  && ok ".github#3053: a non-string diagnostic message is malformed, not a confident finding" \
+  || bad ".github#3053: rendered ShellCheck fields must be type-checked" "rc=$RC\n$OUT"
 
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"

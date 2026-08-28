@@ -63,15 +63,15 @@ assert_run shell-fixture '.github/workflows/shell-lint.yml' true 'shell fixture 
 assert_run shell-fixture 'scripts/lib/extract-workflow-shell.py' true 'shell fixture runs for workflow-shell extraction'
 assert_run shell-fixture 'scripts/lib/select-shellcheck-findings.py' true 'shell fixture runs for structured ShellCheck selection'
 
-analysis_invocations="$(rg -c '"\$SHELLCHECK" .* -f json1' "$ROOT/scripts/lint-shell.sh" || true)"
+analysis_invocations="$(grep -Ec '"\$SHELLCHECK" .* -f json1' "$ROOT/scripts/lint-shell.sh" || true)"
 if [ "$analysis_invocations" = 2 ]; then
   ok 'shell lint has exactly one structured analysis per file/workflow projection'
 else
   bad "shell lint has $analysis_invocations structured ShellCheck analysis sites instead of 2"
 fi
-if rg -n 'SHELL_LINT_MANIFEST|SHELL_LINT_RECEIPT|upload-artifact@v4' \
+if grep -Eq 'SHELL_LINT_MANIFEST|SHELL_LINT_RECEIPT|upload-artifact@v4' \
   "$ROOT/.github/workflows/shell-lint.yml" >/dev/null \
-  && rg -n 'fsgg.shell-lint-manifest/v1|fsgg.shell-lint-receipt/v1' \
+  && grep -Eq 'fsgg.shell-lint-manifest/v1|fsgg.shell-lint-receipt/v1' \
     "$ROOT/scripts/lib/select-shellcheck-findings.py" >/dev/null; then
   ok 'shell lint preserves its deterministic manifest and critical-path receipt'
 else

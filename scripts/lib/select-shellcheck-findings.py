@@ -124,9 +124,14 @@ def select(args: argparse.Namespace) -> int:
         path = finding["file"]
         level = finding["level"]
         code_number = finding["code"]
-        if not isinstance(path, str) or level not in LEVELS or not isinstance(code_number, int):
+        if (not isinstance(path, str) or not path or level not in LEVELS
+                or not isinstance(code_number, int) or isinstance(code_number, bool)
+                or not 1 <= code_number <= 9999
+                or not isinstance(finding["message"], str)):
             raise ValueError(f"ShellCheck comment {index} has invalid field types")
-        if not isinstance(finding["line"], int) or not isinstance(finding["column"], int):
+        if (not isinstance(finding["line"], int) or isinstance(finding["line"], bool)
+                or not isinstance(finding["column"], int) or isinstance(finding["column"], bool)
+                or finding["line"] < 1 or finding["column"] < 1):
             raise ValueError(f"ShellCheck comment {index} has invalid coordinates")
         code = f"SC{code_number:04d}"
         if args.sc1091_refusal and code == "SC1091":
@@ -170,16 +175,18 @@ def receipt(args: argparse.Namespace) -> int:
     if set(durations) != required_phases or any(not isinstance(v, int) or v < 0 for v in durations.values()):
         raise ValueError("receipt durations are incomplete or invalid")
     invocations = {"files": args.file_invocations, "workflowEmbedded": args.workflow_invocations}
-    if any(value not in (0, 1) for value in invocations.values()):
-        raise ValueError("each non-empty subject projection must be analyzed at most once")
+    subject_counts = {
+        "files": len(manifest_doc["subjects"]["files"]),
+        "workflowEmbedded": len(manifest_doc["subjects"]["workflowEmbedded"]),
+    }
+    expected_invocations = {name: int(count > 0) for name, count in subject_counts.items()}
+    if invocations != expected_invocations:
+        raise ValueError("each non-empty subject projection must be analyzed exactly once, and each empty projection zero times")
     document = {
         "schema": SCHEMA_RECEIPT,
         "manifestDigest": expected,
         "shellcheckVersion": manifest_doc["shellcheckVersion"],
-        "subjectCounts": {
-            "files": len(manifest_doc["subjects"]["files"]),
-            "workflowEmbedded": len(manifest_doc["subjects"]["workflowEmbedded"]),
-        },
+        "subjectCounts": subject_counts,
         "invocationCounts": {**invocations, "total": sum(invocations.values())},
         "phaseDurationsMs": durations,
         "verdict": {"exitCode": args.exit_code, "name": args.verdict},
