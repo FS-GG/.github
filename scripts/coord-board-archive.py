@@ -307,10 +307,12 @@ def main() -> int:
     now = _dt.datetime.now(_dt.timezone.utc)
     archive, skipped = plan(rows, now, args.retention_days, args.max_visible)
     projected = len(rows) - len(archive)
+    projected_pages = max(1, -(-projected // 100))
 
     print(f"scanned {len(rows)} row(s) over {pages} page(s) for {spent} GraphQL point(s)")
     print(f"plan: archive {len(archive)}, keep {projected} "
           f"(retention {args.retention_days}d, max visible {args.max_visible})")
+    print(f"pages: {pages} -> {projected_pages} projected")
     if projected > args.max_visible:
         print(f"  BOUND NOT REACHED — {projected - args.max_visible} row(s) remain above the target "
               "because no more candidates satisfy every safety guard")
@@ -325,8 +327,7 @@ def main() -> int:
         return 0
 
     if not args.execute:
-        print(f"\nDRY RUN — nothing archived. Pages would go {pages} -> "
-              f"{max(1, -(-(len(rows) - len(archive)) // 100))}.")
+        print("\nDRY RUN — nothing archived.")
         return 0
 
     # The manifest is written AFTER each batch lands, never before the loop. Round-1 review finding on

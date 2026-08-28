@@ -228,8 +228,25 @@ finally:
 report = stdout.getvalue()
 results["reports when absolute guards prevent reaching the bound"] = (
     report_rc == 0 and "keep 102" in report and "BOUND NOT REACHED" in report and
-    "2 row(s) remain above the target" in report,
+    "2 row(s) remain above the target" in report and "pages: 2 -> 2 projected" in report,
     report)
+
+# 14. The scheduled/execute route shares the same before/after projection report as a dry run. A
+#     101-row safe board is the page-boundary control: archive one, and two pages project to one.
+report_rows = [row(number=900 + i, itemId=f"PVTI_page_{i}", closedAt="2026-08-28T00:00:00Z")
+               for i in range(101)]
+stdout = io.StringIO()
+sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100"]
+try:
+    with contextlib.redirect_stdout(stdout):
+        report_rc = mod.main()
+finally:
+    sys.argv = saved_argv
+page_report = stdout.getvalue()
+results["reports projected before/after pages on the common production path"] = (
+    report_rc == 0 and "plan: archive 1, keep 100" in page_report and
+    "pages: 2 -> 1 projected" in page_report,
+    page_report)
 
 print(json.dumps({k: [bool(v[0]), repr(v[1])] for k, v in results.items()}))
 PY
