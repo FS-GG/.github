@@ -214,6 +214,8 @@ def fake_graphql(*args):
         return {"remaining": 5000}
     if args[0] == "archive-scan":
         return {"items": report_rows, "pages": 2, "spent": 2}
+    if args[0] == "archive-items":
+        return {"archived": list(args[2:])}
     raise AssertionError(args)
 
 mod.coord_graphql = fake_graphql
@@ -231,12 +233,13 @@ results["reports when absolute guards prevent reaching the bound"] = (
     "2 row(s) remain above the target" in report and "pages: 2 -> 2 projected" in report,
     report)
 
-# 14. The scheduled/execute route shares the same before/after projection report as a dry run. A
-#     101-row safe board is the page-boundary control: archive one, and two pages project to one.
+# 14. Exercise the ACTUAL scheduled/execute branch, not another dry run. This is the original escape:
+#     putting the page report inside `if not args.execute` must red this leg. A 101-row safe board is
+#     the page-boundary control: archive one, and two pages project to one.
 report_rows = [row(number=900 + i, itemId=f"PVTI_page_{i}", closedAt="2026-08-28T00:00:00Z")
                for i in range(101)]
 stdout = io.StringIO()
-sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100"]
+sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100", "--execute"]
 try:
     with contextlib.redirect_stdout(stdout):
         report_rc = mod.main()
@@ -245,7 +248,7 @@ finally:
 page_report = stdout.getvalue()
 results["reports projected before/after pages on the common production path"] = (
     report_rc == 0 and "plan: archive 1, keep 100" in page_report and
-    "pages: 2 -> 1 projected" in page_report,
+    "pages: 2 -> 1 projected" in page_report and "archived 1 row(s)" in page_report,
     page_report)
 
 print(json.dumps({k: [bool(v[0]), repr(v[1])] for k, v in results.items()}))
