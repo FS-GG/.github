@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.9 accepted; GS2-01.9 not applicable; GS2-02.10 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.10 accepted; GS2-01.9 not applicable; GS2-02.11 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -451,7 +451,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   causation/correlation, receipt re-read, compensation boundary, and roll-forward classification.
 - [x] **GS2-02.9 — Implement desired-state specifications.** Type issue schema, Projects, repository
   profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
-- [ ] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
+- [x] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
   mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
 - [ ] **GS2-02.11 — Prove deterministic identity.** Equivalent literate Quint authoring forms extract and
   normalize identically; semantic changes produce stable, reviewable diffs; prose-only changes cannot alter
