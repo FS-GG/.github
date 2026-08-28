@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.8 accepted; GS2-01.9 not applicable; GS2-02.9 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.9 accepted; GS2-01.9 not applicable; GS2-02.10 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -449,7 +449,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   transition, and compensate with expected revision, idempotency, and all terminal/uncertain outcomes.
 - [x] **GS2-02.8 — Implement durable plans.** Compile decisions into ordered resumable steps with
   causation/correlation, receipt re-read, compensation boundary, and roll-forward classification.
-- [ ] **GS2-02.9 — Implement desired-state specifications.** Type issue schema, Projects, repository
+- [x] **GS2-02.9 — Implement desired-state specifications.** Type issue schema, Projects, repository
   profiles, rulesets, workflow pins, permissions, releases, security, and supply-chain settings.
 - [ ] **GS2-02.10 — Implement compiled-contract outputs.** Derive schemas, command metadata, permission census,
   mutation census, settings plans, Markdown/JSON views, semantic diff, diagrams, and model-test inventory.
