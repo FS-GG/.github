@@ -43,9 +43,11 @@ THE GUARDS, ALL FAIL-CLOSED
      `CLOSED` for an issue, or `MERGED` for a pull request (GraphQL reports `MERGED` where REST says
      `closed`). Either axis alone is insufficient: a `Done` column over an OPEN issue is exactly the
      drift `lint` reports, and archiving it would hide the finding instead of surfacing it.
-  2. **Aged past the retention window.** Closed at least `--retention-days` ago (default 30), so a
-     just-finished item stays visible to reporting, to a re-open, and to a driver still holding it in
-     a cursor.
+  2. **Aged past the retention window, unless the visible board exceeds its explicit bound.** Closed
+     rows normally stay visible for `--retention-days` (default 30). Above `--max-visible` (default
+     100), the oldest otherwise-safe terminal rows are selected until the board reaches that bound.
+     The terminal, blocker, and readability guards remain absolute, so safety may leave it above the
+     target rather than authorising a dangerous archive.
   3. **Never a live row's blocker.** A row named in any non-`Done` row's `Blocked by` is protected. An
      off-board blocker ref renders `BlockerUnknown` (`Protocol.fs:406`), which would silently turn
      "closed, so this is clear" into "cannot tell" for a live item.
@@ -158,20 +160,25 @@ def protected_refs(rows: list[dict]) -> tuple[set[tuple[str, int]], set[int]]:
     return qualified, unresolvable
 
 
-def plan(rows: list[dict], now: _dt.datetime, retention_days: int
+def plan(rows: list[dict], now: _dt.datetime, retention_days: int, max_visible: int = 100
          ) -> tuple[list[dict], list[tuple[dict, str]]]:
     """Split the board into (archive, skipped-with-reason). PURE — no IO, so the guards are testable.
 
     The reason string is part of the contract: a row that is not archived must say why, or a silent
     skip becomes indistinguishable from a silent archive.
     """
+    if max_visible < 1:
+        raise ValueError("max_visible must be positive")
+
     protected, unresolvable = protected_refs(rows)
     cutoff = now - _dt.timedelta(days=retention_days)
 
-    archive: list[dict] = []
+    # `(closed, repo, number, item id, input index, row)`: the stable prefix is the selection order.
+    # GitHub does not promise a stable item-connection order, so pressure selection must not inherit it.
+    safe: list[tuple[_dt.datetime, str, int, str, int, dict]] = []
     skipped: list[tuple[dict, str]] = []
 
-    for row in rows:
+    for index, row in enumerate(rows):
         status, state = row.get("status"), row.get("state")
         number, repo = row.get("number"), row.get("repo")
 
@@ -203,10 +210,6 @@ def plan(rows: list[dict], now: _dt.datetime, retention_days: int
         except ValueError:
             skipped.append((row, f"closed-at {closed_at!r} did not parse — never archived"))
             continue
-        if closed > cutoff:
-            skipped.append((row, f"closed {closed:%Y-%m-%d}, inside the {retention_days}-day window"))
-            continue
-
         if (repo, number) in protected:
             skipped.append((row, "named by a live row's `Blocked by`"))
             continue
@@ -218,7 +221,26 @@ def plan(rows: list[dict], now: _dt.datetime, retention_days: int
                                  "in every repo rather than guessed" % number))
             continue
 
-        archive.append(row)
+        safe.append((closed, repo, number, str(row.get("itemId") or ""), index, row))
+
+    safe.sort(key=lambda entry: entry[:5])
+    aged = [entry for entry in safe if entry[0] <= cutoff]
+    recent = [entry for entry in safe if entry[0] > cutoff]
+
+    # Age-based candidates leave first, exactly as before. If that still leaves the board above its
+    # explicit scan bound, fill the deficit from the OLDEST recent safe rows. Absolute guards never
+    # enter `safe`, so pressure cannot weaken them.
+    pressure_needed = max(0, len(rows) - len(aged) - max_visible)
+    pressure = recent[:pressure_needed]
+    retained_recent = recent[pressure_needed:]
+    archive = [entry[5] for entry in aged + pressure]
+
+    for closed, _, _, _, index, row in retained_recent:
+        skipped.append((row, f"closed {closed:%Y-%m-%d}, inside the {retention_days}-day window"))
+
+    # Skip reporting follows the input scan for readability; archive selection is independently stable.
+    input_index = {id(row): index for index, row in enumerate(rows)}
+    skipped.sort(key=lambda entry: input_index[id(entry[0])])
 
     return archive, skipped
 
@@ -248,11 +270,15 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None, help=f"ProjectV2 node id (or ${PROJECT_ENV})")
     ap.add_argument("--retention-days", type=int, default=30)
+    ap.add_argument("--max-visible", type=int, default=100,
+                    help="maximum visible rows after archiving safe terminal candidates (default 100)")
     ap.add_argument("--execute", action="store_true", help="archive; without it this is a dry run")
     ap.add_argument("--manifest", default=None, help="append every archived id here, for reversal")
     ap.add_argument("--min-graphql", type=int, default=500,
                     help="defer entirely below this many GraphQL points")
     args = ap.parse_args()
+    if args.max_visible < 1:
+        ap.error("--max-visible must be positive")
 
     import os
     project = args.project or os.environ.get(PROJECT_ENV)
@@ -279,11 +305,17 @@ def main() -> int:
 
     rows, pages, spent = scan(project)
     now = _dt.datetime.now(_dt.timezone.utc)
-    archive, skipped = plan(rows, now, args.retention_days)
+    archive, skipped = plan(rows, now, args.retention_days, args.max_visible)
+    projected = len(rows) - len(archive)
+    projected_pages = max(1, -(-projected // 100))
 
     print(f"scanned {len(rows)} row(s) over {pages} page(s) for {spent} GraphQL point(s)")
-    print(f"plan: archive {len(archive)}, keep {len(rows) - len(archive)} "
-          f"(retention {args.retention_days}d)")
+    print(f"plan: archive {len(archive)}, keep {projected} "
+          f"(retention {args.retention_days}d, max visible {args.max_visible})")
+    print(f"pages: {pages} -> {projected_pages} projected")
+    if projected > args.max_visible:
+        print(f"  BOUND NOT REACHED — {projected - args.max_visible} row(s) remain above the target "
+              "because no more candidates satisfy every safety guard")
 
     # Every non-routine skip is named. A silent skip and a silent archive must not look alike.
     for row, why in skipped:
@@ -295,8 +327,7 @@ def main() -> int:
         return 0
 
     if not args.execute:
-        print(f"\nDRY RUN — nothing archived. Pages would go {pages} -> "
-              f"{max(1, -(-(len(rows) - len(archive)) // 100))}.")
+        print("\nDRY RUN — nothing archived.")
         return 0
 
     # The manifest is written AFTER each batch lands, never before the loop. Round-1 review finding on

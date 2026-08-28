@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fixture for scripts/coord-board-archive.py (.github#2420).
+# Fixture for scripts/coord-board-archive.py (.github#2420, count bound .github#3052).
 #
 # This gate ARCHIVES ROWS OFF THE SHARED BOARD, so the property that matters is not "does it archive"
 # — it is "does it REFUSE to archive everything it must refuse". Every guard therefore gets a negative
@@ -25,7 +25,7 @@ bad() { echo "FAIL  $1"; printf '%s\n' "${2:-}" | sed 's/^/    | /'; fail=$((fai
 run_case() {
   # run_case <name> <python-expression-returning-(archived_refs, skip_reasons)>
   python3 - "$SCRIPT" <<'PY'
-import datetime as dt, importlib.util, json, sys
+import contextlib, datetime as dt, importlib.util, io, json, sys
 
 spec = importlib.util.spec_from_file_location("cba", sys.argv[1])
 mod = importlib.util.module_from_spec(spec)
@@ -41,8 +41,8 @@ def row(**kw):
     base.update(kw)
     return base
 
-def plan(rows, days=30):
-    a, s = mod.plan(rows, NOW, days)
+def plan(rows, days=30, max_visible=100):
+    a, s = mod.plan(rows, NOW, days, max_visible)
     return [(r["repo"], r["number"]) for r in a], [why for _, why in s]
 
 results = {}
@@ -157,6 +157,99 @@ results["never archives an unreadable row"] = (arch == [], arch)
 _, reasons = plan([row(number=400, status="Ready"), row(number=401, state="OPEN"),
                    row(number=402, closedAt=RECENT), row(number=403, closedAt=None)])
 results["every skip carries a reason"] = (all(r and r.strip() for r in reasons), reasons)
+
+# 8. BELOW THE BOUND, retention remains the policy: count pressure must not make a fresh row leave.
+arch, _ = plan([row(number=500, closedAt=RECENT)], max_visible=2)
+results["below the visible-row bound, ordinary retention is unchanged"] = (arch == [], arch)
+
+# 9. ABOVE THE BOUND, the oldest otherwise-safe recent rows leave first. Input connection order is
+#    deliberately scrambled: GitHub does not promise an order, and selection must not inherit one.
+rows = [row(number=503, closedAt="2026-08-11T03:00:00Z"),
+        row(number=501, closedAt="2026-08-11T01:00:00Z"),
+        row(number=504, closedAt="2026-08-11T04:00:00Z"),
+        row(number=502, closedAt="2026-08-11T02:00:00Z")]
+arch, _ = plan(rows, max_visible=2)
+results["over the bound archives the oldest safe rows first"] = (
+    arch == [("FS-GG/.github", 501), ("FS-GG/.github", 502)], arch)
+
+# ...and reversing the entire scan cannot change the selected set or its deterministic order.
+arch_reversed, _ = plan(list(reversed(rows)), max_visible=2)
+results["pressure selection is independent of GraphQL connection order"] = (
+    arch_reversed == arch, (arch, arch_reversed))
+
+# 10. The bound never weakens an absolute guard. With 103 visible rows but only one safe terminal
+#     candidate, the planner archives that one and honestly leaves 102 rather than hiding live rows.
+rows = [row(number=600, closedAt=RECENT)] + [
+    row(number=601 + i, status="Ready", state="OPEN", closedAt=None) for i in range(102)
+]
+arch, _ = plan(rows, max_visible=100)
+results["insufficient safe candidates leave the board above target"] = (
+    arch == [("FS-GG/.github", 600)] and len(rows) - len(arch) == 102,
+    (arch, len(rows) - len(arch)))
+
+# 11. The measured live shape: 374 recent safe rows require exactly 274 archives to reach 100.
+rows = [row(number=1000 + i, itemId=f"PVTI_{i:03d}",
+            closedAt=f"2026-08-{10 + (i % 2):02d}T{(i % 24):02d}:00:00Z") for i in range(374)]
+arch, _ = plan(rows, max_visible=100)
+results["a 374-row safe fixture reaches exactly 100 visible rows"] = (
+    len(arch) == 274 and len(rows) - len(arch) == 100,
+    (len(arch), len(rows) - len(arch)))
+
+# 12. The numeric policy is validated rather than allowing a zero/negative typo to sweep everything.
+try:
+    mod.plan([row(number=700)], NOW, 30, 0)
+except ValueError as exc:
+    invalid_refused = "positive" in str(exc)
+else:
+    invalid_refused = False
+results["a non-positive visible-row bound is refused"] = (invalid_refused, invalid_refused)
+
+# 13. The operator-facing report must distinguish "target reached" from "safety left it above".
+report_rows = [row(number=800, itemId="PVTI_safe", closedAt="2026-08-28T00:00:00Z")] + [
+    row(number=801 + i, itemId=f"PVTI_live_{i}", status="Ready", state="OPEN", closedAt=None)
+    for i in range(102)
+]
+def fake_graphql(*args):
+    if args == ("meter",):
+        return {"remaining": 5000}
+    if args[0] == "archive-scan":
+        return {"items": report_rows, "pages": 2, "spent": 2}
+    if args[0] == "archive-items":
+        return {"archived": list(args[2:])}
+    raise AssertionError(args)
+
+mod.coord_graphql = fake_graphql
+saved_argv = sys.argv
+sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100"]
+stdout = io.StringIO()
+try:
+    with contextlib.redirect_stdout(stdout):
+        report_rc = mod.main()
+finally:
+    sys.argv = saved_argv
+report = stdout.getvalue()
+results["reports when absolute guards prevent reaching the bound"] = (
+    report_rc == 0 and "keep 102" in report and "BOUND NOT REACHED" in report and
+    "2 row(s) remain above the target" in report and "pages: 2 -> 2 projected" in report,
+    report)
+
+# 14. Exercise the ACTUAL scheduled/execute branch, not another dry run. This is the original escape:
+#     putting the page report inside `if not args.execute` must red this leg. A 101-row safe board is
+#     the page-boundary control: archive one, and two pages project to one.
+report_rows = [row(number=900 + i, itemId=f"PVTI_page_{i}", closedAt="2026-08-28T00:00:00Z")
+               for i in range(101)]
+stdout = io.StringIO()
+sys.argv = [str(sys.argv[1]), "--project", "PVT_fixture", "--max-visible", "100", "--execute"]
+try:
+    with contextlib.redirect_stdout(stdout):
+        report_rc = mod.main()
+finally:
+    sys.argv = saved_argv
+page_report = stdout.getvalue()
+results["reports projected before/after pages on the common production path"] = (
+    report_rc == 0 and "plan: archive 1, keep 100" in page_report and
+    "pages: 2 -> 1 projected" in page_report and "archived 1 row(s)" in page_report,
+    page_report)
 
 print(json.dumps({k: [bool(v[0]), repr(v[1])] for k, v in results.items()}))
 PY
