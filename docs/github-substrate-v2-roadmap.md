@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.6 accepted; GS2-01.9 not applicable; GS2-02.7 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.7 accepted; GS2-01.9 not applicable; GS2-02.8 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -445,7 +445,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [x] **GS2-02.6 — Implement protocol streams.** Type claim/lease/touch-set, operation-lock/election,
   review, delivery, and operation-receipt envelopes; classify ephemeral retention versus durable
   checkpointing.
-- [ ] **GS2-02.7 — Implement mutation algebra.** Cover create, append, add/remove edge, set, clear,
+- [x] **GS2-02.7 — Implement mutation algebra.** Cover create, append, add/remove edge, set, clear,
   transition, and compensate with expected revision, idempotency, and all terminal/uncertain outcomes.
 - [ ] **GS2-02.8 — Implement durable plans.** Compile decisions into ordered resumable steps with
   causation/correlation, receipt re-read, compensation boundary, and roll-forward classification.
