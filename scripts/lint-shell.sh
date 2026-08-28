@@ -120,6 +120,8 @@ command -v python3 >/dev/null 2>&1 || {
 
 TOP="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "::error::not inside a git checkout"; exit 2; }
 cd "$TOP" || { echo "::error::cannot cd to $TOP"; exit 2; }
+clock_ms() { python3 -c 'import time; print(time.monotonic_ns() // 1000000)'; }
+started_ms="$(clock_ms)"
 
 # IS THIS FILE SHELL? Extension first (cheap, and it is how `.sh` files are spelled), then the shebang.
 #
@@ -187,6 +189,7 @@ while IFS=$'\t' read -r wf_path wf_label; do
   wf_subject+=("$wf_path")
   wf_labels+=("$wf_label")
 done < "$wf_manifest"
+discovery_done_ms="$(clock_ms)"
 
 if [ "${1:-}" = "--list" ]; then
   # Guarded: `"${subject[@]}"` on an EMPTY array is an unbound expansion under `set -u` on bash < 4.4
@@ -202,38 +205,64 @@ fi
 # "clean", it is this section's own discovery having broken — see the fixture leg that pins a known real
 # step in the subject for the regression guard this line alone cannot provide.
 total=$(( ${#subject[@]} + ${#wf_subject[@]} ))
+empty_subject=0
 if [ "$total" -eq 0 ]; then
   echo "::error::discovered ZERO shell files (file-based or workflow-embedded). This repo contains shell, so discovery is broken — not the tree."
-  exit 3
+  empty_subject=1
 fi
 
-echo "shell-lint: shellcheck $("$SHELLCHECK" --version | awk '/^version:/{print $2}'), severity=$SEVERITY, ${#subject[@]} file(s), ${#wf_subject[@]} workflow-embedded step(s)"
+selector="$GATE_DIR/lib/select-shellcheck-findings.py"
+file_list="$wf_dir/file-subjects.list0"
+[ "${#subject[@]}" -eq 0 ] || printf '%s\0' "${subject[@]}" >"$file_list"
+[ -e "$file_list" ] || : >"$file_list"
+manifest_path="${SHELL_LINT_MANIFEST:-$wf_dir/manifest.json}"
+receipt_path="${SHELL_LINT_RECEIPT:-$wf_dir/receipt.json}"
+shellcheck_version="$("$SHELLCHECK" --version | awk '/^version:/{print $2}')"
+[ -n "$shellcheck_version" ] || { echo "::error::could not read the shellcheck version"; exit 2; }
 
-# `-x` follows `source`d files, which this repo needs: `scripts/lib/*.sh` are sourced fragments, and
-# without -x every caller reads as using undefined functions. Workflow-embedded steps are checked in
-# their OWN pass below — they are never `-x`-followed here, because none of this repo's `run:` blocks
-# `source` anything, and a materialized temp file has no repo-relative directory to follow one from
-# even if it did.
-#
-# One invocation over the whole subject, NOT one per file: shellcheck's `source` resolution and its
-# exit code are both cleaner that way, and a parse failure is REPORTED (SC1009/SC1073 are `error`
-# severity, which any floor at or below `warning` includes) rather than swallowed as a clean file.
-log="$(mktemp)" || exit 2
-trap 'rm -rf "$wf_dir"; rm -f "$wf_manifest" "$log"' EXIT
+manifest_started_ms="$(clock_ms)"
+manifest_digest="$(python3 "$selector" manifest \
+  --root "$TOP" \
+  --file-list0 "$file_list" \
+  --workflow-manifest "$wf_manifest" \
+  --shellcheck-version "$shellcheck_version" \
+  --severity "$SEVERITY" \
+  --targeted SC2251 \
+  --extractor "$GATE_DIR/lib/extract-workflow-shell.py" \
+  --occurrence-filter "$GATE_DIR/lib/filter-sc2050.py" \
+  --implementation "$GATE_DIR/lint-shell.sh" \
+  --output "$manifest_path")" || exit 2
+manifest_done_ms="$(clock_ms)"
+
+echo "shell-lint: shellcheck $shellcheck_version, severity=$SEVERITY, ${#subject[@]} file(s), ${#wf_subject[@]} workflow-embedded step(s), manifest=$manifest_digest"
+
+# ONE structured analysis per projection. The file pass runs at info because SC1091 and targeted
+# SC2251 live below the global warning floor. The selector derives all three verdicts from that one
+# JSON document. Workflow snippets need only the global floor, so warning is their lowest required
+# severity; occurrence-scoped SC2050 filtering is applied to the structured coordinates.
+file_raw="$wf_dir/file-shellcheck.json"
+file_result="$wf_dir/file-selection.json"
+file_invocations=0
+file_shell_rc=0
+file_select_rc=0
+file_shell_started_ms="$(clock_ms)"
 if [ "${#subject[@]}" -gt 0 ]; then
-  "$SHELLCHECK" -x -S info -f gcc "${subject[@]}" >"$log" 2>&1 || true
-  if grep -q 'SC1091' "$log"; then
-    echo "::error::shellcheck could not follow a sourced file (SC1091). Add # shellcheck source-path=SCRIPTDIR to the sourcing script."
-    exit 4
-  fi
+  file_invocations=1
+  "$SHELLCHECK" -x -S info -f json1 "${subject[@]}" >"$file_raw" 2>&1 || file_shell_rc=$?
+else
+  printf '{"comments":[]}\n' >"$file_raw"
 fi
-
-rc=0
-findings_log="$(mktemp)" || exit 2
-trap 'rm -rf "$wf_dir"; rm -f "$wf_manifest" "$log" "$findings_log"' EXIT
-if [ "${#subject[@]}" -gt 0 ]; then
-  "$SHELLCHECK" -x -S "$SEVERITY" -f gcc "${subject[@]}" >>"$findings_log" 2>&1 || rc=$?
-fi
+file_shell_done_ms="$(clock_ms)"
+file_select_started_ms="$file_shell_done_ms"
+case "$file_shell_rc" in
+  0|1)
+    python3 "$selector" select --input "$file_raw" --result "$file_result" \
+      --severity "$SEVERITY" --targeted SC2251 --sc1091-refusal || file_select_rc=$? ;;
+  *)
+    echo "::error::shellcheck exited $file_shell_rc on the file subject, which is neither clean (0) nor findings (1) — treating as 'could not check'."
+    file_select_rc=2 ;;
+esac
+file_select_done_ms="$(clock_ms)"
 
 # ---- SC2251: TARGETED ENABLEMENT, BELOW THE GLOBAL FLOOR (.github#2689) ---------------------------
 #
@@ -273,26 +302,25 @@ fi
 #     false positive anywhere. So this enablement needs no allowlist and no baseline at all: it
 #     ships clean, and the next one to arrive reds.
 #
-# It is also the only shape available. `.github/workflows/shell-lint.yml` forbids lowering `SEVERITY`
-# and forbids per-file exclusion lists, and SC2251 lives at `info`, below the `warning` floor -- so a
-# check-scoped pass is the way to reach it without dropping the floor for everything else.
-#
-# `-i SC2251` means "consider ONLY this code", so this pass cannot re-report anything the pass above
-# already decided, and it cannot quietly widen the gate: adding a code here is a visible edit.
+# It is also the only shape available. `.github/workflows/shell-lint.yml` forbids lowering the global
+# verdict floor and forbids per-file exclusion lists. The single file analysis therefore runs at info
+# and the structured selector admits SC2251 plus findings at the configured warning-or-higher floor;
+# other info findings are deterministically discarded without asking ShellCheck to parse the bytes again.
 #
 # THE FILE SUBJECT ONLY, deliberately -- and the reason is MEASURED, not reasoned. Over all 406
-# extracted `run:` steps, `-i SC2251` reports ZERO findings. The tempting explanation is that a
+# extracted `run:` steps, SC2251 reports ZERO findings. The tempting explanation is that a
 # `run:` block gets its errexit from GitHub's `bash -e {0}` INVOCATION rather than from any text
 # the linter can see; that is true for most of them but NOT the whole story, because 101 of the 406
 # do carry a literal `set -e` and SC2251 still fires on none of them -- they simply contain no bare
-# `!` statement. So the pass is omitted here on the measurement, and if that ever stops holding the
-# remedy is to add `"${wf_subject[@]}"` to a pass of its own rather than to assume it still holds.
-sc_rc=0
-if [ "${#subject[@]}" -gt 0 ]; then
-  "$SHELLCHECK" -x -S info -i SC2251 -f gcc "${subject[@]}" >>"$findings_log" 2>&1 || sc_rc=$?
-fi
-
+# `!` statement. So the workflow selector does not target that code; if the measurement changes, the
+# remedy is to add SC2251 to that projection's declared policy and manifest.
+wf_raw_log="$wf_dir/workflow-shellcheck.json"
+wf_result="$wf_dir/workflow-selection.json"
+wf_findings="$wf_dir/workflow-findings.log"
+wf_invocations=0
+wf_raw_rc=0
 wf_rc=0
+wf_shell_started_ms="$(clock_ms)"
 if [ "${#wf_subject[@]}" -gt 0 ]; then
   # NO `-e SC2050` HERE, and no inline pragma written into the materialized files either — both were
   # tried in earlier rounds of .github#2493's own review and both proved too coarse. `-e SC2050` on the
@@ -306,18 +334,24 @@ if [ "${#wf_subject[@]}" -gt 0 ]; then
   # — never by line, never by file. A raw shellcheck exit outside {0,1} is "could not check" and must
   # not be laundered through the filter at all, so that case is handled BEFORE filtering, identically
   # to how the file-discovered subject's own exit code is checked below.
-  wf_raw_log="$(mktemp)" || exit 2
-  trap 'rm -rf "$wf_dir"; rm -f "$wf_manifest" "$log" "$findings_log" "$wf_raw_log"' EXIT
-  wf_raw_rc=0
-  "$SHELLCHECK" -S "$SEVERITY" -f gcc "${wf_subject[@]}" >"$wf_raw_log" 2>&1 || wf_raw_rc=$?
+  wf_invocations=1
+  "$SHELLCHECK" -S "$SEVERITY" -f json1 "${wf_subject[@]}" >"$wf_raw_log" 2>&1 || wf_raw_rc=$?
   case "$wf_raw_rc" in
     0|1) ;;
     *) echo "::error::shellcheck exited $wf_raw_rc on the workflow-embedded subject, which is neither clean (0) nor findings (1) — treating as 'could not check'."
-       exit 2 ;;
+       wf_rc=2 ;;
   esac
-  wf_rc=0
-  python3 "$GATE_DIR/lib/filter-sc2050.py" <"$wf_raw_log" >>"$findings_log" || wf_rc=$?
+else
+  printf '{"comments":[]}\n' >"$wf_raw_log"
 fi
+wf_shell_done_ms="$(clock_ms)"
+wf_select_started_ms="$wf_shell_done_ms"
+if [ "$wf_rc" -eq 0 ]; then
+  python3 "$selector" select --input "$wf_raw_log" --result "$wf_result" \
+    --severity "$SEVERITY" --occurrence-filter "$GATE_DIR/lib/filter-sc2050.py" \
+    >"$wf_findings" || wf_rc=$?
+fi
+wf_select_done_ms="$(clock_ms)"
 
 # Re-label materialized temp paths back to their origin before a human reads them. The materialized
 # name embeds the workflow's own filename (`wf__.github__workflows__ci.yml__0000.sh`), so it carries
@@ -325,30 +359,47 @@ fi
 # still usually match its own literal path (a wildcarded `.` still matches the same character), but
 # "usually" is not "always", and a pattern that can silently under- or over-match is exactly the kind
 # of quiet failure this file's own header refuses elsewhere.
-if [ -s "$findings_log" ]; then
+# The selector prints file findings directly. Re-label workflow materializations in its already-
+# structured gcc projection without changing any other diagnostic byte.
+if [ -s "$wf_findings" ]; then
   idx=0
   while [ "$idx" -lt "${#wf_subject[@]}" ]; do
     escaped="$(printf '%s' "${wf_subject[$idx]}" | sed 's/[.[\*^$/]/\\&/g')"
-    sed -i "s|$escaped|workflow-embedded: ${wf_labels[$idx]}|g" "$findings_log" 2>/dev/null || true
+    sed -i "s|$escaped|workflow-embedded: ${wf_labels[$idx]}|g" "$wf_findings" 2>/dev/null || true
     idx=$((idx + 1))
   done
-  cat "$findings_log"
+  cat "$wf_findings"
 fi
 
-# Combine: either subject's shellcheck exiting outside {0,1} means "could not check" for the WHOLE
-# gate (#266) — a partial no-verdict silently reported as the other subject's clean is the same failure
-# this exit-code table exists to prevent. Otherwise, either subject reporting 1 makes the gate 1.
-for code in "$rc" "$sc_rc" "$wf_rc"; do
-  case "$code" in
-    0|1) ;;
-    *) echo "::error::shellcheck exited $code, which is neither clean (0) nor findings (1) — treating as 'could not check'."
-       exit 2 ;;
-  esac
-done
-if [ "$rc" -eq 1 ] || [ "$sc_rc" -eq 1 ] || [ "$wf_rc" -eq 1 ]; then
+final_rc=0
+verdict=clean
+if [ "$empty_subject" -eq 1 ]; then
+  final_rc=3; verdict=no-verdict
+elif [ "$file_select_rc" -eq 4 ]; then
+  final_rc=4; verdict=source-refusal
+  echo "::error::shellcheck could not follow a sourced file (SC1091). Add # shellcheck source-path=SCRIPTDIR to the sourcing script."
+elif [ "$file_select_rc" -gt 1 ] || [ "$wf_rc" -gt 1 ]; then
+  final_rc=2; verdict=no-verdict
+elif [ "$file_select_rc" -eq 1 ] || [ "$wf_rc" -eq 1 ]; then
+  final_rc=1; verdict=findings
   echo "::error::shellcheck reported findings (see above)."
-  exit 1
 fi
 
-echo "shell-lint: OK — ${#subject[@]} file(s) and ${#wf_subject[@]} workflow-embedded step(s) clean at severity '$SEVERITY'."
-exit 0
+finished_ms="$(clock_ms)"
+durations="$(printf '{"discovery":%d,"manifest":%d,"fileShellcheck":%d,"fileSelection":%d,"workflowShellcheck":%d,"workflowSelection":%d,"total":%d}' \
+  "$((discovery_done_ms - started_ms))" \
+  "$((manifest_done_ms - manifest_started_ms))" \
+  "$((file_shell_done_ms - file_shell_started_ms))" \
+  "$((file_select_done_ms - file_select_started_ms))" \
+  "$((wf_shell_done_ms - wf_shell_started_ms))" \
+  "$((wf_select_done_ms - wf_select_started_ms))" \
+  "$((finished_ms - started_ms))")"
+python3 "$selector" receipt --manifest "$manifest_path" --output "$receipt_path" \
+  --durations "$durations" --file-invocations "$file_invocations" \
+  --workflow-invocations "$wf_invocations" --exit-code "$final_rc" --verdict "$verdict" \
+  || { echo "::error::could not emit a complete shell-lint receipt"; exit 2; }
+
+if [ "$final_rc" -eq 0 ]; then
+  echo "shell-lint: OK — ${#subject[@]} file(s) and ${#wf_subject[@]} workflow-embedded step(s) clean at severity '$SEVERITY'."
+fi
+exit "$final_rc"

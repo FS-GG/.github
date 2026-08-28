@@ -31,6 +31,7 @@ SUBJECTS = {
         "scripts/lint-shell.sh",
         "scripts/lib/extract-workflow-shell.py",
         "scripts/lib/filter-sc2050.py",
+        "scripts/lib/select-shellcheck-findings.py",
         "tests/shell-lint/",
         ".github/workflows/shell-lint.yml",
     ),

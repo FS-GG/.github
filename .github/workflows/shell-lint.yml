@@ -158,11 +158,22 @@ jobs:
 
       - name: Lint
         id: check
+        env:
+          SHELL_LINT_MANIFEST: ${{ runner.temp }}/shell-lint-evidence/manifest.json
+          SHELL_LINT_RECEIPT: ${{ runner.temp }}/shell-lint-evidence/receipt.json
         run: |
           rc=0
           out="$(bash scripts/lint-shell.sh 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve deterministic subject manifest and critical-path receipt
+        if: ${{ always() && steps.check.outputs.rc != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-lint-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shell-lint-evidence
+          if-no-files-found: error
 
       # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
       # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
