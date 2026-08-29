@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.2 accepted; GS2-01.9 not applicable; GS2-03.3 acceptance next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.3 accepted; GS2-01.9 not applicable; GS2-03.4 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -468,7 +468,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
 - [x] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
   ambiguity, and current-v1 result; never normalize away the defect being tested.
-- [ ] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
+- [x] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
   derive vocabulary completeness, transition coverage, command/mutation registration, permission coverage,
   schema round-trip, and projection freshness cases without creating a second behavioral model.
 - [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
