@@ -473,7 +473,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   schema round-trip, and projection freshness cases without creating a second behavioral model.
 - [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
   projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
-  exact-head review, post-merge verification, and dual-feed release recovery.
+  exact-head review, post-merge verification, and dual-feed release recovery. Include independently authored
+  scale and abstraction oracles that force existing and future Quint roots to preserve required outcomes and
+  anti-vacuity witnesses across bounded concrete-versus-abstract comparisons; record root closure, dependency
+  depth, state/sample counts, elapsed time, peak memory, and artifact volume against runner-calibrated budgets.
 - [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
   witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
   relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
