@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 accepted; GS2-01.9 not applicable; GS2-03.1 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1 accepted; GS2-01.9 not applicable; GS2-03.2 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -464,7 +464,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-02.1–GS2-02.8
 **Exit gates:** Q1, Q2, Q6, and Q7 harness capability
 
-- [ ] **GS2-03.1 — Define the qualification manifest.** Bind source, model, compiler, dependencies,
+- [x] **GS2-03.1 — Define the qualification manifest.** Bind source, model, compiler, dependencies,
   generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
 - [ ] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
   ambiguity, and current-v1 result; never normalize away the defect being tested.
