@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.3 accepted; GS2-01.9 not applicable; GS2-03.4 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.4 accepted; GS2-01.9 not applicable; GS2-03.5 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -471,12 +471,21 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [x] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
   derive vocabulary completeness, transition coverage, command/mutation registration, permission coverage,
   schema round-trip, and projection freshness cases without creating a second behavioral model.
-- [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
+- [x] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
   projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
   exact-head review, post-merge verification, and dual-feed release recovery. Include independently authored
   scale and abstraction oracles that force existing and future Quint roots to preserve required outcomes and
   anti-vacuity witnesses across bounded concrete-versus-abstract comparisons; record root closure, dependency
   depth, state/sample counts, elapsed time, peak memory, and artifact volume against runner-calibrated budgets.
+  **Accepted 2026-08-29:** protected-main merge
+  [`17a6f0e`](https://github.com/FS-GG/FS.GG.Coordination/commit/17a6f0e48f79356cbfd673c8e0e8f5bb5f3efd30)
+  and exact-merge [qualification run 33273274618](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33273274618)
+  completed the single fresh repair phase. The typed
+  [repair-phase record](https://github.com/FS-GG/FS.GG.Coordination/pull/93#issuecomment-5464629983), fresh
+  [successor pass](https://github.com/FS-GG/FS.GG.Coordination/pull/93#issuecomment-5464669577), and
+  [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/93#issuecomment-5464677128) bind exact
+  head `0e3de0aaac9fc2f95a1625ad3f43e0f2ee90a455`; source-derived executable closure and reproduced
+  digest-pinned Quint typechecking close both terminal escalation findings with no accepted exception.
 - [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
   witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
   relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
