@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1 accepted; GS2-01.9 not applicable; GS2-03.2 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.2 accepted; GS2-01.9 not applicable; GS2-03.3 acceptance next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -466,14 +466,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 
 - [x] **GS2-03.1 — Define the qualification manifest.** Bind source, model, compiler, dependencies,
   generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
-- [ ] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
+- [x] **GS2-03.2 — Import the frozen corpus.** Preserve original bytes, provenance, expected behavior,
   ambiguity, and current-v1 result; never normalize away the defect being tested.
 - [ ] **GS2-03.3 — Add generated structural tests.** From the qualified Quint source and compiled contract,
   derive vocabulary completeness, transition coverage, command/mutation registration, permission coverage,
   schema round-trip, and projection freshness cases without creating a second behavioral model.
 - [ ] **GS2-03.4 — Add independent black-box oracles.** Hand-author tests for claim exclusion, stale
   projections, dependency set concurrency, partial operations, old-client fencing, ledger rewind/tamper,
-  exact-head review, post-merge verification, and dual-feed release recovery.
+  exact-head review, post-merge verification, and dual-feed release recovery. Include independently authored
+  scale and abstraction oracles that force existing and future Quint roots to preserve required outcomes and
+  anti-vacuity witnesses across bounded concrete-versus-abstract comparisons; record root closure, dependency
+  depth, state/sample counts, elapsed time, peak memory, and artifact volume against runner-calibrated budgets.
 - [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
   witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
   relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
