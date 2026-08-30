@@ -34,13 +34,13 @@ and rationale.
 > **Remaining-migration architecture amendment:** the
 > [2026-08-30 architecture review](coordination/2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md)
 > found that comment-order CAS and immediate post-open contraction do not meet the required concurrency and
-> recovery contracts. GS2-03.10 now blocks GS2-03.7 and all later implementation. Earlier accepted receipts
-> remain historical evidence, but affected GS2-02 contracts must be amended and requalified against the new
-> snapshot before their implementation can proceed.
+> recovery contracts. GS2-03.10 accepted the sharded expected-parent Git-journal redesign and requalified
+> the affected GS2-02 contracts; GS2-03.7 subsequently accepted the repaired candidate supply chain. The
+> architecture amendment is therefore enforced rather than an outstanding blocker.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.6 historically accepted; GS2-01.9 not applicable; GS2-03.10 amendment candidate is under accountable exact-head acceptance and blocks GS2-03.7+ |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.7 accepted; GS2-01.9 not applicable; GS2-03.10 architecture amendment accepted; GS2-03.8 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -579,11 +579,21 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   [`.github` PR 3078](https://github.com/FS-GG/.github/pull/3078) and shipped in coherent set
   [`0.77.0`](https://github.com/FS-GG/.github/releases/tag/coherent-set%2Fv0.77.0), content
   `sha256:ec52502830d351b841dc64fe1833a9640991a413cfd6230e0d2ecce9f6115711`.
-- [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Build twice in independent clean
+- [x] **GS2-03.7 — Add reproducibility and supply-chain checks.** Build twice in independent clean
   environments and compare package bytes, designate one candidate byte set, verify provenance and SBOM
   predicates separately, publish those identical candidate bytes to every allowed pre-production feed,
   then download and install them from isolated feeds in clean consumers with repository-local empty caches.
   Retain package, symbol, SBOM, attestation, served-download, and installed-assembly digests.
+  **Accepted 2026-08-30:** protected candidate
+  [`ea9781c`](https://github.com/FS-GG/FS.GG.Coordination/commit/ea9781c89d169eec2e4f6aad004acc3a764d59d7)
+  passed [hosted run 33336821654](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33336821654),
+  which packed once, published only version `0.0.0-gs2-03-7.ea9781c89d16` to the candidate channel,
+  compared served bytes, and executed two clean consumers. The retained Actions artifact is bound by
+  repository/run/artifact IDs and zip `sha256:592cfd8ece9ce30a2430e81425ae08ee241e43366c91e0b484dc3bf5d0541ade`;
+  package, canonical symbol package, portable PDB, installed assembly, SPDX SBOM, provenance, and served
+  attestation digests are recorded in the
+  [accepted receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/9341a5a299bfd2cb90c5ea9b1e2355d34297ab4e/evidence/github-substrate-v2/accepted/GS2-03.7.json),
+  merged through [Coordination PR 112](https://github.com/FS-GG/FS.GG.Coordination/pull/112).
 - [ ] **GS2-03.8 — Add critique evidence gates.** Architecture, security, adapter, migration, and cutover
   perspectives produce findings against exact candidate fingerprints. The Accountable Delivery Owner may
   perform every perspective under distinct phase identities and makes the sole acceptance decision; a green
