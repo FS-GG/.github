@@ -22,12 +22,10 @@ REQUIRED_FACTS = (
 # kit-auto-publish admits only a same-line patch bump, on purpose, so an automated publisher never
 # widens its own blast radius across two public feeds (.github#2240).  Coherent-set releases are a
 # MINOR bump by design (.github#2402) and publish through .github#2409's dedicated workflow instead.
-# So a `candidate-not-next-patch` refusal on a coherent-set version is the rail working, not a defect
-# — and .github#2435's own visibility fixes (open escalation target, streak-bound job failure) now
-# apply to this reason exactly like any other, which means this refusal reads, at the point someone
-# actually sees it, like an unexplained problem unless it says otherwise.  `SCOPE_NOTES` is that
-# one-line legibility fix: attached to the decision itself, so it reaches every surface (JSON, sticky
-# comment, ``::error::`` annotation) without special-casing each one.
+# So a `candidate-not-next-patch` refusal on a coherent-set version is the rail working, not a defect.
+# It is a typed `expectedRefusal`, recorded in the run but deliberately excluded from .github#2435's
+# actionable-refusal streak, issue reopening, blocked label, and red job. `SCOPE_NOTES` explains why
+# the decision is expected wherever the typed result is rendered.
 SCOPE_NOTES = {
     "candidate-not-next-patch": (
         "kit-auto-publish deliberately admits only a same-line patch bump (see .github#2442); a "
@@ -97,7 +95,7 @@ def decide(facts):
     if candidate <= org_latest:
         return result("refuse", "candidate-not-strictly-newer-than-frontier", version)
     if candidate[0] != org_latest[0] or candidate[1] != org_latest[1] + 1:
-        return result("refuse", "candidate-not-next-patch", version)
+        return result("expectedRefusal", "candidate-not-next-patch", version)
     # BEGIN sibling-tag-check (extracted verbatim by tests/kit-auto-publish/run.sh for mutation)
     # .github#2495/.github#2498 round-1 repair 1: this check runs on EVERY path that can reach a tag
     # write below — `tagExists` true (kit already tagged) OR false (about to tag kit fresh) — not only
@@ -161,7 +159,7 @@ def decide(facts):
 
 def result(action, reason, version):
     answer = {"schemaVersion": 1, "action": action, "reason": reason, "version": version,
-              "terminal": action in ("refuse", "stickyEscalate")}
+              "terminal": action in ("refuse", "stickyEscalate", "expectedRefusal")}
     note = SCOPE_NOTES.get(reason)
     if note is not None:
         answer["note"] = note
@@ -178,7 +176,10 @@ def main():
     try:
         with open(args.facts, encoding="utf-8") as source:
             answer = decide(json.load(source))
-        if answer["action"] in ("refuse", "stickyEscalate"):
+        # `expectedRefusal` never reaches the workflow's escalation step. Supplying `--run` models
+        # that route as a fault-injection seam so the extracted-step tests can prove an accidental
+        # condition widening would still fail closed rather than authorize a write.
+        if answer["action"] in ("refuse", "stickyEscalate") or (answer["action"] == "expectedRefusal" and args.run):
             previous = None
             if args.previous_escalation:
                 try:

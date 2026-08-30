@@ -352,6 +352,21 @@ jobs:
           echo "action=$(jq -r .action decision.json)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
+      - name: Record an expected out-of-scope decision
+        if: steps.observe.outputs.action == 'expectedRefusal'
+        run: |
+          set -euo pipefail
+          reason="$(jq -r .reason decision.json)"
+          note="$(jq -r '.note // empty' decision.json)"
+          [ -n "$note" ] || { echo "::error::expectedRefusal '$reason' has no scope explanation"; exit 1; }
+          echo "::notice::kit-auto-publish made no write: $reason — $note"
+          {
+            echo '### Expected auto-publish refusal'
+            echo
+            echo "\`$reason\` is outside this publisher's deliberately narrow authority."
+            echo
+            echo "$note"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Escalate a non-eligible or partial state once
         if: steps.observe.outputs.action == 'refuse' || steps.observe.outputs.action == 'stickyEscalate'
         env:

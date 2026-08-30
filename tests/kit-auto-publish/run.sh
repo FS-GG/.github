@@ -23,7 +23,16 @@ case_run partial stickyEscalate "{\"version\":\"0.27.1\",${base/\"orgFeed\":\"ab
 case_run older-gap refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.28.0","nugetLatest":"0.28.0","tagExists":false}'
 case_run frontier-disagree stickyEscalate '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.1","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.28.0","tagExists":false}'
 case_run unrelated-later-pr refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false}'
-case_run coherent-set-minor refuse '{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'
+case_run coherent-set-minor expectedRefusal '{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'
+
+# Expected scope refusals are observable but never enter the actionable escalation path. This is a
+# typed routing decision, not a prose convention inferred from the note after reopening an issue.
+grep -Fq "if: steps.observe.outputs.action == 'expectedRefusal'" "$root/.github/workflows/kit-auto-publish.yml" \
+  || { echo 'coherent-set-minor: expectedRefusal has no dedicated evidence step' >&2; exit 1; }
+checks=$((checks + 1))
+escalation_if="$(grep -A1 'name: Escalate a non-eligible or partial state once' "$root/.github/workflows/kit-auto-publish.yml" | tail -1)"
+case "$escalation_if" in *expectedRefusal*) echo 'coherent-set-minor: expectedRefusal leaked into actionable escalation' >&2; exit 1 ;; esac
+checks=$((checks + 1))
 
 # ---- .github#2495: `kit/v$version` alone leaves FS.GG.Kit unpublished forever — release-kit.yml's
 #      sibling-tag precondition (.github#2409 DEC-004) refuses until `drivers/v$version` and
@@ -189,12 +198,9 @@ rr_action="$(jq -r .action <<<"$rr_verdict")"; rr_reason="$(jq -r .reason <<<"$r
   || { echo "real-remote sibling check: expected stickyEscalate/sibling-tag-commit-mismatch, got $rr_action/$rr_reason" >&2; cat "$real_remote_check_work/facts.json" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- .github#2442/.github#2435: a `candidate-not-next-patch` refusal on a coherent-set minor bump
-#      is the frontier rail working AS DESIGNED, not a defect (maintainer decision on #2442) — but
-#      .github#2435's own visibility fixes (open escalation target, streak-bound job failure) now
-#      apply to this reason exactly like any other actionable one, so without an explanation it reads
-#      as an unexplained problem at the point someone actually sees it. `SCOPE_NOTES` attaches that
-#      explanation to the decision itself. ----
+# ---- .github#2442: a `candidate-not-next-patch` decision on a coherent-set minor bump is the
+#      frontier rail working AS DESIGNED. It is visible in the run as `expectedRefusal`, but never
+#      enters .github#2435's actionable issue/streak escalation. `SCOPE_NOTES` explains the scope. ----
 note="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/coherent-set-minor.json" --json | jq -r '.note // empty')"
 [ -n "$note" ] \
   || { echo 'coherent-set-minor: expected a scope note explaining the deliberate refusal, got none' >&2; exit 1; }
@@ -557,10 +563,9 @@ checks=$((checks + 1))
   || { echo "gate-inversion (streak bound): sanity check that the streak is really at/above the bound failed" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- 8b. The scope note reaches BOTH surfaces a reader hits without opening #2106: the sticky
-#          comment (below threshold, still green) and the `::error::` annotation itself (at/above
-#          threshold, job fails). This is the concrete fix for the gap #2442's closing comment named:
-#          the refusal text did not say a coherent-set minor is deliberately out of scope. ----
+# ---- 8b. Fault injection: if a future workflow accidentally widens the actionable escalation
+#          condition to include `expectedRefusal`, the extracted step still carries the scope note
+#          and reaches the bounded red state. The normal route is excluded by the assertions above. ----
 d9="$(sandbox note-fresh '[]')"
 rc=0; run_escalation "$d9" "$cnp_esc_facts" 7001 "$esc_script" || rc=$?
 [ "$rc" -eq 0 ] || { echo "note escalation: expected exit 0 (streak 1 below threshold), got $rc" >&2; cat "$d9/stderr.log" >&2; exit 1; }
@@ -582,9 +587,8 @@ grep -q '2442' "$d10/stdout.log" \
   || { echo 'note escalation (at threshold): expected the ::error:: annotation to reference .github#2442 without opening the issue' >&2; cat "$d10/stdout.log" >&2; exit 1; }
 checks=$((checks + 1))
 
-# ---- 8c. GATE-INVERSION for the note plumbing: strip the note extraction/suffix wiring back out of
-#          a copy of the REAL step and show the same two surfaces above lose the explanation — a test
-#          that cannot fail on the absence of this wiring has not tested it. ----
+# ---- 8c. GATE-INVERSION for the fault-injection diagnostic: strip the note plumbing from a copy of
+#          the real escalation step and prove the deliberately misrouted decision loses its explanation. ----
 mutate_strip_note_surfacing() {
   python3 - "$esc_script" "$1" <<'PY'
 import sys

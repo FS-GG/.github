@@ -690,7 +690,7 @@ MERGE_AUTOMATION: tuple[MergeAutomation, ...] = (
 # two-of-three sets are the standing cost. So the safe default for an action nobody here anticipated is
 # "the merge performs it", and an action that is neither in this set nor a known act is a NO-VERDICT
 # (see `merge_performs_act`) rather than a silent verdict in either direction.
-_DECISION_CUTS_NOTHING = frozenset({"refuse", "stickyEscalate", "openEvidencePr"})
+_DECISION_CUTS_NOTHING = frozenset({"refuse", "stickyEscalate", "expectedRefusal", "openEvidencePr"})
 # The actions that DO write a tag, and therefore perform the act a declaration must not claim.
 _DECISION_PERFORMS = frozenset({"tag", "tagSiblings"})
 
