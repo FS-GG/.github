@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "b16f47f74537f41f2df65b7b830c87ee515c2de25214019c3bb6da9defcd5a78"
+        "value": "974dabed63282f48a83886cc504dd1707319df4eb4361eaac1ee4e9d5b10132c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "01ba31627813f65690b5bc5c05c2e2822de82bc564087916117a606cd7b11abf"
+        "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "299edaf32301ac0137cb56251087175410cd8f2bdec82e56de210d26c10e999b"
+        "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "1827421bebdfa8102f97f598e0b4ef136e61f6b2000b62607d4889bcfc12b11b"
+        "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "25f47aee5da79fc6e2c87205cfc091e0e9ed7a53e2e130cacafcf41226905d22"
+        "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -222,16 +222,6 @@
       "id": "AR013",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/plan.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceId": "PD-005",
-      "targetId": null,
-      "relationship": "planDecisionDisposition",
-      "state": "current",
-      "diagnosticIds": []
-    },
-    {
-      "id": "AR014",
-      "sourcePath": "work/3068-repair-phase-live-assertion-writer/plan.md",
-      "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": null,
       "targetId": null,
       "relationship": "taskSourcePlan",
@@ -239,7 +229,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR015",
+      "id": "AR014",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/plan.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "VO-001",
@@ -249,17 +239,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR016",
-      "sourcePath": "work/3068-repair-phase-live-assertion-writer/plan.md",
-      "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceId": "VO-002",
-      "targetId": null,
-      "relationship": "verificationDisposition",
-      "state": "current",
-      "diagnosticIds": []
-    },
-    {
-      "id": "AR017",
+      "id": "AR015",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "AC-001",
@@ -269,7 +249,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR018",
+      "id": "AR016",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "AC-002",
@@ -279,7 +259,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR019",
+      "id": "AR017",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "AC-003",
@@ -289,7 +269,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR018",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "AC-004",
@@ -299,17 +279,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
-      "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
-      "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceId": "AC-005",
-      "targetId": null,
-      "relationship": "acceptanceDisposition",
-      "state": "current",
-      "diagnosticIds": []
-    },
-    {
-      "id": "AR022",
+      "id": "AR019",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/checklist.md",
       "sourceId": null,
@@ -319,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR020",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/plan.md",
       "sourceId": null,
@@ -329,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR021",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "FR-001",
@@ -339,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR022",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "FR-002",
@@ -349,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR023",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "FR-003",
@@ -359,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR024",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "FR-004",
@@ -369,17 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
-      "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
-      "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceId": "FR-005",
-      "targetId": null,
-      "relationship": "requirementDisposition",
-      "state": "current",
-      "diagnosticIds": []
-    },
-    {
-      "id": "AR029",
+      "id": "AR025",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/clarifications.md",
       "sourceId": null,
@@ -389,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR026",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": null,
@@ -399,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR027",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "T005",
@@ -409,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR028",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "T006",
@@ -419,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR029",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "T007",
@@ -429,20 +389,10 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR030",
       "sourcePath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceId": "T008",
-      "targetId": "T001",
-      "relationship": "taskDependency",
-      "state": "current",
-      "diagnosticIds": []
-    },
-    {
-      "id": "AR035",
-      "sourcePath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "targetPath": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceId": "T010",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -451,7 +401,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 35,
+    "readyCount": 30,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,

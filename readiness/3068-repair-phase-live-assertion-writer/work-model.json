@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "01ba31627813f65690b5bc5c05c2e2822de82bc564087916117a606cd7b11abf"
+        "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "3d2f97325b973f4c080da8b9f4021f8bb1a3df566f5f9fa46b5656408ef46d02"
+        "value": "43fa67a870b1ec4599d5f0c36b2235cb61134173cbb11ff268ea599d88df4670"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "299edaf32301ac0137cb56251087175410cd8f2bdec82e56de210d26c10e999b"
+        "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1827421bebdfa8102f97f598e0b4ef136e61f6b2000b62607d4889bcfc12b11b"
+        "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "25f47aee5da79fc6e2c87205cfc091e0e9ed7a53e2e130cacafcf41226905d22"
+        "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 37,
+        "line": 36,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 38,
+        "line": 37,
         "column": 1
       },
       "linkedTaskIds": [
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 39,
+        "line": 38,
         "column": 1
       },
       "linkedTaskIds": [
@@ -200,7 +200,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 40,
+        "line": 39,
         "column": 1
       },
       "linkedTaskIds": [
@@ -208,28 +208,6 @@
       ],
       "linkedEvidenceIds": [
         "EV004"
-      ]
-    },
-    {
-      "id": "FR-005",
-      "title": "Two related material findings on consecutive reviewed heads MUST pause serial point repair for a bounded subsystem review of state, authority, sibling paths, production topology, fixtures, and discriminating inversions; unrelated, repeated, or non-material findings MUST NOT trigger it, and the pause MUST NOT create review or repair authority. (Stories: US-002; Acceptance: AC-005)",
-      "text": "Two related material findings on consecutive reviewed heads MUST pause serial point repair for a bounded subsystem review of state, authority, sibling paths, production topology, fixtures, and discriminating inversions; unrelated, repeated, or non-material findings MUST NOT trigger it, and the pause MUST NOT create review or repair authority. (Stories: US-002; Acceptance: AC-005)",
-      "acceptanceCriteria": [
-        "AC-005"
-      ],
-      "priority": null,
-      "classification": [],
-      "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
-      "sourceLocation": {
-        "line": 41,
-        "column": 1
-      },
-      "linkedTaskIds": [
-        "T009"
-      ],
-      "linkedEvidenceIds": [
-        "EV009",
-        "EV010"
       ]
     }
   ],
@@ -457,61 +435,6 @@
         "line": 8,
         "column": 1
       }
-    },
-    {
-      "id": "T009",
-      "title": "Implement requirement FR-005",
-      "status": "done",
-      "owner": "snipe-5bf9",
-      "dependencies": [],
-      "requirements": [
-        "FR-005"
-      ],
-      "decisions": [],
-      "sourceIds": [
-        "AC-005",
-        "FR-005",
-        "PD-005"
-      ],
-      "requiredSkills": [
-        "fsharp",
-        "implementation"
-      ],
-      "requiredEvidence": [
-        "EV009"
-      ],
-      "source": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceLocation": {
-        "line": 9,
-        "column": 1
-      }
-    },
-    {
-      "id": "T010",
-      "title": "Record verification evidence VO-002",
-      "status": "done",
-      "owner": "snipe-5bf9",
-      "dependencies": [
-        "T001"
-      ],
-      "requirements": [],
-      "decisions": [],
-      "sourceIds": [
-        "PD-005",
-        "VO-002"
-      ],
-      "requiredSkills": [
-        "automated-tests",
-        "readiness-evidence"
-      ],
-      "requiredEvidence": [
-        "EV010"
-      ],
-      "source": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
-      "sourceLocation": {
-        "line": 10,
-        "column": 1
-      }
     }
   ],
   "evidence": [
@@ -721,66 +644,6 @@
         "line": 8,
         "column": 1
       }
-    },
-    {
-      "id": "EV009",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T009",
-      "taskRefs": [
-        "T009"
-      ],
-      "requirementRefs": [
-        "FR-005"
-      ],
-      "artifactRefs": [
-        ".agents/skills/pnext-item/references/independent-review.md",
-        ".claude/skills/pnext-item/references/independent-review.md",
-        "tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs",
-        "tests/coord-engine-e2e/stateful_server.py",
-        "tests/coord-engine-e2e/writes.sh",
-        "tests/skill-quality/review-round-contract.py"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
-      "sourceLocation": {
-        "line": 9,
-        "column": 1
-      }
-    },
-    {
-      "id": "EV010",
-      "kind": "verification",
-      "subjectType": "task",
-      "subjectId": "T010",
-      "taskRefs": [
-        "T010"
-      ],
-      "requirementRefs": [
-        "FR-005"
-      ],
-      "artifactRefs": [
-        "tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs",
-        "tests/coord-engine-e2e/writes.sh",
-        "tests/coord-engine-parity/run.sh",
-        "tests/skill-quality/review-round-contract.py"
-      ],
-      "result": "pass",
-      "synthetic": false,
-      "performanceBudget": null,
-      "performanceEvidenceArtifact": null,
-      "performanceMeasurements": [],
-      "rationale": null,
-      "source": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
-      "sourceLocation": {
-        "line": 10,
-        "column": 1
-      }
     }
   ],
   "generatedViews": [
@@ -821,7 +684,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "01ba31627813f65690b5bc5c05c2e2822de82bc564087916117a606cd7b11abf"
+            "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
           },
           "schemaVersion": 1
         },
@@ -837,7 +700,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "3d2f97325b973f4c080da8b9f4021f8bb1a3df566f5f9fa46b5656408ef46d02"
+            "value": "43fa67a870b1ec4599d5f0c36b2235cb61134173cbb11ff268ea599d88df4670"
           },
           "schemaVersion": 1
         },
@@ -845,7 +708,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "299edaf32301ac0137cb56251087175410cd8f2bdec82e56de210d26c10e999b"
+            "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
           },
           "schemaVersion": 1
         },
@@ -853,7 +716,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "1827421bebdfa8102f97f598e0b4ef136e61f6b2000b62607d4889bcfc12b11b"
+            "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
           },
           "schemaVersion": 1
         },
@@ -861,14 +724,14 @@
           "path": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "25f47aee5da79fc6e2c87205cfc091e0e9ed7a53e2e130cacafcf41226905d22"
+            "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "aad450f9ec6ecc081ce2ee02c19ae4425229e59c8ab3e130694b0fa1b32bbbf1"
+        "value": "6e0dd50fb317e651f9dc93283399556977fa6e02c69f8015e7008337ab6d8615"
       },
       "currency": "current"
     }

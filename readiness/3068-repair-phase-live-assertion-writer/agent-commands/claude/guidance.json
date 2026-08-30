@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "b16f47f74537f41f2df65b7b830c87ee515c2de25214019c3bb6da9defcd5a78"
+        "value": "974dabed63282f48a83886cc504dd1707319df4eb4361eaac1ee4e9d5b10132c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,7 +19,7 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "1b6a45f573386aa9257295181d7bcd00461443610079fceed5b1e34e535bfe27"
+    "value": "262032a390e0c91d66cefdbc10519d8c0a56192490d33d523c9e7b466c56888e"
   },
   "commands": [
     {
@@ -111,37 +111,15 @@
         "PD-001",
         "PD-002"
       ]
-    },
-    {
-      "id": "T009",
-      "title": "Implement requirement FR-005",
-      "stage": "specify",
-      "purpose": "Carry out lifecycle task T009 (done) covering AC-005, FR-005, PD-005.",
-      "relatedIds": [
-        "AC-005",
-        "FR-005",
-        "PD-005"
-      ]
-    },
-    {
-      "id": "T010",
-      "title": "Record verification evidence VO-002",
-      "stage": "specify",
-      "purpose": "Carry out lifecycle task T010 (done) covering PD-005, VO-002.",
-      "relatedIds": [
-        "PD-005",
-        "VO-002"
-      ]
     }
   ],
   "skills": [
     {
       "id": "automated-tests",
       "title": "automated-tests",
-      "capability": "Required by tasks: T006, T010.",
+      "capability": "Required by tasks: T006.",
       "relatedIds": [
-        "T006",
-        "T010"
+        "T006"
       ]
     },
     {
@@ -155,35 +133,32 @@
     {
       "id": "fsharp",
       "title": "fsharp",
-      "capability": "Required by tasks: T001, T002, T003, T004, T005, T009.",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005.",
       "relatedIds": [
         "T001",
         "T002",
         "T003",
         "T004",
-        "T005",
-        "T009"
+        "T005"
       ]
     },
     {
       "id": "implementation",
       "title": "implementation",
-      "capability": "Required by tasks: T001, T002, T003, T004, T009.",
+      "capability": "Required by tasks: T001, T002, T003, T004.",
       "relatedIds": [
         "T001",
         "T002",
         "T003",
-        "T004",
-        "T009"
+        "T004"
       ]
     },
     {
       "id": "readiness-evidence",
       "title": "readiness-evidence",
-      "capability": "Required by tasks: T006, T010.",
+      "capability": "Required by tasks: T006.",
       "relatedIds": [
-        "T006",
-        "T010"
+        "T006"
       ]
     },
     {
