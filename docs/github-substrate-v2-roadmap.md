@@ -527,7 +527,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   converge and four return accepted typed refusals. Seven subject-defect and nine artifact inversions fire;
   independent final-state comparison rejects duplicate and reorder corruption even when their trace labels
   are restored to the healthy labels. All findings closed without exception.
-- [ ] **GS2-03.10 — Amend and requalify the remaining-migration architecture.** Implement the
+- [x] **GS2-03.10 — Amend and requalify the remaining-migration architecture.** Implement the
   [2026-08-30 review](coordination/2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md):
   replace comment-order concurrency authority with sharded expected-parent Git journals and fencing
   generations; make one reconciler the normal write path; bind full snapshot epochs; add audit repair;
@@ -535,8 +535,11 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   independent counterexamples and black-box negative controls. This unit blocks GS2-03.7 and all later
   implementation; historical receipts do not qualify the amended candidate. Track the bounded work and
   fresh review on [`.github#3075`](https://github.com/FS-GG/.github/issues/3075).
-  **Progress 2026-08-30:** [Coordination PR 109](https://github.com/FS-GG/FS.GG.Coordination/pull/109)
-  now carries provisioned candidate commit `7308df06`, exact source
+  **Accepted 2026-08-30:** [Coordination PR 109](https://github.com/FS-GG/FS.GG.Coordination/pull/109)
+  merged as protected-main commit
+  [`624ae14f`](https://github.com/FS-GG/FS.GG.Coordination/commit/624ae14f9a1d9d4baf92045a2357fc549d274f04)
+  after [exact-head hosted qualification run 33331721108](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33331721108)
+  accepted candidate `a45837654be041ee8366bb857266005e5eb13c10`, exact source
   `7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218`,
   and compiled contract `947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e`.
   The canonical non-refresh replay is green in 593,599 ms with result
@@ -555,9 +558,12 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   winning generations fence effects, comments/webhooks are projections or hints, and complete audits repair
   loss. Qualification preflights all projection witnesses before expensive TLC work, derives rejection
   coverage as `71 + 5 × formal scenarios`, and reconciles the labeled 186 external / 161 Quint / 47 verify
-  launch inventory through an atomic concurrent observer. This is candidate evidence, not acceptance: the
-  Accountable Delivery Owner must bind the exact commit and evidence identities before GS2-03.10 can close;
-  another person, account, or agent is not an authorization gate.
+  launch inventory through an atomic concurrent observer. After the second related late-stage verifier
+  defect, the Accountable Delivery Owner paused retries, traced the shared default Apalache endpoint as the
+  ordering hazard, isolated every compile/verify invocation on a unique endpoint, retained full stdout/stderr
+  failure evidence, and reran the complete corpus. The hosted gate passed in 1,222 seconds; no exception or
+  retry-only acceptance was used. The owner bound the exact commit and evidence identities; another person,
+  account, or agent was not an authorization gate.
   **Provisioning update 2026-08-30:** the public
   [`FS-GG.Coordination.Authority`](https://github.com/FS-GG/FS.GG.Coordination.Authority) repository now
   exists as repository `1351660651`. Active ruleset `v2-journal-writer` (`21872113`) restricts create/update
@@ -566,9 +572,13 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   `refs/heads/fsgg/v2/journal/**/*`. Live rule suite `3875208315` proves a human administrator cannot
   create a matching ref, and effective-rule readback returns all four rules. The first `/**` target was
   found by the negative control to match nothing, removed, and replaced before any authority opened.
-  The policy-owner qualification workflow is staged on [`.github` PR 3076](https://github.com/FS-GG/.github/pull/3076)
-  to prove App creation/fast-forward CAS plus stale, rewrite, and deletion rejection without exposing the
-  App private key to the authority repository.
+  The policy-owner qualification workflow landed through [`.github` PR 3076](https://github.com/FS-GG/.github/pull/3076)
+  and [run 33330220225](https://github.com/FS-GG/.github/actions/runs/33330220225) proved App
+  creation/fast-forward CAS plus stale, rewrite, and deletion rejection without exposing the App private key
+  to the authority repository. The single-accountable acceptance contract then landed through
+  [`.github` PR 3078](https://github.com/FS-GG/.github/pull/3078) and shipped in coherent set
+  [`0.77.0`](https://github.com/FS-GG/.github/releases/tag/coherent-set%2Fv0.77.0), content
+  `sha256:ec52502830d351b841dc64fe1833a9640991a413cfd6230e0d2ecce9f6115711`.
 - [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Build twice in independent clean
   environments and compare package bytes, designate one candidate byte set, verify provenance and SBOM
   predicates separately, publish those identical candidate bytes to every allowed pre-production feed,
