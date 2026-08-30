@@ -19,6 +19,16 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-30** — **single-accountable delivery release published and GS2-03.10 accepted**
+  (owner github; [coherent set 0.77.0](https://github.com/FS-GG/.github/releases/tag/coherent-set%2Fv0.77.0),
+  [Coordination PR #109](https://github.com/FS-GG/FS.GG.Coordination/pull/109)):
+  Kit, Drivers, and Coord.Cli 0.77.0 are served on both feeds from exact source `0db0dc58` and
+  promoted as content `sha256:ec52502830d351b841dc64fe1833a9640991a413cfd6230e0d2ecce9f6115711`.
+  The initial publisher runs persisted nuget.org's bounded indexing lag; exact-source recoveries
+  observed the already-published bytes without repacking or duplicate pushes. Coordination's amended
+  journal/reconciliation/review/cutover architecture passed the complete endpoint-isolated Quint corpus
+  and merged to protected main as `624ae14f` under the Accountable Delivery Owner's exact-head acceptance.
+
 - **2026-08-30** — **single-accountable delivery source release prepared: coherent set 0.77.0**
   (owner github; [ADR-0079](../docs/adr/0079-single-accountable-delivery-authority.md)):
   the packed `pnext-item` contract no longer treats an external critic, second agent, or reviewer quorum
