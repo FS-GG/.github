@@ -361,10 +361,14 @@ shell table.
 
 ### 4.9 Cutover epoch
 
-The global epoch is a protocol state machine stored in a content-addressed Git ledger on a dedicated,
-ruleset-protected cutover ref and bound to the exact cutover manifest. Each transition is an expected-parent
-commit; a protected, non-deletable phase tag anchors the accepted commit. The GitHub App is the sole normal
-writer and its bypass is limited to the protected `fleet-cutover` environment. A dedicated cutover-control
+The global epoch is a protocol state machine stored in the dedicated
+`FS.GG.Coordination.Authority` repository on a content-addressed
+`refs/heads/fsgg/v2/journal/cutover/global` branch and bound to the exact cutover manifest. Each transition
+is a one-parent fast-forward pushed with an explicit old-OID `--force-with-lease`; a protected,
+non-deletable phase tag anchors the accepted commit. An active branch ruleset restricts creation, update,
+deletion, and force push; administrators do not bypass it, and the repository-scoped journal App is its
+only always-bypass actor. Bootstrap and audit verify both ruleset configuration and the branch's effective
+rules. The protected `fleet-cutover` environment separately authorizes the human transition. A dedicated cutover-control
 issue projects the current state, evidence, and operator guidance for humans, but it is not authority:
 
 ```text

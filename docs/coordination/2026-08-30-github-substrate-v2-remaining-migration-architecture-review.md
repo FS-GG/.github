@@ -70,11 +70,16 @@ over version, revision, or value, while Git history provides the analogous immut
 ([etcd transactions and leases](https://etcd.io/docs/v3.6/learning/api/),
 [etcd fencing explanation](https://etcd.io/docs/v3.6/learning/why/)).
 
-GitHub's non-forced ref update rejects a non-fast-forward sibling, so two writers that build from the same
-parent cannot both advance one protected ref. That is the usable CAS primitive; an immutable tag anchors an
-accepted phase, and an issue comment only explains the result
-([Git database references API](https://docs.github.com/en/rest/git/refs)). Sharding by protocol aggregate
-avoids turning a single global ref into a fleet-wide serialization bottleneck.
+The Git smart protocol carries the old and new object IDs for a ref update, and explicit
+`--force-with-lease=<ref>:<expect>` rejects the push unless the remote ref still has that exact expected
+object ID. The proposed journal commit remains a fast-forward; force-push rules continue to reject history
+rewrites. This—not GitHub's REST update-ref body—is the usable CAS primitive. GitHub rulesets can protect
+branches and admit a repository-scoped App as the sole bypass actor, but cannot scope bypass to one API
+path, so the authority is isolated in a dedicated repository
+([Git push lease semantics](https://git-scm.com/docs/git-push#Documentation/git-push.txt---force-with-leaseltrefnamegtltexpectgt),
+[GitHub ruleset rules and bypass](https://docs.github.com/en/rest/repos/rules)). An immutable tag anchors an
+accepted phase, and an issue comment only explains the result. Sharding by protocol aggregate avoids
+turning a single global branch into a fleet-wide serialization bottleneck.
 
 ## 3. Research findings by remaining roadmap area
 
@@ -155,7 +160,14 @@ weakening correctness.
 semantics fit. Derived lifecycle status remains a projection. Replace comment-order claim CAS and touch-set
 authority with Git journals:
 
-- one claim aggregate ref per work item;
+- a dedicated `FS.GG.Coordination.Authority` repository whose only mutable branches are
+  `refs/heads/fsgg/v2/journal/<kind>/<shard>`;
+- an active branch ruleset targeting `fsgg/v2/journal/**` that restricts creation/update/deletion,
+  blocks force pushes, disables administrator bypass, and gives always-bypass only to the dedicated
+  journal App; bootstrap and audit read back both the ruleset and effective branch rules;
+- exact old-object compare-and-swap through Git receive-pack using
+  `--force-with-lease=<ref>:<observed-object-id>`; the proposed commit remains a one-parent
+  fast-forward and a rejected lease is a conflict;
 - one conflict-domain ref for a normalized touch set, or a deterministic multi-ref acquisition plan with
   compensation before any work grant becomes usable;
 - a monotonically increasing grant generation used as a fencing token;
@@ -164,9 +176,12 @@ authority with Git journals:
 
 Comments retain human-readable claim and review projections, including journal commit and generation.
 
-**Pros.** Atomic expected-parent transition, immutable audit, deterministic replay, and the same primitive
-for claims, reviews, operations, and cutover. **Cons.** More refs, ruleset administration, Git API latency,
-and multi-touch acquisition complexity. These costs are preferable to an unfixable comment write race.
+**Pros.** Atomic expected-parent transition, immutable audit, deterministic replay, enforceable GitHub
+branch protection, repository-scoped App write authority, and the same primitive for claims, reviews,
+operations, and cutover. **Cons.** One additional repository, more refs, ruleset administration, Git
+transport latency, and multi-touch acquisition complexity. These costs are preferable to an unfixable
+comment write race. Custom non-branch refs and an API-path-scoped App bypass are explicitly rejected
+because GitHub cannot enforce those controls.
 
 ### 3.5 Desired state and settings — GS2-06
 

@@ -536,19 +536,24 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   implementation; historical receipts do not qualify the amended candidate. Track the bounded work and
   fresh review on [`.github#3075`](https://github.com/FS-GG/.github/issues/3075).
   **Progress 2026-08-30:** [Coordination PR 109](https://github.com/FS-GG/FS.GG.Coordination/pull/109)
-  now carries candidate commit `dcf3a35f`, exact source
-  `1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528`,
+  now carries repaired candidate commit `bb95af8d`, exact source
+  `e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3`,
   and compiled contract `947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e`.
-  The canonical non-refresh replay is green in 567,702 ms across seven bounded roots, eleven formal
+  The canonical non-refresh replay is green in 587,871 ms across seven bounded roots, eleven formal
   scenarios, 8 positive invariants, and 126 catalogue-derived negative controls. The journal race/fencing
-  model explores 20 states/48 transitions; reconciliation explores 27/87 with duplicate and reordered
-  hints; review epochs explore 8/17; and observation-gated contraction explores 11/26. Every affected
+  model explores distinct retry and fencing properties over 20 states/48 transitions; reconciliation
+  explores 51/163 with total webhook loss, duplicate/reordered hints, mid-read authority change, and audit
+  restart; review epochs explore 10/22 including a valid current effect and rejected stale effect; and
+  evidence-rich observation-gated contraction explores 136/532 across clock, success, freshness, and
+  snapshot binding. Every affected
   safety mutant fails and every removed-step temporal counterexample reproduces with retained deterministic
-  ITF, Quint trace, and manifest digests. Protected expected-parent refs are now the durable CAS journal,
+  ITF, Quint trace, and manifest digests. Protected branches in a dedicated authority repository are now
+  the durable CAS journal, using exact old-OID Git receive-pack leases;
   winning generations fence effects, comments/webhooks are projections or hints, and complete audits repair
   loss. Qualification preflights all projection witnesses before expensive TLC work, derives rejection
   coverage as `71 + 5 × formal scenarios`, and reconciles the labeled 186 external / 161 Quint / 47 verify
-  launch inventory. This is candidate evidence, not acceptance: independent review must bind the exact
+  launch inventory through an atomic concurrent observer. This is candidate evidence, not acceptance:
+  independent review must bind the exact
   commit and evidence identities before GS2-03.10 can close.
 - [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Build twice in independent clean
   environments and compare package bytes, designate one candidate byte set, verify provenance and SBOM
@@ -580,9 +585,13 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   JSON and referenced journal digests, distinguish edit/delete/tamper, and regenerate human projections
   from durable authority. A comment never authorizes a concurrency-sensitive transition.
 - [ ] **GS2-04.6 — Sharded Git journal adapter.** Perform protected expected-parent commits for claim,
-  review, operation, and global cutover aggregates; issue monotonically increasing fencing generations;
-  verify ancestry; create immutable phase anchors; detect rewind/deletion/divergence; compact only after a
-  terminal checkpoint; and project state to issues without making one fleet-wide normal-operation ref.
+  review, operation, and global cutover aggregates in the dedicated `FS.GG.Coordination.Authority`
+  repository. Use `refs/heads/fsgg/v2/journal/<kind>/<shard>`, explicit old-OID
+  `--force-with-lease` receive-pack CAS, and an active `fsgg/v2/journal/**` branch ruleset whose sole
+  bypass actor is the repository-scoped journal App; read back the ruleset and effective branch rules.
+  Issue monotonically increasing fencing generations; verify ancestry; create immutable phase anchors;
+  detect rewind/deletion/divergence; compact only after a terminal checkpoint; and project state to issues
+  without making one fleet-wide normal-operation ref. Custom refs and API-path-scoped bypass claims fail.
 - [ ] **GS2-04.7 — Repository/settings adapter.** Inspect and plan custom properties, rulesets, merge
   policies, Actions policy, environments, releases, tags, security, and dependency features with supported,
   unauthorized, and unavailable outcomes.
@@ -695,8 +704,9 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define states including `ObservingV2` and
   `ContractingV1`, legal transitions, manifest binding, ledger/ref/tag layout, ancestry proof, failure
   semantics, caching ceiling, operation-generation fencing, and issue projection.
-- [ ] **GS2-08.2 — Provision ledger protections.** Create the dedicated ref/tag rulesets, protected
-  `fleet-cutover` environment, App bypass boundary, control issue, and tamper/rewind monitoring.
+- [ ] **GS2-08.2 — Provision ledger protections.** Create the authority repository's branch/tag rulesets,
+  protected `fleet-cutover` environment, repository-scoped App bypass boundary, control issue, effective-rule
+  readback, and tamper/rewind monitoring.
 - [ ] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
   unknown or dynamically discovered write entry points fail the bridge build.
 - [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
