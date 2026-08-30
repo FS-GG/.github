@@ -3,9 +3,10 @@
 - Baseline tree: untouched `origin/main` at `828fc02907edc1c3577b68568f57112e3ed1d1d3`.
 - Host validator: `fsgg-sdd` 1.5.0.
 - Command: `FSGG_COORD_ENGINE_BIN="$PWD/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine" bash tests/coord-engine-e2e/writes.sh`.
-- Observed summary: `coord-engine writes: 190 assertion(s), 184 passed, 6 failed`.
+- Baseline summary: `coord-engine writes: 190 assertion(s), 184 passed, 6 failed`.
+- Candidate summary: `coord-engine writes: 191 assertion(s), 185 passed, 6 failed`.
 - Complete baseline output SHA-256: `5fabaf3a8c4fa09908d8536eb678d2076ef8f015b6485521d0fcd6501f9eeb2b`.
-- Complete candidate output SHA-256: `5fabaf3a8c4fa09908d8536eb678d2076ef8f015b6485521d0fcd6501f9eeb2b`.
+- Complete candidate output SHA-256: `acbd4eae9a384397b915e53b380009a7f5bb54d57950485df2d5d6c52cc08937`.
 
 All six failures are the same pre-existing cycle-validator compatibility refusal:
 
@@ -20,4 +21,4 @@ It occurs for these assertions:
 5. `#2133: feedback validator authority must come from the engine, not artifact rootPath`
 6. `#2133: an unpinned engine-side validator replacement must fail closed`
 
-The complete baseline and candidate logs are byte-identical. The candidate's new repair-assertion lifecycles (`.github#2865`, `.github#2819`, and `.github#3014`) all pass, and the candidate has no additional E2E failure relative to the untouched baseline.
+The candidate adds exactly one passing assertion: `.github#3068` proves the live oracle resolves item #47, exhausted PR #43, and fresh PR #46 through durable cross-reference and structured-ledger reads. The candidate's repair-assertion lifecycles (`.github#2865`, `.github#2819`, and `.github#3014`) also pass, and the candidate has no additional failure relative to the untouched baseline.

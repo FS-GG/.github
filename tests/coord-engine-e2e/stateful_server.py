@@ -961,6 +961,28 @@ class Handler(BaseHTTPRequestHandler):
                         comment["updated_at"] = "2000-01-01T00:00:00Z"
             return self._send(200, {"expired": n})
 
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/timeline$", path)
+        if m:
+            item = int(m.group(1))
+            # #3068: #47 deliberately models the real topology: item #47, exhausted PR #43,
+            # fresh PR #46. #43/#45 preserve the older lifecycle fixtures while exercising the
+            # same typed timeline read.
+            references = {43: [43], 45: [45], 47: [43]}.get(item, [])
+            return self._send(200, [
+                {
+                    "event": "cross-referenced",
+                    "source": {
+                        "type": "issue",
+                        "issue": {
+                            "number": pr,
+                            "pull_request": {"url": f"https://api.github.test/repos/FS-GG/FS.GG.SDD/pulls/{pr}"},
+                            "repository": {"full_name": "FS-GG/FS.GG.SDD"},
+                        },
+                    },
+                }
+                for pr in references
+            ])
+
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             with LOCK:

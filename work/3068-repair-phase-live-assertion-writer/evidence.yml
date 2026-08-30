@@ -11,11 +11,11 @@ sourceAnalysis: readiness/3068-repair-phase-live-assertion-writer/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3068-repair-phase-live-assertion-writer/analysis.json
-    digest: b0444d7a8c662de068b2cf2f32f16d555009ac42c51968a4e9c71d3c0b3fbd7a
+    digest: b6b8be50c9e4d6d3dfbc573bfe157a6f2d8954e903c45cdecaf2541f4144458d
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: 122c879f8020debe5d805c42bb6beccd5af3044570eba24a49a4e93338b1afb1
+    digest: dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: 3f5cc0e7ade3855e41286beef35619f6233e48100c559845bcec53c583dca449
+    digest: 823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7
     schemaVersion: 1
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: 70c2e2cff332223aa8835aea1c38e3975f30cbf3b12f7c2cab51dffea782bf5b
+    digest: ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421
     schemaVersion: 1
   - label: tasks
     path: work/3068-repair-phase-live-assertion-writer/tasks.yml
-    digest: d0ecce94c729d9e64d091b1374fd929e21488ce6ca1e575830362d380e293e27
+    digest: 2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
       failed: 0
       skipped: 0
-    notes: ["Full candidate E2E matches the untouched baseline at 184/190 with only the six documented validator-version refusals; release build and unit tests are green."]
+    notes: ["Full candidate E2E is 185/191: exactly one new non-aliased topology assertion passes beyond the untouched baseline's 184/190, with the same six documented validator-version refusals; release build and unit tests are green."]
   - id: EV007
     kind: verification
     subject:
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:a685cdba79ba1091a97829b613090af69eb0b17ab8d1dfe0d34a3e71530e3f4d"
+      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141

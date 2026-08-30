@@ -627,21 +627,42 @@ module LiveHandlers =
                         match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
                               Reads.prLandable ctx.Transport target.Owner target.Repo pr,
                               Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr,
-                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number with
-                        | Ok head, checks, Ok comments, Ok itemComments ->
+                              Reads.crossReferencedPullRequests ctx.Transport target.Owner target.Repo target.Number with
+                        | Ok head, checks, Ok comments, Ok crossReferencedPrs ->
                             let reviewComments =
                                 comments
                                 |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
 
-                            // Derived, not asserted: a live `repair-phase` marker in the comment thread is
-                            // the same structural fact `Driver.reviewPhaseFacts` already exposes, so the
-                            // caller does not have to pass `--repair` by hand for the common case.
+                            // Current phase comes from this PR's typed ledger. Pending repair entry comes
+                            // from a different durable graph: the item timeline names predecessor PRs,
+                            // whose ledgers carry the exhausted escalation. Item and PR numbers are never
+                            // assumed equal.
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
-                            let repairPhaseEntryExpected =
-                                itemComments
-                                |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                |> Driver.reviewPhaseFacts
-                                |> fun predecessor -> predecessor.EscalationPresent && not predecessor.RepairPhasePresent
+
+                            let rec discoverRepairPredecessor candidates found =
+                                match candidates with
+                                | [] ->
+                                    match found with
+                                    | [] -> Ok false
+                                    | [ _ ] -> Ok true
+                                    | values ->
+                                        let names = values |> List.rev |> List.map string |> String.concat ", "
+                                        Error(Errors.Malformed(target.Short, $"multiple exhausted predecessor PRs carry live escalation evidence: %s{names}"))
+                                | candidate :: rest when candidate = pr -> discoverRepairPredecessor rest found
+                                | candidate :: rest ->
+                                    match Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo candidate with
+                                    | Error error -> Error error
+                                    | Ok predecessorComments ->
+                                        let predecessor =
+                                            predecessorComments
+                                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                            |> Driver.reviewPhaseFacts
+                                        if not (List.isEmpty predecessor.StructuredErrors) then
+                                            let detail = String.concat "; " predecessor.StructuredErrors
+                                            Error(Errors.Malformed(target.Short, $"cross-referenced PR #%d{candidate} carries invalid structured review evidence: %s{detail}"))
+                                        elif predecessor.EscalationPresent && not predecessor.RepairPhasePresent then
+                                            discoverRepairPredecessor rest (candidate :: found)
+                                        else discoverRepairPredecessor rest found
 
                             let binding: Review.Binding =
                                 { ItemRef = target.Canonical
@@ -682,8 +703,11 @@ module LiveHandlers =
                                 ExitNoVerdict
                             | Ok authority ->
                                 let repairAssertion = authority |> Option.map _.Receipt
-                                ReviewApplication.renderLiveWithWaitAndRepairAssertion
-                                    opts binding facts repairAssertion waitState repairPhaseEntryExpected
+                                match discoverRepairPredecessor crossReferencedPrs [] with
+                                | Error error -> fail error
+                                | Ok repairPhaseEntryExpected ->
+                                    ReviewApplication.renderLiveWithWaitAndRepairAssertion
+                                        opts binding facts repairAssertion waitState repairPhaseEntryExpected
                         | Error error, _, _, _
                         | _, _, Error error, _
                         | _, _, _, Error error -> fail error

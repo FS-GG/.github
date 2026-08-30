@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "122c879f8020debe5d805c42bb6beccd5af3044570eba24a49a4e93338b1afb1"
+        "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b04b477a350afdedc5e7c229113d18d05dbb8c1ba3fd57af0e24f7f5845389ee"
+        "value": "ad66cbae97891d289ebb08a3c01d4453772583a56c35d6de8d63cc0e46201f64"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "3f5cc0e7ade3855e41286beef35619f6233e48100c559845bcec53c583dca449"
+        "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "70c2e2cff332223aa8835aea1c38e3975f30cbf3b12f7c2cab51dffea782bf5b"
+        "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d0ecce94c729d9e64d091b1374fd929e21488ce6ca1e575830362d380e293e27"
+        "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
       }
     }
   ],
@@ -191,8 +191,8 @@
     },
     {
       "id": "FR-004",
-      "title": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, rather than requiring hand-authored authority. (Stories: US-002; Acceptance: AC-004)",
-      "text": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, rather than requiring hand-authored authority. (Stories: US-002; Acceptance: AC-004)",
+      "title": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. (Stories: US-002; Acceptance: AC-004)",
+      "text": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. (Stories: US-002; Acceptance: AC-004)",
       "acceptanceCriteria": [
         "AC-004"
       ],
@@ -684,7 +684,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "122c879f8020debe5d805c42bb6beccd5af3044570eba24a49a4e93338b1afb1"
+            "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
           },
           "schemaVersion": 1
         },
@@ -700,7 +700,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "b04b477a350afdedc5e7c229113d18d05dbb8c1ba3fd57af0e24f7f5845389ee"
+            "value": "ad66cbae97891d289ebb08a3c01d4453772583a56c35d6de8d63cc0e46201f64"
           },
           "schemaVersion": 1
         },
@@ -708,7 +708,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "3f5cc0e7ade3855e41286beef35619f6233e48100c559845bcec53c583dca449"
+            "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
           },
           "schemaVersion": 1
         },
@@ -716,7 +716,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "70c2e2cff332223aa8835aea1c38e3975f30cbf3b12f7c2cab51dffea782bf5b"
+            "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
           },
           "schemaVersion": 1
         },
@@ -724,14 +724,14 @@
           "path": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "d0ecce94c729d9e64d091b1374fd929e21488ce6ca1e575830362d380e293e27"
+            "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "02a1dc7827faa7511373107bf820342f9028dc2051a893e31eee2a7850fc3e19"
+        "value": "8e219911514f3762b4fb1eeeb62bf1e4e3e107b5ae7d548f112adbada3b078b6"
       },
       "currency": "current"
     }

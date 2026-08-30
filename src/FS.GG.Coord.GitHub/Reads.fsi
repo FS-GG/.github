@@ -409,6 +409,10 @@ module Reads =
     val commentsWithIdentity:
         transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
 
+    /// Same-repository PR numbers durably cross-referenced from this item through its complete timeline.
+    val crossReferencedPullRequests:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int list>
+
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 
