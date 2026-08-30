@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-30** — **single-accountable delivery source release prepared: coherent set 0.77.0**
+  (owner github; [ADR-0079](../docs/adr/0079-single-accountable-delivery-authority.md)):
+  the packed `pnext-item` contract no longer treats an external critic, second agent, or reviewer quorum
+  as an authorization boundary. One Accountable Delivery Owner may implement, run a fresh critique phase,
+  repair, accept, and deliver; distinct wire identities remain ordering/evidence controls. Required exact-head
+  technical checks remain fail-closed. Registry source advances to 0.77.0 while `package-version` remains
+  0.76.0 until the byte-identical coherent release is served and verified on both feeds.
+
 - **2026-08-30** — **auto-publish evidence: FS.GG.Kit 0.76.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/33309250174) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.76.0/FS.GG.Kit.0.76.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.76.0/fs.gg.kit.0.76.0.nupkg). Both served nuspecs record repository commit a4e3ccb93fc983c950409526b125fe03ab9c106a.
 
 - **2026-08-30** — **workspace initialization releases published and fully reconciled**

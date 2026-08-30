@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.76.0 — workspace initialization bootstrap in the coherent coordination set.
+    <PackageReleaseNotes>0.77.0 — single-accountable delivery authority in the coherent coordination set.
 
-WHAT MOVED, AND WHY IT IS A MINOR. FS.GG.Kit adds one materialized skill,
-`initialize-sdd-workspace`. Newly scaffolded repositories can defer facts that do not exist at
-creation time—repository identity, board, collaborator policy, chore locks, and provider-specific
-extras—then let an in-repository agent inspect real local state, offer a complete local-only mode,
-and configure only selected GitHub integrations. Existing kit members and destinations remain
+WHAT MOVED, AND WHY IT IS A MINOR. FS.GG.Kit updates the materialized `pnext-item` contract so one
+Accountable Delivery Owner can implement, run a fresh critique phase, repair, accept, and deliver.
+An external critic, second agent, reviewer quorum, or other approval authority is no longer required.
+Exact-head technical gates remain fail-closed, and distinct phase identities preserve ordering and
+evidence without creating additional decision makers. Existing kit members and destinations remain
 compatible.
 
 FS.GG.Drivers and FS.GG.Coord.Cli advance because all three packages share one coherent version.
