@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.6 historically accepted; GS2-01.9 not applicable; GS2-03.10 amendment candidate is under independent review and blocks GS2-03.7+ |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.6 historically accepted; GS2-01.9 not applicable; GS2-03.10 amendment candidate is under accountable exact-head acceptance and blocks GS2-03.7+ |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -546,16 +546,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   explores 51/163 with total webhook loss, duplicate/reordered hints, mid-read authority change, and audit
   restart; review epochs explore 10/22 including a valid current effect and rejected stale effect; and
   evidence-rich observation-gated contraction explores 136/532 across clock, success, freshness, and
-  snapshot binding. Every affected
+  snapshot binding. Under [ADR-0079](adr/0079-single-accountable-delivery-authority.md), these checks and
+  critique records are evidence for one accountable acceptance decision; no external or multiple
+  authorization is required. Every affected
   safety mutant fails and every removed-step temporal counterexample reproduces with retained deterministic
   ITF, Quint trace, and manifest digests. Protected branches in a dedicated authority repository are now
   the durable CAS journal, using exact old-OID Git receive-pack leases;
   winning generations fence effects, comments/webhooks are projections or hints, and complete audits repair
   loss. Qualification preflights all projection witnesses before expensive TLC work, derives rejection
   coverage as `71 + 5 × formal scenarios`, and reconciles the labeled 186 external / 161 Quint / 47 verify
-  launch inventory through an atomic concurrent observer. This is candidate evidence, not acceptance:
-  independent review must bind the exact
-  commit and evidence identities before GS2-03.10 can close.
+  launch inventory through an atomic concurrent observer. This is candidate evidence, not acceptance: the
+  Accountable Delivery Owner must bind the exact commit and evidence identities before GS2-03.10 can close;
+  another person, account, or agent is not an authorization gate.
   **Provisioning update 2026-08-30:** the public
   [`FS-GG.Coordination.Authority`](https://github.com/FS-GG/FS.GG.Coordination.Authority) repository now
   exists as repository `1351660651`. Active ruleset `v2-journal-writer` (`21872113`) restricts create/update
@@ -572,8 +574,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   predicates separately, publish those identical candidate bytes to every allowed pre-production feed,
   then download and install them from isolated feeds in clean consumers with repository-local empty caches.
   Retain package, symbol, SBOM, attestation, served-download, and installed-assembly digests.
-- [ ] **GS2-03.8 — Add review gates.** Architecture, security, adapter, migration, and cutover reviewers
-  sign independent findings against exact candidate fingerprints; no self-authored green roll-up suffices.
+- [ ] **GS2-03.8 — Add critique evidence gates.** Architecture, security, adapter, migration, and cutover
+  perspectives produce findings against exact candidate fingerprints. The Accountable Delivery Owner may
+  perform every perspective under distinct phase identities and makes the sole acceptance decision; a green
+  roll-up must still be derived from the bound evidence rather than asserted in prose.
 - [ ] **GS2-03.9 — Prove the harness can fail.** Mutation-test or invert every gate class so a vacuous,
   absent, stale, truncated, forged, or generated-only evidence set is red.
 
@@ -633,10 +637,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   generation for each claim and conflict domain; treat lease expiry only as successor eligibility; use the
   native field/comment projections only as candidate prefilters; acquire multi-touch grants in a
   deterministic compensatable plan; and re-prove exclusion and generation at every external effect.
-- [ ] **GS2-05.6 — Implement review/delivery.** Bind independent review to an immutable full-snapshot
+- [ ] **GS2-05.6 — Implement review/delivery.** Bind accountable critique evidence to an immutable full-snapshot
   `ReviewEpochKey` separate from its stable chain identity; allow succession only inside one epoch; require
-  a fresh seat after any snapshot change; distinguish merged from protected post-merge verification; and
-  generate journal-bound delivery/done receipts.
+  a fresh phase seat after any snapshot change without requiring another authority; distinguish merged from
+  protected post-merge verification; and generate journal-bound delivery/done receipts.
 - [ ] **GS2-05.7 — Implement lifecycle projection.** Derive Status from scheduling intent, holds,
   dependencies, claim, PR/review, delivery, and issue state; no operator writes derived state as intent.
 - [ ] **GS2-05.8 — Shadow the complete live fleet.** Compare v1 and v2 read-only decisions, record every

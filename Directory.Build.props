@@ -486,8 +486,14 @@
        pending initialization marker. Existing kit members, destinations, engine commands, flags,
        schemas, exits, and public members remain unchanged. Drivers and Coord.Cli advance with the
        coherent scalar; their payload behavior is otherwise unchanged. -->
+  <!-- 0.76.0 -> 0.77.0 (ADR-0079): MINOR on the stable 0.x line. The packed
+       pnext-item delivery contract replaces mandatory external critic authorization with one
+       Accountable Delivery Owner. Exact-head critique, repair, and host-acceptance records remain
+       required evidence through distinct phase identities, while no second person, account, agent,
+       or approval quorum is required. This changes receiver-visible delivery behavior without
+       removing a package, command, member, schema, or technical gate. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.76.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.77.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
