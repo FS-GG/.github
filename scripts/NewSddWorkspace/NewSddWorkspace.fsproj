@@ -17,7 +17,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>new-sdd-workspace</ToolCommandName>
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
@@ -35,6 +35,10 @@
   <ItemGroup>
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <EmbeddedResource Include="../../.claude/skills/initialize-sdd-workspace/SKILL.md"
+                      LogicalName="NewSddWorkspace.InitializeSkill.SKILL.md" />
+    <EmbeddedResource Include="../../.claude/skills/initialize-sdd-workspace/agents/openai.yaml"
+                      LogicalName="NewSddWorkspace.InitializeSkill.agents.openai.yaml" />
   </ItemGroup>
 
   <ItemGroup>

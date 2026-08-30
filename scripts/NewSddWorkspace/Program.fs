@@ -12,6 +12,7 @@
 ///   5. coordination wiring      (vendor the kit + write FSGG_COORD_* env — default on)       [non-fatal]
 ///   6. fsgg-sdd doctor          (read-only coherence check)                                  [non-fatal]
 ///   7. fsgg-sdd upgrade         (optional --upgrade — reconcile an existing project)         [fatal]
+///   8. initialization handoff   (embedded skill + pending marker + conditional agent warning) [fatal]
 ///
 /// Currency is the DEFAULT (ADR-0030, the creation-time carve-out to ADR-0009): the CLI
 /// self-updates to the newest coherent set BEFORE scaffolding, so a fresh workspace is always
@@ -92,46 +93,30 @@ type Options =
       /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
       ChoreLocks: string option }
 
-/// Assemble the no-argument wizard's decisions after its meaningful prompts have completed.
-/// Coordination and a current fresh scaffold are established defaults, so the wizard does not
-/// manufacture confirmation answers for them: explicit `--no-coordination` / `--upgrade` remain
-/// available only on the CLI path.
-let assembleWizardOptions
-    (target: string)
-    (product: string)
-    (template: string)
-    (lifecycle: string)
-    (gitRef: string)
-    (governance: bool)
-    (pinned: bool)
-    (profile: string option)
-    (npmPackage: string option)
-    (npmVersion: string option)
-    (bindingTarget: string option)
-    (workspaceRepo: string)
-    (boardOwner: string)
-    (boardTitle: string)
-    (choreLocks: string option)
-    : Options =
+/// Assemble the no-argument wizard's deliberately small, always-answerable decision set. Facts that
+/// commonly do not exist at creation time (repository, board, collaborators, chore locks and provider
+/// package closures) belong to the in-repository initialize skill. The full CLI keeps its explicit
+/// flags for automation and advanced providers.
+let assembleWizardOptions (target: string) (product: string) : Options =
     { Target = target
       Product = product
-      Template = template
-      Lifecycle = lifecycle
-      Ref = gitRef
+      Template = "rendering"
+      Lifecycle = "sdd"
+      Ref = "main"
       Upgrade = false
-      Governance = governance
-      Pinned = pinned
-      Profile = profile
-      NpmPackage = npmPackage
-      NpmVersion = npmVersion
-      BindingTarget = bindingTarget
-      Coordinate = true
-      WorkspaceRepo = Some workspaceRepo
-      BoardOwner = boardOwner
-      BoardTitle = boardTitle
+      Governance = true
+      Pinned = false
+      Profile = None
+      NpmPackage = None
+      NpmVersion = None
+      BindingTarget = None
+      Coordinate = false
+      WorkspaceRepo = None
+      BoardOwner = "FS-GG"
+      BoardTitle = "Coordination"
       PublicBoard = None
       TrustedWriters = []
-      ChoreLocks = choreLocks }
+      ChoreLocks = None }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -732,6 +717,78 @@ let private writeUnder (target: string) (relPath: string) (content: string) =
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
     File.WriteAllText(dest, content)
 
+// ── In-repository initialization handoff ─────────────────────────────────────
+
+let private initializationMarker = ".fsgg/workspace-initialization.json"
+
+let private initializationGuidance =
+    String.concat "\n"
+        [ "<!-- fsgg:workspace-initialization:start -->"
+          "## Workspace initialization"
+          ""
+          "Before doing repository work, read `.fsgg/workspace-initialization.json`. If it is missing"
+          "or its `status` is not `initialized`, warn the user that setup is incomplete and run"
+          "`$initialize-sdd-workspace` with them. Do not guess repository, board, collaborator, or"
+          "package configuration."
+          "<!-- fsgg:workspace-initialization:end -->" ]
+
+let private upsertInitializationGuidance (target: string) (fileName: string) =
+    let dest = Path.Combine(target, fileName)
+    let startMarker = "<!-- fsgg:workspace-initialization:start -->"
+    let endMarker = "<!-- fsgg:workspace-initialization:end -->"
+    let existing = if File.Exists dest then File.ReadAllText dest else ""
+    let startAt = existing.IndexOf(startMarker, StringComparison.Ordinal)
+    let withoutOld =
+        if startAt < 0 then existing.TrimEnd()
+        else
+            let endAt = existing.IndexOf(endMarker, startAt, StringComparison.Ordinal)
+            if endAt < 0 then existing.Substring(0, startAt).TrimEnd()
+            else
+                let after = endAt + endMarker.Length
+                (existing.Substring(0, startAt) + existing.Substring(after)).Trim()
+    let prefix = if String.IsNullOrWhiteSpace withoutOld then "" else withoutOld + "\n\n"
+    File.WriteAllText(dest, prefix + initializationGuidance + "\n")
+
+let private embeddedText (name: string) =
+    let assembly = System.Reflection.Assembly.GetExecutingAssembly()
+    use stream = assembly.GetManifestResourceStream name
+    if isNull stream then failwithf "embedded initialization resource is missing: %s" name
+    use reader = new StreamReader(stream)
+    reader.ReadToEnd()
+
+/// Materialize the bootstrap skill without a network dependency, record the pending state, and add
+/// conditional instructions to both agent entrypoints. An initialized marker is never downgraded by
+/// a later explicit reconcile/upgrade run.
+let private installInitializationHandoff (opts: Options) : Outcome =
+    try
+        let files =
+            [ "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
+              "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml" ]
+        for root in [ ".claude/skills"; ".agents/skills" ] do
+            for rel, content in files do
+                writeUnder opts.Target (sprintf "%s/initialize-sdd-workspace/%s" root rel) content
+
+        let markerPath = Path.Combine(opts.Target, initializationMarker)
+        let alreadyInitialized =
+            if not (File.Exists markerPath) then false
+            else
+                try
+                    JsonNode.Parse(File.ReadAllText markerPath).AsObject().["status"].GetValue<string>() = "initialized"
+                with _ -> false
+        if not alreadyInitialized then
+            let marker = JsonObject()
+            marker.["schemaVersion"] <- JsonValue.Create 1
+            marker.["status"] <- JsonValue.Create "pending"
+            marker.["createdAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString "O")
+            marker.["next"] <- JsonValue.Create "$initialize-sdd-workspace"
+            marker.["reason"] <- JsonValue.Create "repository-specific configuration is intentionally deferred until an agent enters the workspace"
+            writeUnder opts.Target initializationMarker (marker.ToJsonString(JsonSerializerOptions(WriteIndented = true)) + "\n")
+
+        upsertInitializationGuidance opts.Target "AGENTS.md"
+        upsertInitializationGuidance opts.Target "CLAUDE.md"
+        Succeeded
+    with ex -> Failed ex.Message
+
 /// Add the owner/group/other execute bits to a file (the `fsgg-coord` shim must be runnable).
 /// Best-effort at the call site — a filesystem that rejects the mode (or Windows) leaves the file
 /// non-executable rather than failing the whole step, exactly as the inline version this replaces did.
@@ -1177,7 +1234,7 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
         AnsiConsole.MarkupLine(sprintf "[bold]Done:[/] workspace in [green]%s[/]" (Markup.Escape opts.Target))
         AnsiConsole.MarkupLine(
             sprintf
-                "[bold]Next:[/] cd %s && dotnet build && dotnet run   [grey]# then: fsgg-sdd charter[/]"
+                "[bold]Next:[/] cd %s and ask your agent to run [aqua]$initialize-sdd-workspace[/]"
                 (Markup.Escape opts.Target)
         )
         // The chore queue needs a per-repo lock issue, and this workspace's repo does not exist on GitHub
@@ -1352,19 +1409,7 @@ let private paramsPanel (d: Draft) =
          | Some true -> "[grey]pinned (installed CLI)[/]"
          | Some false -> "[green]update[/] [grey]fsgg-sdd first[/]"
          | None -> pendingCell)
-    row "coordination"
-        (let board =
-             sprintf "board [aqua]%s/%s[/]"
-                 (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
-                 (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
-         match d.WorkspaceRepo with
-         | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
-         | None -> sprintf "%s [grey](default on)[/]" board)
-    row "Project visibility"
-        (match d.PublicBoard with Some true -> "[green]public-readable[/]" | Some false -> "[aqua]private[/]" | None -> pendingCell)
-    row "Project base permission" "[yellow]Read (human verification required)[/]"
-    row "Project writers"
-        (d.TrustedWriters |> Option.map (fun writers -> sprintf "[green]%s[/]" (Markup.Escape(String.Join(", ", writers)))) |> Option.defaultValue pendingCell)
+    row "repository setup" "[yellow]deferred to $initialize-sdd-workspace[/]"
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
     panel.Border <- BoxBorder.Rounded
@@ -1423,20 +1468,9 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
     |> ignore
 
-    let board =
-        sprintf "%s/%s"
-            (d.BoardOwner |> Option.defaultValue "FS-GG")
-            (d.BoardTitle |> Option.defaultValue "Coordination")
-    let coordination =
-        tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
-    coordination.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
-    let access = tree.AddNode "[yellow]Project access boundary[/]  [grey](base Read requires operator verification)[/]"
-    access.AddNode(
-        match d.PublicBoard with
-        | Some true -> "[green]public-readable[/]"
-        | Some false -> "[aqua]private[/]"
-        | None -> pendingCell) |> ignore
-    access.AddNode(sprintf "writers: %s" (d.TrustedWriters |> Option.map (String.concat ", " >> Markup.Escape) |> Option.defaultValue pendingCell)) |> ignore
+    let initialization = tree.AddNode "[yellow]initialization handoff[/]  [grey](run inside the repository)[/]"
+    initialization.AddNode "[grey37]$initialize-sdd-workspace · conditional AGENTS.md/CLAUDE.md warning[/]" |> ignore
+    initialization.AddNode "[grey37]repository, board, collaborators and provider extras are asked only if applicable[/]" |> ignore
 
     let panel = Panel(tree)
     panel.Header <- PanelHeader "[bold]scaffold preview[/]"
@@ -1485,8 +1519,9 @@ let private draftView (d: Draft) =
 
 /// When invoked with no arguments on an interactive terminal, walk the user through the
 /// scaffold parameters with Spectre.Console prompts instead of failing with a usage error.
-/// The surface follows the CLI defaults: product + target (text), profile + governance + ref
-/// (selection), then the non-default coordination values. A live preview grows beside the prompts.
+/// Only product and target are creation-time facts. Everything repository-specific is deferred to
+/// the initialize skill installed in the generated workspace. A live preview shows those fixed,
+/// coherent defaults before the final confirmation.
 /// A non-interactive stdin never reaches here (see `main`), so the piped/CI usage-error contract
 /// is unchanged.
 /// Returns None if the user declines the final confirmation.
@@ -1506,156 +1541,19 @@ let private interactive () : Options option =
             TextPrompt<string>("[green]Target[/] directory?")
                 .DefaultValue("./" + product)
                 .Validate(fun (s: string) -> required "target directory" s)).Trim()
-    draft <- { draft with Target = Some target }
-
-    draftView draft
-    let template =
-        AnsiConsole.Prompt(
-            SelectionPrompt<string>()
-                .Title("Application [magenta]type[/]?")
-                .AddChoices(templates |> List.map (fun (id, gloss) -> sprintf "%s — %s" id gloss) |> List.toArray))
-            .Split(' ').[0]
-    draft <- { draft with Template = Some template }
-
-    draftView draft
-    let lifecycle =
-        AnsiConsole.Prompt(
-            SelectionPrompt<string>()
-                .Title("Specification [magenta]lifecycle[/]?")
-                .AddChoices(
-                    [| "sdd — Standard SDD (current default)"
-                       "typed-sdd — Typed SDD (canonical F# specification)"
-                       "none — Freeform (no FS-GG lifecycle)"
-                       "spec-kit — legacy/frozen" |]))
-            .Split(' ').[0]
-    draft <- { draft with Lifecycle = Some lifecycle }
-
-    let profile =
-        if supportsProfile template then
-            draftView draft
-            let selected =
-                AnsiConsole.Prompt(
-                    SelectionPrompt<string>()
-                        .Title("Render [magenta]profile[/]?")
-                        .AddChoices(profiles |> List.map (fun (id, gloss) -> sprintf "%s — %s" id gloss) |> List.toArray))
-                    .Split(' ').[0]
-            draft <- { draft with Profile = Some selected }
-            selected
-        else
-            ""
-
-    let npmPackage, npmVersion, bindingTarget =
-        if requiresNpmClosure template then
-            draftView draft
-            let packageName = AnsiConsole.Prompt(TextPrompt<string>("npm [green]package[/]?").Validate(fun s -> required "npm package" s)).Trim()
-            draft <- { draft with NpmPackage = Some packageName }
-            draftView draft
-            let version = AnsiConsole.Prompt(TextPrompt<string>("exact npm [green]version[/]?").Validate(fun s -> required "npm version" s)).Trim()
-            draft <- { draft with NpmVersion = Some version }
-            draftView draft
-            let target =
-                AnsiConsole.Prompt(
-                    SelectionPrompt<string>()
-                        .Title("Bindings runtime [magenta]target[/]?")
-                        .AddChoices([| "browser"; "node"; "universal" |]))
-            draft <- { draft with BindingTarget = Some target }
-            Some packageName, Some version, Some target
-        else None, None, None
-
-    draftView draft
-    let governance =
-        AnsiConsole.Prompt(
-            SelectionPrompt<string>()
-                .Title("[green]Governance[/] overlay?")
-                .AddChoices([| "light — apply the overlay (recommended)"; "none — skip it (--no-governance)" |]))
-            .StartsWith "light"
-    draft <- { draft with Governance = Some governance }
-
-    draftView draft
-    let gitRef =
-        let choice =
-            AnsiConsole.Prompt(
-                SelectionPrompt<string>()
-                    .Title("Descriptor [green]ref[/] to pin the coherent set?")
-                    .AddChoices([| "main — newest coherent set"; "pin a specific ref…" |]))
-        if choice.StartsWith "main" then
-            "main"
-        else
-            AnsiConsole.Prompt(
-                TextPrompt<string>("  Git ref [grey](tag / branch / sha)[/]?")
-                    .Validate(fun (s: string) -> required "ref" s)).Trim()
-    draft <- { draft with Ref = Some gitRef }
-
-    draftView draft
-    let pinned =
-        AnsiConsole.Prompt(
-            SelectionPrompt<string>()
-                .Title("Tooling [green]currency[/] before scaffolding?")
-                .AddChoices(
-                    [| "update — self-update fsgg-sdd to the newest build (default, recommended)"
-                       "pinned — scaffold with the installed CLI (--pinned)" |]))
-            .StartsWith "pinned"
-    draft <- { draft with Pinned = Some pinned }
-
-    draftView draft
-    // Coordination remains default-on. Ask only for its meaningful values; scripted callers retain
-    // `--no-coordination` when they intentionally want to skip the whole step.
-    let workspaceRepo =
-        AnsiConsole.Prompt(
-            TextPrompt<string>("  This workspace's [green]repo[/] [grey](owner/repo)[/]?")
-                .DefaultValue(sprintf "FS-GG/%s" product)
-                .Validate(fun (s: string) -> required "repo" s)).Trim()
-    let boardOwner =
-        AnsiConsole.Prompt(
-            TextPrompt<string>("  Coordination board [green]org[/] [grey](owner)[/]?")
-                .DefaultValue(fst (parseBoard workspaceRepo))
-                .Validate(fun (s: string) -> required "org" s)).Trim()
-    let boardTitle =
-        AnsiConsole
-            .Prompt(TextPrompt<string>("  Board [green]title[/]?").DefaultValue("Coordination"))
-            .Trim()
-    let choreLocks =
-        let raw =
-            AnsiConsole
-                .Prompt(
-                    TextPrompt<string>(
-                        "  [green]Chore-locks[/] [grey](owner/repo#n,… — non-FS-GG boards; blank to skip)[/]?"
-                    )
-                        .AllowEmpty())
-                .Trim()
-        if String.IsNullOrWhiteSpace raw then None else Some raw
-    draftView draft
-    let publicBoard =
-        AnsiConsole.Prompt(
-            SelectionPrompt<string>()
-                .Title("Product Project [green]visibility[/]?")
-                .AddChoices([| "private — preserve private access"; "public — public-readable, never public-writable" |]))
-            .StartsWith "public"
-    draft <- { draft with PublicBoard = Some publicBoard }
-    draftView draft
-    let trustedWriters =
-        AnsiConsole.Prompt(
-            TextPrompt<string>("  Explicit Project [green]writers[/] [grey](team/user ids, comma-separated)[/]?")
-                .Validate(fun (s: string) -> required "trusted writer allowlist" s))
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-        |> Array.map (fun s -> s.Trim())
-        |> Array.filter (String.IsNullOrWhiteSpace >> not)
-        |> List.ofArray
     draft <-
         { draft with
-            WorkspaceRepo = Some workspaceRepo
-            BoardOwner = Some boardOwner
-            BoardTitle = Some boardTitle
-            PublicBoard = Some publicBoard
-            TrustedWriters = Some trustedWriters
-            ChoreLocks = choreLocks }
+            Target = Some target
+            Template = Some "rendering"
+            Lifecycle = Some "sdd"
+            Governance = Some true
+            Ref = Some "main"
+            Pinned = Some false }
 
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some({ assembleWizardOptions target product template lifecycle gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks with
-                 PublicBoard = Some publicBoard
-                 TrustedWriters = trustedWriters })
+        Some(assembleWizardOptions target product)
     else
         None
 
@@ -2018,6 +1916,24 @@ let private run (opts: Options) : int =
                 AnsiConsole.MarkupLine(sprintf "  [red]✗[/] upgrade failed (exit %d)" code)
                 results.Add { Title = "upgrade"; Outcome = Failed(sprintf "exit %d" code) }
                 fatal <- true
+
+        // Final authored step · install the creation-time agent handoff after every provider and
+        // overlay has written its files. The skill and warning are embedded in this tool, so a fresh
+        // workspace does not need a repository, board, collaborator list, npm choice, or network
+        // access to learn how to finish configuration.
+        if not fatal then
+            step 8 "initialization handoff"
+            let outcome = installInitializationHandoff opts
+            match outcome with
+            | Succeeded ->
+                AnsiConsole.MarkupLine
+                    "  [green]✓[/] installed $initialize-sdd-workspace + pending initialization warning"
+            | Failed note ->
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] could not install initialization handoff: %s" (Markup.Escape note))
+                fatal <- true
+            | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
+            | Skipped reason -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape reason))
+            results.Add { Title = "initialization handoff"; Outcome = outcome }
 
         summary results opts fatal
         if fatal then 1 else 0

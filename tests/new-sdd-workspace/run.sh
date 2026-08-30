@@ -41,9 +41,8 @@ DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -type f -name new-s
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
 # Exercise the wizard's pure decision boundary directly. The normal interactive path intentionally
-# requires a TTY; this deterministic probe proves that the removed confirmations assemble the two
-# established defaults (coordination ON, post-scaffold upgrade OFF) while preserving non-default
-# board/repo/chore-lock values.
+# requires a TTY; this deterministic probe proves that creation needs only product + target and does
+# not manufacture repository, board, collaborator, chore-lock, or npm answers.
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
 
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
@@ -476,8 +475,12 @@ expect_execution() {
   if [ "$template" = "fable-bindings" ]; then
     grep -qF "npmPackage=@babylonjs/core" "$log" && grep -qF "npmVersion=8.0.0" "$log" || params_ok=0
   fi
-  if [ "$rc" -ne 0 ] || ! grep -qF "source: fixture/$template" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ]; then
-    bad "$desc" "want successful real route, selected descriptor, provider '$template', and params '$expected_params'; got rc=$rc"$'\n'"--- output ---"$'\n'"$OUT"$'\n'"--- fsgg-sdd ---"$'\n'"$(cat "$log" 2>/dev/null || true)"
+  if [ "$rc" -ne 0 ] || ! grep -qF "source: fixture/$template" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ] \
+    || ! jq -e '.schemaVersion == 1 and .status == "pending" and .next == "$initialize-sdd-workspace"' "$target/.fsgg/workspace-initialization.json" >/dev/null \
+    || ! cmp -s "$target/.claude/skills/initialize-sdd-workspace/SKILL.md" "$target/.agents/skills/initialize-sdd-workspace/SKILL.md" \
+    || ! grep -qF 'fsgg:workspace-initialization:start' "$target/AGENTS.md" \
+    || ! grep -qF '$initialize-sdd-workspace' "$target/CLAUDE.md"; then
+    bad "$desc" "want successful real route, selected descriptor, provider '$template', pending initialization handoff, and params '$expected_params'; got rc=$rc"$'\n'"--- output ---"$'\n'"$OUT"$'\n'"--- fsgg-sdd ---"$'\n'"$(cat "$log" 2>/dev/null || true)"
   else
     ok "$desc"
   fi

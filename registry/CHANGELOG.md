@@ -19,6 +19,16 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-30** — **workspace initialization source release prepared: `new-sdd-workspace`
+  0.11.0 and coordination coherent set `github:0.76.0`** (github): the interactive workspace
+  wizard now asks only for product and target, selects the stable rendering/Standard-SDD defaults,
+  and defers repository, Project, collaborators, chore locks, and provider-specific package facts
+  until they can be observed inside the repository. The tool embeds `initialize-sdd-workspace`, writes
+  a pending initialization marker, and adds conditional agent-entry warnings. The same skill becomes
+  a new FS.GG.Kit member, requiring the coherent set's additive MINOR bump; Drivers and Coord.Cli move
+  on the shared scalar without engine wire or driver behavior changes. Published package fields remain
+  at 0.10.1/0.75.5 until both dual-feed release paths are verified, preserving publish-before-flip.
+
 - **2026-08-25** — **coordination coherent set `github:0.75.5` published and fully reconciled**
   (github; [.github#2983](https://github.com/FS-GG/.github/issues/2983),
   [source PR #2990](https://github.com/FS-GG/.github/pull/2990),

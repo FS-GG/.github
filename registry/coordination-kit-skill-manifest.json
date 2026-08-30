@@ -76,6 +76,23 @@
       ]
     },
     {
+      "id": "initialize-sdd-workspace",
+      "supplied-by": ".claude/skills/initialize-sdd-workspace",
+      "tree-sha256": "b4f797a2b3d64ce3325a1b499274b6499bef1264692cf36ac634725698baa652",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "865d81c262030bf7c63cb4a09daa95ccbf5cebe5e3e482f825faea39caa29cb8",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "105c9e45971c8f2c4e0585227a51bbf970b835b7280d3d0ae856d41166454e59",
+          "executable": false
+        }
+      ]
+    },
+    {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
       "tree-sha256": "307b71bda594bc3adf329dcfba06ac90bd994b4a65938eff483f0382b8708cf8",
