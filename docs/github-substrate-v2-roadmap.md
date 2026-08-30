@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.4 accepted; GS2-01.9 not applicable; GS2-03.5 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.5 accepted; GS2-01.9 not applicable; GS2-03.6 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -486,10 +486,19 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/93#issuecomment-5464677128) bind exact
   head `0e3de0aaac9fc2f95a1625ad3f43e0f2ee90a455`; source-derived executable closure and reproduced
   digest-pinned Quint typechecking close both terminal escalation findings with no accepted exception.
-- [ ] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
+- [x] **GS2-03.5 — Add native Quint model/property/formal tests.** Run examples, simulation, reachability
   witnesses, safety properties, temporal liveness checks, and bounded model checking over claim/election,
   relation mutation, lifecycle, operation saga, epoch, and rollback state spaces, retaining reproducible
   Quint/ITF counterexamples.
+  **Accepted 2026-08-30:** protected-main merge
+  [`893997af`](https://github.com/FS-GG/FS.GG.Coordination/commit/893997af87cb723c06cb9e1865c56165f28e22ed)
+  and exact-merge [qualification run 33282988853](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33282988853)
+  accepted exact candidate `aa2f8d165aeeb107c210ed231a9702f69c0e76a6`. The fresh
+  [successor pass](https://github.com/FS-GG/FS.GG.Coordination/pull/97#issuecomment-5465677710) and
+  [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/97#issuecomment-5465697691) bind a
+  clean-checkout SDD projection with all 24 tracked observations verified, six reproducible temporal
+  transition-removal counterexamples with retained Quint/ITF/trace/manifest/receipt digests, and
+  runner-calibrated hosted elapsed budgets. All findings closed without exception.
 - [ ] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
   duplicate/reorder events; return partial pages; exhaust rate budgets; revoke permission; mutate concurrent
   revisions; and require convergence or typed refusal.
