@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421
+    digest: f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b
+    digest: 2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: 823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7
+    digest: c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9
     schemaVersion: 1
 tasks:
   - id: T001

@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
+        "value": "2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "43fa67a870b1ec4599d5f0c36b2235cb61134173cbb11ff268ea599d88df4670"
+        "value": "c976930ec75b79c7636acbcc0d4cd5a7864a9f7abbaf2cc5d0abd73ac0dd84bf"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
+        "value": "c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
+        "value": "f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
+        "value": "340422a98bbdcc2151c20f2a46fbfd8dbe0c156f4514078a86eb739e67a85307"
       }
     }
   ],
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, and malformed assertions without selecting a latest-wins fallback. (Stories: US-002; Acceptance: AC-003)",
-      "text": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, and malformed assertions without selecting a latest-wins fallback. (Stories: US-002; Acceptance: AC-003)",
+      "title": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, malformed, and wrong-purpose assertions without selecting a latest-wins fallback; refusal MUST occur before any append-only assertion or wait mutation. (Stories: US-002; Acceptance: AC-003)",
+      "text": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, malformed, and wrong-purpose assertions without selecting a latest-wins fallback; refusal MUST occur before any append-only assertion or wait mutation. (Stories: US-002; Acceptance: AC-003)",
       "acceptanceCriteria": [
         "AC-003"
       ],
@@ -191,8 +191,8 @@
     },
     {
       "id": "FR-004",
-      "title": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. (Stories: US-002; Acceptance: AC-004)",
-      "text": "The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. (Stories: US-002; Acceptance: AC-004)",
+      "title": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. Caller syntax MAY assert the expected purpose but MUST NOT select a different immutable semantic route. (Stories: US-002; Acceptance: AC-004)",
+      "text": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. Caller syntax MAY assert the expected purpose but MUST NOT select a different immutable semantic route. (Stories: US-002; Acceptance: AC-004)",
       "acceptanceCriteria": [
         "AC-004"
       ],
@@ -684,7 +684,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b"
+            "value": "2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c"
           },
           "schemaVersion": 1
         },
@@ -700,7 +700,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "43fa67a870b1ec4599d5f0c36b2235cb61134173cbb11ff268ea599d88df4670"
+            "value": "c976930ec75b79c7636acbcc0d4cd5a7864a9f7abbaf2cc5d0abd73ac0dd84bf"
           },
           "schemaVersion": 1
         },
@@ -708,7 +708,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7"
+            "value": "c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9"
           },
           "schemaVersion": 1
         },
@@ -716,7 +716,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421"
+            "value": "f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229"
           },
           "schemaVersion": 1
         },
@@ -724,14 +724,14 @@
           "path": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438"
+            "value": "340422a98bbdcc2151c20f2a46fbfd8dbe0c156f4514078a86eb739e67a85307"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "6e0dd50fb317e651f9dc93283399556977fa6e02c69f8015e7008337ab6d8615"
+        "value": "88615704a76399ff7493ae54f375c9c2f83ed2f5fe04b96862e45bf018b10a36"
       },
       "currency": "current"
     }

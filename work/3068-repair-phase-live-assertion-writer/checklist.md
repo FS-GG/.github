@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/3068-repair-phase-live-assertion-writer/clarifications.md
 
 ## Source Snapshot
-- spec: work/3068-repair-phase-live-assertion-writer/spec.md sha256:ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421 schemaVersion:1
+- spec: work/3068-repair-phase-live-assertion-writer/spec.md sha256:f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229 schemaVersion:1
 - clarifications: work/3068-repair-phase-live-assertion-writer/clarifications.md sha256:b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a schemaVersion:1
 
 ## Checklist Items

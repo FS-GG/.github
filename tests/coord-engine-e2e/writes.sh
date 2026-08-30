@@ -369,6 +369,22 @@ review_marker_complete_out="$("$ENGINE" review wait FS.GG.SDD#42 "$review_wait_f
 complete_review_record_wait aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:initial-review:0 "sha256:$review_initial_digest"; review_digest_complete_rc=$?
 review_normalized_evidence="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" \
   | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->")) | (.body | split("\n")[1] | fromjson) | select(.event == "complete")] | last | .evidenceRef')"
+# #3068 second-order inversion: the `repair-phase` spelling is only a caller assertion. In this
+# ordinary same-head confirmation topology the writer must derive confirmation, refuse the mismatch,
+# and append neither immutable assertion authority nor a wait transition.
+review_wrong_purpose_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+review_wrong_purpose_wait_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
+review_wrong_purpose_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#42 "$review_initial_url" 'wrong semantic route' --pr 42 --worker accountable-purpose-host --json 2>&1)"; review_wrong_purpose_rc=$?
+review_wrong_purpose_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+review_wrong_purpose_wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
+if [ "$review_wrong_purpose_rc" -ne 0 ] \
+   && [[ "$review_wrong_purpose_out" == *"requires purpose=confirmation"* ]] \
+   && [ "$review_wrong_purpose_before" = "$review_wrong_purpose_after" ] \
+   && [ "$review_wrong_purpose_wait_before" = "$review_wrong_purpose_wait_after" ]; then
+  ok "#3068 repair-phase purpose is refused before assertion/wait append in ordinary confirmation topology"
+else
+  bad "#3068 caller purpose must not select immutable ordinary-confirmation authority" "rc=$review_wrong_purpose_rc:$review_wrong_purpose_out comments=$review_wrong_purpose_before->$review_wrong_purpose_after waits=$review_wrong_purpose_wait_before->$review_wrong_purpose_wait_after"
+fi
 # Legacy callers may use arbitrary generation names. A name that merely starts like a canonical token
 # is still legacy: the canonical grammar is whole-string, not a substring classifier. This is the
 # production-shaped inversion for the old unanchored predicate: under that mutation the completion
@@ -941,10 +957,23 @@ repair_oracle_command="$(printf '%s' "$repair_oracle_out" | jq -r '.repairAssert
 # repair-phase generation zero. Exercise every identity/binding refusal before the valid append, so a
 # later duplicate fence cannot be the reason they failed.
 repair_assert_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_assert_wait_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
+repair_wrong_purpose_out="$("$ENGINE" review assert-repair FS.GG.SDD#43 "$repair_initial_url" 'wrong semantic route' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_wrong_purpose_rc=$?
+repair_wrong_purpose_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_wrong_purpose_wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
+if [ "$repair_wrong_purpose_rc" -ne 0 ] \
+   && [[ "$repair_wrong_purpose_out" == *"requires purpose=repair-phase-entry"* ]] \
+   && [ "$repair_assert_before" = "$repair_wrong_purpose_after" ] \
+   && [ "$repair_assert_wait_before" = "$repair_wrong_purpose_wait_after" ]; then
+  ok "#3068 ordinary purpose is refused before assertion/wait append in repair-entry topology"
+else
+  bad "#3068 caller purpose must not select immutable repair-entry authority" "rc=$repair_wrong_purpose_rc:$repair_wrong_purpose_out comments=$repair_assert_before->$repair_wrong_purpose_after waits=$repair_assert_wait_before->$repair_wrong_purpose_wait_after"
+fi
 repair_self_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_self_rc=$?
 repair_critic_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker "$turnover_critic" --json 2>&1)"; repair_critic_rc=$?
 repair_wrong_review_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 https://fixture.invalid/wrong-review 'comment repair is complete' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_wrong_review_rc=$?
 repair_assert_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_assert_wait_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
 
 repair_malformed_assertion_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:repair-assertion/v1 -->\n{}"}' \
@@ -996,8 +1025,10 @@ repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repa
 
 if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$repair_initial_complete_rc" -eq 0 ] \
    && [ "$repair_oracle_rc" -eq 0 ] && [[ "$repair_oracle_command" == *"review assert-repair repair-phase"* ]] \
+   && [ "$repair_wrong_purpose_rc" -ne 0 ] && [[ "$repair_wrong_purpose_out" == *"requires purpose=repair-phase-entry"* ]] \
    && [ "$repair_self_rc" -ne 0 ] && [ "$repair_critic_rc" -ne 0 ] && [ "$repair_wrong_review_rc" -ne 0 ] \
    && [ "$repair_assert_before" = "$repair_assert_negative_after" ] \
+   && [ "$repair_assert_wait_before" = "$repair_assert_wait_negative_after" ] \
    && [ "$repair_malformed_reader_rc" -ne 0 ] && [[ "$repair_malformed_reader_out" == *"repair assertion authority is invalid"* ]] \
    && [ "$repair_assert_rc" -eq 0 ] && [ -n "$repair_assert_id" ] && [ "$repair_duplicate_rc" -ne 0 ] \
    && [ "$repair_assert_after" -eq $((repair_assert_negative_after + 1)) ] \
@@ -1019,7 +1050,7 @@ if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$
   ok ".github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true"
 else
   bad ".github#2865: live repair-phase entry must produce and consume the seven-field typed receipt" \
-    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc oracle=$repair_oracle_rc:$repair_oracle_out command=$repair_oracle_command assertion=self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
+    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc oracle=$repair_oracle_rc:$repair_oracle_out command=$repair_oracle_command assertion=wrong-purpose:$repair_wrong_purpose_rc:$repair_wrong_purpose_out self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after waits=$repair_assert_wait_before/$repair_assert_wait_negative_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
 fi
 rm -f "$turnover_draft.bad" "$turnover_draft.stale" "$turnover_draft.missing"
 

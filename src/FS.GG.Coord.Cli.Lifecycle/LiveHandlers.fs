@@ -585,6 +585,39 @@ module LiveHandlers =
                                 ExitNoVerdict
                             | _ -> DeliveryApplication.renderWithPostMergeVerification opts postMergeVerification facts
 
+    // Derive the one immutable assertion-purpose bit from durable topology. Both the live oracle and
+    // the append-only writer use this function: rendering a purpose in one path and trusting the
+    // caller to select it in the other can permanently poison a chain because duplicate authority
+    // cannot be corrected after append.
+    let private repairPhaseEntryExpected (ctx: Context) (target: Ref) (pr: int) =
+        let rec discover candidates found =
+            match candidates with
+            | [] ->
+                match found with
+                | [] -> Ok false
+                | [ _ ] -> Ok true
+                | values ->
+                    let names = values |> List.rev |> List.map string |> String.concat ", "
+                    Error(Errors.Malformed(target.Short, $"multiple exhausted predecessor PRs carry live escalation evidence: %s{names}"))
+            | candidate :: rest when candidate = pr -> discover rest found
+            | candidate :: rest ->
+                match Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo candidate with
+                | Error error -> Error error
+                | Ok predecessorComments ->
+                    let predecessor =
+                        predecessorComments
+                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                        |> Driver.reviewPhaseFacts
+                    if not (List.isEmpty predecessor.StructuredErrors) then
+                        let detail = String.concat "; " predecessor.StructuredErrors
+                        Error(Errors.Malformed(target.Short, $"cross-referenced PR #%d{candidate} carries invalid structured review evidence: %s{detail}"))
+                    elif predecessor.EscalationPresent && not predecessor.RepairPhasePresent then
+                        discover rest (candidate :: found)
+                    else discover rest found
+
+        Reads.crossReferencedPullRequests ctx.Transport target.Owner target.Repo target.Number
+        |> Result.bind (fun candidates -> discover candidates [])
+
     /// The live `review <ref> --pr N` adapter (.github#2175) — matches `delivery <ref> [--pr N]`'s shape
     /// rather than inventing a parallel spelling, and reuses the SAME live reads that function already
     /// makes (`Reads.markerScan`, `Reads.commentsWithIdentity`, `Reads.prLandable`) rather than a second
@@ -627,8 +660,8 @@ module LiveHandlers =
                         match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
                               Reads.prLandable ctx.Transport target.Owner target.Repo pr,
                               Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr,
-                              Reads.crossReferencedPullRequests ctx.Transport target.Owner target.Repo target.Number with
-                        | Ok head, checks, Ok comments, Ok crossReferencedPrs ->
+                              repairPhaseEntryExpected ctx target pr with
+                        | Ok head, checks, Ok comments, Ok repairPhaseEntryExpected ->
                             let reviewComments =
                                 comments
                                 |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -638,31 +671,6 @@ module LiveHandlers =
                             // whose ledgers carry the exhausted escalation. Item and PR numbers are never
                             // assumed equal.
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
-
-                            let rec discoverRepairPredecessor candidates found =
-                                match candidates with
-                                | [] ->
-                                    match found with
-                                    | [] -> Ok false
-                                    | [ _ ] -> Ok true
-                                    | values ->
-                                        let names = values |> List.rev |> List.map string |> String.concat ", "
-                                        Error(Errors.Malformed(target.Short, $"multiple exhausted predecessor PRs carry live escalation evidence: %s{names}"))
-                                | candidate :: rest when candidate = pr -> discoverRepairPredecessor rest found
-                                | candidate :: rest ->
-                                    match Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo candidate with
-                                    | Error error -> Error error
-                                    | Ok predecessorComments ->
-                                        let predecessor =
-                                            predecessorComments
-                                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                            |> Driver.reviewPhaseFacts
-                                        if not (List.isEmpty predecessor.StructuredErrors) then
-                                            let detail = String.concat "; " predecessor.StructuredErrors
-                                            Error(Errors.Malformed(target.Short, $"cross-referenced PR #%d{candidate} carries invalid structured review evidence: %s{detail}"))
-                                        elif predecessor.EscalationPresent && not predecessor.RepairPhasePresent then
-                                            discoverRepairPredecessor rest (candidate :: found)
-                                        else discoverRepairPredecessor rest found
 
                             let binding: Review.Binding =
                                 { ItemRef = target.Canonical
@@ -703,11 +711,8 @@ module LiveHandlers =
                                 ExitNoVerdict
                             | Ok authority ->
                                 let repairAssertion = authority |> Option.map _.Receipt
-                                match discoverRepairPredecessor crossReferencedPrs [] with
-                                | Error error -> fail error
-                                | Ok repairPhaseEntryExpected ->
-                                    ReviewApplication.renderLiveWithWaitAndRepairAssertion
-                                        opts binding facts repairAssertion waitState repairPhaseEntryExpected
+                                ReviewApplication.renderLiveWithWaitAndRepairAssertion
+                                    opts binding facts repairAssertion waitState repairPhaseEntryExpected
                         | Error error, _, _, _
                         | _, _, Error error, _
                         | _, _, _, Error error -> fail error
@@ -1039,30 +1044,37 @@ module LiveHandlers =
                       |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
                       Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
                       Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
-                | Error error, _, _, _
-                | _, Error error, _, _
-                | _, _, _, Error error -> fail error
-                | Ok markers, Ok head, checks, Ok comments ->
+                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr,
+                      repairPhaseEntryExpected ctx target pr with
+                | Error error, _, _, _, _
+                | _, Error error, _, _, _
+                | _, _, _, Error error, _
+                | _, _, _, _, Error error -> fail error
+                | Ok _, Ok _, _, Ok _, Ok expectedRepairPhaseEntry
+                    when purpose <> (if expectedRepairPhaseEntry then ReviewApplication.RepairPhaseEntry else ReviewApplication.Confirmation) ->
+                    let expectedName = if expectedRepairPhaseEntry then "repair-phase-entry" else "confirmation"
+                    eprint $"fsgg-coord-engine: review assert-repair: refused before append: live review state requires purpose=%s{expectedName}; the caller-selected purpose does not match."
+                    ExitNoVerdict
+                | Ok markers, Ok head, checks, Ok comments, Ok _ ->
                     match authorizedMarker opts.LeaseMinutes markers (fun () -> Reads.prAlive ctx.Transport target.Owner target.Repo target.Number) with
                     | Error error -> fail error
                     | Ok None ->
                         eprint "fsgg-coord-engine: review assert-repair: no current claim generation identifies the implementing worker."
                         ExitNoVerdict
                     | Ok(Some claim) ->
-                        let reviewComments =
+                          let reviewComments =
                             comments
                             |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                        let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
-                        match ReviewApplication.repairAssertionFromComments expectedSubject reviewComments with
-                        | Error errors ->
+                          let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                          match ReviewApplication.repairAssertionFromComments expectedSubject reviewComments with
+                          | Error errors ->
                             let detail = String.concat "; " errors
                             eprint $"fsgg-coord-engine: review assert-repair: existing authority is invalid: %s{detail}"
                             ExitNoVerdict
-                        | Ok(Some _) ->
+                          | Ok(Some _) ->
                             eprint "fsgg-coord-engine: review assert-repair: a repair assertion already exists; append-only authority does not replace or duplicate it."
                             ExitNoVerdict
-                        | Ok None ->
+                          | Ok None ->
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
                             let receipt: Review.RepairAssertionReceipt =
                                 { AnsweredReviewUrl = answeredReviewUrl
