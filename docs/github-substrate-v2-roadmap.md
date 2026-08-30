@@ -536,10 +536,11 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   implementation; historical receipts do not qualify the amended candidate. Track the bounded work and
   fresh review on [`.github#3075`](https://github.com/FS-GG/.github/issues/3075).
   **Progress 2026-08-30:** [Coordination PR 109](https://github.com/FS-GG/FS.GG.Coordination/pull/109)
-  now carries repaired candidate commit `bb95af8d`, exact source
-  `e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3`,
+  now carries provisioned candidate commit `7308df06`, exact source
+  `7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218`,
   and compiled contract `947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e`.
-  The canonical non-refresh replay is green in 587,871 ms across seven bounded roots, eleven formal
+  The canonical non-refresh replay is green in 593,599 ms with result
+  `d68b2c8a25bff5174cab55cb5292d382a1f577cdf807739ba759705c42fbd33b` across seven bounded roots, eleven formal
   scenarios, 8 positive invariants, and 126 catalogue-derived negative controls. The journal race/fencing
   model explores distinct retry and fencing properties over 20 states/48 transitions; reconciliation
   explores 51/163 with total webhook loss, duplicate/reordered hints, mid-read authority change, and audit
