@@ -18,14 +18,14 @@ is not a permanent compatibility burden on the v2 runtime.
 
 | Field | Value |
 |---|---|
-| Status | Proposed governing design, amended by the [2026-08-30 remaining-migration architecture review](2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md), for [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
+| Status | Proposed governing design for [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Authored | 2026-08-25 |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Execution spine | [Bootstrap/qualify `.github#2963`](https://github.com/FS-GG/.github/issues/2963), [bridge/ledger `.github#2964`](https://github.com/FS-GG/.github/issues/2964), [cutover/retire `.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
 | Execution roadmap | [GitHub Substrate v2 fleet-cutover roadmap](../github-substrate-v2-roadmap.md) |
 | Maintainer direction | Coordinated fleet cutover; breaking changes are allowed when they remove the wrong authority or avoid permanent compatibility machinery |
 | Builds on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), the [Quint-first migration design](2026-08-25-quint-first-typed-sdd-migration-design.md), the historical [typed protocol kernel design](2026-08-24-typed-protocol-kernel-design.md), and the [change-risk design](2026-08-22-coordination-change-risk-mitigation-design.md) |
-| Preserves | Claim CAS and leases with fencing generations, touch-set exclusion, full-snapshot review/delivery evidence, semantic contract registry, and two-feed release recovery |
+| Preserves | Claim CAS and leases, touch-set exclusion, exact-SHA review/delivery evidence, semantic contract registry, and two-feed release recovery |
 
 ## 1. Evidence and implementation baseline
 
@@ -154,8 +154,8 @@ candidate.
 ### Non-goals
 
 - Replacing the GitHub issue/project substrate with a custom database or hosted workflow service.
-- Replacing protected journal claim CAS, fencing generations, worker identities, leases, operation locks,
-  or merge elections with assignees, comments, or Project columns.
+- Replacing comment-order claim CAS, worker identities, leases, operation locks, or merge elections with
+  assignees or Project columns.
 - Moving semantic dependency compatibility out of `registry/dependencies.yml`.
 - Pretending GitHub can make NuGet.org and GitHub Packages publication atomic.
 - Event-sourcing every GitHub object or repository fact.
@@ -290,7 +290,7 @@ v2 opens.
 
 ### 4.5 Protocol event streams
 
-Typed event streams remain for state that requires server ordering, CAS election, or durable
+Typed event streams remain for state that requires server ordering, CAS-like election, or durable
 evidence:
 
 - item claim, lease, release, and adoption;
@@ -300,18 +300,17 @@ evidence:
 - delivery and done receipts;
 - durable multi-step operation receipts.
 
-Protected, sharded Git refs are the concurrency authority. Each claim, review epoch, and operation aggregate
-appends an expected-parent commit and issues a monotonically increasing fencing generation. The global
-cutover retains its singular ref; normal aggregates do not contend on it. GitHub issue comments remain
-human transport and projection because GitHub assigns their identity and order and they are independently
-readable, but they never authorize a concurrency-sensitive transition. Comments may be edited or deleted,
-so every marker refers to its journal commit, subject, generation, snapshot fingerprint, and model
-fingerprint. Prose is a generated explanation, never the parser input.
+GitHub issue comments remain the operational transport initially because GitHub assigns their identity and
+order, they are independently readable, and the existing CAS/recovery behavior is already proven. They are
+not an immutable archive: comments may be edited or deleted. Every payload is therefore versioned JSON in a
+marker envelope with sequence, predecessor digest, subject, generation, and model fingerprint. Prose is a
+generated explanation, never the parser input.
 
-The extension classifies each journal's retention contract. Ephemeral coordination streams, such as
-released claims, may compact only after an explicit terminal checkpoint. Durable decisions, delivery
-evidence, and operation receipts remain content-addressed. A missing or rewritten comment is detectable and
-regenerated from authority; it cannot silently rewrite audit history.
+The extension classifies each stream's retention contract. Ephemeral coordination streams, such as released
+claims, may compact under an explicit terminal receipt. Durable decisions, delivery evidence, and operation
+receipts are hash-chained and checkpointed into a content-addressed repository or immutable release artifact.
+A missing or rewritten comment is then detectable and cannot silently rewrite audit history. The global
+cutover epoch uses the stronger repository ledger in section 4.9 and is not comment-authoritative.
 
 ### 4.6 Mutation algebra and durable plans
 
@@ -361,15 +360,10 @@ shell table.
 
 ### 4.9 Cutover epoch
 
-The global epoch is a protocol state machine stored in the dedicated
-`FS.GG.Coordination.Authority` repository on a content-addressed
-`refs/heads/fsgg/v2/journal/cutover/global` branch and bound to the exact cutover manifest. Each transition
-is a one-parent fast-forward pushed with an explicit old-OID `--force-with-lease`; a protected,
-non-deletable phase tag anchors the accepted commit. Split active rulesets target
-`refs/heads/fsgg/v2/journal/**/*`: the writer rule restricts creation/update and bypasses only the journal
-App, while the integrity rule rejects deletion/non-fast-forward updates with no bypass actor. Bootstrap
-and audit verify both configurations and the branch's effective rules. The protected `fleet-cutover`
-environment separately authorizes the human transition. A dedicated cutover-control
+The global epoch is a protocol state machine stored in a content-addressed Git ledger on a dedicated,
+ruleset-protected cutover ref and bound to the exact cutover manifest. Each transition is an expected-parent
+commit; a protected, non-deletable phase tag anchors the accepted commit. The GitHub App is the sole normal
+writer and its bypass is limited to the protected `fleet-cutover` environment. A dedicated cutover-control
 issue projects the current state, evidence, and operator guidance for humans, but it is not authority:
 
 ```text
@@ -380,8 +374,7 @@ OperatingV1
     -> SwitchedV2(candidate)
     -> VerifiedV2(evidence)
     -> OpenV2(acceptance)       # point of no return
-    -> ObservingV2(readings)
-    -> ContractingV1(deletion)
+    -> RetiringV1(deletion)
     -> OperatingV2(report)
 
 Before OpenV2 only:
@@ -691,8 +684,7 @@ At minimum:
 - touch-set declarations become v2 touch-set events plus projection;
 - lifecycle watermarks, claims, reviews, delivery, and release operations are drained or migrated;
 - body metadata projections are removed after the v2 facts verify; and
-- Project-local fields are made non-authoritative at `OpenV2` but deleted only after the fixed 30-day
-  observation accepts `ContractingV1`; v1 rollback remains unavailable throughout observation.
+- Project-local fields are deleted only after `OpenV2` makes v1 rollback unavailable.
 
 Every transformation is `Migrated`, `Ambiguous`, or `Unsupported`. The cutover refuses on the latter two
 until an explicit disposition is recorded. No heuristic default silently turns prose into authority.
@@ -856,21 +848,17 @@ Exit: every positive journey passes and every named wrong-path control refuses o
 
 `OpenV2` is the point of no return. Any later failure uses roll-forward repair. V1 never resumes.
 
-### F9 — observe, contract v1, and normalize operations
+### F9 — retire v1 and normalize operations
 
-- Immediately revoke or fence every v1 write credential, schedule, dispatch route, installation, and
-  mutation entry point; independently prove old clients cannot cause an external effect.
-- Archive the v1 verifier, evidence manifest, and inert recovery inputs outside production dependency
-  closure, then commit and anchor `ObservingV2(readings)`.
-- Publish fixed-definition 0/7/14/30-day operational readings. Repair is roll-forward and v1 never resumes.
-- Only after the 30-day gate, approve and anchor `ContractingV1(deletion)`, then delete v1 readers/writers,
-  text blocker field, Class/Kind/body sentinels, old Project fields, legacy workflows, obsolete permissions,
-  and temporary migration adapters.
-- Remove remaining contraction safeguards, enable the accepted normal merge-queue/ruleset profiles, prove a
-  clean checkout/install has no v1 production path, and commit `OperatingV2(report)`.
+- Delete v1 readers/writers, text blocker field, Class/Kind/body sentinels, old Project fields, legacy
+  schedules, moving-ref exception, and temporary migration adapters.
+- Archive the v1 verifier and evidence manifest outside production dependency closure.
+- Remove temporary update restrictions and enable the accepted normal merge-queue/ruleset profiles.
+- Publish the deletion ledger and 0/7/14/30-day operational readings.
+- Commit and anchor `OperatingV2(report)` after deletion and immediate verification; later readings amend the report,
+  not the epoch.
 
-Exit: no v1 production authority or mutation path remains, sealed history is independently verifiable, and
-the v2 protocol-surface census is complete.
+Exit: no v1 production authority or mutation path remains, and the v2 protocol-surface census is complete.
 
 ## 11. Rollback and recovery
 
