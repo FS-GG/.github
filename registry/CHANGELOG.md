@@ -30,6 +30,7 @@ no gate behaviour changes — this is purely how humans record the log.
   the immutable packages without repacking or duplicate pushes; promotion 33309339542 verified both
   registries and sealed content
   `sha256:1ec17f089d763a36272541229a66d56e551cecbc2132a2cf2e6e8a09120acaa5`.
+  Source annotations now also state `SOURCE/PUBLISHED`, matching the reconciled package scalars.
 
 - **2026-08-30** — **workspace initialization source release prepared: `new-sdd-workspace`
   0.11.0 and coordination coherent set `github:0.76.0`** (github): the interactive workspace
