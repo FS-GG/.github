@@ -68,6 +68,25 @@ def main() -> None:
         "durable queue entry was weakened from writes to may write",
     )
 
+    # .github#3068. Two findings at one authority boundary pause serial repair long enough to inspect
+    # the family; unrelated or non-material findings must not consume that escalation.
+    for literal in (
+        "Two **material** findings that arise on consecutive reviewed heads and share one subsystem or authority boundary are a cluster trigger",
+        "Before dispatching another critic, the host pauses the serial point-repair loop",
+        "cancels any unconsumed wait generation",
+        "every sibling read/write/derive path",
+        "realistic production topology assumptions",
+        "discriminating positive, inversion, and sibling-path coverage",
+        "does **not** add a review round, authorize another repair phase, or relax either ceiling",
+        "Unrelated findings, a restatement of one finding, and non-material feedback do not satisfy the trigger",
+        "Scope growth still requires a typed `widen` and a revised structured delivery-route receipt",
+        "timestamped cluster-review record",
+        "review or repair rounds avoided or added",
+        "false-positive or over-escalation evidence",
+        "must not be used to reshape the implementation merely to make the policy appear successful",
+    ):
+        require(literal in contract, f"related-finding cluster contract is missing: {literal}")
+
     # The semantic assertions are production-code xUnit witnesses, not this source-text scanner. The
     # selected Core suite executes them when ReviewWait or its consumers change; these names keep each
     # required boundary independently visible in evidence and prevent one catch-all test being reused.

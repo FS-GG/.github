@@ -167,6 +167,27 @@ Report concrete findings first, ordered by severity and linked to files or comma
 unresolved material finding remains at the reviewed head. The host validates the ledger and checks
 itself and never translates a prose verdict into a structured pass.
 
+### Related-finding cluster escalation
+
+Two **material** findings that arise on consecutive reviewed heads and share one subsystem or authority
+boundary are a cluster trigger. Before dispatching another critic, the host pauses the serial point-repair
+loop, cancels any unconsumed wait generation, and records a bounded subsystem review. The review maps the
+state machine, data and authority boundaries, every sibling read/write/derive path, realistic production
+topology assumptions, and fixture representativeness; it enumerates the failure family and adds
+discriminating positive, inversion, and sibling-path coverage before a fresh wait can be entered.
+
+The trigger does **not** add a review round, authorize another repair phase, or relax either ceiling. It
+changes the work performed before the already-authorized next review. Unrelated findings, a restatement of
+one finding, and non-material feedback do not satisfy the trigger; where relatedness is not evidenced, the
+ordinary per-finding route continues. Scope growth still requires a typed `widen` and a revised structured
+delivery-route receipt before any newly declared path is touched.
+
+The owning issue or PR carries a timestamped cluster-review record: the related finding sequence and shared
+cause, detection stage, review or repair rounds avoided or added, cluster-review duration, sibling paths
+inspected, discriminating tests added, false-positive or over-escalation evidence, and the eventual
+acceptance outcome. This observation record measures the policy; it must not be used to reshape the
+implementation merely to make the policy appear successful.
+
 ## Root cause, dedupe, and materiality
 
 For every candidate finding the critic searches the relevant code and history for the **cause**, then

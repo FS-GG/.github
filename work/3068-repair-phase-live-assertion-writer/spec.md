@@ -31,12 +31,14 @@ Review hosts can durably authorize an accountable same-head repair assertion thr
 - AC-002 [US-001] [FR-002]: Given validated ordinary exhaustion, a fresh claim and PR, and an initial changes-required record on the already-repaired head, when the assertion and wait are present, then a kind=repair-phase record is reachable and a fresh successor pass can reach host acceptance.
 - AC-003 [US-002] [FR-003]: Given a stale head, wrong review URL, wrong PR, implementer grantor, current-critic grantor, duplicate assertion, or malformed assertion, when the live reader or writer evaluates it, then it refuses without advancing review state.
 - AC-004 [US-002] [FR-004]: Given an item, a separately numbered exhausted predecessor PR, and a fresh current PR, when live review state is inspected, then the item timeline and predecessor ledger select the exact purpose-bearing next command without assuming item/PR number equality.
+- AC-005 [US-002] [FR-005]: Given two consecutive material findings at the same repair-phase authority boundary, when another critic would otherwise be dispatched, then the host first performs and records a bounded cluster review with sibling-path and false-positive controls without adding a review round or relaxing a ceiling.
 
 ## Functional Requirements
 - FR-001: After ordinary exhaustion and an accountable assertion bound to the exact review, head, and disjoint grantor identity, the live oracle MUST make repair-confirmation wait and kind=repair-phase record reachable without changing the candidate head. (Stories: US-001; Acceptance: AC-001)
 - FR-002: The production review path MUST carry the durable assertion through inspect, wait-enter, and review-record so exhaustion through repair-phase successor pass and host acceptance is executable. (Stories: US-001; Acceptance: AC-002)
 - FR-003: The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, and malformed assertions without selecting a latest-wins fallback. (Stories: US-002; Acceptance: AC-003)
 - FR-004: The CLI contract and live oracle MUST render the exact authorized writer or next command, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. (Stories: US-002; Acceptance: AC-004)
+- FR-005: Two related material findings on consecutive reviewed heads MUST pause serial point repair for a bounded subsystem review of state, authority, sibling paths, production topology, fixtures, and discriminating inversions; unrelated, repeated, or non-material findings MUST NOT trigger it, and the pause MUST NOT create review or repair authority. (Stories: US-002; Acceptance: AC-005)
 
 ## Ambiguities
 No material ambiguities recorded.

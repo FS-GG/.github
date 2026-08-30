@@ -43,3 +43,13 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Purpose: Carry out lifecycle task T008 (done) covering GV-001, PD-001, PD-002.
 - Related: GV-001, PD-001, PD-002
 
+## T009 — Implement requirement FR-005
+- Stage: specify
+- Purpose: Carry out lifecycle task T009 (done) covering AC-005, FR-005, PD-005.
+- Related: AC-005, FR-005, PD-005
+
+## T010 — Record verification evidence VO-002
+- Stage: specify
+- Purpose: Carry out lifecycle task T010 (done) covering PD-005, VO-002.
+- Related: PD-005, VO-002
+

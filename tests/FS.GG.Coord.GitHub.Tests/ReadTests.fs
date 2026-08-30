@@ -20,6 +20,58 @@ let private serving (body: string) =
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
 
 [<Fact>]
+let ``.github#3068 repair predecessor timeline returns only distinct sorted same-repository PRs and pins its request`` () =
+    let requests = ResizeArray<Request>()
+    let body =
+        """[
+          {"event":"cross-referenced","source":{"issue":{"number":11,"pull_request":{},"repository":{"full_name":"fs-gg/.GITHUB"}}}},
+          {"event":"cross-referenced","source":{"issue":{"number":7,"pull_request":{},"repository":{"full_name":"FS-GG/.github"}}}},
+          {"event":"cross-referenced","source":{"issue":{"number":11,"pull_request":{},"repository":{"full_name":"FS-GG/.github"}}}},
+          {"event":"cross-referenced","source":{"issue":{"number":8,"pull_request":{},"repository":{"full_name":"another/repo"}}}},
+          {"event":"cross-referenced","source":{"issue":{"number":9,"repository":{"full_name":"FS-GG/.github"}}}},
+          {"event":"commented","source":{}}
+        ]"""
+    let transport =
+        Fake.Recorder(fun request ->
+            requests.Add request
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+
+    match Reads.crossReferencedPullRequests transport "FS-GG" ".github" 3068 with
+    | Ok actual -> Assert.Equal<int list>([ 7; 11 ], actual)
+    | Error error -> failwith $"the complete timeline must yield its same-repository PR set: %A{error}"
+
+    Assert.Equal(1, requests.Count)
+    Assert.Equal<Request>(
+        { Method = "GET"
+          Path = "repos/FS-GG/.github/issues/3068/timeline"
+          Query = [ "per_page", "100" ]
+          Body = NoBody
+          Budget = Rest
+          IfNoneMatch = None
+          Subject = "FS-GG/.github#3068 cross-referenced pull requests" },
+        requests[0])
+
+[<Fact>]
+let ``.github#3068 a PR-shaped cross-reference without exact repository binding fails closed`` () =
+    let transport =
+        serving
+            """[{"event":"cross-referenced","source":{"issue":{"number":43,"pull_request":{}}}}]"""
+
+    match Reads.crossReferencedPullRequests transport "FS-GG" ".github" 3068 with
+    | Error(Malformed(subject, detail)) ->
+        Assert.Equal("FS-GG/.github#3068 cross-referenced pull requests", subject)
+        Assert.Contains("repository.full_name", detail)
+    | other -> failwith $"an unbound PR cross-reference must not disappear from discovery: %A{other}"
+
+[<Fact>]
+let ``.github#3068 a cross-reference without readable source issue fails closed`` () =
+    let transport = serving """[{"event":"cross-referenced","source":{"type":"issue"}}]"""
+
+    match Reads.crossReferencedPullRequests transport "FS-GG" ".github" 3068 with
+    | Error(Malformed(_, detail)) -> Assert.Contains("source.issue", detail)
+    | other -> failwith $"a malformed cross-reference must not become an empty predecessor set: %A{other}"
+
+[<Fact>]
 let ``#2360 effective base reads the live branch tip not the stale PR base snapshot`` () =
     let staleSnapshot = String.replicate 40 "b"
     let liveTip = String.replicate 40 "c"

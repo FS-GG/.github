@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421
+    digest: 1827421bebdfa8102f97f598e0b4ef136e61f6b2000b62607d4889bcfc12b11b
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b
+    digest: 01ba31627813f65690b5bc5c05c2e2822de82bc564087916117a606cd7b11abf
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: 823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7
+    digest: 299edaf32301ac0137cb56251087175410cd8f2bdec82e56de210d26c10e999b
     schemaVersion: 1
 tasks:
   - id: T001
@@ -108,6 +108,26 @@ tasks:
     sourceIds: [GV-001, PD-001, PD-002]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV008]
+  - id: T009
+    title: Implement requirement FR-005
+    status: done
+    owner: snipe-5bf9
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-002
+    status: done
+    owner: snipe-5bf9
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-005, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

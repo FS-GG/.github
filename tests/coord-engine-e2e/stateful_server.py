@@ -967,7 +967,7 @@ class Handler(BaseHTTPRequestHandler):
             # #3068: #47 deliberately models the real topology: item #47, exhausted PR #43,
             # fresh PR #46. #43/#45 preserve the older lifecycle fixtures while exercising the
             # same typed timeline read.
-            references = {43: [43], 45: [45], 47: [43]}.get(item, [])
+            references = {43: [43], 45: [45], 47: [43, 46]}.get(item, [])
             return self._send(200, [
                 {
                     "event": "cross-referenced",

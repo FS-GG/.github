@@ -882,8 +882,9 @@ curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr/43" >/dev/null
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_fresh_claim_id" >/dev/null
 
 # #3068 regression: production topology does not alias the item and exhausted PR numbers. Item #47
-# cross-references exhausted PR #43 and opens fresh PR #46. Establish only its fresh initial review,
-# then prove live guidance discovers the escalation through the typed timeline/PR reads.
+# cross-references exhausted PR #43 and current fresh PR #46. Establish only its fresh initial review,
+# then prove live guidance excludes the current PR and discovers the predecessor escalation through the
+# typed timeline/PR reads.
 topology_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=fixture-topology-impl lease=120 -->\nheld"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/47/comments" | jq -r '.id')"
@@ -896,14 +897,17 @@ topology_initial_out="$("$ENGINE" review record FS.GG.SDD#47 "$turnover_draft" -
 topology_initial_url="$(printf '%s' "$topology_initial_out" | jq -r '.commentUrl // empty')"
 write_turnover_wait complete "$topology_head:initial-review:0" "$topology_initial_url" "$topology_claim_id"
 "$ENGINE" review wait FS.GG.SDD#47 "$turnover_wait" --pr 46 --worker fixture-topology-impl --json >/dev/null 2>&1; topology_complete_rc=$?
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads" >/dev/null
 topology_projection="$("$ENGINE" review FS.GG.SDD#47 --pr 46 --worker fixture-topology-impl --json 2>&1)"; topology_projection_rc=$?
+topology_reads="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
+topology_current_comment_reads="$(printf '%s' "$topology_reads" | jq '[.paths[] | select(. == "GET /repos/FS-GG/FS.GG.SDD/issues/46/comments")] | length')"
 if [ "$topology_wait_rc" -eq 0 ] && [ "$topology_initial_rc" -eq 0 ] && [ "$topology_complete_rc" -eq 0 ] \
-   && [ "$topology_projection_rc" -eq 0 ] \
+   && [ "$topology_projection_rc" -eq 0 ] && [ "$topology_current_comment_reads" -eq 1 ] \
    && printf '%s' "$topology_projection" | jq -e '.repairAssertionCommand | contains("review assert-repair repair-phase FS-GG/FS.GG.SDD#47")' >/dev/null; then
-  ok ".github#3068: live oracle resolves a separately numbered exhausted PR from the item timeline"
+  ok ".github#3068: live oracle excludes current PR and resolves a separately numbered exhausted predecessor"
 else
   bad ".github#3068: item/PR number aliasing must not be required for repair-purpose guidance" \
-    "wait=$topology_wait_rc initial=$topology_initial_rc:$topology_initial_out complete=$topology_complete_rc projection=$topology_projection_rc:$topology_projection"
+    "wait=$topology_wait_rc initial=$topology_initial_rc:$topology_initial_out complete=$topology_complete_rc projection=$topology_projection_rc:$topology_projection current-pr-comment-reads=$topology_current_comment_reads reads=$topology_reads"
 fi
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$topology_claim_id" >/dev/null
 while IFS= read -r topology_comment_id; do

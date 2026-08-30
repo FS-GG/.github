@@ -11,11 +11,11 @@ sourceAnalysis: readiness/3068-repair-phase-live-assertion-writer/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3068-repair-phase-live-assertion-writer/analysis.json
-    digest: b6b8be50c9e4d6d3dfbc573bfe157a6f2d8954e903c45cdecaf2541f4144458d
+    digest: 50bd5ce1aad03e9842b8ed8e5c75ecd7359f8e0a02d13ff7ce329e173d55fe9e
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: dc443d83b892529313cc08efa0398d263fac82091541096f23abcbef1bd40b0b
+    digest: 01ba31627813f65690b5bc5c05c2e2822de82bc564087916117a606cd7b11abf
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: 823a0f92b1ec2a1550bc6628606861974cba029a26b4fb14b84a9b29b9430bf7
+    digest: 299edaf32301ac0137cb56251087175410cd8f2bdec82e56de210d26c10e999b
     schemaVersion: 1
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: ddb3930fd6dcdf1d45786f1083abadfe59a8d2e75b1ba40f42b5cd06ccf5f421
+    digest: 1827421bebdfa8102f97f598e0b4ef136e61f6b2000b62607d4889bcfc12b11b
     schemaVersion: 1
   - label: tasks
     path: work/3068-repair-phase-live-assertion-writer/tasks.yml
-    digest: 2bf1e27dd22ad087ff94f5d797d10f0a5633303eeac3c35cd9307621d1004438
+    digest: 25f47aee5da79fc6e2c87205cfc091e0e9ed7a53e2e130cacafcf41226905d22
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -243,12 +243,76 @@ evidence:
     synthetic: false
     observedRun:
       source: test-results/3068/repair-assertion-lifecycle.trx
-      digest: "sha256:890cbbf3a0ff54cbff7b1dcd8c60d09fb1417e4f39fce5fc3d55c51fd3c54205"
+      digest: "sha256:be1820bbef26c496a737bdade70273d367d3d7e131965c96ca6bb7f948e315c2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
       failed: 0
       skipped: 0
     notes: [JSON projections assert the exact next action and command.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-005]
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [".agents/skills/pnext-item/references/independent-review.md", ".claude/skills/pnext-item/references/independent-review.md", tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh, tests/skill-quality/review-round-contract.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/3068/repair-predecessor-github.trx
+      digest: "sha256:e110a64448767ddd19225655ef8ad5a06017a4cbd6eaffa6fbcba0f273aa1e4c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 683
+      failed: 0
+      skipped: 0
+    notes: ["Two-related-findings policy, false-positive boundary, timeline siblings, and current-PR exclusion are each independently observable."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
+    clarificationDecisionRefs: []
+    checklistResultRefs: [CR-005]
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV010]
+    artifacts: [tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs, tests/coord-engine-e2e/writes.sh, tests/coord-engine-parity/run.sh, tests/skill-quality/review-round-contract.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/review-round-contract.py
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+      - kind: verification
+        path: tests/coord-engine-parity/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/3068/repair-predecessor-github.trx
+      digest: "sha256:e110a64448767ddd19225655ef8ad5a06017a4cbd6eaffa6fbcba0f273aa1e4c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 683
+      failed: 0
+      skipped: 0
+    notes: ["Contract, foreign-repository, and current-PR inversions red independently; parity is 616/616 and the candidate E2E delta remains one new passing assertion over the matched baseline."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
