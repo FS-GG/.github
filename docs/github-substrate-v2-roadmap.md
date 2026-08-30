@@ -555,6 +555,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   launch inventory through an atomic concurrent observer. This is candidate evidence, not acceptance:
   independent review must bind the exact
   commit and evidence identities before GS2-03.10 can close.
+  **Provisioning update 2026-08-30:** the public
+  [`FS-GG.Coordination.Authority`](https://github.com/FS-GG/FS.GG.Coordination.Authority) repository now
+  exists as repository `1351660651`. Active ruleset `v2-journal-writer` (`21872113`) restricts create/update
+  and bypasses only App `4166418`; active `v2-journal-integrity` (`21872115`) independently rejects
+  deletion/non-fast-forward with no bypass actors. Both use the corrected GitHub fnmatch
+  `refs/heads/fsgg/v2/journal/**/*`. Live rule suite `3875208315` proves a human administrator cannot
+  create a matching ref, and effective-rule readback returns all four rules. The first `/**` target was
+  found by the negative control to match nothing, removed, and replaced before any authority opened.
+  The policy-owner qualification workflow is staged on [`.github` PR 3076](https://github.com/FS-GG/.github/pull/3076)
+  to prove App creation/fast-forward CAS plus stale, rewrite, and deletion rejection without exposing the
+  App private key to the authority repository.
 - [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Build twice in independent clean
   environments and compare package bytes, designate one candidate byte set, verify provenance and SBOM
   predicates separately, publish those identical candidate bytes to every allowed pre-production feed,
@@ -587,8 +598,9 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [ ] **GS2-04.6 — Sharded Git journal adapter.** Perform protected expected-parent commits for claim,
   review, operation, and global cutover aggregates in the dedicated `FS.GG.Coordination.Authority`
   repository. Use `refs/heads/fsgg/v2/journal/<kind>/<shard>`, explicit old-OID
-  `--force-with-lease` receive-pack CAS, and an active `fsgg/v2/journal/**` branch ruleset whose sole
-  bypass actor is the repository-scoped journal App; read back the ruleset and effective branch rules.
+  `--force-with-lease` receive-pack CAS, the split `v2-journal-writer` and `v2-journal-integrity`
+  rulesets targeting `refs/heads/fsgg/v2/journal/**/*`, and a repository-limited journal App token;
+  read back both rulesets and effective branch rules.
   Issue monotonically increasing fencing generations; verify ancestry; create immutable phase anchors;
   detect rewind/deletion/divergence; compact only after a terminal checkpoint; and project state to issues
   without making one fleet-wide normal-operation ref. Custom refs and API-path-scoped bypass claims fail.
@@ -704,9 +716,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 - [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define states including `ObservingV2` and
   `ContractingV1`, legal transitions, manifest binding, ledger/ref/tag layout, ancestry proof, failure
   semantics, caching ceiling, operation-generation fencing, and issue projection.
-- [ ] **GS2-08.2 — Provision ledger protections.** Create the authority repository's branch/tag rulesets,
-  protected `fleet-cutover` environment, repository-scoped App bypass boundary, control issue, effective-rule
-  readback, and tamper/rewind monitoring.
+- [ ] **GS2-08.2 — Complete ledger protections.** Preserve and continuously audit the authority
+  repository's split branch rulesets; add immutable tag rules, the protected `fleet-cutover` environment,
+  a contents-only selected-repository journal App (or explicit security acceptance of the shared App),
+  control issue, effective-rule readback, and tamper/rewind monitoring.
 - [ ] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
   unknown or dynamically discovered write entry points fail the bridge build.
 - [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the

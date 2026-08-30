@@ -1,0 +1,99 @@
+name: GitHub substrate v2 authority qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: app-cas-and-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mint authority-repository-limited writer token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+
+      - name: Exercise journal policy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          AUTHORITY_REPOSITORY: FS-GG/FS.GG.Coordination.Authority
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          probe_dir="$(mktemp -d)"
+          trap 'rm -rf "$probe_dir"' EXIT
+          cd "$probe_dir"
+
+          git init --quiet
+          git config user.name 'fs-gg-cross-repo-dispatch[bot]'
+          git config user.email '297630107+fs-gg-cross-repo-dispatch[bot]@users.noreply.github.com'
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${AUTHORITY_REPOSITORY}.git"
+          git fetch --quiet --depth=1 origin main
+
+          ref="refs/heads/fsgg/v2/journal/qualification/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          base="$(git rev-parse FETCH_HEAD)"
+
+          make_commit() {
+            local parent="$1"
+            local generation="$2"
+            local result="$3"
+            printf '{"generation":%s,"kind":"authority-policy-qualification","result":"%s","run_id":%s,"run_attempt":%s}\n' \
+              "$generation" "$result" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > journal.json
+            git add journal.json
+            local tree
+            tree="$(git write-tree)"
+            printf 'authority qualification generation %s\n' "$generation" \
+              | git commit-tree "$tree" -p "$parent"
+          }
+
+          first="$(make_commit "$base" 1 created)"
+          git push --quiet --force-with-lease="$ref:" origin "$first:$ref"
+
+          second="$(make_commit "$first" 2 advanced)"
+          git push --quiet --force-with-lease="$ref:$first" origin "$second:$ref"
+
+          stale="$(make_commit "$second" 3 stale-candidate)"
+          if git push --quiet --force-with-lease="$ref:$first" origin "$stale:$ref" 2>stale.err; then
+            echo 'stale expected-parent update unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq 'stale info|rejected|failed to push' stale.err
+
+          terminal="$(make_commit "$second" 3 qualified)"
+          git push --quiet --force-with-lease="$ref:$second" origin "$terminal:$ref"
+
+          non_ff="$(make_commit "$base" 4 non-fast-forward-candidate)"
+          if git push --quiet --force-with-lease="$ref:$terminal" origin "+$non_ff:$ref" 2>non-ff.err; then
+            echo 'non-fast-forward update unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq 'rule violations|non-fast-forward|rejected|failed to push' non-ff.err
+
+          if git push --quiet origin ":$ref" 2>delete.err; then
+            echo 'journal deletion unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq 'rule violations|deletion|rejected|failed to push' delete.err
+
+          observed="$(git ls-remote origin "$ref" | awk '{print $1}')"
+          test "$observed" = "$terminal"
+
+          {
+            echo '### Authority policy qualification'
+            echo
+            echo "- Ref: \`$ref\`"
+            echo "- Terminal object: \`$terminal\`"
+            echo '- Authorized create and fast-forward CAS: PASS'
+            echo '- Stale expected-parent update: REJECTED'
+            echo '- Writer-App non-fast-forward update: REJECTED'
+            echo '- Writer-App deletion: REJECTED'
+          } >> "$GITHUB_STEP_SUMMARY"
