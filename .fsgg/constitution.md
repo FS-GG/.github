@@ -39,16 +39,20 @@ incomplete.
 Prefer the plain, idiomatic form: functions over classes, records and discriminated
 unions over hierarchies, simple modules over frameworks, and the standard library
 over clever abstractions. Reach for advanced or metaprogramming features only with
-a justification recorded in the plan. Mutation and loops are allowed where they are
-clearer or measurably necessary; say so in a short comment.
+a justification recorded in the plan. Prefer clear, bounded local mutation and
+loops over incidental recursion. Use recursion when it is semantically meaningful
+to the domain — for example, when expressing recursive data or state-machine
+transitions — and make that meaning apparent in the model or a short comment.
 
-### V. Model–Update–Effect Is the Boundary for State and I/O
+### V. Elmish MVU Is the Default for State Management
 
-Any workflow with multi-step state or external I/O MUST expose or clearly wrap a
-Model–Update–Effect boundary: durable state, explicit messages, requested effects,
-a pure transition, and an edge interpreter that performs the real I/O. Pure
-parsers, data models, and validators need no such ceremony. Keep I/O out of pure
-transitions so behavior stays testable and deterministic.
+Stateful workflows MUST use or clearly wrap an Elmish Model–View–Update boundary by
+default: explicit model state, explicit messages, a pure update transition, a view
+or projection of the current state, and commands or effects interpreted at the
+edge. A different state-management architecture requires a justification recorded
+in the plan. Pure parsers, data models, validators, and other stateless components
+need no such ceremony. Keep I/O out of update transitions so behavior stays
+testable and deterministic.
 
 ### VI. Test Evidence Is Mandatory
 
@@ -106,5 +110,7 @@ Versioning policy:
 - MINOR: new principles or materially expanded obligations.
 - PATCH: clarifications that do not change obligations.
 
-This baseline is unratified. Record your product's ratification once the team has
-reviewed and adopted these principles.
+## Ratification
+
+Ratified on 2026-08-30 following review and adoption of these principles as the
+product's governing engineering contract.
