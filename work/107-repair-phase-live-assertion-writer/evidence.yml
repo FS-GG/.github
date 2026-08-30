@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 107-repair-phase-live-assertion-writer
+stage: evidence
+status: evidenceReady
+sourceSpec: work/107-repair-phase-live-assertion-writer/spec.md
+sourceClarifications: work/107-repair-phase-live-assertion-writer/clarifications.md
+sourceChecklist: work/107-repair-phase-live-assertion-writer/checklist.md
+sourcePlan: work/107-repair-phase-live-assertion-writer/plan.md
+sourceTasks: work/107-repair-phase-live-assertion-writer/tasks.yml
+sourceAnalysis: readiness/107-repair-phase-live-assertion-writer/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/107-repair-phase-live-assertion-writer/analysis.json
+    digest: 38a4b7d2957ab243eb01a4f58d917745497e916976058fb6ed75a468e8f1d352
+    schemaVersion: 1
+  - label: checklist
+    path: work/107-repair-phase-live-assertion-writer/checklist.md
+    digest: e81dd9ca03be0b00e1191365020d9bb88afef8957f5f4df7aa21880055eb59af
+    schemaVersion: 1
+  - label: clarifications
+    path: work/107-repair-phase-live-assertion-writer/clarifications.md
+    digest: 414617cbaa998958ae42cc5c00331b919f28b106aa155c6f56d95c0d0cef89b9
+    schemaVersion: 1
+  - label: plan
+    path: work/107-repair-phase-live-assertion-writer/plan.md
+    digest: 6b783bfe29b179331844d1007d46b1b4408483647b98d95853c68fa974032a69
+    schemaVersion: 1
+  - label: spec
+    path: work/107-repair-phase-live-assertion-writer/spec.md
+    digest: 10b94711f3469ec1dfefe5092c9f22e7936f962dc7eccdf50dc7a05c64557de1
+    schemaVersion: 1
+  - label: tasks
+    path: work/107-repair-phase-live-assertion-writer/tasks.yml
+    digest: 1403517699f5f6387222f352a76f3e74d3394876547c9b56f286eddbbf7f8349
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs, tests/coord-engine-e2e/writes.sh, work/107-repair-phase-live-assertion-writer/baseline-e2e.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Strict codec and production lifecycle cover the typed writer and reader.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Negative controls prove exact-head, and identity binding., exact-review]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Production writer drives the repair-confirmation wait and repair-phase record.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Malformed and duplicate durable authorities fail closed before mutation.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Cli.Kernel/Options.fs, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [CLI help and live command behavior are covered together.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs, tests/coord-engine-e2e/writes.sh, work/107-repair-phase-live-assertion-writer/baseline-e2e.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["Full candidate E2E matches the untouched baseline at 184/190 with only the six documented validator-version refusals; release build and unit tests are green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Versioned marker codec provides an additive fail-closed migration posture.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV008]
+    artifacts: [tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/107/repair-assertion-lifecycle.trx
+      digest: "sha256:0664cf4379e40e5a262c97fa2a932449978b13d9fd6466e0b41ac1c228f998ce"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [JSON projections assert the exact next action and command.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

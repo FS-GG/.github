@@ -53,6 +53,21 @@ module ReviewApplicationTests =
         try ReviewApplication.renderWithWait opts binding facts waitState, stdout.ToString(), stderr.ToString()
         finally Console.SetOut oldOut; Console.SetError oldErr
 
+    let private renderWithWaitAndAssertion binding facts assertion waitState =
+        let opts = Options.parse [ "review"; "FS-GG/.github#2175"; "--pr"; "42"; "--json" ] |> function Ok value -> value | Error error -> failwith error
+        let oldOut, oldErr = Console.Out, Console.Error
+        use stdout = new StringWriter()
+        use stderr = new StringWriter()
+        Console.SetOut stdout
+        Console.SetError stderr
+        try ReviewApplication.renderWithWaitAndRepairAssertion opts binding facts assertion waitState, stdout.ToString(), stderr.ToString()
+        finally Console.SetOut oldOut; Console.SetError oldErr
+
+    let private sameHeadChangesRequired () =
+        StructuredFixtures.movedHeadRepairComments subject head "critic-heron-42"
+        |> List.head
+        |> fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment)
+
     [<Fact>]
     let ``ordinary exhaustion consumers cannot restore a local terminal predicate`` () =
         let readSide = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs"))
@@ -63,6 +78,83 @@ module ReviewApplicationTests =
             Assert.DoesNotContain("Review.isOrdinaryExhaustionTerminal", source)
 
         Assert.Contains("Review.projectOrdinaryExhaustion exhaustionDecision", readSide)
+
+    [<Fact>]
+    let ``repair assertion codec is strict anchored and round trips exact authority`` () =
+        let receipt: Review.RepairAssertionReceipt =
+            { AnsweredReviewUrl = "https://reviews/1"
+              CandidateHeadSha = head
+              GrantedBy = "host-tern-7"
+              Reason = "the delivery-obligation comment was repaired" }
+        let authority: ReviewApplication.RepairAssertionAuthority =
+            { Purpose = ReviewApplication.Confirmation; Receipt = receipt }
+        let body = ReviewApplication.encodeRepairAssertion subject authority
+        Assert.StartsWith(ReviewApplication.RepairAssertionMarker + "\n", body)
+        Assert.Equal(Ok(Some(subject, authority)), ReviewApplication.tryDecodeRepairAssertion body)
+        Assert.Equal(Ok None, ReviewApplication.tryDecodeRepairAssertion ("quoted " + ReviewApplication.RepairAssertionMarker))
+        let malformed = ReviewApplication.RepairAssertionMarker + "\n{\"schema\":\"fsgg.coord.repair-assertion/v1\",\"schema\":\"fsgg.coord.repair-assertion/v1\"}"
+        match ReviewApplication.tryDecodeRepairAssertion malformed with
+        | Error error -> Assert.Contains("duplicate field", error)
+        | other -> failwithf "expected malformed duplicate refusal, got %A" other
+
+    [<Fact>]
+    let ``repair assertion reader refuses wrong subject duplicate and malformed authority`` () =
+        let receipt: Review.RepairAssertionReceipt =
+            { AnsweredReviewUrl = "https://reviews/1"; CandidateHeadSha = head
+              GrantedBy = "host-tern-7"; Reason = "comment repaired" }
+        let authority: ReviewApplication.RepairAssertionAuthority =
+            { Purpose = ReviewApplication.RepairPhaseEntry; Receipt = receipt }
+        let comment id url body = ({ Id = id; Url = url; Body = body }: Driver.ReviewComment)
+        let valid = comment 10L "https://assertions/10" (ReviewApplication.encodeRepairAssertion subject authority)
+        Assert.Equal(Ok(Some authority), ReviewApplication.repairAssertionFromComments subject [ valid ])
+        match ReviewApplication.repairAssertionFromComments subject [ { valid with Body = ReviewApplication.encodeRepairAssertion "FS-GG/.github#999/pr/42" authority } ] with
+        | Error [ error ] -> Assert.Contains("expected", error)
+        | other -> failwithf "expected wrong-subject refusal, got %A" other
+        match ReviewApplication.repairAssertionFromComments subject [ valid; { valid with Id = 11L; Url = "https://assertions/11" } ] with
+        | Error [ error ] -> Assert.Contains("latest-wins", error)
+        | other -> failwithf "expected duplicate refusal, got %A" other
+        let malformed = comment 12L "https://assertions/12" (ReviewApplication.RepairAssertionMarker + "\n{}")
+        match ReviewApplication.repairAssertionFromComments subject [ malformed ] with
+        | Error [ error ] -> Assert.Contains("malformed", error)
+        | other -> failwithf "expected malformed refusal, got %A" other
+
+    [<Fact>]
+    let ``same-head accountable assertion reaches successor wait while stale and self grants do not`` () =
+        let initial = sameHeadChangesRequired ()
+        let binding: Review.Binding =
+            { ItemRef = "FS-GG/.github#2175"; Pr = 42; HeadSha = head
+              ClaimGeneration = "fixture-claim"; ImplementerIdentity = "worker-1"
+              Phase = Review.Ordinary; Round = 1 }
+        let facts: Review.Facts =
+            { Comments = [ initial ]; Checks = Types.PrPending; RepairPhaseGranted = None
+              RepairRouteAvailable = true; DiffAuditTrusted = None }
+        let wait: ReviewWait.WaitReceipt =
+            { Item = binding.ItemRef; ClaimGeneration = binding.ClaimGeneration
+              ReviewGeneration = ReviewWait.generationToken head ReviewWait.RepairConfirmation 1
+              Kind = ReviewWait.RepairConfirmation
+              EnteredAt = DateTimeOffset.Parse "2026-08-30T00:00:00Z"
+              ExpiresAt = DateTimeOffset.Parse "2026-08-30T04:00:00Z"
+              EvidenceRef = "https://reviews/queue" }
+        let assertion grantedBy candidateHead reviewUrl: Review.RepairAssertionReceipt =
+            { AnsweredReviewUrl = reviewUrl; CandidateHeadSha = candidateHead
+              GrantedBy = grantedBy; Reason = "comment-shaped repair" }
+
+        let code, output, error =
+            renderWithWaitAndAssertion binding facts (Some(assertion "host-tern-7" head initial.Url)) (ReviewWait.Waiting wait)
+        Assert.Equal(0, code)
+        Assert.Contains("\"action\":\"dispatchSuccessor\"", output)
+        Assert.Contains("\"nextCommand\":\"scripts/fsgg-coord review wait enter", output)
+        Assert.Empty error
+
+        for refused in
+            [ assertion "worker-1" head initial.Url
+              assertion "critic-heron-42" head initial.Url
+              assertion "host-tern-7" (String.replicate 40 "b") initial.Url
+              assertion "host-tern-7" head "https://reviews/wrong" ] do
+            let refusedCode, refusedOutput, _ =
+                renderWithWaitAndAssertion binding facts (Some refused) (ReviewWait.Waiting wait)
+            Assert.NotEqual(0, refusedCode)
+            Assert.Contains("\"verdict\":\"noVerdict\"", refusedOutput)
 
     [<Fact>]
     let empty_thread_dispatches_critic () =
