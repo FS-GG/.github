@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-30** — **workspace initialization releases published and fully reconciled**
+  (github; [source PR #3071](https://github.com/FS-GG/.github/pull/3071),
+  [coherent-set release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.76.0)):
+  `FS.GG.NewSddWorkspace` 0.11.0 and the coherent Kit/Drivers/Coord set 0.76.0 are served by
+  GitHub Packages and nuget.org from exact source `a4e3ccb93fc983c950409526b125fe03ab9c106a`.
+  NewSddWorkspace publisher 33308717626 completed both pushes. Coherent prepare run 33308722808
+  packed once; initial publishers 33308836487/33308836373/33308837375 persisted the bounded
+  nuget.org indexing wait; exact-source recoveries 33309250174/33309251146/33309252197 observed
+  the immutable packages without repacking or duplicate pushes; promotion 33309339542 verified both
+  registries and sealed content
+  `sha256:1ec17f089d763a36272541229a66d56e551cecbc2132a2cf2e6e8a09120acaa5`.
+
 - **2026-08-30** — **workspace initialization source release prepared: `new-sdd-workspace`
   0.11.0 and coordination coherent set `github:0.76.0`** (github): the interactive workspace
   wizard now asks only for product and target, selects the stable rendering/Standard-SDD defaults,
