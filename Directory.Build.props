@@ -480,8 +480,14 @@
        unread-versus-undeclared state. Protocol.fs has zero commits across the span; package identities,
        commands, flags, schemas, exits, and public members remain unchanged. Typed SDD P5 stays deferred
        until OperatingV2 and no provider/receiver default changes in this cut. -->
+  <!-- 0.75.5 -> 0.76.0: MINOR on the stable 0.x line. FS.GG.Kit adds the
+       initialize-sdd-workspace skill as a new materialized member. It guides a freshly scaffolded
+       repository through deferred local and optional GitHub configuration and clears the scaffold's
+       pending initialization marker. Existing kit members, destinations, engine commands, flags,
+       schemas, exits, and public members remain unchanged. Drivers and Coord.Cli advance with the
+       coherent scalar; their payload behavior is otherwise unchanged. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.75.5</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.76.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

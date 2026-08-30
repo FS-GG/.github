@@ -566,6 +566,9 @@ outside-fabric: []
 # a generator, guarded by a regeneration gate, and authored by nobody. This block is now purely
 # authored — a row here is a decision, and reserving it means something again.
 kit:
+  # Bootstrap handoff written by new-sdd-workspace before repository-specific facts exist. Keeping it
+  # in the kit also means a later coordination retrofit refreshes the same skill from one authority.
+  - { id: initialize-sdd-workspace, kind: skill, source: .claude/skills/initialize-sdd-workspace }
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work }
   # Command skills — the two driver skills over the protocol the three items above define.

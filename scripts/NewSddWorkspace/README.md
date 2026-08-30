@@ -30,12 +30,13 @@ new-sdd-workspace ./Portal Portal --template web
 new-sdd-workspace ./Interop Interop --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
 ```
 
-Run it with **no arguments** on an interactive terminal and it walks you through the meaningful
-parameters with prompts (product → target → application type → lifecycle → provider-specific parameters → governance → descriptor ref → currency →
-this workspace's repo / coordination org / board / chore-locks, defaulting to FS-GG).
-The wizard follows the established defaults without asking redundant confirmations: coordination is
-on and an immediate post-scaffold `fsgg-sdd upgrade` is off. Scripted callers can still opt out with
-`--no-coordination` or intentionally request reconciliation with `--upgrade`.
+Run it with **no arguments** on an interactive terminal and it asks only for the two facts that are
+always available at creation time: product name and target directory. It creates the stable default
+(`rendering` + Standard SDD + light governance), leaves GitHub coordination unset, and installs
+`$initialize-sdd-workspace` for the agent you open inside the new repository. That skill discovers
+the real local/provider state and asks about repository, board, access, collaborators, chore locks,
+or package configuration only when the selected setup actually needs them. Scripted callers retain
+all explicit flags for advanced providers and automation.
 Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
@@ -83,17 +84,23 @@ effective-writer read. Its recorded `--verified-base-permission READ
 --verified-exclusive-writers …` resume command rechecks the observable facts and
 converges only when the human-observed exclusive writer set matches the allowlist.
 
-### Coordination by default (ADR-0019)
+### Initialization before coordination
 
-By default, **step 5 wires the workspace to a coordination board** so `/pnext-item` and `/check-board`
-work out of the box: it vendors the coordination kit (the four coordination skills into `.claude`,
+The no-argument wizard does not guess a repository or attach every new product to
+`FS-GG/Coordination`. It writes `.fsgg/workspace-initialization.json` with `status: pending`, installs
+the initialize skill into both agent roots, and adds a conditional warning to `AGENTS.md` and
+`CLAUDE.md`. The first agent entering the repository should run `$initialize-sdd-workspace`;
+local-only is a complete supported result, while users who select GitHub coordination are guided
+through the existing `retrofit` and `secure` commands with real repository context available.
+
+Explicit CLI invocations retain their compatible default: **step 5 wires the workspace to a
+coordination board** so `/pnext-item` and `/check-board` work out of the box. It vendors the
+coordination kit (the coordination skills into `.claude`,
 `.agents` skill root byte-identical, the `fsgg-coord` shim, and the `fs.gg.coord.cli`
 tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the descriptor) and writes
 `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (and `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
 `.claude/settings.json` `env`. The board defaults to **FS-GG/Coordination**; `--board` retargets it and
-`--no-coordination` skips the step. The **no-arg wizard** does not reconfirm this default; it asks only
-for the wiring values — this workspace's repo, org, board title, and chore-locks — with Enter-through
-giving FS-GG/Coordination, and the repo's owner defaulting the board-org prompt. This opens the product-mirror slice ADR-0019 §Consequences deferred
+`--no-coordination` skips the step. This opens the product-mirror slice ADR-0019 §Consequences deferred
 (distribution had been framework-repos-only); the engine is env-multi-tenant, so any board works (#1140).
 
 Best-effort and non-blocking, like the governance overlay: a kit file that fails to fetch warns and the
@@ -116,7 +123,7 @@ new-sdd-workspace retrofit ./MyApp --board acme/Roadmap --repo acme/MyApp --chor
 
 It is **idempotent** and never leaves partial state:
 
-- it vendors the same kit as the scaffold step (the four coordination skills into `.claude`/`.agents`/
+- it vendors the same kit as the scaffold step (the coordination skills into `.claude`/`.agents`/
   `.agents` byte-identical, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest merged into any
   existing `.config/dotnet-tools.json`) and writes `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT`
   (+ `FSGG_COORD_CHORE_LOCKS`) merged into `.claude/settings.json` — **but writes each piece only if it
@@ -165,6 +172,7 @@ It orchestrates the commands that already exist, and reports each step's outcome
 5. **coordination wiring** — vendor the coordination kit + write the `FSGG_COORD_*` env (default on; `--no-coordination` skips) — *non-blocking; best-effort*
 6. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
 7. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
+8. **initialization handoff** — install the embedded initialize skill, pending marker, and conditional agent warning after all overlays have written — *fatal on failure*
 
 ### Governance overlay & feeds
 

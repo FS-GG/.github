@@ -1,25 +1,9 @@
 open NewSddWorkspace.Program
 
-let defaults =
-    assembleWizardOptions
-        "./Pong"
-        "Pong"
-        "rendering"
-        "sdd"
-        "main"
-        true
-        false
-        (Some "game")
-        None
-        None
-        None
-        "FS-GG/Pong"
-        "FS-GG"
-        "Coordination"
-        None
+let defaults = assembleWizardOptions "./Pong" "Pong"
 
-if not defaults.Coordinate then
-    failwith "the wizard must keep default-on coordination"
+if defaults.Coordinate then
+    failwith "the wizard must defer coordination until repository initialization"
 
 if defaults.Upgrade then
     failwith "the wizard must not silently select the explicit --upgrade behavior"
@@ -27,38 +11,18 @@ if defaults.Upgrade then
 if defaults.Lifecycle <> "sdd" then
     failwith "the wizard must preserve Standard SDD as the P4 default"
 
-if defaults.WorkspaceRepo <> Some "FS-GG/Pong"
+if defaults.Template <> "rendering"
+   || defaults.Profile <> None
+   || defaults.NpmPackage <> None
+   || defaults.NpmVersion <> None
+   || defaults.BindingTarget <> None then
+    failwith "the wizard must select the dependency-free rendering default"
+
+if defaults.WorkspaceRepo <> None
    || defaults.BoardOwner <> "FS-GG"
    || defaults.BoardTitle <> "Coordination"
    || defaults.ChoreLocks <> None then
-    failwith "the wizard did not preserve its default coordination assembly"
-
-let nonDefaultWiring =
-    assembleWizardOptions
-        "./Product.X"
-        "Product.X"
-        "rendering"
-        "typed-sdd"
-        "release/v1"
-        false
-        true
-        (Some "app")
-        None
-        None
-        None
-        "acme/Product.X"
-        "acme"
-        "Roadmap"
-        (Some "acme/Product.X#5")
-
-if not nonDefaultWiring.Coordinate
-   || nonDefaultWiring.Upgrade
-   || nonDefaultWiring.Lifecycle <> "typed-sdd"
-   || nonDefaultWiring.WorkspaceRepo <> Some "acme/Product.X"
-   || nonDefaultWiring.BoardOwner <> "acme"
-   || nonDefaultWiring.BoardTitle <> "Roadmap"
-   || nonDefaultWiring.ChoreLocks <> Some "acme/Product.X#5" then
-    failwith "the wizard did not preserve explicit non-default coordination values"
+    failwith "the wizard must not manufacture repository-specific configuration"
 
 let recoveryTarget = System.IO.Path.GetFullPath("./workspace with 'quote")
 let recovery = securityResumeCommand "./workspace with 'quote" [ "--repo"; "acme/app" ]

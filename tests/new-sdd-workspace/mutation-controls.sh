@@ -59,8 +59,8 @@ expect_red() {
 
 expect_red \
   "wrong-default mutation is detected and restored" \
-  'Lifecycle = "sdd"' \
-  'Lifecycle = "typed-sdd"' \
+  $'Product = product\n              Template = "rendering"\n              Lifecycle = "sdd"' \
+  $'Product = product\n              Template = "rendering"\n              Lifecycle = "typed-sdd"' \
   'FAIL  omitted lifecycle forwards the Standard SDD default' \
   "$WORK/wrong-default.log"
 

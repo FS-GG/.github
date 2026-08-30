@@ -55,6 +55,13 @@
     "negative": "Coordinate a dependency that spans two repositories.",
     "boundary": "Show the safe lanes in this repository without claiming them."
   },
+  "initialize-sdd-workspace": {
+    "positive": "Initialize this newly scaffolded SDD workspace before we start feature work.",
+    "indirect": "This repository says setup is pending; verify it locally and guide me through what remains.",
+    "incomplete": "Finish setting up this new workspace",
+    "negative": "Create a new workspace in a target directory.",
+    "boundary": "Initialize it for local work, but do not create or mutate any GitHub resources."
+  },
   "lane-steward": {
     "positive": "Propose narrower Paths declarations so this full board exposes more lanes.",
     "indirect": "Workers report nothing schedulable even though several independent items are open.",
