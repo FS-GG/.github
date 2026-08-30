@@ -31,7 +31,7 @@ architecture and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.5 accepted; GS2-01.9 not applicable; GS2-03.6 next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.6 accepted; GS2-01.9 not applicable; GS2-03.7 next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -499,9 +499,20 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   clean-checkout SDD projection with all 24 tracked observations verified, six reproducible temporal
   transition-removal counterexamples with retained Quint/ITF/trace/manifest/receipt digests, and
   runner-calibrated hosted elapsed budgets. All findings closed without exception.
-- [ ] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
+- [x] **GS2-03.6 — Add fault injection.** Fail before and after every external step; lose responses;
   duplicate/reorder events; return partial pages; exhaust rate budgets; revoke permission; mutate concurrent
   revisions; and require convergence or typed refusal.
+  **Accepted 2026-08-30:** protected-main merge
+  [`df8e7d29`](https://github.com/FS-GG/FS.GG.Coordination/commit/df8e7d290c9990087ada6c2cd62e859db976f0ee),
+  exact-merge [Bootstrap qualification run 33287672800](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33287672800),
+  and [push CodeQL run 33287672761](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33287672761)
+  accepted exact candidate `5b5b1fd82a47e1bc14dcc9c94b72307c61c76b6d`. The fresh
+  [successor pass](https://github.com/FS-GG/FS.GG.Coordination/pull/101#issuecomment-5466125131) and
+  [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/101#issuecomment-5466191671) bind
+  15 deterministic executions across the source-derived Inspect, Plan, Apply, and Verify boundary: 11
+  converge and four return accepted typed refusals. Seven subject-defect and nine artifact inversions fire;
+  independent final-state comparison rejects duplicate and reorder corruption even when their trace labels
+  are restored to the healthy labels. All findings closed without exception.
 - [ ] **GS2-03.7 — Add reproducibility and supply-chain checks.** Pack once, compare bytes, generate SBOM
   and attestations, publish candidate artifacts to the allowed pre-production channel, and install them in
   clean consumers.
