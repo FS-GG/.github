@@ -97,6 +97,10 @@ module Identity =
     /// is for making a NEW worker, and reading the old one would defeat the point.
     val mint: unit -> string
 
+    /// True only for an already-resolved canonical id in the exact shape emitted by `mint`:
+    /// one word from the shared mint table, `-`, and four lowercase hexadecimal digits.
+    val isMintedWorkerId: id: string -> bool
+
     /// The `whoami` report: the id, the session, and the rule that fired — the last because an id nobody
     /// can explain is one nobody can trust.
     ///

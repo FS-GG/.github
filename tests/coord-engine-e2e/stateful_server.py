@@ -121,7 +121,13 @@ def comments_for(n):
     # by the test itself. Every other issue gets a current fixture decision up front.
     if n in ISSUES and n != 42:
         raw = [route_receipt_comment(n)] + raw
-    return [dict(comment, html_url=comment.get("html_url", f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{comment['id']}")) for comment in raw]
+    return [dict(
+        comment,
+        html_url=comment.get("html_url", f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{comment['id']}"),
+        user=comment.get("user", {"login": "fixture"}),
+        created_at=comment.get("created_at", comment.get("updated_at", "2026-01-01T00:00:00Z")),
+        updated_at=comment.get("updated_at", comment.get("created_at", "2026-01-01T00:00:00Z")),
+    ) for comment in raw]
 
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
@@ -679,7 +685,10 @@ class Handler(BaseHTTPRequestHandler):
                 cid = NEXT_COMMENT_ID[0]
                 NEXT_COMMENT_ID[0] += 1
                 html_url = f"https://github.com/{owner_of(n)}/{repo_of(n)}/pull/{n}#issuecomment-{cid}"
-                COMMENTS.setdefault(n, []).append({"id": cid, "html_url": html_url, "body": stored_body, "updated_at": now_iso()})
+                timestamp = now_iso()
+                COMMENTS.setdefault(n, []).append({"id": cid, "html_url": html_url, "body": stored_body,
+                                                    "user": {"login": "fixture"},
+                                                    "created_at": timestamp, "updated_at": timestamp})
             if lose_response or drop_incumbent or mismatch:
                 return self._send(503, {"message": "fixture: replacement stored but POST response lost"})
             return self._send(201, {"id": cid, "html_url": html_url, "body": body, "updated_at": now_iso()})
@@ -782,6 +791,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._meter()
         path = self.path.split("?", 1)[0]
+
+        if path.rstrip("/") == "/user":
+            return self._send(200, {"login": "fixture"})
 
         # THE FIXTURE'S OWN INSTRUMENTATION, not a GitHub route — hence the `_fixture/` prefix, which no
         # real endpoint can collide with. It reports what the engine SPENT, so a leg can assert a read that
@@ -967,7 +979,7 @@ class Handler(BaseHTTPRequestHandler):
             # #3068: #47 deliberately models the real topology: item #47, exhausted PR #43,
             # fresh PR #46. #43/#45 preserve the older lifecycle fixtures while exercising the
             # same typed timeline read.
-            references = {43: [43], 45: [45], 47: [43, 46]}.get(item, [])
+            references = {43: [43], 45: [45], 47: [3067, 43, 46], 3068: [3067, 3069]}.get(item, [])
             return self._send(200, [
                 {
                     "event": "cross-referenced",
@@ -1059,18 +1071,18 @@ class Handler(BaseHTTPRequestHandler):
                 "fsgg.coord.review-decision/v2" in comment.get("body", "")
                 for comment in COMMENTS.get(pr, [])
             )
-            head_sha = "d" * 40 if pr == 43 else ("f" * 40 if pr == 44 else ("b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40))
-            issue_number = 50 if pr in (502, 503) else (43 if pr == 44 else 44)
+            head_sha = "e" * 40 if pr == 3069 else ("d" * 40 if pr == 43 else ("f" * 40 if pr == 44 else ("b" * 40 if pr == 42 and structured_reviews >= 3 else "a" * 40)))
+            issue_number = 3068 if pr in (3067, 3069) else (50 if pr in (502, 503) else (43 if pr == 44 else 44))
             response = {
                 "number": pr,
-                "head": {"ref": ("item/43-repair-phase" if pr == 44 else f"item/{issue_number}-the-work"), "sha": head_sha},
+                "head": {"ref": ("item/3068-repair-phase-live-assertion-writer" if pr == 3069 else ("item/107-repair-phase-live-assertion-writer" if pr == 3067 else ("item/43-repair-phase" if pr == 44 else f"item/{issue_number}-the-work"))), "sha": head_sha},
                 "base": {"ref": "main", "sha": "9" * 40},
             }
-            if pr in (43, 44, 45, 46):
+            if pr in (43, 44, 45, 46, 3067, 3069):
                 response.update({
                     "mergeable": True,
                     "mergeable_state": "unstable",
-                    "state": "closed" if pr in CLOSED_PRS else "open",
+                    "state": "closed" if pr == 3067 or pr in CLOSED_PRS else "open",
                     "merged": False,
                 })
             return self._send(200, response)
@@ -1103,6 +1115,18 @@ class Handler(BaseHTTPRequestHandler):
                     "check_suite_id": 2865,
                 }]
                 return self._send(200, {"total_count": 1, "workflow_runs": runs})
+            if head_sha == "e" * 40:
+                runs = [{
+                    "path": ".github/workflows/coherence.yml",
+                    "event": "pull_request",
+                    "head_branch": "item/3068-repair-phase-live-assertion-writer",
+                    "pull_requests": [{"number": 3069}],
+                    "run_number": 3069,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "check_suite_id": 3069,
+                }]
+                return self._send(200, {"total_count": 1, "workflow_runs": runs})
             return self._send(500, {"message": "fixture: workflow runs unreadable outside pass-red subject"})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/commits/([0-9a-f]+)/check-runs$", path)
@@ -1110,6 +1134,8 @@ class Handler(BaseHTTPRequestHandler):
             if m.group(1) == "d" * 40:
                 return self._send(200, {"total_count": 0, "check_runs": []})
             if m.group(1) == "f" * 40:
+                return self._send(200, {"total_count": 0, "check_runs": []})
+            if m.group(1) == "e" * 40:
                 return self._send(200, {"total_count": 0, "check_runs": []})
             return self._send(500, {"message": "fixture: check runs unreadable outside pass-red subject"})
 

@@ -78,6 +78,65 @@ module ReviewApplicationTests =
         |> List.head
         |> fun (id, url, body) -> ({ Id = id; Url = url; Body = body }: Driver.ReviewComment)
 
+    let private answeredDecision () : ReviewApplication.AnsweredDecisionKey =
+        { Subject = subject
+          DecisionId = 981L
+          DecisionUrl = "https://reviews/981"
+          DecisionBodySha256 = String.replicate 64 "b"
+          HeadSha = head
+          Critic = "critic-7"
+          Kind = "initial"
+          Round = 0
+          Verdict = "changes-required" }
+
+    [<Fact>]
+    let ``#3068 host grant is deterministic canonical UTF8 LF authority`` () =
+        let first = ReviewApplication.createReviewHostGrant (answeredDecision ()) "avocet-8ae8"
+        let second = ReviewApplication.createReviewHostGrant (answeredDecision ()) "avocet-8ae8"
+        Assert.Equal(first, second)
+        Assert.Matches("^[0-9a-f]{64}$", first.HostGrantDigest)
+        let body = ReviewApplication.encodeReviewHostGrant first
+        Assert.StartsWith(ReviewApplication.ReviewHostGrantMarker + "\n{", body)
+        Assert.EndsWith("}\n", body)
+        Assert.Equal(Ok(Some first), ReviewApplication.tryDecodeReviewHostGrant body)
+        Assert.Equal(Ok None, ReviewApplication.tryDecodeReviewHostGrant ("quoted " + ReviewApplication.ReviewHostGrantMarker))
+
+    [<Fact>]
+    let ``#3068 invalid edited and wrong-author host grant noise cannot revoke valid authority`` () =
+        let grant = ReviewApplication.createReviewHostGrant (answeredDecision ()) "avocet-8ae8"
+        let at = DateTimeOffset.Parse "2026-08-30T08:00:00Z"
+        let comment id body author created updated : ReviewApplication.ReviewHostGrantComment =
+            { Id = id; Url = $"https://comments/%d{id}"; Body = body; Author = author
+              CreatedAt = created; UpdatedAt = updated }
+        let valid = comment 1L (ReviewApplication.encodeReviewHostGrant grant) "fixture" at at
+        let wrongDigest =
+            (ReviewApplication.encodeReviewHostGrant grant).Replace(
+                grant.HostGrantDigest,
+                String.replicate 64 "0",
+                StringComparison.Ordinal)
+        let noise =
+            [ comment 2L wrongDigest "fixture" at at
+              comment 3L (ReviewApplication.encodeReviewHostGrant grant) "intruder" at at
+              comment 4L (ReviewApplication.encodeReviewHostGrant grant) "fixture" at (at.AddSeconds 1.0)
+              comment 5L (ReviewApplication.ReviewHostGrantMarker + "\n{}\n") "fixture" at at ]
+        let retained = ReviewApplication.reviewHostGrantsFromComments "fixture" (valid :: noise)
+        Assert.Single(retained) |> ignore
+        Assert.Equal(grant, retained.Head)
+        Assert.Empty(ReviewApplication.reviewHostGrantsFromComments "fixture" noise)
+
+    [<Fact>]
+    let ``#3068 independent hosts coexist while byte-identical duplicates collapse per logical grant`` () =
+        let at = DateTimeOffset.Parse "2026-08-30T08:00:00Z"
+        let one = ReviewApplication.createReviewHostGrant (answeredDecision ()) "avocet-8ae8"
+        let two = ReviewApplication.createReviewHostGrant (answeredDecision ()) "finch-0001"
+        let physical grant id : ReviewApplication.ReviewHostGrantComment =
+            { Id = id; Url = $"https://comments/%d{id}"; Body = ReviewApplication.encodeReviewHostGrant grant
+              Author = "fixture"; CreatedAt = at; UpdatedAt = at }
+        let grants = ReviewApplication.reviewHostGrantsFromComments "fixture" [ physical one 1L; physical one 2L; physical two 3L ]
+        Assert.Equal(2, grants.Length)
+        Assert.Contains(one, grants)
+        Assert.Contains(two, grants)
+
     [<Fact>]
     let ``ordinary exhaustion consumers cannot restore a local terminal predicate`` () =
         let readSide = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs"))
@@ -95,14 +154,17 @@ module ReviewApplicationTests =
             { AnsweredReviewUrl = "https://reviews/1"
               CandidateHeadSha = head
               GrantedBy = "host-tern-7"
-              Reason = "the delivery-obligation comment was repaired" }
+              Reason = "review-host-grant:" + String.replicate 64 "c" }
         let authority: ReviewApplication.RepairAssertionAuthority =
-            { Purpose = ReviewApplication.Confirmation; Receipt = receipt }
+            { Purpose = ReviewApplication.Confirmation
+              HostGrantDigest = String.replicate 64 "c"
+              PredecessorProvenance = "none"
+              Receipt = receipt }
         let body = ReviewApplication.encodeRepairAssertion subject authority
         Assert.StartsWith(ReviewApplication.RepairAssertionMarker + "\n", body)
         Assert.Equal(Ok(Some(subject, authority)), ReviewApplication.tryDecodeRepairAssertion body)
         Assert.Equal(Ok None, ReviewApplication.tryDecodeRepairAssertion ("quoted " + ReviewApplication.RepairAssertionMarker))
-        let malformed = ReviewApplication.RepairAssertionMarker + "\n{\"schema\":\"fsgg.coord.repair-assertion/v1\",\"schema\":\"fsgg.coord.repair-assertion/v1\"}"
+        let malformed = ReviewApplication.RepairAssertionMarker + "\n{\"schema\":\"fsgg.coord.repair-assertion/v1\",\"schema\":\"fsgg.coord.repair-assertion/v1\"}\n"
         match ReviewApplication.tryDecodeRepairAssertion malformed with
         | Error error -> Assert.Contains("duplicate field", error)
         | other -> failwithf "expected malformed duplicate refusal, got %A" other
@@ -111,9 +173,12 @@ module ReviewApplicationTests =
     let ``repair assertion reader refuses wrong subject duplicate and malformed authority`` () =
         let receipt: Review.RepairAssertionReceipt =
             { AnsweredReviewUrl = "https://reviews/1"; CandidateHeadSha = head
-              GrantedBy = "host-tern-7"; Reason = "comment repaired" }
+              GrantedBy = "host-tern-7"; Reason = "review-host-grant:" + String.replicate 64 "c" }
         let authority: ReviewApplication.RepairAssertionAuthority =
-            { Purpose = ReviewApplication.RepairPhaseEntry; Receipt = receipt }
+            { Purpose = ReviewApplication.RepairPhaseEntry
+              HostGrantDigest = String.replicate 64 "c"
+              PredecessorProvenance = "pr:41:sha256:" + String.replicate 64 "d"
+              Receipt = receipt }
         let comment id url body = ({ Id = id; Url = url; Body = body }: Driver.ReviewComment)
         let valid = comment 10L "https://assertions/10" (ReviewApplication.encodeRepairAssertion subject authority)
         Assert.Equal(Ok(Some authority), ReviewApplication.repairAssertionFromComments subject [ valid ])
@@ -167,7 +232,7 @@ module ReviewApplicationTests =
             Assert.Contains("\"verdict\":\"noVerdict\"", refusedOutput)
 
     [<Fact>]
-    let ``live repair entry oracle emits purpose-bearing writer command`` () =
+    let ``live repair entry oracle emits host-owned grant producer with no caller authority fields`` () =
         let initial = sameHeadChangesRequired ()
         let binding: Review.Binding =
             { ItemRef = "FS-GG/.github#2175"; Pr = 42; HeadSha = head
@@ -186,7 +251,9 @@ module ReviewApplicationTests =
         let code, output, error =
             renderLiveWithRepairPurpose binding facts (ReviewWait.Completed(wait, initial.Url)) true
         Assert.Equal(0, code)
-        Assert.Contains("review assert-repair repair-phase FS-GG/.github#2175", output)
+        Assert.Contains("review host-grant FS-GG/.github#2175 --pr 42 --json", output)
+        Assert.DoesNotContain("repair-phase", output)
+        Assert.DoesNotContain("accountable-reason", output)
         Assert.Empty error
 
     [<Fact>]

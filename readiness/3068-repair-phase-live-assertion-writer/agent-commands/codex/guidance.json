@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "d597ad384c2d974a326329709b6836d877062a762bb72447937bfba1653edc29"
+        "value": "499e8c6627ea9418feb5287c8d4b7e8d533a55815f9eae4db4188e471174f079"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,7 +19,7 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "262032a390e0c91d66cefdbc10519d8c0a56192490d33d523c9e7b466c56888e"
+    "value": "ff309d65eea2355b96ba212eb715ac6f6a5680ae4456aaf79b35b0f7fb117e6d"
   },
   "commands": [
     {
@@ -59,9 +59,10 @@
       "id": "T004",
       "title": "Implement requirement FR-004",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T004 (done) covering AC-004, FR-004, PD-004.",
+      "purpose": "Carry out lifecycle task T004 (done) covering AC-004, AC-005, FR-004, PD-004.",
       "relatedIds": [
         "AC-004",
+        "AC-005",
         "FR-004",
         "PD-004"
       ]
@@ -70,24 +71,26 @@
       "id": "T005",
       "title": "Update contract surface PC-001",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T005 (done) covering PC-001, PD-001, PD-004.",
+      "purpose": "Carry out lifecycle task T005 (done) covering PC-001, PD-001, PD-004, PD-005.",
       "relatedIds": [
         "PC-001",
         "PD-001",
-        "PD-004"
+        "PD-004",
+        "PD-005"
       ]
     },
     {
       "id": "T006",
       "title": "Record verification evidence VO-001",
       "stage": "specify",
-      "purpose": "Carry out lifecycle task T006 (done) covering PC-001, PD-001, PD-002, PD-003, PD-004, VO-001.",
+      "purpose": "Carry out lifecycle task T006 (done) covering PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001.",
       "relatedIds": [
         "PC-001",
         "PD-001",
         "PD-002",
         "PD-003",
         "PD-004",
+        "PD-005",
         "VO-001"
       ]
     },
@@ -111,6 +114,23 @@
         "PD-001",
         "PD-002"
       ]
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-005",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T009 (done) covering AC-006, AC-007, AC-008, AC-009, AC-010, AC-011, DEC-001, FR-005, PD-005.",
+      "relatedIds": [
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "DEC-001",
+        "FR-005",
+        "PD-005"
+      ]
     }
   ],
   "skills": [
@@ -133,24 +153,26 @@
     {
       "id": "fsharp",
       "title": "fsharp",
-      "capability": "Required by tasks: T001, T002, T003, T004, T005.",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T009.",
       "relatedIds": [
         "T001",
         "T002",
         "T003",
         "T004",
-        "T005"
+        "T005",
+        "T009"
       ]
     },
     {
       "id": "implementation",
       "title": "implementation",
-      "capability": "Required by tasks: T001, T002, T003, T004.",
+      "capability": "Required by tasks: T001, T002, T003, T004, T009.",
       "relatedIds": [
         "T001",
         "T002",
         "T003",
-        "T004"
+        "T004",
+        "T009"
       ]
     },
     {

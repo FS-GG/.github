@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229
+    digest: 4f7b7cfae55e90e532053e550a0bcb80f6537768a704b72f6976632e414324f9
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
-    digest: b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a
+    digest: ffac4e8d1a600af548440a73fbb7d5097da205654dfad57a24d947c5fb23c381
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: 2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c
+    digest: 419adea4a9d1f0b0293cde059379f8cec5a241c759ee001119981bcfbe4814a4
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9
+    digest: 010f204046fb1beb1d67dd5b7ca3eb1cc94ced670d11d9cc0e966ec05b8f3d5a
     schemaVersion: 1
 tasks:
   - id: T001
@@ -61,11 +61,11 @@ tasks:
   - id: T004
     title: Implement requirement FR-004
     status: done
-    owner: snipe-5bf9
+    owner: avocet-8ae8
     dependencies: []
     requirements: [FR-004]
     decisions: []
-    sourceIds: [AC-004, FR-004, PD-004]
+    sourceIds: [AC-004, AC-005, FR-004, PD-004]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV004]
   - id: T005
@@ -75,17 +75,17 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PD-001, PD-004]
+    sourceIds: [PC-001, PD-001, PD-004, PD-005]
     requiredSkills: [fsharp]
     requiredEvidence: [EV005]
   - id: T006
     title: Record verification evidence VO-001
     status: done
-    owner: snipe-5bf9
+    owner: avocet-8ae8
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001]
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV006]
   - id: T007
@@ -108,6 +108,16 @@ tasks:
     sourceIds: [GV-001, PD-001, PD-002]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV008]
+  - id: T009
+    title: Implement requirement FR-005
+    status: done
+    owner: avocet-8ae8
+    dependencies: []
+    requirements: [FR-005]
+    decisions: [DEC-001]
+    sourceIds: [AC-006, AC-007, AC-008, AC-009, AC-010, AC-011, DEC-001, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

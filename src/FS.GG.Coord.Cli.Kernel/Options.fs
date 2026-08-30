@@ -338,7 +338,8 @@ DECISION (pure — no board, no network):
   review --snapshot FILE [--json|--text]     inspect a supplied review-protocol snapshot without IO
   review record REF draft.json --pr N [--json]
                                              seal and append the next structured v2 review decision
-  review assert-repair [repair-phase] REF REVIEW-URL REASON --pr N [--json]
+  review host-grant REF --pr N [--json]
+  review assert-repair REF --pr N [--json]
                                              append one accountable same-head repair assertion, deriving
                                              the PR head and grantor identity from live authority
   review wait enter REF --pr N [--json]       derive and append the one critic-queue entry authorized by

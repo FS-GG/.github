@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3068-repair-phase-live-assertion-writer/ship.json",
-      "digest": "sha256:cab46ec24e8c14a0c42a3d3c603afd81bc787854456d58ca5a0e7723f001ef17",
+      "digest": "sha256:41ab6328b3de59e9eb731c03d4e79dacbb4361701a7cba5f0b137088b908776c",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3068-repair-phase-live-assertion-writer/verify.json",
-      "digest": "sha256:6ce216270efe4c246a00e7379ba56cb01c24f0f0c96d03ae13a68d847213719f",
+      "digest": "sha256:d742fa9130e9dac5d7e8e31ee3fc0618c2e7bf198056fa8e216bb591d666ea1f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3068-repair-phase-live-assertion-writer/work-model.json",
-      "digest": "sha256:d597ad384c2d974a326329709b6836d877062a762bb72447937bfba1653edc29",
+      "digest": "sha256:499e8c6627ea9418feb5287c8d4b7e8d533a55815f9eae4db4188e471174f079",
       "schemaVersion": 1
     }
   ],
@@ -63,6 +63,11 @@
         "rationale": null
       },
       {
+        "id": "evidence:EV009",
+        "state": "real",
+        "rationale": null
+      },
+      {
         "id": "task:T001",
         "state": "real",
         "rationale": null
@@ -101,6 +106,11 @@
         "id": "task:T008",
         "state": "real",
         "rationale": null
+      },
+      {
+        "id": "task:T009",
+        "state": "real",
+        "rationale": null
       }
     ],
     "dependencies": [
@@ -135,6 +145,10 @@
       {
         "dependent": "evidence:EV008",
         "dependency": "task:T008"
+      },
+      {
+        "dependent": "evidence:EV009",
+        "dependency": "task:T009"
       },
       {
         "dependent": "task:T001",
@@ -183,6 +197,10 @@
       {
         "dependent": "task:T008",
         "dependency": "task:T001"
+      },
+      {
+        "dependent": "task:T009",
+        "dependency": "evidence:EV009"
       }
     ]
   },

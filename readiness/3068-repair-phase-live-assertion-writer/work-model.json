@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c"
+        "value": "419adea4a9d1f0b0293cde059379f8cec5a241c759ee001119981bcfbe4814a4"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a"
+        "value": "ffac4e8d1a600af548440a73fbb7d5097da205654dfad57a24d947c5fb23c381"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c976930ec75b79c7636acbcc0d4cd5a7864a9f7abbaf2cc5d0abd73ac0dd84bf"
+        "value": "032abb04b8824d45ffcdefa597d6e6e5427843117bab91fa02d4dc344de9a9a9"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9"
+        "value": "789ce67b1fe3f695df93accbb78b9f4cffaff4bc76072bc7b5d8ce40abd5bded"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229"
+        "value": "4f7b7cfae55e90e532053e550a0bcb80f6537768a704b72f6976632e414324f9"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "340422a98bbdcc2151c20f2a46fbfd8dbe0c156f4514078a86eb739e67a85307"
+        "value": "a25822f04107dc8c93e302e29753881dc7f0ea8b629d04cdf32deca5a9b542dd"
       }
     }
   ],
@@ -137,7 +137,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 36,
+        "line": 43,
         "column": 1
       },
       "linkedTaskIds": [
@@ -158,7 +158,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 37,
+        "line": 44,
         "column": 1
       },
       "linkedTaskIds": [
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, malformed, and wrong-purpose assertions without selecting a latest-wins fallback; refusal MUST occur before any append-only assertion or wait mutation. (Stories: US-002; Acceptance: AC-003)",
-      "text": "The writer and reader MUST reject stale, wrong-subject, self-granted, critic-granted, duplicate, malformed, and wrong-purpose assertions without selecting a latest-wins fallback; refusal MUST occur before any append-only assertion or wait mutation. (Stories: US-002; Acceptance: AC-003)",
+      "title": "The writer and reader MUST classify stale, wrong-subject/head/review/purpose, self-granted, current-critic-granted, malformed, old-schema, and unrelated assertion records independently as non-authorizing audit noise. Invalid records MUST NOT poison exact current facts or any valid grant. Exact duplicate physical posts collapse; multiple independently eligible exact grants form a monotone set, and wait eligibility is existential over that set. Comment order, latest-wins, absence, malformed noise, and caller-selected values MUST NOT select authority. (Stories: US-002; Acceptance: AC-003)",
+      "text": "The writer and reader MUST classify stale, wrong-subject/head/review/purpose, self-granted, current-critic-granted, malformed, old-schema, and unrelated assertion records independently as non-authorizing audit noise. Invalid records MUST NOT poison exact current facts or any valid grant. Exact duplicate physical posts collapse; multiple independently eligible exact grants form a monotone set, and wait eligibility is existential over that set. Comment order, latest-wins, absence, malformed noise, and caller-selected values MUST NOT select authority. (Stories: US-002; Acceptance: AC-003)",
       "acceptanceCriteria": [
         "AC-003"
       ],
@@ -179,7 +179,7 @@
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 38,
+        "line": 45,
         "column": 1
       },
       "linkedTaskIds": [
@@ -191,16 +191,17 @@
     },
     {
       "id": "FR-004",
-      "title": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. Caller syntax MAY assert the expected purpose but MUST NOT select a different immutable semantic route. (Stories: US-002; Acceptance: AC-004)",
-      "text": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings, by resolving a unique exhausted predecessor from typed item cross-references and its review ledger rather than requiring hand-authored authority or item/PR number equality. Caller syntax MAY assert the expected purpose but MUST NOT select a different immutable semantic route. (Stories: US-002; Acceptance: AC-004)",
+      "title": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings; caller syntax MUST NOT accept or select purpose. Derivation MUST first establish whether the current transition requires exhausted-predecessor authority, MUST keep current-PR authority fail-closed, and only then resolve a unique selected exhausted predecessor from typed item cross-references and its review ledger. A predecessor ledger is marker-bearing only when the existing codec recognizes exactly one canonical unquoted marker at the start of the comment body; substring, quote, code-fence, indentation, or later-line occurrences MUST NOT select authority. Irrelevant historical PRs and invalid assertion noise MUST NOT poison an exact-head current transition, while malformed evidence on the selected current/exhausted predecessor MUST fail closed. (Stories: US-002; Acceptance: AC-004, AC-005)",
+      "text": "The CLI contract, live oracle, and live writer MUST derive the exact authorized purpose and next command from the same live state, including all required bindings; caller syntax MUST NOT accept or select purpose. Derivation MUST first establish whether the current transition requires exhausted-predecessor authority, MUST keep current-PR authority fail-closed, and only then resolve a unique selected exhausted predecessor from typed item cross-references and its review ledger. A predecessor ledger is marker-bearing only when the existing codec recognizes exactly one canonical unquoted marker at the start of the comment body; substring, quote, code-fence, indentation, or later-line occurrences MUST NOT select authority. Irrelevant historical PRs and invalid assertion noise MUST NOT poison an exact-head current transition, while malformed evidence on the selected current/exhausted predecessor MUST fail closed. (Stories: US-002; Acceptance: AC-004, AC-005)",
       "acceptanceCriteria": [
-        "AC-004"
+        "AC-004",
+        "AC-005"
       ],
       "priority": null,
       "classification": [],
       "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
       "sourceLocation": {
-        "line": 39,
+        "line": 46,
         "column": 1
       },
       "linkedTaskIds": [
@@ -209,9 +210,60 @@
       "linkedEvidenceIds": [
         "EV004"
       ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Add append-only \u0060fsgg.coord.review-host-grant/v1\u0060 over immutable \u0060AnsweredDecisionKey\u0060, \u0060grantedBy\u0060, \u0060env-minted/v1\u0060, and deterministic canonical digest. Kernel \u0060Identity\u0060 MUST export \u0060isMintedWorkerId\u0060 beside \u0060mint\u0060, reusing the private word table and accepting an already-canonical resolved id exactly \u0060\u003Cknown-word\u003E-\u003Cfour lowercase hex\u003E\u0060. Commands apply it to \u0060Worker.Id\u0060 after normal \u0060slug\u0060; raw \u0060FSGG_WORKER\u0060 spellings that normalize to the same canonical id are intentionally equivalent and are not raw-string validated. Canonical resolved ids not matching the grammar\u2014including \u0060root\u0060, \u0060host\u0060, \u0060system\u0060, role labels, unknown words and wrong suffixes\u2014are non-worker for these commands. Producer admission MUST be the conjunction of parsed \u0060opts.Worker=None\u0060, \u0060Identity.resolve None\u0060 provenance exactly \u0060FromEnv \u0022FSGG_WORKER\u0022\u0060, and minted canonical id. \u0060opts.Worker.IsSome\u0060 refuses before identity use/comment mutation even though \u0060resolve None\u0060 would still return an admissible env identity. Reachable after-command flags are tested; before-command flags are pinned as actual parser unknown/non-routable for both engine and wrapper. Every session/shared/absent/non-minted source refuses. Freshness/uniqueness/non-spoofing remains cooperative. (covers AC-006, AC-007, AC-008, AC-009, AC-010, AC-011)",
+      "text": "Add append-only \u0060fsgg.coord.review-host-grant/v1\u0060 over immutable \u0060AnsweredDecisionKey\u0060, \u0060grantedBy\u0060, \u0060env-minted/v1\u0060, and deterministic canonical digest. Kernel \u0060Identity\u0060 MUST export \u0060isMintedWorkerId\u0060 beside \u0060mint\u0060, reusing the private word table and accepting an already-canonical resolved id exactly \u0060\u003Cknown-word\u003E-\u003Cfour lowercase hex\u003E\u0060. Commands apply it to \u0060Worker.Id\u0060 after normal \u0060slug\u0060; raw \u0060FSGG_WORKER\u0060 spellings that normalize to the same canonical id are intentionally equivalent and are not raw-string validated. Canonical resolved ids not matching the grammar\u2014including \u0060root\u0060, \u0060host\u0060, \u0060system\u0060, role labels, unknown words and wrong suffixes\u2014are non-worker for these commands. Producer admission MUST be the conjunction of parsed \u0060opts.Worker=None\u0060, \u0060Identity.resolve None\u0060 provenance exactly \u0060FromEnv \u0022FSGG_WORKER\u0022\u0060, and minted canonical id. \u0060opts.Worker.IsSome\u0060 refuses before identity use/comment mutation even though \u0060resolve None\u0060 would still return an admissible env identity. Reachable after-command flags are tested; before-command flags are pinned as actual parser unknown/non-routable for both engine and wrapper. Every session/shared/absent/non-minted source refuses. Freshness/uniqueness/non-spoofing remains cooperative. (covers AC-006, AC-007, AC-008, AC-009, AC-010, AC-011)",
+      "acceptanceCriteria": [
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3068-repair-phase-live-assertion-writer/spec.md",
+      "sourceLocation": {
+        "line": 47,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ],
+      "linkedEvidenceIds": [
+        "EV009"
+      ]
     }
   ],
-  "decisions": [],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Implement the additive receipt and Kernel minted predicate over resolved canonical id. Keep parsed \u0060opts.Worker\u0060 separate from identity provenance and require None before both comment producers. Same-key duplicates collapse, invalid bytes cannot poison, and downstream stays unchanged.",
+      "decision": "Implement the additive receipt and Kernel minted predicate over resolved canonical id. Keep parsed \u0060opts.Worker\u0060 separate from identity provenance and require None before both comment producers. Same-key duplicates collapse, invalid bytes cannot poison, and downstream stays unchanged.",
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011"
+      ],
+      "source": "work/3068-repair-phase-live-assertion-writer/clarifications.md",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ]
+    }
+  ],
   "tasks": [
     {
       "id": "T001",
@@ -301,7 +353,7 @@
       "id": "T004",
       "title": "Implement requirement FR-004",
       "status": "done",
-      "owner": "snipe-5bf9",
+      "owner": "avocet-8ae8",
       "dependencies": [],
       "requirements": [
         "FR-004"
@@ -309,6 +361,7 @@
       "decisions": [],
       "sourceIds": [
         "AC-004",
+        "AC-005",
         "FR-004",
         "PD-004"
       ],
@@ -338,7 +391,8 @@
       "sourceIds": [
         "PC-001",
         "PD-001",
-        "PD-004"
+        "PD-004",
+        "PD-005"
       ],
       "requiredSkills": [
         "fsharp"
@@ -356,7 +410,7 @@
       "id": "T006",
       "title": "Record verification evidence VO-001",
       "status": "done",
-      "owner": "snipe-5bf9",
+      "owner": "avocet-8ae8",
       "dependencies": [
         "T001"
       ],
@@ -368,6 +422,7 @@
         "PD-002",
         "PD-003",
         "PD-004",
+        "PD-005",
         "VO-001"
       ],
       "requiredSkills": [
@@ -433,6 +488,42 @@
       "source": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
       "sourceLocation": {
         "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "avocet-8ae8",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "DEC-001",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
         "column": 1
       }
     }
@@ -644,6 +735,39 @@
         "line": 8,
         "column": 1
       }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Cli.Kernel/Identity.fs",
+        "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs",
+        "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs",
+        "src/FS.GG.Coord.GitHub/Reads.fs",
+        "tests/FS.GG.Coord.Cli.Kernel.Tests/IdentityTests.fs",
+        "tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs",
+        "tests/coord-engine-e2e/stateful_server.py",
+        "tests/coord-engine-e2e/writes.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
     }
   ],
   "generatedViews": [
@@ -684,7 +808,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c"
+            "value": "419adea4a9d1f0b0293cde059379f8cec5a241c759ee001119981bcfbe4814a4"
           },
           "schemaVersion": 1
         },
@@ -692,7 +816,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a"
+            "value": "ffac4e8d1a600af548440a73fbb7d5097da205654dfad57a24d947c5fb23c381"
           },
           "schemaVersion": 1
         },
@@ -700,7 +824,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c976930ec75b79c7636acbcc0d4cd5a7864a9f7abbaf2cc5d0abd73ac0dd84bf"
+            "value": "032abb04b8824d45ffcdefa597d6e6e5427843117bab91fa02d4dc344de9a9a9"
           },
           "schemaVersion": 1
         },
@@ -708,7 +832,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9"
+            "value": "789ce67b1fe3f695df93accbb78b9f4cffaff4bc76072bc7b5d8ce40abd5bded"
           },
           "schemaVersion": 1
         },
@@ -716,7 +840,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229"
+            "value": "4f7b7cfae55e90e532053e550a0bcb80f6537768a704b72f6976632e414324f9"
           },
           "schemaVersion": 1
         },
@@ -724,14 +848,14 @@
           "path": "work/3068-repair-phase-live-assertion-writer/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "340422a98bbdcc2151c20f2a46fbfd8dbe0c156f4514078a86eb739e67a85307"
+            "value": "a25822f04107dc8c93e302e29753881dc7f0ea8b629d04cdf32deca5a9b542dd"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "88615704a76399ff7493ae54f375c9c2f83ed2f5fe04b96862e45bf018b10a36"
+        "value": "93d36a994b8cceca975394d7c02ca797f618b6264a0eb9d21048f405d9d6ee93"
       },
       "currency": "current"
     }

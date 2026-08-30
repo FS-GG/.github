@@ -20,18 +20,18 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 
 ## T004 — Implement requirement FR-004
 - Stage: specify
-- Purpose: Carry out lifecycle task T004 (done) covering AC-004, FR-004, PD-004.
-- Related: AC-004, FR-004, PD-004
+- Purpose: Carry out lifecycle task T004 (done) covering AC-004, AC-005, FR-004, PD-004.
+- Related: AC-004, AC-005, FR-004, PD-004
 
 ## T005 — Update contract surface PC-001
 - Stage: specify
-- Purpose: Carry out lifecycle task T005 (done) covering PC-001, PD-001, PD-004.
-- Related: PC-001, PD-001, PD-004
+- Purpose: Carry out lifecycle task T005 (done) covering PC-001, PD-001, PD-004, PD-005.
+- Related: PC-001, PD-001, PD-004, PD-005
 
 ## T006 — Record verification evidence VO-001
 - Stage: specify
-- Purpose: Carry out lifecycle task T006 (done) covering PC-001, PD-001, PD-002, PD-003, PD-004, VO-001.
-- Related: PC-001, PD-001, PD-002, PD-003, PD-004, VO-001
+- Purpose: Carry out lifecycle task T006 (done) covering PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001.
+- Related: PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001
 
 ## T007 — Handle migration posture PM-001
 - Stage: specify
@@ -42,4 +42,9 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Stage: specify
 - Purpose: Carry out lifecycle task T008 (done) covering GV-001, PD-001, PD-002.
 - Related: GV-001, PD-001, PD-002
+
+## T009 — Implement requirement FR-005
+- Stage: specify
+- Purpose: Carry out lifecycle task T009 (done) covering AC-006, AC-007, AC-008, AC-009, AC-010, AC-011, DEC-001, FR-005, PD-005.
+- Related: AC-006, AC-007, AC-008, AC-009, AC-010, AC-011, DEC-001, FR-005, PD-005
 

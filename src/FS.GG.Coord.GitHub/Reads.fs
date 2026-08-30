@@ -726,6 +726,14 @@ module Reads =
     type CommentBody =
         { Id: int64; Url: string; Body: string }
 
+    type AuthorityComment =
+        { Id: int64
+          Url: string
+          Body: string
+          Author: string
+          CreatedAt: DateTimeOffset
+          UpdatedAt: DateTimeOffset }
+
     // Pull requests in this repository that GitHub durably cross-referenced from an item. The timeline
     // endpoint is paginated by the transport; a cross-reference that says it is a PR but cannot name
     // its number/repository fails closed instead of disappearing from repair-route discovery.
@@ -815,6 +823,61 @@ module Reads =
                         (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
                         (Ok [])
                     |> Result.map List.rev
+
+    let commentsWithAuthority (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
+        let subject = $"%s{owner}/%s{repo}#%d{number} authority comments"
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    document.RootElement.EnumerateArray()
+                    |> Seq.map (fun comment ->
+                        let author =
+                            match comment.TryGetProperty "user" with
+                            | true, user when user.ValueKind = JsonValueKind.Object -> str user "login"
+                            | _ -> None
+                        match comment.TryGetProperty "id", str comment "html_url", str comment "body", author,
+                              str comment "created_at", str comment "updated_at" with
+                        | (true, id), Some url, Some body, Some login, Some created, Some updated
+                            when id.ValueKind = JsonValueKind.Number ->
+                            match DateTimeOffset.TryParse created, DateTimeOffset.TryParse updated with
+                            | (true, createdAt), (true, updatedAt) ->
+                                Ok { Id = id.GetInt64(); Url = url; Body = body; Author = login
+                                     CreatedAt = createdAt; UpdatedAt = updatedAt }
+                            | _ -> Error(Malformed(subject, "a comment has unreadable created_at or updated_at"))
+                        | _ -> Error(Malformed(subject, "a comment has no readable id, html_url, body, user.login, created_at, and updated_at")))
+                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Result.map List.rev
+
+    let authenticatedLogin (transport: IGitHubTransport) =
+        let subject = "authenticated GitHub actor"
+        let request =
+            { Method = "GET"; Path = "user"; Query = []; Body = NoBody; Budget = Rest
+              IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                match str document.RootElement "login" with
+                | Some login when not (String.IsNullOrWhiteSpace login) -> Ok login
+                | _ -> Error(Malformed(subject, "the response has no readable login"))
 
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"

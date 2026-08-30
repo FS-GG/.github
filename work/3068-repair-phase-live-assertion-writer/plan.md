@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/3068-repair-phase-live-assertion-writer/spec.md sha256:f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229 schemaVersion:1
-- clarifications: work/3068-repair-phase-live-assertion-writer/clarifications.md sha256:b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a schemaVersion:1
-- checklist: work/3068-repair-phase-live-assertion-writer/checklist.md sha256:2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c schemaVersion:1
+- spec: work/3068-repair-phase-live-assertion-writer/spec.md sha256:4f7b7cfae55e90e532053e550a0bcb80f6537768a704b72f6976632e414324f9 schemaVersion:1
+- clarifications: work/3068-repair-phase-live-assertion-writer/clarifications.md sha256:ffac4e8d1a600af548440a73fbb7d5097da205654dfad57a24d947c5fb23c381 schemaVersion:1
+- checklist: work/3068-repair-phase-live-assertion-writer/checklist.md sha256:419adea4a9d1f0b0293cde059379f8cec5a241c759ee001119981bcfbe4814a4 schemaVersion:1
 
 ## Plan Scope
 - Work item 3068-repair-phase-live-assertion-writer is planned from the current specification, clarification, and checklist facts.
@@ -27,22 +27,26 @@ Prose status: planned
 - Checklist result count: 4.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Add a host-owned `review assert-repair` live command that derives PR and current review facts, validates the supplied accountable grantor and reason, and appends one canonical comment-shaped assertion through the typed GitHub adapter.
-- PD-002 [AC-002] [FR-002] complete: Parse the assertion in the live review snapshot and pass it into every `Review.inspect` call used by inspect, wait-enter, and review-record; preserve the pure reducer as the sole transition authority.
-- PD-003 [AC-003] [FR-003] complete: Reject malformed or duplicate markers at read time and reject stale review/head/PR, implementer/current-critic grantors, and either direction of caller-purpose mismatch before any append, with Lifecycle and black-box shell E2E inversion cases for each boundary and explicit zero assertion/wait mutation proof.
-- PD-004 [AC-004] [FR-004] complete: Share one live predecessor/purpose derivation between inspect and the writer, render its executable purpose-bearing `review assert-repair` command, and treat caller syntax only as an assertion that must match the derived purpose; fail closed on unreadable, malformed, ambiguous, or mismatched predecessor evidence before immutable authority is written.
+- PD-001 [AC-001] [FR-001] in-progress: Add host-owned `review host-grant` and derived `review assert-repair` live commands that append canonical comment projections through the typed GitHub adapter without downstream mutation.
+- PD-002 [AC-002] [FR-002] in-progress: Parse the assertion in the live review snapshot and pass it into every `Review.inspect` call used by inspect, wait-enter, and review-record; preserve the pure reducer as the sole transition authority.
+- PD-003 [AC-003] [FR-003] done: Classify malformed, duplicate, stale review/head/PR, implementer/current-critic, wrong-derived-field, and old-schema projections independently; invalid projections remain audit noise while exact eligible duplicates collapse, with Lifecycle and black-box E2E inversion cases proving zero unauthorized assertion/wait mutation and no poisoning of later valid authority.
+- PD-004 [AC-004] [AC-005] [FR-004] done: Make predecessor discovery a state-driven, provenance-bearing dependency: parse and classify the exact current PR first; read predecessor topology only when the derived transition requires repair-entry authority; exclude the current PR explicitly; and fail closed on an unreadable, malformed, ambiguous, or mismatched selected exhausted predecessor. Share the total purpose/round/evidence derivation with writer and reader and render an executable command with no caller-purpose input.
+- PD-005 [AC-006] [AC-007] [AC-008] [AC-009] [AC-010] [AC-011] [FR-005] done: Export Kernel minted predicate over resolved canonical id; accept raw spellings that normalize equivalently. Model/parser keep `opts.Worker` independent: both producers require None plus FromEnv plus minted id. Pin wrapper+engine before-command nonroute and after-command parsed refusal. Preserve per-host non-poisoning/existential semantics and downstream.
 
 ## Contract Impact
-- PC-001 [PD-001] [PD-004] command report: `fsgg-coord review assert-repair [repair-phase] REF REVIEW-URL REASON --pr N --json` is a new additive command; successful output derives the grantor from the caller identity and binds the canonical comment URL plus exact review/head/purpose facts.
+- PC-001 [PD-001] [PD-004] [PD-005] command report: `review host-grant REF --pr N --json` derives exact immutable decision and env-minted self identity; host-owned `review assert-repair REF --pr N --json` consumes only that identity's receipt and separately derives live transition. Neither accepts caller semantic authority. Existing downstream contracts are unchanged.
+
+## Planned Touch-Set Extension
+- Kernel identity grammar requires only `src/FS.GG.Coord.Cli.Kernel/Identity.fs`, `src/FS.GG.Coord.Cli.Kernel/Identity.fsi`, and `tests/FS.GG.Coord.Cli.Kernel.Tests/IdentityTests.fs` beyond the existing route. Typed `widen` was attempted under `snipe-5bf9` and correctly refused because the 120-minute claim expired during architecture review. These paths MUST be added by typed widen and route revision after a fresh claim and before any source edit; issue-body hand editing is forbidden.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PC-001] semanticTest: Run the full Lifecycle unit suite and engine E2E, including exhaustion-to-acceptance production-route coverage, a distinct item/exhausted-PR/current-PR topology, literal emitted-command execution, explicit stale/wrong/self/duplicate/malformed inversions, and black-box wrong-purpose controls in both directions that prove zero assertion and wait mutation.
+- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PD-005] [PC-001] semanticTest: Model parsed Option<Id> separately from resolved source/id. With valid env identity plus Some option, grant/assertion invocations refuse and post counts stay zero. Use actual engine/wrapper black-box for before/after flag placement. Retain baseline-first one-field behavioral controls without redundant full-record equality, noise monotonicity, host survival and zero downstream mutation. EV009 is sealed by the production-equivalent Lifecycle TRX and black-box E2E evidence.
 
 ## Performance Intent
 No performance intent is declared for this work item.
 
 ## Migration Posture
-- PM-001 [PC-001] additive: Existing review commands and ledgers remain readable; the assertion is a new append-only marker and no compatibility-only event gains authority.
+- PM-001 [PC-001] additive-before-release: Add `review-host-grant/v1` and replace only the unshipped caller-selectable assertion shape. Existing claim heartbeat, `review-wait/v1`, `review-decision/v2`, succession, terminal event-file, host-acceptance, and concurrency contracts remain byte-for-byte unchanged. Legacy decisions require a real backward-linked receipt or fresh review.
 
 ## Generated View Impact
 - GV-001 [PD-001] [PD-002] workModel: SDD readiness views refresh from the authored package; runtime state remains GitHub comment authority and is never generated from SDD prose.

@@ -54,6 +54,43 @@ module IdentityTests =
             System.Environment.SetEnvironmentVariable(key, saved)
 
     [<Fact>]
+    let ``#3068 every freshly minted worker id satisfies the public mint grammar`` () =
+        for _ in 1..256 do
+            Assert.True(Identity.mint () |> Identity.isMintedWorkerId)
+
+    [<Theory>]
+    [<InlineData("finch-0000")>]
+    [<InlineData("avocet-8ae8")>]
+    [<InlineData("plover-ffff")>]
+    let ``#3068 canonical ids from the mint vocabulary are admitted`` id =
+        Assert.True(Identity.isMintedWorkerId id)
+
+    [<Theory>]
+    [<InlineData("")>]
+    [<InlineData("root")>]
+    [<InlineData("host")>]
+    [<InlineData("system")>]
+    [<InlineData("review-host")>]
+    [<InlineData("unknown-1234")>]
+    [<InlineData("finch-123")>]
+    [<InlineData("finch-12345")>]
+    [<InlineData("finch-12g4")>]
+    [<InlineData("FINCH-ABCD")>]
+    [<InlineData("finch_abcd")>]
+    let ``#3068 non-minted or noncanonical ids are refused`` id =
+        Assert.False(Identity.isMintedWorkerId id)
+
+    [<Fact>]
+    let ``#3068 raw env spelling may normalize to the same canonical minted authority`` () =
+        withWorkerEnv (Some "FINCH-ABCD") (fun () ->
+            match Identity.resolve None with
+            | Ok worker ->
+                Assert.Equal("finch-abcd", worker.Id)
+                Assert.Equal(Identity.FromEnv "FSGG_WORKER", worker.Provenance)
+                Assert.True(Identity.isMintedWorkerId worker.Id)
+            | Error message -> failwith message)
+
+    [<Fact>]
     let ``#1070 an id that slugs to NOTHING is REFUSED, not resolved to the empty id`` () =
         // The regression: Ok, exit 0, empty id, no warning. An empty id is one every caller whose input
         // annihilates SHARES — the exact fan-out collapse rule 4 refuses to invent.

@@ -11,27 +11,27 @@ sourceAnalysis: readiness/3068-repair-phase-live-assertion-writer/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3068-repair-phase-live-assertion-writer/analysis.json
-    digest: 4401caaa625f7d3b6502c93821bcca2938986770d066fd9058a8f8e9c4b7883d
+    digest: 23ddbf33df1f86a6a61f0e22d61979e365c08b23f7047167c3ce1c84dd5dc138
     schemaVersion: 1
   - label: checklist
     path: work/3068-repair-phase-live-assertion-writer/checklist.md
-    digest: 2a8c39de6dcd1a392177550baa64b81157b4a3b60cc13b38fc3f6b8747c8937c
+    digest: 419adea4a9d1f0b0293cde059379f8cec5a241c759ee001119981bcfbe4814a4
     schemaVersion: 1
   - label: clarifications
     path: work/3068-repair-phase-live-assertion-writer/clarifications.md
-    digest: b2301022480cdf69c79e9d73099876b691207faef5688763496c08f3fea7bb7a
+    digest: ffac4e8d1a600af548440a73fbb7d5097da205654dfad57a24d947c5fb23c381
     schemaVersion: 1
   - label: plan
     path: work/3068-repair-phase-live-assertion-writer/plan.md
-    digest: c384d83a8246ff37ba9aced14ec5ca03baa59e94656ee9b89f2fd999681198d9
+    digest: 789ce67b1fe3f695df93accbb78b9f4cffaff4bc76072bc7b5d8ce40abd5bded
     schemaVersion: 1
   - label: spec
     path: work/3068-repair-phase-live-assertion-writer/spec.md
-    digest: f7dc0eed94e7261f36961b3c223997a556ea2d616d6e3945967fc9a198961229
+    digest: 4f7b7cfae55e90e532053e550a0bcb80f6537768a704b72f6976632e414324f9
     schemaVersion: 1
   - label: tasks
     path: work/3068-repair-phase-live-assertion-writer/tasks.yml
-    digest: 340422a98bbdcc2151c20f2a46fbfd8dbe0c156f4514078a86eb739e67a85307
+    digest: a25822f04107dc8c93e302e29753881dc7f0ea8b629d04cdf32deca5a9b542dd
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -53,11 +53,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [Strict codec and production lifecycle cover the typed writer and reader.]
@@ -80,11 +80,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [Negative controls prove exact-head, and identity binding., exact-review]
@@ -107,11 +107,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: ["Production writer derives immutable purpose from live topology; both wrong-purpose directions refuse before assertion or wait mutation."]
@@ -134,11 +134,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [Malformed, ambiguous-predecessor, and caller-purpose mismatches fail closed before immutable authority is appended., duplicate]
@@ -161,11 +161,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [CLI help and live command behavior are covered together.]
@@ -188,14 +188,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
-    notes: ["Full candidate E2E is 187/193: exactly three new assertions (non-aliased topology plus both zero-mutation wrong-purpose inversions) pass beyond the untouched baseline's 184/190, with the same six documented validator-version refusals; exact log sha256 is f807931a4f86b76855418eeaa0866bc9ad4eee642afc499468177fe231e5c728; release build, Lifecycle 141/141, GitHub 683/683, parity 616/616, and contract tests are green."]
+    notes: ["Full candidate E2E is 189/195, adding five passing #3068 assertions beyond the untouched baseline's 184/190 with the identical six documented #2133 validator-version refusals; exact log sha256 is 1f5be7d5e1ded969687976d9194e2752737260d5624a49d3b7b01c3dc07c2d08; release build, Kernel 198/198, Lifecycle 144/144, GitHub 683/683, parity 616/616, and contract tests are green."]
   - id: EV007
     kind: verification
     subject:
@@ -215,11 +215,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [Versioned marker codec provides an additive fail-closed migration posture.]
@@ -242,13 +242,42 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: test-results/3068/repair-purpose-lifecycle-exact.trx
-      digest: "sha256:a407e0065fe7878f7787f84234cc2c5ae44755b35074efc04032ec624e7e6561"
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 144
       failed: 0
       skipped: 0
     notes: [JSON projections assert the exact next action and command.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: [DEC-001]
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Cli.Kernel/Identity.fs, src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs, src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs, src/FS.GG.Coord.GitHub/Reads.fs, tests/FS.GG.Coord.Cli.Kernel.Tests/IdentityTests.fs, tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs, tests/coord-engine-e2e/stateful_server.py, tests/coord-engine-e2e/writes.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/ReviewApplicationTests.fs
+      - kind: verification
+        path: tests/coord-engine-e2e/writes.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: test-results/3068/review-host-grant-rev20.trx
+      digest: "sha256:e2a3f9e6b6d58122b96f3b16c4af32b93a3dcb3be313662d4882c3b3b903c182"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 144
+      failed: 0
+      skipped: 0
+    notes: ["Production-equivalent evidence covers deterministic host-grant encoding, FromEnv minted identity admission, caller --worker refusal, exact decision/head/critic/round bindings, invalid-noise monotonicity, independent grant survival, literal command following, and zero downstream mutation by both new producers."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

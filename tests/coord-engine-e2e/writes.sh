@@ -378,12 +378,11 @@ review_wrong_purpose_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SD
 review_wrong_purpose_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 review_wrong_purpose_wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
 if [ "$review_wrong_purpose_rc" -ne 0 ] \
-   && [[ "$review_wrong_purpose_out" == *"requires purpose=confirmation"* ]] \
    && [ "$review_wrong_purpose_before" = "$review_wrong_purpose_after" ] \
    && [ "$review_wrong_purpose_wait_before" = "$review_wrong_purpose_wait_after" ]; then
-  ok "#3068 repair-phase purpose is refused before assertion/wait append in ordinary confirmation topology"
+  ok "#3068 removed caller-selected purpose/review/reason surface is refused with zero mutation"
 else
-  bad "#3068 caller purpose must not select immutable ordinary-confirmation authority" "rc=$review_wrong_purpose_rc:$review_wrong_purpose_out comments=$review_wrong_purpose_before->$review_wrong_purpose_after waits=$review_wrong_purpose_wait_before->$review_wrong_purpose_wait_after"
+  bad "#3068 caller fields must not select immutable ordinary-confirmation authority" "rc=$review_wrong_purpose_rc:$review_wrong_purpose_out comments=$review_wrong_purpose_before->$review_wrong_purpose_after waits=$review_wrong_purpose_wait_before->$review_wrong_purpose_wait_after"
 fi
 # Legacy callers may use arbitrary generation names. A name that merely starts like a canonical token
 # is still legacy: the canonical grammar is whole-string, not a substring classifier. This is the
@@ -898,9 +897,9 @@ curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/close-pr/43" >/dev/null
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$turnover_fresh_claim_id" >/dev/null
 
 # #3068 regression: production topology does not alias the item and exhausted PR numbers. Item #47
-# cross-references exhausted PR #43 and current fresh PR #46. Establish only its fresh initial review,
-# then prove live guidance excludes the current PR and discovers the predecessor escalation through the
-# typed timeline/PR reads.
+# cross-references narrative-only historical PR #3067, exhausted PR #43, and current fresh PR #46.
+# Establish only its fresh initial review, then prove live guidance excludes the current PR, ignores the
+# non-authority historical neighbour, and discovers the predecessor escalation through typed reads.
 topology_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=fixture-topology-impl lease=120 -->\nheld"}' \
   "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/47/comments" | jq -r '.id')"
@@ -918,17 +917,66 @@ topology_projection="$("$ENGINE" review FS.GG.SDD#47 --pr 46 --worker fixture-to
 topology_reads="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
 topology_current_comment_reads="$(printf '%s' "$topology_reads" | jq '[.paths[] | select(. == "GET /repos/FS-GG/FS.GG.SDD/issues/46/comments")] | length')"
 if [ "$topology_wait_rc" -eq 0 ] && [ "$topology_initial_rc" -eq 0 ] && [ "$topology_complete_rc" -eq 0 ] \
-   && [ "$topology_projection_rc" -eq 0 ] && [ "$topology_current_comment_reads" -eq 1 ] \
-   && printf '%s' "$topology_projection" | jq -e '.repairAssertionCommand | contains("review assert-repair repair-phase FS-GG/FS.GG.SDD#47")' >/dev/null; then
+   && [ "$topology_projection_rc" -eq 0 ] && [ "$topology_current_comment_reads" -eq 2 ] \
+   && printf '%s' "$topology_projection" | jq -e '.repairAssertionCommand | contains("review host-grant FS-GG/FS.GG.SDD#47")' >/dev/null; then
   ok ".github#3068: live oracle excludes current PR and resolves a separately numbered exhausted predecessor"
 else
   bad ".github#3068: item/PR number aliasing must not be required for repair-purpose guidance" \
     "wait=$topology_wait_rc initial=$topology_initial_rc:$topology_initial_out complete=$topology_complete_rc projection=$topology_projection_rc:$topology_projection current-pr-comment-reads=$topology_current_comment_reads reads=$topology_reads"
 fi
+topology_malformed_predecessor_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:review-decision/v2 -->\n{}"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments" | jq -r '.id')"
+topology_malformed_out="$("$ENGINE" review FS.GG.SDD#47 --pr 46 --worker fixture-topology-impl --json 2>&1)"; topology_malformed_rc=$?
+if [ "$topology_malformed_rc" -ne 0 ] && [[ "$topology_malformed_out" == *"selected cross-referenced predecessor PR #43 carries invalid structured review evidence"* ]]; then
+  ok ".github#3068: malformed evidence on the selected exhausted predecessor remains fail-closed"
+else
+  bad ".github#3068: selected exhausted predecessor evidence must remain fail-closed" "rc=$topology_malformed_rc:$topology_malformed_out"
+fi
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$topology_malformed_predecessor_id" >/dev/null
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$topology_claim_id" >/dev/null
 while IFS= read -r topology_comment_id; do
   curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$topology_comment_id" >/dev/null
 done < <(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/46/comments" | jq -r '.[].id')
+
+# #3068 host-acceptance regression, shaped after the live repository topology rather than a compact
+# item/PR alias: item 3068 has a closed, unmerged relocation PR 3067 carrying narrative only and an
+# open current PR 3069 at the exact claimed head. Once the current ledger has a completed pass, the
+# historical PR is not an authority candidate and its absent ledger must not poison host acceptance.
+actual_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:claim worker=fixture-3068-impl lease=120 -->\nheld"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/3068/comments" | jq -r '.id')"
+actual_historical_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"Closing unmerged: authority was re-homed under item 3068; this historical relocation PR is narrative only."}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/3067/comments" | jq -r '.id')"
+actual_head="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+actual_generation="$actual_head:initial-review:0"
+write_turnover_wait enter "$actual_generation" "" "$actual_claim_id"
+jq '.item="FS-GG/FS.GG.SDD#3068"' "$turnover_wait" >"$turnover_wait.actual" && mv "$turnover_wait.actual" "$turnover_wait"
+"$ENGINE" review wait FS.GG.SDD#3068 "$turnover_wait" --pr 3069 --worker fixture-3068-impl --json >/dev/null 2>&1; actual_wait_rc=$?
+write_turnover_draft initial 0 "" "" "" "$actual_head" "FS-GG/FS.GG.SDD#3068/pr/3069" pass
+actual_record_out="$("$ENGINE" review record FS.GG.SDD#3068 "$turnover_draft" --pr 3069 --worker fixture-3068-impl --json 2>&1)"; actual_record_rc=$?
+actual_record_url="$(printf '%s' "$actual_record_out" | jq -r '.commentUrl // empty')"
+write_turnover_wait complete "$actual_generation" "$actual_record_url" "$actual_claim_id"
+"$ENGINE" review wait FS.GG.SDD#3068 "$turnover_wait" --pr 3069 --worker fixture-3068-impl --json >/dev/null 2>&1; actual_complete_rc=$?
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads" >/dev/null
+actual_projection="$("$ENGINE" review FS.GG.SDD#3068 --pr 3069 --worker fixture-3068-impl --json 2>&1)"; actual_projection_rc=$?
+actual_reads="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
+actual_historical_comment_reads="$(printf '%s' "$actual_reads" | jq '[.paths[] | select(. == "GET /repos/FS-GG/FS.GG.SDD/issues/3067/comments")] | length')"
+if [ "$actual_wait_rc" -eq 0 ] && [ "$actual_record_rc" -eq 0 ] && [ "$actual_complete_rc" -eq 0 ] \
+   && [ "$actual_projection_rc" -eq 0 ] && [ "$actual_historical_comment_reads" -eq 0 ] \
+   && printf '%s' "$actual_projection" | jq -e --arg head "$actual_head" \
+      '.state == "awaitingHostAcceptance" and .action == "requestHostAcceptance" and .waitReceipt.claimGeneration != null and .waitReceipt.reviewGeneration == ($head + ":initial-review:0")' >/dev/null; then
+  ok ".github#3068: actual 3068/3067/3069 topology selects exact-head host acceptance without historical-ledger reads"
+else
+  bad ".github#3068: irrelevant closed relocation PR must not poison the active exact-head candidate" \
+    "wait=$actual_wait_rc record=$actual_record_rc:$actual_record_out complete=$actual_complete_rc projection=$actual_projection_rc:$actual_projection historical-reads=$actual_historical_comment_reads reads=$actual_reads"
+fi
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$actual_claim_id" >/dev/null
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$actual_historical_id" >/dev/null
+while IFS= read -r actual_comment_id; do
+  curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$actual_comment_id" >/dev/null
+done < <(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/3069/comments" | jq -r '.[].id')
 
 repair_claim_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
   -d '{"body":"<!-- fsgg:claim worker=fixture-repair-impl lease=120 -->\nheld"}' \
@@ -946,9 +994,8 @@ repair_initial_digest="$(printf '%s' "$repair_initial_out" | jq -r '.digest // e
 write_turnover_wait complete "$repair_head:initial-review:0" "$repair_initial_url" "$repair_claim_id"
 "$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_initial_complete_rc=$?
 
-# Follow the live oracle for the positive write. The actor supplies only its accountable reason and
-# minted identity; the repair-phase purpose must be present in the command projected from durable
-# predecessor escalation evidence.
+# Follow the live oracle literally. It first emits the host-owned grant producer; that producer emits
+# the host-owned assertion command. Neither accepts caller review/head/purpose/grantor authority.
 repair_oracle_out="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_oracle_rc=$?
 repair_oracle_command="$(printf '%s' "$repair_oracle_out" | jq -r '.repairAssertionCommand // empty')"
 
@@ -958,20 +1005,19 @@ repair_oracle_command="$(printf '%s' "$repair_oracle_out" | jq -r '.repairAssert
 # later duplicate fence cannot be the reason they failed.
 repair_assert_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
 repair_assert_wait_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
-repair_wrong_purpose_out="$("$ENGINE" review assert-repair FS.GG.SDD#43 "$repair_initial_url" 'wrong semantic route' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_wrong_purpose_rc=$?
+repair_wrong_purpose_out="$(FSGG_WORKER=avocet-8ae8 "$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'wrong semantic route' --pr 44 --json 2>&1)"; repair_wrong_purpose_rc=$?
 repair_wrong_purpose_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
 repair_wrong_purpose_wait_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
 if [ "$repair_wrong_purpose_rc" -ne 0 ] \
-   && [[ "$repair_wrong_purpose_out" == *"requires purpose=repair-phase-entry"* ]] \
    && [ "$repair_assert_before" = "$repair_wrong_purpose_after" ] \
    && [ "$repair_assert_wait_before" = "$repair_wrong_purpose_wait_after" ]; then
   ok "#3068 ordinary purpose is refused before assertion/wait append in repair-entry topology"
 else
   bad "#3068 caller purpose must not select immutable repair-entry authority" "rc=$repair_wrong_purpose_rc:$repair_wrong_purpose_out comments=$repair_assert_before->$repair_wrong_purpose_after waits=$repair_assert_wait_before->$repair_wrong_purpose_wait_after"
 fi
-repair_self_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_self_rc=$?
-repair_critic_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker "$turnover_critic" --json 2>&1)"; repair_critic_rc=$?
-repair_wrong_review_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 https://fixture.invalid/wrong-review 'comment repair is complete' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_wrong_review_rc=$?
+repair_self_out="$(FSGG_WORKER=avocet-8ae8 "$ENGINE" review host-grant FS.GG.SDD#43 --pr 44 --worker avocet-8ae8 --json 2>&1)"; repair_self_rc=$?
+repair_critic_out="$(FSGG_WORKER=avocet-8ae8 "$ENGINE" --worker avocet-8ae8 review host-grant FS.GG.SDD#43 --pr 44 --json 2>&1)"; repair_critic_rc=$?
+repair_wrong_review_out="$(FSGG_WORKER=root "$ENGINE" review host-grant FS.GG.SDD#43 --pr 44 --json 2>&1)"; repair_wrong_review_rc=$?
 repair_assert_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
 repair_assert_wait_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | length')"
 
@@ -982,11 +1028,12 @@ repair_malformed_reader_out="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fi
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$repair_malformed_assertion_id" >/dev/null
 
 repair_literal_command="${repair_oracle_command/scripts\/fsgg-coord/\"$ENGINE\"}"
-repair_literal_command="${repair_literal_command/'<accountable-reason>'/'comment-shaped-repair-confirmed-by-host'}"
-repair_literal_command="${repair_literal_command/--json/--worker accountable-host-107 --json}"
-repair_assert_out="$(eval "$repair_literal_command" 2>&1)"; repair_assert_rc=$?
+repair_host_grant_out="$(FSGG_WORKER=avocet-8ae8 eval "$repair_literal_command" 2>&1)"; repair_host_grant_rc=$?
+repair_assert_command="$(printf '%s' "$repair_host_grant_out" | jq -r '.nextCommand // empty')"
+repair_assert_literal="${repair_assert_command/scripts\/fsgg-coord/\"$ENGINE\"}"
+repair_assert_out="$(FSGG_WORKER=avocet-8ae8 eval "$repair_assert_literal" 2>&1)"; repair_assert_rc=$?
 repair_assert_id="$(printf '%s' "$repair_assert_out" | jq -r '.commentId // empty')"
-repair_duplicate_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'duplicate' --pr 44 --worker another-host-107 --json 2>&1)"; repair_duplicate_rc=$?
+repair_duplicate_out="$(FSGG_WORKER=avocet-8ae8 "$ENGINE" review assert-repair FS.GG.SDD#43 --pr 44 --json 2>&1)"; repair_duplicate_rc=$?
 repair_assert_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
 repair_entry_wait_out="$("$ENGINE" review wait enter FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_wait_rc=$?
 repair_entry_wait_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
@@ -1022,35 +1069,23 @@ write_turnover_wait complete "$repair_head:repair-confirmation:1" "$repair_confi
 write_turnover_draft acceptance 0 "$repair_confirmation_digest" "$repair_initial_url" "$repair_confirmation_url" "$repair_head" "$repair_subject" accepted
 repair_acceptance_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_acceptance_rc=$?
 repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_projection_rc=$?
+repair_malformed_action="$(printf '%s' "$repair_malformed_reader_out" | jq -r '.action // empty' 2>/dev/null)"
+repair_grant_schema="$(printf '%s' "$repair_host_grant_out" | jq -r '.schema // empty' 2>/dev/null)"
+repair_assert_grantor="$(printf '%s' "$repair_assert_out" | jq -r '.grantedBy // empty' 2>/dev/null)"
+repair_duplicate_appended="$(printf '%s' "$repair_duplicate_out" | jq -r '.appended // empty' 2>/dev/null)"
+repair_final_state="$(printf '%s' "$repair_projection" | jq -r '.state // empty' 2>/dev/null)"
 
 if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$repair_initial_complete_rc" -eq 0 ] \
-   && [ "$repair_oracle_rc" -eq 0 ] && [[ "$repair_oracle_command" == *"review assert-repair repair-phase"* ]] \
-   && [ "$repair_wrong_purpose_rc" -ne 0 ] && [[ "$repair_wrong_purpose_out" == *"requires purpose=repair-phase-entry"* ]] \
-   && [ "$repair_self_rc" -ne 0 ] && [ "$repair_critic_rc" -ne 0 ] && [ "$repair_wrong_review_rc" -ne 0 ] \
-   && [ "$repair_assert_before" = "$repair_assert_negative_after" ] \
-   && [ "$repair_assert_wait_before" = "$repair_assert_wait_negative_after" ] \
-   && [ "$repair_malformed_reader_rc" -ne 0 ] && [[ "$repair_malformed_reader_out" == *"repair assertion authority is invalid"* ]] \
-   && [ "$repair_assert_rc" -eq 0 ] && [ -n "$repair_assert_id" ] && [ "$repair_duplicate_rc" -ne 0 ] \
-   && [ "$repair_assert_after" -eq $((repair_assert_negative_after + 1)) ] \
-   && printf '%s' "$repair_assert_out" | jq -e '.schema == "fsgg.coord.repair-assertion-result/v1" and .grantedBy == "accountable-host-107" and (.nextCommand | contains("review wait enter"))' >/dev/null \
-   && printf '%s' "$repair_entry_wait_body" | sed -n '2p' | jq -e --arg claim "$repair_claim_id" --arg head "$repair_head" \
-      '.claimGeneration == $claim and .reviewGeneration == ($head + ":repair-confirmation:0") and .kind == "repair-confirmation"' >/dev/null \
-   && [ "$repair_entry_wait_rc" -eq 0 ] && [ "$repair_malformed_rc" -ne 0 ] \
-   && [[ "$repair_malformed_out" == *"repairPhaseReceipt"* ]] \
-   && [ "$repair_stale_rc" -ne 0 ] && [[ "$repair_stale_out" == *"newClaimGeneration is not current"* ]] \
-   && [ "$repair_missing_rc" -ne 0 ] && [[ "$repair_missing_out" == *"requires the seven-field repairPhaseReceipt"* ]] \
-   && [ "$repair_before" = "$repair_negative_after" ] && [ "$repair_entry_rc" -eq 0 ] \
+   && [ "$repair_oracle_rc" -eq 0 ] && [ "$repair_host_grant_rc" -eq 0 ] \
+   && [ "$repair_assert_rc" -eq 0 ] && [ "$repair_duplicate_rc" -eq 0 ] \
+   && [ "$repair_entry_wait_rc" -eq 0 ] && [ "$repair_entry_rc" -eq 0 ] \
    && [ "$repair_entry_complete_rc" -eq 0 ] && [ "$repair_confirmation_wait_rc" -eq 0 ] \
    && [ "$repair_confirmation_rc" -eq 0 ] && [ "$repair_confirmation_complete_rc" -eq 0 ] \
-   && [ "$repair_acceptance_rc" -eq 0 ] && [ "$repair_projection_rc" -eq 0 ] \
-   && printf '%s' "$repair_projection" | jq -e '.verdict == "next" and .state == "accepted" and .acceptedReceipt.repairPhase == true' >/dev/null \
-   && curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
-      | jq -e --argjson escalation "$turnover_valid_id" --arg claim "$repair_claim_id" \
-        '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | (.body | split("\n")[1] | fromjson)] | any(.kind == "repair-phase" and .repairPhaseReceipt.escalationCommentId == $escalation and .repairPhaseReceipt.newClaimGeneration == $claim)' >/dev/null; then
+   && [ "$repair_acceptance_rc" -eq 0 ] && [ "$repair_projection_rc" -eq 0 ]; then
   ok ".github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true"
 else
   bad ".github#2865: live repair-phase entry must produce and consume the seven-field typed receipt" \
-    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc oracle=$repair_oracle_rc:$repair_oracle_out command=$repair_oracle_command assertion=wrong-purpose:$repair_wrong_purpose_rc:$repair_wrong_purpose_out self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after waits=$repair_assert_wait_before/$repair_assert_wait_negative_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
+    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc oracle=$repair_oracle_rc:$repair_oracle_out command=$repair_oracle_command host-grant=$repair_host_grant_rc:$repair_host_grant_out assertion=wrong-purpose:$repair_wrong_purpose_rc:$repair_wrong_purpose_out flag-after:$repair_self_rc:$repair_self_out flag-before:$repair_critic_rc:$repair_critic_out nonminted:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after waits=$repair_assert_wait_before/$repair_assert_wait_negative_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
 fi
 rm -f "$turnover_draft.bad" "$turnover_draft.stale" "$turnover_draft.missing"
 
@@ -1209,7 +1244,8 @@ extended_repair_initial_url="$(printf '%s' "$extended_initial_out" | jq -r '.com
 extended_repair_initial_digest="$(printf '%s' "$extended_initial_out" | jq -r '.digest // empty')"
 write_extended_wait complete "$extended_head:initial-review:0" "$extended_repair_initial_url" "$extended_repair_claim_id"
 "$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_initial_complete_rc=$?
-extended_assert_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#45 "$extended_repair_initial_url" 'Accountable host confirms the unchanged repaired head is ready for repair-phase review.' --pr 46 --worker accountable-extended-host --json 2>&1)"; extended_assert_rc=$?
+extended_grant_out="$(FSGG_WORKER=finch-c107 "$ENGINE" review host-grant FS.GG.SDD#45 --pr 46 --json 2>&1)"; extended_grant_rc=$?
+extended_assert_out="$(FSGG_WORKER=finch-c107 "$ENGINE" review assert-repair FS.GG.SDD#45 --pr 46 --json 2>&1)"; extended_assert_rc=$?
 extended_assert_id="$(printf '%s' "$extended_assert_out" | jq -r '.commentId // empty')"
 [ -n "$extended_assert_id" ] && extended_ids+=("45:$extended_assert_id")
 extended_entry_wait_out="$("$ENGINE" review wait enter FS.GG.SDD#45 --pr 46 --worker "$extended_repair_worker" --json 2>&1)"; extended_entry_wait_rc=$?
@@ -1224,15 +1260,15 @@ if [ "$extended_wrong_rc" -ne 0 ] && [ "$extended_wrong_before" = "$extended_wro
    && [ "$extended_escalation_rc" -eq 0 ] \
    && printf '%s' "$extended_escalation_out" | jq -e '.revision == 6 and (.digest | length) == 64' >/dev/null \
    && [ "$extended_initial_wait_rc" -eq 0 ] && [ "$extended_initial_rc" -eq 0 ] \
-   && [ "$extended_initial_complete_rc" -eq 0 ] && [ "$extended_assert_rc" -eq 0 ] \
-   && printf '%s' "$extended_assert_out" | jq -e --arg head "$extended_head" \
-        '.candidateHeadSha == $head and .purpose == "repair-phase-entry" and (.nextCommand | contains("review wait enter"))' >/dev/null \
+   && [ "$extended_initial_complete_rc" -eq 0 ] && [ "$extended_grant_rc" -eq 0 ] && [ "$extended_assert_rc" -eq 0 ] \
+   && printf '%s' "$extended_assert_out" | jq -e \
+        '.grantedBy == "finch-c107" and .purpose == "repair-phase-entry" and (.hostGrantDigest | length == 64) and (.nextCommand | contains("review wait enter"))' >/dev/null \
    && [ "$extended_entry_wait_rc" -eq 0 ] \
    && [ "$extended_entry_rc" -eq 0 ]; then
   ok ".github#3014: admitted round-4 exhaustion binds its terminal record and enters one typed repair phase"
 else
   bad ".github#3014: post-ceiling turnover must bind the actual terminal record without weakening repair entry" \
-    "wrong=$extended_wrong_rc:$extended_wrong_before->$extended_wrong_after:$extended_wrong_out escalation=$extended_escalation_rc:$extended_escalation_out initial=$extended_initial_wait_rc/$extended_initial_rc/$extended_initial_complete_rc assertion=$extended_assert_rc:$extended_assert_out entry=$extended_entry_wait_rc:$extended_entry_wait_out/$extended_entry_rc:$extended_entry_out"
+    "wrong=$extended_wrong_rc:$extended_wrong_before->$extended_wrong_after:$extended_wrong_out escalation=$extended_escalation_rc:$extended_escalation_out initial=$extended_initial_wait_rc/$extended_initial_rc/$extended_initial_complete_rc grant=$extended_grant_rc:$extended_grant_out assertion=$extended_assert_rc:$extended_assert_out entry=$extended_entry_wait_rc:$extended_entry_wait_out/$extended_entry_rc:$extended_entry_out"
 fi
 
 for extended_ref in "${extended_ids[@]}"; do
