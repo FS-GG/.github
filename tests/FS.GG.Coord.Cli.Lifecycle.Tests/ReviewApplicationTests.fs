@@ -63,6 +63,16 @@ module ReviewApplicationTests =
         try ReviewApplication.renderWithWaitAndRepairAssertion opts binding facts assertion waitState, stdout.ToString(), stderr.ToString()
         finally Console.SetOut oldOut; Console.SetError oldErr
 
+    let private renderLiveWithRepairPurpose binding facts waitState repairPhaseEntryExpected =
+        let opts = Options.parse [ "review"; "FS-GG/.github#2175"; "--pr"; "42"; "--json" ] |> function Ok value -> value | Error error -> failwith error
+        let oldOut, oldErr = Console.Out, Console.Error
+        use stdout = new StringWriter()
+        use stderr = new StringWriter()
+        Console.SetOut stdout
+        Console.SetError stderr
+        try ReviewApplication.renderLiveWithWaitAndRepairAssertion opts binding facts None waitState repairPhaseEntryExpected, stdout.ToString(), stderr.ToString()
+        finally Console.SetOut oldOut; Console.SetError oldErr
+
     let private sameHeadChangesRequired () =
         StructuredFixtures.movedHeadRepairComments subject head "critic-heron-42"
         |> List.head
@@ -155,6 +165,29 @@ module ReviewApplicationTests =
                 renderWithWaitAndAssertion binding facts (Some refused) (ReviewWait.Waiting wait)
             Assert.NotEqual(0, refusedCode)
             Assert.Contains("\"verdict\":\"noVerdict\"", refusedOutput)
+
+    [<Fact>]
+    let ``live repair entry oracle emits purpose-bearing writer command`` () =
+        let initial = sameHeadChangesRequired ()
+        let binding: Review.Binding =
+            { ItemRef = "FS-GG/.github#2175"; Pr = 42; HeadSha = head
+              ClaimGeneration = "fixture-claim"; ImplementerIdentity = "worker-1"
+              Phase = Review.Ordinary; Round = 1 }
+        let facts: Review.Facts =
+            { Comments = [ initial ]; Checks = Types.PrPending; RepairPhaseGranted = None
+              RepairRouteAvailable = true; DiffAuditTrusted = None }
+        let wait: ReviewWait.WaitReceipt =
+            { Item = binding.ItemRef; ClaimGeneration = binding.ClaimGeneration
+              ReviewGeneration = ReviewWait.generationToken head ReviewWait.InitialReview 0
+              Kind = ReviewWait.InitialReview
+              EnteredAt = DateTimeOffset.Parse "2026-08-30T00:00:00Z"
+              ExpiresAt = DateTimeOffset.Parse "2026-08-30T04:00:00Z"
+              EvidenceRef = initial.Url }
+        let code, output, error =
+            renderLiveWithRepairPurpose binding facts (ReviewWait.Completed(wait, initial.Url)) true
+        Assert.Equal(0, code)
+        Assert.Contains("review assert-repair repair-phase FS-GG/.github#2175", output)
+        Assert.Empty error
 
     [<Fact>]
     let empty_thread_dispatches_critic () =

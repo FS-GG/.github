@@ -346,13 +346,14 @@ module ReviewApplication =
             Some $"scripts/fsgg-coord review wait enter %s{binding.ItemRef} --pr %d{binding.Pr} --json"
         | _ -> None
 
-    let private repairAssertionCommand (binding: Review.Binding) (facts: Review.Facts) (action: Review.NextAction) =
+    let private repairAssertionCommand repairPhaseEntryExpected (binding: Review.Binding) (facts: Review.Facts) (action: Review.NextAction) =
         match action with
         | Review.ResumeImplementer _ ->
             Driver.reviewPhaseFacts facts.Comments
             |> _.LatestReviewUrl
             |> Option.map (fun reviewUrl ->
-                $"scripts/fsgg-coord review assert-repair %s{binding.ItemRef} %s{reviewUrl} '<accountable-reason>' --pr %d{binding.Pr} --json")
+                let purpose = if repairPhaseEntryExpected then " repair-phase" else ""
+                $"scripts/fsgg-coord review assert-repair%s{purpose} %s{binding.ItemRef} %s{reviewUrl} '<accountable-reason>' --pr %d{binding.Pr} --json")
         | _ -> None
 
     let private receiptJson (receipt: Review.RepairPhaseReceipt) =
@@ -467,6 +468,7 @@ module ReviewApplication =
         (successionGranted: Review.CriticSuccessionReceipt option)
         (repairAssertionGranted: Review.RepairAssertionReceipt option)
         (waitState: ReviewWait.State option)
+        (repairPhaseEntryExpected: bool)
         : int =
         let exhaustionDecision = ordinaryExhaustionDecision binding facts waitState
         let ordinaryExhaustionCompleted =
@@ -515,7 +517,7 @@ module ReviewApplication =
                        action = actionName verdict.NextAction
                        actionReason = actionReason verdict.NextAction
                        nextCommand = nextCommand binding verdict.NextAction
-                       repairAssertionCommand = repairAssertionCommand binding facts verdict.NextAction
+                       repairAssertionCommand = repairAssertionCommand repairPhaseEntryExpected binding facts verdict.NextAction
                        repairPhaseReceipt =
                         match verdict.NextAction with
                         | Review.EnterRepairPhase receipt -> Some(receiptJson receipt)
@@ -554,10 +556,10 @@ module ReviewApplication =
                 ExitCode.toInt ExitCode.Green
 
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
-        renderVerdict opts binding facts None None None
+        renderVerdict opts binding facts None None None false
 
     let renderWithWait (opts: Options) (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State) : int =
-        renderVerdict opts binding facts None None (Some waitState)
+        renderVerdict opts binding facts None None (Some waitState) false
 
     let renderWithWaitAndRepairAssertion
         (opts: Options)
@@ -566,7 +568,17 @@ module ReviewApplication =
         (repairAssertionGranted: Review.RepairAssertionReceipt option)
         (waitState: ReviewWait.State)
         : int =
-        renderVerdict opts binding facts None repairAssertionGranted (Some waitState)
+        renderVerdict opts binding facts None repairAssertionGranted (Some waitState) false
+
+    let renderLiveWithWaitAndRepairAssertion
+        (opts: Options)
+        (binding: Review.Binding)
+        (facts: Review.Facts)
+        (repairAssertionGranted: Review.RepairAssertionReceipt option)
+        (waitState: ReviewWait.State)
+        (repairPhaseEntryExpected: bool)
+        : int =
+        renderVerdict opts binding facts None repairAssertionGranted (Some waitState) repairPhaseEntryExpected
 
     let run (opts: Options) : int =
         let raw = input opts
@@ -579,4 +591,4 @@ module ReviewApplication =
                 eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
             | Ok(binding, facts, successionGranted, repairAssertionGranted) ->
-                renderVerdict opts binding facts successionGranted repairAssertionGranted None
+                renderVerdict opts binding facts successionGranted repairAssertionGranted None false

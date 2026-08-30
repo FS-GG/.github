@@ -626,8 +626,9 @@ module LiveHandlers =
                     | Ok marker ->
                         match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
                               Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
-                        | Ok head, checks, Ok comments ->
+                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr,
+                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number with
+                        | Ok head, checks, Ok comments, Ok itemComments ->
                             let reviewComments =
                                 comments
                                 |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -636,6 +637,11 @@ module LiveHandlers =
                             // the same structural fact `Driver.reviewPhaseFacts` already exposes, so the
                             // caller does not have to pass `--repair` by hand for the common case.
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
+                            let repairPhaseEntryExpected =
+                                itemComments
+                                |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                |> Driver.reviewPhaseFacts
+                                |> fun predecessor -> predecessor.EscalationPresent && not predecessor.RepairPhasePresent
 
                             let binding: Review.Binding =
                                 { ItemRef = target.Canonical
@@ -676,9 +682,11 @@ module LiveHandlers =
                                 ExitNoVerdict
                             | Ok authority ->
                                 let repairAssertion = authority |> Option.map _.Receipt
-                                ReviewApplication.renderWithWaitAndRepairAssertion opts binding facts repairAssertion waitState
-                        | Error error, _, _
-                        | _, _, Error error -> fail error
+                                ReviewApplication.renderLiveWithWaitAndRepairAssertion
+                                    opts binding facts repairAssertion waitState repairPhaseEntryExpected
+                        | Error error, _, _, _
+                        | _, _, Error error, _
+                        | _, _, _, Error error -> fail error
 
     // Append one validated durable review-wait event. Queue entry is a write, never an in-memory host
     // promise: the marker is posted to the reviewed PR and is therefore available to a later host after

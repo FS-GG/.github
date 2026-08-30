@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1f8ee3c963ebfcb10b025c2ccd60debabea3abddd5f1296f4e7f12ed8989e096"
+        "value": "b04b477a350afdedc5e7c229113d18d05dbb8c1ba3fd57af0e24f7f5845389ee"
       }
     },
     {
@@ -700,7 +700,7 @@
           "path": "work/3068-repair-phase-live-assertion-writer/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "1f8ee3c963ebfcb10b025c2ccd60debabea3abddd5f1296f4e7f12ed8989e096"
+            "value": "b04b477a350afdedc5e7c229113d18d05dbb8c1ba3fd57af0e24f7f5845389ee"
           },
           "schemaVersion": 1
         },
@@ -731,7 +731,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "497489f55d64d34f2eb9cc74e82145728b1e2a4a42280d5a11a204ee357ac9a1"
+        "value": "02a1dc7827faa7511373107bf820342f9028dc2051a893e31eee2a7850fc3e19"
       },
       "currency": "current"
     }

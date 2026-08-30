@@ -896,7 +896,13 @@ repair_initial_digest="$(printf '%s' "$repair_initial_out" | jq -r '.digest // e
 write_turnover_wait complete "$repair_head:initial-review:0" "$repair_initial_url" "$repair_claim_id"
 "$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_initial_complete_rc=$?
 
-# #107: the unchanged repair head no longer needs a hand-authored wait event. The accountable writer
+# Follow the live oracle for the positive write. The actor supplies only its accountable reason and
+# minted identity; the repair-phase purpose must be present in the command projected from durable
+# predecessor escalation evidence.
+repair_oracle_out="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_oracle_rc=$?
+repair_oracle_command="$(printf '%s' "$repair_oracle_out" | jq -r '.repairAssertionCommand // empty')"
+
+# #3068: the unchanged repair head no longer needs a hand-authored wait event. The accountable writer
 # derives head/grantor and seals one purpose-bound comment; live wait-enter then derives the special
 # repair-phase generation zero. Exercise every identity/binding refusal before the valid append, so a
 # later duplicate fence cannot be the reason they failed.
@@ -912,7 +918,10 @@ repair_malformed_assertion_id="$(curl -fsS -X POST -H 'Content-Type: application
 repair_malformed_reader_out="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_malformed_reader_rc=$?
 curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$repair_malformed_assertion_id" >/dev/null
 
-repair_assert_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment-shaped repair confirmed by host' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_assert_rc=$?
+repair_literal_command="${repair_oracle_command/scripts\/fsgg-coord/\"$ENGINE\"}"
+repair_literal_command="${repair_literal_command/'<accountable-reason>'/'comment-shaped-repair-confirmed-by-host'}"
+repair_literal_command="${repair_literal_command/--json/--worker accountable-host-107 --json}"
+repair_assert_out="$(eval "$repair_literal_command" 2>&1)"; repair_assert_rc=$?
 repair_assert_id="$(printf '%s' "$repair_assert_out" | jq -r '.commentId // empty')"
 repair_duplicate_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'duplicate' --pr 44 --worker another-host-107 --json 2>&1)"; repair_duplicate_rc=$?
 repair_assert_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
@@ -952,6 +961,7 @@ repair_acceptance_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" 
 repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_projection_rc=$?
 
 if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$repair_initial_complete_rc" -eq 0 ] \
+   && [ "$repair_oracle_rc" -eq 0 ] && [[ "$repair_oracle_command" == *"review assert-repair repair-phase"* ]] \
    && [ "$repair_self_rc" -ne 0 ] && [ "$repair_critic_rc" -ne 0 ] && [ "$repair_wrong_review_rc" -ne 0 ] \
    && [ "$repair_assert_before" = "$repair_assert_negative_after" ] \
    && [ "$repair_malformed_reader_rc" -ne 0 ] && [[ "$repair_malformed_reader_out" == *"repair assertion authority is invalid"* ]] \
@@ -975,7 +985,7 @@ if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$
   ok ".github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true"
 else
   bad ".github#2865: live repair-phase entry must produce and consume the seven-field typed receipt" \
-    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc assertion=self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
+    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc oracle=$repair_oracle_rc:$repair_oracle_out command=$repair_oracle_command assertion=self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
 fi
 rm -f "$turnover_draft.bad" "$turnover_draft.stale" "$turnover_draft.missing"
 

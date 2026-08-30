@@ -77,6 +77,16 @@ module ReviewApplication =
         FS.GG.Coord.ReviewWait.State ->
         int
 
+    /// Live projection with durable predecessor-escalation context for exact repair-purpose guidance.
+    val renderLiveWithWaitAndRepairAssertion:
+        Options.Options ->
+        FS.GG.Coord.Review.Binding ->
+        FS.GG.Coord.Review.Facts ->
+        FS.GG.Coord.Review.RepairAssertionReceipt option ->
+        FS.GG.Coord.ReviewWait.State ->
+        repairPhaseEntryExpected: bool ->
+        int
+
     /// Run `review --snapshot FILE` (or read the snapshot from stdin), printing one verdict.
     ///
     /// REFUSES AN EMPTY SNAPSHOT EXPLICITLY rather than parsing it into a default: an empty document

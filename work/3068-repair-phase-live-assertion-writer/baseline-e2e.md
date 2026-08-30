@@ -1,6 +1,6 @@
 # E2E baseline comparison
 
-- Baseline tree: untouched `origin/main` at `828fc0293ae92b3319cde9081659a345dba8ae41`.
+- Baseline tree: untouched `origin/main` at `828fc02907edc1c3577b68568f57112e3ed1d1d3`.
 - Host validator: `fsgg-sdd` 1.5.0.
 - Command: `FSGG_COORD_ENGINE_BIN="$PWD/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine" bash tests/coord-engine-e2e/writes.sh`.
 - Observed summary: `coord-engine writes: 190 assertion(s), 184 passed, 6 failed`.
