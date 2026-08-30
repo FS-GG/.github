@@ -726,9 +726,9 @@ module Reads =
     type CommentBody =
         { Id: int64; Url: string; Body: string }
 
-    /// Pull requests in this repository that GitHub durably cross-referenced from an item. The timeline
-    /// endpoint is paginated by the transport; a cross-reference that says it is a PR but cannot name
-    /// its number/repository fails closed instead of disappearing from repair-route discovery.
+    // Pull requests in this repository that GitHub durably cross-referenced from an item. The timeline
+    // endpoint is paginated by the transport; a cross-reference that says it is a PR but cannot name
+    // its number/repository fails closed instead of disappearing from repair-route discovery.
     let crossReferencedPullRequests (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} cross-referenced pull requests"
         let request =
