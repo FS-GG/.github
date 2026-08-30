@@ -896,8 +896,29 @@ repair_initial_digest="$(printf '%s' "$repair_initial_out" | jq -r '.digest // e
 write_turnover_wait complete "$repair_head:initial-review:0" "$repair_initial_url" "$repair_claim_id"
 "$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_initial_complete_rc=$?
 
-write_turnover_wait enter "$repair_head:repair-confirmation:0" "" "$repair_claim_id"
-"$ENGINE" review wait FS.GG.SDD#43 "$turnover_wait" --pr 44 --worker fixture-repair-impl --json >/dev/null 2>&1; repair_entry_wait_rc=$?
+# #107: the unchanged repair head no longer needs a hand-authored wait event. The accountable writer
+# derives head/grantor and seals one purpose-bound comment; live wait-enter then derives the special
+# repair-phase generation zero. Exercise every identity/binding refusal before the valid append, so a
+# later duplicate fence cannot be the reason they failed.
+repair_assert_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_self_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_self_rc=$?
+repair_critic_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment repair is complete' --pr 44 --worker "$turnover_critic" --json 2>&1)"; repair_critic_rc=$?
+repair_wrong_review_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 https://fixture.invalid/wrong-review 'comment repair is complete' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_wrong_review_rc=$?
+repair_assert_negative_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+
+repair_malformed_assertion_id="$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"body":"<!-- fsgg:repair-assertion/v1 -->\n{}"}' \
+  "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq -r '.id')"
+repair_malformed_reader_out="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_malformed_reader_rc=$?
+curl -fsS -X DELETE "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/comments/$repair_malformed_assertion_id" >/dev/null
+
+repair_assert_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'comment-shaped repair confirmed by host' --pr 44 --worker accountable-host-107 --json 2>&1)"; repair_assert_rc=$?
+repair_assert_id="$(printf '%s' "$repair_assert_out" | jq -r '.commentId // empty')"
+repair_duplicate_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#43 "$repair_initial_url" 'duplicate' --pr 44 --worker another-host-107 --json 2>&1)"; repair_duplicate_rc=$?
+repair_assert_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" | jq length)"
+repair_entry_wait_out="$("$ENGINE" review wait enter FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_entry_wait_rc=$?
+repair_entry_wait_body="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/44/comments" \
+  | jq -r '[.[] | select(.body | startswith("<!-- fsgg:review-wait/v1 -->"))] | last | .body')"
 write_turnover_draft repair-phase 0 "$repair_initial_digest" "$repair_initial_url" "$repair_initial_url" "$repair_head" "$repair_subject" changes-required
 jq --argjson exhausted 43 --argjson escalation "$turnover_valid_id" --arg claim "$repair_claim_id" --arg branch 'item/43-repair-phase' --arg implementer 'fixture-repair-impl' --arg critic "$turnover_critic" --arg head "$repair_head" \
   '.repairPhaseReceipt={exhaustedPr:$exhausted,escalationCommentId:$escalation,newClaimGeneration:$claim,newBranchOrPr:$branch,newImplementerIdentity:$implementer,newCriticIdentity:$critic,candidateHeadSha:$head}' \
@@ -931,6 +952,14 @@ repair_acceptance_out="$("$ENGINE" review record FS.GG.SDD#43 "$turnover_draft" 
 repair_projection="$("$ENGINE" review FS.GG.SDD#43 --pr 44 --worker fixture-repair-impl --json 2>&1)"; repair_projection_rc=$?
 
 if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$repair_initial_complete_rc" -eq 0 ] \
+   && [ "$repair_self_rc" -ne 0 ] && [ "$repair_critic_rc" -ne 0 ] && [ "$repair_wrong_review_rc" -ne 0 ] \
+   && [ "$repair_assert_before" = "$repair_assert_negative_after" ] \
+   && [ "$repair_malformed_reader_rc" -ne 0 ] && [[ "$repair_malformed_reader_out" == *"repair assertion authority is invalid"* ]] \
+   && [ "$repair_assert_rc" -eq 0 ] && [ -n "$repair_assert_id" ] && [ "$repair_duplicate_rc" -ne 0 ] \
+   && [ "$repair_assert_after" -eq $((repair_assert_negative_after + 1)) ] \
+   && printf '%s' "$repair_assert_out" | jq -e '.schema == "fsgg.coord.repair-assertion-result/v1" and .grantedBy == "accountable-host-107" and (.nextCommand | contains("review wait enter"))' >/dev/null \
+   && printf '%s' "$repair_entry_wait_body" | sed -n '2p' | jq -e --arg claim "$repair_claim_id" --arg head "$repair_head" \
+      '.claimGeneration == $claim and .reviewGeneration == ($head + ":repair-confirmation:0") and .kind == "repair-confirmation"' >/dev/null \
    && [ "$repair_entry_wait_rc" -eq 0 ] && [ "$repair_malformed_rc" -ne 0 ] \
    && [[ "$repair_malformed_out" == *"repairPhaseReceipt"* ]] \
    && [ "$repair_stale_rc" -ne 0 ] && [[ "$repair_stale_out" == *"newClaimGeneration is not current"* ]] \
@@ -946,7 +975,7 @@ if [ "$repair_initial_wait_rc" -eq 0 ] && [ "$repair_initial_rc" -eq 0 ] && [ "$
   ok ".github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true"
 else
   bad ".github#2865: live repair-phase entry must produce and consume the seven-field typed receipt" \
-    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc entry=$repair_entry_wait_rc malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
+    "initial=$repair_initial_wait_rc/$repair_initial_rc/$repair_initial_complete_rc assertion=self:$repair_self_rc:$repair_self_out critic:$repair_critic_rc:$repair_critic_out wrong:$repair_wrong_review_rc:$repair_wrong_review_out malformed-reader:$repair_malformed_reader_rc:$repair_malformed_reader_out valid:$repair_assert_rc:$repair_assert_out duplicate:$repair_duplicate_rc:$repair_duplicate_out counts=$repair_assert_before/$repair_assert_negative_after/$repair_assert_after entry=$repair_entry_wait_rc:$repair_entry_wait_out:$repair_entry_wait_body malformed=$repair_malformed_rc:$repair_malformed_out stale=$repair_stale_rc:$repair_stale_out missing=$repair_missing_rc:$repair_missing_out count=$repair_before->$repair_negative_after valid=$repair_entry_rc:$repair_entry_out complete=$repair_entry_complete_rc confirm=$repair_confirmation_wait_rc/$repair_confirmation_rc/$repair_confirmation_complete_rc acceptance=$repair_acceptance_rc:$repair_acceptance_out projection=$repair_projection_rc:$repair_projection"
 fi
 rm -f "$turnover_draft.bad" "$turnover_draft.stale" "$turnover_draft.missing"
 
@@ -1105,8 +1134,10 @@ extended_repair_initial_url="$(printf '%s' "$extended_initial_out" | jq -r '.com
 extended_repair_initial_digest="$(printf '%s' "$extended_initial_out" | jq -r '.digest // empty')"
 write_extended_wait complete "$extended_head:initial-review:0" "$extended_repair_initial_url" "$extended_repair_claim_id"
 "$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_initial_complete_rc=$?
-write_extended_wait enter "$extended_head:repair-confirmation:0" "" "$extended_repair_claim_id"
-"$ENGINE" review wait FS.GG.SDD#45 "$extended_wait" --pr 46 --worker "$extended_repair_worker" --json >/dev/null 2>&1; extended_entry_wait_rc=$?
+extended_assert_out="$("$ENGINE" review assert-repair repair-phase FS.GG.SDD#45 "$extended_repair_initial_url" 'Accountable host confirms the unchanged repaired head is ready for repair-phase review.' --pr 46 --worker accountable-extended-host --json 2>&1)"; extended_assert_rc=$?
+extended_assert_id="$(printf '%s' "$extended_assert_out" | jq -r '.commentId // empty')"
+[ -n "$extended_assert_id" ] && extended_ids+=("45:$extended_assert_id")
+extended_entry_wait_out="$("$ENGINE" review wait enter FS.GG.SDD#45 --pr 46 --worker "$extended_repair_worker" --json 2>&1)"; extended_entry_wait_rc=$?
 write_turnover_draft repair-phase 0 "$extended_repair_initial_digest" "$extended_repair_initial_url" "$extended_repair_initial_url" "$extended_head" "FS-GG/FS.GG.SDD#45/pr/46" changes-required
 jq --argjson exhausted 45 --argjson escalation "$extended_escalation_id" --arg claim "$extended_repair_claim_id" --arg branch '46' --arg implementer "$extended_repair_worker" --arg critic "$turnover_critic" --arg head "$extended_head" \
   '.repairPhaseReceipt={exhaustedPr:$exhausted,escalationCommentId:$escalation,newClaimGeneration:$claim,newBranchOrPr:$branch,newImplementerIdentity:$implementer,newCriticIdentity:$critic,candidateHeadSha:$head}' \
@@ -1118,12 +1149,15 @@ if [ "$extended_wrong_rc" -ne 0 ] && [ "$extended_wrong_before" = "$extended_wro
    && [ "$extended_escalation_rc" -eq 0 ] \
    && printf '%s' "$extended_escalation_out" | jq -e '.revision == 6 and (.digest | length) == 64' >/dev/null \
    && [ "$extended_initial_wait_rc" -eq 0 ] && [ "$extended_initial_rc" -eq 0 ] \
-   && [ "$extended_initial_complete_rc" -eq 0 ] && [ "$extended_entry_wait_rc" -eq 0 ] \
+   && [ "$extended_initial_complete_rc" -eq 0 ] && [ "$extended_assert_rc" -eq 0 ] \
+   && printf '%s' "$extended_assert_out" | jq -e --arg head "$extended_head" \
+        '.candidateHeadSha == $head and .purpose == "repair-phase-entry" and (.nextCommand | contains("review wait enter"))' >/dev/null \
+   && [ "$extended_entry_wait_rc" -eq 0 ] \
    && [ "$extended_entry_rc" -eq 0 ]; then
   ok ".github#3014: admitted round-4 exhaustion binds its terminal record and enters one typed repair phase"
 else
   bad ".github#3014: post-ceiling turnover must bind the actual terminal record without weakening repair entry" \
-    "wrong=$extended_wrong_rc:$extended_wrong_before->$extended_wrong_after:$extended_wrong_out escalation=$extended_escalation_rc:$extended_escalation_out initial=$extended_initial_wait_rc/$extended_initial_rc/$extended_initial_complete_rc entry=$extended_entry_wait_rc/$extended_entry_rc:$extended_entry_out"
+    "wrong=$extended_wrong_rc:$extended_wrong_before->$extended_wrong_after:$extended_wrong_out escalation=$extended_escalation_rc:$extended_escalation_out initial=$extended_initial_wait_rc/$extended_initial_rc/$extended_initial_complete_rc assertion=$extended_assert_rc:$extended_assert_out entry=$extended_entry_wait_rc:$extended_entry_wait_out/$extended_entry_rc:$extended_entry_out"
 fi
 
 for extended_ref in "${extended_ids[@]}"; do

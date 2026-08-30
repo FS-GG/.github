@@ -7,6 +7,20 @@ module ReviewApplication =
     open FS.GG.Coord
     open FS.GG.Coord.Cli.Options
 
+    [<Literal>]
+    let RepairAssertionMarker = "<!-- fsgg:repair-assertion/v1 -->"
+
+    [<Literal>]
+    let private RepairAssertionSchema = "fsgg.coord.repair-assertion/v1"
+
+    type RepairAssertionPurpose =
+        | Confirmation
+        | RepairPhaseEntry
+
+    type RepairAssertionAuthority =
+        { Purpose: RepairAssertionPurpose
+          Receipt: Review.RepairAssertionReceipt }
+
     let private eprint (message: string) = Console.Error.WriteLine(message)
 
     let private input opts =
@@ -44,6 +58,86 @@ module ReviewApplication =
         | JsonValueKind.True -> true
         | JsonValueKind.False -> false
         | _ -> invalidArg name "must be a boolean"
+
+    let private purposeName = function Confirmation -> "confirmation" | RepairPhaseEntry -> "repair-phase-entry"
+
+    let encodeRepairAssertion (subject: string) (authority: RepairAssertionAuthority) =
+        let receipt = authority.Receipt
+        let payload =
+            {| schema = RepairAssertionSchema
+               subject = subject
+               purpose = purposeName authority.Purpose
+               answeredReviewUrl = receipt.AnsweredReviewUrl
+               candidateHeadSha = receipt.CandidateHeadSha
+               grantedBy = receipt.GrantedBy
+               reason = receipt.Reason |}
+        RepairAssertionMarker + "\n" + JsonSerializer.Serialize payload
+
+    let tryDecodeRepairAssertion (body: string) : Result<(string * RepairAssertionAuthority) option, string> =
+        if not (body.StartsWith(RepairAssertionMarker, StringComparison.Ordinal)) then
+            Ok None
+        elif not (body.StartsWith(RepairAssertionMarker + "\n", StringComparison.Ordinal)) then
+            Error "repair-assertion marker must be followed immediately by one JSON object"
+        else
+            try
+                use document = JsonDocument.Parse(body.Substring(RepairAssertionMarker.Length).Trim())
+                let root = document.RootElement
+                if root.ValueKind <> JsonValueKind.Object then
+                    invalidArg "repairAssertion" "must be one JSON object"
+                let known = Set.ofList [ "schema"; "subject"; "purpose"; "answeredReviewUrl"; "candidateHeadSha"; "grantedBy"; "reason" ]
+                let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                let unknown = names |> List.filter (known.Contains >> not)
+                let duplicate = names |> List.countBy id |> List.tryFind (fun (_, count) -> count <> 1)
+                if not (List.isEmpty unknown) then
+                    let unknownFields = String.concat ", " unknown
+                    invalidArg "repairAssertion" $"contains unknown fields: %s{unknownFields}"
+                match duplicate with
+                | Some(name, _) -> invalidArg "repairAssertion" $"contains duplicate field '%s{name}'"
+                | None -> ()
+                let schema = readString "schema" root
+                if schema <> RepairAssertionSchema then
+                    invalidArg "schema" $"must be '%s{RepairAssertionSchema}'"
+                let subject = readString "subject" root
+                let purpose =
+                    match readString "purpose" root with
+                    | "confirmation" -> Confirmation
+                    | "repair-phase-entry" -> RepairPhaseEntry
+                    | other -> invalidArg "purpose" $"must be 'confirmation' or 'repair-phase-entry', got '%s{other}'"
+                let receipt: Review.RepairAssertionReceipt =
+                    { AnsweredReviewUrl = readString "answeredReviewUrl" root
+                      CandidateHeadSha = readString "candidateHeadSha" root
+                      GrantedBy = readString "grantedBy" root
+                      Reason = readString "reason" root }
+                Ok(Some(subject, { Purpose = purpose; Receipt = receipt }))
+            with error -> Error error.Message
+
+    let repairAssertionFromComments
+        (expectedSubject: string)
+        (comments: Driver.ReviewComment list)
+        : Result<RepairAssertionAuthority option, string list> =
+        let decoded = comments |> List.map (fun comment -> comment, tryDecodeRepairAssertion comment.Body)
+        let errors =
+            decoded
+            |> List.choose (fun (comment, result) ->
+                match result with
+                | Error error -> Some($"repair assertion comment %s{comment.Url} is malformed: %s{error}")
+                | Ok _ -> None)
+        let assertions =
+            decoded
+            |> List.choose (fun (comment, result) ->
+                match result with
+                | Ok(Some(subject, authority)) -> Some(comment, subject, authority)
+                | _ -> None)
+        if not (List.isEmpty errors) then Error errors
+        else
+            match assertions with
+            | [] -> Ok None
+            | [ _, subject, authority ] when subject = expectedSubject -> Ok(Some authority)
+            | [ comment, subject, _ ] ->
+                Error [ $"repair assertion comment %s{comment.Url} names subject '%s{subject}', expected '%s{expectedSubject}'" ]
+            | many ->
+                let urls = many |> List.map (fun (comment, _, _) -> comment.Url) |> String.concat ", "
+                Error [ $"multiple repair assertions are present; append-only authority does not use latest-wins: %s{urls}" ]
 
     // The seven-word `PrState` wire vocabulary `Landable.name` renders — read here in reverse. Not a
     // second authority: `Landable.name` is forward-only (`PrState -> string`), so the reverse parser is
@@ -245,6 +339,22 @@ module ReviewApplication =
         | Review.Park reason -> Some reason
         | _ -> None
 
+    let private nextCommand (binding: Review.Binding) (action: Review.NextAction) =
+        match action with
+        | Review.DispatchCritic
+        | Review.DispatchSuccessor _ ->
+            Some $"scripts/fsgg-coord review wait enter %s{binding.ItemRef} --pr %d{binding.Pr} --json"
+        | _ -> None
+
+    let private repairAssertionCommand (binding: Review.Binding) (facts: Review.Facts) (action: Review.NextAction) =
+        match action with
+        | Review.ResumeImplementer _ ->
+            Driver.reviewPhaseFacts facts.Comments
+            |> _.LatestReviewUrl
+            |> Option.map (fun reviewUrl ->
+                $"scripts/fsgg-coord review assert-repair %s{binding.ItemRef} %s{reviewUrl} '<accountable-reason>' --pr %d{binding.Pr} --json")
+        | _ -> None
+
     let private receiptJson (receipt: Review.RepairPhaseReceipt) =
         {| exhaustedPr = receipt.ExhaustedPr
            escalationCommentId = receipt.EscalationCommentId
@@ -404,6 +514,8 @@ module ReviewApplication =
                        stateErrors = stateErrors verdict.State
                        action = actionName verdict.NextAction
                        actionReason = actionReason verdict.NextAction
+                       nextCommand = nextCommand binding verdict.NextAction
+                       repairAssertionCommand = repairAssertionCommand binding facts verdict.NextAction
                        repairPhaseReceipt =
                         match verdict.NextAction with
                         | Review.EnterRepairPhase receipt -> Some(receiptJson receipt)
@@ -446,6 +558,15 @@ module ReviewApplication =
 
     let renderWithWait (opts: Options) (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State) : int =
         renderVerdict opts binding facts None None (Some waitState)
+
+    let renderWithWaitAndRepairAssertion
+        (opts: Options)
+        (binding: Review.Binding)
+        (facts: Review.Facts)
+        (repairAssertionGranted: Review.RepairAssertionReceipt option)
+        (waitState: ReviewWait.State)
+        : int =
+        renderVerdict opts binding facts None repairAssertionGranted (Some waitState)
 
     let run (opts: Options) : int =
         let raw = input opts

@@ -668,7 +668,15 @@ module LiveHandlers =
                                 if List.isEmpty waitErrors then
                                     ReviewWait.project target.Canonical (Some(string marker.Id)) prOpen DateTimeOffset.UtcNow waitEvents
                                 else ReviewWait.Invalid waitErrors
-                            ReviewApplication.renderWithWait opts binding facts waitState
+                            let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                            match ReviewApplication.repairAssertionFromComments expectedSubject reviewComments with
+                            | Error errors ->
+                                let detail = String.concat "; " errors
+                                eprint $"fsgg-coord-engine: review: repair assertion authority is invalid: %s{detail}"
+                                ExitNoVerdict
+                            | Ok authority ->
+                                let repairAssertion = authority |> Option.map _.Receipt
+                                ReviewApplication.renderWithWaitAndRepairAssertion opts binding facts repairAssertion waitState
                         | Error error, _, _
                         | _, _, Error error -> fail error
 
@@ -946,7 +954,9 @@ module LiveHandlers =
                           RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
                           RepairRouteAvailable = true
                           DiffAuditTrusted = None }
-                    match Review.inspect binding facts None None with
+                    let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                    let repairAssertion = ReviewApplication.repairAssertionFromComments expectedSubject reviewComments
+                    match repairAssertion |> Result.bind (fun authority -> Review.inspect binding facts None (authority |> Option.map _.Receipt)) with
                     | Error reasons ->
                         let detail = String.concat "; " reasons
                         eprint $"fsgg-coord-engine: review wait enter: refused: %s{detail}"
@@ -955,6 +965,8 @@ module LiveHandlers =
                         let authority =
                             match verdict.NextAction, verdict.State with
                             | Review.DispatchCritic, _ -> Ok(ReviewWait.InitialReview, 0)
+                            | Review.DispatchSuccessor _, _ when repairAssertion |> Result.toOption |> Option.flatten |> Option.exists (fun authority -> authority.Purpose = ReviewApplication.RepairPhaseEntry) ->
+                                Ok(ReviewWait.RepairConfirmation, 0)
                             | Review.DispatchSuccessor _, Review.AwaitingSuccessorReview nextRound
                             | Review.DispatchSuccessor _, Review.RepairPhaseActive nextRound ->
                                 Ok(ReviewWait.RepairConfirmation, nextRound)
@@ -977,6 +989,109 @@ module LiveHandlers =
                                       ExpiresAt = now.AddHours 4.0
                                       EvidenceRef = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}" }
                             appendReviewWait ctx opts target pr event
+
+    let private assertRepair (ctx: Context) (opts: Options) (rawRef: string) (answeredReviewUrl: string) (reason: string) (purpose: ReviewApplication.RepairAssertionPurpose) : int =
+        match parseRef ctx rawRef, opts.Pr, worker opts with
+        | Error message, _, _ -> eprint $"fsgg-coord-engine: review assert-repair: %s{message}"; ExitError
+        | _, None, _ -> eprint "fsgg-coord-engine: review assert-repair: --pr is required."; ExitError
+        | _, _, Error code -> code
+        | Ok target, Some pr, Ok grantor ->
+            if String.IsNullOrWhiteSpace answeredReviewUrl then
+                eprint "fsgg-coord-engine: review assert-repair: the answered review URL must not be empty."
+                ExitError
+            elif String.IsNullOrWhiteSpace reason then
+                eprint "fsgg-coord-engine: review assert-repair: the reason must not be empty."
+                ExitError
+            else
+                match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                      |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+                      Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                      Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                | Error error, _, _, _
+                | _, Error error, _, _
+                | _, _, _, Error error -> fail error
+                | Ok markers, Ok head, checks, Ok comments ->
+                    match authorizedMarker opts.LeaseMinutes markers (fun () -> Reads.prAlive ctx.Transport target.Owner target.Repo target.Number) with
+                    | Error error -> fail error
+                    | Ok None ->
+                        eprint "fsgg-coord-engine: review assert-repair: no current claim generation identifies the implementing worker."
+                        ExitNoVerdict
+                    | Ok(Some claim) ->
+                        let reviewComments =
+                            comments
+                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                        let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                        match ReviewApplication.repairAssertionFromComments expectedSubject reviewComments with
+                        | Error errors ->
+                            let detail = String.concat "; " errors
+                            eprint $"fsgg-coord-engine: review assert-repair: existing authority is invalid: %s{detail}"
+                            ExitNoVerdict
+                        | Ok(Some _) ->
+                            eprint "fsgg-coord-engine: review assert-repair: a repair assertion already exists; append-only authority does not replace or duplicate it."
+                            ExitNoVerdict
+                        | Ok None ->
+                            let phaseFacts = Driver.reviewPhaseFacts reviewComments
+                            let receipt: Review.RepairAssertionReceipt =
+                                { AnsweredReviewUrl = answeredReviewUrl
+                                  CandidateHeadSha = head
+                                  GrantedBy = grantor.Id
+                                  Reason = reason }
+                            let authority: ReviewApplication.RepairAssertionAuthority =
+                                { Purpose = purpose; Receipt = receipt }
+                            let round = phaseFacts.ConfirmationCount + 1
+                            let binding: Review.Binding =
+                                { ItemRef = target.Canonical
+                                  Pr = pr
+                                  HeadSha = head
+                                  ClaimGeneration = string claim.Id
+                                  ImplementerIdentity = claim.Worker.Value
+                                  Phase = if phaseFacts.RepairPhasePresent then Review.Repair else Review.Ordinary
+                                  Round = round }
+                            let facts: Review.Facts =
+                                { Comments = reviewComments
+                                  Checks = checks
+                                  RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
+                                  RepairRouteAvailable = true
+                                  DiffAuditTrusted = None }
+                            match Review.inspect binding facts None (Some receipt) with
+                            | Error errors ->
+                                let detail = String.concat "; " errors
+                                eprint $"fsgg-coord-engine: review assert-repair: refused: %s{detail}"
+                                ExitNoVerdict
+                            | Ok verdict ->
+                                match verdict.NextAction with
+                                | Review.DispatchSuccessor _ ->
+                                    let body = ReviewApplication.encodeRepairAssertion expectedSubject authority
+                                    let prTarget = { target with Number = pr }
+                                    match Writes.postIssueComment ctx.Transport prTarget body with
+                                    | Error error -> fail error
+                                    | Ok commentId ->
+                                        match Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                                        | Error error -> fail error
+                                        | Ok current ->
+                                            let currentComments =
+                                                current
+                                                |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                            match ReviewApplication.repairAssertionFromComments expectedSubject currentComments with
+                                            | Ok(Some observed) when observed = authority ->
+                                                let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
+                                                let purposeName =
+                                                    match purpose with
+                                                    | ReviewApplication.Confirmation -> "confirmation"
+                                                    | ReviewApplication.RepairPhaseEntry -> "repair-phase-entry"
+                                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.repair-assertion-result/v1"; subject = expectedSubject; purpose = purposeName; commentId = commentId; commentUrl = commentUrl; answeredReviewUrl = answeredReviewUrl; candidateHeadSha = head; grantedBy = grantor.Id; nextCommand = $"scripts/fsgg-coord review wait enter %s{target.Canonical} --pr %d{pr} --json" |})
+                                                ExitGreen
+                                            | Ok _ ->
+                                                eprint "fsgg-coord-engine: review assert-repair: the posted assertion did not become the sole durable authority."
+                                                ExitNoVerdict
+                                            | Error errors ->
+                                                let detail = String.concat "; " errors
+                                                eprint $"fsgg-coord-engine: review assert-repair: posted authority is invalid: %s{detail}"
+                                                ExitNoVerdict
+                                | _ ->
+                                    eprint $"fsgg-coord-engine: review assert-repair: the current state authorizes %A{verdict.NextAction}, not an accountable same-head repair assertion."
+                                    ExitNoVerdict
 
     let private authorizeReviewRecordWait
         (ctx: Context)
@@ -1016,48 +1131,72 @@ module LiveHandlers =
                     | Some entry when entry.NewCriticIdentity <> draft.Critic -> Error "repairPhaseReceipt.newCriticIdentity does not match the repair-phase critic"
                     | Some entry when entry.CandidateHeadSha <> draft.HeadSha -> Error "repairPhaseReceipt.candidateHeadSha does not match the repair-phase record head"
                     | Some entry ->
-                        match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
+                        let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+                        let reviewComments =
+                            comments
+                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                        let phaseFacts = Driver.reviewPhaseFacts reviewComments
+                        let assertionAuthority =
+                            match ReviewApplication.repairAssertionFromComments expectedSubject reviewComments with
+                            | Error errors -> Error(String.concat "; " errors)
+                            | Ok None -> Error "a repair-phase record requires one durable accountable repair assertion"
+                            | Ok(Some authority) when authority.Purpose <> ReviewApplication.RepairPhaseEntry ->
+                                Error "the repair assertion purpose is not repair-phase-entry"
+                            | Ok(Some authority) when authority.Receipt.CandidateHeadSha <> draft.HeadSha ->
+                                Error "the repair assertion candidateHeadSha does not match the repair-phase record head"
+                            | Ok(Some authority) when draft.PrecedingReview <> Some authority.Receipt.AnsweredReviewUrl ->
+                                Error "the repair assertion does not answer the review immediately preceding the repair-phase record"
+                            | Ok(Some authority) when authority.Receipt.GrantedBy = claim.Worker.Value ->
+                                Error "the repair assertion grantor is the current implementing worker"
+                            | Ok(Some authority) when phaseFacts.CriticIdentity = Some authority.Receipt.GrantedBy ->
+                                Error "the repair assertion grantor is the current critic"
+                            | Ok(Some _) -> Ok ()
+                        let provenance =
+                            (match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
                               Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
                               Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo entry.ExhaustedPr with
-                        | Error error, _, _
-                        | _, Error error, _
-                        | _, _, Error error -> Error(sprintf "repair-phase entry provenance could not be read: %A" error)
-                        | Ok branch, Ok head, Ok exhaustedComments ->
-                            let prBinding = string pr
-                            let branchOrPrMatches =
-                                entry.NewBranchOrPr = branch
-                                || entry.NewBranchOrPr = prBinding
-                                || entry.NewBranchOrPr = $"#%d{pr}"
-                                || entry.NewBranchOrPr = $"pr/%d{pr}"
-                            if not branchOrPrMatches then
-                                Error "repairPhaseReceipt.newBranchOrPr does not match the current branch or PR"
-                            elif head <> entry.CandidateHeadSha then
-                                Error "repairPhaseReceipt.candidateHeadSha is stale for the current PR"
-                            elif claim.Id <= entry.EscalationCommentId then
-                                Error "repairPhaseReceipt.newClaimGeneration must be newer than the exhausted escalation comment"
-                            elif Reads.prLandable ctx.Transport target.Owner target.Repo entry.ExhaustedPr <> Types.PrClosed then
-                                Error "repairPhaseReceipt.exhaustedPr must be closed without merging"
-                            else
-                                let reviewComments =
-                                    exhaustedComments
-                                    |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                let phaseFacts = Driver.reviewPhaseFacts reviewComments
-                                let exactEscalation =
-                                    exhaustedComments
-                                    |> List.tryFind (fun comment -> comment.Id = entry.EscalationCommentId)
-                                    |> Option.bind (fun comment ->
-                                        if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
-                                            Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim())
-                                            |> Result.toOption
-                                        else None)
-                                match phaseFacts.StructuredErrors, exactEscalation with
-                                | errors, _ when not (List.isEmpty errors) ->
-                                    let detail = String.concat "; " errors
-                                    Error($"the exhausted repair-phase provenance ledger is invalid: %s{detail}")
-                                | _, Some escalation
-                                    when escalation.Kind = StructuredDecision.Escalation
-                                         && escalation.Subject = $"%s{target.Canonical}/pr/%d{entry.ExhaustedPr}" -> Ok ()
-                                | _ -> Error "repairPhaseReceipt.escalationCommentId does not name the exhausted PR's structured escalation record"
+                             | Error error, _, _
+                             | _, Error error, _
+                             | _, _, Error error -> Error(sprintf "repair-phase entry provenance could not be read: %A" error)
+                             | Ok branch, Ok head, Ok exhaustedComments ->
+                                 let prBinding = string pr
+                                 let branchOrPrMatches =
+                                     entry.NewBranchOrPr = branch
+                                     || entry.NewBranchOrPr = prBinding
+                                     || entry.NewBranchOrPr = $"#%d{pr}"
+                                     || entry.NewBranchOrPr = $"pr/%d{pr}"
+                                 if not branchOrPrMatches then
+                                     Error "repairPhaseReceipt.newBranchOrPr does not match the current branch or PR"
+                                 elif head <> entry.CandidateHeadSha then
+                                     Error "repairPhaseReceipt.candidateHeadSha is stale for the current PR"
+                                 elif claim.Id <= entry.EscalationCommentId then
+                                     Error "repairPhaseReceipt.newClaimGeneration must be newer than the exhausted escalation comment"
+                                 elif Reads.prLandable ctx.Transport target.Owner target.Repo entry.ExhaustedPr <> Types.PrClosed then
+                                     Error "repairPhaseReceipt.exhaustedPr must be closed without merging"
+                                 else
+                                     let reviewComments =
+                                         exhaustedComments
+                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                     let phaseFacts = Driver.reviewPhaseFacts reviewComments
+                                     let exactEscalation =
+                                         exhaustedComments
+                                         |> List.tryFind (fun comment -> comment.Id = entry.EscalationCommentId)
+                                         |> Option.bind (fun comment ->
+                                             if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
+                                                 Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                                                 |> Result.toOption
+                                             else None)
+                                     match phaseFacts.StructuredErrors, exactEscalation with
+                                     | errors, _ when not (List.isEmpty errors) ->
+                                         let detail = String.concat "; " errors
+                                         Error($"the exhausted repair-phase provenance ledger is invalid: %s{detail}")
+                                     | _, Some escalation
+                                         when escalation.Kind = StructuredDecision.Escalation
+                                              && escalation.Subject = $"%s{target.Canonical}/pr/%d{entry.ExhaustedPr}" -> Ok ()
+                                     | _ -> Error "repairPhaseReceipt.escalationCommentId does not name the exhausted PR's structured escalation record")
+                        match assertionAuthority with
+                        | Error reason -> Error reason
+                        | Ok () -> provenance
 
                 let authorizeExhaustedClaimTurnover (receipt: ReviewWait.WaitReceipt) evidence =
                     let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
@@ -1381,6 +1520,10 @@ module LiveHandlers =
 
     let review (ctx: Context) (opts: Options) : int =
         match opts.Args with
+        | [ "assert-repair"; rawRef; answeredReviewUrl; reason ] ->
+            assertRepair ctx opts rawRef answeredReviewUrl reason ReviewApplication.Confirmation
+        | [ "assert-repair"; "repair-phase"; rawRef; answeredReviewUrl; reason ] ->
+            assertRepair ctx opts rawRef answeredReviewUrl reason ReviewApplication.RepairPhaseEntry
         | [ "wait"; "enter"; rawRef ] -> enterReviewWait ctx opts rawRef
         | [ "wait"; rawRef; path ] -> recordReviewWait ctx opts rawRef path
         | [ "record"; rawRef; path ] -> recordReview ctx opts rawRef path
