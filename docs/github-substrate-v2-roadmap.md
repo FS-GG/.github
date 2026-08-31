@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.4 accepted; GS2-01.9 not applicable; GS2-04.5 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.5 accepted; GS2-01.9 not applicable; GS2-04.6 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -755,9 +755,21 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   merged at [`62396de0`](https://github.com/FS-GG/FS.GG.Coordination/commit/62396de0b38a13fd8f2cb5fec7ba9e8e42770823),
   and passed [protected-main run 33412110063](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33412110063).
 
-- [ ] **GS2-04.5 — Comment/projection adapter.** Preserve server-issued identity/order, validate marker
+- [x] **GS2-04.5 — Comment/projection adapter.** Preserve server-issued identity/order, validate marker
   JSON and referenced journal digests, distinguish edit/delete/tamper, and regenerate human projections
   from durable authority. A comment never authorizes a concurrency-sensitive transition.
+
+  Accepted 2026-08-31. [Implementation PR 150](https://github.com/FS-GG/FS.GG.Coordination/pull/150)
+  passed [exact-head qualification run 33433701416](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33433701416)
+  and merged as protected commit
+  [`76782e3f`](https://github.com/FS-GG/FS.GG.Coordination/commit/76782e3f86646f2303d0aad90b28d27198a4f7ef),
+  whose [protected-main run 33434459359](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33434459359)
+  passed. [Acceptance PR 152](https://github.com/FS-GG/FS.GG.Coordination/pull/152) added the append-only
+  [GS2-04.5 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/a8e6c061918cc351de76d7a42be4f1c2a1792686/evidence/github-substrate-v2/accepted/GS2-04.5.json)
+  with self-digest `27b27b76cf52fca137059aa466c7922dc096cae33c0a4e1045735bd937497091`,
+  merged at [`a8e6c061`](https://github.com/FS-GG/FS.GG.Coordination/commit/a8e6c061918cc351de76d7a42be4f1c2a1792686),
+  and passed [protected-main run 33436270111](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33436270111).
+
 - [ ] **GS2-04.6 — Sharded Git journal adapter.** Perform protected expected-parent commits for claim,
   review, operation, and global cutover aggregates in the dedicated `FS.GG.Coordination.Authority`
   repository. Use `refs/heads/fsgg/v2/journal/<kind>/<shard>`, explicit old-OID
