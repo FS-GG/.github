@@ -238,7 +238,8 @@ if python3 "$TOOL" promote --manifest "$WORK/incomplete.json" --previous-channel
 fi
 
 python3 - "$ROOT" <<'PY'
-import pathlib, sys
+import copy, pathlib, sys
+import yaml
 root = pathlib.Path(sys.argv[1])
 subjects = {
     "release-coord-engine.yml": "FS.GG.Coord.Cli",
@@ -303,6 +304,42 @@ assert immutable >= 0 and immutable_download > immutable and immutable_upload < 
     immutable, immutable_download, immutable_upload
 )
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
+start_path = root / ".github/workflows/release-saga-start.yml"
+start = start_path.read_text()
+start_doc = yaml.safe_load(start)
+start_jobs = start_doc["jobs"]
+assert start_jobs["prepare"]["uses"] == "./.github/workflows/release-saga-prepare.yml"
+
+def start_topology_problems(doc):
+    jobs = doc.get("jobs", {})
+    prepare_job = jobs.get("prepare", {})
+    publisher_job = jobs.get("start-publishers", {})
+    problems = []
+    if prepare_job.get("uses") != "./.github/workflows/release-saga-prepare.yml":
+        problems.append("operator entry point does not call the single-pack prepare workflow")
+    needs = publisher_job.get("needs")
+    if needs != "prepare" and not (isinstance(needs, list) and "prepare" in needs):
+        problems.append("publisher start has no causal dependency on successful preparation")
+    return problems
+
+assert not start_topology_problems(start_doc), start_topology_problems(start_doc)
+decoupled = copy.deepcopy(start_doc)
+decoupled["jobs"]["start-publishers"].pop("needs")
+assert start_topology_problems(decoupled) == [
+    "publisher start has no causal dependency on successful preparation"
+], "removing the prepare dependency did not turn the topology proof red"
+for token in (
+    "git push --atomic origin",
+    'gh workflow run "$workflow"',
+    '-f source_sha="$SOURCE_SHA"',
+    'elif [ "$tagged" = "$SOURCE_SHA" ]',
+    "release-kit.yml",
+    "release-drivers.yml",
+    "release-coord-engine.yml",
+):
+    assert token in start, token
+assert "git push origin kit/v$VERSION" not in prepare
+assert "release-saga-start.yml" in prepare
 for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
     assert prepare.count(f"dotnet pack src/{project}/") == 1, project
 lifecycle_suite = "dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj"

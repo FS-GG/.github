@@ -97,6 +97,21 @@ published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.g
 
 ## How a package gets published
 
+### `.github` coherent-set entry point
+
+For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), do **not**
+push component tags directly and do not sequence preparation from a step-summary recipe. Start the
+transaction from the exact accepted source commit:
+
+    gh workflow run release-saga-start.yml --repo FS-GG/.github --ref main \
+      -f source_sha=<40-character-merge-sha>
+
+`release-saga-start` calls the single-pack prepare workflow first. Only after it succeeds does the
+next job atomically create missing component tags; members whose immutable tags already exist are
+resumed through their manifest-bound `workflow_dispatch` recovery. This is the standard entry point
+for both fresh operator cuts and partial recovery. The component release workflows and
+`release-saga-prepare.yml` are lower-level saga primitives, not independent operator instructions.
+
 Each **producer owns its release workflow**, including `.github` for its two org-level tools
 (ADR-0039 §5). The shape is:
 
