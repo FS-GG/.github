@@ -492,8 +492,13 @@
        required evidence through distinct phase identities, while no second person, account, agent,
        or approval quorum is required. This changes receiver-visible delivery behavior without
        removing a package, command, member, schema, or technical gate. -->
+  <!-- 0.77.0 -> 0.78.0: MINOR on the stable 0.x line. The intake command now
+       canonicalizes Class through the shared issue/Projects vocabulary and can recover explicitly
+       declared legacy drafts after a partial create. Recovery requires the receipt-bound exact
+       predecessor body, re-reads the canonical PATCH, and advances the receipt before projection.
+       The packed coordination skills remove the unprojectable `capability` example. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.77.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.78.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
