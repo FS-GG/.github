@@ -479,7 +479,9 @@ expect_execution() {
     || ! jq -e '.schemaVersion == 1 and .status == "pending" and .next == "$initialize-sdd-workspace"' "$target/.fsgg/workspace-initialization.json" >/dev/null \
     || ! cmp -s "$target/.claude/skills/initialize-sdd-workspace/SKILL.md" "$target/.agents/skills/initialize-sdd-workspace/SKILL.md" \
     || ! grep -qF 'fsgg:workspace-initialization:start' "$target/AGENTS.md" \
-    || ! grep -qF '$initialize-sdd-workspace' "$target/CLAUDE.md"; then
+    || ! grep -qF '$initialize-sdd-workspace' "$target/CLAUDE.md" \
+    || ! grep -qF 'Initialization required:' <<<"$OUT" \
+    || ! grep -qF 'The wizard does not run initialization.' <<<"$OUT"; then
     bad "$desc" "want successful real route, selected descriptor, provider '$template', pending initialization handoff, and params '$expected_params'; got rc=$rc"$'\n'"--- output ---"$'\n'"$OUT"$'\n'"--- fsgg-sdd ---"$'\n'"$(cat "$log" 2>/dev/null || true)"
   else
     ok "$desc"

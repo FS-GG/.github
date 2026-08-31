@@ -118,6 +118,23 @@ let assembleWizardOptions (target: string) (product: string) : Options =
       TrustedWriters = []
       ChoreLocks = None }
 
+/// Apply the provider-specific answers gathered by the interactive wizard to its stable defaults.
+/// Kept as a pure boundary so the selected template (and the bindings closure it requires) can be
+/// exercised without driving a terminal UI.
+let assembleWizardTemplateOptions
+    (target: string)
+    (product: string)
+    (template: string)
+    (npmPackage: string option)
+    (npmVersion: string option)
+    (bindingTarget: string option)
+    : Options =
+    { assembleWizardOptions target product with
+        Template = template
+        NpmPackage = npmPackage
+        NpmVersion = npmVersion
+        BindingTarget = bindingTarget }
+
 // ── Effects ──────────────────────────────────────────────────────────────────
 
 /// One lock guards every write to AnsiConsole from the process-output pump threads, so
@@ -1234,7 +1251,7 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
         AnsiConsole.MarkupLine(sprintf "[bold]Done:[/] workspace in [green]%s[/]" (Markup.Escape opts.Target))
         AnsiConsole.MarkupLine(
             sprintf
-                "[bold]Next:[/] cd %s and ask your agent to run [aqua]$initialize-sdd-workspace[/]"
+                "[bold yellow]Initialization required:[/] first start your agent in [green]%s[/], then ask it to run [aqua]$initialize-sdd-workspace[/]. The wizard does not run initialization."
                 (Markup.Escape opts.Target)
         )
         // The chore queue needs a per-repo lock issue, and this workspace's repo does not exist on GitHub
@@ -1468,8 +1485,8 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
     |> ignore
 
-    let initialization = tree.AddNode "[yellow]initialization handoff[/]  [grey](run inside the repository)[/]"
-    initialization.AddNode "[grey37]$initialize-sdd-workspace · conditional AGENTS.md/CLAUDE.md warning[/]" |> ignore
+    let initialization = tree.AddNode "[yellow]initialization handoff[/]  [grey](after the first agent starts in the repository)[/]"
+    initialization.AddNode "[grey37]$initialize-sdd-workspace · not run by this wizard · conditional AGENTS.md/CLAUDE.md warning[/]" |> ignore
     initialization.AddNode "[grey37]repository, board, collaborators and provider extras are asked only if applicable[/]" |> ignore
 
     let panel = Panel(tree)
@@ -1519,9 +1536,9 @@ let private draftView (d: Draft) =
 
 /// When invoked with no arguments on an interactive terminal, walk the user through the
 /// scaffold parameters with Spectre.Console prompts instead of failing with a usage error.
-/// Only product and target are creation-time facts. Everything repository-specific is deferred to
-/// the initialize skill installed in the generated workspace. A live preview shows those fixed,
-/// coherent defaults before the final confirmation.
+/// Product, target, and the workspace template are the creation-time choices. Everything
+/// repository-specific is deferred to the initialize skill installed in the generated workspace.
+/// A live preview shows those fixed, coherent defaults before the final confirmation.
 /// A non-interactive stdin never reaches here (see `main`), so the piped/CI usage-error contract
 /// is unchanged.
 /// Returns None if the user declines the final confirmation.
@@ -1544,16 +1561,70 @@ let private interactive () : Options option =
     draft <-
         { draft with
             Target = Some target
-            Template = Some "rendering"
             Lifecycle = Some "sdd"
             Governance = Some true
             Ref = Some "main"
             Pinned = Some false }
 
+    draftView draft
+    let templateChoices =
+        templates
+        |> List.map (fun (name, description) -> sprintf "%s — %s" name description)
+    let templateChoice =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Which [green]template[/] should this workspace use?")
+                .PageSize(templateChoices.Length)
+                .AddChoices(templateChoices))
+    let template =
+        (templates, templateChoices)
+        ||> List.zip
+        |> List.find (fun (_, choice) -> choice = templateChoice)
+        |> fst
+        |> fst
+    draft <- { draft with Template = Some template }
+
+    let mutable npmPackage = None
+    let mutable npmVersion = None
+    let mutable bindingTarget = None
+    if requiresNpmClosure template then
+        draftView draft
+        let packageName =
+            AnsiConsole.Prompt(
+                TextPrompt<string>("Exact [green]npm package[/] name?")
+                    .Validate(fun (s: string) -> required "npm package" s)).Trim()
+        npmPackage <- Some packageName
+        draft <- { draft with NpmPackage = npmPackage }
+
+        draftView draft
+        let version =
+            AnsiConsole.Prompt(
+                TextPrompt<string>("Exact [green]npm version[/]?")
+                    .Validate(fun (s: string) ->
+                        if String.IsNullOrWhiteSpace s
+                           || s.Equals("latest", StringComparison.OrdinalIgnoreCase)
+                           || s.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0 then
+                            ValidationResult.Error("[red]an exact npm version is required (not latest or a range)[/]")
+                        else
+                            ValidationResult.Success())).Trim()
+        npmVersion <- Some version
+        draft <- { draft with NpmVersion = npmVersion }
+
+        draftView draft
+        let targetChoice =
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("Which [green]binding target[/] should be generated?")
+                    .AddChoices([ "browser"; "node"; "universal" ]))
+        bindingTarget <- Some targetChoice
+        draft <- { draft with BindingTarget = bindingTarget }
+
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
+    AnsiConsole.MarkupLine "[yellow]Initialization runs only after you start an agent in the new workspace for the first time; this wizard installs the handoff but does not initialize the repository.[/]"
+    AnsiConsole.WriteLine()
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some(assembleWizardOptions target product)
+        Some(assembleWizardTemplateOptions target product template npmPackage npmVersion bindingTarget)
     else
         None
 
