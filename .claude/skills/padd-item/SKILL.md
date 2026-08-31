@@ -73,7 +73,7 @@ Create a concise outcome title and put the structured fields in a draft such as:
   "acceptance": "<testable criteria>",
   "verification": "<commands or evidence links>",
   "paths": ["<exact path or directory prefix>"],
-  "class": "<defect|hardening|capability|decision>",
+  "class": "<defect|hardening|decision>",
   "severity": "<low|medium|high|critical>",
   "status": "Backlog",
   "backlogReason": "not-yet-actionable",

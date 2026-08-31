@@ -16,13 +16,27 @@ module IntakeReceipt =
 
     let digest (draft: Intake.Draft) = digestWithSeverity draft.Severity draft
 
+    // Every accepted predecessor is an EXPLICIT migration, never "any digest with this id".  That keeps
+    // the receipt an exact content binding while allowing the decoder to repair a value that an older
+    // validator accepted even though the board could not project it.  Cross-product the two bounded
+    // migrations because a draft may have passed through both historical defects.
+    let compatibleDrafts (draft: Intake.Draft) =
+        let classVariants =
+            [ yield draft
+              if draft.Class = "hardening" then
+                  yield { draft with Class = "capability" } ]
+
+        classVariants
+        |> List.collect (fun classVariant ->
+            [ yield classVariant
+              match classVariant.Severity with
+              | Some value when value.ToLowerInvariant() <> value ->
+                  yield { classVariant with Severity = Some(value.ToLowerInvariant()) }
+              | _ -> () ])
+        |> List.distinct
+
     let compatibleDigests (draft: Intake.Draft) =
-        [ yield digest draft
-          match draft.Severity with
-          | Some value ->
-              let legacy = digestWithSeverity (Some(value.ToLowerInvariant())) draft
-              if legacy <> digest draft then yield legacy
-          | None -> () ]
+        compatibleDrafts draft |> List.map digest
 
     let marker (draft: Intake.Draft) =
         $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{digest draft} -->"

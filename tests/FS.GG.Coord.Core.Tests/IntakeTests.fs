@@ -36,6 +36,15 @@ module IntakeTests =
         | Ok _ -> failwith "a repository escape must refuse"
 
     [<Fact>]
+    let ``intake class vocabulary is the shared board vocabulary`` () =
+        match Intake.validate { draft with Class = "capability" } with
+        | Error findings ->
+            Assert.Contains(findings, fun finding ->
+                finding.Field = "class"
+                && finding.Detail.Contains("defect, hardening, decision"))
+        | Ok _ -> failwith "a class the board cannot project must refuse before IO"
+
+    [<Fact>]
     let ``#2134 receipt cannot turn a different draft into a retry`` () =
         let receipt: IntakeReceipt.Receipt = { DraftId = "other"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 42; DraftDigest = "wrong" }
         Assert.True(IntakeReceipt.validate draft receipt |> Result.isError)

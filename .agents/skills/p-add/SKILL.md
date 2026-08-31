@@ -55,7 +55,7 @@ hand-authored issue body. Start from this complete shape and replace every place
   "acceptance": "<testable acceptance criteria>",
   "verification": "<commands, evidence links, or intended proof>",
   "paths": ["<exact path or directory prefix>"],
-  "class": "<defect|hardening|capability|decision>",
+  "class": "<defect|hardening|decision>",
   "severity": "<low|medium|high|critical>",
   "status": "Backlog",
   "backlogReason": "not-yet-actionable",

@@ -113,6 +113,14 @@ module Writes =
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
     val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
 
+    /// Canonicalize an issue created from one explicitly supported predecessor draft. The receipt and
+    /// exact generated predecessor body jointly authorize the PATCH; arbitrary edits fail closed.
+    val canonicalizeIntake:
+        transport: Transport.IGitHubTransport ->
+        receipt: FS.GG.Coord.IntakeReceipt.Receipt ->
+        draft: FS.GG.Coord.Intake.Draft ->
+            Errors.IoResult<unit>
+
     open FS.GG.Coord.Types
     open Errors
     open Transport

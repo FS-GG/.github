@@ -47,6 +47,18 @@ module Intake =
                     yield { Field = "id"; Detail = "must contain only letters, digits, '-', '_' or '.'" }
                 if draft.Paths |> List.exists (validPath >> not) then
                     yield { Field = "paths"; Detail = "must be relative repository paths without empty, '.' or '..' segments" }
+                match Types.itemClassOfWireName draft.Class with
+                | Some parsed when Types.itemClassWireName parsed = draft.Class -> ()
+                | Some parsed ->
+                    yield
+                        { Field = "class"
+                          Detail = $"must use canonical board value '%s{Types.itemClassWireName parsed}'" }
+                | None ->
+                    let known =
+                        Class.legalClasses
+                        |> List.map Types.itemClassWireName
+                        |> String.concat ", "
+                    yield { Field = "class"; Detail = $"must be one of %s{known}" }
                 match draft.Severity with
                 | Some value ->
                     match canonicalSeverity value with

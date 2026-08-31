@@ -2093,7 +2093,17 @@ module Handlers =
                         | Ok(Some receipt) ->
                             IntakeReceipt.validate draft receipt
                             |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
-                            |> Result.map (fun r -> { Owner = r.Owner; Repo = r.Repository; Number = r.IssueNumber })
+                            |> Result.bind (fun r ->
+                                Writes.canonicalizeIntake ctx.Transport r draft
+                                |> Result.bind (fun () ->
+                                    let canonical =
+                                        { r with DraftDigest = IntakeReceipt.digest draft }
+                                    Cache.putIntakeReceipt canonical
+                                    |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                    |> Result.map (fun () ->
+                                        { Owner = canonical.Owner
+                                          Repo = canonical.Repository
+                                          Number = canonical.IssueNumber })))
                         | Ok None ->
                             let digest = IntakeReceipt.digest draft
                             let intent =
@@ -2109,7 +2119,9 @@ module Handlers =
                                 let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
                                 let provenanceMarkers =
                                     IntakeReceipt.compatibleDigests draft
-                                    |> List.map (fun compatibleDigest -> $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{compatibleDigest} -->")
+                                    |> List.map (fun compatibleDigest ->
+                                        compatibleDigest,
+                                        $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{compatibleDigest} -->")
                                 let persist number =
                                     let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
                                     Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
@@ -2118,7 +2130,22 @@ module Handlers =
                                 | Some Intake.Reuse, [ c ], _ -> persist c.Number
                                 | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
                                 | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
-                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest && (provenanceMarkers |> List.exists (fun marker -> c.Body.Contains(marker, StringComparison.Ordinal))) -> persist c.Number
+                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest ->
+                                    match
+                                        provenanceMarkers
+                                        |> List.tryFind (fun (_, marker) -> c.Body.Contains(marker, StringComparison.Ordinal))
+                                    with
+                                    | None ->
+                                        Error(Errors.Malformed(draft.Id, "the durable intake intent found a same-title issue without a compatible provenance marker"))
+                                    | Some(predecessorDigest, _) ->
+                                        let predecessorReceipt: IntakeReceipt.Receipt =
+                                            { DraftId = draft.Id
+                                              Owner = draft.Owner
+                                              Repository = draft.Repository
+                                              IssueNumber = c.Number
+                                              DraftDigest = predecessorDigest }
+                                        Writes.canonicalizeIntake ctx.Transport predecessorReceipt draft
+                                        |> Result.bind (fun () -> persist c.Number)
                                 | Some Intake.Create, _ :: _, _ ->
                                     Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
                                 | Some Intake.Create, [], _ ->
