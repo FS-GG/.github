@@ -19,6 +19,16 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-31** — **`new-sdd-workspace` 0.11.1 published and reconciled**
+  (owner github; [source PR #3098](https://github.com/FS-GG/.github/pull/3098),
+  [release run 33369748748](https://github.com/FS-GG/.github/actions/runs/33369748748)):
+  GitHub Packages and nuget.org serve the patch from exact tagged source `f0f6d133`; both nuspecs
+  bind that commit and version 0.11.1. The 25 normalized payload entries are byte-identical with
+  digest `sha256:5874479e1ee24f959dfa79da051d1ed0dd50dc91d6cc60f4d0019ee669b3bc5c`;
+  the org archive is `sha256:c02471b15167d98951e3ac006c913e71613dd8b05bbb229eb625b0e2a837a288`
+  and the public signed archive is
+  `sha256:9c5337aeccc731c68242d176f471b8f4f5e85124642f6543f9c6092f55dadb30`.
+
 - **2026-08-31** — **`new-sdd-workspace` 0.11.1 source release prepared**
   (owner github; [source PR #3097](https://github.com/FS-GG/.github/pull/3097)):
   the interactive wizard again asks which workspace template to create before the choice becomes
