@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.6 accepted; GS2-01.9 not applicable; GS2-04.7 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.7 accepted; GS2-01.9 not applicable; GS2-04.8 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -790,9 +790,19 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `4011bbe0d7e2db27aff2b6e0a36d9bc342dc89e8310b56d4e358b6d73bc96511`,
   merged at [`53fe450f`](https://github.com/FS-GG/FS.GG.Coordination/commit/53fe450f8d60fdfe4cc68aaaeaa181666796e31a),
   and passed [protected-main run 33445770572](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33445770572).
-- [ ] **GS2-04.7 — Repository/settings adapter.** Inspect and plan custom properties, rulesets, merge
+- [x] **GS2-04.7 — Repository/settings adapter.** Inspect and plan custom properties, rulesets, merge
   policies, Actions policy, environments, releases, tags, security, and dependency features with supported,
   unauthorized, and unavailable outcomes.
+
+  Accepted 2026-09-01. [Implementation PR 162](https://github.com/FS-GG/FS.GG.Coordination/pull/162)
+  merged as protected commit
+  [`99dd3ca2`](https://github.com/FS-GG/FS.GG.Coordination/commit/99dd3ca27df05dc65ffea2b1c513c0423460f51a),
+  whose [protected-main run 33450426877](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33450426877)
+  passed. [Acceptance PR 164](https://github.com/FS-GG/FS.GG.Coordination/pull/164) added the append-only
+  [GS2-04.7 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/89d0dda060efbe28d2dd25ad5a475fe865392b6f/evidence/github-substrate-v2/accepted/GS2-04.7.json)
+  with self-digest `25503c9cdc1ba86a5d37c01e0cd3e38d95ee213262047a7dea3c8c3bfbebd848`,
+  merged at [`89d0dda0`](https://github.com/FS-GG/FS.GG.Coordination/commit/89d0dda060efbe28d2dd25ad5a475fe865392b6f),
+  and passed [protected-main run 33451465408](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33451465408).
 - [ ] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
   attestations, packages, and public downloads without treating upload responses as served artifacts.
 - [ ] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
