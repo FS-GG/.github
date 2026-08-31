@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.8 accepted; GS2-01.9 not applicable; GS2-03.10 architecture amendment accepted; GS2-03.9 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and all GS2-03 units accepted; GS2-01.9 not applicable; GS2-04.1 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -618,8 +618,46 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   One Accountable Delivery Owner made the sole decision; no reviewer count, external account, or additional
   authorization was required. The observed evidence-only acceptance route still paid one full formal run;
   that selector-granularity cost is retained for a later CI architecture improvement rather than hidden.
-- [ ] **GS2-03.9 — Prove the harness can fail.** Mutation-test or invert every gate class so a vacuous,
+- [x] **GS2-03.9 — Prove the harness can fail.** Mutation-test or invert every gate class so a vacuous,
   absent, stale, truncated, forged, or generated-only evidence set is red.
+  **Accepted 2026-08-31:** protected implementation
+  [`53f0338d`](https://github.com/FS-GG/FS.GG.Coordination/commit/53f0338dea988fd79b95092286709df7c0fb4745)
+  introduced the typed `harness-mutation-proof/1` boundary, closed ten-gate and six-mutation inventories,
+  ten healthy controls, and the derived sixty-cell negative Cartesian matrix. Every cell is created by the
+  generator, executes the production qualification-manifest validator, records its actual stable diagnostic,
+  and is regenerated during validation; callers cannot assert outcomes, coverage counts, or a hand-picked
+  subset. Valid-hash forgery is resealed through every dependent manifest digest and rejected only against
+  the independently frozen healthy baseline. Generated-case producers are also red when they are the sole
+  provenance for any non-generated evidence class. [Implementation PR 120](https://github.com/FS-GG/FS.GG.Coordination/pull/120)
+  passed [full qualification run 33348201595](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33348201595)
+  and protected main reused the identical subject through
+  [run 33349197336](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33349197336).
+
+  The first hosted candidate exposed an opaque TLC transition-removal result after a prior related formal
+  failure. Under the standard second-defect rule, the owner stopped retries, inventoried the complete formal
+  result boundary, and reproduced the exact relation model independently. The model still produced its
+  two-state liveness counterexample, while the runner had conflated semantic green, tool exit, output-protocol
+  drift, and nondeterminism into one message. The class-level repair now retains exit code/stdout/stderr for
+  every simulation-measurement, transition-removal, and counterexample-marker failure and hashes both
+  projection and temporal-diagnostic reproductions when they differ. It changes no success predicate, lane,
+  or ordering edge. The repaired local canonical run passed Q1/Q2 with 8 positive invariants, 126 rejected
+  controls, 11 reproducible formal counterexamples, and the exact 186 external / 161 Quint / 47 verify
+  process census before the complete hosted run passed.
+
+  Independent [acceptance PR 121](https://github.com/FS-GG/FS.GG.Coordination/pull/121) retained exact Q7,
+  hosted formal, PR-execute, protected-main-reuse, and four-run observations; five separately hashed critique
+  perspectives; a deterministic combined digest over both validator source files; and the canonical
+  [mutation proof](https://github.com/FS-GG/FS.GG.Coordination/blob/d7029dd485419e19a3b6b6491932b39b7e29ecba/evidence/github-substrate-v2/mutation-proofs/GS2-03.9.json)
+  (`sha256:4585fb2f68700dd8d8f0a470a55591fc0d5b6e8a31d2936ff2388fe655204060`).
+  Acceptance passed [full run 33349742847](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33349742847)
+  and merged as protected commit
+  [`d7029dd4`](https://github.com/FS-GG/FS.GG.Coordination/commit/d7029dd485419e19a3b6b6491932b39b7e29ecba);
+  protected-main [run 33350667104](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33350667104)
+  then revalidated the identical acceptance subject. The append-only
+  [accepted receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/d7029dd485419e19a3b6b6491932b39b7e29ecba/evidence/github-substrate-v2/accepted/GS2-03.9.json)
+  has self-digest `c5b0bf313583e26dc6a2f471b58e22d6315f4ff425d05cf6f74070c45c5ecde2`.
+  One Accountable Delivery Owner made the decision; no external, multiple, or approval-count authorization
+  was required, and every declared technical predicate remained fail-closed.
 
 ### GS2-04 — Implement GitHub authority adapters and interpreters
 
