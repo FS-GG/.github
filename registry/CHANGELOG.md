@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-31** — **canonical intake recovery release published: coherent set 0.78.0**
+  (owner github; [coherent release](https://github.com/FS-GG/.github/releases/tag/coherent-set%2Fv0.78.0),
+  [source PR #3086](https://github.com/FS-GG/.github/pull/3086),
+  [release-order repairs #3087](https://github.com/FS-GG/.github/pull/3087)/[#3088](https://github.com/FS-GG/.github/pull/3088)):
+  Kit, Drivers, and Coord.Cli 0.78.0 are served on both feeds from exact source `0cd242ea` and
+  promoted as immutable content `sha256:cc6e20c76d2d4b5bfe605a9a200a56425cdfed8ae8a93fafe01bbc5da23e12fc`.
+  Prepare run 33353954339 packed the set once; initial publishers 33354166693/33354168305/33354170151
+  persisted nuget.org's bounded indexing lag, exact-source recoveries
+  33354612921/33354614291/33354615735 observed the same bytes without duplicate pushes, and promotion
+  33354772922 sealed the draft. The operator release rail now encodes preparation before tag creation,
+  and recovery validates the durable manifest without re-packing authoritative stored bytes.
+
 - **2026-08-31** — **canonical intake recovery source release prepared: coherent set 0.78.0**
   (owner github; [PR #3086](https://github.com/FS-GG/.github/pull/3086),
   [Coordination #123](https://github.com/FS-GG/FS.GG.Coordination/issues/123)):
