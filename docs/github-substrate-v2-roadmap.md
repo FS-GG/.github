@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.5 accepted; GS2-01.9 not applicable; GS2-04.6 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.6 accepted; GS2-01.9 not applicable; GS2-04.7 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -770,7 +770,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   merged at [`a8e6c061`](https://github.com/FS-GG/FS.GG.Coordination/commit/a8e6c061918cc351de76d7a42be4f1c2a1792686),
   and passed [protected-main run 33436270111](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33436270111).
 
-- [ ] **GS2-04.6 — Sharded Git journal adapter.** Perform protected expected-parent commits for claim,
+- [x] **GS2-04.6 — Sharded Git journal adapter.** Perform protected expected-parent commits for claim,
   review, operation, and global cutover aggregates in the dedicated `FS.GG.Coordination.Authority`
   repository. Use `refs/heads/fsgg/v2/journal/<kind>/<shard>`, explicit old-OID
   `--force-with-lease` receive-pack CAS, the split `v2-journal-writer` and `v2-journal-integrity`
@@ -779,6 +779,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   Issue monotonically increasing fencing generations; verify ancestry; create immutable phase anchors;
   detect rewind/deletion/divergence; compact only after a terminal checkpoint; and project state to issues
   without making one fleet-wide normal-operation ref. Custom refs and API-path-scoped bypass claims fail.
+
+  Accepted 2026-09-01. [Implementation PR 156](https://github.com/FS-GG/FS.GG.Coordination/pull/156)
+  passed [exact-head qualification run 33443440969](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33443440969)
+  and merged as protected commit
+  [`b6c25c0b`](https://github.com/FS-GG/FS.GG.Coordination/commit/b6c25c0b3f26211d4cfcfcdc8f08f9b87e43586c),
+  whose [protected-main run 33444027453](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33444027453)
+  passed. [Acceptance PR 158](https://github.com/FS-GG/FS.GG.Coordination/pull/158) added the append-only
+  [GS2-04.6 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/53fe450f8d60fdfe4cc68aaaeaa181666796e31a/evidence/github-substrate-v2/accepted/GS2-04.6.json)
+  with self-digest `4011bbe0d7e2db27aff2b6e0a36d9bc342dc89e8310b56d4e358b6d73bc96511`,
+  merged at [`53fe450f`](https://github.com/FS-GG/FS.GG.Coordination/commit/53fe450f8d60fdfe4cc68aaaeaa181666796e31a),
+  and passed [protected-main run 33445770572](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33445770572).
 - [ ] **GS2-04.7 — Repository/settings adapter.** Inspect and plan custom properties, rulesets, merge
   policies, Actions policy, environments, releases, tags, security, and dependency features with supported,
   unauthorized, and unavailable outcomes.
