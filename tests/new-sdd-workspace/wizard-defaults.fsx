@@ -24,6 +24,24 @@ if defaults.WorkspaceRepo <> None
    || defaults.ChoreLocks <> None then
     failwith "the wizard must not manufacture repository-specific configuration"
 
+let console = assembleWizardTemplateOptions "./Tool" "Tool" "console" None None None
+if console.Template <> "console" then
+    failwith "the wizard must preserve the selected template"
+
+let bindings =
+    assembleWizardTemplateOptions
+        "./Interop"
+        "Interop"
+        "fable-bindings"
+        (Some "@babylonjs/core")
+        (Some "8.0.0")
+        (Some "browser")
+if bindings.Template <> "fable-bindings"
+   || bindings.NpmPackage <> Some "@babylonjs/core"
+   || bindings.NpmVersion <> Some "8.0.0"
+   || bindings.BindingTarget <> Some "browser" then
+    failwith "the wizard must preserve the selected template's required package closure"
+
 let recoveryTarget = System.IO.Path.GetFullPath("./workspace with 'quote")
 let recovery = securityResumeCommand "./workspace with 'quote" [ "--repo"; "acme/app" ]
 let expectedTarget = "'" + recoveryTarget.Replace("'", "'\"'\"'") + "'"

@@ -30,9 +30,10 @@ new-sdd-workspace ./Portal Portal --template web
 new-sdd-workspace ./Interop Interop --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
 ```
 
-Run it with **no arguments** on an interactive terminal and it asks only for the two facts that are
-always available at creation time: product name and target directory. It creates the stable default
-(`rendering` + Standard SDD + light governance), leaves GitHub coordination unset, and installs
+Run it with **no arguments** on an interactive terminal and it asks for the product name, target
+directory, and workspace template. Choosing `fable-bindings` also asks for its required exact npm
+package/version and binding target. Standard SDD and light governance remain the defaults; GitHub
+coordination stays unset, and the wizard installs
 `$initialize-sdd-workspace` for the agent you open inside the new repository. That skill discovers
 the real local/provider state and asks about repository, board, access, collaborators, chore locks,
 or package configuration only when the selected setup actually needs them. Scripted callers retain
@@ -41,6 +42,10 @@ Beside the prompts a live preview fills in as you answer — a **parameters** ca
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
 usage-error contract, so scripted callers must still pass `<target-dir> <product-name>`.
+
+> **Initialization is a separate first-agent step.** The wizard installs the initialization
+> handoff but does not run it. After scaffolding, start an agent inside the new workspace for the
+> first time, then ask it to run `$initialize-sdd-workspace` before doing repository work.
 
 | Option | Effect |
 |---|---|
