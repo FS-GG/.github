@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and all GS2-03 units accepted; GS2-01.9 not applicable; GS2-04.1 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1 accepted; GS2-01.9 not applicable; GS2-04.2 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -666,9 +666,44 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-02; GS2-03 manifest contract
 **Exit gates:** Q3 and Q4
 
-- [ ] **GS2-04.1 — Transport foundation.** Implement typed REST/GraphQL requests, response envelopes,
+- [x] **GS2-04.1 — Transport foundation.** Implement typed REST/GraphQL requests, response envelopes,
   retries that respect idempotency, ETags/revisions, rate budgets, pagination, node/connection completeness,
   API-version headers, redaction, and deterministic fixture capture.
+
+  Accepted 2026-08-31. [Implementation PR 124](https://github.com/FS-GG/FS.GG.Coordination/pull/124)
+  bound typed REST and GraphQL transport, idempotency-aware retry decisions, revisions and rate facts,
+  pagination completeness, redaction, and deterministic fixtures to exact candidate
+  `15737cfd698216fb5a232178eb5e2f36233efb4b`. The candidate passed
+  [full qualification run 33358807559](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33358807559)
+  and merged as protected commit
+  [`3182fccc`](https://github.com/FS-GG/FS.GG.Coordination/commit/3182fcccf81ad3e519624ad12cbd7f7ce5c3b66a),
+  whose [protected-main run 33360184506](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33360184506)
+  revalidated the identical subject. Qualification comprised 34 focused unit tests, 258 architecture tests,
+  and fourteen Q3 positive/inversion controls. The hosted candidate also exposed an implicit Apalache server
+  lifecycle assumption; the repair made server start, readiness, verification, and teardown explicit so the
+  canonical formal lane passed without weakening a property.
+
+  [Acceptance PR 126](https://github.com/FS-GG/FS.GG.Coordination/pull/126) added the append-only
+  [GS2-04.1 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/dbaecade8d47d872336601b3b3bb9785082dbb81/evidence/github-substrate-v2/accepted/GS2-04.1.json)
+  with self-digest `867e1d9842f0821be0af1bacfc175ef23da1351f22bb353de6ffb3671229a58e`
+  after [full run 33360908095](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33360908095),
+  including canonical Quint, passed. It merged at
+  [`dbaecade`](https://github.com/FS-GG/FS.GG.Coordination/commit/dbaecade8d47d872336601b3b3bb9785082dbb81)
+  and [protected-main run 33362412616](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33362412616)
+  passed. The implementation completion digest is
+  `1e1f1b894b9449ab8fa1bacfc175ef23da1350f33bed09915ff55b09fcec88f`; the acceptance
+  [completion receipt](https://github.com/FS-GG/FS.GG.Coordination/issues/125#issuecomment-5474420007)
+  is `a7eb421bff718dc81cef9500f17ebf4d46bfefa7612e3215e4bc225550950b3c`.
+
+  The landing exposed a second class boundary: the released delivery client sent an exact head but relied on
+  GitHub's implicit merge-commit default, while the repository was squash-only. The safe exact-head squash
+  fallback landed this accepted candidate; the standard second-defect response then stopped retries and
+  redesigned delivery to observe typed merge capabilities, choose deterministically `squash > rebase > merge`,
+  serialize the method explicitly, and refuse before any write when policy is unreadable or permits none.
+  The class repair is tracked by [`.github#3091`](https://github.com/FS-GG/.github/issues/3091) and
+  [PR 3092](https://github.com/FS-GG/.github/pull/3092). One Accountable Delivery Owner made every decision;
+  no external, multiple, or approval-count authorization was required.
+
 - [ ] **GS2-04.2 — Issue/type/field adapter.** Resolve semantic identities to live IDs, verify type and
   option sets, read complete values, and plan guarded create/update/clear operations.
 - [ ] **GS2-04.3 — Native relation adapter.** Read complete hierarchy/dependency sets and perform
