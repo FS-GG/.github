@@ -312,22 +312,34 @@ assert start_jobs["prepare"]["uses"] == "./.github/workflows/release-saga-prepar
 
 def start_topology_problems(doc):
     jobs = doc.get("jobs", {})
+    inspect_job = jobs.get("inspect", {})
     prepare_job = jobs.get("prepare", {})
     publisher_job = jobs.get("start-publishers", {})
     problems = []
     if prepare_job.get("uses") != "./.github/workflows/release-saga-prepare.yml":
         problems.append("operator entry point does not call the single-pack prepare workflow")
+    if prepare_job.get("needs") != "inspect" or "action == 'prepare'" not in str(prepare_job.get("if")):
+        problems.append("fresh preparation is not selected from durable-state inspection")
     needs = publisher_job.get("needs")
-    if needs != "prepare" and not (isinstance(needs, list) and "prepare" in needs):
-        problems.append("publisher start has no causal dependency on successful preparation")
+    if not (isinstance(needs, list) and set(needs) == {"inspect", "prepare"}):
+        problems.append("publisher start does not depend on both inspection and preparation")
+    predicate = str(publisher_job.get("if") or "")
+    for clause in ("action == 'resume'", "action == 'prepare'", "needs.prepare.result == 'success'"):
+        if clause not in predicate:
+            problems.append(f"publisher start predicate omits {clause}")
+    if "release-saga.py assert-identity" not in start or "action=resume" not in start:
+        problems.append("stored-draft recovery is not manifest-bound")
+    if "dotnet pack" in start:
+        problems.append("operator entry point re-packs during durable-state recovery")
     return problems
 
 assert not start_topology_problems(start_doc), start_topology_problems(start_doc)
 decoupled = copy.deepcopy(start_doc)
-decoupled["jobs"]["start-publishers"].pop("needs")
+decoupled["jobs"]["start-publishers"]["if"] = "always() && needs.inspect.outputs.action == 'prepare'"
 assert start_topology_problems(decoupled) == [
-    "publisher start has no causal dependency on successful preparation"
-], "removing the prepare dependency did not turn the topology proof red"
+    "publisher start predicate omits action == 'resume'",
+    "publisher start predicate omits needs.prepare.result == 'success'",
+], "removing fresh-success and recovery clauses did not turn the topology proof red"
 for token in (
     "git push --atomic origin",
     'gh workflow run "$workflow"',
