@@ -19,6 +19,16 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-31** — **canonical intake recovery source release prepared: coherent set 0.78.0**
+  (owner github; [PR #3086](https://github.com/FS-GG/.github/pull/3086),
+  [Coordination #123](https://github.com/FS-GG/FS.GG.Coordination/issues/123)):
+  intake now derives `Class` from the shared three-value board vocabulary and repairs only enumerated
+  predecessor drafts after a partial create. The exact receipt-bound generated body authorizes the
+  rewrite; an authoritative post-PATCH read precedes receipt advancement and board projection. Packed
+  filing skills no longer advertise `capability`, which Projects v2 cannot represent. Registry source
+  advances to 0.78.0 while `package-version` remains 0.77.0 until the coherent release is served and
+  verified byte-identically on both feeds.
+
 - **2026-08-30** — **auto-publish evidence: FS.GG.Kit 0.77.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/33332713589) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.77.0/FS.GG.Kit.0.77.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.77.0/fs.gg.kit.0.77.0.nupkg). Both served nuspecs record repository commit 0db0dc582736e43cf71e3dc8b7986eef6e37bcf1.
 
 - **2026-08-30** — **single-accountable delivery release published and GS2-03.10 accepted**

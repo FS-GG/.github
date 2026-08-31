@@ -69,10 +69,13 @@ module IntakeApplication =
                     match severity with
                     | Error detail -> Error detail
                     | Ok severity ->
-                        let draft: Intake.Draft =
-                            { Schema = schema; Id = id; Owner = owner; Repository = repository; Title = title; Observed = observed; RootCause = rootCause; Acceptance = acceptance; Verification = verification; Paths = paths; Class = className; Status = status; Disposition = Some disposition
-                              Phase = phase; Severity = severity; BlockedBy = blockedBy; BlockedOn = blockedOn; BacklogReason = backlogReason; JudgementQuestion = judgementQuestion }
-                        Ok draft
+                        match Types.itemClassOfWireName className with
+                        | None -> Error "class must be defect, hardening or decision"
+                        | Some parsed ->
+                            let draft: Intake.Draft =
+                                { Schema = schema; Id = id; Owner = owner; Repository = repository; Title = title; Observed = observed; RootCause = rootCause; Acceptance = acceptance; Verification = verification; Paths = paths; Class = Types.itemClassWireName parsed; Status = status; Disposition = Some disposition
+                                  Phase = phase; Severity = severity; BlockedBy = blockedBy; BlockedOn = blockedOn; BacklogReason = backlogReason; JudgementQuestion = judgementQuestion }
+                            Ok draft
                 | _ ->
                     let failures = strings |> List.choose (function Error e -> Some e | _ -> None)
                     let failures = match paths with Error e -> failures @ [ e ] | _ -> failures

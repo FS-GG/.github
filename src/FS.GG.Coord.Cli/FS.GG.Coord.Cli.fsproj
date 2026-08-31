@@ -130,18 +130,17 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.77.0 — single-accountable delivery authority in the coherent coordination set.
+    <PackageReleaseNotes>0.78.0 — canonical intake vocabulary and partial-transaction recovery.
 
-WHAT MOVED, AND WHY IT IS A MINOR. FS.GG.Kit updates the materialized `pnext-item` contract so one
-Accountable Delivery Owner can implement, run a fresh critique phase, repair, accept, and deliver.
-An external critic, second agent, reviewer quorum, or other approval authority is no longer required.
-Exact-head technical gates remain fail-closed, and distinct phase identities preserve ordering and
-evidence without creating additional decision makers. Existing kit members and destinations remain
-compatible.
+WHAT MOVED, AND WHY IT IS A MINOR. FS.GG.Coord.Cli intake now derives Class from the same closed
+vocabulary used by issue bodies and Projects v2. A partial create can resume after an explicitly
+declared legacy correction: the receipt and exact generated predecessor body authorize the rewrite,
+the canonical body is re-read after PATCH, and only then is the receipt advanced and projection
+resumed. Arbitrary changed drafts and operator-edited bodies still fail closed. FS.GG.Kit and
+FS.GG.Drivers remove the unprojectable `capability` value from their filing examples.
 
-FS.GG.Drivers and FS.GG.Coord.Cli advance because all three packages share one coherent version.
-Their receiver-visible behavior, engine commands, flags, schemas, exit codes, and public members are
-unchanged in this cut.
+All three packages advance together because they share one coherent version. Existing command names,
+flags, result schemas, exit codes, and public members remain compatible.
 
 $(FsggStandingAdvisories)
 

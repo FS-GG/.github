@@ -55,10 +55,6 @@
          pure `Chore.derive` reads it (.github#1203). -->
     <Compile Include="RegistryPredicate.fsi" />
     <Compile Include="RegistryPredicate.fs" />
-    <Compile Include="Intake.fsi" />
-    <Compile Include="Intake.fs" />
-    <Compile Include="IntakeReceipt.fsi" />
-    <Compile Include="IntakeReceipt.fs" />
     <!-- FindingPacket (.github#2737) opens NO sibling module — only System, System.Text.Json and
          System.Text.RegularExpressions — so it constrains nothing below it and is placed here purely
          for readability, beside the intake types its `toIntakeSeed` feeds. It is the schema for the
@@ -99,6 +95,13 @@
          adding a second line meaning the same thing. -->
     <Compile Include="Class.fsi" />
     <Compile Include="Class.fs" />
+    <!-- Intake projects Class onto the board, so its validator consumes the same derived wire vocabulary
+         as the body parser and Projects v2 writer. Keep it after Class: an earlier position forced the
+         intake schema to restate those strings and allowed the two vocabularies to drift. -->
+    <Compile Include="Intake.fsi" />
+    <Compile Include="Intake.fs" />
+    <Compile Include="IntakeReceipt.fsi" />
+    <Compile Include="IntakeReceipt.fs" />
     <Compile Include="Kind.fsi" />
     <Compile Include="Kind.fs" />
     <Compile Include="Rooms.fsi" />

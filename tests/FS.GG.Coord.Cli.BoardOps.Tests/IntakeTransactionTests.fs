@@ -60,6 +60,18 @@ module IntakeTransactionTests =
         | Ok parsed -> IntakeReceipt.marker parsed
         | Error error -> failwith error
 
+    let private draftBody (parsed: Intake.Draft) =
+        let paths = String.concat " " parsed.Paths
+        let optionalLines =
+            [ parsed.Phase |> Option.map (sprintf "Phase: %s")
+              parsed.Severity |> Option.map (sprintf "Severity: %s")
+              parsed.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+              parsed.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+              parsed.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+            |> List.choose id
+            |> String.concat "\n"
+        $"%s{IntakeReceipt.marker parsed}\n\n## Observed behavior\n\n%s{parsed.Observed}\n\n## Root cause\n\n%s{parsed.RootCause}\n\n## Acceptance\n\n%s{parsed.Acceptance}\n\n## Verification\n\n%s{parsed.Verification}\n\nClass: %s{parsed.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
+
     let private severityDraft value =
         draft.Replace("\"disposition\":\"create\"", $"\"severity\":\"%s{value}\",\"disposition\":\"create\"")
 
@@ -147,9 +159,13 @@ module IntakeTransactionTests =
             |> Result.defaultWith failwith
 
             let mutable creates = 0
+            let mutable body = draftBody legacy
             let world = Fake.Recorder(fun req ->
-                if req.Method = "POST" && req.Path.EndsWith "/issues" then creates <- creates + 1
-                Error(NotFound "stop after legacy receipt recovery"))
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                | "PATCH", "repos/FS-GG/.github/issues/77" -> body <- draftBody canonical; ok "{}"
+                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "must not create")
+                | _ -> Error(NotFound "stop after legacy receipt recovery"))
             let code, error = invokeDraftWithError cache (severityDraft "High") world
             Assert.Equal(Kernel.ExitError, code)
             Assert.Equal(0, creates)
@@ -168,12 +184,14 @@ module IntakeTransactionTests =
                 { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
                   Repository = canonical.Repository; DraftDigest = legacyDigest }
             |> Result.defaultWith failwith
-            let legacyMarker = $"<!-- fsgg:intake:v1 id=%s{canonical.Id} digest=%s{legacyDigest} -->"
+            let mutable body = draftBody legacy
             let mutable creates = 0
             let world = Fake.Recorder(fun req ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "repos/FS-GG/.github/issues" ->
-                    ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize legacyMarker}}}]")
+                    ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize body}}}]")
+                | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                | "PATCH", "repos/FS-GG/.github/issues/77" -> body <- draftBody canonical; ok "{}"
                 | "POST", path when path.EndsWith "/issues" ->
                     creates <- creates + 1
                     Error(NotFound "legacy intent must not create again")
@@ -618,7 +636,7 @@ module IntakeTransactionTests =
             Assert.Equal(Kernel.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
 
-    let private successfulProjectionWorld duplicateCandidates =
+    let private successfulProjectionWorld duplicateCandidates initialBody canonicalBody =
         let creates = ref 0
         let added = ref 0
         let writes = ref 0
@@ -626,11 +644,13 @@ module IntakeTransactionTests =
         let projectedStatus: string option ref = ref None
         let projectedClass: string option ref = ref None
         let projectedSeverity: string option ref = ref None
+        let currentBody = ref initialBody
         let world = Fake.Recorder(fun req ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "repos/FS-GG/.github/issues" -> ok duplicateCandidates
             | "POST", "repos/FS-GG/.github/issues" -> creates.Value <- creates.Value + 1; ok "{\"number\":77}"
-            | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
+            | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize currentBody.Value}}}")
+            | "PATCH", "repos/FS-GG/.github/issues/77" -> currentBody.Value <- canonicalBody; ok "{}"
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(doc, _) when doc.Contains "projectsV2" ->
@@ -688,14 +708,39 @@ module IntakeTransactionTests =
                         { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
                           Repository = canonical.Repository; DraftDigest = legacyDigest }
                     |> Result.defaultWith failwith
-                    let legacyMarker = $"<!-- fsgg:intake:v1 id=%s{canonical.Id} digest=%s{legacyDigest} -->"
-                    $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize legacyMarker}}}]"
-            let world, creates, added, writes = successfulProjectionWorld duplicateCandidates
+                    $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize(draftBody legacy)}}}]"
+            let world, creates, added, writes =
+                successfulProjectionWorld duplicateCandidates (draftBody legacy) (draftBody canonical)
             let code = invokeDraft cache correctedJson world
             if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal(0, creates.Value)
             Assert.Equal(1, added.Value)
             Assert.Equal(1, writes.Value)
+
+    [<Fact>]
+    let ``a board-invalid legacy class is canonically repaired before projection`` () =
+        withCache <| fun cache ->
+            let canonicalPath = Path.Combine(cache, "canonical-class.json")
+            File.WriteAllText(canonicalPath, draft)
+            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+            let legacy = { canonical with Class = "capability" }
+            Cache.putIntakeReceipt
+                { IntakeReceipt.Receipt.DraftId = canonical.Id
+                  Owner = canonical.Owner
+                  Repository = canonical.Repository
+                  IssueNumber = 77
+                  DraftDigest = IntakeReceipt.digest legacy }
+            |> Result.defaultWith failwith
+            let world, creates, added, writes =
+                successfulProjectionWorld "[]" (draftBody legacy) (draftBody canonical)
+            let code = invoke cache world
+            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal(0, creates.Value)
+            Assert.Equal(1, added.Value)
+            Assert.Equal(1, writes.Value)
+            match Cache.getIntakeReceipt canonical.Id with
+            | Ok(Some receipt) -> Assert.Equal(IntakeReceipt.digest canonical, receipt.DraftDigest)
+            | other -> failwithf "class repair did not advance the canonical receipt: %A" other
 
     [<Fact>]
     let ``#2835 receipt persistence failure names the created issue and same-id recovery completes`` () =
@@ -717,7 +762,11 @@ module IntakeTransactionTests =
             Directory.Delete receiptPath
             let marker = draftMarker cache
             let duplicate = $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize marker}}}]"
-            let world, creates, added, writes = successfulProjectionWorld duplicate
+            let canonicalPath = Path.Combine(cache, "canonical-recovery.json")
+            File.WriteAllText(canonicalPath, draft)
+            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+            let world, creates, added, writes =
+                successfulProjectionWorld duplicate (draftBody canonical) (draftBody canonical)
             let retryCode = invoke cache world
             if retryCode <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal(0, creates.Value)

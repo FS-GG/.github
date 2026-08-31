@@ -1834,24 +1834,85 @@ module Writes =
                             )
                         )
 
+    let private renderIntake (valid: Intake.Draft) =
+        let paths = String.concat " " valid.Paths
+        let optionalLines =
+            [ valid.Phase |> Option.map (sprintf "Phase: %s")
+              valid.Severity |> Option.map (sprintf "Severity: %s")
+              valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+              valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+              valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+            |> List.choose id
+            |> String.concat "\n"
+        $"%s{IntakeReceipt.marker valid}\n\n## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
+
     // The first write boundary of #2134: a malformed draft cannot reach issue creation.
     let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =
         match Intake.validate draft with
         | Error findings ->
             let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
             Error(Malformed(draft.Id, $"invalid intake draft: %s{detail}"))
-        | Ok valid ->
-            let paths = String.concat " " valid.Paths
-            let optionalLines =
-                [ valid.Phase |> Option.map (sprintf "Phase: %s")
-                  valid.Severity |> Option.map (sprintf "Severity: %s")
-                  valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
-                  valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
-                  valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
-                |> List.choose id
-                |> String.concat "\n"
-            let body = $"%s{IntakeReceipt.marker valid}\n\n## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
-            createRoom transport valid.Owner valid.Repository valid.Title body
+        | Ok valid -> createRoom transport valid.Owner valid.Repository valid.Title (renderIntake valid)
+
+    // Repair a receipt-bound issue across one of IntakeReceipt's EXPLICIT schema migrations. The old
+    // marker and exact old generated body are the write capability: a same-id issue whose body was
+    // edited, or an arbitrary changed draft, cannot be rewritten by this path. Re-read after PATCH and
+    // after a lost response so interruption converges before the caller advances the local receipt.
+    let canonicalizeIntake
+        (transport: IGitHubTransport)
+        (receipt: IntakeReceipt.Receipt)
+        (draft: Intake.Draft)
+        : IoResult<unit> =
+        match Intake.validate draft, IntakeReceipt.validate draft receipt with
+        | Error findings, _ ->
+            let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
+            Error(Malformed(draft.Id, $"invalid canonical intake draft: %s{detail}"))
+        | _, Error detail -> Error(Malformed(draft.Id, detail))
+        | Ok valid, Ok bound ->
+            let canonicalDigest = IntakeReceipt.digest valid
+            if bound.DraftDigest = canonicalDigest then Ok() else
+            let predecessor =
+                IntakeReceipt.compatibleDrafts valid
+                |> List.tryFind (fun candidate -> IntakeReceipt.digest candidate = bound.DraftDigest)
+            match predecessor with
+            | None -> Error(Malformed(draft.Id, "receipt content digest has no declared canonical migration"))
+            | Some old ->
+                let issue = { Owner = bound.Owner; Repo = bound.Repository; Number = bound.IssueNumber }
+                let canonicalBody = renderIntake valid
+                let predecessorBody = renderIntake old
+                let observe () = Reads.issueBody transport issue.Owner issue.Repo issue.Number
+                let patch () =
+                    let payload =
+                        let o = Nodes.JsonObject()
+                        o.["body"] <- Nodes.JsonValue.Create canonicalBody
+                        o.ToJsonString()
+                    let request =
+                        { Method = "PATCH"
+                          Path = $"repos/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+                          Query = []
+                          Body = Json payload
+                          Budget = Rest
+                          IfNoneMatch = None
+                          Subject = issue.Short }
+                    transport.Send request |> Result.map ignore
+                observe ()
+                |> Result.bind (fun before ->
+                    if before = canonicalBody then Ok()
+                    elif before <> predecessorBody then
+                        Error(Malformed(issue.Canonical, "receipt-bound intake body differs from both its declared predecessor and canonical projection; refusing to overwrite operator-authored content"))
+                    else
+                        let write = patch ()
+                        match observe () with
+                        | Ok after when after = canonicalBody -> Ok()
+                        | Ok _ ->
+                            match write with
+                            | Error error -> Error error
+                            | Ok _ -> Error(Malformed(issue.Canonical, "intake canonicalization PATCH returned success but the authoritative body does not match"))
+                        | Error readError ->
+                            match write with
+                            | Error writeError ->
+                                Error(Malformed(issue.Canonical, $"intake canonicalization failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"))
+                            | Ok _ -> Error readError)
 
     // Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
     // currently references it is done, and the caller (`done --flip`'s roll-up) has already established

@@ -5,7 +5,10 @@ namespace FS.GG.Coord
 module IntakeReceipt =
     type Receipt = { DraftId: string; Owner: string; Repository: string; IssueNumber: int; DraftDigest: string }
     val digest: Intake.Draft -> string
-    /// Current canonical digest plus the bounded pre-#2835 lowercase-severity representation.
+    /// Canonical draft plus explicitly declared predecessor representations. This is the only recovery
+    /// vocabulary: a matching id never makes arbitrary changed content compatible.
+    val compatibleDrafts: Intake.Draft -> Intake.Draft list
+    /// Current canonical digest plus the bounded predecessor representations above.
     val compatibleDigests: Intake.Draft -> string list
 
     /// Durable provenance embedded in the created issue. A title is human text and cannot identify the
