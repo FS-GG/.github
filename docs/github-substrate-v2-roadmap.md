@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.7 accepted; GS2-01.9 not applicable; GS2-03.10 architecture amendment accepted; GS2-03.8 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11 and GS2-03.1–GS2-03.8 accepted; GS2-01.9 not applicable; GS2-03.10 architecture amendment accepted; GS2-03.9 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -594,10 +594,30 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   attestation digests are recorded in the
   [accepted receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/9341a5a299bfd2cb90c5ea9b1e2355d34297ab4e/evidence/github-substrate-v2/accepted/GS2-03.7.json),
   merged through [Coordination PR 112](https://github.com/FS-GG/FS.GG.Coordination/pull/112).
-- [ ] **GS2-03.8 — Add critique evidence gates.** Architecture, security, adapter, migration, and cutover
+- [x] **GS2-03.8 — Add critique evidence gates.** Architecture, security, adapter, migration, and cutover
   perspectives produce findings against exact candidate fingerprints. The Accountable Delivery Owner may
   perform every perspective under distinct phase identities and makes the sole acceptance decision; a green
   roll-up must still be derived from the bound evidence rather than asserted in prose.
+  **Accepted 2026-08-31:** protected implementation
+  [`2427478b`](https://github.com/FS-GG/FS.GG.Coordination/commit/2427478b6fffba470e86ff46cf2ca22106a11a6d)
+  introduced the typed `critique-evidence/1` generator/validator, executable reviews/v2 schema, closed
+  five-perspective inventory, distinct phase identities, exact candidate/evidence/content bindings, and
+  derived `all-required-bound-green/1` roll-up. [PR 116](https://github.com/FS-GG/FS.GG.Coordination/pull/116)
+  passed [full hosted qualification 33342488041](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33342488041)
+  and CodeQL; protected main then reused the identical complete tracked tree and revalidated the merge.
+  The Accountable Delivery Owner retained five separately hashed perspective findings and an executable
+  acceptance harness that checks the PR-execute/protected-main-reuse relationship, Q7 gate inventory,
+  exact tree/unit identities, and every hosted conclusion before regenerating the canonical
+  [critique bundle](https://github.com/FS-GG/FS.GG.Coordination/blob/4c7878623f2fc73c4a5d8eb55697d159e6e08e86/evidence/github-substrate-v2/reviews/GS2-03.8.json).
+  Acceptance [PR 117](https://github.com/FS-GG/FS.GG.Coordination/pull/117) passed
+  [hosted run 33343928942](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33343928942), including
+  reproduction of the actual bundle; protected-main [run 33344891169](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33344891169)
+  revalidated acceptance merge `4c787862` while skipping all six expensive lanes. The append-only
+  [accepted receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/4c7878623f2fc73c4a5d8eb55697d159e6e08e86/evidence/github-substrate-v2/accepted/GS2-03.8.json)
+  has self-digest `67e73228b0c6ef658b1294314e75e2bc62021f070f1c446b0ffdbda19834e116`.
+  One Accountable Delivery Owner made the sole decision; no reviewer count, external account, or additional
+  authorization was required. The observed evidence-only acceptance route still paid one full formal run;
+  that selector-granularity cost is retained for a later CI architecture improvement rather than hidden.
 - [ ] **GS2-03.9 — Prove the harness can fail.** Mutation-test or invert every gate class so a vacuous,
   absent, stale, truncated, forged, or generated-only evidence set is red.
 
