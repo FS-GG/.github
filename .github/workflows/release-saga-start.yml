@@ -1,0 +1,108 @@
+name: release-saga-start
+
+# The operator-facing entry point for the .github coherent set. This workflow owns the causal edge
+# that prose used to leave to an operator: prepared immutable bytes MUST exist before any component
+# publisher starts. Fresh publication and partial recovery deliberately enter through the same graph.
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Exact 40-character source commit; empty means the selected ref's commit"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    permissions:
+      contents: write
+      packages: read
+    uses: ./.github/workflows/release-saga-prepare.yml
+    with:
+      source-sha: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
+
+  start-publishers:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - name: Mint the release coordinator App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Atomically tag fresh members and exact-source resume existing members
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || { echo "::error::source_sha must resolve to an exact 40-character lowercase commit"; exit 1; }
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
+          case "$version" in ''|*-*) echo "::error::a non-empty stable version is required"; exit 1;; esac
+
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+          push_refs=()
+          recovery_workflows=()
+          classify() {
+            local tag="$1" workflow="$2" tagged
+            tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "refs/tags/$tag" "refs/tags/$tag^{}" \
+              | awk -v p="refs/tags/$tag^{}" -v b="refs/tags/$tag" \
+                  '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
+            if [ -z "$tagged" ]; then
+              git tag -a "$tag" "$SOURCE_SHA" -m "Publish FS.GG coherent set $version from prepared source $SOURCE_SHA"
+              push_refs+=("refs/tags/$tag")
+            elif [ "$tagged" = "$SOURCE_SHA" ]; then
+              recovery_workflows+=("$workflow")
+            else
+              echo "::error::$tag names $tagged, not prepared source $SOURCE_SHA"
+              exit 1
+            fi
+          }
+
+          classify "kit/v$version" release-kit.yml
+          classify "drivers/v$version" release-drivers.yml
+          classify "coord-engine/v$version" release-coord-engine.yml
+
+          # The App-authored push starts only the publishers whose immutable tags were absent. Atomic
+          # push keeps the sibling-tag precondition observable as one state transition.
+          if [ "${#push_refs[@]}" -gt 0 ]; then
+            git push --atomic origin "${push_refs[@]}"
+          fi
+
+          # Existing tags mean their original publisher event may have failed or been lost. A manual
+          # workflow_dispatch is the exact-source, manifest-bound recovery edge; GITHUB_TOKEN is
+          # intentionally sufficient because workflow_dispatch is exempt from recursive-run suppression.
+          for workflow in "${recovery_workflows[@]}"; do
+            gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref main \
+              -f source_sha="$SOURCE_SHA"
+          done
+
+          {
+            echo "### Coherent-set publishers started"
+            echo "- Version: $version"
+            echo "- Prepared source: $SOURCE_SHA"
+            echo "- Fresh tag events: ${#push_refs[@]}"
+            echo "- Exact-source recoveries: ${#recovery_workflows[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"

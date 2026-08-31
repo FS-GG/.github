@@ -9,8 +9,8 @@ name: release-saga-prepare
 # Publishing starts when all three tags — `kit/v<version>`, `drivers/v<version>`,
 # `coord-engine/v<version>` — exist at one commit. TWO actors push them:
 #
-#   * an OPERATOR, via `workflow_dispatch` here followed by the `git push` this workflow's own step
-#     summary prints; and
+#   * an OPERATOR, via `release-saga-start.yml`, which calls this workflow and starts publishers only
+#     after this job succeeds; and
 #   * `.github/workflows/kit-auto-publish.yml`, automatically, with no operator involved, on any
 #     merge whose `<Version>` is the next patch above both feed frontiers (.github#2442).
 #
@@ -213,14 +213,13 @@ jobs:
               --notes "Prepared content-addressed release. This remains draft until both feeds serve all three manifest-bound artifacts."
             gh release upload "$tag" --repo "$GITHUB_REPOSITORY" artifacts/packages/*.nupkg artifacts/packages/release-manifest.json
           fi
-          # Printed for the OPERATOR path. When kit-auto-publish called this workflow it pushes the
-          # same three refs at the same commit itself, in one `--atomic` push, as its next job.
+          # This is a low-level reversible primitive. Both supported callers encode preparation as a
+          # job dependency before starting publishers: release-saga-start for operators and
+          # kit-auto-publish for the automatic patch rail. Never turn this summary back into a
+          # copy/paste synchronization protocol.
           {
-            echo 'Preparation complete. To start the irreversible phase, push these three refs together:'
-            echo "git tag kit/v$VERSION $FSGG_SOURCE_SHA"
-            echo "git tag drivers/v$VERSION $FSGG_SOURCE_SHA"
-            echo "git tag coord-engine/v$VERSION $FSGG_SOURCE_SHA"
-            echo "git push origin kit/v$VERSION drivers/v$VERSION coord-engine/v$VERSION"
+            echo 'Preparation complete.'
+            echo 'Operator releases must enter through release-saga-start.yml; automatic releases continue in the caller job graph.'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v6
         with:
