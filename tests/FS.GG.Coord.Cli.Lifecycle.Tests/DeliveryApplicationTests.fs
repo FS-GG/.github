@@ -79,6 +79,19 @@ module DeliveryApplicationTests =
         Assert.DoesNotContain("fsgg:done-receipt v=1", doneWriter)
 
     [<Fact>]
+    let ``#3091 live guarded landing selects repository policy before the merge callback`` () =
+        let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
+        let guardedBranch = writer.IndexOf("transition.Action = Delivery.GuardedLand", StringComparison.Ordinal)
+        let policyRead = writer.IndexOf("OperationalGraphQl.repositoryPolicy", guardedBranch, StringComparison.Ordinal)
+        let guardedLanding = writer.IndexOf("DeliveryApplication.guardedLandingWithMergePolicy", policyRead, StringComparison.Ordinal)
+        let mergeWrite = writer.IndexOf("Writes.mergeAtHead", guardedLanding, StringComparison.Ordinal)
+
+        Assert.True(guardedBranch >= 0, "guarded delivery branch is missing")
+        Assert.True(policyRead > guardedBranch, "repository merge policy is not observed inside guarded delivery")
+        Assert.True(guardedLanding > policyRead, "observed policy is not passed to the guarded selector")
+        Assert.True(mergeWrite > guardedLanding, "the guarded callback does not receive the typed merge write")
+
+    [<Fact>]
     let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =
         let malformed =
             [ review 10L "https://reviews/initial" "<!-- fsgg:review-decision/v2 -->\n{}" ]
@@ -691,6 +704,62 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.Equal(facts.Freshness.HeadSha, receipt.HeadSha)
             Assert.Equal(acceptedBase, receipt.BaseSha)
             Assert.Equal("merged", receipt.Result)
+
+    [<Fact>]
+    let ``#3091 no allowed merge method refuses before invoking the merge adapter`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let policy : OperationalGraphQl.RepositoryPolicy =
+            { IssueCreationPolicy = "COLLABORATORS_ONLY"
+              HasIssuesEnabled = true
+              MergeCommitAllowed = false
+              SquashMergeAllowed = false
+              RebaseMergeAllowed = false }
+        let mutable mergeCalls = 0
+
+        match
+            DeliveryApplication.guardedLandingWithMergePolicy
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                (Some "claim-generation-a")
+                (Some facts.Freshness.HeadSha)
+                (Some(String.replicate 40 "b"))
+                policy
+                (fun _ -> mergeCalls <- mergeCalls + 1)
+        with
+        | Ok _ -> failwith "a repository with no merge method authorized a write"
+        | Error reason -> Assert.Contains("permits no", reason)
+
+        Assert.Equal(0, mergeCalls)
+
+    [<Fact>]
+    let ``#3091 squash-only policy invokes one guarded merge with squash`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let policy : OperationalGraphQl.RepositoryPolicy =
+            { IssueCreationPolicy = "COLLABORATORS_ONLY"
+              HasIssuesEnabled = true
+              MergeCommitAllowed = false
+              SquashMergeAllowed = true
+              RebaseMergeAllowed = false }
+        let observed = ResizeArray<OperationalGraphQl.MergeMethod>()
+
+        match
+            DeliveryApplication.guardedLandingWithMergePolicy
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                (Some "claim-generation-a")
+                (Some facts.Freshness.HeadSha)
+                (Some(String.replicate 40 "b"))
+                policy
+                (fun method -> observed.Add method; "merged")
+        with
+        | Error reason -> failwith reason
+        | Ok receipt -> Assert.Equal("merged", receipt.Result)
+
+        Assert.Equal<OperationalGraphQl.MergeMethod list>([ OperationalGraphQl.Squash ], List.ofSeq observed)
 
     // -- repair round 1 (critic `crake-0420`, PR #2301): the `declaredPaths` JSON wire shapes were only
     // proven by the critic executing the built CLI artifact by hand — this closes that with a committed

@@ -1016,10 +1016,23 @@ module Writes =
         : IoResult<ClaimOutcome> =
         claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None) (fun () -> Ok())
 
-    let mergeAtHead (transport: IGitHubTransport) (ref: Ref) (pr: int) (headSha: string) : IoResult<bool> =
+    let mergeAtHead
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (pr: int)
+        (headSha: string)
+        (method: OperationalGraphQl.MergeMethod)
+        : IoResult<bool> =
         let payload =
             let body = Nodes.JsonObject()
             body["sha"] <- Nodes.JsonValue.Create headSha
+            body["merge_method"] <-
+                Nodes.JsonValue.Create(
+                    match method with
+                    | OperationalGraphQl.Squash -> "squash"
+                    | OperationalGraphQl.Rebase -> "rebase"
+                    | OperationalGraphQl.Merge -> "merge"
+                )
             body.ToJsonString()
         let request =
             { Method = "PUT"

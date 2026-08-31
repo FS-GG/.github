@@ -433,7 +433,13 @@ module Writes =
 
     /// Merge an open pull request only if GitHub still sees the inspected head SHA.  A changed head is a
     /// refusal, never a merge of code the delivery receipt did not inspect.
-    val mergeAtHead: transport: IGitHubTransport -> ref: Ref -> pr: int -> headSha: string -> IoResult<bool>
+    val mergeAtHead:
+        transport: IGitHubTransport ->
+        ref: Ref ->
+        pr: int ->
+        headSha: string ->
+        method: OperationalGraphQl.MergeMethod ->
+        IoResult<bool>
 
     /// What re-reading the markers says about whether WE hold the lock.
     ///

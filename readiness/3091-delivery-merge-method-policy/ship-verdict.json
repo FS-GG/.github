@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3091-delivery-merge-method-policy",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "8df15bada2572269bfb7595faf575c1f8621067ddc34debb289209c7d0df755e"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 15,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 15
+  },
+  "disposition": {
+    "state": "advisory",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

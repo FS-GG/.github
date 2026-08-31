@@ -86,6 +86,19 @@ module DeliveryApplication =
         merge: (unit -> 'result) ->
             Result<LandingReceipt<'result>, string>
 
+    /// Select one method from a complete repository policy before invoking guarded landing. A policy
+    /// that permits no method is a zero-callback refusal, never a sequence of trial merge writes.
+    val guardedLandingWithMergePolicy:
+        freshnessToken: string ->
+        actionKey: string ->
+        facts: FS.GG.Coord.Delivery.Snapshot ->
+        currentClaimGeneration: string option ->
+        currentHead: string option ->
+        currentBase: string option ->
+        repositoryPolicy: FS.GG.Coord.GitHub.OperationalGraphQl.RepositoryPolicy ->
+        merge: (FS.GG.Coord.GitHub.OperationalGraphQl.MergeMethod -> 'result) ->
+            Result<LandingReceipt<'result>, string>
+
     /// Run `delivery --snapshot FILE` — the PURE, IO-free form, which reads a supplied lifecycle
     /// snapshot and prints one freshness-bound action.
     ///
