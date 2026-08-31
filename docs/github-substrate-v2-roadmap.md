@@ -727,10 +727,34 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 
 - [x] **GS2-04.2 — Issue/type/field adapter.** Resolve semantic identities to live IDs, verify type and
   option sets, read complete values, and plan guarded create/update/clear operations.
-- [ ] **GS2-04.3 — Native relation adapter.** Read complete hierarchy/dependency sets and perform
+- [x] **GS2-04.3 — Native relation adapter.** Read complete hierarchy/dependency sets and perform
   add/remove with stale re-read and post-state verification.
-- [ ] **GS2-04.4 — Project adapter.** Treat membership and Status as projections; handle archived,
+
+  Accepted 2026-08-31. [Implementation PR 138](https://github.com/FS-GG/FS.GG.Coordination/pull/138)
+  passed [exact-head qualification run 33399640438](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33399640438)
+  and merged as protected commit
+  [`ee0353ac`](https://github.com/FS-GG/FS.GG.Coordination/commit/ee0353acc753fb33d02ff3addeeb03bb1b2b2c4c),
+  whose [protected-main run 33400527635](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33400527635)
+  passed. [Acceptance PR 140](https://github.com/FS-GG/FS.GG.Coordination/pull/140) added the append-only
+  [GS2-04.3 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/c524f8410323e7a79a6bab4ad691a99e75f530e1/evidence/github-substrate-v2/accepted/GS2-04.3.json)
+  with self-digest `210ae250d081c39ec422d59c9bd4a72c653650380497aef586164b6fc3a52507`,
+  merged at [`c524f841`](https://github.com/FS-GG/FS.GG.Coordination/commit/c524f8410323e7a79a6bab4ad691a99e75f530e1),
+  and passed [protected-main run 33402803310](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33402803310).
+
+- [x] **GS2-04.4 — Project adapter.** Treat membership and Status as projections; handle archived,
   duplicated, external, draft, missing, and unreadable items without inventing absence.
+
+  Accepted 2026-08-31. [Implementation PR 144](https://github.com/FS-GG/FS.GG.Coordination/pull/144)
+  passed [exact-head qualification run 33409563736](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33409563736)
+  with canonical Quint reused, and merged as protected commit
+  [`36abdce0`](https://github.com/FS-GG/FS.GG.Coordination/commit/36abdce0a907b0acd3d8ace1f4ac6d6491f4e080),
+  whose [protected-main run 33410269364](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33410269364)
+  passed. [Acceptance PR 146](https://github.com/FS-GG/FS.GG.Coordination/pull/146) added the append-only
+  [GS2-04.4 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/62396de0b38a13fd8f2cb5fec7ba9e8e42770823/evidence/github-substrate-v2/accepted/GS2-04.4.json)
+  with self-digest `a2a71df6fe5f871c8f40b353c161b58fbb2206643b02dcb3ef5987802a82c252`,
+  merged at [`62396de0`](https://github.com/FS-GG/FS.GG.Coordination/commit/62396de0b38a13fd8f2cb5fec7ba9e8e42770823),
+  and passed [protected-main run 33412110063](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33412110063).
+
 - [ ] **GS2-04.5 — Comment/projection adapter.** Preserve server-issued identity/order, validate marker
   JSON and referenced journal digests, distinguish edit/delete/tamper, and regenerate human projections
   from durable authority. A comment never authorizes a concurrency-sensitive transition.
