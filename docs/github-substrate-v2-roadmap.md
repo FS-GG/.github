@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1 accepted; GS2-01.9 not applicable; GS2-04.2 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.2 accepted; GS2-01.9 not applicable; GS2-04.3 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -54,6 +54,20 @@ and rationale.
 The three program issues are too large to hand directly to a general worker. They are durable anchors for
 ownership, roll-up, and cross-repository sequencing. Actual work is performed as one bounded roadmap unit
 at a time.
+
+### 1.0 Qualification strength at child and parent boundaries
+
+[ADR-0080](adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md) makes scoped
+content-addressed qualification the default for every ordinary child unit. A gate executes when its declared
+semantic subject changes and may reuse independently validated immutable evidence when that subject is identical.
+Formal-input drift always executes the canonical formal gate. The exact-head terminal manifest binds every current
+or reused gate subject and artifact.
+
+The final child of each parent milestone is also its explicit closure candidate. That candidate binds the complete
+accepted child set and forces all declared gates cold; scoped reuse is forbidden. Protected merge and exact-merge
+verification produce the append-only parent closure receipt. Freeze, release, cutover, rollback-authority, and
+`OpenV2` boundaries are comprehensive regardless of their position in the hierarchy. GS2-04.9 is the first closure
+candidate governed by this default.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
@@ -704,7 +718,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   [PR 3092](https://github.com/FS-GG/.github/pull/3092). One Accountable Delivery Owner made every decision;
   no external, multiple, or approval-count authorization was required.
 
-- [ ] **GS2-04.2 — Issue/type/field adapter.** Resolve semantic identities to live IDs, verify type and
+- [x] **GS2-04.2 — Issue/type/field adapter.** Resolve semantic identities to live IDs, verify type and
   option sets, read complete values, and plan guarded create/update/clear operations.
 - [ ] **GS2-04.3 — Native relation adapter.** Read complete hierarchy/dependency sets and perform
   add/remove with stale re-read and post-state verification.
@@ -727,8 +741,11 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   unauthorized, and unavailable outcomes.
 - [ ] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
   attestations, packages, and public downloads without treating upload responses as served artifacts.
-- [ ] **GS2-04.9 — Sandbox qualification.** Exercise destructive create/update/delete/rollback behavior in
+- [ ] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
   isolated test repositories and a test Project using non-production identities and quotas.
+  Bind every accepted GS2-04 child receipt, execute Q3/Q4 and all repository qualification gates cold under
+  ADR-0080 comprehensive mode, and retain the protected GS2-04 closure receipt before GS2-05 may consume the
+  adapter milestone.
 
 ### GS2-05 — Implement the native work and roadmap model
 
