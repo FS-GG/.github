@@ -17,7 +17,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>new-sdd-workspace</ToolCommandName>
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
-    <Version>0.11.0</Version>
+    <Version>0.11.1</Version>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>

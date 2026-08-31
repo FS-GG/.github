@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-08-31** — **`new-sdd-workspace` 0.11.1 source release prepared**
+  (owner github; [source PR #3097](https://github.com/FS-GG/.github/pull/3097)):
+  the interactive wizard again asks which workspace template to create before the choice becomes
+  fixed, carries that selection into the scaffold invocation, and gathers the exact npm package,
+  version, and binding target required by `fable-bindings`. This is a backward-compatible patch over
+  0.11.0. The published package field remains 0.11.0 until the 0.11.1 bytes are served and verified
+  on both feeds.
+
 - **2026-08-31** — **canonical intake recovery release published: coherent set 0.78.0**
   (owner github; [coherent release](https://github.com/FS-GG/.github/releases/tag/coherent-set%2Fv0.78.0),
   [source PR #3086](https://github.com/FS-GG/.github/pull/3086),
