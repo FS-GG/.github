@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-31
+- **Amended by:** [ADR-0081](0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md)
 - **Affects:** `.github`, `FS.GG.Coordination`, and future roadmap-owning FS-GG components
 
 ## Context

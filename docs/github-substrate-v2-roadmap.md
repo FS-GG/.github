@@ -69,6 +69,13 @@ verification produce the append-only parent closure receipt. Freeze, release, cu
 `OpenV2` boundaries are comprehensive regardless of their position in the hierarchy. GS2-04.9 is the first closure
 candidate governed by this default.
 
+[ADR-0081](adr/0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md) adds the
+operating principle inside that envelope: approximately daily, use observed gate cost, unique actionable-defect
+yield, detection delay, closure equivalence, and blast radius to recommend retaining, increasing, or reducing each
+gate's cadence. Sparse evidence stays explicitly inconclusive, cadence changes are reviewed versioned policy, and
+closure plus production-authority boundaries cannot be weakened. A defect first found at closure feeds the next
+cadence review instead of becoming an unpriced surprise.
+
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
 The README-only repository exists at the explicitly authorized inert bootstrap commit
