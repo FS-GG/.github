@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-08-30"
+updated: "2026-08-31"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -337,7 +337,7 @@ skills:
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: padd-item,              scope: driver,  owner: .github,         source: .github/.claude/skills/padd-item/SKILL.md, sha256: afa270481a9ba5335a39314cb739264307def81bb1a8173aa3fd343024d397d1, materializes-when: always }
+  - { id: padd-item,              scope: driver,  owner: .github,         source: .github/.claude/skills/padd-item/SKILL.md, sha256: 60938ac4fc0f147de8be89f125a4a78a958be52ef1b879c33876f901d6486247, materializes-when: always }
   # work-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -363,7 +363,7 @@ skills:
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: p-add,                  scope: operator,owner: .github,         source: .github/.claude/skills/p-add/SKILL.md, sha256: 5f70ae93d72d99a1e6c40530dc2de9eb52396f4e09f60d3cf33c9f27f2cf2428, materializes-when: "false" }
+  - { id: p-add,                  scope: operator,owner: .github,         source: .github/.claude/skills/p-add/SKILL.md, sha256: 1361456fd086bcdeadd37842fe639361da1c83cde39226693b62c65de2a1f2d5, materializes-when: "false" }
   # lane-steward — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -371,7 +371,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: f30f1c1bd4d3a9820272ce15b98375fe76279e4e727198c2f449a3ecb702d631, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 0d218840e89e9cc0db58e91c1c7557f6552e8e059d87a21d8561e40e56efaf52, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
