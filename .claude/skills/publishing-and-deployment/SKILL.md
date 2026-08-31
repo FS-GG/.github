@@ -106,9 +106,10 @@ transaction from the exact accepted source commit:
     gh workflow run release-saga-start.yml --repo FS-GG/.github --ref main \
       -f source_sha=<40-character-merge-sha>
 
-`release-saga-start` calls the single-pack prepare workflow first. Only after it succeeds does the
-next job atomically create missing component tags; members whose immutable tags already exist are
-resumed through their manifest-bound `workflow_dispatch` recovery. This is the standard entry point
+`release-saga-start` first inspects the durable release journal. A fresh version calls the single-pack
+prepare workflow and can create component tags only after it succeeds. A prepared draft validates
+its stored manifest and resumes already-tagged members without re-packing; a promoted release is an
+idempotent no-op. This is the standard entry point
 for both fresh operator cuts and partial recovery. The component release workflows and
 `release-saga-prepare.yml` are lower-level saga primitives, not independent operator instructions.
 
