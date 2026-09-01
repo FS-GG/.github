@@ -134,7 +134,17 @@ jobs:
           org="$(observe_feed org "$org_url" yes)"; nuget="$(observe_feed nuget "$nuget_url" no)"
           # Frontiers are independently observed, not inferred from candidate
           # absence.  A listing/read failure remains `unknown` and refuses.
-          org_latest="$(gh api 'orgs/FS-GG/packages/nuget/FS.GG.Kit/versions?per_page=100' --paginate --jq '[.[].name | select(test("^0\\.[0-9]+\\.[0-9]+$"))] | sort_by(split(".") | map(tonumber)) | last // empty' 2>/dev/null || true)"
+          # `gh api --paginate --jq ...` evaluates the jq expression once PER PAGE. Once the package
+          # crossed 100 versions that produced two "latest" lines (one per page), which is not one
+          # parseable frontier and made the decision engine refuse every release as
+          # `feed-frontier-unknown`. Slurp the complete page set first, then choose one global latest.
+          # BEGIN kit-org-frontier
+          observe_org_frontier() {
+            gh api 'orgs/FS-GG/packages/nuget/FS.GG.Kit/versions?per_page=100' --paginate --slurp 2>/dev/null \
+              | jq -r 'add | [.[].name | select(test("^0\\.[0-9]+\\.[0-9]+$"))] | sort_by(split(".") | map(tonumber)) | last // empty' 2>/dev/null
+          }
+          # END kit-org-frontier
+          org_latest="$(observe_org_frontier || true)"
           nuget_latest="$(curl --retry 2 --connect-timeout 10 -fsS 'https://api.nuget.org/v3-flatcontainer/fs.gg.kit/index.json' 2>/dev/null | jq -r '[.versions[] | select(test("^0\\.[0-9]+\\.[0-9]+$"))] | sort_by(split(".") | map(tonumber)) | last // empty' || true)"
           [ -n "$org_latest" ] || org_latest=unknown; [ -n "$nuget_latest" ] || nuget_latest=unknown
           tag="kit/v${version}"; tag_exists=false
@@ -478,7 +488,7 @@ jobs:
           # SERVED body was one single line of literal backslash-n sequences.  That defect is
           # invisible in the source and obvious in the API response, which is where it must be
           # verified (.github#2558 acceptance criterion 3).
-          body="$(printf 'Automated evidence for FS.GG.Kit %s.\n\n- release run: %s\n- GitHub Packages: %s\n- nuget.org: %s\n- both served nuspecs: %s\n\nHuman/critic review is required before merge.\n\nCloses #2106\n' "$VERSION" "$run" "$org" "$nuget" "$SOURCE_SHA")"
+          body="$(printf 'Automated evidence for FS.GG.Kit %s.\n\n- release run: %s\n- GitHub Packages: %s\n- nuget.org: %s\n- both served nuspecs: %s\n\narchitecture-map: unaffected\n\nHuman/critic review is required before merge.\n\nCloses #2106\n' "$VERSION" "$run" "$org" "$nuget" "$SOURCE_SHA")"
           # ONE title, used by BOTH branches.  The refresh branch used to pass `--body` with no
           # `--title`, so an evidence PR that stayed open across two publishes kept its first
           # version's title forever: PR #2246 read `0.39.0` while its body had been rewritten all the
