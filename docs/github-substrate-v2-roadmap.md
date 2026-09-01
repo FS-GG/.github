@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.7 accepted; GS2-01.9 not applicable; GS2-04.8 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.8 accepted; GS2-01.9 not applicable; GS2-04.9 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -803,8 +803,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `5a54e22d217044a4b5cc2424c8d7e8e24f86dbbe8c6d6373c0c487819a930acf`,
   merged at [`89d0dda0`](https://github.com/FS-GG/FS.GG.Coordination/commit/89d0dda060efbe28d2dd25ad5a475fe865392b6f),
   and passed [protected-main run 33451465408](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33451465408).
-- [ ] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
+- [x] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
   attestations, packages, and public downloads without treating upload responses as served artifacts.
+
+  Accepted 2026-09-01. [Implementation PR 171](https://github.com/FS-GG/FS.GG.Coordination/pull/171)
+  merged as protected commit
+  [`42465b95`](https://github.com/FS-GG/FS.GG.Coordination/commit/42465b9514ac460fab228464641a9f918232c624),
+  whose [protected-main run 33457032627](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33457032627)
+  passed. [Acceptance PR 173](https://github.com/FS-GG/FS.GG.Coordination/pull/173) added the append-only
+  [GS2-04.8 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/12c6c196843acec65bc249604827ba838035ce04/evidence/github-substrate-v2/accepted/GS2-04.8.json)
+  with self-digest `84a9d9764cc0cbfbbddd0f9c34dc7e60aedbb9f58b024f28b4d7830bb6a10e99`,
+  merged at [`12c6c196`](https://github.com/FS-GG/FS.GG.Coordination/commit/12c6c196843acec65bc249604827ba838035ce04),
+  and passed [protected-main run 33458047588](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33458047588).
 - [ ] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
   isolated test repositories and a test Project using non-production identities and quotas.
   Bind every accepted GS2-04 child receipt, execute Q3/Q4 and all repository qualification gates cold under
