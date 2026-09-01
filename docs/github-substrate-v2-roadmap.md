@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.4, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.5 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.5, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.6 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -913,10 +913,20 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `0017ef59099ee14e6c3d0df73b4fb05a9c45a34f2067cecdf19a4b29e0a7a0fe`,
   merged at [`2ebca83b`](https://github.com/FS-GG/FS.GG.Coordination/commit/2ebca83bd3df4dcbcacba8c23c4d0ec53f96c6b2),
   and passed [protected-main run 33547250026](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33547250026).
-- [ ] **GS2-05.5 — Implement claims/touch sets.** Use protected journal expected-parent CAS plus a fencing
+- [x] **GS2-05.5 — Implement claims/touch sets.** Use protected journal expected-parent CAS plus a fencing
   generation for each claim and conflict domain; treat lease expiry only as successor eligibility; use the
   native field/comment projections only as candidate prefilters; acquire multi-touch grants in a
   deterministic compensatable plan; and re-prove exclusion and generation at every external effect.
+
+  Accepted 2026-09-01. [Implementation PR 209](https://github.com/FS-GG/FS.GG.Coordination/pull/209)
+  merged as protected commit
+  [`3def07ad`](https://github.com/FS-GG/FS.GG.Coordination/commit/3def07adda22806ed62cb739d76cab64ed118b8b),
+  whose [protected-main run 33556504859](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33556504859)
+  passed. [Acceptance PR 211](https://github.com/FS-GG/FS.GG.Coordination/pull/211) added the append-only
+  [GS2-05.5 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/0d0ed46343c12def5af15565cba0ed0ae3294990/evidence/github-substrate-v2/accepted/GS2-05.5.json)
+  with self-digest `f382502968cf634bf93c7318d24f629eb3ccfbbac6cf759a99434f1a33975059`,
+  merged at [`0d0ed463`](https://github.com/FS-GG/FS.GG.Coordination/commit/0d0ed46343c12def5af15565cba0ed0ae3294990),
+  and passed [protected-main run 33558097446](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33558097446).
 - [ ] **GS2-05.6 — Implement review/delivery.** Bind accountable critique evidence to an immutable full-snapshot
   `ReviewEpochKey` separate from its stable chain identity; allow succession only inside one epoch; require
   a fresh phase seat after any snapshot change without requiring another authority; distinguish merged from
