@@ -1,12 +1,12 @@
 ---
-title: "Design: durable actor orchestrator and deterministic agent harness"
+title: "Design: operations-research-first agent orchestration"
 category: Design
 categoryindex: 4
 index: 28
-description: "A proposed Akka.NET execution plane for authenticated agent supervision, deterministic scheduling, durable recovery, and guarded reuse of the FS.GG GitHub coordination substrate."
+description: "An operations-research-first control architecture for shaping, scheduling, supervising, and safely coordinating agent work over the FS.GG GitHub substrate."
 ---
 
-# Design: durable actor orchestrator and deterministic agent harness
+# Design: operations-research-first agent orchestration
 
 This design adds a continuously running, authenticated agent harness above the existing FS.GG GitHub
 coordination substrate. A pure operations-research control kernel models the delivery system, shapes work,
