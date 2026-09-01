@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and GS2-04.1–GS2-04.8 accepted; GS2-01.9 not applicable; GS2-04.9 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and all GS2-04 units accepted; GS2-01.9 not applicable; GS2-05.1 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -815,11 +815,22 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `9f80d0048b06a7ca3c06491ee4c1e6f2baad6bf704f763b7ed018ff43b62e19b`,
   corrected and merged at [`cd8d4141`](https://github.com/FS-GG/FS.GG.Coordination/commit/cd8d41417aff13a4248dfaa414b31c31e918aeb8),
   and passed [protected-main run 33459978204](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33459978204).
-- [ ] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
+- [x] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
   isolated test repositories and a test Project using non-production identities and quotas.
   Bind every accepted GS2-04 child receipt, execute Q3/Q4 and all repository qualification gates cold under
   ADR-0080 comprehensive mode, and retain the protected GS2-04 closure receipt before GS2-05 may consume the
   adapter milestone.
+
+  Accepted 2026-09-01. [Implementation PR 179](https://github.com/FS-GG/FS.GG.Coordination/pull/179)
+  merged as protected commit
+  [`b0a2a8eb`](https://github.com/FS-GG/FS.GG.Coordination/commit/b0a2a8eb6827fd66cd04f20c7356080074e35289),
+  whose comprehensive [protected sandbox run 33467333141](https://github.com/FS-GG/.github/actions/runs/33467333141)
+  passed all eight cold Q3 adapters and the Q4 closure with complete cleanup. [Acceptance PR 181](https://github.com/FS-GG/FS.GG.Coordination/pull/181)
+  added the append-only
+  [GS2-04.9 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/5cc9db538c9c8a43e38ee7991f2211bbec75cbaa/evidence/github-substrate-v2/accepted/GS2-04.9.json)
+  with self-digest `11defafd12353bbcb9b96cc06d3d9e29553ddca4ba912bacd7476c067f9802ed`,
+  merged at [`5cc9db53`](https://github.com/FS-GG/FS.GG.Coordination/commit/5cc9db538c9c8a43e38ee7991f2211bbec75cbaa),
+  and passed [protected-main run 33468604425](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33468604425).
 
 ### GS2-05 — Implement the native work and roadmap model
 
