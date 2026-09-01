@@ -1,0 +1,144 @@
+name: GitHub substrate v2 sandbox qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-hex FS.GG.Coordination commit to qualify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-v2-sandbox-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: gs2-04-9-live-sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: github-substrate-v2-sandbox
+    env:
+      FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      FSGG_SANDBOX_ACTOR: fs-gg-cross-repo-dispatch[bot]
+      FSGG_SANDBOX_ACTOR_ID: '297630107'
+      FSGG_SANDBOX_OWNER: FS-GG
+      FSGG_SANDBOX_REPOSITORY: FS.GG.GitHub.Substrate.Sandbox
+      FSGG_SANDBOX_REPOSITORY_NODE_ID: R_kgDOUKXpqQ
+      FSGG_SANDBOX_PROJECT_NUMBER: '2'
+      FSGG_SANDBOX_PROJECT_NODE_ID: PVT_kwDOEYAWY84BiESo
+      FSGG_SANDBOX_PURPOSE: fsgg-sandbox-gs2-04-9
+      FSGG_SANDBOX_MODE: live
+      FSGG_SANDBOX_RUN_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.candidate_sha }}
+      FSGG_SANDBOX_EVIDENCE_DIR: ${{ runner.temp }}/github-substrate-v2-sandbox
+    steps:
+      - name: Validate the exact candidate input
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FSGG_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'candidate_sha must be one full lowercase 40-hex Git commit' >&2
+            exit 1
+          }
+
+      - name: Check out the exact product candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: coordination
+
+      - name: Prove the checked-out object
+        shell: bash
+        run: test "$(git -C coordination rev-parse HEAD)" = "$FSGG_CANDIDATE_SHA"
+
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: coordination/global.json
+
+      - name: Mint the repository-scoped non-production App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.GitHub.Substrate.Sandbox
+          permission-administration: write
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-organization-projects: write
+
+      - name: Authoritatively bind the App and sandbox targets before writes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$FSGG_SANDBOX_EVIDENCE_DIR"
+          viewer="$(gh api graphql -f query='{viewer{login id databaseId}}' --jq '.data.viewer')"
+          test "$(jq -r .login <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR"
+          test "$(jq -r .databaseId <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR_ID"
+
+          repository="$(gh api "repos/$FSGG_SANDBOX_OWNER/$FSGG_SANDBOX_REPOSITORY")"
+          test "$(jq -r .node_id <<<"$repository")" = "$FSGG_SANDBOX_REPOSITORY_NODE_ID"
+          test "$(jq -r .private <<<"$repository")" = true
+          test "$(jq -r .description <<<"$repository")" = 'fsgg-sandbox-gs2-04-9 disposable qualification target; never production'
+
+          project="$(gh api graphql -f query='query($owner:String!,$number:Int!){organization(login:$owner){projectV2(number:$number){id title closed public}}}' -F owner="$FSGG_SANDBOX_OWNER" -F number="$FSGG_SANDBOX_PROJECT_NUMBER" --jq '.data.organization.projectV2')"
+          test "$(jq -r .id <<<"$project")" = "$FSGG_SANDBOX_PROJECT_NODE_ID"
+          test "$(jq -r .title <<<"$project")" = "$FSGG_SANDBOX_PURPOSE"
+          test "$(jq -r .closed <<<"$project")" = false
+          test "$(jq -r .public <<<"$project")" = false
+
+          jq -n --argjson viewer "$viewer" --argjson repository "$repository" --argjson project "$project" \
+            --arg candidate "$FSGG_CANDIDATE_SHA" --arg nonce "$FSGG_SANDBOX_RUN_NONCE" \
+            '{schema:"fsgg.github-substrate-v2.sandbox-preflight/1",candidateSha:$candidate,runNonce:$nonce,viewer:$viewer,repository:{node_id:$repository.node_id,full_name:$repository.full_name,private:$repository.private,description:$repository.description},project:$project}' \
+            > "$FSGG_SANDBOX_EVIDENCE_DIR/preflight.json"
+
+      - name: Execute the signed live operation plan
+        id: execute
+        continue-on-error: true
+        env:
+          FSGG_SANDBOX_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_SANDBOX_PHASE: execute
+        working-directory: coordination
+        shell: bash
+        run: bash eng/qualify-github-sandbox-closure.sh .
+
+      - name: Compensate and authoritatively verify cleanup
+        id: cleanup
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          FSGG_SANDBOX_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_SANDBOX_PHASE: cleanup
+        working-directory: coordination
+        shell: bash
+        run: bash eng/qualify-github-sandbox-closure.sh .
+
+      - name: Retain exact-candidate Q4 evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-04-9-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve execution and cleanup verdicts
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.execute.outcome }}' = success
+          test '${{ steps.cleanup.outcome }}' = success
+          test -s "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json"
+          test "$(jq -r .cleanup.disposition "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json")" = complete
