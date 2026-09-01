@@ -800,7 +800,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   whose [protected-main run 33450426877](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33450426877)
   passed. [Acceptance PR 164](https://github.com/FS-GG/FS.GG.Coordination/pull/164) added the append-only
   [GS2-04.7 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/89d0dda060efbe28d2dd25ad5a475fe865392b6f/evidence/github-substrate-v2/accepted/GS2-04.7.json)
-  with self-digest `25503c9cdc1ba86a5d37c01e0cd3e38d95ee213262047a7dea3c8c3bfbebd848`,
+  with self-digest `5a54e22d217044a4b5cc2424c8d7e8e24f86dbbe8c6d6373c0c487819a930acf`,
   merged at [`89d0dda0`](https://github.com/FS-GG/FS.GG.Coordination/commit/89d0dda060efbe28d2dd25ad5a475fe865392b6f),
   and passed [protected-main run 33451465408](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33451465408).
 - [ ] **GS2-04.8 — Actions/release/feed adapter.** Observe runs/checks/merge groups, immutable releases,
