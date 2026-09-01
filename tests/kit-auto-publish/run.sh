@@ -25,6 +25,43 @@ case_run frontier-disagree stickyEscalate '{"version":"0.27.1","provenance":{"me
 case_run unrelated-later-pr refuse '{"version":"0.27.1","provenance":{"mergedReachable":true,"introducedVersion":"0.27.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.27.0","nugetLatest":"0.27.0","tagExists":false}'
 case_run coherent-set-minor expectedRefusal '{"version":"0.51.0","provenance":{"mergedReachable":true,"introducedVersion":"0.51.0","prArm":"pass"},"orgFeed":"absent","nugetFeed":"absent","orgLatest":"0.50.2","nugetLatest":"0.50.2","tagExists":false}'
 
+# A paginated `gh api --jq` evaluates jq once per page. The package now has more than 100 versions,
+# so that shape returned TWO page-local frontiers and made a valid next patch fail closed as
+# `feed-frontier-unknown`. Exercise the REAL workflow helper against two synthetic pages and require
+# one globally maximal version.
+extract_org_frontier_fn() {
+  awk '/^[[:space:]]*# BEGIN kit-org-frontier$/{flag=1; next} /^[[:space:]]*# END kit-org-frontier$/{flag=0} flag' \
+    "$root/.github/workflows/kit-auto-publish.yml" > "$1"
+  grep -q 'observe_org_frontier()' "$1" \
+    || { echo "observe_org_frontier() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
+}
+
+frontier_work="$work/org-frontier"
+mkdir -p "$frontier_work/bin"
+frontier_fn="$frontier_work/observe-org-frontier.sh"
+extract_org_frontier_fn "$frontier_fn"
+cat > "$frontier_work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+set -euo pipefail
+paginate=false
+slurp=false
+for arg in "$@"; do
+  if [ "$arg" = --paginate ]; then paginate=true; fi
+  if [ "$arg" = --slurp ]; then slurp=true; fi
+done
+[ "$paginate" = true ] && [ "$slurp" = true ] \
+  || { echo "frontier query must paginate and slurp before reducing" >&2; exit 91; }
+jq -n '[
+  ([range(0; 100) | {name:("0.1." + tostring)}]),
+  [{name:"0.78.0"}, {name:"preview"}]
+]'
+GH
+chmod +x "$frontier_work/bin/gh"
+frontier="$(PATH="$frontier_work/bin:$PATH" bash -c "source '$frontier_fn'; observe_org_frontier")"
+[ "$frontier" = "0.78.0" ] \
+  || { echo "org frontier: expected one global 0.78.0, got '$frontier'" >&2; exit 1; }
+checks=$((checks + 1))
+
 # Expected scope refusals are observable but never enter the actionable escalation path. This is a
 # typed routing decision, not a prose convention inferred from the note after reopening an issue.
 grep -Fq "if: steps.observe.outputs.action == 'expectedRefusal'" "$root/.github/workflows/kit-auto-publish.yml" \
@@ -1750,6 +1787,9 @@ grep -qF '\n' "$ev1/last-body.txt" \
 checks=$((checks + 1))
 grep -qx 'Closes #2106' "$ev1/last-body.txt" \
   || { echo "evidence step (create): the closing keyword is not on its own line" >&2; cat "$ev1/last-body.txt" >&2; exit 1; }
+checks=$((checks + 1))
+grep -qx 'architecture-map: unaffected' "$ev1/last-body.txt" \
+  || { echo "evidence step (create): architecture-map opt-out is missing from the generated PR body" >&2; cat "$ev1/last-body.txt" >&2; exit 1; }
 checks=$((checks + 1))
 grep -qx 'CREATE' "$ev1/calls.log" \
   || { echo "evidence step (create): expected a gh pr create" >&2; cat "$ev1/calls.log" >&2; exit 1; }
