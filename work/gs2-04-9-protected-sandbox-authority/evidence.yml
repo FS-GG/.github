@@ -1,0 +1,304 @@
+schemaVersion: 1
+workId: gs2-04-9-protected-sandbox-authority
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-9-protected-sandbox-authority/spec.md
+sourceClarifications: work/gs2-04-9-protected-sandbox-authority/clarifications.md
+sourceChecklist: work/gs2-04-9-protected-sandbox-authority/checklist.md
+sourcePlan: work/gs2-04-9-protected-sandbox-authority/plan.md
+sourceTasks: work/gs2-04-9-protected-sandbox-authority/tasks.yml
+sourceAnalysis: readiness/gs2-04-9-protected-sandbox-authority/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-9-protected-sandbox-authority/analysis.json
+    digest: 789babd65ee636003835e3c52f0463bd7e3432bb7adbe9bc96bcced0c0c6f9f2
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-9-protected-sandbox-authority/checklist.md
+    digest: 7ff55ccd0021e5529b2a22d2e343dad32d614a1850d6fe24624a5f4b6e1c6e02
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-9-protected-sandbox-authority/clarifications.md
+    digest: 8e8d19f5b06ffba4f78fbd036f6ffb036df8f0a819ab7dbc08044481f1679386
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-9-protected-sandbox-authority/plan.md
+    digest: 32b05a690053c60a2672947267207aa101a5be20a94564eb50274fa8b2b03662
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-9-protected-sandbox-authority/spec.md
+    digest: fba540b5b83c54e07d7622f3be5c654c45b410678746935d81e497ff069422cc
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-9-protected-sandbox-authority/tasks.yml
+    digest: 11145a1f293ad8c8aa904bb7dc86239285bb1eb8b492df3a4edde4c706d40891
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Manual-only workflow requires a string candidate_sha, rejects non-lowercase-40-hex input, checks out that exact object with a pinned checkout action, and proves HEAD equality before minting authority. actionlint 1.7.12 passed the shipped manual-only workflow."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Pinned create-github-app-token scopes the installation token to FS-GG/FS.GG.GitHub.Substrate.Sandbox and requests only administration, contents, issues, pull requests, and organization Projects write; the token is step-local and absent from uploaded paths."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Protected run 33464889841 preflight observed App actor fs-gg-cross-repo-dispatch[bot] database id 297630107, repository node R_kgDOUKXpqQ/private/purpose, and Project node PVT_kwDOEYAWY84BiESo/private/open/purpose before the live executor received the token. A local human-token negative control exited 1 at the actor assertion while retaining a non-empty preflight.json with the observed human actor and correct read-only sandbox targets."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Run 33464889841 executed all eight live effects, ran cleanup separately, uploaded exact-candidate/run/attempt evidence, and passed the terminal verdict with cleanup disposition complete and residualCount 0."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: [The workflow permission request is the DEC-001 subset and the successful protected mint/run proves that subset is sufficient for all registered Q4 surfaces.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Execute and cleanup use separate continue-on-error outcome records, artifact upload and cleanup use always(), and the final assertion preserves either red outcome. Failed runs 33464077514, 33464332367, 33464499738, and 33464706050 all retained cleanup artifacts and ended red."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Run 33464889841 minted the fixed App through protected secrets and completed repository administration, contents, issues, pull-request-compatible relation, and organization Project operations without any broader requested grant."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["The green live run proves execute, compensating cleanup, upload, and final verdict ordering; its artifact contains comprehensive.json, execution.json, cleanup.json, closure.json, preflight.json, eight child receipts, and the retrieved release asset."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["PC-001 is the single non-reusable workflow contract. The shipped trigger is workflow_dispatch only, candidate_sha is required, every external action is pinned to a full commit, and no production coordinate or reusable secret interface exists."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["actionlint 1.7.12 returned exit 0 on the final manual-only workflow. Source inspection confirms workflow_dispatch-only triggering, exact candidate validation, pinned actions, fixed actor/repository/Project identities, bounded permissions, and evidence-directory-only upload."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Negative live controls remained red while cleanup stayed green: run 33464077514 refused an invalid nonce before writes; 33464332367 preserved a label-limit execution failure; 33464499738 preserved a Project verification failure; 33464706050 preserved an upload-host failure. Every run uploaded cleanup evidence."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["Protected run https://github.com/FS-GG/.github/actions/runs/33464889841 is green for exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec. Independent post-run REST/GraphQL reads found zero nonce labels/comments, sub-issues, issue-1 Project membership, fsgg/sandbox refs, releases, or release 380186129; the permanent issue-2 Project item and main ref were positive controls."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/github-substrate-v2-sandbox-qualification.yml"]
+    sourceRefs:
+      - kind: verification
+        path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+    result: pass
+    synthetic: false
+    notes: ["PM-001 is additive: the diff adds one manual workflow and SDD receipts, with no existing trigger, secret consumer, schema, deployment, or production workflow migration."]
+  - id: EV014
+    kind: generated-view
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV014]
+    artifacts: [readiness/gs2-04-9-protected-sandbox-authority/work-model.json]
+    sourceRefs:
+      - kind: verification
+        path: readiness/gs2-04-9-protected-sandbox-authority/work-model.json
+    result: pass
+    synthetic: false
+    notes: ["The SDD-owned work model and subsequent verify/ship projections are regenerated from current authored sources. Live evidence remains an immutable GitHub Actions artifact named by candidate, run, and attempt, not a reusable credential or configuration input."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
