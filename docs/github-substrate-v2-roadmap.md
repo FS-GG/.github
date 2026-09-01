@@ -811,10 +811,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   [`42465b95`](https://github.com/FS-GG/FS.GG.Coordination/commit/42465b9514ac460fab228464641a9f918232c624),
   whose [protected-main run 33457032627](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33457032627)
   passed. [Acceptance PR 173](https://github.com/FS-GG/FS.GG.Coordination/pull/173) added the append-only
-  [GS2-04.8 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/12c6c196843acec65bc249604827ba838035ce04/evidence/github-substrate-v2/accepted/GS2-04.8.json)
-  with self-digest `84a9d9764cc0cbfbbddd0f9c34dc7e60aedbb9f58b024f28b4d7830bb6a10e99`,
-  merged at [`12c6c196`](https://github.com/FS-GG/FS.GG.Coordination/commit/12c6c196843acec65bc249604827ba838035ce04),
-  and passed [protected-main run 33458047588](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33458047588).
+  [GS2-04.8 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/cd8d41417aff13a4248dfaa414b31c31e918aeb8/evidence/github-substrate-v2/accepted/GS2-04.8.json)
+  with self-digest `9f80d0048b06a7ca3c06491ee4c1e6f2baad6bf704f763b7ed018ff43b62e19b`,
+  corrected and merged at [`cd8d4141`](https://github.com/FS-GG/FS.GG.Coordination/commit/cd8d41417aff13a4248dfaa414b31c31e918aeb8),
+  and passed [protected-main run 33459978204](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33459978204).
 - [ ] **GS2-04.9 — Sandbox qualification and comprehensive GS2-04 closure.** Exercise destructive create/update/delete/rollback behavior in
   isolated test repositories and a test Project using non-production identities and quotas.
   Bind every accepted GS2-04 child receipt, execute Q3/Q4 and all repository qualification gates cold under
