@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1 accepted; GS2-01.9 not applicable; GS2-05.2 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.2 accepted; GS2-01.9 not applicable; GS2-05.3 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -851,8 +851,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `6a2c26033946b986b25fc4fc99257d21d6fa5d728e1f365170d9bc17a9226df5`,
   merged at [`d61ef112`](https://github.com/FS-GG/FS.GG.Coordination/commit/d61ef112875bdfa74223c2596776dc3bdcaf77e5),
   and passed [protected-main run 33475728297](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33475728297).
-- [ ] **GS2-05.2 — Finalize organization issue fields.** Specify scheduling, hold reason, priority,
+- [x] **GS2-05.2 — Finalize organization issue fields.** Specify scheduling, hold reason, priority,
   effort, dates, severity, phase, workstream, contract, and touch-set projection with minimal vocabularies.
+
+  Accepted 2026-09-01. [Implementation PR 191](https://github.com/FS-GG/FS.GG.Coordination/pull/191)
+  merged as protected commit
+  [`775bb0d3`](https://github.com/FS-GG/FS.GG.Coordination/commit/775bb0d350119c370089710f1847fe7609b080a8),
+  whose [protected-main run 33480138353](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33480138353)
+  passed. [Acceptance PR 193](https://github.com/FS-GG/FS.GG.Coordination/pull/193) added the append-only
+  [GS2-05.2 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/5e0dca1e2c8daf53f7ed745be1d947a4d3fc8b43/evidence/github-substrate-v2/accepted/GS2-05.2.json)
+  with self-digest `a8474e696d2c1ff149ec1efb6a4c4b4cb6fe6e56b86ec840871b4430864f0a50`,
+  merged at [`5e0dca1e`](https://github.com/FS-GG/FS.GG.Coordination/commit/5e0dca1e2c8daf53f7ed745be1d947a4d3fc8b43),
+  and passed [protected-main run 33482054038](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33482054038).
 - [ ] **GS2-05.3 — Implement intake.** Provide pure validate/plan, exact-plan apply, and live inspect for
   issues, fields, Project membership, hierarchy, dependencies, and protocol initialization.
 - [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
