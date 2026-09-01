@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-01** — **auto-publish evidence: FS.GG.Kit 0.78.1** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/33517994174) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.78.1/FS.GG.Kit.0.78.1.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.78.1/fs.gg.kit.0.78.1.nupkg). Both served nuspecs record repository commit c028d0ca62347e4cf94270cee59c4f84c482b738.
+
 - **2026-08-31** — **`new-sdd-workspace` 0.11.1 published and reconciled**
   (owner github; [source PR #3098](https://github.com/FS-GG/.github/pull/3098),
   [release run 33369748748](https://github.com/FS-GG/.github/actions/runs/33369748748)):
