@@ -35,7 +35,7 @@ jobs:
       FSGG_SANDBOX_PURPOSE: fsgg-sandbox-gs2-04-9
       FSGG_SANDBOX_MODE: live
       FSGG_SANDBOX_RUN_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.candidate_sha }}
-      FSGG_SANDBOX_EVIDENCE_DIR: ${{ runner.temp }}/github-substrate-v2-sandbox
+      FSGG_SANDBOX_EVIDENCE_DIR: /tmp/fsgg-${{ github.run_id }}-${{ github.run_attempt }}-sandbox
     steps:
       - name: Validate the exact candidate input
         shell: bash
