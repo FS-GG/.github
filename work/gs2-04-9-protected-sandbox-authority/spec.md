@@ -37,7 +37,7 @@ Operators can execute GS2-04.9 live qualification through a protected non-produc
 ## Functional Requirements
 - FR-001: The workflow MUST accept only a full 40-hex FS.GG.Coordination candidate, check out that exact object with pinned actions, and prove `HEAD` equality before execution. (covers AC-001)
 - FR-002: The workflow MUST mint `fs-gg-cross-repo-dispatch` from protected secrets with explicit owner, repository allowlist, and minimum granted permission requests; the token and private key MUST never be uploaded or printed. (covers AC-002)
-- FR-003: Preflight MUST authoritatively verify App actor id 297630107, repository node `R_kgDORU8V6g`, private/non-production description, Project node `PVT_kwDOEYAWY84BiESo`, purpose marker, and run expiry before exporting the token to the product harness. (covers AC-003)
+- FR-003: Preflight MUST authoritatively verify App actor id 297630107, repository node `R_kgDOUKXpqQ`, private/non-production description, Project node `PVT_kwDOEYAWY84BiESo`, purpose marker, and run expiry before exporting the token to the product harness. (covers AC-003)
 - FR-004: The live harness MUST run with fixed sandbox coordinates and bounded quotas; cleanup and evidence upload MUST use `always()`, artifacts MUST include run and attempt identity, and missing or residual cleanup MUST remain non-green. (covers AC-004)
 
 ## Ambiguities

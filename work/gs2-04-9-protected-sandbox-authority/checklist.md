@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/gs2-04-9-protected-sandbox-authority/clarifications.md
 
 ## Source Snapshot
-- spec: work/gs2-04-9-protected-sandbox-authority/spec.md sha256:99772085ff93d3ef7528060c26196e305bd3c6ecabb7d2e67a57e26557120c48 schemaVersion:1
+- spec: work/gs2-04-9-protected-sandbox-authority/spec.md sha256:fba540b5b83c54e07d7622f3be5c654c45b410678746935d81e497ff069422cc schemaVersion:1
 - clarifications: work/gs2-04-9-protected-sandbox-authority/clarifications.md sha256:8e8d19f5b06ffba4f78fbd036f6ffb036df8f0a819ab7dbc08044481f1679386 schemaVersion:1
 
 ## Checklist Items

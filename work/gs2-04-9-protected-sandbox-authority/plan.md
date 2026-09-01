@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/gs2-04-9-protected-sandbox-authority/spec.md sha256:99772085ff93d3ef7528060c26196e305bd3c6ecabb7d2e67a57e26557120c48 schemaVersion:1
+- spec: work/gs2-04-9-protected-sandbox-authority/spec.md sha256:fba540b5b83c54e07d7622f3be5c654c45b410678746935d81e497ff069422cc schemaVersion:1
 - clarifications: work/gs2-04-9-protected-sandbox-authority/clarifications.md sha256:8e8d19f5b06ffba4f78fbd036f6ffb036df8f0a819ab7dbc08044481f1679386 schemaVersion:1
-- checklist: work/gs2-04-9-protected-sandbox-authority/checklist.md sha256:70be775b8059b07c58a5dd8cc2edbafd7c48ffbff0221415ff57636bdced3784 schemaVersion:1
+- checklist: work/gs2-04-9-protected-sandbox-authority/checklist.md sha256:7ff55ccd0021e5529b2a22d2e343dad32d614a1850d6fe24624a5f4b6e1c6e02 schemaVersion:1
 
 ## Plan Scope
 - Add one repository-owned workflow with no reusable secret-bearing call surface.
