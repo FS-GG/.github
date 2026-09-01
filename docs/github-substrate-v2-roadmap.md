@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.3 accepted; GS2-01.9 not applicable; GS2-05.4 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.3 accepted; GS2-01.9 not applicable; GS2-05.9 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -875,9 +875,23 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `f5ac79b55dfa001903a4173209f09a71e7265641f5891c6498c65ce395364be0`,
   merged at [`a0ddf90f`](https://github.com/FS-GG/FS.GG.Coordination/commit/a0ddf90f49ba406b7242dc7357573de109ba223d),
   and passed [protected-main run 33493517326](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33493517326).
+- [ ] **GS2-05.9 — Implement staged intake admission.** Preserve GS2-05.3's sealed
+  validate/plan/apply/inspect, explicit create-or-reuse identity, idempotent recovery, and authoritative
+  readback while separating item-local Backlog capture from Ready promotion. Capture accepts an explicitly
+  unknown root cause, deferred verification detail, and an unspecified touch set; it may perform at most six
+  authority-read operations and six mutation operations in its sealed plan, independent of total Project and
+  Backlog cardinality, and may not traverse or retriage unrelated work or invoke organization-wide
+  reconciliation. Ready promotion requires the complete phase-local touch set, verification contract,
+  dependencies, route decision, native type and fields, and all other schedulability inputs. Claim and PR
+  evidence remain later lifecycle outputs and therefore cannot be prerequisites for Ready. Event-targeted,
+  scheduled, or explicitly requested maintenance owns global reconciliation. Preserve unknown and partial
+  observations, report every missing promotion input, keep `fsgg.coord.intake/v1` transaction guarantees
+  during migration, and prove the fixed budget and phase boundary with cardinality-growth and inversion
+  fixtures. This inserted unit uses the next unused stable `GS2-NN.N` identity while remaining ordered before
+  GS2-05.4. Receiver: [FS.GG.Coordination#200](https://github.com/FS-GG/FS.GG.Coordination/issues/200).
 - [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
   parent edges, dependency edges, dates/fields, and drift inspection without making Project fields the
-  execution ledger.
+  execution ledger. Its registered prerequisites must include the accepted GS2-05.9 receipt.
 - [ ] **GS2-05.5 — Implement claims/touch sets.** Use protected journal expected-parent CAS plus a fencing
   generation for each claim and conflict domain; treat lease expiry only as successor eligibility; use the
   native field/comment projections only as candidate prefilters; acquire multi-touch grants in a
