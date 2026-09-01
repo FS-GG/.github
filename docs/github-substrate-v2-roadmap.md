@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.2 accepted; GS2-01.9 not applicable; GS2-05.3 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.3 accepted; GS2-01.9 not applicable; GS2-05.4 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -863,8 +863,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `a8474e696d2c1ff149ec1efb6a4c4b4cb6fe6e56b86ec840871b4430864f0a50`,
   merged at [`5e0dca1e`](https://github.com/FS-GG/FS.GG.Coordination/commit/5e0dca1e2c8daf53f7ed745be1d947a4d3fc8b43),
   and passed [protected-main run 33482054038](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33482054038).
-- [ ] **GS2-05.3 — Implement intake.** Provide pure validate/plan, exact-plan apply, and live inspect for
+- [x] **GS2-05.3 — Implement intake.** Provide pure validate/plan, exact-plan apply, and live inspect for
   issues, fields, Project membership, hierarchy, dependencies, and protocol initialization.
+
+  Accepted 2026-09-01. [Implementation PR 197](https://github.com/FS-GG/FS.GG.Coordination/pull/197)
+  merged as protected commit
+  [`d99f8033`](https://github.com/FS-GG/FS.GG.Coordination/commit/d99f803330bf42aee7238022928b8899d0de2cae),
+  whose [protected-main run 33490893417](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33490893417)
+  passed. [Acceptance PR 199](https://github.com/FS-GG/FS.GG.Coordination/pull/199) added the append-only
+  [GS2-05.3 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/a0ddf90f49ba406b7242dc7357573de109ba223d/evidence/github-substrate-v2/accepted/GS2-05.3.json)
+  with self-digest `f5ac79b55dfa001903a4173209f09a71e7265641f5891c6498c65ce395364be0`,
+  merged at [`a0ddf90f`](https://github.com/FS-GG/FS.GG.Coordination/commit/a0ddf90f49ba406b7242dc7357573de109ba223d),
+  and passed [protected-main run 33493517326](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33493517326).
 - [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
   parent edges, dependency edges, dates/fields, and drift inspection without making Project fields the
   execution ledger.
