@@ -888,7 +888,9 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   observations, report every missing promotion input, keep `fsgg.coord.intake/v1` transaction guarantees
   during migration, and prove the fixed budget and phase boundary with cardinality-growth and inversion
   fixtures. This inserted unit uses the next unused stable `GS2-NN.N` identity while remaining ordered before
-  GS2-05.4. Receiver: [FS.GG.Coordination#200](https://github.com/FS-GG/FS.GG.Coordination/issues/200).
+  GS2-05.4. Use the [filing's measured baseline](https://github.com/FS-GG/.github/issues/3134) of 35
+  mechanical projection repairs and 10 unrelated delivery-route refusals incurred during one admission.
+  Receiver: [FS.GG.Coordination#200](https://github.com/FS-GG/FS.GG.Coordination/issues/200).
 - [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
   parent edges, dependency edges, dates/fields, and drift inspection without making Project fields the
   execution ledger. Its registered prerequisites must include the accepted GS2-05.9 receipt.
