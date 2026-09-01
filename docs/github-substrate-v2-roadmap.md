@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, and all GS2-04 units accepted; GS2-01.9 not applicable; GS2-05.1 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1 accepted; GS2-01.9 not applicable; GS2-05.2 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -839,8 +839,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-02–GS2-04
 **Exit:** complete work lifecycle passes Q2–Q5 without production writes
 
-- [ ] **GS2-05.1 — Finalize taxonomy.** Ratify native issue types and eliminate parallel Class/Kind
+- [x] **GS2-05.1 — Finalize taxonomy.** Ratify native issue types and eliminate parallel Class/Kind
   authority. Define exact migration for every current combination and refuse ambiguity.
+
+  Accepted 2026-09-01. [Implementation PR 185](https://github.com/FS-GG/FS.GG.Coordination/pull/185)
+  merged as protected commit
+  [`c2cdc9d8`](https://github.com/FS-GG/FS.GG.Coordination/commit/c2cdc9d8126ed65874616afd0877d5f0a0c59368),
+  whose [protected-main run 33474575558](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33474575558)
+  passed. [Acceptance PR 187](https://github.com/FS-GG/FS.GG.Coordination/pull/187) added the append-only
+  [GS2-05.1 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/d61ef112875bdfa74223c2596776dc3bdcaf77e5/evidence/github-substrate-v2/accepted/GS2-05.1.json)
+  with self-digest `6a2c26033946b986b25fc4fc99257d21d6fa5d728e1f365170d9bc17a9226df5`,
+  merged at [`d61ef112`](https://github.com/FS-GG/FS.GG.Coordination/commit/d61ef112875bdfa74223c2596776dc3bdcaf77e5),
+  and passed [protected-main run 33475728297](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33475728297).
 - [ ] **GS2-05.2 — Finalize organization issue fields.** Specify scheduling, hold reason, priority,
   effort, dates, severity, phase, workstream, contract, and touch-set projection with minimal vocabularies.
 - [ ] **GS2-05.3 — Implement intake.** Provide pure validate/plan, exact-plan apply, and live inspect for
