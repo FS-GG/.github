@@ -90,7 +90,7 @@ evidence:
         path: ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
     result: pass
     synthetic: false
-    notes: ["Protected run 33464889841 preflight observed App actor fs-gg-cross-repo-dispatch[bot] database id 297630107, repository node R_kgDOUKXpqQ/private/purpose, and Project node PVT_kwDOEYAWY84BiESo/private/open/purpose before the live executor received the token."]
+    notes: ["Protected run 33464889841 preflight observed App actor fs-gg-cross-repo-dispatch[bot] database id 297630107, repository node R_kgDOUKXpqQ/private/purpose, and Project node PVT_kwDOEYAWY84BiESo/private/open/purpose before the live executor received the token. A local human-token negative control exited 1 at the actor assertion while retaining a non-empty preflight.json with the observed human actor and correct read-only sandbox targets."]
   - id: EV004
     kind: verification
     subject:

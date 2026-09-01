@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/gs2-04-9-protected-sandbox-authority/ship.json",
-      "digest": "sha256:005fbe6f6a698ad7ac0578449b6ababb76645e1148d9c1c47cb0e21f84cd0567",
+      "digest": "sha256:907654878d5b7a9d5b3cee996c40c579fc531b162dc11c6c41c298e2e458f01d",
       "schemaVersion": 1
     },
     {
       "path": "readiness/gs2-04-9-protected-sandbox-authority/verify.json",
-      "digest": "sha256:66ee0182868d4d040917a8c4e6513b6ec6cde3b80b23e39e3d88abfcbadb87c0",
+      "digest": "sha256:1c688d784e9715a925e0883edee1e5a8ebf3bae64f7eecf9b5a7d434bd12ff5f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/gs2-04-9-protected-sandbox-authority/work-model.json",
-      "digest": "sha256:f589dc78395c611eb950c32c6a47aadb56a4bb33c6a5b65884e19d934b42bfc6",
+      "digest": "sha256:7cc3ced140d22b3a571977cb7e8c7867705e826df2cdf424f22d27a7639b18d8",
       "schemaVersion": 1
     }
   ],

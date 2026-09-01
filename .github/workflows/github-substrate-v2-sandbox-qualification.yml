@@ -84,24 +84,25 @@ jobs:
           set -euo pipefail
           mkdir -p "$FSGG_SANDBOX_EVIDENCE_DIR"
           viewer="$(gh api graphql -f query='{viewer{login id databaseId}}' --jq '.data.viewer')"
-          test "$(jq -r .login <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR"
-          test "$(jq -r .databaseId <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR_ID"
-
           repository="$(gh api "repos/$FSGG_SANDBOX_OWNER/$FSGG_SANDBOX_REPOSITORY")"
-          test "$(jq -r .node_id <<<"$repository")" = "$FSGG_SANDBOX_REPOSITORY_NODE_ID"
-          test "$(jq -r .private <<<"$repository")" = true
-          test "$(jq -r .description <<<"$repository")" = 'fsgg-sandbox-gs2-04-9 disposable qualification target; never production'
-
           project="$(gh api graphql -f query='query($owner:String!,$number:Int!){organization(login:$owner){projectV2(number:$number){id title closed public}}}' -F owner="$FSGG_SANDBOX_OWNER" -F number="$FSGG_SANDBOX_PROJECT_NUMBER" --jq '.data.organization.projectV2')"
-          test "$(jq -r .id <<<"$project")" = "$FSGG_SANDBOX_PROJECT_NODE_ID"
-          test "$(jq -r .title <<<"$project")" = "$FSGG_SANDBOX_PURPOSE"
-          test "$(jq -r .closed <<<"$project")" = false
-          test "$(jq -r .public <<<"$project")" = false
 
           jq -n --argjson viewer "$viewer" --argjson repository "$repository" --argjson project "$project" \
             --arg candidate "$FSGG_CANDIDATE_SHA" --arg nonce "$FSGG_SANDBOX_RUN_NONCE" \
             '{schema:"fsgg.github-substrate-v2.sandbox-preflight/1",candidateSha:$candidate,runNonce:$nonce,viewer:$viewer,repository:{node_id:$repository.node_id,full_name:$repository.full_name,private:$repository.private,description:$repository.description},project:$project}' \
             > "$FSGG_SANDBOX_EVIDENCE_DIR/preflight.json"
+
+          # Retain the authoritative observations before any mismatch exits.
+          # Every assertion remains before the product harness receives a token.
+          test "$(jq -r .login <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR"
+          test "$(jq -r .databaseId <<<"$viewer")" = "$FSGG_SANDBOX_ACTOR_ID"
+          test "$(jq -r .node_id <<<"$repository")" = "$FSGG_SANDBOX_REPOSITORY_NODE_ID"
+          test "$(jq -r .private <<<"$repository")" = true
+          test "$(jq -r .description <<<"$repository")" = 'fsgg-sandbox-gs2-04-9 disposable qualification target; never production'
+          test "$(jq -r .id <<<"$project")" = "$FSGG_SANDBOX_PROJECT_NODE_ID"
+          test "$(jq -r .title <<<"$project")" = "$FSGG_SANDBOX_PURPOSE"
+          test "$(jq -r .closed <<<"$project")" = false
+          test "$(jq -r .public <<<"$project")" = false
 
       - name: Execute the signed live operation plan
         id: execute

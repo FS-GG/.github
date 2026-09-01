@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "36b963855ca08cfa6548e1076cdc08ceeff62eef02155c8323c200191c3fcbe5"
+        "value": "7e6c9758891bdebf9a3d9a1dccc573c7b1853f0188ee129d881da49737cc727c"
       }
     },
     {
@@ -1050,7 +1050,7 @@
           "path": "work/gs2-04-9-protected-sandbox-authority/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "36b963855ca08cfa6548e1076cdc08ceeff62eef02155c8323c200191c3fcbe5"
+            "value": "7e6c9758891bdebf9a3d9a1dccc573c7b1853f0188ee129d881da49737cc727c"
           },
           "schemaVersion": 1
         },
@@ -1081,7 +1081,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "2864c2efee65be2266dff9b21c81fb86b16a6852ba3f5feeb7fb940c995ba586"
+        "value": "34d173f4db269232e69c3972517d8d4b63c026533cebdf3b9ad5d9edad182014"
       },
       "currency": "current"
     }
