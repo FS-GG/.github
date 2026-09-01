@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and GS2-05.1–GS2-05.3 accepted; GS2-01.9 not applicable; GS2-05.9 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.3, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.4 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -875,7 +875,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `f5ac79b55dfa001903a4173209f09a71e7265641f5891c6498c65ce395364be0`,
   merged at [`a0ddf90f`](https://github.com/FS-GG/FS.GG.Coordination/commit/a0ddf90f49ba406b7242dc7357573de109ba223d),
   and passed [protected-main run 33493517326](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33493517326).
-- [ ] **GS2-05.9 — Implement staged intake admission.** Preserve GS2-05.3's sealed
+- [x] **GS2-05.9 — Implement staged intake admission.** Preserve GS2-05.3's sealed
   validate/plan/apply/inspect, explicit create-or-reuse identity, idempotent recovery, and authoritative
   readback while separating item-local Backlog capture from Ready promotion. Capture accepts an explicitly
   unknown root cause, deferred verification detail, and an unspecified touch set; it may perform at most six
@@ -891,6 +891,15 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   GS2-05.4. Use the [filing's measured baseline](https://github.com/FS-GG/.github/issues/3134) of 35
   mechanical projection repairs and 10 unrelated delivery-route refusals incurred during one admission.
   Receiver: [FS.GG.Coordination#200](https://github.com/FS-GG/FS.GG.Coordination/issues/200).
+  [Implementation PR 201](https://github.com/FS-GG/FS.GG.Coordination/pull/201) merged the registered
+  contract and qualified implementation as
+  [`30474c05`](https://github.com/FS-GG/FS.GG.Coordination/commit/30474c0553073765c54b1b89f5cc93bb511d07e3),
+  then passed [protected-main run 33504664191](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33504664191).
+  [Acceptance PR 203](https://github.com/FS-GG/FS.GG.Coordination/pull/203) added the append-only
+  [GS2-05.9 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/f069df4da305f3976b7df65a8fb3dccf20b42bec/evidence/github-substrate-v2/accepted/GS2-05.9.json)
+  with self-digest `59398e603e39b04ff6d971ef923d19513e03d3990a970323add90cf7ce593861`,
+  merged at [`f069df4d`](https://github.com/FS-GG/FS.GG.Coordination/commit/f069df4da305f3976b7df65a8fb3dccf20b42bec),
+  and passed [protected-main run 33507525817](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33507525817).
 - [ ] **GS2-05.4 — Implement roadmap intake.** Compile a roadmap into an Epic, bounded work issues,
   parent edges, dependency edges, dates/fields, and drift inspection without making Project fields the
   execution ledger. Its registered prerequisites must include the accepted GS2-05.9 receipt.
