@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.5, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.6 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.6, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.7 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -927,10 +927,20 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `f382502968cf634bf93c7318d24f629eb3ccfbbac6cf759a99434f1a33975059`,
   merged at [`0d0ed463`](https://github.com/FS-GG/FS.GG.Coordination/commit/0d0ed46343c12def5af15565cba0ed0ae3294990),
   and passed [protected-main run 33558097446](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33558097446).
-- [ ] **GS2-05.6 — Implement review/delivery.** Bind accountable critique evidence to an immutable full-snapshot
+- [x] **GS2-05.6 — Implement review/delivery.** Bind accountable critique evidence to an immutable full-snapshot
   `ReviewEpochKey` separate from its stable chain identity; allow succession only inside one epoch; require
   a fresh phase seat after any snapshot change without requiring another authority; distinguish merged from
   protected post-merge verification; and generate journal-bound delivery/done receipts.
+
+  Accepted 2026-09-01. [Implementation PR 213](https://github.com/FS-GG/FS.GG.Coordination/pull/213)
+  merged as protected commit
+  [`afa05338`](https://github.com/FS-GG/FS.GG.Coordination/commit/afa053382c749ccc6bc31884b1c00bed0543e24f),
+  whose [protected-main run 33564712056](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33564712056)
+  passed. [Acceptance PR 215](https://github.com/FS-GG/FS.GG.Coordination/pull/215) added the append-only
+  [GS2-05.6 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/44cc1f7c19b123e6dc74347649cb383d514aa80f/evidence/github-substrate-v2/accepted/GS2-05.6.json)
+  with self-digest `24de35789ad18aff1409e873e9aa63edc2d2cff313d8b63f34168c70f7494368`,
+  merged at [`44cc1f7c`](https://github.com/FS-GG/FS.GG.Coordination/commit/44cc1f7c19b123e6dc74347649cb383d514aa80f),
+  and passed [protected-main run 33566409238](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33566409238).
 - [ ] **GS2-05.7 — Implement lifecycle projection.** Derive Status from scheduling intent, holds,
   dependencies, claim, PR/review, delivery, and issue state; no operator writes derived state as intent.
 - [ ] **GS2-05.8 — Shadow the complete live fleet.** Compare v1 and v2 read-only decisions, record every
