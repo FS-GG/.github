@@ -497,8 +497,11 @@
        declared legacy drafts after a partial create. Recovery requires the receipt-bound exact
        predecessor body, re-reads the canonical PATCH, and advances the receipt before projection.
        The packed coordination skills remove the unprojectable `capability` example. -->
+  <!-- 0.78.0 to 0.78.1: mandatory post-merge patch bump and local pack after the
+       documentation-only orchestration visualization design in PR #3138. No package behavior
+       changes; the fresh identity belongs to the required post-merge verification artifacts. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.78.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.78.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

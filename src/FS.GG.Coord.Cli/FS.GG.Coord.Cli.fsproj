@@ -130,17 +130,11 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.78.0 — canonical intake vocabulary and partial-transaction recovery.
+    <PackageReleaseNotes>0.78.1 — documentation-only orchestration visualization design.
 
-WHAT MOVED, AND WHY IT IS A MINOR. FS.GG.Coord.Cli intake now derives Class from the same closed
-vocabulary used by issue bodies and Projects v2. A partial create can resume after an explicitly
-declared legacy correction: the receipt and exact generated predecessor body authorize the rewrite,
-the canonical body is re-read after PATCH, and only then is the receipt advanced and projection
-resumed. Arbitrary changed drafts and operator-edited bodies still fail closed. FS.GG.Kit and
-FS.GG.Drivers remove the unprojectable `capability` value from their filing examples.
-
-All three packages advance together because they share one coherent version. Existing command names,
-flags, result schemas, exit codes, and public members remain compatible.
+No coordination-engine code, command, flag, result schema, exit code, or public member changes in
+this patch. The coherent set advances for the required post-merge local pack verification after
+PR #3138 added SVG and dashboard architecture documentation.
 
 $(FsggStandingAdvisories)
 
