@@ -23,11 +23,11 @@ process, actor, timer, or database lease to authorize an external mutation by it
 |---|---|
 | Status | Proposed architecture; records direction and implementation preparation, not production authorization |
 | Authored | 2026-08-31 11:48 CEST (09:48 UTC) |
-| Revised | 2026-09-01 — recentered on an OR-first closed-loop controller and hardened authority, cutover sequencing, determinism, claim ordering, crash consistency, and runner boundaries |
+| Revised | 2026-09-01 — recentered on an OR-first closed-loop controller; hardened authority, cutover sequencing, determinism, claim ordering, crash consistency, and runner boundaries; and added the SVG/dashboard visualization architecture |
 | Scope | Agent creation and communication, deterministic planning, GitHub mediation, persistence, authentication, supervision, liveness, availability, observability, and staged adoption |
 | Preserves | GitHub-native multi-host coordination, typed transition checks, Git-ref fencing, exact-head evidence, durable receipts, and scheduled reconciliation |
 | Builds on | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0053](../adr/0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md), [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0078](../adr/0078-github-substrate-v2-new-only-coordination-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), and the [remaining-v2 architecture review](2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md) |
-| Candidate runtime | ASP.NET Core + SignalR + Akka.Hosting + Akka.Persistence; PostgreSQL first, Akka.Cluster deferred |
+| Candidate runtime | ASP.NET Core + SignalR + Akka.Hosting + Akka.Persistence; PostgreSQL first, Akka.Cluster deferred; AG Grid/AG Charts for operational grids and conventional charts; SVG + ELK layered layout for complex graphs |
 | Lifecycle placement | Independent of the GitHub Substrate v2 critical path; read-only and shadow work may prepare the runtime, but normal mutation requires the external epoch and a separately accepted operating boundary |
 | Primary decision | Treat the OR kernel as the execution-decision control plane, Akka.NET as its preferred durable realization, and FS.GG/GitHub as external coordination authority |
 
@@ -85,8 +85,8 @@ evidence:
 
 | Posture | Decisions |
 |---|---|
-| Direction fixed by this proposal | OR-first execution decisions; external GitHub/Git fencing; typed-engine legality; disposable agents; deterministic plan verification; durable intent before effects; one preferred normal executor; emergency CLI retained |
-| Candidate pending a vertical slice | Akka.Persistence plugin and serializer; PostgreSQL schema and outbox realization; SignalR replay implementation; identity provider; sandbox/runner technology; artifact store; optimizer and solver libraries |
+| Direction fixed by this proposal | OR-first execution decisions; external GitHub/Git fencing; typed-engine legality; disposable agents; deterministic plan verification; durable intent before effects; one preferred normal executor; emergency CLI retained; AG Grid/AG Charts for grids and conventional charts; an accessible SVG graph surface for complex pipelines and topology |
+| Candidate pending a vertical slice | Akka.Persistence plugin and serializer; PostgreSQL schema and outbox realization; SignalR replay implementation; identity provider; sandbox/runner technology; artifact store; optimizer and solver libraries; exact AG Grid/AG Charts edition and licence; ELK.js/D3 packaging and SVG export implementation |
 | Separately accepted before production | operational owner and SLO; data classification and retention; GitHub App principal split; mutation canary scope; disaster recovery; any required hosted-service dependency |
 | Deferred by design | Akka.Cluster, sharding, remote actor transport, learned scheduling policy, and a mandatory webhook runtime |
 
@@ -111,6 +111,8 @@ The harness must:
   messages, duplicate commands, and changed external facts;
 - retain the existing CLI and GitHub-visible protocol as emergency, diagnostic, and multi-host paths;
 - expose why each action was selected, refused, deferred, retried, or escalated;
+- expose the same versioned read models through coordinated grids, conventional charts, and accessible SVG
+  pipeline/graph views without making a visualization authoritative;
 - isolate one failed issue, agent, repository, or provider without corrupting unrelated workflows; and
 - provide a measured path from one node to passive failover or clustering without changing domain policy.
 
@@ -195,32 +197,10 @@ controller repeatedly decides four things: what information to acquire, how to s
 admissible execution mode to use, and when to commit scarce resources. It does not optimize one backlog
 score or ask an LLM to improvise the workflow.
 
-The closed loop is:
+The closed loop is shown below. The external-authority lane is deliberately distinct from the planning and
+execution loop: it supplies facts and fencing, and receives only typed, revalidated effects.
 
-```text
-complete observations + event history + accepted policy
-                         │
-                         ▼
-              canonical PlanningSnapshot
-                         │
-          ┌──────────────┼────────────────┐
-          ▼              ▼                ▼
-    feasibility      OR planners      uncertainty model
-    and authority    and simulation   and estimators
-          └──────────────┼────────────────┘
-                         ▼
-                checked DecisionPlan
-                         │
-                         ▼
-             durable actor execution
-                         │
-                         ▼
-        agents / CI / review / provider effects
-                         │
-                         ▼
-          verified outcomes and new observations
-                         └──────────► replan
-```
+![Operations-research orchestration closed loop](../img/orchestration/orchestration-closed-loop.svg)
 
 Only a bounded first part of a plan is committed. New provider facts, completions, failures, claims,
 deadlines, estimates, or resource changes create a new planning snapshot. This rolling-horizon design
@@ -238,6 +218,8 @@ The OR kernel models six coupled graphs:
 | Evidence | claims, observations, tests, reviews, receipts | proves, invalidates, supersedes | next information and acceptance actions |
 | CI | build/test/policy obligations | consumes, produces, requires | selection, partitioning, ordering, runner placement |
 | Resources | agent profiles, humans, runners, APIs, mutation lanes, budgets | capacity and calendars | admission, reservation, fairness, and recovery headroom |
+
+![Six typed planning graphs fused into one canonical snapshot](../img/orchestration/planning-graph-fusion.svg)
 
 The dependency and coordination graphs are distinct. Two tasks may be technically independent yet compete
 for one touch set, reviewer, runner, or API budget. Conversely, related tasks may execute in parallel when
@@ -922,16 +904,7 @@ a capability and resource envelope.
 
 Admission is not a claim. For ordinary write-capable work, the ordering is:
 
-```text
-complete external observation
-→ deterministic candidate decision
-→ bounded local capacity reservation
-→ typed external claim/touch-set plan
-→ protected-journal claim and fencing generation
-→ complete verification of the accepted claim
-→ durable WorkGranted event
-→ workspace preparation and agent spawn
-```
+![Write-capable work admission from observation through external claim to agent spawn](../img/orchestration/claim-and-agent-admission.svg)
 
 The local reservation has a short bounded lifetime and is released if the external claim loses a race. The
 verified external claim—not the scheduler row—authorizes the attempt to begin write-capable work. Every
@@ -1240,18 +1213,7 @@ Persistence rules:
 
 Transport messages and provider effects use durable inbox/outbox semantics:
 
-```text
-receive command
-→ validate and deduplicate
-→ persist domain event + effect intent
-→ acknowledge durable command position
-→ dispatch outbox item
-→ re-read external authority
-→ perform fenced effect
-→ verify post-state
-→ persist receipt
-→ mark outbox item settled
-```
+![Durable provider-effect protocol including the crash window and observe-before-retry recovery](../img/orchestration/durable-effect-crash-recovery.svg)
 
 If the process dies after GitHub accepts an effect but before the receipt is persisted, recovery sees an
 unsettled intent, re-observes GitHub, and records `AlreadyApplied` or a conflict. It does not blindly repeat
@@ -1524,6 +1486,392 @@ Logs must exclude bearer tokens, GitHub tokens, App private keys, cookies, raw s
 content. Security-relevant records are immutable or exported to a protected sink. Operator dashboards link
 runtime state to the GitHub-visible subject and receipt without making the dashboard authoritative.
 
+### 14.1 Visualization decision and renderer boundary
+
+Visualization is a first-class projection of the canonical planning, workflow, and evidence models. It is
+not a screenshot layer added after the runtime is built. Every view binds a `DashboardSnapshotId`, observation
+fingerprint, completeness verdict, policy version, decision time, and freshness time. A chart selection,
+expanded row, zoom, or highlighted edge is client state; it cannot grant a claim, settle an effect, or amend
+a receipt.
+
+The renderer split is deliberate:
+
+| Surface | Selected technology | Appropriate use | Explicit boundary |
+|---|---|---|---|
+| Operational tables | [AG Grid](https://www.ag-grid.com/javascript-data-grid/) | work queues, receipts, resources, attempts, effects, audit records | read-only by default; commands leave the grid through separately authorized typed endpoints |
+| Conventional charts | [AG Charts](https://www.ag-grid.com/charts/) and AG Grid Integrated Charts | line/bar/range/box/heatmap/treemap and bounded acyclic Sankey views | AG Charts is canvas-based, so it is not the SVG pipeline renderer |
+| Complex topology and pipelines | SVG elements positioned by [ELK Layered](https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html) and drawn with a narrow D3/SVG adapter | cyclic workflow, dependency, compound actor, authority, evidence, and saga graphs | layout computes geometry only; domain types decide nodes, edges, groups, labels, and legal interactions |
+| Static design assets | deterministic committed SVG generated from the same diagram grammar | architecture, protocol, trust-boundary, and failure-window explanations | no live state and no authority; source fingerprint is recorded in the asset manifest |
+
+ELK Layered is a good match for complex delivery pipelines because it emphasizes direction, minimizes edge
+crossings, supports orthogonal routing, ports, compound graphs, and cross-hierarchy edges. The SVG adapter
+owns semantic DOM, focus, styling, markers, and details-on-demand; ELK never receives secrets or decides what
+an edge means. D3 is restricted to scales, paths, selection, zoom, and transitions rather than becoming a
+second domain model.
+
+AG Charts remains the standard for conventional live charts because it shares the AG Grid data/configuration
+family and supports the required range, box, heatmap, treemap, sunburst, waterfall, funnel, and flow forms.
+Its Sankey view is used only for acyclic quantity flow: the documented implementation removes circular links,
+so it must not depict the real retry/rework/reconciliation topology. Complex pipelines use SVG, where cycles,
+edge identity, generations, and failure paths remain visible.
+
+AG Grid Tree Data, Server-Side Row Model tree operations, Master/Detail, sparklines, Integrated Charts, and
+several AG Charts series are edition-dependent. H0 records the exact Community/Enterprise feature matrix,
+compatible version set, procurement owner, licence scope, and fallback before these features become acceptance
+dependencies. A trial watermark or unlicensed production bundle is not an acceptable deployment state.
+
+### 14.2 Required visualization catalogue
+
+The same concept may need a grid, chart, and graph because each answers a different question. The grid is
+always the exact-value and accessible fallback for a chart or graph.
+
+| Decision question | Primary visualization | Required encodings and interactions | Canonical data |
+|---|---|---|---|
+| Is the controller operating on current authority? | status strip plus trust-boundary SVG | epoch/generation, completeness, observation age, policy, kill-switch state; open source receipt | `DashboardSnapshot`, `AuthorityFact`, health facts |
+| Why did this plan win? | alternatives grid plus objective/Pareto view | feasible/refused/unknown separated; lexicographic vector, bound, sensitivity, selected alternative | `OrDecisionReceipt` and rejected constraints |
+| What is on the critical path? | layered work DAG | precedence versus touch conflict by edge style; slack, P50/P80/P95, committed horizon; collapse groups | `WorkGraph`, `CoordinationGraph`, checked plan |
+| Where is flow accumulating? | stage grid plus WIP/age heatmap and control line | arrivals, departures, queue age, WIP limit, recovery reserve, throughput and cycle-time window | event-derived flow windows, never current-row counts alone |
+| Is a decomposition good? | DSM matrix plus candidate partition graph | dependency kind, cut edges, setup/rework range, evidence closure, proposed groups | product, work, coordination, and evidence graphs |
+| When do activities and resources overlap? | range-bar schedule plus resource heatmap | start/end range, uncertainty band, capacity, calendar, touch conflict, committed versus forecast | checked schedule intervals and resource calendars |
+| Is estimate uncertainty calibrated? | box/range chart and reliability plot | sample count, P50/P80/P95, censored count, prediction versus outcome, calibration window | versioned `Estimate` and verified outcomes |
+| Which agent/mode should run? | assignment grid plus capability matrix | eligibility, expected time/cost/failure/rework, context/tool requirements, reason rejected | execution modes, profiles, reservations |
+| Why is review blocked? | reviewer-work bipartite graph plus workload grid | required roles, independence conflicts, expertise, calendar, queue age, knowledge concentration | review candidates and `ConstraintFailure`s |
+| Which CI work buys the earliest evidence? | CI DAG plus job timeline | obligation closure, job packing, setup duplication, failure probability, critical result, sentinel coverage | `CiGraph`, selected jobs, run receipts |
+| Where did work or evidence go? | acyclic Sankey | counts/cost/time between normalized stages; fixed denominator and interval; click to exact rows | aggregated verified transitions only |
+| What happened to an effect? | saga/sequence SVG plus receipt grid | intent, attempts, crash window, observation, generation, provider result, settlement; causal order | operation events and provider receipts |
+| What is failing repeatedly? | small-multiple line/heatmap plus finding grid | failure class, repository/profile, rate denominator, retry and quarantine outcome | verified failures including cancelled and censored attempts |
+| Does the policy improve delivery? | baseline/candidate small multiples | identical scenario seed, uncertainty interval, safety/fairness first, cost and flow second | replay/simulation/shadow/canary comparison receipts |
+
+Pie/donut charts, decorative gauges, three-dimensional encodings, animation without a state purpose, and one
+scalar fleet score are excluded from the default dashboard. They hide denominators, compare angles poorly,
+or encourage optimization of a proxy. A gauge is admissible only for a bounded operational limit with the
+numeric value, threshold, direction, and observation time shown beside it.
+
+#### 14.2.1 Further visualization candidates
+
+These are useful candidates for the policy laboratory, drill-downs, and incident analysis. They are not all
+default dashboard widgets; each must first demonstrate a real operator question, an accessible tabular/textual
+equivalent, and acceptable behavior at the declared data budget.
+
+- [Chord diagram](https://www.ag-grid.com/charts/javascript/chord-series/) — symmetric cross-repository,
+  reviewer, tool, or failure-class exchange when direction and quantity matter more than stage order.
+- [Treemap](https://www.ag-grid.com/charts/javascript/treemap-series/) — hierarchical allocation of cost,
+  tokens, runner minutes, artifact bytes, or WIP; pair area with labels and exact values because small areas
+  are difficult to compare.
+- [Sunburst](https://www.ag-grid.com/charts/javascript/sunburst-series/) — repository/component/obligation
+  hierarchy with a selected path; prefer a tree grid when exact sibling comparison is the task.
+- [Box plot](https://www.ag-grid.com/charts/javascript/box-plot-series/) — duration, queue-time, cost, retry,
+  or review-yield distributions by execution mode while retaining median, quartiles, and tails.
+- [Range area](https://www.ag-grid.com/charts/javascript/range-area-series/) — P50–P95 forecast or calibration
+  bands over time, with observed values overlaid and forecast boundaries explicitly marked.
+- [Waterfall](https://www.ag-grid.com/charts/javascript/waterfall-series/) — additive explanation of where
+  cycle time, objective cost, capacity, or budget changed between a baseline and selected plan.
+- [Histogram](https://www.ag-grid.com/charts/javascript/histogram-series/) — empirical duration, cost, queue,
+  and solver-latency shape; always disclose bin policy, sample count, censoring, and tail clipping.
+- [Scatter/bubble](https://www.ag-grid.com/charts/javascript/scatter-series/) — cost/latency/rework trade-offs
+  and Pareto candidates, with bubble area reserved for a third quantitative value and exact rows on selection.
+- [Funnel](https://www.ag-grid.com/charts/javascript/funnel-series/) — cohort attrition through admission,
+  implementation, qualification, review, and delivery only when the same starting cohort and interval are used.
+- [Organization chart](https://www.ag-grid.com/charts/javascript/org-chart/) — actor/work/attempt hierarchy or
+  accountable-owner relationships; never use it to imply provider authority or technical dependency.
+- [Calendar heatmap](https://observablehq.com/notebook-kit/gallery) — arrival, incident, review, or CI-load
+  seasonality by hour/day, useful for capacity calendars and on-call planning.
+- [Ridgeline or small-multiple density](https://observablehq.com/notebook-kit/gallery) — compare duration or
+  queue distributions across repositories/modes without collapsing them into one fleet average.
+- [Hexbin density](https://observablehq.com/plot/transforms/hexbin) — dense estimate-versus-outcome or
+  cost-versus-cycle scatter where individual points overplot; disclose bin size and counts.
+- [Parallel coordinates](https://observablehq.com/notebook-kit/gallery) — exploratory comparison of plan
+  alternatives across many normalized objectives; keep it in the lab because axis ordering can change the story.
+- [Scatterplot matrix](https://observablehq.com/notebook-kit/gallery) — estimator diagnostics and correlated
+  resource/flow measures before choosing model features; not an operational status display.
+- [Horizon chart](https://observablehq.com/notebook-kit/gallery) — compact long-window comparison of many
+  resource or queue time series; requires a simpler line-chart drill-down because folded bands are unfamiliar.
+- [Icicle/zoomable hierarchy](https://observablehq.com/notebook-kit/gallery) — evidence, context-manifest, or
+  cost provenance across nested packages with stable breadcrumbs and a companion tree grid.
+- [Force-directed network](https://d3js.org/d3-force) — exploratory discovery of unexpected coordination or
+  failure clusters; never use force position as a stable pipeline order or decision receipt.
+- [Arc diagram](https://observablehq.com/notebook-kit/gallery) — compact dependency or cross-stage coupling
+  over a stable sorted order, especially when a layered graph has too many long crossing edges.
+- [Flame graph](https://www.speedscope.app/) — solver, policy, rendering, or agent-tool CPU profiles during
+  performance diagnosis; profiling samples are operational evidence, not workflow progress.
+- [Trace waterfall](https://opentelemetry.io/docs/concepts/signals/traces/) — causally nested command,
+  planning, persistence, tool, and provider spans; link spans to domain receipts without treating telemetry as
+  delivery authority.
+
+Observable examples are references for visual form, not an additional production dependency. Any candidate
+implemented in the product should first be expressed through AG Charts or the selected SVG/D3 layer; adding a
+third renderer requires a separate bundle, security, accessibility, performance, and maintenance decision.
+
+### 14.3 Dashboard information architecture
+
+The primary dashboard has seven routes backed by one coordinated selection model:
+
+1. **Overview** — authority/freshness strip, bottleneck cards, work grid, selected pipeline, WIP/cycle-time,
+   and the selected decision receipt.
+2. **Flow** — arrivals, departures, WIP, age, throughput, cycle/tail time, rework, stage flow, and recovery reserve.
+3. **Plan** — six-graph explorer, critical path, schedule, alternatives, objective vector, bounds, sensitivity,
+   commitment horizon, and replan triggers.
+4. **Execution** — agents, runners, CI, review, resource calendars, claims, attempts, budgets, and live deadlines.
+5. **Recovery** — unsettled effects, sagas, stale generations, retries, compensation, quarantine, and reconciliation.
+6. **Policy lab** — historical replay, simulation, calibration, constraint mutations, baseline comparison, and shadow drift.
+7. **Audit** — causation timeline, exact receipts, external evidence links, exports, and emergency-CLI reconciliation.
+
+Selecting a grid row highlights the same stable subject in SVG and charts; selecting a graph node filters the
+grid without discarding the unfiltered count; selecting a time range rematerializes every panel from the same
+window. The URL stores only non-sensitive view state and stable opaque IDs so an operator can share a view
+without copying provider data into query parameters.
+
+![Illustrative orchestration dashboard with concrete queue, pipeline, flow, and decision-receipt data](../img/orchestration/operator-dashboard.svg)
+
+The mockup is illustrative, but its values are intentionally concrete. It demonstrates the minimum global
+context (`ps-01J9`, `or-7.3`, observation time, completeness, `OperatingV2`, generation `G42`), bottleneck
+and recovery state, exact work rows, a cyclic finding/rework edge, a WIP limit, and a decision explanation.
+No production view may omit those identities merely to gain screen space.
+
+### 14.4 Canonical visualization read model
+
+The server materializes bounded visualization projections from authoritative events and complete external
+observations. Browsers do not join actor state, GitHub calls, and metric queries themselves.
+
+```fsharp
+type VisualCompleteness =
+    | VisualComplete
+    | VisualIncomplete of reasons: string list
+    | VisualStale of observedAt: System.DateTimeOffset * maximumAge: System.TimeSpan
+
+type VisualNode =
+    { NodeId: string
+      SubjectId: string
+      Kind: string
+      GroupId: string option
+      Label: string
+      Status: string
+      Metrics: Map<string, decimal option>
+      ReceiptIds: string list }
+
+type VisualEdge =
+    { EdgeId: string
+      SourceId: string
+      TargetId: string
+      Kind: string
+      Label: string option
+      Critical: bool
+      Quantity: decimal option
+      ReceiptIds: string list }
+
+type DashboardSnapshot =
+    { DashboardSnapshotId: string
+      PlanningSnapshotId: string
+      ObservationFingerprint: string
+      Completeness: VisualCompleteness
+      ObservedAt: System.DateTimeOffset
+      MaterializedAt: System.DateTimeOffset
+      FleetEpoch: string
+      PolicyVersion: PolicyVersion
+      SchemaVersion: string
+      Rows: WorkRow list
+      Series: Map<string, DataPoint list>
+      Nodes: VisualNode list
+      Edges: VisualEdge list
+      ReceiptIndex: Map<string, EvidenceReference> }
+```
+
+`null`/`None`, incomplete, unauthorized, indeterminate, zero, and an empty set are different visual values.
+Every aggregate carries its numerator, denominator, unit, interval start/end, timezone, grouping keys, sample
+count, censored count, and estimate/calibration identity. Rates do not silently change denominators when a
+filter is applied. Current state, interval flow, forecast, and counterfactual simulation use distinct record
+types and visual grammar.
+
+An illustrative payload for the pipeline panel is:
+
+```json
+{
+  "dashboardSnapshotId": "ds-01J9",
+  "planningSnapshotId": "ps-01J9",
+  "observationFingerprint": "sha256:8af0...91c2",
+  "completeness": { "case": "complete" },
+  "observedAt": "2026-09-01T12:04:21Z",
+  "fleetEpoch": "OperatingV2",
+  "policyVersion": "or-7.3",
+  "graph": {
+    "nodes": [
+      { "id": "claim", "kind": "claim", "label": "Claim G42", "status": "verified" },
+      { "id": "agent", "kind": "attempt", "label": "Agent A3", "status": "complete" },
+      { "id": "ci", "kind": "gate", "label": "CI 8127", "status": "green" },
+      { "id": "review", "kind": "review", "label": "Security review", "status": "waiting" },
+      { "id": "merge", "kind": "effect", "label": "Merge", "status": "forecast" }
+    ],
+    "edges": [
+      { "id": "e1", "source": "claim", "target": "agent", "kind": "authorizes" },
+      { "id": "e2", "source": "agent", "target": "ci", "kind": "produces" },
+      { "id": "e3", "source": "ci", "target": "review", "kind": "precedes" },
+      { "id": "e4", "source": "review", "target": "ci", "kind": "rework", "status": "possible" },
+      { "id": "e5", "source": "review", "target": "merge", "kind": "guards" }
+    ]
+  }
+}
+```
+
+### 14.5 Concrete AG Grid and chart configuration
+
+Grid identity must be domain identity, not row position. Updates are immutable by `subjectId`; sorting and
+filtering never change selection identity. The first implementation uses a bounded client-side row model for
+the active operational window and pages historical audit data. Server-Side Row Model is admitted only after
+its incomplete-row-count accessibility behavior, cache invalidation, and Enterprise licence are accepted.
+
+```typescript
+type WorkRow = {
+  subjectId: string;
+  path: string[];
+  stage: 'admission' | 'implementation' | 'ci' | 'review' | 'delivery' | 'recovery';
+  verdict: 'verified' | 'waiting' | 'refused' | 'unknown' | 'quarantined';
+  queueAgeSeconds: number;
+  durationP80Seconds?: number;
+  generation?: number;
+  completeness: 'complete' | 'incomplete' | 'stale';
+  recentQueueAge: number[];
+};
+
+const columnDefs: ColDef<WorkRow>[] = [
+  { field: 'subjectId', headerName: 'Subject', pinned: 'left', minWidth: 240 },
+  { field: 'stage', filter: true, rowGroup: true, hide: true },
+  { field: 'queueAgeSeconds', headerName: 'Queue age (s)', filter: 'agNumberColumnFilter' },
+  { field: 'durationP80Seconds', headerName: 'P80 (s)' },
+  { field: 'generation', headerName: 'Fence' },
+  { field: 'completeness', headerName: 'Facts' },
+  { field: 'verdict', headerName: 'Verdict' },
+  { field: 'recentQueueAge', headerName: 'Age trend', cellRenderer: 'agSparklineCellRenderer' }
+];
+
+const gridOptions: GridOptions<WorkRow> = {
+  columnDefs,
+  getRowId: ({ data }) => data.subjectId,
+  rowModelType: 'clientSide',
+  readOnlyEdit: true,
+  rowSelection: { mode: 'singleRow', enableClickSelection: true },
+  ensureDomOrder: true,
+  defaultColDef: { sortable: true, resizable: true, filter: true },
+  getRowClass: ({ data }) => data ? `verdict-${data.verdict} facts-${data.completeness}` : undefined
+};
+```
+
+`rowGroup` and the sparkline renderer shown above make the desired production configuration concrete, but
+both are feature-matrix gates rather than assumptions. If the accepted licence excludes them, the fallback
+is a flat sorted Community grid plus the separate chart panel; the domain read model does not change.
+
+AG Charts consumes the same explicit rows and never re-derives WIP from what happens to be visible in the
+grid. The control chart must carry the accepted limit and observation window:
+
+```typescript
+type FlowPoint = { at: Date; wip: number; cycleP80Minutes: number; wipLimit: number };
+
+const flowChart: AgChartOptions<FlowPoint> = {
+  data: flowPoints,
+  title: { text: 'WIP and cycle-time control' },
+  subtitle: { text: 'OperatingV2 · 08:00–12:00 UTC · complete observations' },
+  series: [
+    { type: 'line', xKey: 'at', yKey: 'wip', yName: 'WIP' },
+    { type: 'line', xKey: 'at', yKey: 'wipLimit', yName: 'Accepted WIP limit' },
+    { type: 'line', xKey: 'at', yKey: 'cycleP80Minutes', yName: 'Cycle time P80 (min)' }
+  ],
+  axes: { x: { type: 'unit-time' }, y: { type: 'number', min: 0 } },
+  legend: { enabled: true }
+};
+```
+
+The actual implementation separates WIP count and duration onto compatible axes or coordinated panels; the
+compact example shows the binding contract, not permission to imply that unlike units share a scale. Range
+bars represent schedules and credible duration intervals; box plots represent outcome distributions; heatmaps
+represent DSM/touch/resource matrices; and small multiples compare repositories or policies without mixing
+their denominators.
+
+### 14.6 Complex SVG graph contract
+
+The graph renderer receives only a typed `VisualGraph`, then maps its stable identity and groups to ELK. A
+pipeline starts with this bounded layout configuration:
+
+```typescript
+const layoutOptions = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+  'elk.spacing.nodeNode': '36',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '64'
+};
+```
+
+Semantic edge kinds have a fixed visual vocabulary: `precedes` solid gray, `authorizes` solid teal with a
+generation badge, `blocks` red with a stop marker, `rework/retry` dashed orange/red, `proves` green, `consumes`
+blue, and `forecast` dotted. Color is redundant with label, dash, marker, and shape. Critical-path emphasis is
+a separate halo and never overwrites authority or failure semantics. Node shapes distinguish work, evidence,
+decision, resource, human, provider effect, and trust boundary.
+
+The initial interactive budget is 500 visible nodes, 1,500 visible edges, and 250 KB of labels/metadata per
+panel. Larger graphs must aggregate by repository, stage, actor subtree, or connected component and disclose
+the hidden counts; an operator expands on demand. Layout runs in a Web Worker, is cancellable, preserves
+model order where practical to reduce mental-map churn, and caches by graph fingerprint plus layout settings.
+No incremental patch is shown until its base `DashboardSnapshotId` matches; otherwise the client requests a
+fresh snapshot.
+
+Committed SVG assets and exports contain a `viewBox`, `<title>`, `<desc>`, stable element IDs, source and
+schema fingerprints in metadata, and no scripts, event attributes, external references, embedded credentials,
+or `<foreignObject>`. Labels are text nodes, not paths. Inbound labels and links are allowlisted and escaped;
+agent-authored SVG is never inserted into the privileged dashboard DOM.
+
+### 14.7 Accessibility, truthfulness, and degraded states
+
+The dashboard targets WCAG 2.2 AA and uses the following non-negotiable projection rules:
+
+- every SVG has a concise title and description, and every interactive node/edge is keyboard reachable with
+  a textual detail panel and a "show rows" action;
+- every chart has a nearby exact-value grid or downloadable table, summary sentence, units, time window,
+  timezone, source identity, and freshness/completeness status;
+- status never depends on color alone; shape, text, marker, and line style remain meaningful in monochrome;
+- canvas charts are `aria-describedby` by their title, summary, and companion table rather than pretending
+  that pixels form a useful accessibility tree;
+- AG Grid keyboard behavior and ARIA output are tested with supported screen readers; custom cell renderers
+  implement their own focus behavior, and virtualization trade-offs are documented;
+- incomplete, stale, unauthorized, unsupported, and indeterminate panels render an explicit hatched state
+  and reason instead of an empty chart, zero, last-known green, or interpolated line;
+- axes, bins, logarithmic scales, smoothing, excluded outliers, truncated windows, and forecast boundaries are
+  visible; tooltips may add detail but never contain the only copy of a fact; and
+- animation is disabled under reduced-motion preference and never implies causal order unless events actually
+  carry that order.
+
+The [AG Grid accessibility guidance](https://www.ag-grid.com/javascript-data-grid/accessibility/) documents
+both its ARIA approach and limitations, including server-side row-count announcement. SVG follows the W3C
+guidance for text alternatives, including a referenced `<title>` for inline graphics. Accessibility checks
+therefore cover the assembled dashboard rather than assuming library defaults prove conformance.
+
+### 14.8 Export, testing, and promotion
+
+Every dashboard route supports a reproducibility bundle containing the canonical filtered JSON/CSV data,
+`DashboardSnapshotId`, observation and policy identities, view configuration, receipt references, and an
+image appropriate to the renderer. Complex graphs export sanitized SVG. AG Charts exports a raster image
+because its renderer is canvas-based; calling that file SVG or converting pixels into an SVG wrapper is
+forbidden. A static report may instead render a separately qualified deterministic SVG chart from the same
+data contract and record that renderer identity.
+
+Visualization qualification includes:
+
+- schema/property tests proving that every visual row, point, node, and edge resolves to its canonical subject;
+- golden SVG and browser screenshot tests at named widths, light/dark/high-contrast themes, and 100–400% zoom;
+- deterministic layout tests over graph fixtures, cycles, compound groups, long labels, missing nodes, parallel
+  edges, self-loops, and stable-order updates;
+- semantic mutation tests that remove completeness, generation, units, denominator, uncertainty, or a critical
+  edge and require the projection/verifier to fail;
+- keyboard-only, screen-reader, color-vision, reduced-motion, and forced-colors tests;
+- performance tests at the declared row/node/edge budgets, update bursts, reconnect, stale patch, and worker
+  cancellation boundaries;
+- security tests for hostile labels, URLs, SVG/XML, oversized graphs, prototype-pollution keys, external
+  resources, scripts, CSS escape, and cross-subject selection; and
+- comparison of every aggregate against an independent query over the same immutable snapshot.
+
+Visualization versions promote through the same replay, shadow, canary, and rollback discipline as policy.
+A misleading view, missing authority identity, wrong denominator, stale-green rendering, inaccessible critical
+path, or graph/data disagreement is a correctness defect and can stop the canary.
+
 ## 15. Testing and formal assurance
 
 ### 15.1 Pure model tests
@@ -1566,6 +1914,10 @@ runtime state to the GitHub-visible subject and receipt without making the dashb
 - restore from snapshots plus subsequent events and from full replay;
 - perform database backup restoration in an isolated environment; and
 - verify that one quarantined actor does not stop unrelated work.
+
+Visualization/runtime integration additionally verifies that a reconnect resumes on one coherent dashboard
+snapshot, stale deltas are refused, coordinated selection retains stable subject identity across grid/chart/SVG,
+and no panel silently combines different observation fingerprints or time windows.
 
 ### 15.4 Security tests
 
@@ -1635,6 +1987,8 @@ the fleet epoch must stop mutations even if the process remains alive.
 - Define planner/verifier contracts for work shape, SDD, portfolio, CI, review, agent allocation, and recovery.
 - Build the historical corpus inventory and document missing, selected, censored, and biased observations.
 - Define the incumbent heuristic and the replay, simulation, mutation, shadow, and canary comparison protocol.
+- Define the visualization schema, visual grammar, accessibility target, diagram asset manifest, view budgets,
+  and exact Community/Enterprise feature and licence decision for AG Grid/AG Charts.
 
 **Exit:** an independently reviewable mathematical/domain specification and measurement contract exist;
 unknown data is explicit; no hosted runtime or provider mutation is required.
@@ -1649,6 +2003,8 @@ unknown data is explicit; no hosted runtime or provider mutation is required.
 - Pin and qualify the candidate CP-SAT solver; add independent plan verification and degraded heuristics.
 - Replay historical board and incident snapshots and publish objective, sensitivity, calibration, and
   constraint-mutation evidence.
+- Generate deterministic SVGs for the six-graph model, critical path, schedules, plan alternatives, and named
+  incident traces from immutable fixtures; verify each visual aggregate against an independent query.
 
 **Exit:** every planner is deterministic at its contract boundary, independently checked, explainable, and
 no worse than the incumbent on declared safety/fairness measures; it still cannot dispatch work.
@@ -1660,6 +2016,8 @@ no worse than the incumbent on declared safety/fairness measures; it still canno
 - Add actor-system, journal, dependency, OR-decision, and workflow health endpoints.
 - Observe GitHub through the typed engine without mutation and materialize canonical planning snapshots.
 - Persist shadow decisions and compare them with actual operator/CLI choices and outcomes.
+- Deliver the read-only Overview and Audit routes with AG Grid, conventional AG Charts, accessible SVG pipeline
+  views, coherent snapshot/reconnect behavior, and reproducibility exports.
 
 **Exit:** restart, reconnect, revocation, malformed-message, read-completeness, snapshot, and shadow-decision
 tests pass; the service cannot mutate GitHub or create a write-capable agent.
@@ -1683,6 +2041,8 @@ agent observations feed estimates but do not self-certify success.
 - Measure queueing, WIP, throughput, cycle/tail time, CI feedback, review delay, rework, cost, fairness,
   knowledge concentration, and forecast calibration.
 - Promote no learned estimate or parameter outside the accepted policy-update workflow.
+- Deliver Flow, Plan, Execution, and Policy Lab routes; exercise graph aggregation, coordinated selection,
+  incomplete/stale states, uncertainty encodings, accessibility, and performance budgets on live shadow data.
 
 **Exit:** the full loop is stable and explainable over the declared observation window, hard-constraint
 mutations are caught, and material shadow divergences have explicit dispositions.
@@ -1696,6 +2056,8 @@ mutations are caught, and material shadow divergences have explicit dispositions
 - Run shadow comparison against real typed-engine verdicts.
 - Qualify token minting, rate limits, circuit breakers, postcondition reads, principal separation, and kill switch.
 - Complete the runner/WebSocket/database/App/Git threat model, data classification, and disaster-recovery proof.
+- Deliver the Recovery route with causally ordered saga/effect SVGs and prove that the display cannot infer
+  success, trigger a retry, or cross an authority boundary from journal/chart state alone.
 
 **Exit:** every injected interruption converges without an unfenced effect; shadow divergence is adjudicated;
 no production mutation permission exists.
@@ -1766,7 +2128,15 @@ The architecture is ready for normal-writer consideration only when:
 - database restore and key rotation are rehearsed;
 - stored prompts, artifacts, identities, audit records, telemetry, and backups have accepted classification,
   retention, export, and deletion rules;
-- emergency CLI use remains possible and is reconciled; and
+- emergency CLI use remains possible and is reconciled;
+- every operational view names its dashboard/planning snapshot, observation fingerprint, completeness,
+  freshness, policy, epoch, units, window, and denominator where applicable;
+- grid, chart, and SVG coordinated views resolve to the same stable subject and immutable evidence references;
+- complex cyclic pipelines retain cycle, edge-kind, group, generation, critical-path, and hidden-count semantics;
+- every chart/graph has an accessible exact-value or textual equivalent, and keyboard/screen-reader/high-contrast/
+  reduced-motion qualification passes at the declared data and rendering budgets;
+- SVG and dashboard hostile-content tests pass, export bundles reproduce their source view, and a visualization
+  cannot authorize, settle, or retry an external effect; and
 - an accepted owner, SLO, incident process, retention policy, cost envelope, and disaster-recovery proof exist.
 
 ## 19. Consequences and trade-offs
@@ -1787,6 +2157,8 @@ The architecture is ready for normal-writer consideration only when:
 - Existing FS.GG coordination work remains useful as the externally verifiable control plane.
 - Akka.NET provides credible expansion paths for streams, reliable delivery, sharding, and multi-node
   availability if later measurements justify them.
+- Shared visualization read models make topology, bottlenecks, uncertainty, decisions, and recovery paths
+  inspectable without reducing them to prose or one opaque fleet score.
 
 ### Costs
 
@@ -1801,6 +2173,8 @@ The architecture is ready for normal-writer consideration only when:
 - Optimization models can become opaque, brittle, or misaligned unless kept versioned, constrained, measured,
   sensitivity-tested, and explainable.
 - A future cluster would add partition and rolling-compatibility risks and therefore remains deferred.
+- AG Grid/AG Charts licensing, a second SVG rendering path, accessible alternatives, deterministic diagram
+  fixtures, and visual-regression infrastructure add cost and upgrade coupling.
 
 ## 20. Alternatives considered
 
@@ -1866,6 +2240,19 @@ authorization. Agents remain proposal and implementation engines inside determin
 Offers simple global ranking. Rejected because safety, authority, and completeness are constraints rather
 than prices, and one exposed proxy invites Goodhart behavior. Use lexicographic constraints and factored
 objectives with a stable explanation.
+
+### Canvas charts for every visualization
+
+Would minimize renderer count and use AG Charts for most dashboard pixels. Rejected because canvas is a poor
+semantic/export substrate for compound cyclic pipelines, trust boundaries, exact edge identity, keyboard
+navigation, and committed architecture assets. Retained for high-performance conventional charts, always with
+text/grid equivalents.
+
+### SVG for every table and time series
+
+Would make every visual inspectable and exportable as vectors. Rejected because it would recreate grid
+virtualization, sorting, filtering, accessibility, and conventional chart behavior while performing poorly on
+large live series. AG Grid/AG Charts own those cases; SVG owns complex graphs and documentation diagrams.
 
 ## 21. External references
 
@@ -1947,6 +2334,37 @@ objectives with a stable explanation.
   principal lifetime, keepalive, and timeout behavior.
 - [GitHub App permissions](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)
   and [installation access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) — least privilege and short-lived provider identity.
+
+### Visualization and dashboard substrate
+
+- [AG Grid chart types](https://www.ag-grid.com/javascript-data-grid/integrated-charts-chart-types/),
+  [Tree Data](https://www.ag-grid.com/javascript-data-grid/tree-data/),
+  [Server-Side Tree Data](https://www.ag-grid.com/javascript-data-grid/server-side-model-tree-data/), and
+  [sparklines](https://www.ag-grid.com/javascript-data-grid/sparklines-overview/) — grid-linked conventional
+  visualization, hierarchy, bounded remote data, and row-level trends.
+- [AG Charts data binding](https://www.ag-grid.com/charts/javascript/data-configuration/),
+  [range bars](https://www.ag-grid.com/charts/javascript/range-bar-series/),
+  [heatmaps](https://www.ag-grid.com/charts/javascript/heatmap-series/), and
+  [Sankey](https://www.ag-grid.com/charts/javascript/sankey-series/) — typed point/series binding, interval and
+  matrix encodings, and the documented acyclic boundary for flow diagrams.
+- [AG Grid accessibility](https://www.ag-grid.com/javascript-data-grid/accessibility/) and
+  [keyboard interaction](https://www.ag-grid.com/javascript-data-grid/keyboard-navigation/) — ARIA/keyboard
+  behavior plus known limitations that require assembled-product testing.
+- [AG Grid/AG Charts licensing](https://www.ag-grid.com/license-pricing/) and
+  [AG Charts Enterprise licensing](https://www.ag-grid.com/charts/javascript/licensing/) — feature/edition and
+  production-licence boundary to qualify before advanced views become required.
+- [ELK Layered](https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html) and the
+  [ELK layout-option reference](https://eclipse.dev/elk/reference/options.html) — layered, compound, port-aware,
+  orthogonally routed geometry for complex pipelines and topology.
+- [D3 shape](https://d3js.org/d3-shape) and [D3 force](https://d3js.org/d3-force) — data-driven SVG path
+  generation plus an exploratory network layout kept outside stable pipeline ordering.
+- [Observable visualization gallery](https://observablehq.com/notebook-kit/gallery) and
+  [Plot hexbin](https://observablehq.com/plot/transforms/hexbin) — candidate visual forms for diagnostic and
+  policy-laboratory views, not an implied production dependency.
+- [OpenTelemetry traces](https://opentelemetry.io/docs/concepts/signals/traces/) — causal span structure for
+  diagnostic trace waterfalls that remain distinct from domain receipts.
+- [W3C image/SVG accessibility tips](https://www.w3.org/WAI/tutorials/images/tips/) — text alternatives and
+  `<title>` association for SVG content.
 
 ## 22. Further reading
 
