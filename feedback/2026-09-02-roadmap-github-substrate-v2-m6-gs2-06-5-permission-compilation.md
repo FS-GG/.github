@@ -16,7 +16,8 @@ commit: e1ae428d916f61e5336d6996cd21f669943561e4
 - **zero-event reason:** `fs-gg-feedback-report` is not materialized in the Coordination product tree; all four phases were exercised, no substitute checkpoint tool was used, and the recurrence remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366).
 
 This report covers GS2-06.5 from accepted-prerequisite inspection through SDD authoring, implementation,
-one review repair, protected implementation merge, append-only acceptance, and protected-main verification.
+one product review repair, protected implementation merge, append-only acceptance, one roadmap-cycle
+provider-evidence repair, and protected-main verification.
 Confidence is bounded to exact repository objects, GitHub records, retained evidence, and validators named here.
 
 ## §2 What worked
@@ -44,6 +45,18 @@ Acceptance PR #249 then sealed receipt digest
 `e1ae428d916f61e5336d6996cd21f669943561e4`. Protected-main Bootstrap run `33670195315` and CodeQL
 run `33670194486` both completed successfully on that merge.
 
+The roadmap cycle then failed closed because the accepted product tree did not retain the ignored analysis,
+qualification TRX, and verify artifacts needed to reproduce observed SDD currency. Coordination issue #250
+and provider-evidence PR #251 restored those artifacts without changing the accepted receipt or product
+behavior. Independent exact-head review `5515480710` (digest
+`399812260b1a4f7a4781acd8f53a7157abda8d80a9c703dedd8207a37c673083`) and host acceptance
+`5515590228` (digest `320bcb174c4c0b2707c1e7f09983496abd5f2a4062d0a8efd1ee9da72b2fa6c8`)
+passed candidate `999f2a04a2ff4183679d3bd046be2c2e3f3e47dc`. It merged as
+`8131326661ae4c4b38d6cbda4d1c92f944fe13ed` with an identical tree; protected-main CodeQL run
+`33676781842` and Bootstrap run `33676789693` passed. Canonical `fsgg-sdd` 1.0.0 verification at that
+merge reports coherent/no-change readiness, 21/21 implementation items, 5/5 supported and observed
+evidence items, 10/10 verification items, and no diagnostic or blocking finding.
+
 ## §3 What did not
 
 The initial candidate at `03781747d069a036b7aeaf4302882f84306aaba7` allowed its permission-census
@@ -51,14 +64,20 @@ proof to agree with caller-authored evidence without a canonical producer agreem
 comment `5512665801` required changes. Repair commit `88f515d083e8bf6de8f8a7da3de8dc7731e8af24`
 closed that gap and the fresh confirmation passed it; no blocker or major finding remained.
 
+The initial roadmap-cycle advance could not reproduce exact observed evidence from accepted Coordination
+`main` because ignored analysis, TRX, and verify outputs were absent. Provider-evidence PR #251 repaired the
+retention gap; its exact-merge canonical verification is green. No accepted GS2-06.5 behavior or receipt
+changed.
+
 The Coordination product tree still lacks `fs-gg-feedback-report`. The required zero-event activation
 envelope is used without an out-of-workspace substitute, and the scaffold-provenance defect remains owned by
 `.github#2366`.
 
 ## §4 Findings
 
-No checkpoint-backed feedback finding was created. The one major product-review finding is resolved in the
-schema-v3 critique. The missing feedback skill is an accepted deduplicated observation at `.github#2366`.
+No checkpoint-backed feedback finding was created. The product authority-binding finding and the later
+provider-evidence currency finding are both resolved in the schema-v3 critique. The missing feedback skill
+is an accepted deduplicated observation at `.github#2366`.
 
 ## §5 Did not exercise
 
@@ -81,7 +100,9 @@ or merge bypass was introduced.
 
 The initial permission-census proof needed one review repair because its authority could self-agree. The
 canonical producer binding and attacker mutation turned that review cost into retained regression evidence.
-Feedback activation again required the bounded zero-event path because the product skill is absent.
+The roadmap cycle needed one additional repair because observed SDD outputs were ignored rather than
+retained; provider-evidence PR #251 restored exact reproducibility. Feedback activation again required the
+bounded zero-event path because the product skill is absent.
 
 ## §9 Skill value and gaps
 
@@ -98,6 +119,8 @@ and roadmap-only projection discipline. The missing feedback skill remains the o
 - Acceptance: PR #249 candidate `dc2e97bc0116acfa7272552620c7f6487f9cfdab`, pass `5514697460`, acceptance `5514733073`, merge `e1ae428d916f61e5336d6996cd21f669943561e4`.
 - Acceptance receipt: `9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f`.
 - Exact protected main: runs `33670195315` and `33670194486`, completed successfully on `e1ae428d916f61e5336d6996cd21f669943561e4`.
+- Provider evidence: PR #251 candidate `999f2a04a2ff4183679d3bd046be2c2e3f3e47dc`, pass `5515480710`, acceptance `5515590228`, merge `8131326661ae4c4b38d6cbda4d1c92f944fe13ed`.
+- Provider protected main: runs `33676789693` and `33676781842`, completed successfully on `8131326661ae4c4b38d6cbda4d1c92f944fe13ed`; completion `5515633493`, digest `f851e366801d7d337764aed0047e0445deb6619d3e4e80fa3ad872ddc4972119`.
 - Qualification: Release build zero warnings/errors; unit 175/175; architecture 440/440 at acceptance; focused acceptance 15/15; evidence self-test 85 entries and 56 negative cases.
 
 ## §11 Falsifiable improvements
@@ -115,9 +138,9 @@ declared agent paths and validate real checkpoint invocations without this zero-
 | implementation-apis | exercised | Pure permission compilation and canonical producer agreement shipped. |
 | dependencies-build | exercised | Release build passed with zero warnings and errors. |
 | testing | exercised | Acceptance recorded 175 unit, 440 architecture, 15 focused, and 85/56 evidence self-test results. |
-| evidence | exercised | Corpus, independent expectations, Q3, SDD, acceptance receipt, and protected runs verified. |
+| evidence | exercised | Corpus, independent expectations, Q3, SDD, acceptance receipt, retained exact-merge provider artifacts, and protected runs verified. |
 | runtime-playtest | not-exercised | Non-game offline qualification unit. |
 | performance | not-exercised | No performance claim. |
 | documentation | exercised | SDD package, evidence README, critique, feedback, and roadmap projection. |
 | packaging-upgrade | not-exercised | Out of scope. |
-| worker-git-pr | exercised | PRs #247 and #249 carry exact-head review, acceptance, merge, and protected-main evidence. |
+| worker-git-pr | exercised | PRs #247, #249, and #251 carry exact-head review, acceptance, merge, and protected-main evidence. |

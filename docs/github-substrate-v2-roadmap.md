@@ -1051,10 +1051,15 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   merged as [`e1ae428d`](https://github.com/FS-GG/FS.GG.Coordination/commit/e1ae428d916f61e5336d6996cd21f669943561e4),
   and passed protected-main [Bootstrap run 33670195315](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33670195315)
   and [CodeQL run 33670194486](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33670194486).
+  Provider-evidence [PR 251](https://github.com/FS-GG/FS.GG.Coordination/pull/251) then retained the
+  exact observed SDD artifacts required by the roadmap cycle, merged as
+  [`81313266`](https://github.com/FS-GG/FS.GG.Coordination/commit/8131326661ae4c4b38d6cbda4d1c92f944fe13ed),
+  and passed protected-main [Bootstrap run 33676789693](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33676789693)
+  and [CodeQL run 33676781842](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33676781842).
   The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.json)
   and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md)
   close typed cycle `cycle-f7201370a11c6a38`; its guarded update digest is
-  `sha256:76aad7ef8088dfdbfc8651568dbaa5a2cba749e13d49c13c412949be846d0381`.
+  `sha256:65e2edce7a6d0a0cd10232a881ed7b3fe769e35ca6e483fafd20dc63ae84c096`.
 - [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
   environments, immutable releases/tags, one pack, SBOMs, attestations, dependency submission/review, and
   public-download verification.
