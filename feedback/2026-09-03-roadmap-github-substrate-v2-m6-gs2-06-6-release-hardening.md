@@ -77,6 +77,10 @@ roadmap artifact or acceptance claim was created.
 The Coordination product tree still lacks `fs-gg-feedback-report`. The required zero-event activation
 envelope is used without an out-of-workspace substitute; `.github#2366` remains the owner.
 
+The first projection PR (#3166) used a non-canonical branch name that omitted accountable issue #3165.
+The typed delivery gate refused review handoff with `item branch is not canonical`; it was closed unmerged
+and replaced by canonical successor PR #3167 before any structured review or merge authority was granted.
+
 ## §4 Findings
 
 No checkpoint-backed feedback finding was created. The product proof-authority finding and provider durability
@@ -103,7 +107,9 @@ No external feedback tool, production writer, secret shim, publication bypass, o
 The product proof required three confirmation rounds because one passing review preceded a moved head whose
 stronger audit found independent-oracle and closed-object gaps. The roadmap cycle then incurred one provider
 repair because generated SDD outputs had not been retained. The clean-checkout preflight prevented both costs
-from becoming false roadmap acceptance. Feedback activation again used the bounded zero-event path.
+from becoming false roadmap acceptance. The typed delivery gate also caught the non-canonical first projection
+branch before review; its successor retained the same four-file scope. Feedback activation again used the
+bounded zero-event path.
 
 ## §9 Skill value and gaps
 

@@ -1,7 +1,7 @@
 {
   "auditSchema": 1,
   "report": "feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md",
-  "reportSha256": "b251d1186e31c6b22246b183547d4c21f75a17a69e70d0befbf943749a4e51d1",
+  "reportSha256": "7682ed144e7585e75d3aa087d07238eb8ca024303062588f6b00ef225e5d066c",
   "criticMode": "zero-event-contract-validation",
   "criticPromptVersion": "actionability-v1",
   "findings": []
