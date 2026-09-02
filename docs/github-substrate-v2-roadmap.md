@@ -1088,7 +1088,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.json)
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md)
   close typed cycle `cycle-ff8060a5a0d68217`; its guarded update digest is
-  `sha256:42325cf975f77af147a34be1ae39ae701414511bd24c2f5edc83f471de9da124`.
+  `sha256:e779aee0efa6a31e033b13110122b718c09771b3fc2332723ad64323f5db1459`.
 - [ ] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
   with typed inventory, composite steps, reusable job contracts, and stable aggregate outputs. Compile a
   versioned dependency graph from changed subjects and non-file inputs to the smallest sound transitive

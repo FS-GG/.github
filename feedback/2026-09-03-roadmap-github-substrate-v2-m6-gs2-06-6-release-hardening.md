@@ -80,6 +80,11 @@ envelope is used without an out-of-workspace substitute; `.github#2366` remains 
 The first projection PR (#3166) used a non-canonical branch name that omitted accountable issue #3165.
 The typed delivery gate refused review handoff with `item branch is not canonical`; it was closed unmerged
 and replaced by canonical successor PR #3167 before any structured review or merge authority was granted.
+The first exact-head review of #3167 then found that its authorization had reused #3166's immutable operation
+key, so closed PR #3166 still held the lowest-id election and claim-fence failed. The repair released and
+reclaimed #3165 as generation `5518159797`; `delivery` issued distinct operation key
+`86d6b250e6bb9196006880497179acdb550939b74baff3ec82935c58a236a684`, preventing the superseded election
+from authorizing or blocking the successor generation.
 
 ## §4 Findings
 
@@ -109,7 +114,8 @@ stronger audit found independent-oracle and closed-object gaps. The roadmap cycl
 repair because generated SDD outputs had not been retained. The clean-checkout preflight prevented both costs
 from becoming false roadmap acceptance. The typed delivery gate also caught the non-canonical first projection
 branch before review; its successor retained the same four-file scope. Feedback activation again used the
-bounded zero-event path.
+bounded zero-event path. The successor's first review then caught operation-key reuse; one typed release,
+reclaim, and authorization refresh repaired it without deleting or rewriting either immutable election.
 
 ## §9 Skill value and gaps
 
