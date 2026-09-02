@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md",
+  "reportSha256": "096eb27e28b99e7a6a84b3692908a410013f9a6048ea2d719f760ecf152cfeb8",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}
