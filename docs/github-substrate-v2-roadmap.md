@@ -1083,6 +1083,8 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   [`42457a5e`](https://github.com/FS-GG/FS.GG.Coordination/commit/42457a5e215386b9151a4d6670c35a662dc13f80),
   and passed protected-main [Bootstrap run 33695108140](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695108140)
   and [CodeQL run 33695107570](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695107570).
+  Roadmap projection [issue 3165](https://github.com/FS-GG/.github/issues/3165) and
+  [PR 3166](https://github.com/FS-GG/.github/pull/3166) bind the final four-path ledger update.
   The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.json)
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md)
   close typed cycle `cycle-ff8060a5a0d68217`; its guarded update digest is
