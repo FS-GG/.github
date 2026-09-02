@@ -1,0 +1,87 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation",
+  "milestone": "M6 — GS2-06.5 permission compilation",
+  "critic": "tern-f749",
+  "initial_reviewed_commit": "03781747d069a036b7aeaf4302882f84306aaba7",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 3,
+  "reviewed_commits": [
+    "03781747d069a036b7aeaf4302882f84306aaba7",
+    "88f515d083e8bf6de8f8a7da3de8dc7731e8af24",
+    "8131326661ae4c4b38d6cbda4d1c92f944fe13ed",
+    "84e488f046c624b2789d520cd062bf99d964b3b5"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.5-MAJ-001",
+      "severity": "major",
+      "summary": "The initial permission-compilation proof was not bound to the canonical generated permission-census producer, so caller-authored evidence could self-agree.",
+      "evidence": [
+        "Verification: PR #247 structured initial review comment https://github.com/FS-GG/FS.GG.Coordination/pull/247#issuecomment-5512665801 records a changes-required verdict at exact head 03781747d069a036b7aeaf4302882f84306aaba7; `gh api repos/FS-GG/FS.GG.Coordination/compare/03781747d069a036b7aeaf4302882f84306aaba7...88f515d083e8bf6de8f8a7da3de8dc7731e8af24` shows the sole repair commit and the missing canonical permission-census path, byte digest, required-family binding, producer-agreement control, and attacker mutation it added."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: PR #247 confirmation comment https://github.com/FS-GG/FS.GG.Coordination/pull/247#issuecomment-5512891863 passes exact repaired head 88f515d083e8bf6de8f8a7da3de8dc7731e8af24 after one repair; host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/247#issuecomment-5512971887 records the canonical producer-divergence mutation failing with CanonicalPermissionCensusMismatch, Q3 passing 19 controls, focused 6/6 unit and 4/4 architecture tests, full 175/175 unit and 439/439 architecture tests, and no unresolved material finding."
+      ]
+    },
+    {
+      "id": "GS2-06.5-PROVIDER-001",
+      "severity": "major",
+      "summary": "Accepted protected main retained an SDD provider declaration whose ignored analysis and observed qualification bytes were absent, so the typed roadmap cycle could not replay its required implementation provider.",
+      "evidence": [
+        "Verification: at accepted Coordination main e1ae428d916f61e5336d6996cd21f669943561e4, `PATH=/tmp/fsgg-sdd-cli-1.0.0:$PATH fsgg-sdd verify --root . --work 246-permission-compilation --require-observed --dry-run` exited 1 with outcome blocked, coherent false, and diagnostic evidence.missingAnalysisPrerequisite for readiness/246-permission-compilation/analysis.json; `work/246-permission-compilation/evidence.yml:10-14,56-57` named that absent analysis and artifacts/test-results/246-permission-compilation/qualification.trx digest bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559, while an exhaustive repository-file SHA-256 scan found no matching bytes."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: durable provider-evidence PR https://github.com/FS-GG/FS.GG.Coordination/pull/253 adds the previously absent analysis, TRX, work-model, and verify paths to Git from base 8131326661ae4c4b38d6cbda4d1c92f944fe13ed; independent exact-head review https://github.com/FS-GG/FS.GG.Coordination/pull/253#issuecomment-5516103883 reproduces their SHA-256 values as cf59f15eb5a04511ab06477b1455f08b869f5ed00472571862577261030afc77, 766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493, 9e2bf23a171a9089eee522c962a9911e13abf71fef14633e0b2a37ca8b8e61a9, and 478bed672d7f450edeab22af0018f0c924290a1b63435eaaeca0451da17f849f respectively from a fresh clean checkout.",
+        "Verification: the same independent review reports canonical fsgg-sdd 1.0.0 noChange/coherent true, implementationReady 21/21, evidence 5/5 supported and observed, verification 10/10, zero diagnostics/blockers, and guard failures for tampered, untracked, and missing variants; host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/253#issuecomment-5516131612 binds those results and 175/175 unit, 5/5 focused architecture, and 441/441 full architecture tests to candidate 1919975b6a6371706263d07712b360adee9ee414."
+      ]
+    },
+    {
+      "id": "GS2-06.5-PROVIDER-DURABILITY-MAJ-001",
+      "severity": "major",
+      "summary": "The first provider repair was assessed from ignored dirty-worktree artifacts that were absent from its exact merged tree, so its claimed clean replay and the first roadmap projection were not durable.",
+      "evidence": [
+        "Verification: provider-currency PR https://github.com/FS-GG/FS.GG.Coordination/pull/251 changed only work/246-permission-compilation/evidence.yml and merged as 8131326661ae4c4b38d6cbda4d1c92f944fe13ed; FS-GG/.github PR #3164 changes-required decision https://github.com/FS-GG/.github/pull/3164#issuecomment-5515937701 (digest d98cb532434b9f5eb7d784012348b890524fc77cbd5c70accc637bdc96daabfa) records that a fresh clean checkout at that exact merge lacks readiness/246-permission-compilation/analysis.json, artifacts/test-results/246-permission-compilation/qualification.trx, and readiness/246-permission-compilation/verify.json and that canonical fsgg-sdd 1.0.0 exits blocked with coherent=false and evidence.missingAnalysisPrerequisite."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: successor issue https://github.com/FS-GG/FS.GG.Coordination/issues/252 and PR https://github.com/FS-GG/FS.GG.Coordination/pull/253 make all four provider prerequisites durable; GitHub PR and commit API reads report candidate 1919975b6a6371706263d07712b360adee9ee414 and merge 84e488f046c624b2789d520cd062bf99d964b3b5 share exact tree b9114aaae95653567aa9b6f88621f8ba97143ecd.",
+        "Verification: independent review https://github.com/FS-GG/FS.GG.Coordination/pull/253#issuecomment-5516103883 (digest 281df9e8f4103c03023d4f4e9fd6c55072007f0834360ea707f9f14d1d1725c2) passes the clean exact candidate; host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/253#issuecomment-5516131612 (digest 3319bdd30398ea94ea234b5c1528f9b87abda81ff68c2ace67069235e5739ffe) accepts it; delivery completion https://github.com/FS-GG/FS.GG.Coordination/issues/252#issuecomment-5516159022 (digest a717bab5a4982ab8bcc9869f6e704a1113db77007930e2da968630675f3ae13e) records mergeReachable=true, zero pending board writes, zero obligations, and protected-main Bootstrap run 33681065304 at the exact merge."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: FS-GG/.github PR #3164 initial review https://github.com/FS-GG/.github/pull/3164#issuecomment-5515937701 binds changes-required digest d98cb532434b9f5eb7d784012348b890524fc77cbd5c70accc637bdc96daabfa to exact projection head 07fbf4d4191d18903ede83a62184bd69517e67b7 and identifies the non-durable PR #251 evidence as the sole material finding; it also records the exact four declared projection paths, a clean diff check, structurally passing canonical validators, and GS2-06.6 remaining outside the inspected frontier.",
+    "Verification: FS-GG/.github issue https://github.com/FS-GG/.github/issues/3163 acceptance requires checking only GS2-06.5, retaining the schema-v3 critique and schema-v2 feedback/audit, advancing the status frontier, validating the exact Coordination chain and typed cycle, and leaving successor work outside scope; docs/github-substrate-v2-roadmap.md:1040-1057 checks GS2-06.5 and names the immutable implementation, acceptance, critique, feedback, cycle, and guarded-update evidence.",
+    "Verification: `gh pr view 247 --repo FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,baseRefOid,files` reports candidate 88f515d083e8bf6de8f8a7da3de8dc7731e8af24 merged through PR #247 as b6845fbdd80344de8346d33f61c968f87ed80e3b from base 34fdebc438c04c81039c767a0d2bbbc13f060c47; GitHub commit API reads show candidate and merge share tree 32581457dd422cc254057f688e5f99dd1b737ac2.",
+    "Verification: implementation delivery completion https://github.com/FS-GG/FS.GG.Coordination/issues/246#issuecomment-5513004927 records digest c3c942b69dc8c680c68916e6b2f57777666a7f0e1927f75ada416c277170a9ce, mergeReachable=true, merge b6845fbdd80344de8346d33f61c968f87ed80e3b, zero pending writes, zero obligations, and protected Bootstrap run 33656170405; GitHub Actions API reads independently report that run and CodeQL run 33656169897 completed successfully at the exact merge.",
+    "Verification: `gh pr view 249 --repo FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,baseRefOid,files` reports acceptance candidate dc2e97bc0116acfa7272552620c7f6487f9cfdab merged through PR #249 as e1ae428d916f61e5336d6996cd21f669943561e4 with exactly three acceptance paths; exact-head pass https://github.com/FS-GG/FS.GG.Coordination/pull/249#issuecomment-5514697460 and host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/249#issuecomment-5514733073 bind that candidate and the accepted implementation evidence.",
+    "Verification: GitHub raw-content API read of evidence/github-substrate-v2/accepted/GS2-06.5.json at e1ae428d916f61e5336d6996cd21f669943561e4 reports state accepted, source b6845fbdd80344de8346d33f61c968f87ed80e3b, implementation candidate 88f515d083e8bf6de8f8a7da3de8dc7731e8af24, structured review/acceptance/delivery bindings, and self-digest 9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f; GitHub Actions API reads report protected-main Bootstrap run 33670195315 and CodeQL run 33670194486 completed successfully at acceptance merge e1ae428d916f61e5336d6996cd21f669943561e4.",
+    "Verification: `gh pr view 253 --repo FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,baseRefOid,files` reports the six-file durability repair from base 8131326661ae4c4b38d6cbda4d1c92f944fe13ed, candidate 1919975b6a6371706263d07712b360adee9ee414, and merge 84e488f046c624b2789d520cd062bf99d964b3b5; GitHub commit API reads show candidate and merge share tree b9114aaae95653567aa9b6f88621f8ba97143ecd.",
+    "Verification: independent exact-head pass https://github.com/FS-GG/FS.GG.Coordination/pull/253#issuecomment-5516103883 binds tracked analysis SHA-256 cf59f15eb5a04511ab06477b1455f08b869f5ed00472571862577261030afc77, TRX SHA-256 766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493, work-model SHA-256 9e2bf23a171a9089eee522c962a9911e13abf71fef14633e0b2a37ca8b8e61a9, and verify SHA-256 478bed672d7f450edeab22af0018f0c924290a1b63435eaaeca0451da17f849f to a fresh clean exact-candidate checkout and reports coherent/noChange, 5/5 observed, 10/10 ready, and zero diagnostics/blockers.",
+    "Verification: GitHub Actions API reads report protected-main CodeQL run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33681062103 and Bootstrap run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33681065304 completed successfully at exact merge 84e488f046c624b2789d520cd062bf99d964b3b5; delivery completion https://github.com/FS-GG/FS.GG.Coordination/issues/252#issuecomment-5516159022 records digest a717bab5a4982ab8bcc9869f6e704a1113db77007930e2da968630675f3ae13e, mergeReachable=true, zero pending board writes, and zero obligations.",
+    "Verification: `sha256sum feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md` returns c4b9ef3f4dd9ae5588d08b3323dceb37a3d4068514ba3e0897ee2dab72896fd2, exactly matching its audit; `python3 .agents/skills/work-roadmap/scripts/validate-feedback-state.py --root . --cycle roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation --report feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md --audit feedback/audits/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.audit.json --phases onboarding-first-build,lifecycle-authoring,implementation-test-evidence,verify-ship-pr` exits zero with 0 material events, and the report explicitly records the absent product-tree feedback skill as the zero-event reason deduplicated to FS-GG/.github#2366.",
+    "Verification: review of src/FS.GG.Coordination.Qualification.Contracts/GitHubPermissionCompilationQualification.fs/.fsi, eng/validate-github-permission-compilation.fsx, and focused unit/architecture tests at the accepted tree shows a pure deterministic compiler, exact least-privilege comparisons, isolated normal/admin/release principals and environments, canonical producer-byte agreement, wildcard/escalation/crossover/seal/replay negative controls, and no public production-mutation surface; protected implementation and acceptance runs above exercise the retained build/test architecture.",
+    "Verification: no finding remains unresolved, no minor follow-up exists, and the milestone is an offline non-game permission-qualification unit, so no player journey applies."
+  ],
+  "confirmation": {
+    "reviewed_commit": "84e488f046c624b2789d520cd062bf99d964b3b5",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
