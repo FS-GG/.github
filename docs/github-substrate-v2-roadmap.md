@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, and all GS2-05 units accepted; GS2-01.9 not applicable; GS2-06.1 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1 accepted; GS2-01.9 not applicable; GS2-06.2 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -973,8 +973,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-02–GS2-05
 **Exit:** every rostered repository has a verified plan and rollback, not yet necessarily applied
 
-- [ ] **GS2-06.1 — Repository profiles.** Derive expected settings from the reviewed roster and project
+- [x] **GS2-06.1 — Repository profiles.** Derive expected settings from the reviewed roster and project
   selected attributes into native custom properties; retain external rows and rich registry authority.
+
+  Accepted 2026-09-02. [Implementation PR 225](https://github.com/FS-GG/FS.GG.Coordination/pull/225)
+  merged as protected commit
+  [`dba99645`](https://github.com/FS-GG/FS.GG.Coordination/commit/dba99645facf479ef885e71edbeef73c84ee7155),
+  whose [protected-main run 33582624167](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33582624167)
+  passed. [Acceptance PR 227](https://github.com/FS-GG/FS.GG.Coordination/pull/227) added the append-only
+  [GS2-06.1 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/f3a92488d6c15e1a4592686c6f00c375c62b167d/evidence/github-substrate-v2/accepted/GS2-06.1.json)
+  with self-digest `0f6a142023f21a266242997ae896e494dfa668e895e308ad73d2d5e01404c042`,
+  merged at [`f3a92488`](https://github.com/FS-GG/FS.GG.Coordination/commit/f3a92488d6c15e1a4592686c6f00c375c62b167d),
+  and passed [protected-main run 33583686226](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33583686226).
 - [ ] **GS2-06.2 — Required-check census.** Union classic protection and rulesets, classify every check,
   prove unconditional PR/merge-group production, and reduce the external contract to stable aggregates.
 - [ ] **GS2-06.3 — Ruleset plans.** Define branch/tag protection, reviews, conversations, merge methods,
