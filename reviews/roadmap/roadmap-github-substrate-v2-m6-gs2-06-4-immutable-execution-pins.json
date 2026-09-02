@@ -79,6 +79,17 @@
         "Verification: PR #241 final pass comment 5510133060 records exact head d58fe80494c14bdf13f82dd0c531159a2f6ccc6c rejecting all 20 staged competing invocation/configuration routes, including dist-tags, semver ranges, npm aliases, GitHub specs, and file/path specs; host acceptance comment 5510155388 and protected merge b5d00bb18070bbd1b57dfe2032b647f7699276c9 preserve that candidate.",
         "Verification: acceptance PR #243 initial pass 5510612274 and host acceptance 5510641166 independently bind the canonical GS2-06.4 receipt to implementation merge b5d00bb18070bbd1b57dfe2032b647f7699276c9, then PR #243 merged as 94f28e12e81bfd68dc685230a1ca52a863f0688b."
       ]
+    },
+    {
+      "id": "GS2-06.4-PROVIDER-001",
+      "severity": "major",
+      "summary": "The accepted tracked SDD provider projection named an ignored exact-byte observed TRX that was no longer present after the implementation worktree was removed.",
+      "evidence": ["Verification: accepted merge 94f28e12e81bfd68dc685230a1ca52a863f0688b declared `artifacts/test-results/239-immutable-execution-pins/qualification.trx` with SHA-256 8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526, while exhaustive filesystem search found no file with that digest and `fsgg-sdd verify --require-observed --dry-run` failed closed on the missing artifact."],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: issue #244 and PR #245 regenerated the exact focused 7/0/0 observed TRX at SHA-256 102778fb3696dd10a59fdee83b15a6689d3c9f52e92941948df4056660dda1dc and updated only `work/239-immutable-execution-pins/evidence.yml`; independent pass 5511206970 and host acceptance 5511235455 verified fsgg-sdd 1.0.0 coherent/noChange, 9/9 supported and observed declarations, 18/18 verification obligations, and zero stale, invalid, synthetic, missing, or blocking evidence.",
+        "Verification: PR #245 merged as 34fdebc438c04c81039c767a0d2bbbc13f060c47; protected-main runs 33643133114 and 33643132834 succeeded; completion comment 5511294989 records digest 09bdc93a384918a50e490463897c45ee722a1882b3bb8273f1654d9ec42b6927, zero pending writes, and merge reachability."
+      ]
     }
   ],
   "verification_evidence": [

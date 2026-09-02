@@ -132,7 +132,7 @@ feedback skill remains the only activation gap and is already deduplicated.
 - Acceptance qualification: Release build zero warnings/errors, unit 169/169, architecture 435/435,
   evidence self-test 84 entries/56 negative cases, focused EvidenceStorageTests 14/14, and self-digest
   tamper refusal, as independently recorded in comment `5510612274`.
-- Critique: seven resolved major findings, ten exact reviewed-head transitions through acceptance and provider currency, final pass at the protected provider source,
+- Critique: eight resolved major findings, ten exact reviewed-head transitions through acceptance and provider currency, final pass at the protected provider source,
   zero unresolved blocker/major findings, zero minor follow-ups.
 
 ## §11 Falsifiable improvements
