@@ -1,0 +1,109 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-4-immutable-execution-pins",
+  "milestone": "M6 — GS2-06.4 immutable execution pins",
+  "critic": "independent structured critics brant-ef81, rook-ce55, avocet-4cca, kite-4315; host roll-up /root/gs2_06_4_roadmap_rollup",
+  "initial_reviewed_commit": "286ff1b44519a9ffcf185a87dd93a5d2dbc1a9f2",
+  "scope": ["requirements", "diff", "tests", "architecture", "roadmap-evidence"],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 8,
+  "reviewed_commits": [
+    "286ff1b44519a9ffcf185a87dd93a5d2dbc1a9f2",
+    "18f58831d78441a80ed2f39e9138e4752fc8a0ff",
+    "88f8771b9e1e067bba956603c5b95146a8560a31",
+    "fc9a5c5ba3410e904f7202cc27cf7474e9277b57",
+    "e1fce4d511211a7b7fbf6b236b9542151d20718f",
+    "5687fbcbf8d897cfc37526192a6ffae26a247f4d",
+    "043b8ed64457fe655f2b962af0bc0b77aa379778",
+    "94f28e12e81bfd68dc685230a1ca52a863f0688b",
+    "34fdebc438c04c81039c767a0d2bbbc13f060c47"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.4-MAJ-001",
+      "severity": "major",
+      "summary": "Repository-local reusable-workflow calls were filtered out before immutable-reference and publication checks.",
+      "evidence": ["Verification: PR #240 structured initial review comment 5508604832 records that `uses: ./...` was excluded before the observed-reference inventory and that the exact staged local reference survived Q3 at 286ff1b44519a9ffcf185a87dd93a5d2dbc1a9f2."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: PR #240 round-1 decision comment 5508742599 and issue #239 handoff comment 5508683311 record exact head 18f58831d78441a80ed2f39e9138e4752fc8a0ff refusing local workflow/action spellings, focused 6/6 unit and 6/6 architecture tests, full 169/169 and 433/433 suites, and exact Q3 success."]
+    },
+    {
+      "id": "GS2-06.4-MAJ-002",
+      "severity": "major",
+      "summary": "The validator trusted its declared updater list and failed to inventory a competing tracked Dependabot configuration.",
+      "evidence": ["Verification: PR #240 round-1 decision comment 5508742599 records a staged `.github/dependabot.yml` mutation that left Q3 green at 18f58831d78441a80ed2f39e9138e4752fc8a0ff."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: PR #240 round-2 decision comment 5508945596 and issue #239 handoff comment 5508870661 record exact head 88f8771b9e1e067bba956603c5b95146a8560a31 deriving and sealing the competing-updater inventory, rejecting the staged Dependabot route, and passing 169/169 unit and 434/434 architecture tests."]
+    },
+    {
+      "id": "GS2-06.4-MAJ-003",
+      "severity": "major",
+      "summary": "Updater discovery omitted official JSONC, embedded package.json, and custom Renovate configuration routes.",
+      "evidence": ["Verification: PR #240 round-2 decision comment 5508945596 records official Renovate locations and custom selectors whose staged configuration remained outside the sealed inventory at 88f8771b9e1e067bba956603c5b95146a8560a31."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: PR #240 round-3 decision comment 5509230706 and issue #239 handoff comment 5509142180 record exact head fc9a5c5ba3410e904f7202cc27cf7474e9277b57 sealing 15 configuration paths and seven invocation selectors and rejecting seven staged production-Q3 routes."]
+    },
+    {
+      "id": "GS2-06.4-MAJ-004",
+      "severity": "major",
+      "summary": "Inline RENOVATE_CONFIG, per-option RENOVATE_* environment values, and CLI authority could bypass discovery and branch/direct-automerge refusal.",
+      "evidence": ["Verification: PR #240 terminal round-3 decision comment 5509230706 records an exact staged `RENOVATE_AUTOMERGE=true RENOVATE_AUTOMERGE_TYPE=branch renovate` script that left Q3 green at fc9a5c5ba3410e904f7202cc27cf7474e9277b57; wait completion 5509234139 and escalation 5509325279 prove ordinary exhaustion and closure without merge."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: issue #239 repair-phase handoff comment 5509545962 records fresh implementer snipe-eae6, branch/PR #241, and exact head e1fce4d511211a7b7fbf6b236b9542151d20718f covering inline JSON, wildcard per-option environment values, direct/npx/container commands, and CLI options; repair-phase record 5509680302 binds exhausted PR #240 and escalation 5509325279 through its seven-field receipt."]
+    },
+    {
+      "id": "GS2-06.4-RP-001",
+      "severity": "major",
+      "summary": "Quoted Renovate executables invoked through script process APIs still bypassed repository-controlled invocation discovery.",
+      "evidence": ["Verification: PR #241 initial decision comment 5509587065 records a staged Node `spawnSync(\"renovate\", ...)` branch-automerge mutation that left Q3 green at e1fce4d511211a7b7fbf6b236b9542151d20718f."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: PR #241 repair-phase decision comment 5509680302 records the quoted executable mutation red at 5687fbcbf8d897cfc37526192a6ffae26a247f4d and binds the required repairPhaseReceipt."]
+    },
+    {
+      "id": "GS2-06.4-RP-002",
+      "severity": "major",
+      "summary": "Path-qualified Unix and Windows Renovate executables were not recognized by the direct-command scanner.",
+      "evidence": ["Verification: PR #241 repair-phase decision comment 5509680302 records a staged `./node_modules/.bin/renovate` process invocation that left Q3 green at 5687fbcbf8d897cfc37526192a6ffae26a247f4d."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: PR #241 round-1 decision comment 5509886961 records quoted bare and path-qualified Unix/Windows executable coverage passing at 043b8ed64457fe655f2b962af0bc0b77aa379778."]
+    },
+    {
+      "id": "GS2-06.4-RP-003",
+      "severity": "major",
+      "summary": "Package-manager Renovate version, dist-tag, alias, GitHub, file, and path specifications could evade invocation discovery.",
+      "evidence": ["Verification: PR #241 round-1 decision comment 5509886961 records a staged `npx renovate@latest` branch-automerge mutation that left Q3 green at 043b8ed64457fe655f2b962af0bc0b77aa379778."],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: PR #241 final pass comment 5510133060 records exact head d58fe80494c14bdf13f82dd0c531159a2f6ccc6c rejecting all 20 staged competing invocation/configuration routes, including dist-tags, semver ranges, npm aliases, GitHub specs, and file/path specs; host acceptance comment 5510155388 and protected merge b5d00bb18070bbd1b57dfe2032b647f7699276c9 preserve that candidate.",
+        "Verification: acceptance PR #243 initial pass 5510612274 and host acceptance 5510641166 independently bind the canonical GS2-06.4 receipt to implementation merge b5d00bb18070bbd1b57dfe2032b647f7699276c9, then PR #243 merged as 94f28e12e81bfd68dc685230a1ca52a863f0688b."
+      ]
+    },
+    {
+      "id": "GS2-06.4-PROVIDER-001",
+      "severity": "major",
+      "summary": "The accepted tracked SDD provider projection named an ignored exact-byte observed TRX that was no longer present after the implementation worktree was removed.",
+      "evidence": ["Verification: accepted merge 94f28e12e81bfd68dc685230a1ca52a863f0688b declared `artifacts/test-results/239-immutable-execution-pins/qualification.trx` with SHA-256 8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526, while exhaustive filesystem search found no file with that digest and `fsgg-sdd verify --require-observed --dry-run` failed closed on the missing artifact."],
+      "disposition": "resolved",
+      "resolution_evidence": ["Verification: issue #244 and PR #245 regenerated the exact focused 7/0/0 observed TRX at SHA-256 102778fb3696dd10a59fdee83b15a6689d3c9f52e92941948df4056660dda1dc and updated only `work/239-immutable-execution-pins/evidence.yml`; independent pass 5511206970 and host acceptance 5511235455 verified fsgg-sdd 1.0.0 coherent/noChange, 9/9 supported and observed declarations, 18/18 verification obligations, and zero stale, invalid, synthetic, missing, or blocking evidence.", "Verification: PR #245 merged as 34fdebc438c04c81039c767a0d2bbbc13f060c47; protected-main runs 33643133114 and 33643132834 succeeded; completion comment 5511294989 records digest 09bdc93a384918a50e490463897c45ee722a1882b3bb8273f1654d9ec42b6927, zero pending writes, and merge reachability."]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: `gh api repos/FS-GG/FS.GG.Coordination/pulls/243` reports merged=true and merge_commit_sha 94f28e12e81bfd68dc685230a1ca52a863f0688b; completion comment 5510696823 reports digest ec0fe14b1204871b0c5b4e2a0f0131f1c8edb75d6ef73f2d9873157c1d0fa1b3, mergeReachable=true, zero pending writes, and zero obligations.",
+    "Verification: GitHub Actions API reads for runs 33638647452 and 33638648190 report completed/success at exact head 94f28e12e81bfd68dc685230a1ca52a863f0688b.",
+    "Verification: acceptance review comment 5510612274 records receipt self-digest 9f2476ebea520372f836b69fc8b1d11300d5299ed1796fc34cc70afead9e2a76, focused EvidenceStorageTests 14/14, full evidence self-test 84 entries/56 negative cases, Release build zero warnings/errors, unit 169/169, architecture 435/435, and exact self-digest tamper refusal.",
+    "Verification: PR #240 is closed without merge; structured escalation 5509325279 and PR #241 repair-phase record 5509680302 retain the ordinary-exhaustion and fresh repair-phase provenance rather than presenting the landing as ordinary work.",
+    "Verification: provider-evidence currency PR #245 independently retained the accepted GS2-06.4 semantics while restoring exact reproducible SDD provider evidence; generated verify.json SHA-256 is 6a4d94e36b242c2cdbf5afda6b6d6df8d49fce20950dffe038cf41269d632114 and analysis SHA-256 is b46f5b127f385134b8ca929cf141d689a935c9c107b906d15bf9d955411b1aae.",
+    "Verification: no finding remains unresolved, no minor follow-up exists, and this non-game offline qualification milestone requires no player journey."
+  ],
+  "confirmation": {
+    "reviewed_commit": "34fdebc438c04c81039c767a0d2bbbc13f060c47",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

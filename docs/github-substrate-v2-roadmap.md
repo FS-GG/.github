@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.3 accepted; GS2-01.9 not applicable; GS2-06.4 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.4 accepted; GS2-01.9 not applicable; GS2-06.5 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1016,8 +1016,27 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-3-ruleset-plans.md)
   close typed cycle `cycle-b4037c9a48b9ed22`; its guarded update digest is
   `sha256:825e01d5c52156f39ca264c8114cc2a0fc5d1c276e550e960ac2207ec646d274`.
-- [ ] **GS2-06.4 — Immutable execution pins.** Move reusable workflows and third-party Actions to full
+- [x] **GS2-06.4 — Immutable execution pins.** Move reusable workflows and third-party Actions to full
   commit SHAs, define immutable workflow publication, and retain Renovate as the sole automated update path.
+
+  Accepted 2026-09-02. Ordinary PR [240](https://github.com/FS-GG/FS.GG.Coordination/pull/240)
+  closed unmerged after its third repair confirmation; repair-phase implementation PR
+  [241](https://github.com/FS-GG/FS.GG.Coordination/pull/241) then merged as
+  [`b5d00bb1`](https://github.com/FS-GG/FS.GG.Coordination/commit/b5d00bb18070bbd1b57dfe2032b647f7699276c9).
+  Acceptance PR [243](https://github.com/FS-GG/FS.GG.Coordination/pull/243) added the append-only receipt
+  with self-digest `9f2476ebea520372f836b69fc8b1d11300d5299ed1796fc34cc70afead9e2a76`, merged as
+  [`94f28e12`](https://github.com/FS-GG/FS.GG.Coordination/commit/94f28e12e81bfd68dc685230a1ca52a863f0688b),
+  and passed protected-main runs [33638647452](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33638647452)
+  and [33638648190](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33638648190).
+  Provider-evidence PR [245](https://github.com/FS-GG/FS.GG.Coordination/pull/245) retained exact observed
+  SDD currency, merged as
+  [`34fdebc4`](https://github.com/FS-GG/FS.GG.Coordination/commit/34fdebc438c04c81039c767a0d2bbbc13f060c47),
+  and passed protected-main runs [33643133114](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33643133114)
+  and [33643132834](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33643132834).
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-4-immutable-execution-pins.json)
+  and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-4-immutable-execution-pins.md)
+  close typed cycle `cycle-a6b1456aa04fc557`; its guarded update digest is
+  `sha256:2407358a20eb68f8581d2c4c0bfee1eb6d48e8a2034d5e0c369ef71f6b306781`.
 - [ ] **GS2-06.5 — Permission compilation.** Derive App and workflow permissions from registered
   interpreters; separate normal coordination, admin/cutover, and release principals/environments.
 - [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
