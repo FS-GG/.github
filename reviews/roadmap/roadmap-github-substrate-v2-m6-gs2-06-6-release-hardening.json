@@ -1,0 +1,81 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening",
+  "milestone": "M6 — GS2-06.6 release hardening",
+  "critic": "gs2-06-6-projection-critic",
+  "initial_reviewed_commit": "a60c1e30ba284f88b73849176d8cc97ab8d60df1",
+  "scope": ["requirements", "diff", "tests", "architecture", "roadmap-evidence"],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 5,
+  "reviewed_commits": [
+    "a60c1e30ba284f88b73849176d8cc97ab8d60df1",
+    "6da56287bbbe2bbb7b26ffa3924a8a9196dc5e54",
+    "01b196d4d2f41be1058155197c6d9b400365809c",
+    "5e876400371947033fdf99ab0e6d2a93782bbda0",
+    "d0178670c2f8e63d4c214116c8e04f00ba6c4005",
+    "42457a5e215386b9151a4d6670c35a662dc13f80"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.6-SUBJECT-IDENTITY-MAJ-001",
+      "severity": "major",
+      "summary": "The initial compiler did not bind the repository, package ID, or package version to the accepted release subject, so a structurally valid snapshot for another subject could compile.",
+      "evidence": [
+        "Verification: PR #255 initial review https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5516948866 records changes-required at exact head a60c1e30ba284f88b73849176d8cc97ab8d60df1; `git diff a60c1e30ba284f88b73849176d8cc97ab8d60df1..6da56287bbbe2bbb7b26ffa3924a8a9196dc5e54 -- src/FS.GG.Coordination.Qualification.Contracts/GitHubReleaseHardeningQualification.fs eng/validate-github-release-hardening.fsx tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs` shows that the initial compiler lacked repositoryBinding and packageIdentityBinding and that its generated controls did not attack alternate repository, package ID, or version values."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: exact repair 6da56287bbbe2bbb7b26ffa3924a8a9196dc5e54 adds repository and package identity bindings plus alternate-subject negative controls; PR #255 confirmation https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5516993061 records a pass at that exact head after repair round 1."
+      ]
+    },
+    {
+      "id": "GS2-06.6-PROOF-AUTHORITY-MAJ-002",
+      "severity": "major",
+      "summary": "A later exact-head audit found that unknown corpus properties were accepted and five purportedly independent controls delegated their oracle to generated mutations, leaving fail-closed shape and independent-proof requirements materially unproven.",
+      "evidence": [
+        "Verification: PR #255 changes-required confirmation https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5517141834 binds exact head 01b196d4d2f41be1058155197c6d9b400365809c and states that unknown corpus properties were ignored, five safety controls delegated their independent oracle to generated mutations, and evidence was stale; critic succession grant https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5517139697 records that this fresh audit superseded the earlier pass."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `git diff 01b196d4d2f41be1058155197c6d9b400365809c..5e876400371947033fdf99ab0e6d2a93782bbda0` adds exact-property validation at the corpus, feed, recovery, expectations, and independent-case boundaries, five retained shape attacks, and separately named independent fixtures for all 21 controls; final PR #255 confirmation https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5517224429 passes exact repaired head 5e876400371947033fdf99ab0e6d2a93782bbda0 with the unknownCredentialSecret reproduction exiting 1, stable Q3 seal, unit 182/182, architecture 446/446, and SDD 20/20 verification obligations."
+      ]
+    },
+    {
+      "id": "GS2-06.6-PROVIDER-DURABILITY-MAJ-003",
+      "severity": "major",
+      "summary": "Accepted protected main did not retain four required SDD provider artifacts, so the roadmap cycle could not reproduce canonical verification from a clean checkout.",
+      "evidence": [
+        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/258 records that exact accepted merge d0178670c2f8e63d4c214116c8e04f00ba6c4005 lacked readiness/254-release-hardening/analysis.json and artifacts/test-results/254-release-hardening/qualification.trx and that canonical fsgg-sdd 1.0.0 returned blocked/coherent=false with evidence.missingAnalysisPrerequisite; `git show --stat d0178670c2f8e63d4c214116c8e04f00ba6c4005` confirms the acceptance merge added only the receipt, index update, and acceptance tests rather than the declared provider outputs."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: provider repair PR https://github.com/FS-GG/FS.GG.Coordination/pull/259 adds the analysis, qualification TRX, work-model, verify report, and executable durability guard; independent review https://github.com/FS-GG/FS.GG.Coordination/pull/259#issuecomment-5517791401 reports a fresh detached checkout at candidate fc49a925fa7379bba5686d7016c0308e28568005, tracked digests, canonical fsgg-sdd 1.0.0 noChange/coherent=true, analysis 33/33, evidence 10/10 supported and observed, verification 20/20, and missing/untracked/byte-tampered inversions failing the guard.",
+        "Verification: host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/259#issuecomment-5517819023 binds the clean replay and 182/182 unit, 6/6 focused architecture, and 448/448 full architecture results; PR #259 merged as 42457a5e215386b9151a4d6670c35a662dc13f80 and GitHub Actions runs https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695108140 and https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695107570 completed successfully on that protected merge."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: `gh issue view 3165 -R FS-GG/.github --json body` requires checking only GS2-06.6, retaining validated schema-v3 critique and schema-v2 feedback/audit, advancing the status frontier to GS2-06.7, and leaving GS2-06.7 uninspected and unimplemented; `git diff -- docs/github-substrate-v2-roadmap.md` changes the status row, checks only GS2-06.6, appends its immutable evidence chain, and leaves GS2-06.7 unchecked.",
+    "Verification: `gh pr view 255 -R FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup` reports candidate 5e876400371947033fdf99ab0e6d2a93782bbda0 merged as cc4cb1b738b6be18044a8a6c24d34439efe469ec; implementation host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/255#issuecomment-5517287718 binds exact base 84e488f046c624b2789d520cd062bf99d964b3b5, final confirmation, 21 generated and 21 separate independent controls, five shape attacks, unit 182/182, architecture 446/446, evidence 10/10 observed, and verification 20/20.",
+    "Verification: GitHub Actions API reads report protected-main Bootstrap run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33690674962 and CodeQL run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33690674525 completed successfully at implementation merge cc4cb1b738b6be18044a8a6c24d34439efe469ec.",
+    "Verification: `gh pr view 257 -R FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup` reports acceptance candidate eafab3394b2f0464728cde05a226e9ba60269fa5 merged as d0178670c2f8e63d4c214116c8e04f00ba6c4005; exact-head pass https://github.com/FS-GG/FS.GG.Coordination/pull/257#issuecomment-5517508952 and host acceptance https://github.com/FS-GG/FS.GG.Coordination/pull/257#issuecomment-5517550610 bind the three-path acceptance scope and receipt self-digest 517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f.",
+    "Verification: protected-main Bootstrap run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33692742405 and CodeQL run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33692740214 completed successfully at acceptance merge d0178670c2f8e63d4c214116c8e04f00ba6c4005; evidence/github-substrate-v2/accepted/GS2-06.6.json names state accepted, implementation merge cc4cb1b738b6be18044a8a6c24d34439efe469ec, and self-digest 517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f.",
+    "Verification: at exact Coordination protected main 42457a5e215386b9151a4d6670c35a662dc13f80, `git ls-files --error-unmatch readiness/254-release-hardening/analysis.json artifacts/test-results/254-release-hardening/qualification.trx readiness/254-release-hardening/work-model.json readiness/254-release-hardening/verify.json` succeeds and `sha256sum` returns 7cc01dce90044e0b765a77d86feb8fa869441ceeba81b94ed15aa1843307dd80, 892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d, 21cdd50ce4cc4c68ee83798b42dca65331c61e4ef3ef08061c951f39c7ef0a68, and 0c78fccbe4c2a6519b896f214a324dd0dbc1fd4f9f4bc3b7cba5fef7dd09d11b respectively.",
+    "Verification: at exact Coordination protected main 42457a5e215386b9151a4d6670c35a662dc13f80, `PATH=/tmp/fsgg-sdd-cli-1.0.0:$PATH fsgg-sdd verify --root . --work 254-release-hardening --require-observed --dry-run` exits zero under tool 1.0.0 with outcome noChange, coherent=true, analysis implementationReady 33/33, evidenceReady 10/10 supported and observed, verificationReady 20/20, and zero diagnostics or blockers.",
+    "Verification: at exact Coordination protected main 42457a5e215386b9151a4d6670c35a662dc13f80, `dotnet fsi eng/validate-github-release-hardening.fsx -- .` exits zero with GITHUB_RELEASE_HARDENING_OK, 11 stages, 2 feeds, 1 pack, 21 controls, and seal 430ba76d264ccd7a43236e051b8414f231a2b466664428a2f6cb055c8ddd9483; `dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore` passes 182/182 and the filtered GitHubReleaseHardeningArchitectureTests run passes 6/6.",
+    "Verification: review of src/FS.GG.Coordination.Qualification.Contracts/GitHubReleaseHardeningQualification.fs/.fsi and eng/validate-github-release-hardening.fsx at 42457a5e215386b9151a4d6670c35a662dc13f80 shows a pure compiler with no public apply/publish surface; exact ordered protected-environment, OIDC, pack, SBOM, dependency, attestation, dual-feed, immutable-release, and public-download stages; length-framed sealed replay; closed JSON object shapes; and generated plus separately authored negative control inventories.",
+    "Verification: `sha256sum feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md` returns b251d1186e31c6b22246b183547d4c21f75a17a69e70d0befbf943749a4e51d1, matching its audit, and the canonical validate-feedback-state.py command exits zero with 0 material events and the explicit absent-tool reason deduplicated to FS-GG/.github#2366.",
+    "Verification: no finding remains unresolved and no minor follow-up exists; GS2-06.6 is a non-game, offline release-policy qualification and roadmap-projection milestone, so no player journey, uncovered game functionality, or entry-point exception applies."
+  ],
+  "confirmation": {
+    "reviewed_commit": "42457a5e215386b9151a4d6670c35a662dc13f80",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
