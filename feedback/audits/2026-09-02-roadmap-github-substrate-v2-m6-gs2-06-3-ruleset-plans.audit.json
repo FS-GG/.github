@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-3-ruleset-plans.md",
+  "reportSha256": "97827e3ed3187f69f321684b85322192a44488fbb9799f846fc5f4fdb3877a1e",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

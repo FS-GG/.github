@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.2 accepted; GS2-01.9 not applicable; GS2-06.3 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.3 accepted; GS2-01.9 not applicable; GS2-06.4 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -997,8 +997,25 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `7157ad56a4879e48642dbb055b0b35158353cbc020fca9a008ed901446d74d0c`,
   merged at [`3e02166b`](https://github.com/FS-GG/FS.GG.Coordination/commit/3e02166ba6f1ab5ba9e89b72cedeaf56e3286032),
   and passed [protected-main run 33590153931](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33590153931).
-- [ ] **GS2-06.3 — Ruleset plans.** Define branch/tag protection, reviews, conversations, merge methods,
+- [x] **GS2-06.3 — Ruleset plans.** Define branch/tag protection, reviews, conversations, merge methods,
   auto-merge/queue, branch deletion, bypass principals, and expiring exceptions per profile.
+
+  Accepted 2026-09-02. [Implementation PR 234](https://github.com/FS-GG/FS.GG.Coordination/pull/234)
+  merged as protected commit
+  [`d8a284c7`](https://github.com/FS-GG/FS.GG.Coordination/commit/d8a284c7f238ed77d5b0824d866a21b0a3148915).
+  [Acceptance PR 236](https://github.com/FS-GG/FS.GG.Coordination/pull/236) added the append-only receipt
+  with self-digest `eec15747e2e5c1cf0ae91fbf370eb82a3e6ea88d6fe3c0f2f738a556e63e5063`, merged as
+  [`a9ac6c89`](https://github.com/FS-GG/FS.GG.Coordination/commit/a9ac6c891a885ee37ab69967c6a9dbb542e10840),
+  and passed [protected-main run 33613116278](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33613116278).
+  [Provider-evidence repair PR 238](https://github.com/FS-GG/FS.GG.Coordination/pull/238) then merged as
+  [`e25727a8`](https://github.com/FS-GG/FS.GG.Coordination/commit/e25727a89ad0101188da74414669a556059d251e),
+  passed protected-main runs [33616257051](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33616257051)
+  and [33616256028](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33616256028), and emitted typed
+  completion digest `23f3638fb4356d96394fdfbaff975674cd63673a211371e3c0b59903a74794a7`.
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-3-ruleset-plans.json)
+  and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-3-ruleset-plans.md)
+  close typed cycle `cycle-b4037c9a48b9ed22`; its guarded update digest is
+  `sha256:825e01d5c52156f39ca264c8114cc2a0fc5d1c276e550e960ac2207ec646d274`.
 - [ ] **GS2-06.4 — Immutable execution pins.** Move reusable workflows and third-party Actions to full
   commit SHAs, define immutable workflow publication, and retain Renovate as the sole automated update path.
 - [ ] **GS2-06.5 — Permission compilation.** Derive App and workflow permissions from registered

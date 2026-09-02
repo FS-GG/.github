@@ -1,0 +1,40 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-3-ruleset-plans",
+  "milestone": "M6 — GS2-06.3 ruleset plans provider-evidence currency",
+  "critic": "/root/gs2_06_3_provider_critic",
+  "initial_reviewed_commit": "e25727a89ad0101188da74414669a556059d251e",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "pass",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "e25727a89ad0101188da74414669a556059d251e"
+  ],
+  "findings": [],
+  "verification_evidence": [
+    "Verification: `gh pr view 238 --repo FS-GG/FS.GG.Coordination --json state,mergedAt,mergeCommit,headRefOid,files` reported PR #238 merged as `e25727a89ad0101188da74414669a556059d251e` from candidate `933e2b999f55723b1e8543471a2862441465cf31`, with the sole changed path `work/232-ruleset-plans/evidence.yml`; `git rev-parse 933e2b999f55723b1e8543471a2862441465cf31^{tree} e25727a89ad0101188da74414669a556059d251e^{tree}` returned identical tree `460dc1aadd95ea37a03905610e43b0b6f45ac7b7`, and `git diff --exit-code` between those commits exited zero.",
+    "Verification: `sha256sum readiness/232-ruleset-plans/analysis.json artifacts/test-results/232-ruleset-plans/qualification.trx` returned `8b06cff2b282af282db0ace978e819a838ef0ad0b93180e98835723434336825` and `2dc942fe29fdbfa006addd59de5421dca932f2514d826f22484e245863c40d21`, exactly matching the one-file evidence projection at candidate `933e2b999f55723b1e8543471a2862441465cf31`.",
+    "Verification: `/tmp/fsgg-sdd-1.0.0.AU8WOp/fsgg-sdd verify --root . --work 232-ruleset-plans --require-observed --dry-run` at the candidate reported `coherent: true`, `outcome: noChange`, current analysis/work-model/verify generated views, 11/11 observed evidence obligations, 11/11 observed test obligations, and zero blocking, stale, synthetic, invalid, or missing evidence.",
+    "Verification: `dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-restore --filter FullyQualifiedName~GitHubRulesetPlan` passed 20/20 focused tests, covering secure desired targets, merge-queue census gating, replay/seal substitution, stable ordering, bypass authorization, exception boundaries, observe-only disposition, stale/cross-repository refusal, pure architecture, exact unit registration, retained target evidence, Q3 mutation closure, and canonical Quint preservation.",
+    "Verification: `dotnet fsi eng/validate-github-ruleset-plans.fsx -- .` passed the exact Q3 contract with repository `FS-GG/FS.GG.Coordination`, six required checks, merge queue disabled, zero bypasses/exceptions, 26 controls, and seal `f16a8e3cde6e2a6e607e53b4e97c4165e895113aab9353bb1edb95a4fb5ffaea`.",
+    "Verification: `docs/github-substrate-v2-roadmap.md:1000` names branch/tag protection, reviews, conversations, merge methods, auto-merge/queue, branch deletion, bypass principals, and expiring exceptions; `work/232-ruleset-plans/spec.md` FR-001 covers that complete boundary, and `evidence/github-substrate-v2/accepted/GS2-06.3.json` records accepted state with unit contract digest `c469645aeabd48bf3ca4fc9fc7ab4d054fd61869696d9416ca669c88c184a84d` and self-digest `eec15747e2e5c1cf0ae91fbf370eb82a3e6ea88d6fe3c0f2f738a556e63e5063`; the roadmap checkbox remains intentionally pending the host's guarded cycle projection.",
+    "Verification: issue #237 delivery-completion comment `5507710915` records digest `23f3638fb4356d96394fdfbaff975674cd63673a211371e3c0b59903a74794a7`, mergeReachable=true, merge SHA `e25727a89ad0101188da74414669a556059d251e`, zero pending board writes, zero post-merge obligations, and successful protected-main run `33616257051`; `gh run view` independently reported runs `33616257051` and `33616256028` successful at the exact merge SHA."
+  ],
+  "confirmation": {
+    "reviewed_commit": "e25727a89ad0101188da74414669a556059d251e",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
