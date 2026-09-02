@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1 accepted; GS2-01.9 not applicable; GS2-06.2 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.2 accepted; GS2-01.9 not applicable; GS2-06.3 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -985,8 +985,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `0f6a142023f21a266242997ae896e494dfa668e895e308ad73d2d5e01404c042`,
   merged at [`f3a92488`](https://github.com/FS-GG/FS.GG.Coordination/commit/f3a92488d6c15e1a4592686c6f00c375c62b167d),
   and passed [protected-main run 33583686226](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33583686226).
-- [ ] **GS2-06.2 — Required-check census.** Union classic protection and rulesets, classify every check,
+- [x] **GS2-06.2 — Required-check census.** Union classic protection and rulesets, classify every check,
   prove unconditional PR/merge-group production, and reduce the external contract to stable aggregates.
+
+  Accepted 2026-09-02. [Implementation PR 229](https://github.com/FS-GG/FS.GG.Coordination/pull/229)
+  merged as protected commit
+  [`35f9398f`](https://github.com/FS-GG/FS.GG.Coordination/commit/35f9398f528c033eaebed2ac2499ee2e865963f8),
+  whose [protected-main run 33588758947](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33588758947)
+  passed. [Acceptance PR 231](https://github.com/FS-GG/FS.GG.Coordination/pull/231) added the append-only
+  [GS2-06.2 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/3e02166ba6f1ab5ba9e89b72cedeaf56e3286032/evidence/github-substrate-v2/accepted/GS2-06.2.json)
+  with self-digest `7157ad56a4879e48642dbb055b0b35158353cbc020fca9a008ed901446d74d0c`,
+  merged at [`3e02166b`](https://github.com/FS-GG/FS.GG.Coordination/commit/3e02166ba6f1ab5ba9e89b72cedeaf56e3286032),
+  and passed [protected-main run 33590153931](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33590153931).
 - [ ] **GS2-06.3 — Ruleset plans.** Define branch/tag protection, reviews, conversations, merge methods,
   auto-merge/queue, branch deletion, bypass principals, and expiring exceptions per profile.
 - [ ] **GS2-06.4 — Immutable execution pins.** Move reusable workflows and third-party Actions to full
