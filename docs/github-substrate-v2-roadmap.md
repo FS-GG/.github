@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.4 accepted; GS2-01.9 not applicable; GS2-06.5 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.5 accepted; GS2-01.9 not applicable; GS2-06.6 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1037,8 +1037,24 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-4-immutable-execution-pins.md)
   close typed cycle `cycle-a6b1456aa04fc557`; its guarded update digest is
   `sha256:2407358a20eb68f8581d2c4c0bfee1eb6d48e8a2034d5e0c369ef71f6b306781`.
-- [ ] **GS2-06.5 — Permission compilation.** Derive App and workflow permissions from registered
+- [x] **GS2-06.5 — Permission compilation.** Derive App and workflow permissions from registered
   interpreters; separate normal coordination, admin/cutover, and release principals/environments.
+
+  Accepted 2026-09-02. [Implementation PR 247](https://github.com/FS-GG/FS.GG.Coordination/pull/247)
+  merged exact reviewed candidate `88f515d083e8bf6de8f8a7da3de8dc7731e8af24` as
+  [`b6845fbd`](https://github.com/FS-GG/FS.GG.Coordination/commit/b6845fbdd80344de8346d33f61c968f87ed80e3b),
+  with protected-main [CodeQL run 33656169897](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33656169897)
+  and [Bootstrap run 33656170405](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33656170405)
+  successful. [Acceptance PR 249](https://github.com/FS-GG/FS.GG.Coordination/pull/249) added the
+  append-only [GS2-06.5 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/e1ae428d916f61e5336d6996cd21f669943561e4/evidence/github-substrate-v2/accepted/GS2-06.5.json)
+  with self-digest `9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f`,
+  merged as [`e1ae428d`](https://github.com/FS-GG/FS.GG.Coordination/commit/e1ae428d916f61e5336d6996cd21f669943561e4),
+  and passed protected-main [Bootstrap run 33670195315](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33670195315)
+  and [CodeQL run 33670194486](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33670194486).
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.json)
+  and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md)
+  close typed cycle `cycle-f7201370a11c6a38`; its guarded update digest is
+  `sha256:76aad7ef8088dfdbfc8651568dbaa5a2cba749e13d49c13c412949be846d0381`.
 - [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
   environments, immutable releases/tags, one pack, SBOMs, attestations, dependency submission/review, and
   public-download verification.
