@@ -1,0 +1,55 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation",
+  "milestone": "M6 — GS2-06.5 permission compilation",
+  "critic": "snipe-ca76; kite-2f5e",
+  "initial_reviewed_commit": "03781747d069a036b7aeaf4302882f84306aaba7",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "03781747d069a036b7aeaf4302882f84306aaba7",
+    "88f515d083e8bf6de8f8a7da3de8dc7731e8af24"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.5-MAJ-001",
+      "severity": "major",
+      "summary": "The permission-compilation Q3 gate was not bound to the canonical generated permission producer, so producer divergence remained green.",
+      "evidence": [
+        "Verification: at exact initial head 03781747d069a036b7aeaf4302882f84306aaba7, an isolated git archive under /tmp/gs2-06-5-critic.qFfNRl replaced the six required permissions in src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/permission-census.json with attacker-invented-permission; `dotnet fsi eng/validate-github-permission-compilation.fsx -- <mutated-root>` exited 0 and printed the unchanged 18-control success and seal 08313ec6564c27657baa7aa192e78a9d0e4cae8e86745f52c3c6c5c3b76bd4b8.",
+        "Verification: initial structured review comment https://github.com/FS-GG/FS.GG.Coordination/pull/247#issuecomment-5512665801 records changes-required at the exact initial head; durable completion comment 5512674976 advances the typed chain to implementer repair."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repaired exact head 88f515d083e8bf6de8f8a7da3de8dc7731e8af24 adds the permission-census path, SHA-256, non-empty required families, canonical identity checks, bidirectional exact producer agreement, manifest retention, and an architecture mutation test; `git diff 03781747..88f515d -- eng/validate-github-permission-compilation.fsx evidence/github-substrate-v2/gs2-06-5/corpus.json src/FS.GG.Coordination.Qualification.Contracts/GitHubPermissionCompilationQualification.fs tests/FS.GG.Coordination.ArchitectureTests/GitHubPermissionCompilationArchitectureTests.fs`.",
+        "Verification: an isolated archive at /tmp/gs2-06-5-round1.DoMdd3 passed baseline Q3 with 19 controls and seal 9c163a82c561fab7deeda900be63567f0d87e616e6449a8692d430e05f1db265, then the original attacker-invented-permission mutation exited 1 with CanonicalPermissionCensusMismatch.",
+        "Verification: confirmation comment https://github.com/FS-GG/FS.GG.Coordination/pull/247#issuecomment-5512891863 records pass at exact repaired head under fresh successor critic kite-2f5e; durable wait completion comment 5512896871 yields typed state passedAwaitingChecks."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: `dotnet build FS.GG.Coordination.sln -c Release --nologo -warnaserror` succeeded with 0 warnings and 0 errors at repaired head 88f515d083e8bf6de8f8a7da3de8dc7731e8af24.",
+    "Verification: full repaired-head unit and architecture commands passed 175/175 and 439/439 respectively.",
+    "Verification: repaired-head roadmap-work candidate manifest SHA-256 is 3ae17a236d1827c001ef0ee4ed7c22d8f2212498e09effe07747d127baab10f6, binds candidate 88f515d083e8bf6de8f8a7da3de8dc7731e8af24 and retained permission-census SHA-256 744455ecc2b4bb8dac96819eb93c1082696c92fabadab9bf58c25da3fdfc99ec; its gate result exits 0 and stops at the GS2-06.5 boundary.",
+    "Verification: `fsgg-sdd verify --work 246-permission-compilation --require-observed --dry-run` and `fsgg-sdd ship --work 246-permission-compilation --require-observed --dry-run` both reported coherent=true and outcome=noChange; verification retained 5/5 supported observed declarations, 10/10 ready obligations, and zero synthetic, stale, missing, invalid, or blocking evidence.",
+    "Verification: this is a non-game offline qualification milestone, so game_functionality=false and no player journey is required."
+  ],
+  "confirmation": {
+    "reviewed_commit": "88f515d083e8bf6de8f8a7da3de8dc7731e8af24",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
