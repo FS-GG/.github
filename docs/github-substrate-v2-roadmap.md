@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.6, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.7 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, GS2-05.1–GS2-05.7, and GS2-05.9 accepted; GS2-01.9 not applicable; GS2-05.8 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -941,8 +941,18 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   with self-digest `24de35789ad18aff1409e873e9aa63edc2d2cff313d8b63f34168c70f7494368`,
   merged at [`44cc1f7c`](https://github.com/FS-GG/FS.GG.Coordination/commit/44cc1f7c19b123e6dc74347649cb383d514aa80f),
   and passed [protected-main run 33566409238](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33566409238).
-- [ ] **GS2-05.7 — Implement lifecycle projection.** Derive Status from scheduling intent, holds,
+- [x] **GS2-05.7 — Implement lifecycle projection.** Derive Status from scheduling intent, holds,
   dependencies, claim, PR/review, delivery, and issue state; no operator writes derived state as intent.
+
+  Accepted 2026-09-01. [Implementation PR 217](https://github.com/FS-GG/FS.GG.Coordination/pull/217)
+  merged as protected commit
+  [`7dac2aac`](https://github.com/FS-GG/FS.GG.Coordination/commit/7dac2aac18cd9be7668eb27cb5e22d51461519fb),
+  whose [protected-main run 33571327530](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33571327530)
+  passed. [Acceptance PR 219](https://github.com/FS-GG/FS.GG.Coordination/pull/219) added the append-only
+  [GS2-05.7 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/4f33cc536b2becc4faa8e356e51fb370ef929c51/evidence/github-substrate-v2/accepted/GS2-05.7.json)
+  with self-digest `77ba4ae9ddf350ec93afe7021b320474c5f04ed5f7a255fa2136a3f15af5af12`,
+  merged at [`4f33cc53`](https://github.com/FS-GG/FS.GG.Coordination/commit/4f33cc536b2becc4faa8e356e51fb370ef929c51),
+  and passed [protected-main run 33572673424](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33572673424).
 - [ ] **GS2-05.8 — Shadow the complete live fleet.** Compare v1 and v2 read-only decisions, record every
   divergence, and reach zero unexplained divergence without granting v2 mutation permission.
 
