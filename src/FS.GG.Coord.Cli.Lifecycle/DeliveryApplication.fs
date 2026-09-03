@@ -523,6 +523,29 @@ module DeliveryApplication =
             | None, _ -> Error "delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
             | _, None -> Error "delivery effective base could not be re-read; GitHub merge was not attempted"
 
+    let guardedLandingWithMergePolicy
+        freshnessToken
+        actionKey
+        facts
+        currentClaimGeneration
+        currentHead
+        currentBase
+        repositoryPolicy
+        merge
+        =
+        match FS.GG.Coord.GitHub.OperationalGraphQl.selectMergeMethod repositoryPolicy with
+        | FS.GG.Coord.GitHub.OperationalGraphQl.NoAllowedMethod ->
+            Error "the target repository permits no pull-request merge method; GitHub merge was not attempted"
+        | FS.GG.Coord.GitHub.OperationalGraphQl.Selected method ->
+            guardedLanding
+                freshnessToken
+                actionKey
+                facts
+                currentClaimGeneration
+                currentHead
+                currentBase
+                (fun () -> merge method)
+
     let private snapshot (raw: string) : Result<Delivery.Snapshot * Delivery.PostMergeVerification, string> =
         try
             use document = JsonDocument.Parse raw

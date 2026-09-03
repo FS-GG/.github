@@ -111,6 +111,51 @@ let ``operational repository policy never inverts mixed data and errors`` () =
     | other -> failwith $"expected errors-first refusal, got %A{other}"
 
 [<Fact>]
+let ``#3091 repository policy observes every merge capability and selects deterministically`` () =
+    let body = """{"data":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":true},"rateLimit":{"cost":1,"remaining":99}}}"""
+    let transport = Fake.Recorder(fun _ -> response body)
+
+    match OperationalGraphQl.repositoryPolicy transport "FS-GG" ".github" with
+    | Ok policy ->
+        Assert.True(policy.MergeCommitAllowed)
+        Assert.True(policy.SquashMergeAllowed)
+        Assert.True(policy.RebaseMergeAllowed)
+        Assert.Equal(OperationalGraphQl.Selected OperationalGraphQl.Squash, OperationalGraphQl.selectMergeMethod policy)
+    | other -> failwith $"expected complete repository policy, got %A{other}"
+
+[<Theory>]
+[<InlineData(false, false, true, "rebase")>]
+[<InlineData(true, false, false, "merge")>]
+[<InlineData(true, false, true, "rebase")>]
+[<InlineData(false, false, false, "none")>]
+let ``#3091 merge selection covers sole fallback and no-method policy``
+    (mergeAllowed: bool, squashAllowed: bool, rebaseAllowed: bool, expected: string) =
+    let policy : OperationalGraphQl.RepositoryPolicy =
+        { IssueCreationPolicy = "COLLABORATORS_ONLY"
+          HasIssuesEnabled = true
+          MergeCommitAllowed = mergeAllowed
+          SquashMergeAllowed = squashAllowed
+          RebaseMergeAllowed = rebaseAllowed }
+
+    let actual =
+        match OperationalGraphQl.selectMergeMethod policy with
+        | OperationalGraphQl.Selected OperationalGraphQl.Squash -> "squash"
+        | OperationalGraphQl.Selected OperationalGraphQl.Rebase -> "rebase"
+        | OperationalGraphQl.Selected OperationalGraphQl.Merge -> "merge"
+        | OperationalGraphQl.NoAllowedMethod -> "none"
+
+    Assert.Equal(expected, actual)
+
+[<Fact>]
+let ``#3091 incomplete merge policy fails closed`` () =
+    let body = """{"data":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":false,"squashMergeAllowed":true},"rateLimit":{"cost":1,"remaining":99}}}"""
+    let transport = Fake.Recorder(fun _ -> response body)
+
+    match OperationalGraphQl.repositoryPolicy transport "FS-GG" ".github" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
+    | other -> failwith $"expected incomplete-policy refusal, got %A{other}"
+
+[<Fact>]
 let ``operational archive mutation preserves partial alias accounting`` () =
     let body = """{"data":{"a0":{"item":{"id":"one"}},"a1":null},"errors":[{"message":"denied","path":["a1"]}]}"""
     let transport = Fake.Recorder(fun _ -> response body)

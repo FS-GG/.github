@@ -539,12 +539,25 @@ module LiveHandlers =
                                         | _ -> None)
                                 match currentClaimGeneration,
                                       Reads.prHeadSha ctx.Transport target.Owner target.Repo pr.Value,
-                                      Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr.Value with
-                                | Error error, _, _
-                                | _, Error error, _
-                                | _, _, Error error -> fail error
-                                | Ok generation, Ok currentHead, Ok currentBase ->
-                                    match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts generation (Some currentHead) (Some currentBase) (fun () -> Writes.mergeAtHead ctx.Transport target pr.Value head) with
+                                      Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr.Value,
+                                      OperationalGraphQl.repositoryPolicy ctx.Transport target.Owner target.Repo with
+                                | Error error, _, _, _
+                                | _, Error error, _, _
+                                | _, _, Error error, _
+                                | _, _, _, Error error -> fail error
+                                | Ok generation, Ok currentHead, Ok currentBase, Ok repositoryPolicy ->
+                                    match
+                                        DeliveryApplication.guardedLandingWithMergePolicy
+                                            transition.FreshnessToken
+                                            transition.ActionKey
+                                            facts
+                                            generation
+                                            (Some currentHead)
+                                            (Some currentBase)
+                                            repositoryPolicy
+                                            (fun mergeMethod ->
+                                                Writes.mergeAtHead ctx.Transport target pr.Value head mergeMethod)
+                                    with
                                     | Error reason ->
                                         eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
                                         ExitNoVerdict

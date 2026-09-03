@@ -6,9 +6,21 @@ module OperationalGraphQl =
     open Errors
     open Transport
 
+    type MergeMethod =
+        | Squash
+        | Rebase
+        | Merge
+
+    type MergeMethodDecision =
+        | Selected of MergeMethod
+        | NoAllowedMethod
+
     type RepositoryPolicy =
         { IssueCreationPolicy: string
-          HasIssuesEnabled: bool }
+          HasIssuesEnabled: bool
+          MergeCommitAllowed: bool
+          SquashMergeAllowed: bool
+          RebaseMergeAllowed: bool }
 
     type ArchiveRow =
         { ItemId: string
@@ -89,13 +101,25 @@ module OperationalGraphQl =
 
     let repositoryPolicy (transport: IGitHubTransport) (owner: string) (name: string) =
         let subject = $"%s{owner}/%s{name} repository policy"
-        let document = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issueCreationPolicy hasIssuesEnabled} rateLimit{cost remaining}}"
+        let document = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issueCreationPolicy hasIssuesEnabled mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed} rateLimit{cost remaining}}"
         GraphQl.read transport (request subject document [ "owner", VString owner; "name", VString name ]) (fun data ->
             match requiredObject subject "repository" data with
             | Error error -> Error error
             | Ok repo ->
-                try Ok { IssueCreationPolicy = repo.GetProperty("issueCreationPolicy").GetString(); HasIssuesEnabled = repo.GetProperty("hasIssuesEnabled").GetBoolean() }
+                try
+                    Ok
+                        { IssueCreationPolicy = repo.GetProperty("issueCreationPolicy").GetString()
+                          HasIssuesEnabled = repo.GetProperty("hasIssuesEnabled").GetBoolean()
+                          MergeCommitAllowed = repo.GetProperty("mergeCommitAllowed").GetBoolean()
+                          SquashMergeAllowed = repo.GetProperty("squashMergeAllowed").GetBoolean()
+                          RebaseMergeAllowed = repo.GetProperty("rebaseMergeAllowed").GetBoolean() }
                 with _ -> malformed subject "repository policy fields were incomplete")
+
+    let selectMergeMethod policy =
+        if policy.SquashMergeAllowed then Selected Squash
+        elif policy.RebaseMergeAllowed then Selected Rebase
+        elif policy.MergeCommitAllowed then Selected Merge
+        else NoAllowedMethod
 
     let meterRemaining (transport: IGitHubTransport) =
         let subject = "GraphQL rate meter"

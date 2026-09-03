@@ -6,9 +6,21 @@ module OperationalGraphQl =
     open Errors
     open Transport
 
+    type MergeMethod =
+        | Squash
+        | Rebase
+        | Merge
+
+    type MergeMethodDecision =
+        | Selected of MergeMethod
+        | NoAllowedMethod
+
     type RepositoryPolicy =
         { IssueCreationPolicy: string
-          HasIssuesEnabled: bool }
+          HasIssuesEnabled: bool
+          MergeCommitAllowed: bool
+          SquashMergeAllowed: bool
+          RebaseMergeAllowed: bool }
 
     type ArchiveRow =
         { ItemId: string
@@ -33,6 +45,7 @@ module OperationalGraphQl =
     val projectVisibility: IGitHubTransport -> owner: string -> title: string -> IoResult<bool option>
     val projectId: IGitHubTransport -> owner: string -> number: int -> IoResult<string>
     val repositoryPolicy: IGitHubTransport -> owner: string -> name: string -> IoResult<RepositoryPolicy>
+    val selectMergeMethod: RepositoryPolicy -> MergeMethodDecision
     val meterRemaining: IGitHubTransport -> IoResult<int>
     val archiveScan: IGitHubTransport -> projectId: string -> IoResult<ArchiveScan>
     val archiveItems: IGitHubTransport -> projectId: string -> itemIds: string list -> IoResult<unit>

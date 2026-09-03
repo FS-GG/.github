@@ -9096,7 +9096,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | true, value when value > 0 -> result (OperationalGraphQl.projectId ctx.Transport owner value) (fun id -> {| id = id |})
             | _ -> eprint "fsgg-coord-engine: graphql project-id requires a positive integer project number"; ExitError
         | [ "repository-policy"; owner; name ] ->
-            result (OperationalGraphQl.repositoryPolicy ctx.Transport owner name) (fun policy -> {| issueCreationPolicy = policy.IssueCreationPolicy; hasIssuesEnabled = policy.HasIssuesEnabled |})
+            result (OperationalGraphQl.repositoryPolicy ctx.Transport owner name) (fun policy ->
+                {| issueCreationPolicy = policy.IssueCreationPolicy
+                   hasIssuesEnabled = policy.HasIssuesEnabled
+                   mergeCommitAllowed = policy.MergeCommitAllowed
+                   squashMergeAllowed = policy.SquashMergeAllowed
+                   rebaseMergeAllowed = policy.RebaseMergeAllowed |})
         | [ "meter" ] ->
             result (OperationalGraphQl.meterRemaining ctx.Transport) (fun remaining -> {| remaining = remaining |})
         | [ "archive-scan"; projectId ] ->

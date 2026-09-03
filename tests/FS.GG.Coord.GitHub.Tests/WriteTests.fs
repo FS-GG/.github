@@ -100,19 +100,41 @@ let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
         Assert.Equal("PUT", request.Method)
         Assert.Equal("repos/FS-GG/FS.GG.SDD/pulls/99/merge", request.Path)
         match request.Body with
-        | Json body -> Assert.Contains("head-a", body)
+        | Json body ->
+            Assert.Contains("head-a", body)
+            Assert.Contains("\"merge_method\":\"squash\"", body)
         | _ -> failwith "a guarded merge must carry the inspected head SHA"
         ok """{"merged":true}""")
 
-    match Writes.mergeAtHead recorder aRef 99 "head-a" with
+    match Writes.mergeAtHead recorder aRef 99 "head-a" OperationalGraphQl.Squash with
     | Ok true -> Assert.Equal(1, recorder.RestCalls)
     | outcome -> failwithf "expected a guarded merge, got %A" outcome
+
+[<Theory>]
+[<InlineData("squash")>]
+[<InlineData("rebase")>]
+[<InlineData("merge")>]
+let ``#3091 guarded merge serializes the selected repository method`` (wireMethod: string) =
+    let selected =
+        match wireMethod with
+        | "squash" -> OperationalGraphQl.Squash
+        | "rebase" -> OperationalGraphQl.Rebase
+        | _ -> OperationalGraphQl.Merge
+
+    let recorder = Fake.Recorder(fun request ->
+        match request.Body with
+        | Json body -> Assert.Contains($"\"merge_method\":\"%s{wireMethod}\"", body)
+        | _ -> failwith "a guarded merge must carry a JSON body"
+        ok """{"merged":true}""")
+
+    Assert.Equal(Ok true, Writes.mergeAtHead recorder aRef 99 "head-a" selected)
+    Assert.Equal(1, recorder.RestCalls)
 
 [<Fact>]
 let ``#2131 a GitHub head mismatch is a refused guarded merge, not a green write`` () =
     let recorder = Fake.Recorder(fun _ -> ok """{"merged":false,"message":"Head branch was modified"}""")
 
-    match Writes.mergeAtHead recorder aRef 99 "head-a" with
+    match Writes.mergeAtHead recorder aRef 99 "head-a" OperationalGraphQl.Squash with
     | Ok false -> ()
     | outcome -> failwithf "expected a refused guarded merge, got %A" outcome
 
