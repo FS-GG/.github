@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.6 accepted; GS2-01.9 not applicable; GS2-06.7 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.7 accepted; GS2-01.9 not applicable; GS2-06.8 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1089,7 +1089,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md)
   close typed cycle `cycle-ff8060a5a0d68217`; its guarded update digest is
   `sha256:400c32cabeab23c29e42d970ec55c8e826f1656166be4317bfc8e3307fcfd94b`.
-- [ ] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
+- [x] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
   with typed inventory, composite steps, reusable job contracts, and stable aggregate outputs. Compile a
   versioned dependency graph from changed subjects and non-file inputs to the smallest sound transitive
   closure of build, test, policy, coordination, packaging, and release obligations; policy may still mark
@@ -1102,7 +1102,30 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   minutes, queue time, and p50/p95 completion time, and prove the selector meets them without a missed
   obligation. Keep a small unconditional core suite, run scheduled full-suite sentinels that compare the
   selected closure with actual failures, and disable selection fleet-wide after any missed obligation.
-  Record every removed workflow and obligation.
+  Record every removed workflow and obligation. Registration [issue 260](https://github.com/FS-GG/FS.GG.Coordination/issues/260)
+  and [PR 261](https://github.com/FS-GG/FS.GG.Coordination/pull/261) merged the exact unit/Q3/Q7 contract as
+  [`ff65faa6`](https://github.com/FS-GG/FS.GG.Coordination/commit/ff65faa6697ea5835de72c1e6fa1b53af0a883e3).
+  Implementation [issue 262](https://github.com/FS-GG/FS.GG.Coordination/issues/262) and
+  [PR 263](https://github.com/FS-GG/FS.GG.Coordination/pull/263) qualified the pure selector after review
+  rejected a root-classification survivor; repaired candidate `6720277c` passed Q3's 23 controls and Q7's
+  12 controls with seal `43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab`, then
+  squash-merged as [`3277a7a5`](https://github.com/FS-GG/FS.GG.Coordination/commit/3277a7a581f9b75001a851e0b614de3c1eadf812).
+  Review confirmation `5519081717`, host acceptance `5519120654`, delivery `5519145418`, protected
+  [Bootstrap 33705575802](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33705575802), and
+  [CodeQL 33705575434](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33705575434) bind that transport.
+  Acceptance [issue 264](https://github.com/FS-GG/FS.GG.Coordination/issues/264) and
+  [PR 265](https://github.com/FS-GG/FS.GG.Coordination/pull/265) merged receipt
+  `c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036` as
+  [`81574bc8`](https://github.com/FS-GG/FS.GG.Coordination/commit/81574bc8d12d46d08d60448b96db641fc3cb0de9),
+  with protected [Bootstrap 33707365752](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33707365752)
+  and [Push-on-main 33707365512](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33707365512) green.
+  The first clean-checkout provider replay failed closed on ambient SDD 1.5.0 views; linked
+  [issue 266](https://github.com/FS-GG/FS.GG.Coordination/issues/266) and independently reviewed
+  [PR 267](https://github.com/FS-GG/FS.GG.Coordination/pull/267) restored canonical 1.0.0 fixed-point evidence,
+  squash-merged as [`57305e54`](https://github.com/FS-GG/FS.GG.Coordination/commit/57305e540267f3f4696ba5a6cdfc84361de577d3),
+  and passed protected [Bootstrap 33708922854](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33708922854)
+  and [Push-on-main 33708922489](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33708922489).
+  The validated schema-v3 critique and schema-v2 feedback/audit close typed cycle `<pending>`.
 - [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
 
