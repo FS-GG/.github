@@ -1,7 +1,7 @@
 {
   "auditSchema": 1,
   "report": "feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md",
-  "reportSha256": "51249be7da2fa95163cc8fd433ae2292be59b6d74e357f387a4047d5a47e1758",
+  "reportSha256": "9f384e10d70e157a70f22105135bf67ebff19ac4060e882c96686f81b28a7982",
   "criticMode": "zero-event-contract-validation",
   "criticPromptVersion": "actionability-v1",
   "findings": []

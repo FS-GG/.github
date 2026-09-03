@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.6 accepted; GS2-01.9 not applicable; GS2-06.7 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.7 accepted; GS2-01.9 not applicable; GS2-06.8 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1089,7 +1089,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md)
   close typed cycle `cycle-ff8060a5a0d68217`; its guarded update digest is
   `sha256:400c32cabeab23c29e42d970ec55c8e826f1656166be4317bfc8e3307fcfd94b`.
-- [ ] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
+- [x] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
   with typed inventory, composite steps, reusable job contracts, and stable aggregate outputs. Compile a
   versioned dependency graph from changed subjects and non-file inputs to the smallest sound transitive
   closure of build, test, policy, coordination, packaging, and release obligations; policy may still mark
@@ -1103,6 +1103,53 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   obligation. Keep a small unconditional core suite, run scheduled full-suite sentinels that compare the
   selected closure with actual failures, and disable selection fleet-wide after any missed obligation.
   Record every removed workflow and obligation.
+
+  Accepted 2026-09-03. Registration [issue 260](https://github.com/FS-GG/FS.GG.Coordination/issues/260)
+  and [PR 261](https://github.com/FS-GG/FS.GG.Coordination/pull/261) merged as
+  [`ff65faa6`](https://github.com/FS-GG/FS.GG.Coordination/commit/ff65faa6697ea5835de72c1e6fa1b53af0a883e3).
+  Implementation [issue 262](https://github.com/FS-GG/FS.GG.Coordination/issues/262) and
+  [PR 263](https://github.com/FS-GG/FS.GG.Coordination/pull/263) merged as
+  [`3277a7a5`](https://github.com/FS-GG/FS.GG.Coordination/commit/3277a7a581f9b75001a851e0b614de3c1eadf812);
+  acceptance [issue 264](https://github.com/FS-GG/FS.GG.Coordination/issues/264) and
+  [PR 265](https://github.com/FS-GG/FS.GG.Coordination/pull/265) merged as
+  [`81574bc8`](https://github.com/FS-GG/FS.GG.Coordination/commit/81574bc8d12d46d08d60448b96db641fc3cb0de9)
+  with receipt self-digest `c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036`.
+  Clean-checkout provider repair [#266/#267](https://github.com/FS-GG/FS.GG.Coordination/pull/267)
+  merged as [`57305e54`](https://github.com/FS-GG/FS.GG.Coordination/commit/57305e540267f3f4696ba5a6cdfc84361de577d3).
+
+  Independent critique then held the projection for three substantive repair layers. Runtime selector,
+  workflow, aggregate, sentinel, and measured fleet-provenance repair
+  [#268/#269](https://github.com/FS-GG/FS.GG.Coordination/pull/269) merged as
+  [`286bde7a`](https://github.com/FS-GG/FS.GG.Coordination/commit/286bde7afd607ac8e62a4ca71f6f82d363c052b4),
+  followed by append-only receipt [#270/#271](https://github.com/FS-GG/FS.GG.Coordination/pull/271)
+  at [`6d3b7662`](https://github.com/FS-GG/FS.GG.Coordination/commit/6d3b7662ac4d9474a9976ac093ec910f55fb6087).
+  Current-authority repair [#272/#273](https://github.com/FS-GG/FS.GG.Coordination/pull/273) merged as
+  [`588e1a4b`](https://github.com/FS-GG/FS.GG.Coordination/commit/588e1a4bcceeef1cc5a110c924aa52636f263b07),
+  followed by receipt [#274/#275](https://github.com/FS-GG/FS.GG.Coordination/pull/275) at
+  [`1dd4f111`](https://github.com/FS-GG/FS.GG.Coordination/commit/1dd4f111fc80251e1e6107fbff1e5c4c73667762).
+  Durable authority-v2 repair [#276/#277](https://github.com/FS-GG/FS.GG.Coordination/pull/277) merged as
+  [`48a3880c`](https://github.com/FS-GG/FS.GG.Coordination/commit/48a3880c695111df360fbe0efd8bf35071ce8194),
+  and its separately reviewed receipt [#278/#279](https://github.com/FS-GG/FS.GG.Coordination/pull/279)
+  advanced protected main to
+  [`6c0c75ab`](https://github.com/FS-GG/FS.GG.Coordination/commit/6c0c75ab9b355e9e4e91b350711b7ab257755ff5).
+
+  Protected runs [33738452137](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33738452137)
+  and [33738452009](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33738452009) passed. A fresh
+  current-main scheduled sentinel after that receipt rollover passed 189 unit and 468 architecture tests,
+  Q3's 23 controls, Q7's 12 controls over ten repositories, package and release checks; decision
+  `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a` records full suite passed,
+  no missed obligations, selection eligible, and no production mutation. Receipt
+  `repair-GS2-06.7-276` has self-digest
+  `d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; prior receipts remain
+  byte-identical. Canonical FS.GG.SDD.Cli 1.0.0 independently returned `noChange`, `coherent=true`, and
+  zero diagnostics from a clean checkout of final protected main.
+
+  Roadmap projection [issue 3168](https://github.com/FS-GG/.github/issues/3168) binds the final exact
+  four-path ledger update. The validated
+  [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.json)
+  and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md)
+  close typed cycle `cycle-a0cceecae4469bf3`; its guarded update digest is
+  `sha256:33d035ca6a2eda90579b30cb05bae62ac838f4350ab98359b71fe881226bf84e`.
 - [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
 

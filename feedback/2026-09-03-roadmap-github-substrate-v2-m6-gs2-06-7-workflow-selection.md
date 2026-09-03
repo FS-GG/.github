@@ -5,7 +5,7 @@ workspace: FS.GG.Coordination
 cycle: roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection
 lane: github-substrate-v2
 toolVersion: n/a
-commit: 6d3b7662ac4d9474a9976ac093ec910f55fb6087
+commit: 6c0c75ab9b355e9e4e91b350711b7ab257755ff5
 ---
 
 ## §1 Provenance and confidence
@@ -98,6 +98,50 @@ the original receipt, and the repair receipt. Canonical FS.GG.SDD.Cli 1.0.0 retu
 analysis `75cad913`, work model `5d4a3f00`, verification `1a8b8aee`, unit TRX `a2746a37`, and architecture
 TRX `13648d7f`.
 
+The next same-critic pass found that the sentinel at protected `6d3b7662` supplied retained base and settings
+as their own current authorities. Issue #272 and PR #273 replaced that stale self-comparison with an exact
+checkout/settings authority proof. Candidate `0705405ff76eaf5cf34b627017a40240396616f9` passed successor review
+`5521926908` (digest `604e7c479baee9985e7d62df89bd3ed4732b079bd41ca118bc3a3120a6daaa54`)
+and host acceptance `5521933056`, then squash-merged as
+`588e1a4bcceeef1cc5a110c924aa52636f263b07`. Protected Bootstrap `33726702726` and CodeQL
+`33726701922` passed. Issue #274 and PR #275 appended receipt `repair-GS2-06.7-272`; candidate
+`2cccbafbff064eb0c60734ee975296c06da6cbb9` passed review `5522299239`, then merged as
+`1dd4f111fc80251e1e6107fbff1e5c4c73667762`. Its receipt file SHA-256 is
+`fa0d1e78ac9528d1793d43e850bfc5479628ee242f0407c49d65d81cc74063da` and self-digest is
+`e7d660e32f8f94762f9556ddf3552f343eb1fea6d4d53e3258b79b7387e4e3bf`; protected runs
+`33729339426` and `33729338755` passed.
+
+That repair still depended on a direct-child Git distance and therefore expired as soon as its append-only
+receipt advanced protected main. Issue #276 and PR #277 replaced distance-one freshness with authority v2:
+reviewed inventory, graph, and settings remain content-bound, while exact run identity comes from the live
+event and `GITHUB_SHA`. Candidate `45b2e994e2d49df1700f03e8051918ae3ac4b4f2` passed independent review
+`5523013563` (digest `26055bbd0438ba2b40482592b18b413c2975ecae033bc683bb88c3f25852a799`)
+and host acceptance `5523059801` (digest
+`317751fcbef4fcf86247c0add1bc2778239170fb5b14b2f0aa4f38f46918b549`), then squash-merged as
+`48a3880c695111df360fbe0efd8bf35071ce8194`. Issue #278 and PR #279 separately appended
+`repair-GS2-06.7-276`; exact head `e8be64c02369942fc6efd58844be60d7214d021d` passed review `5523497146`
+(digest `df42f3162f4681f2ea45cc56ef6616f2d746e5ce64f39ee0de125e24f205aacd`) and host acceptance
+`5523513052` (digest `179cfe8088aad422e7baf360bb3d11439c7dbf2f6bbd2cad670d692deb5d8685`),
+then squash-merged as final protected main `6c0c75ab9b355e9e4e91b350711b7ab257755ff5`. Protected Bootstrap
+`33738452137` and CodeQL `33738452009` passed. The new receipt file SHA-256 is
+`3a2d42612f3480569e8a0f0ddc1a908456b12f3a1b456b4278b784d45dc6e5af` and self-digest is
+`d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; all earlier receipts remained
+byte-identical.
+
+A fresh detached invocation on that receipt-advanced protected head ran the real scheduled sentinel through
+189/189 unit tests, 468/468 architecture tests, dependency/security, Q3's 23 controls, Q7's 12 controls over
+ten repositories, package smoke, and release hardening. Authority v2 bound inventory base `6d3b7662`, current
+and event revision `6c0c75ab`, and no queued head; decision SHA-256
+`67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a` records full suite passed, no
+missed obligations, selection eligible, and no production mutation. A separate final isolated checkout with
+FS.GG.SDD.Cli exactly 1.0.0 returned `noChange`, `coherent=true`, `verificationReady`, and zero diagnostics
+without changing Git. Final tracked hashes are analysis `2dc4c5c43ee8430303a22ceb38c3f33b2bba0d11016b8b5f90d6ada6edf3c83d`,
+work model `f22fff614e7d8ee1e7fd024f9f8620068d02e1c13d771ff6a5e940dd56ffc04a`, verification
+`2aecda1b2d1e1b0cb000f82be85e5fb622bef3c07d99e20813c3123a519215e6`, ship verdict
+`b3eb891464341c78f14dfc2a8ee577f825a886e0c3343677bf617478d4280868`, unit TRX
+`6fbe1892e2d3658297991876d86d55344e08b192e98457ee630543b5e8e4f74d`, and architecture TRX
+`13648d7f46a78743131c648f9699a1827d2285c952408e026daee812fcdec3f3`.
+
 ## §3 What did not
 
 The first implementation review proved that changed-subject labels and non-file inputs were not bound to
@@ -108,6 +152,12 @@ The first projection critique proved that the supposedly accepted implementation
 fixtures and that its uniform fleet baselines were not measurements. Projection was rolled back before PR,
 linked as blocked by #268, and remained unchecked until production surfaces, observation provenance, and a
 separate repair receipt had completed their own review and protected-main chains.
+
+Two later critique rounds found distinct current-authority defects: retained base/settings were first
+presented as their own current values, then the replacement accepted only the direct child of its retained
+base and predictably stopped after the receipt merge. Projection remained blocked and unchecked while
+#272/#274 and then #276/#278 completed. The final current-main sentinel after the #278 receipt rollover is
+the evidence that disposes the second defect; candidate-only evidence would not have been sufficient.
 
 The accepted tree retained all provider paths, but its work model and verification view were generated by
 SDD 1.5.0. Canonical 1.0.0 rewrote them and reported `coherent=false`; running canonical analyze first made
@@ -129,6 +179,11 @@ default merge-commit request to a squash-only repository and GitHub returned HTT
 exact-head candidate was then squash-merged explicitly, and typed delivery resumed to its verified completion
 receipt. Durable [`.github#3169`](https://github.com/FS-GG/.github/issues/3169) owns selecting an enabled
 repository merge method inside guarded landing.
+
+Receipt PR #279 initially had one red hosted bootstrap-recovery attempt: an unchanged organization-field Q2
+subprocess returned one while its direct validator and exact local 468-test sentinel were green. The failed-job
+rerun on the identical head passed, and no acceptance or merge happened while the head was red. This was
+retained as transient hosted orchestration evidence, not hidden or misclassified as a product repair.
 
 ## §4 Findings
 
@@ -168,6 +223,12 @@ the final pass. Squash transport required explicit candidate-to-merge mappings a
 guarded-delivery HTTP 405 recurred for the repair merges. Exact `--match-head-commit` squash preserved the
 reviewed heads while `.github#3169` continues to own the transport fix.
 
+Two further blocker units and two append-only receipt units were the cost of proving runtime authority instead
+of asserting it: #272 fixed stale self-comparison, while #276 removed the direct-child expiry exposed by the
+#274 receipt rollover. The final acceptance proof deliberately ran after #278 advanced protected main. That
+ordering made the operational requirement falsifiable and prevented an implementation-head-only green result
+from being mistaken for durable current-main behavior.
+
 ## §9 Skill value and gaps
 
 `github-substrate-v2-work` preserved the accepted prerequisite, Q3/Q7 ordering, permission ceiling, and unit
@@ -185,7 +246,12 @@ only activation gap.
 - Provider repair: #266/#267; candidate `353c5a5a`; merge `57305e54`; review `5519507655`; host `5519547792`; delivery `5519583995`.
 - Semantic repair: #268/#269; final candidate `2da51ef3`; merge `286bde7a`; review `5520730651`; host `5520759515`; protected runs `33717657519`/`33717657228`.
 - Repair acceptance: #270/#271; candidate `31eccc62`; merge `6d3b7662`; receipt `f0360e50a1c94262d8c1b83a12871276c8b1c58e6efceba14b49926dca00d45d`; protected runs `33720546807`/`33720546536`.
-- Final provider hashes: analysis `75cad913`, work model `5d4a3f00`, verification `1a8b8aee`, unit TRX `a2746a37`, architecture TRX `13648d7f`.
+- Current-authority repair: #272/#273; candidate `0705405f`; merge `588e1a4b`; successor review `5521926908`; protected runs `33726702726`/`33726701922`.
+- Current-authority receipt: #274/#275; candidate `2cccbafb`; merge `1dd4f111`; receipt `e7d660e32f8f94762f9556ddf3552f343eb1fea6d4d53e3258b79b7387e4e3bf`; protected runs `33729339426`/`33729338755`.
+- Durable-authority repair: #276/#277; candidate `45b2e994`; merge `48a3880c`; review `5523013563`; host `5523059801`.
+- Durable-authority receipt: #278/#279; candidate `e8be64c0`; final protected merge `6c0c75ab`; receipt `d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; protected runs `33738452137`/`33738452009`.
+- Final operational proof: current-main sentinel 189/189 unit, 468/468 architecture, Q3 23, Q7 12/10; decision `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`.
+- Final provider hashes: analysis `2dc4c5c4`, work model `f22fff61`, verification `2aecda1b`, ship `b3eb8914`, unit TRX `6fbe1892`, architecture TRX `13648d7f`.
 - Transport follow-up: `.github#3169` records guarded landing's HTTP 405 on squash-only repository policy.
 
 ## §11 Falsifiable improvements
@@ -205,10 +271,10 @@ should validate real checkpoint invocations instead of the zero-event fallback.
 | sdd-authoring | exercised | Existing lifecycle package reached implementation, evidence, verification, and ship readiness. |
 | implementation-apis | exercised | Production Core/CLI arbitrary-input selection, workflow contracts, aggregate, sentinel, and Q3/Q7 contracts qualified. |
 | dependencies-build | exercised | Release builds passed with warnings as errors. |
-| testing | exercised | Unit 189/189; semantic architecture 464/464; receipt architecture 465/465; Q3 23; Q7 12. |
-| evidence | exercised | Original and indexed repair receipts, 80-run/305-job provenance, review, protected runs, fixed provider bytes, and inversions verified. |
+| testing | exercised | Final current-main unit 189/189 and architecture 468/468; Q3 23; Q7 12 controls over ten repositories. |
+| evidence | exercised | Original and three indexed repair receipts, 80-run/305-job provenance, reviews, protected runs, fixed provider bytes, authority-v2 rollover proof, and inversions verified. |
 | runtime-playtest | not-exercised | Non-game offline qualification unit. |
 | performance | exercised | Ten repository baselines and accepted fan-out/time targets qualified offline. |
 | documentation | exercised | SDD, evidence, feedback, critique, and roadmap ledger are covered. |
 | packaging-upgrade | not-exercised | No release or package publication occurred. |
-| worker-git-pr | exercised | PRs #261, #263, #265, #267, #269, and #271 preserve candidate/merge identity pairs. |
+| worker-git-pr | exercised | PRs #261, #263, #265, #267, #269, #271, #273, #275, #277, and #279 preserve candidate/merge identity pairs. |
