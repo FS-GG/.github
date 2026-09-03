@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.5 accepted; GS2-01.9 not applicable; GS2-06.6 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.6 accepted; GS2-01.9 not applicable; GS2-06.7 is next |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1061,9 +1061,34 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-02-roadmap-github-substrate-v2-m6-gs2-06-5-permission-compilation.md)
   close typed cycle `cycle-f7201370a11c6a38`; its guarded update digest is
   `sha256:1e567eb9141e0da05aa1bc75c4ad5685a204b3690dadd442721ff1d77a663769`.
-- [ ] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
+- [x] **GS2-06.6 — Release hardening.** Preserve OIDC and dual-feed saga semantics while adding protected
   environments, immutable releases/tags, one pack, SBOMs, attestations, dependency submission/review, and
   public-download verification.
+
+  Accepted 2026-09-02. [Implementation PR 255](https://github.com/FS-GG/FS.GG.Coordination/pull/255)
+  merged exact reviewed candidate `5e876400371947033fdf99ab0e6d2a93782bbda0` as
+  [`cc4cb1b7`](https://github.com/FS-GG/FS.GG.Coordination/commit/cc4cb1b738b6be18044a8a6c24d34439efe469ec),
+  with protected-main [Bootstrap run 33690674962](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33690674962)
+  and [CodeQL run 33690674525](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33690674525)
+  successful. [Acceptance PR 257](https://github.com/FS-GG/FS.GG.Coordination/pull/257) added the
+  append-only [GS2-06.6 receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/d0178670c2f8e63d4c214116c8e04f00ba6c4005/evidence/github-substrate-v2/accepted/GS2-06.6.json)
+  with self-digest `517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f`,
+  merged as [`d0178670`](https://github.com/FS-GG/FS.GG.Coordination/commit/d0178670c2f8e63d4c214116c8e04f00ba6c4005),
+  and passed protected-main [Bootstrap run 33692742405](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33692742405)
+  and [CodeQL run 33692740214](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33692740214).
+  Clean-checkout preflight then found that required SDD provider outputs were ignored and absent.
+  Linked [Coordination issue 258](https://github.com/FS-GG/FS.GG.Coordination/issues/258) and independently
+  reviewed [provider repair PR 259](https://github.com/FS-GG/FS.GG.Coordination/pull/259) retained all four
+  exact provider inputs plus a durability guard, merged as
+  [`42457a5e`](https://github.com/FS-GG/FS.GG.Coordination/commit/42457a5e215386b9151a4d6670c35a662dc13f80),
+  and passed protected-main [Bootstrap run 33695108140](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695108140)
+  and [CodeQL run 33695107570](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33695107570).
+  Roadmap projection [issue 3165](https://github.com/FS-GG/.github/issues/3165) and
+  [PR 3167](https://github.com/FS-GG/.github/pull/3167) bind the final four-path ledger update.
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.json)
+  and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md)
+  close typed cycle `cycle-ff8060a5a0d68217`; its guarded update digest is
+  `sha256:400c32cabeab23c29e42d970ec55c8e826f1656166be4317bfc8e3307fcfd94b`.
 - [ ] **GS2-06.7 — Workflow consolidation and change-impact selection.** Replace duplicated policy jobs
   with typed inventory, composite steps, reusable job contracts, and stable aggregate outputs. Compile a
   versioned dependency graph from changed subjects and non-file inputs to the smallest sound transitive
