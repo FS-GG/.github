@@ -1,0 +1,159 @@
+---
+feedbackSchema: 2
+date: 2026-09-03
+workspace: FS.GG.Coordination
+cycle: roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection
+lane: github-substrate-v2
+toolVersion: n/a
+commit: 57305e540267f3f4696ba5a6cdfc84361de577d3
+---
+
+## §1 Provenance and confidence
+
+- **activation:** active
+- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence, verify-ship-pr
+- **material events:** 0
+- **zero-event reason:** `fs-gg-feedback-report` is not materialized in the Coordination product tree; all four phases were exercised, no substitute checkpoint tool was used, and the recurrence remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366).
+
+This report covers GS2-06.7 from exact prerequisite registration through SDD implementation, Q3/Q7
+qualification, repair confirmation, protected implementation merge, append-only acceptance, clean-checkout
+provider rejection and repair, and roadmap projection. Confidence is bounded to the exact Git and GitHub
+objects, retained evidence, protected runs, and validators named here.
+
+## §2 What worked
+
+Registration issue #260 and PR #261 pinned the canonical roadmap, accepted GS2-06.6 receipt, unit contract
+`a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79`, and ordered Q3/Q7 command
+digests. Candidate `c10590c4fcc35fdae22435af09b5b551682910a2` passed independent review `5518639298`
+and host acceptance `5518668723`, then squash-merged as
+`ff65faa6697ea5835de72c1e6fa1b53af0a883e3`. Delivery `5518694233` records digest
+`760d1f20cb58d67f0da1d5adf43d71025dc2e1961568701186e730ae9a4811ae`; protected Bootstrap
+`33701716628` and Push-on-main `33701716127` passed.
+
+Implementation issue #262 and PR #263 produced a sealed, mutation-free selector over the complete typed
+workflow inventory, file and non-file impact graph, stable aggregates, typed `NotApplicable`, merge-group
+recomputation, fleet baselines and targets, sentinels, deterministic fleet disablement, and the deletion
+ledger. The initial review `5519020498` found a major root-binding survivor. Repaired candidate
+`6720277cd17f96e044e5afd9b18fa71813f9cbca` passed confirmation `5519081717` (digest
+`7395681afa5bbed16c632018bddc81af05e8eae5774ee1e999c406046d0974d5`) and host acceptance
+`5519120654` (digest `558767721a6d425ae0f158ee54eefa43485b283207a936d2fb52c60f1777cc0e`).
+Q3 passed 23 controls and Q7 passed 12 controls with seal
+`43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab`; unit tests passed
+185/185 and architecture tests 458/458. The candidate squash-merged as
+`3277a7a581f9b75001a851e0b614de3c1eadf812`; delivery `5519145418` records digest
+`e0e995fab8a077d82a0701d83da935a723ccce4cc26a546291c55077e4d31592`, and protected Bootstrap
+`33705575802` plus CodeQL `33705575434` passed.
+
+Acceptance issue #264 and PR #265 bound the exact implementation merge, Q3/Q7 evidence, repair and host
+records, delivery, protected runs, and accepted GS2-06.6 prerequisite into receipt
+`c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036`. Candidate
+`05ce70b3f05a7178bfad0af68649e8b80db6c5ac` passed review `5519238919` and host acceptance
+`5519346373`, then squash-merged as `81574bc8d12d46d08d60448b96db641fc3cb0de9`. Delivery
+`5519369598` records digest `bc006aeec8f4310566dfed91bdf665f079abe8801ef46a393749c3840b903234`;
+protected Bootstrap `33707365752` and Push-on-main `33707365512` passed.
+
+The first roadmap provider preflight rejected accepted main because the retained work model and verification
+view came from ambient SDD 1.5.0 instead of the canonical 1.0.0 consumer. Typed issue #266 and PR #267
+stabilized the exact canonical views and extended the tracked-byte guard. Candidate
+`353c5a5ab9cd47cc01ea4ecfda6aee3d5bf58bfe` passed independent review `5519507655` (digest
+`577255bd7f557e49051b5c6b6c95f2f23f2e46d8babc8212bed574a48a026377`) and host acceptance
+`5519547792` (digest `d30d6701344676899760ff4751a17069fed70acc4a42159dc55015baf8876261`), then
+squash-merged as `57305e540267f3f4696ba5a6cdfc84361de577d3`. Protected Bootstrap `33708922854` and
+Push-on-main `33708922489` passed; delivery `5519583995` records digest
+`fd0df37052c30cbf5bcac47c00c75b4a0f311ee8a3a0cd582b7fddf50a8e5706`.
+
+A second fresh isolated checkout at that protected merge found all five provider paths tracked. Canonical
+FS.GG.SDD.Cli 1.0.0 returned `noChange`, `coherent=true`, 38 ready obligations, 19 observed evidence
+items, 19 observed tests, zero diagnostics, four `noChange` operations, and a clean Git tree.
+
+## §3 What did not
+
+The first implementation review proved that changed-subject labels and non-file inputs were not bound to
+their typed roots: a well-formed source-to-release reclassification survived. The repair added exact bindings
+for all representative inputs and an independently authored inversion before acceptance.
+
+The accepted tree retained all provider paths, but its work model and verification view were generated by
+SDD 1.5.0. Canonical 1.0.0 rewrote them and reported `coherent=false`; running canonical analyze first made
+verification block on stale evidence. Provider repair #266/#267 restored the consumer-defined fixed point
+before any projection artifact was authored.
+
+The GitHub repository uses squash-only transport. Four reviewed candidate identities therefore differ from
+their protected merge identities: `c10590c4` → `ff65faa6`, `6720277c` → `3277a7a5`, `05ce70b3` →
+`81574bc8`, and `353c5a5a` → `57305e54`. Review evidence binds candidate heads; receipts, prerequisites,
+protected runs, and roadmap authority bind squash merge heads. Treating either identity as the other would
+make an otherwise accurate evidence chain stale.
+
+The first typed intake application partially created provider issue #266 before refusing its board projection
+because no worker identity was present. Exact-id resume completed the transaction without duplicating the
+issue. This was bounded orchestration friction, not product behavior.
+
+## §4 Findings
+
+No checkpoint-backed feedback finding was created. The implementation root-binding defect and provider
+currency defect are resolved in the schema-v3 critique. The missing feedback skill remains deduplicated to
+`.github#2366`.
+
+## §5 Did not exercise
+
+No production workflow, fleet setting, ruleset, required check, merge queue, repository setting, package,
+release, deployment, feed, or successor-unit behavior was mutated. This non-game offline qualification and
+roadmap-projection milestone requires no player journey.
+
+## §6 Doc-versus-behavior contradictions
+
+The roadmap contract expects `fs-gg-feedback-report` in a fully materialized product tree, while this
+Coordination checkout omits it. `.github#2366` owns that scaffold-provenance contradiction.
+
+## §7 Workarounds still in the tree
+
+None. The retained provider files and durability test are explicit tracked evidence. No ignored output,
+external feedback tool, production writer, secret shim, or merge bypass was introduced.
+
+## §8 Friction and avoidable cost
+
+One implementation repair was required for an independently reproduced root-classification survivor. One
+provider repair was required because the producer used an ambient SDD version newer than the roadmap
+consumer's canonical verifier. Squash transport required four explicit candidate-to-merge mappings across
+registration, implementation, acceptance, and provider repair. The typed preflight and exact-id intake resume
+kept each mismatch fail-closed and prevented a false roadmap acceptance or duplicate issue.
+
+## §9 Skill value and gaps
+
+`github-substrate-v2-work` preserved the accepted prerequisite, Q3/Q7 ordering, permission ceiling, and unit
+boundary. `pnext-item` preserved exact-head review, host acceptance, protected squash merge, and completion
+receipts. `work-roadmap` enforced the clean-checkout canonical-provider gate, schema-v3 critique,
+schema-v2 feedback/audit, typed cycle, and exact four-path projection. The absent feedback skill remains the
+only activation gap.
+
+## §10 Outcome markers
+
+- Registration: #260/#261; candidate `c10590c4`; merge `ff65faa6`; delivery `5518694233`.
+- Implementation: #262/#263; repaired candidate `6720277c`; merge `3277a7a5`; Q3 23, Q7 12, seal `43836b63`.
+- Implementation review: changes-required `5519020498`; confirmation `5519081717`; host `5519120654`.
+- Acceptance: #264/#265; candidate `05ce70b3`; merge `81574bc8`; receipt `c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036`.
+- Provider repair: #266/#267; candidate `353c5a5a`; merge `57305e54`; review `5519507655`; host `5519547792`; delivery `5519583995`.
+- Provider hashes: analysis `35486521`, work model `a2b96fd1`, verification `b5d87f7c`, unit TRX `e5e82831`, architecture TRX `ad66e4ae`.
+
+## §11 Falsifiable improvements
+
+Pinning the roadmap cycle's canonical SDD version at producer authoring time should make the first clean
+checkout replay return `noChange`; any future ambient-version output must red the retained generator and
+digest guard before acceptance. After `.github#2366` lands, the same product checkout should validate real
+checkpoint invocations instead of the zero-event fallback.
+
+## §12 Development-surface coverage
+
+| Surface | Status | Evidence and result |
+|---|---|---|
+| onboarding-guidance | exercised | Accepted GS2-06.6 and exact roadmap bytes gated registration. |
+| skills | partial | Roadmap, unit, SDD, review, and delivery skills exercised; feedback skill absent. |
+| sdd-authoring | exercised | Existing lifecycle package reached implementation, evidence, verification, and ship readiness. |
+| implementation-apis | exercised | Pure typed selection and Q3/Q7 validation contracts qualified. |
+| dependencies-build | exercised | Release builds passed with warnings as errors. |
+| testing | exercised | Unit 185/185; architecture 459/459 after provider guard; Q3 23; Q7 12. |
+| evidence | exercised | Receipt, review, delivery, protected runs, fixed provider bytes, and inversions verified. |
+| runtime-playtest | not-exercised | Non-game offline qualification unit. |
+| performance | exercised | Ten repository baselines and accepted fan-out/time targets qualified offline. |
+| documentation | exercised | SDD, evidence, feedback, critique, and roadmap ledger are covered. |
+| packaging-upgrade | not-exercised | No release or package publication occurred. |
+| worker-git-pr | exercised | PRs #261, #263, #265, and #267 preserve candidate/merge identity pairs. |
