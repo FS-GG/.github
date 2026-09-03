@@ -267,6 +267,12 @@ GitHub runner did not. One further provider repair was required because earlier 
 verify twice but did not require ship twice; the complete contract exposed two absent canonical views.
 The guarded four-run fixed point and exact-head hosted dispatch now make both gaps directly reproducible.
 
+The first `.github` projection ledger then became non-advancable without changing its content: sanctioned
+claim turnover left an unconsumed wait bound to a retired claim generation, and the moved prior-pass route
+required a fresh successor whom the structured writer refused. The documented fresh-item/fresh-PR fallback
+preserved every append-only record on #3168/PR #3171 and moved delivery authority to #3175. Open #2853 and
+#3173 continue to own those process causes; the GS2-06.7 recovery neither edits their evidence nor closes them.
+
 ## §9 Skill value and gaps
 
 `github-substrate-v2-work` preserved the accepted prerequisite, Q3/Q7 ordering, permission ceiling, and unit
@@ -293,6 +299,7 @@ only activation gap.
 - Canonical-ship repair: #284/#285; candidate `4d1a1930`; merge `e8b9c5ff`; review `5526638716`; host `5526708654`; protected runs `33762801775`/`33762800840`.
 - Final hosted proof: workflow_dispatch `33763107314` at exact `e8b9c5ff`; artifact `9896556087`; decision `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`.
 - Final provider hashes: analysis `2dc4c5c4`, work model `f22fff61`, verification `2aecda1b`, ship view `0b4e5756`, ship verdict `b3eb8914`, governance handoff `6c4bd08e`, unit TRX `6fbe1892`, architecture TRX `13648d7f`.
+- Roadmap-ledger recovery: superseding issue #3175 preserves wedged #3168/PR #3171 and reissues typed cycle `cycle-a2884e80de219a84`; #2853 and #3173 remain open.
 - Transport follow-up: `.github#3169` records guarded landing's HTTP 405 on squash-only repository policy.
 
 ## §11 Falsifiable improvements

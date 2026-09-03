@@ -1166,12 +1166,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`, with no missed obligation or
   production mutation.
 
-  Roadmap projection [issue 3168](https://github.com/FS-GG/.github/issues/3168) binds the final exact
-  four-path ledger update. The validated
+  Roadmap projection [issue 3175](https://github.com/FS-GG/.github/issues/3175) supersedes the
+  content-valid but review-ledger-wedged [issue 3168](https://github.com/FS-GG/.github/issues/3168)
+  and unmerged [PR 3171](https://github.com/FS-GG/.github/pull/3171), preserving their append-only
+  evidence while binding the final exact four-path ledger update through a fresh delivery identity.
+  Open process defects [#2853](https://github.com/FS-GG/.github/issues/2853) and
+  [#3173](https://github.com/FS-GG/.github/issues/3173) retain the claim-turnover and moved-pass
+  successor causes; this projection does not close or repair them. The validated
   [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.json)
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md)
-  close typed cycle `cycle-6a77ff8aa5071d6e`; its guarded update digest is
-  `sha256:554d704fbef70eae8c6205654682c110a14e6b29ef1905fbd979f6e9d9636f55`.
+  close reissued typed cycle `cycle-a2884e80de219a84`; its source-bound guarded update digest is
+  `sha256:aa9df7f27207dc8f1c72e4459855100c534aa40cad1d5f66ad58a85f253be5ed`.
 - [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
 
