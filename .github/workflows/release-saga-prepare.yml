@@ -221,7 +221,7 @@ jobs:
             echo 'Preparation complete.'
             echo 'Operator releases must enter through release-saga-start.yml; automatic releases continue in the caller job graph.'
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: coherent-set-${{ steps.version.outputs.version }}
           path: artifacts/packages/
