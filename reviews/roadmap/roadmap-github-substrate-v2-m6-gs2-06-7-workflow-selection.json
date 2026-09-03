@@ -12,86 +12,106 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 0,
+  "repair_rounds": 3,
   "reviewed_commits": [
-    "5716707b1cf5c9a63816467b7629bb7bc189c176"
+    "5716707b1cf5c9a63816467b7629bb7bc189c176",
+    "ee95ba8ff066b4a883891bfaabfb1277c64cd993",
+    "dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4",
+    "6d3b7662ac4d9474a9976ac093ec910f55fb6087"
   ],
   "findings": [
     {
       "id": "GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001",
       "severity": "major",
-      "summary": "The accepted upstream change validates a fixed qualification corpus but does not implement the roadmap-required workflow consolidation or a change-impact selector that can classify arbitrary changed subjects and non-file inputs.",
+      "summary": "The initially accepted upstream change validated a fixed qualification corpus but did not implement the roadmap-required arbitrary-input selector and production workflow surfaces.",
       "evidence": [
-        "Verification: `git -C /home/developer/projects/FS.GG.Coordination diff --name-only ff65faa6697ea5835de72c1e6fa1b53af0a883e3..3277a7a581f9b75001a851e0b614de3c1eadf812` lists qualification-contract source/signature, validator scripts, retained evidence, tests, and SDD work/readiness artifacts, but no `.github/workflows`, composite action, reusable job, production selector, Core, GitHub adapter, CLI, or host implementation path; this conflicts with `docs/github-substrate-v2-roadmap.md` GS2-06.7, which requires consolidating reusable work and selecting the smallest sound job set.",
-        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubWorkflowSelectionQualification.fs` at protected main 57305e540267f3f4696ba5a6cdfc84361de577d3 defines `expectedImpactBindings` as eleven exact fixture tuples; `compile` compares caller-supplied `ChangedSubjects`, `NonFileInputs`, and `Roots` to those tuples, checks caller-supplied `ExpectedClosure`, and returns only counts, fleet state, missed obligations, and a seal. The public signature exposes no operation that accepts a new changed-subject/non-file-input set and returns selected obligations or child outcomes.",
-        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/262 and its retained `work/262-workflow-selection/spec.md` FR-002 say the selector MUST compile a versioned dependency graph over changed subjects and non-file inputs into the smallest sound closure; PR https://github.com/FS-GG/FS.GG.Coordination/pull/263 merged the fixed-corpus validator as 3277a7a581f9b75001a851e0b614de3c1eadf812 without such an input-to-selection API. The exact Q3 and Q7 scripts pass only after the Release contract assembly is built, printing 23 and 12 controls with seal 43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab; those green controls validate the fixed corpus and do not close the missing implementation surface."
+        "Verification: the initial Coordination diff ff65faa6697ea5835de72c1e6fa1b53af0a883e3..3277a7a581f9b75001a851e0b614de3c1eadf812 contained qualification-contract, evidence, validator, test, work, and readiness files but no production Core selector, CLI command, composite action, or reusable/sentinel workflow.",
+        "Verification: protected Coordination main 57305e540267f3f4696ba5a6cdfc84361de577d3 exposed eleven exact expectedImpactBindings in GitHubWorkflowSelectionQualification.fs and no API that accepted a previously unseen changed-subject/non-file-input set and returned selected obligations."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Verification: unverified; repair requires a new independently reviewed Coordination exact head that implements the roadmap/spec input-to-selection behavior and workflow consolidation, adds positive and negative tests over previously unseen changed-subject/non-file-input combinations, and supersedes or amends the current accepted receipt before this projection can be confirmed."
+        "Verification: semantic repair PR https://github.com/FS-GG/FS.GG.Coordination/pull/269 maps candidate 2da51ef3c1b92a37886284cff3ee35dc5cc2cb6c to squash merge 286bde7a4155098407ae724066b6429e16e377718; review comment 5520730651, host comment 5520759515, protected runs 33717657519 and 33717657228, and delivery comment 5520832555 bind that exact chain.",
+        "Verification: detached protected Coordination head 6d3b7662ac4d9474a9976ac093ec910f55fb6087 contains WorkflowSelection.fs/.fsi, WorkflowSelectionCommand.fs, .github/actions/coordination-setup/action.yml, reusable-obligation-selection.yml, workflow-selection-sentinel.yml, workflow-selection-aggregate.sh, and workflow-selection-sentinel.sh.",
+        "Verification: executing the Release CLI at detached 6d3b7662 against an independently authored arbitrary request selected build, policy, and packaging roots and the six-obligation closure; a request containing assets/unseen.future exited 3 with reason unknown-changed-path.",
+        "Verification: superseding acceptance PR https://github.com/FS-GG/FS.GG.Coordination/pull/271 maps candidate 31eccc62f557bdb3b6c2ad1e5dceace9863ed28d to squash merge 6d3b7662ac4d9474a9976ac093ec910f55fb6087; review 5521120106, host 5521151909, protected runs 33720546807 and 33720546536, and delivery 5521183025 bind the reacceptance."
       ]
     },
     {
       "id": "GS2-06.7-MEASURED-BASELINES-MAJ-002",
       "severity": "major",
-      "summary": "The Q7 evidence does not prove measured per-repository baselines or accepted targets; it seals identical unexplained constants for every repository and tests only arithmetic ordering.",
+      "summary": "The initial Q7 evidence sealed uniform unexplained constants rather than measured per-repository baseline provenance.",
       "evidence": [
-        "Verification: `evidence/github-substrate-v2/gs2-06-7/corpus.json` at Coordination protected main 57305e540267f3f4696ba5a6cdfc84361de577d3 contains ten repository rows, but every baseline is exactly workflowFanOut=4, jobFanOut=12, billedMinutes=120, queueTimeSeconds=300, p50Seconds=1200, p95Seconds=2400, every target is 3/9/90/240/1000/2100, and every selected value is 2/7/70/180/900/1800. The rows carry no observation window, run IDs, sample counts, source URLs, timestamps, collector identity, or acceptance authority.",
-        "Verification: `rg -n 'baseline|measured' work/262-workflow-selection evidence/github-substrate-v2/gs2-06-7 readiness/262-workflow-selection --glob '!*.trx'` finds the requirement/plan language and the literal corpus rows but no measurement provenance. `GitHubWorkflowSelectionQualification.compile` checks only that metrics are positive, targets are no worse than baselines, and selected values are no worse than targets; the 12 Q7 controls mutate row presence or numeric inequalities and never establish that any value was observed or accepted.",
-        "Verification: `docs/github-substrate-v2-roadmap.md` GS2-06.7 requires per-repository baselines and accepted targets for workflow/job fan-out, billed minutes, queue time, and p50/p95 completion time before cutover; the identical provenance-free literals therefore do not satisfy the roadmap evidence requirement even though `dotnet fsi eng/validate-github-workflow-selection-supply-chain.fsx -- .` prints a passing 12-control result."
+        "Verification: corpus.json at protected Coordination main 57305e540267f3f4696ba5a6cdfc84361de577d3 repeated the same baseline, target, and selected metrics for all ten repositories and carried no observation window, run identities, sample counts, source URLs, timestamps, or collector authority.",
+        "Verification: the initial Q7 compiler checked positivity and numeric ordering but did not establish that any baseline was observed or accepted."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Verification: unverified; repair requires traceable repository-specific measurements and target acceptance evidence, schema/compiler bindings that reject missing or stale provenance, independent controls for fabricated/cross-repository measurements, and a superseding independently reviewed Coordination acceptance chain."
+        "Verification: the repaired evidence at protected 6d3b7662 records a bounded observation schema and provenance for ten repositories, eight runs per repository, 80 unique workflow runs, and 305 unique jobs; independent enumeration reproduced those cardinalities.",
+        "Verification: GitHub Actions API comparison of all 80 retained run identities—repository, head SHA, workflow ID, attempt, and job count—found zero mismatches, and comparison of all 305 job IDs, conclusions, started timestamps, and completed timestamps found zero mismatches.",
+        "Verification: the repaired Q7 supply-chain validator exited zero with 12 controls, ten repositories, fleet disabled, and seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868."
       ]
     },
     {
       "id": "GS2-06.7-DELIVERY-FEEDBACK-MAJ-003",
       "severity": "major",
-      "summary": "The projection feedback omits and contradicts the durable guarded-landing failure and manual squash workaround recorded during provider-repair delivery.",
+      "summary": "The initial projection feedback omitted the provider-repair delivery HTTP 405 and manual exact-head squash workaround recorded in FS-GG/.github#3169.",
       "evidence": [
-        "Verification: GitHub issue https://github.com/FS-GG/.github/issues/3169 records that `fsgg-coord delivery --apply` for Coordination #266/#267 received HTTP 405 because `Writes.mergeAtHead` omitted `merge_method` on a squash-only repository, after which an out-of-band exact-head squash merge succeeded; the issue remains OPEN and carries concrete transport-test acceptance criteria.",
-        "Verification: at exact projection head 5716707b1cf5c9a63816467b7629bb7bc189c176, `feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md` §3 omits the HTTP 405, §4 says only the missing feedback skill remains, §7 says `None` and denies a merge bypass/workaround, and §8 lists other friction without the guarded-landing failure. The report was authored after issue #3169 was created at 2026-09-03T02:49:05Z and after delivery comment https://github.com/FS-GG/FS.GG.Coordination/issues/266#issuecomment-5519583995 recorded the resulting merge 57305e540267f3f4696ba5a6cdfc84361de577d3.",
-        "Verification: the canonical feedback contract `.agents/skills/work-roadmap/references/feedback-contract.md` requires material orchestration failures and workarounds to be captured and dispositioned. The initial report and audit hash match and `validate-feedback-state.py` exits zero with zero material events, demonstrating structural consistency but not semantic completeness."
+        "Verification: https://github.com/FS-GG/.github/issues/3169 records that fsgg-coord delivery --apply received HTTP 405 on the squash-only Coordination repository because merge_method was omitted, followed by an exact-head squash merge.",
+        "Verification: feedback at initial projection head 5716707b1cf5c9a63816467b7629bb7bc189c176 omitted this event and contradicted it in its bypass/workaround account."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Verification: unverified; the projection worker reports an uncommitted feedback repair that names and dispositions FS-GG/.github#3169, but no repaired exact commit, regenerated audit hash, or canonical validator result has yet been presented to this critic."
+        "Verification: feedback at repaired projection head dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 names and dispositions FS-GG/.github#3169 in sections 3, 4, 7, 8, 10, and 11.",
+        "Verification: the repaired feedback report SHA-256 is 51249be7da2fa95163cc8fd433ae2292be59b6d74e357f387a4047d5a47e1758, matching its audit, and the canonical validate-feedback-state.py command exits zero."
       ]
     },
     {
       "id": "GS2-06.7-PROJECTION-AUTHORITY-MAJ-004",
       "severity": "major",
-      "summary": "The initial projection marks GS2-06.7 accepted before the required validated critique and typed-cycle evidence exist.",
+      "summary": "The initial projection marked GS2-06.7 accepted before a validated critique and completed typed-cycle evidence existed.",
       "evidence": [
-        "Verification: `git show 5716707b1cf5c9a63816467b7629bb7bc189c176:docs/github-substrate-v2-roadmap.md` checks GS2-06.7, advances the status row to GS2-06.8, and ends the GS2-06.7 evidence paragraph with `The validated schema-v3 critique and schema-v2 feedback/audit close typed cycle <pending>`; `git ls-tree -r --name-only 5716707b1cf5c9a63816467b7629bb7bc189c176 -- reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.json` returns no artifact.",
-        "Verification: `.agents/skills/work-roadmap/SKILL.md` steps 4-6 and `.agents/skills/work-roadmap/references/critique-contract.md` require validated schema-v3 critique plus generated SDD and feedback provider evidence to advance, guarded-update, and complete the exact typed cycle before roadmap completion evidence is accepted; issue https://github.com/FS-GG/.github/issues/3168 likewise requires the completed typed cycle and an exact four-file diff."
+        "Verification: roadmap at initial projection head 5716707b1cf5c9a63816467b7629bb7bc189c176 checked GS2-06.7 and cited typed cycle <pending>, while git ls-tree showed no critique artifact at the required path.",
+        "Verification: the work-roadmap critique contract requires validated same-critic confirmation before advancement."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: projection commit ee95ba8ff066b4a883891bfaabfb1277c64cd993 rolled the roadmap back to an unchecked GS2-06.7 and restored GS2-06.7 as the next milestone.",
+        "Verification: after discovery of the current-authority finding, git diff --exit-code b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9 -- docs/github-substrate-v2-roadmap.md exits zero in the projection worktree, proving the roadmap is again byte-identical to the pre-projection base and unchecked.",
+        "Verification: typed cycle cycle-5c2c1d829da0bf43 is registered only and has not been advanced; FS-GG/.github#3168 is released Blocked by FS-GG/FS.GG.Coordination#272 pending an independently reviewed repair."
+      ]
+    },
+    {
+      "id": "GS2-06.7-SENTINEL-CURRENT-AUTHORITY-MAJ-005",
+      "severity": "major",
+      "summary": "The scheduled production sentinel can accept stale retained authority because it supplies the retained base and settings values as their own current comparison values instead of deriving current checkout and settings authority.",
+      "evidence": [
+        "Verification: at detached protected Coordination head 6d3b7662ac4d9474a9976ac093ec910f55fb6087, evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json and runtime-request-sentinel.json both bind baseRevision 57305e540267f3f4696ba5a6cdfc84361de577d3 and settingsSha256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518.",
+        "Verification: eng/workflow-selection-sentinel.sh lines 119-126 at 6d3b7662 pass those same retained literals as --current-base and --current-settings; inspection of that script and .github/workflows/workflow-selection-sentinel.yml finds no comparison to the scheduled checkout HEAD or independently fetched/current repository settings.",
+        "Verification: because evidence and purported current authority are the same stale literals, the CLI freshness guard can succeed after protected main or repository settings have changed, so the scheduled sentinel does not fail closed against current production authority."
       ],
       "disposition": "unresolved",
       "resolution_evidence": [
-        "Verification: unverified; no typed-cycle identifier, guarded update receipt/digest, completed cycle inspection, repaired projection commit, or exact-head confirmation exists yet."
+        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/272 is OPEN and routes an sdd-required repair to bind the sentinel to current checkout and independently authoritative settings; route comment 5521320075 carries digest 22e52d10fecf3fddeebb860e845220dfaf40b649d009e17324ab2fc8beebc022 and the lifecycle watermark is Ready.",
+        "Verification: no repaired protected Coordination exact head, superseding acceptance receipt, exact-head review/host/delivery chain, or protected-run confirmation exists yet; the finding therefore remains unresolved."
       ]
     }
   ],
   "verification_evidence": [
-    "Verification: `git rev-parse 5716707b` in `/home/developer/projects/.github-item-3168` resolves to 5716707b1cf5c9a63816467b7629bb7bc189c176; `git diff --name-status b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9..5716707b1cf5c9a63816467b7629bb7bc189c176` shows exactly the roadmap plus the feedback report and audit, while the required critique path is absent at that commit.",
-    "Verification: GitHub API/CLI reads of Coordination issues #260/#262/#264/#266 and PRs #261/#263/#265/#267 confirm all four issues closed and all four PRs squash-merged, mapping candidates c10590c4fcc35fdae22435af09b5b551682910a2→ff65faa6697ea5835de72c1e6fa1b53af0a883e3, 6720277cd17f96e044e5afd9b18fa71813f9cbca→3277a7a581f9b75001a851e0b614de3c1eadf812, 05ce70b3f05a7178bfad0af68649e8b80db6c5ac→81574bc8d12d46d08d60448b96db641fc3cb0de9, and 353c5a5ab9cd47cc01ea4ecfda6aee3d5bf58bfe→57305e540267f3f4696ba5a6cdfc84361de577d3.",
-    "Verification: GitHub comment API reads confirm registration review/host/delivery 5518639298/5518668723/5518694233, implementation initial rejection/repair confirmation/host/delivery 5519020498/5519081717/5519120654/5519145418, acceptance review/host/delivery 5519238919/5519346373/5519369598, and provider review/host/delivery 5519507655/5519547792/5519583995 bind the candidate and merge identities claimed by the projection. The implementation initial review found the root-classification survivor and the 6720277c confirmation records it repaired.",
-    "Verification: GitHub Actions API and `gh run view` confirm protected Bootstrap/CodeQL workflows 33701716628/33701716127 at ff65faa6697ea5835de72c1e6fa1b53af0a883e3, 33705575802/33705575434 at 3277a7a581f9b75001a851e0b614de3c1eadf812, 33707365752/33707365512 at 81574bc8d12d46d08d60448b96db641fc3cb0de9, and 33708922854/33708922489 at 57305e540267f3f4696ba5a6cdfc84361de577d3 all completed successfully; the dynamic `Push on main` display titles for the second run in each pair have workflowName `CodeQL` and contain successful CodeQL analysis jobs.",
-    "Verification: `evidence/github-substrate-v2/accepted/GS2-06.7.json` at Coordination 57305e540267f3f4696ba5a6cdfc84361de577d3 binds sourceRevision 3277a7a581f9b75001a851e0b614de3c1eadf812, unit contract a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79, Q3/Q7 validators, implementation candidate manifest 9084d9636eb1166c69ef855b9fe29c469415b0d70d468a37a7011a7e1c234e66, confirmation/host/delivery records, protected runs, and self-digest c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036.",
-    "Verification: at Coordination protected main 57305e540267f3f4696ba5a6cdfc84361de577d3, `PATH=/tmp/fsgg-sdd-cli-1.0.0:$PATH fsgg-sdd verify --root . --work 262-workflow-selection --require-observed --dry-run` exits zero under tool 1.0.0 with outcome noChange, coherent=true, four noChange operations, 38/38 verification obligations ready, 19/19 evidence observed, 19/19 tests observed, and zero diagnostics; focused unit tests pass 3/3 and focused architecture tests pass 7/7.",
-    "Verification: after building the Coordination Release contract assembly, `dotnet fsi eng/validate-github-workflow-selection.fsx -- .` and `dotnet fsi eng/validate-github-workflow-selection-supply-chain.fsx -- .` exit zero with 23 Q3 controls, 12 Q7 controls, ten repository rows, and shared seal 43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab; findings GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001 and GS2-06.7-MEASURED-BASELINES-MAJ-002 explain why those fixed-corpus checks do not establish the omitted acceptance behavior/evidence.",
-    "Verification: `sha256sum feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md` at initial head returns a29086e65fbc0d4c00acb771a9500a20f94a08d764df5f90e2ce0c7ae6fef030, matching its audit, and the canonical feedback-state validator exits zero with 0 material events; finding GS2-06.7-DELIVERY-FEEDBACK-MAJ-003 records the semantic omission that structural validation does not detect.",
+    "Verification: initial projection SHA 5716707b1cf5c9a63816467b7629bb7bc189c176 and repaired projection SHA dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 resolve locally; detached Coordination confirmation SHA resolves to protected main 6d3b7662ac4d9474a9976ac093ec910f55fb6087.",
+    "Verification: Coordination semantic repair #268/#269 and superseding acceptance #270/#271 are closed/merged and preserve the original acceptance receipt while adding repair receipt evidence; the original receipt SHA-256 is 9a98a1324ad5ba5e125f708318e8ec1be3e1713920d31ba80443536af53b1510 with self-digest c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036, and the repair receipt SHA-256 is 37d36961eb90e7aceec4f181fe548b76ea75e8ef04f9c825276219e3d2b79483 with self-digest f0360e50a1c94262d8c1b83a12871276c8b1c58e6efceba14b49926dca00d45d.",
+    "Verification: at detached Coordination 6d3b7662, dotnet build completes with zero warnings and zero errors; focused unit tests pass 189/189 and architecture tests pass 465/465.",
+    "Verification: at detached Coordination 6d3b7662, Q3 exits zero with 23 controls and Q7 exits zero with 12 controls, ten repositories, 80 runs, 305 jobs, fleet disabled, and shared seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868.",
+    "Verification: the repair-receipt validator/self-test at 6d3b7662 passes seven mutation inversions; observed artifact hashes are analysis 75cad91363bc370af3838ddfa01ba02ad021526aa5b2d93563de5a401551c29e, work-model 5d4a3f00069e486620579824d80ad2618827c047111106e9747a5bf5fd0514b, verify 1a8b8aee909bd64ebcd0f7977ed5ed3d5bfd7d623278afee3a2299651a1bc40c, unit TRX a2746a37077d40e75d5c91c9e9cad61bcaf7d02f22f347b54735e078c222b215, and architecture TRX 13648d7ffca719debe2161a086cf936eb39a27dbc4da2f5d96cc114c0f798491.",
+    "Verification: PATH pinned to canonical FS.GG.SDD CLI 1.0.0 and fsgg-sdd verify --root . --work 262-workflow-selection --require-observed --dry-run at 6d3b7662 exits zero with outcome noChange, coherent=true, four noChange operations, 38/38 obligations ready, 19/19 evidence observed, 19/19 tests observed, and zero diagnostics.",
+    "Verification: semantic repair PR #269 candidate 2da51ef3c1b92a37886284cff3ee35dc5cc2cb6c maps to merge 286bde7a4155098407ae724066b6429e16e377718 with final review/host/delivery comments 5520730651/5520759515/5520832555 and successful protected runs 33717657519/33717657228.",
+    "Verification: superseding acceptance PR #271 candidate 31eccc62f557bdb3b6c2ad1e5dceace9863ed28d maps to merge 6d3b7662ac4d9474a9976ac093ec910f55fb6087 with final review/host/delivery comments 5521120106/5521151909/5521183025 and successful protected runs 33720546807/33720546536.",
     "Verification: GS2-06.7 is an offline CI/workflow policy and roadmap-projection milestone, not reachable game functionality; game_functionality=false, no player journey is applicable, and no uncovered game functionality or entry-point exception exists."
   ],
   "confirmation": {
-    "reviewed_commit": "5716707b1cf5c9a63816467b7629bb7bc189c176",
+    "reviewed_commit": "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001",
-      "GS2-06.7-MEASURED-BASELINES-MAJ-002",
-      "GS2-06.7-DELIVERY-FEEDBACK-MAJ-003",
-      "GS2-06.7-PROJECTION-AUTHORITY-MAJ-004"
+      "GS2-06.7-SENTINEL-CURRENT-AUTHORITY-MAJ-005"
     ]
   },
   "human_escalation": null,
