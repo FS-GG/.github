@@ -5,7 +5,7 @@ workspace: FS.GG.Coordination
 cycle: roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection
 lane: github-substrate-v2
 toolVersion: n/a
-commit: 6c0c75ab9b355e9e4e91b350711b7ab257755ff5
+commit: e8b9c5ff978e0f14462514406ac86a71c4826425
 ---
 
 ## §1 Provenance and confidence
@@ -17,7 +17,8 @@ commit: 6c0c75ab9b355e9e4e91b350711b7ab257755ff5
 
 This report covers GS2-06.7 from exact prerequisite registration through SDD implementation, Q3/Q7
 qualification, repair confirmation, protected implementation merge, append-only acceptance, clean-checkout
-provider rejection and repair, semantic repair, superseding repair acceptance, and roadmap projection. Confidence is bounded to the exact Git and GitHub
+provider rejection and repair, semantic repair, superseding repair acceptance, hosted-sentinel repair,
+complete canonical ship-output repair, and roadmap projection. Confidence is bounded to the exact Git and GitHub
 objects, retained evidence, protected runs, and validators named here.
 
 ## §2 What worked
@@ -128,7 +129,7 @@ then squash-merged as final protected main `6c0c75ab9b355e9e4e91b350711b7ab25775
 `d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; all earlier receipts remained
 byte-identical.
 
-A fresh detached invocation on that receipt-advanced protected head ran the real scheduled sentinel through
+A fresh detached diagnostic invocation on that receipt-advanced protected head ran the scheduled-event route through
 189/189 unit tests, 468/468 architecture tests, dependency/security, Q3's 23 controls, Q7's 12 controls over
 ten repositories, package smoke, and release hardening. Authority v2 bound inventory base `6d3b7662`, current
 and event revision `6c0c75ab`, and no queued head; decision SHA-256
@@ -141,6 +142,27 @@ work model `f22fff614e7d8ee1e7fd024f9f8620068d02e1c13d771ff6a5e940dd56ffc04a`, v
 `b3eb891464341c78f14dfc2a8ee577f825a886e0c3343677bf617478d4280868`, unit TRX
 `6fbe1892e2d3658297991876d86d55344e08b192e98457ee630543b5e8e4f74d`, and architecture TRX
 `13648d7f46a78743131c648f9699a1827d2285c952408e026daee812fcdec3f3`.
+
+The first actual hosted workflow-dispatch run, `33740967246`, then failed two registered Q2 tests because
+the hosted PATH had no Quint executable. The decision correctly disabled fleet selection, and no production
+mutation occurred. Issue #280 and PR #281 added checksum-pinned Quint 0.32.0 provisioning plus an executable
+acquisition-failure inversion. Repaired candidate `20c3e30c03cd058d8f7f35fe68fada617cffb674` passed successor
+review `5524410118`, host acceptance `5524432557`, and exact-head hosted full-suite run `33744634200`, then
+squash-merged as `2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc`.
+
+The hardened roadmap preflight then proved canonical ship was not yet a fixed point: protected head
+`26e7b3e1107d87a0b48aba5c708f512b9bc80730` omitted `ship.json` and `governance-handoff.json`.
+Typed issue #284 and PR #285 retained both canonical views and extended the exact-byte durability guard.
+Candidate `4d1a1930082bfe7a3b23b4aaa19652e8af8fbf30` passed review `5526638716`, host acceptance
+`5526708654`, and protected Bootstrap `33762801775` plus CodeQL `33762800840`, then squash-merged as
+`e8b9c5ff978e0f14462514406ac86a71c4826425`. From a fresh checkout of that merge, FS.GG.SDD.Cli exactly
+1.0.0 produced two verify and two ship results that were all `noChange`, `coherent=true`, zero-diagnostic,
+and Git-clean. The retained ship SHA-256 is `0b4e5756cdeefddf934aaacbf8f5683c13e1ad659a443899c87d4870eaec3b72`;
+governance handoff is `6c4bd08e91b3a573e7d7e50c61ebd423f81a95f7b4e4891d39b5ed4d0f40c6ce`.
+Hosted workflow-dispatch run `33763107314` then passed at exact protected `e8b9c5ff`; its sole non-expired
+artifact `9896556087` contains decision SHA-256
+`67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`, reporting full suite passed,
+no missed obligations, selection eligible, and no production mutation.
 
 ## §3 What did not
 
@@ -185,10 +207,21 @@ subprocess returned one while its direct validator and exact local 468-test sent
 rerun on the identical head passed, and no acceptance or merge happened while the head was red. This was
 retained as transient hosted orchestration evidence, not hidden or misclassified as a product repair.
 
+Hosted workflow-dispatch run `33740967246` was a substantive failure, not transient noise: 466/468
+architecture tests passed, and the two Q2 validators failed because the runner lacked Quint. Local
+schedule emulation had hidden that hosted dependency. Repair #280/#281 made acquisition explicit and
+fail-closed; exact-head hosted run `33744634200` is the replacement authority.
+
+The first complete canonical preflight at protected `26e7b3e1` also rejected the provider because ship
+would create two absent generated views and reported `coherent=false`. Earlier evidence had checked verify
+but not ship. Repair #284/#285 retained the missing views and extended the guard; the four-run canonical
+fixed point at `e8b9c5ff` is the replacement authority.
+
 ## §4 Findings
 
 No checkpoint-backed feedback finding was created. The implementation root-binding defect and provider
-currency defect, missing runtime selector, and unproven-baseline defects are resolved in the schema-v3 critique.
+currency defect, missing runtime selector, unproven-baseline defect, hosted-Q2 dependency, and incomplete
+canonical ship fixed point are resolved in the schema-v3 critique.
 The guarded-landing merge-policy defect is routed to
 `.github#3169`; the missing feedback skill remains deduplicated to `.github#2366`.
 
@@ -229,6 +262,11 @@ of asserting it: #272 fixed stale self-comparison, while #276 removed the direct
 ordering made the operational requirement falsifiable and prevented an implementation-head-only green result
 from being mistaken for durable current-main behavior.
 
+One hosted-only repair was required because local schedule emulation inherited ambient Quint while the
+GitHub runner did not. One further provider repair was required because earlier clean-checkout evidence ran
+verify twice but did not require ship twice; the complete contract exposed two absent canonical views.
+The guarded four-run fixed point and exact-head hosted dispatch now make both gaps directly reproducible.
+
 ## §9 Skill value and gaps
 
 `github-substrate-v2-work` preserved the accepted prerequisite, Q3/Q7 ordering, permission ceiling, and unit
@@ -251,14 +289,19 @@ only activation gap.
 - Durable-authority repair: #276/#277; candidate `45b2e994`; merge `48a3880c`; review `5523013563`; host `5523059801`.
 - Durable-authority receipt: #278/#279; candidate `e8be64c0`; final protected merge `6c0c75ab`; receipt `d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; protected runs `33738452137`/`33738452009`.
 - Final operational proof: current-main sentinel 189/189 unit, 468/468 architecture, Q3 23, Q7 12/10; decision `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`.
-- Final provider hashes: analysis `2dc4c5c4`, work model `f22fff61`, verification `2aecda1b`, ship `b3eb8914`, unit TRX `6fbe1892`, architecture TRX `13648d7f`.
+- Hosted-Q2 repair: #280/#281; candidate `20c3e30c`; merge `2f9d2e7d`; review `5524410118`; host `5524432557`; exact-head hosted sentinel `33744634200`.
+- Canonical-ship repair: #284/#285; candidate `4d1a1930`; merge `e8b9c5ff`; review `5526638716`; host `5526708654`; protected runs `33762801775`/`33762800840`.
+- Final hosted proof: workflow_dispatch `33763107314` at exact `e8b9c5ff`; artifact `9896556087`; decision `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`.
+- Final provider hashes: analysis `2dc4c5c4`, work model `f22fff61`, verification `2aecda1b`, ship view `0b4e5756`, ship verdict `b3eb8914`, governance handoff `6c4bd08e`, unit TRX `6fbe1892`, architecture TRX `13648d7f`.
 - Transport follow-up: `.github#3169` records guarded landing's HTTP 405 on squash-only repository policy.
 
 ## §11 Falsifiable improvements
 
 Pinning the roadmap cycle's canonical SDD version at producer authoring time should make the first clean
 checkout replay return `noChange`; any future ambient-version output must red the retained generator and
-digest guard before acceptance. `.github#3169` should make the same exact-head guarded delivery succeed with
+digest guard before acceptance. Requiring both verify and ship twice must reject a provider that retains only
+the verify-stage subset. Hosted sentinel dispatch must remain part of the evidence boundary so a missing
+runner dependency cannot be masked by an authoring machine. `.github#3169` should make the same exact-head guarded delivery succeed with
 the repository's enabled squash method and no fallback. After `.github#2366` lands, the same product checkout
 should validate real checkpoint invocations instead of the zero-event fallback.
 
@@ -268,13 +311,13 @@ should validate real checkpoint invocations instead of the zero-event fallback.
 |---|---|---|
 | onboarding-guidance | exercised | Accepted GS2-06.6 and exact roadmap bytes gated registration. |
 | skills | partial | Roadmap, unit, SDD, review, and delivery skills exercised; feedback skill absent. |
-| sdd-authoring | exercised | Existing lifecycle package reached implementation, evidence, verification, and ship readiness. |
+| sdd-authoring | exercised | Existing lifecycle package reached implementation, evidence, verification, and ship readiness; canonical 1.0.0 verify and ship each passed twice at protected `e8b9c5ff`. |
 | implementation-apis | exercised | Production Core/CLI arbitrary-input selection, workflow contracts, aggregate, sentinel, and Q3/Q7 contracts qualified. |
 | dependencies-build | exercised | Release builds passed with warnings as errors. |
-| testing | exercised | Final current-main unit 189/189 and architecture 468/468; Q3 23; Q7 12 controls over ten repositories. |
-| evidence | exercised | Original and three indexed repair receipts, 80-run/305-job provenance, reviews, protected runs, fixed provider bytes, authority-v2 rollover proof, and inversions verified. |
+| testing | exercised | Final hosted repair candidate passed 189/189 unit and 469/469 architecture tests; Q3 23; Q7 12 controls over ten repositories. |
+| evidence | exercised | Original and three indexed repair receipts, 80-run/305-job provenance, reviews, protected runs, hosted sentinel runs, complete fixed provider bytes, authority-v2 descendant matrix, and inversions verified. |
 | runtime-playtest | not-exercised | Non-game offline qualification unit. |
 | performance | exercised | Ten repository baselines and accepted fan-out/time targets qualified offline. |
 | documentation | exercised | SDD, evidence, feedback, critique, and roadmap ledger are covered. |
 | packaging-upgrade | not-exercised | No release or package publication occurred. |
-| worker-git-pr | exercised | PRs #261, #263, #265, #267, #269, #271, #273, #275, #277, and #279 preserve candidate/merge identity pairs. |
+| worker-git-pr | exercised | PRs #261, #263, #265, #267, #269, #271, #273, #275, #277, #279, #281, and #285 preserve candidate/merge identity pairs. |

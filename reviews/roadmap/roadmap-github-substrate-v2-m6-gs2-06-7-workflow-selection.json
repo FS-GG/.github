@@ -12,14 +12,16 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 5,
+  "repair_rounds": 7,
   "reviewed_commits": [
     "5716707b1cf5c9a63816467b7629bb7bc189c176",
     "ee95ba8ff066b4a883891bfaabfb1277c64cd993",
     "dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4",
     "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
     "1dd4f111fc80251e1e6107fbff1e5c4c73667762",
-    "6c0c75ab9b355e9e4e91b350711b7ab257755ff5"
+    "6c0c75ab9b355e9e4e91b350711b7ab257755ff5",
+    "20c3e30c03cd058d8f7f35fe68fada617cffb674",
+    "e8b9c5ff978e0f14462514406ac86a71c4826425"
   ],
   "findings": [
     {
@@ -117,6 +119,36 @@
         "Verification: that exact current-main run emits workflow-selection-authority/2 with inventory base 6d3b7662ac4d9474a9976ac093ec910f55fb6087 and current/event revision 6c0c75ab9b355e9e4e91b350711b7ab257755ff5, then emits a typed sentinel decision with fullSuite=passed, missedObligation=false, missedObligations=[], fleetSelection=eligible, productionMutation=false, and Q7 seal 34cc3b592c9a67d26814cea8768b1864071ff261204d56d42ef8d38bcfbe8ad2.",
         "Verification: append-only receipt issue #278 and PR #279 map candidate e8be64c02369942fc6efd58844be60d7214d021d to squash merge 6c0c75ab9b355e9e4e91b350711b7ab257755ff5; review/host records 5523497146 and 5523513052, successful protected runs 33738452137 and 33738452009, and delivery completion 5523563453 bind the current receipt head."
       ]
+    },
+    {
+      "id": "GS2-06.7-HOSTED-Q2-MAJ-007",
+      "severity": "major",
+      "summary": "The first actual hosted full-suite sentinel could not execute the two registered Q2 validators because the hosted runner had no Quint executable.",
+      "evidence": [
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33740967246 at exact protected head 6c0c75ab9b355e9e4e91b350711b7ab257755ff5 failed with 466/468 architecture tests; WorkTaxonomyArchitectureTests and OrganizationIssueFieldsArchitectureTests each expected Q2 exit 0 and observed exit 1.",
+        "Verification: the retained decision artifact for run 33740967246 reported fullSuite=failed, missedObligation=true, missedObligations=[test], fleetSelection=disabled, and productionMutation=false, contradicting the earlier local-only hosted-operability claim while preserving the fail-closed fleet state."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: Coordination issue #280 and PR #281 map repaired candidate 20c3e30c03cd058d8f7f35fe68fada617cffb674 to squash merge 2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc; successor review 5524410118 and host acceptance 5524432557 bind checksum-pinned Quint 0.32.0 provisioning and the acquisition-failure inversion.",
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33744634200 executed the shipped workflow at exact candidate 20c3e30c03cd058d8f7f35fe68fada617cffb674 and passed the full-suite-sentinel job; the decision reports fullSuite=passed, missedObligation=false, fleetSelection=eligible, and productionMutation=false.",
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33763107314 passed at exact final protected head e8b9c5ff978e0f14462514406ac86a71c4826425; downloaded non-expired artifact 9896556087 contains decision.json SHA-256 67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a with fullSuite=passed, missedObligation=false, missedObligations=[], fleetSelection=eligible, productionMutation=false, and Q7 seal 34cc3b592c9a67d26814cea8768b1864071ff261204d56d42ef8d38bcfbe8ad2."
+      ]
+    },
+    {
+      "id": "GS2-06.7-CANONICAL-SHIP-FIXED-POINT-MAJ-008",
+      "severity": "major",
+      "summary": "The protected provider retained verify-stage outputs but omitted the canonical ship and governance-handoff views, so FS.GG.SDD.Cli 1.0.0 ship was not a coherent no-change fixed point.",
+      "evidence": [
+        "Verification: fresh detached protected provider 26e7b3e1107d87a0b48aba5c708f512b9bc80730 passed canonical 1.0.0 verify twice as noChange/coherent=true, but ship reported coherent=false and proposed create operations for readiness/262-workflow-selection/ship.json and readiness/262-workflow-selection/governance-handoff.json.",
+        "Verification: git ls-files at 26e7b3e1 found analysis, work-model, verify, ship-verdict, and both TRX inputs but did not contain either proposed ship-stage output; the earlier durability guard therefore covered only the verify-stage subset."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: typed sdd-required repair issue #284 and PR #285 map reviewed candidate 4d1a1930082bfe7a3b23b4aaa19652e8af8fbf30 to protected merge e8b9c5ff978e0f14462514406ac86a71c4826425; review 5526638716, host acceptance 5526708654, protected Bootstrap 33762801775, and CodeQL 33762800840 bind the three-path repair.",
+        "Verification: fresh detached e8b9c5ff with FS.GG.SDD.Cli exactly 1.0.0 produced verify twice and ship twice with exit 0, outcome noChange, coherent=true, only noChange operations, zero diagnostics, shipReady with zero blockers, and a clean Git tree; tracked ship SHA-256 is 0b4e5756cdeefddf934aaacbf8f5683c13e1ad659a443899c87d4870eaec3b72 and governance-handoff SHA-256 is 6c4bd08e91b3a573e7d7e50c61ebd423f81a95f7b4e4891d39b5ed4d0f40c6ce.",
+        "Verification: exact e8b9c5ff focused architecture test sentinel authority survives unrelated protected advances and rejects stale paired evidence passed 1/1, including refusal legs for forged head, stale request, stale inventory, duplicate authority key, stale settings, and queued-head mismatch."
+      ]
     }
   ],
   "verification_evidence": [
@@ -126,13 +158,15 @@
     "Verification: at detached Coordination 6d3b7662, dotnet build completes with zero warnings and zero errors; focused unit tests pass 189/189 and architecture tests pass 465/465.",
     "Verification: at detached Coordination 6d3b7662, Q3 exits zero with 23 controls and Q7 exits zero with 12 controls, ten repositories, 80 runs, 305 jobs, fleet disabled, and shared seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868.",
     "Verification: the repair-receipt validator/self-test at 6d3b7662 passes seven mutation inversions; observed artifact hashes are analysis 75cad91363bc370af3838ddfa01ba02ad021526aa5b2d93563de5a401551c29e, work-model 5d4a3f00069e486620579824d80ad2618827c047111106e9747a5bf5fd0514b, verify 1a8b8aee909bd64ebcd0f7977ed5ed3d5bfd7d623278afee3a2299651a1bc40c, unit TRX a2746a37077d40e75d5c91c9e9cad61bcaf7d02f22f347b54735e078c222b215, and architecture TRX 13648d7ffca719debe2161a086cf936eb39a27dbc4da2f5d96cc114c0f798491.",
-    "Verification: PATH pinned to canonical FS.GG.SDD CLI 1.0.0 and fsgg-sdd verify --root . --work 262-workflow-selection --require-observed --dry-run at protected 6c0c75ab exits zero with outcome noChange, coherent=true, four noChange operations, 38/38 obligations ready, 19/19 evidence observed, 19/19 tests observed, and zero diagnostics.",
+    "Verification: fresh detached protected provider e8b9c5ff978e0f14462514406ac86a71c4826425 with FS.GG.SDD.Cli exactly 1.0.0 ran verify twice and ship twice; all four invocations exited zero with outcome noChange, coherent=true, only noChange operations, zero diagnostics, 38/38 obligations ready, 19/19 evidence and tests observed, shipReady, zero ship blockers, and an unchanged Git tree.",
+    "Verification: real authority resolution passed at implementation merge 48a3880c695111df360fbe0efd8bf35071ce8194, receipt descendant 6c0c75ab9b355e9e4e91b350711b7ab257755ff5, unrelated descendant 2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc, and current protected e8b9c5ff978e0f14462514406ac86a71c4826425; every row emitted authority/2 with its exact currentRevision, retained inventory base 6d3b7662ac4d9474a9976ac093ec910f55fb6087, queuedHead none, and reviewed settings SHA-256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518.",
+    "Verification: hosted workflow_dispatch run 33763107314 completed success at exact protected head e8b9c5ff978e0f14462514406ac86a71c4826425; complete run artifact census returned exactly one non-expired artifact, id 9896556087/name workflow-selection-sentinel-e8b9c5ff978e0f14462514406ac86a71c4826425, whose downloaded decision.json SHA-256 is 67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a and whose typed fields report the full suite passed with no missed obligations or production mutation.",
     "Verification: semantic repair PR #269 candidate 2da51ef3a77ac826e16141418232a46d786388c6 maps to merge 286bde7afd607ac8e62a4ca71f6f82d363c052b4 with final review/host/delivery comments 5520730651/5520759515/5520832555 and successful protected runs 33717657519/33717657228.",
     "Verification: superseding acceptance PR #271 candidate 31eccc62a83ad4ae15cb0338156001cbb6e6eb77 maps to merge 6d3b7662ac4d9474a9976ac093ec910f55fb6087 with final review/host/delivery comments 5521120106/5521151909/5521183025 and successful protected runs 33720546807/33720546536.",
     "Verification: GS2-06.7 is an offline CI/workflow policy and roadmap-projection milestone, not reachable game functionality; game_functionality=false, no player journey is applicable, and no uncovered game functionality or entry-point exception exists."
   ],
   "confirmation": {
-    "reviewed_commit": "6c0c75ab9b355e9e4e91b350711b7ab257755ff5",
+    "reviewed_commit": "e8b9c5ff978e0f14462514406ac86a71c4826425",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
