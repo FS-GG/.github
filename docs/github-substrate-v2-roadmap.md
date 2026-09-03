@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and GS2-06.1–GS2-06.7 accepted; GS2-01.9 not applicable; GS2-06.8 is next |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and all GS2-06 units accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1177,8 +1177,26 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md)
   close reissued typed cycle `cycle-a2884e80de219a84`; its source-bound guarded update digest is
   `sha256:aa9df7f27207dc8f1c72e4459855100c534aa40cad1d5f66ad58a85f253be5ed`.
-- [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
+- [x] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
+
+  Coordination [issue 288](https://github.com/FS-GG/FS.GG.Coordination/issues/288) and
+  [PR 289](https://github.com/FS-GG/FS.GG.Coordination/pull/289) accepted mutation-free fleet planning
+  over 10 repositories, 120 endpoints, 121 pages, and 356 observed items. Candidate
+  `6da61d7006444352670e27fbd850157768dc53b0` produced 107 supported, four unsupported, and nine
+  indeterminate dispositions, retained two complete terminal reads with zero operations, and passed all
+  nine registered Q3/Q5/Q7 gates, 198 unit tests, and 485 architecture tests. The independent critique
+  repaired two blockers and four majors over two rounds before confirming that exact candidate; the
+  implementation protected-merged as `3ac29ec0f46d744bfe607fea6c7fdceffc689673`.
+
+  Acceptance [PR 290](https://github.com/FS-GG/FS.GG.Coordination/pull/290) protected-merged the indexed,
+  append-only receipt as `84729d040a7d8baf039d5490d95ef982bb5e3f09`, with canonical digest
+  `c8831d8e3b06f77ae26d23579b738347794a8d08e460c84c5856cbbff50abd0e`; exact-main Bootstrap run
+  `33793312264` and CodeQL run `33793311567` succeeded, and #288 read back Closed/Done with no live claim.
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-8-fleet-dry-plans.json)
+  and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-8-fleet-dry-plans.md)
+  bind normalized SDD unit key `gs2-06-8` to typed cycle `cycle-7649c275b420340b`; its source-bound guarded
+  update digest is `sha256:f76c5b2a15980c6617b561b1370693c8153371895263e0ee7a2e91e94817c56d`.
 
 ### GS2-07 — Implement event reconciliation and merge readiness
 
