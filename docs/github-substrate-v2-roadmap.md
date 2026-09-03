@@ -1141,15 +1141,37 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   no missed obligations, selection eligible, and no production mutation. Receipt
   `repair-GS2-06.7-276` has self-digest
   `d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7`; prior receipts remain
-  byte-identical. Canonical FS.GG.SDD.Cli 1.0.0 independently returned `noChange`, `coherent=true`, and
-  zero diagnostics from a clean checkout of final protected main.
+  byte-identical. The first actual hosted sentinel at that protected head failed two registered Q2 tests
+  because the runner lacked Quint. Pinned-tool repair
+  [#280/#281](https://github.com/FS-GG/FS.GG.Coordination/pull/281) mapped reviewed candidate
+  `20c3e30c03cd058d8f7f35fe68fada617cffb674` to protected merge
+  [`2f9d2e7d`](https://github.com/FS-GG/FS.GG.Coordination/commit/2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc);
+  exact-head hosted [run 33744634200](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33744634200)
+  passed after checksum-pinned Quint 0.32.0 provisioning and an acquisition-failure inversion.
+
+  The complete canonical preflight then exposed two absent ship-stage provider views. Typed repair
+  [#284/#285](https://github.com/FS-GG/FS.GG.Coordination/pull/285) retained `ship.json` and
+  `governance-handoff.json`, extended their deletion-sensitive tracked-byte guard, and mapped candidate
+  `4d1a1930082bfe7a3b23b4aaa19652e8af8fbf30` to protected merge
+  [`e8b9c5ff`](https://github.com/FS-GG/FS.GG.Coordination/commit/e8b9c5ff978e0f14462514406ac86a71c4826425).
+  Protected [Bootstrap run 33762801775](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33762801775)
+  and [CodeQL run 33762800840](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33762800840)
+  passed. From a fresh checkout of that exact merge, canonical FS.GG.SDD.Cli 1.0.0 verify twice and ship
+  twice each returned `noChange`, `coherent=true`, only no-change operations, and zero diagnostics; Git
+  remained clean. Authority resolution passed at implementation merge `48a3880c`, receipt descendant
+  `6c0c75ab`, unrelated descendant `2f9d2e7d`, and current `e8b9c5ff`, while relevant stale-input
+  mutations failed closed. Final exact-head hosted
+  [run 33763107314](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33763107314) passed; its sole
+  retained artifact `9896556087` contains decision SHA-256
+  `67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a`, with no missed obligation or
+  production mutation.
 
   Roadmap projection [issue 3168](https://github.com/FS-GG/.github/issues/3168) binds the final exact
   four-path ledger update. The validated
   [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.json)
   and [schema-v2 feedback report](../feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md)
-  close typed cycle `cycle-a0cceecae4469bf3`; its guarded update digest is
-  `sha256:33d035ca6a2eda90579b30cb05bae62ac838f4350ab98359b71fe881226bf84e`.
+  close typed cycle `cycle-6a77ff8aa5071d6e`; its guarded update digest is
+  `sha256:554d704fbef70eae8c6205654682c110a14e6b29ef1905fbd979f6e9d9636f55`.
 - [ ] **GS2-06.8 — Fleet dry plans.** Inspect, plan, serialize, review, and re-inspect all repository
   settings without applying them. Unsupported plan/permission cases receive explicit dispositions.
 
