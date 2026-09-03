@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-8-fleet-dry-plans.md",
+  "reportSha256": "3bc9e08d058b455f12eb86fce69a33e63a1bf1d1d6a15b557d8f81637886c9f0",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

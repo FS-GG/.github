@@ -1,0 +1,106 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-8-fleet-dry-plans",
+  "milestone": "M6 — GS2-06.8 fleet dry plans",
+  "critic": "gs2-06-8-critic-rawls",
+  "initial_reviewed_commit": "6cf1d01fee493425679007aee68ed9efcdf03a4d",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 2,
+  "reviewed_commits": [
+    "6cf1d01fee493425679007aee68ed9efcdf03a4d",
+    "80fe4052c2a58b3c93c19d812b53c49f6d09f670",
+    "6da61d7006444352670e27fbd850157768dc53b0"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.8-C1-F01",
+      "severity": "blocker",
+      "summary": "The initial plan seal omitted endpoint observations, pagination, permission evidence, per-setting dispositions, and independent review.",
+      "evidence": [
+        "Verification: direct inspection of GitHubFleetDryPlanQualification.fs at 6cf1d01 lines 27-40, 130-155, and 245-270 showed these subjects absent from GitHubFleetRepositoryPlan and planSeal."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: GitHubFleetDryPlanQualification.fs at 80fe405 lines 146-173 and 277-320 binds pagination, permissions, dispositions, desired settings, operations, and typed review in the complete reviewed-envelope seal."
+      ]
+    },
+    {
+      "id": "GS2-06.8-C1-F02",
+      "severity": "blocker",
+      "summary": "Q5 asserted generated and independent controls as passing instead of executing the adversarial cases.",
+      "evidence": [
+        "Verification: eng/validate-github-fleet-dry-plans.fsx at 6cf1d01 constructed ControlPassed=true and BaselineGreen=true for all retained controls."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: at 6da61d7 the Q5 validator has distinct exhaustive execute and independentExecute functions with 33 branches each, matches retained results by control ID, and exits zero."
+      ]
+    },
+    {
+      "id": "GS2-06.8-C1-F03",
+      "severity": "major",
+      "summary": "Compilation accepted incomplete desired-setting inventories, arbitrary permissions, and observations without a deterministic freshness bound.",
+      "evidence": [
+        "Verification: the original passing fixture at 6cf1d01 supplied only one of twelve desired settings, while validation required only ordered unique names and nonblank permission text."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: 80fe405 added exact setting completeness, freshness, and permission validation; 6da61d7 completed the permission repair by requiring environments:read/write and rejecting administration:write."
+      ]
+    },
+    {
+      "id": "GS2-06.8-C1-F04",
+      "severity": "major",
+      "summary": "Parse and verify did not revalidate plan semantics, and review unconditionally asserted independence.",
+      "evidence": [
+        "Verification: GitHubFleetDryPlanQualification.fs at 6cf1d01 lines 289-356 accepted shape, canonical bytes, and seal while setting Independent=true without distinct author provenance."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: 80fe405 centralized semantic recompilation, requires distinct author and reviewer identities, and rejects semantic mismatch, self-review, altered review evidence, and invalid reviewed seals."
+      ]
+    },
+    {
+      "id": "GS2-06.8-C1-R1-F01",
+      "severity": "major",
+      "summary": "The first repair still used one executor for both the generated and nominally independent Q5 suites.",
+      "evidence": [
+        "Verification: candidate 80fe405 used execute control independentSide for both result lists, with independentSide materially changing only one branch."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate 6da61d7 adds separately authored exhaustive generated and independent executors, each with 33 branches, and Q5 passed both complete inventories."
+      ]
+    },
+    {
+      "id": "GS2-06.8-C1-R1-F02",
+      "severity": "major",
+      "summary": "The first repair mapped environment settings to deployments:read and administration:write instead of the accepted adapter contract.",
+      "evidence": [
+        "Verification: direct comparison at 80fe405 with RepositorySettingsAdapter.fs line 89 established that the adapter requires environments:write."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: all retained environment observations at 6da61d7 use environments:read, all desired settings use environments:write, and focused tests reject administration:write."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "6da61d7006444352670e27fbd850157768dc53b0",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
