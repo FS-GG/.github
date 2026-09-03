@@ -56,7 +56,7 @@ and verify report plus an executable tracked-path/digest/TRX guard. Independent 
 passed candidate `fc49a925fa7379bba5686d7016c0308e28568005`. It merged as
 `42457a5e215386b9151a4d6670c35a662dc13f80`; protected Bootstrap run `33695108140` and CodeQL run
 `33695107570` passed. Delivery completion `5517912133` records digest
-`5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2`, zero pending writes, and zero obligations.
+`5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2eb5`, zero pending writes, and zero obligations.
 
 Independent fresh-checkout replay at that protected merge reports canonical `fsgg-sdd` 1.0.0
 `noChange`/coherent, analysis 33/33, evidence 10/10 supported and observed, verification 20/20, and zero

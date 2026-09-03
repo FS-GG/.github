@@ -65,6 +65,20 @@
         "Verification: issue #3165 claim comment https://github.com/FS-GG/.github/issues/3165#issuecomment-5518159797 establishes replacement claim generation 5518159797; its PR #3167 election https://github.com/FS-GG/.github/issues/3165#issuecomment-5518167031 and live PR authorization bind distinct opkey 86d6b250e6bb9196006880497179acdb550939b74baff3ec82935c58a236a684 and grant 5518167031 to unchanged exact head fc97126a61ebe1622bca9c25f10701717b92a6e2.",
         "Verification: rerun https://github.com/FS-GG/.github/actions/runs/33697259768 completed successfully at exact head fc97126a61ebe1622bca9c25f10701717b92a6e2; its claim-fence log reports all five substantive checks pass for issue #3165 and confirms the new election is grounded. This control-plane-only repair did not change the reviewed Coordination implementation chain, so repair_rounds and reviewed_commits remain the five-round product/provider chain rather than inventing a duplicate commit entry."
       ]
+    },
+    {
+      "id": "GS2-06.6-PROJECTION-EVIDENCE-MAJ-005",
+      "severity": "major",
+      "summary": "The first canonical projection head retained two false immutable-hash assertions: its critique named a feedback hash that did not match the committed report or audit, and its feedback report truncated the provider delivery-completion digest.",
+      "evidence": [
+        "Verification: `git show fc97126a61ebe1622bca9c25f10701717b92a6e2:reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.json` line 67 claims feedback SHA-256 b251d1186e31c6b22246b183547d4c21f75a17a69e70d0befbf943749a4e51d1 matches its audit, while `git show fc97126a61ebe1622bca9c25f10701717b92a6e2:feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md | sha256sum` returns 7682ed144e7585e75d3aa087d07238eb8ca024303062588f6b00ef225e5d066c and that head's audit binds 7682ed144e7585e75d3aa087d07238eb8ca024303062588f6b00ef225e5d066c.",
+        "Verification: exact head fc97126a61ebe1622bca9c25f10701717b92a6e2 feedback lines 58-59 record delivery comment 5517912133 digest as 5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2, but `gh api repos/FS-GG/FS.GG.Coordination/issues/comments/5517912133 --jq .body` returns full digest 5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2eb5. Both canonical artifact validators returned zero at fc97126a61ebe1622bca9c25f10701717b92a6e2, demonstrating that their structural checks did not detect either semantic evidence error."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: commit 23c54d98342b00e301ddac5f84e5bbfd4af0a7fd replaces the stale b251d1186e31c6b22246b183547d4c21f75a17a69e70d0befbf943749a4e51d1 assertion with an exact `git show` check that binds reviewed head fc97126a61ebe1622bca9c25f10701717b92a6e2 feedback bytes to 7682ed144e7585e75d3aa087d07238eb8ca024303062588f6b00ef225e5d066c and explicitly requires audit and typed-cycle reissue after subsequent feedback changes.",
+        "Verification: the current repair worktree changes feedback delivery digest 5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2 to the live comment's complete 5e2afc19b7621ba1cd42fe8e7ad451b0700018a23a48455a0486c7a580ae2eb5; `git diff 23c54d98342b00e301ddac5f84e5bbfd4af0a7fd -- feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-6-release-hardening.md` shows that bounded correction. The projection worker must regenerate the feedback audit, reissue typed-cycle evidence, and present the resulting committed head for exact-head confirmation before merge."
+      ]
     }
   ],
   "verification_evidence": [
