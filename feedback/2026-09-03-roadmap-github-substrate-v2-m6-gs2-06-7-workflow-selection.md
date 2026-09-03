@@ -87,11 +87,17 @@ The first typed intake application partially created provider issue #266 before 
 because no worker identity was present. Exact-id resume completed the transaction without duplicating the
 issue. This was bounded orchestration friction, not product behavior.
 
+Provider PR #267 also exposed a guarded-landing transport defect: `fsgg-coord delivery --apply` sent the
+default merge-commit request to a squash-only repository and GitHub returned HTTP 405. The already accepted,
+exact-head candidate was then squash-merged explicitly, and typed delivery resumed to its verified completion
+receipt. Durable [`.github#3169`](https://github.com/FS-GG/.github/issues/3169) owns selecting an enabled
+repository merge method inside guarded landing.
+
 ## §4 Findings
 
 No checkpoint-backed feedback finding was created. The implementation root-binding defect and provider
-currency defect are resolved in the schema-v3 critique. The missing feedback skill remains deduplicated to
-`.github#2366`.
+currency defect are resolved in the schema-v3 critique. The guarded-landing merge-policy defect is routed to
+`.github#3169`; the missing feedback skill remains deduplicated to `.github#2366`.
 
 ## §5 Did not exercise
 
@@ -106,16 +112,20 @@ Coordination checkout omits it. `.github#2366` owns that scaffold-provenance con
 
 ## §7 Workarounds still in the tree
 
-None. The retained provider files and durability test are explicit tracked evidence. No ignored output,
-external feedback tool, production writer, secret shim, or merge bypass was introduced.
+The provider repair used one explicit exact-head squash merge after guarded delivery returned HTTP 405; the
+typed completion flow then verified the same protected merge. `.github#3169` owns removal of that out-of-band
+transport fallback. The retained provider files and durability test are explicit tracked evidence; no ignored
+output, external feedback tool, production writer, or secret shim remains in the tree.
 
 ## §8 Friction and avoidable cost
 
 One implementation repair was required for an independently reproduced root-classification survivor. One
 provider repair was required because the producer used an ambient SDD version newer than the roadmap
 consumer's canonical verifier. Squash transport required four explicit candidate-to-merge mappings across
-registration, implementation, acceptance, and provider repair. The typed preflight and exact-id intake resume
-kept each mismatch fail-closed and prevented a false roadmap acceptance or duplicate issue.
+registration, implementation, acceptance, and provider repair, and the provider repair additionally needed
+one explicit squash invocation after guarded landing assumed a disabled merge-commit method. The typed
+preflight and exact-id intake resume kept each mismatch fail-closed and prevented a false roadmap acceptance
+or duplicate issue; `.github#3169` makes the remaining transport cost durable.
 
 ## §9 Skill value and gaps
 
@@ -133,13 +143,15 @@ only activation gap.
 - Acceptance: #264/#265; candidate `05ce70b3`; merge `81574bc8`; receipt `c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036`.
 - Provider repair: #266/#267; candidate `353c5a5a`; merge `57305e54`; review `5519507655`; host `5519547792`; delivery `5519583995`.
 - Provider hashes: analysis `35486521`, work model `a2b96fd1`, verification `b5d87f7c`, unit TRX `e5e82831`, architecture TRX `ad66e4ae`.
+- Transport follow-up: `.github#3169` records guarded landing's HTTP 405 on squash-only repository policy.
 
 ## §11 Falsifiable improvements
 
 Pinning the roadmap cycle's canonical SDD version at producer authoring time should make the first clean
 checkout replay return `noChange`; any future ambient-version output must red the retained generator and
-digest guard before acceptance. After `.github#2366` lands, the same product checkout should validate real
-checkpoint invocations instead of the zero-event fallback.
+digest guard before acceptance. `.github#3169` should make the same exact-head guarded delivery succeed with
+the repository's enabled squash method and no fallback. After `.github#2366` lands, the same product checkout
+should validate real checkpoint invocations instead of the zero-event fallback.
 
 ## §12 Development-surface coverage
 
