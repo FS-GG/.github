@@ -1,0 +1,103 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection",
+  "milestone": "M6 — GS2-06.7 workflow consolidation and change-impact selection",
+  "critic": "gs2-06-7-projection-critic",
+  "initial_reviewed_commit": "5716707b1cf5c9a63816467b7629bb7bc189c176",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "5716707b1cf5c9a63816467b7629bb7bc189c176"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001",
+      "severity": "major",
+      "summary": "The accepted upstream change validates a fixed qualification corpus but does not implement the roadmap-required workflow consolidation or a change-impact selector that can classify arbitrary changed subjects and non-file inputs.",
+      "evidence": [
+        "Verification: `git -C /home/developer/projects/FS.GG.Coordination diff --name-only ff65faa6697ea5835de72c1e6fa1b53af0a883e3..3277a7a581f9b75001a851e0b614de3c1eadf812` lists qualification-contract source/signature, validator scripts, retained evidence, tests, and SDD work/readiness artifacts, but no `.github/workflows`, composite action, reusable job, production selector, Core, GitHub adapter, CLI, or host implementation path; this conflicts with `docs/github-substrate-v2-roadmap.md` GS2-06.7, which requires consolidating reusable work and selecting the smallest sound job set.",
+        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubWorkflowSelectionQualification.fs` at protected main 57305e540267f3f4696ba5a6cdfc84361de577d3 defines `expectedImpactBindings` as eleven exact fixture tuples; `compile` compares caller-supplied `ChangedSubjects`, `NonFileInputs`, and `Roots` to those tuples, checks caller-supplied `ExpectedClosure`, and returns only counts, fleet state, missed obligations, and a seal. The public signature exposes no operation that accepts a new changed-subject/non-file-input set and returns selected obligations or child outcomes.",
+        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/262 and its retained `work/262-workflow-selection/spec.md` FR-002 say the selector MUST compile a versioned dependency graph over changed subjects and non-file inputs into the smallest sound closure; PR https://github.com/FS-GG/FS.GG.Coordination/pull/263 merged the fixed-corpus validator as 3277a7a581f9b75001a851e0b614de3c1eadf812 without such an input-to-selection API. The exact Q3 and Q7 scripts pass only after the Release contract assembly is built, printing 23 and 12 controls with seal 43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab; those green controls validate the fixed corpus and do not close the missing implementation surface."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unverified; repair requires a new independently reviewed Coordination exact head that implements the roadmap/spec input-to-selection behavior and workflow consolidation, adds positive and negative tests over previously unseen changed-subject/non-file-input combinations, and supersedes or amends the current accepted receipt before this projection can be confirmed."
+      ]
+    },
+    {
+      "id": "GS2-06.7-MEASURED-BASELINES-MAJ-002",
+      "severity": "major",
+      "summary": "The Q7 evidence does not prove measured per-repository baselines or accepted targets; it seals identical unexplained constants for every repository and tests only arithmetic ordering.",
+      "evidence": [
+        "Verification: `evidence/github-substrate-v2/gs2-06-7/corpus.json` at Coordination protected main 57305e540267f3f4696ba5a6cdfc84361de577d3 contains ten repository rows, but every baseline is exactly workflowFanOut=4, jobFanOut=12, billedMinutes=120, queueTimeSeconds=300, p50Seconds=1200, p95Seconds=2400, every target is 3/9/90/240/1000/2100, and every selected value is 2/7/70/180/900/1800. The rows carry no observation window, run IDs, sample counts, source URLs, timestamps, collector identity, or acceptance authority.",
+        "Verification: `rg -n 'baseline|measured' work/262-workflow-selection evidence/github-substrate-v2/gs2-06-7 readiness/262-workflow-selection --glob '!*.trx'` finds the requirement/plan language and the literal corpus rows but no measurement provenance. `GitHubWorkflowSelectionQualification.compile` checks only that metrics are positive, targets are no worse than baselines, and selected values are no worse than targets; the 12 Q7 controls mutate row presence or numeric inequalities and never establish that any value was observed or accepted.",
+        "Verification: `docs/github-substrate-v2-roadmap.md` GS2-06.7 requires per-repository baselines and accepted targets for workflow/job fan-out, billed minutes, queue time, and p50/p95 completion time before cutover; the identical provenance-free literals therefore do not satisfy the roadmap evidence requirement even though `dotnet fsi eng/validate-github-workflow-selection-supply-chain.fsx -- .` prints a passing 12-control result."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unverified; repair requires traceable repository-specific measurements and target acceptance evidence, schema/compiler bindings that reject missing or stale provenance, independent controls for fabricated/cross-repository measurements, and a superseding independently reviewed Coordination acceptance chain."
+      ]
+    },
+    {
+      "id": "GS2-06.7-DELIVERY-FEEDBACK-MAJ-003",
+      "severity": "major",
+      "summary": "The projection feedback omits and contradicts the durable guarded-landing failure and manual squash workaround recorded during provider-repair delivery.",
+      "evidence": [
+        "Verification: GitHub issue https://github.com/FS-GG/.github/issues/3169 records that `fsgg-coord delivery --apply` for Coordination #266/#267 received HTTP 405 because `Writes.mergeAtHead` omitted `merge_method` on a squash-only repository, after which an out-of-band exact-head squash merge succeeded; the issue remains OPEN and carries concrete transport-test acceptance criteria.",
+        "Verification: at exact projection head 5716707b1cf5c9a63816467b7629bb7bc189c176, `feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md` §3 omits the HTTP 405, §4 says only the missing feedback skill remains, §7 says `None` and denies a merge bypass/workaround, and §8 lists other friction without the guarded-landing failure. The report was authored after issue #3169 was created at 2026-09-03T02:49:05Z and after delivery comment https://github.com/FS-GG/FS.GG.Coordination/issues/266#issuecomment-5519583995 recorded the resulting merge 57305e540267f3f4696ba5a6cdfc84361de577d3.",
+        "Verification: the canonical feedback contract `.agents/skills/work-roadmap/references/feedback-contract.md` requires material orchestration failures and workarounds to be captured and dispositioned. The initial report and audit hash match and `validate-feedback-state.py` exits zero with zero material events, demonstrating structural consistency but not semantic completeness."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unverified; the projection worker reports an uncommitted feedback repair that names and dispositions FS-GG/.github#3169, but no repaired exact commit, regenerated audit hash, or canonical validator result has yet been presented to this critic."
+      ]
+    },
+    {
+      "id": "GS2-06.7-PROJECTION-AUTHORITY-MAJ-004",
+      "severity": "major",
+      "summary": "The initial projection marks GS2-06.7 accepted before the required validated critique and typed-cycle evidence exist.",
+      "evidence": [
+        "Verification: `git show 5716707b1cf5c9a63816467b7629bb7bc189c176:docs/github-substrate-v2-roadmap.md` checks GS2-06.7, advances the status row to GS2-06.8, and ends the GS2-06.7 evidence paragraph with `The validated schema-v3 critique and schema-v2 feedback/audit close typed cycle <pending>`; `git ls-tree -r --name-only 5716707b1cf5c9a63816467b7629bb7bc189c176 -- reviews/roadmap/roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.json` returns no artifact.",
+        "Verification: `.agents/skills/work-roadmap/SKILL.md` steps 4-6 and `.agents/skills/work-roadmap/references/critique-contract.md` require validated schema-v3 critique plus generated SDD and feedback provider evidence to advance, guarded-update, and complete the exact typed cycle before roadmap completion evidence is accepted; issue https://github.com/FS-GG/.github/issues/3168 likewise requires the completed typed cycle and an exact four-file diff."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Verification: unverified; no typed-cycle identifier, guarded update receipt/digest, completed cycle inspection, repaired projection commit, or exact-head confirmation exists yet."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: `git rev-parse 5716707b` in `/home/developer/projects/.github-item-3168` resolves to 5716707b1cf5c9a63816467b7629bb7bc189c176; `git diff --name-status b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9..5716707b1cf5c9a63816467b7629bb7bc189c176` shows exactly the roadmap plus the feedback report and audit, while the required critique path is absent at that commit.",
+    "Verification: GitHub API/CLI reads of Coordination issues #260/#262/#264/#266 and PRs #261/#263/#265/#267 confirm all four issues closed and all four PRs squash-merged, mapping candidates c10590c4fcc35fdae22435af09b5b551682910a2→ff65faa6697ea5835de72c1e6fa1b53af0a883e3, 6720277cd17f96e044e5afd9b18fa71813f9cbca→3277a7a581f9b75001a851e0b614de3c1eadf812, 05ce70b3f05a7178bfad0af68649e8b80db6c5ac→81574bc8d12d46d08d60448b96db641fc3cb0de9, and 353c5a5ab9cd47cc01ea4ecfda6aee3d5bf58bfe→57305e540267f3f4696ba5a6cdfc84361de577d3.",
+    "Verification: GitHub comment API reads confirm registration review/host/delivery 5518639298/5518668723/5518694233, implementation initial rejection/repair confirmation/host/delivery 5519020498/5519081717/5519120654/5519145418, acceptance review/host/delivery 5519238919/5519346373/5519369598, and provider review/host/delivery 5519507655/5519547792/5519583995 bind the candidate and merge identities claimed by the projection. The implementation initial review found the root-classification survivor and the 6720277c confirmation records it repaired.",
+    "Verification: GitHub Actions API and `gh run view` confirm protected Bootstrap/CodeQL workflows 33701716628/33701716127 at ff65faa6697ea5835de72c1e6fa1b53af0a883e3, 33705575802/33705575434 at 3277a7a581f9b75001a851e0b614de3c1eadf812, 33707365752/33707365512 at 81574bc8d12d46d08d60448b96db641fc3cb0de9, and 33708922854/33708922489 at 57305e540267f3f4696ba5a6cdfc84361de577d3 all completed successfully; the dynamic `Push on main` display titles for the second run in each pair have workflowName `CodeQL` and contain successful CodeQL analysis jobs.",
+    "Verification: `evidence/github-substrate-v2/accepted/GS2-06.7.json` at Coordination 57305e540267f3f4696ba5a6cdfc84361de577d3 binds sourceRevision 3277a7a581f9b75001a851e0b614de3c1eadf812, unit contract a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79, Q3/Q7 validators, implementation candidate manifest 9084d9636eb1166c69ef855b9fe29c469415b0d70d468a37a7011a7e1c234e66, confirmation/host/delivery records, protected runs, and self-digest c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036.",
+    "Verification: at Coordination protected main 57305e540267f3f4696ba5a6cdfc84361de577d3, `PATH=/tmp/fsgg-sdd-cli-1.0.0:$PATH fsgg-sdd verify --root . --work 262-workflow-selection --require-observed --dry-run` exits zero under tool 1.0.0 with outcome noChange, coherent=true, four noChange operations, 38/38 verification obligations ready, 19/19 evidence observed, 19/19 tests observed, and zero diagnostics; focused unit tests pass 3/3 and focused architecture tests pass 7/7.",
+    "Verification: after building the Coordination Release contract assembly, `dotnet fsi eng/validate-github-workflow-selection.fsx -- .` and `dotnet fsi eng/validate-github-workflow-selection-supply-chain.fsx -- .` exit zero with 23 Q3 controls, 12 Q7 controls, ten repository rows, and shared seal 43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab; findings GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001 and GS2-06.7-MEASURED-BASELINES-MAJ-002 explain why those fixed-corpus checks do not establish the omitted acceptance behavior/evidence.",
+    "Verification: `sha256sum feedback/2026-09-03-roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection.md` at initial head returns a29086e65fbc0d4c00acb771a9500a20f94a08d764df5f90e2ce0c7ae6fef030, matching its audit, and the canonical feedback-state validator exits zero with 0 material events; finding GS2-06.7-DELIVERY-FEEDBACK-MAJ-003 records the semantic omission that structural validation does not detect.",
+    "Verification: GS2-06.7 is an offline CI/workflow policy and roadmap-projection milestone, not reachable game functionality; game_functionality=false, no player journey is applicable, and no uncovered game functionality or entry-point exception exists."
+  ],
+  "confirmation": {
+    "reviewed_commit": "5716707b1cf5c9a63816467b7629bb7bc189c176",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001",
+      "GS2-06.7-MEASURED-BASELINES-MAJ-002",
+      "GS2-06.7-DELIVERY-FEEDBACK-MAJ-003",
+      "GS2-06.7-PROJECTION-AUTHORITY-MAJ-004"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
