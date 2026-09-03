@@ -12,12 +12,13 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 4,
   "reviewed_commits": [
     "5716707b1cf5c9a63816467b7629bb7bc189c176",
     "ee95ba8ff066b4a883891bfaabfb1277c64cd993",
     "dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4",
-    "6d3b7662ac4d9474a9976ac093ec910f55fb6087"
+    "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
+    "1dd4f111fc80251e1e6107fbff1e5c4c73667762"
   ],
   "findings": [
     {
@@ -77,7 +78,7 @@
       "resolution_evidence": [
         "Verification: projection commit ee95ba8ff066b4a883891bfaabfb1277c64cd993 rolled the roadmap back to an unchecked GS2-06.7 and restored GS2-06.7 as the next milestone.",
         "Verification: after discovery of the current-authority finding, git diff --exit-code b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9 -- docs/github-substrate-v2-roadmap.md exits zero in the projection worktree, proving the roadmap is again byte-identical to the pre-projection base and unchecked.",
-        "Verification: typed cycle cycle-5c2c1d829da0bf43 is registered only and has not been advanced; FS-GG/.github#3168 is released Blocked by FS-GG/FS.GG.Coordination#272 pending an independently reviewed repair."
+        "Verification: typed cycle cycle-5c2c1d829da0bf43 is registered only and has not been advanced; FS-GG/.github#3168 is released Blocked by FS-GG/FS.GG.Coordination#276 pending an independently reviewed rollover repair."
       ]
     },
     {
@@ -89,15 +90,33 @@
         "Verification: eng/workflow-selection-sentinel.sh lines 119-126 at 6d3b7662 pass those same retained literals as --current-base and --current-settings; inspection of that script and .github/workflows/workflow-selection-sentinel.yml finds no comparison to the scheduled checkout HEAD or independently fetched/current repository settings.",
         "Verification: because evidence and purported current authority are the same stale literals, the CLI freshness guard can succeed after protected main or repository settings have changed, so the scheduled sentinel does not fail closed against current production authority."
       ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: Coordination #272/#273 maps final candidate 0705405ff76eaf5cf34b627017a40240396616f9 to squash merge 588e1a4bcceeef1cc5a110c924aa52636f263b07, the direct child of retained base 6d3b7662ac4d9474a9976ac093ec910f55fb6087; successor critique 5521920685, structured review/host records 5521926908 and 5521933056, successful protected runs 33725627516 and 33725618051, and done receipt 5522003177 bind that implementation chain.",
+        "Verification: at detached 588e1a4, a scheduled-event invocation of eng/workflow-selection-sentinel.sh --resolve-authority exits zero and emits baseRevision 6d3b7662ac4d9474a9976ac093ec910f55fb6087, currentRevision 588e1a4bcceeef1cc5a110c924aa52636f263b07, reviewed settings SHA-256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518, and queuedHead none; the original stale-self-authority failure is therefore repaired.",
+        "Verification: append-only receipt issue #274 and PR #275 map candidate 2cccbafbff064eb0c60734ee975296c06da6cbb9 to squash merge 1dd4f111fc80251e1e6107fbff1e5c4c73667762; exact-head critique 5522292283, structured review/host records 5522299239 and 5522303389, successful protected runs 33728419618 and 33728414137, and done receipt 5522351065 bind the immutable superseding receipt without rewriting prior receipts."
+      ]
+    },
+    {
+      "id": "GS2-06.7-SENTINEL-ROLLOVER-MAJ-006",
+      "severity": "major",
+      "summary": "The repaired scheduled sentinel is intentionally runnable only at the direct child of its retained base, so the append-only acceptance receipt and every later protected-main merge make the full-suite oracle refuse before it can compare failures.",
+      "evidence": [
+        "Verification: git history at protected Coordination main 1dd4f111fc80251e1e6107fbff1e5c4c73667762 is the exact two-commit chain 6d3b7662ac4d9474a9976ac093ec910f55fb6087 -> 588e1a4bcceeef1cc5a110c924aa52636f263b07 -> 1dd4f111fc80251e1e6107fbff1e5c4c73667762, and git rev-list --count 6d3b7662..1dd4f111 returns 2.",
+        "Verification: eng/workflow-selection-sentinel.sh at 1dd4f111 requires git rev-list distance exactly 1; an independent scheduled-event --resolve-authority invocation at that exact protected head exits 1 and writes a zero-byte authority output, while the architecture test explicitly expects refusal after a protected-head advancement.",
+        "Verification: .github/workflows/workflow-selection-sentinel.yml runs authority resolution as a preflight step before the full-suite/oracle step; at current protected main that preflight fails, no decision.json is produced, and the always-run upload declares decision.json mandatory, so the scheduled route cannot retain the required typed comparison decision.",
+        "Verification: gh run list -R FS-GG/FS.GG.Coordination --workflow workflow-selection-sentinel.yml returns an empty array, so no hosted scheduled or manual run demonstrates an operational full-suite sentinel at 1dd4f111.",
+        "Verification: roadmap GS2-06.7 lines 1103-1104 require scheduled full-suite sentinels that compare selected closure with actual failures and disable selection after a missed obligation; a route that predictably stops at authority preflight after normal protected advancement does not perform that operational acceptance behavior."
+      ],
       "disposition": "unresolved",
       "resolution_evidence": [
-        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/272 is OPEN and routes an sdd-required repair to bind the sentinel to current checkout and independently authoritative settings; route comment 5521320075 carries digest 22e52d10fecf3fddeebb860e845220dfaf40b649d009e17324ab2fc8beebc022 and the lifecycle watermark is Ready.",
-        "Verification: no repaired protected Coordination exact head, superseding acceptance receipt, exact-head review/host/delivery chain, or protected-run confirmation exists yet; the finding therefore remains unresolved."
+        "Verification: Coordination issue https://github.com/FS-GG/FS.GG.Coordination/issues/276 is OPEN and routes an sdd-required repair that distinguishes irrelevant protected advancement from authority-sensitive drift, retains a typed decision, and reaches the full-suite oracle on current main; route comment 5522411819 carries digest a9a8cee9a6f09def74a097d9b43f813173440bb566d31446b4aecebf397cc426 and the lifecycle watermark is Ready.",
+        "Verification: no repaired protected Coordination exact head, append-only acceptance receipt, exact-head review/host/delivery chain, or successful hosted current-main sentinel run exists yet; the rollover finding remains unresolved."
       ]
     }
   ],
   "verification_evidence": [
-    "Verification: initial projection SHA 5716707b1cf5c9a63816467b7629bb7bc189c176 and repaired projection SHA dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 resolve locally; detached Coordination confirmation SHA resolves to protected main 6d3b7662ac4d9474a9976ac093ec910f55fb6087.",
+    "Verification: initial projection SHA 5716707b1cf5c9a63816467b7629bb7bc189c176 and repaired projection SHA dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 resolve locally; detached Coordination confirmation SHA resolves to protected main 1dd4f111fc80251e1e6107fbff1e5c4c73667762, two commits after retained selector base 6d3b7662ac4d9474a9976ac093ec910f55fb6087.",
     "Verification: Coordination semantic repair #268/#269 and superseding acceptance #270/#271 are closed/merged and preserve the original acceptance receipt while adding repair receipt evidence; the original receipt SHA-256 is 9a98a1324ad5ba5e125f708318e8ec1be3e1713920d31ba80443536af53b1510 with self-digest c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036, and the repair receipt SHA-256 is 37d36961eb90e7aceec4f181fe548b76ea75e8ef04f9c825276219e3d2b79483 with self-digest f0360e50a1c94262d8c1b83a12871276c8b1c58e6efceba14b49926dca00d45d.",
     "Verification: at detached Coordination 6d3b7662, dotnet build completes with zero warnings and zero errors; focused unit tests pass 189/189 and architecture tests pass 465/465.",
     "Verification: at detached Coordination 6d3b7662, Q3 exits zero with 23 controls and Q7 exits zero with 12 controls, ten repositories, 80 runs, 305 jobs, fleet disabled, and shared seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868.",
@@ -108,10 +127,10 @@
     "Verification: GS2-06.7 is an offline CI/workflow policy and roadmap-projection milestone, not reachable game functionality; game_functionality=false, no player journey is applicable, and no uncovered game functionality or entry-point exception exists."
   ],
   "confirmation": {
-    "reviewed_commit": "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
+    "reviewed_commit": "1dd4f111fc80251e1e6107fbff1e5c4c73667762",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "GS2-06.7-SENTINEL-CURRENT-AUTHORITY-MAJ-005"
+      "GS2-06.7-SENTINEL-ROLLOVER-MAJ-006"
     ]
   },
   "human_escalation": null,
