@@ -501,7 +501,7 @@
        documentation-only orchestration visualization design in PR #3138. No package behavior
        changes; the fresh identity belongs to the required post-merge verification artifacts. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.78.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.79.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
