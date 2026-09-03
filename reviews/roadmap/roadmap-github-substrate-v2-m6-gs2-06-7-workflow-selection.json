@@ -1,0 +1,179 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m6-gs2-06-7-workflow-selection",
+  "milestone": "M6 — GS2-06.7 workflow consolidation and change-impact selection",
+  "critic": "gs2-06-7-projection-critic",
+  "initial_reviewed_commit": "5716707b1cf5c9a63816467b7629bb7bc189c176",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 7,
+  "reviewed_commits": [
+    "5716707b1cf5c9a63816467b7629bb7bc189c176",
+    "ee95ba8ff066b4a883891bfaabfb1277c64cd993",
+    "dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4",
+    "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
+    "1dd4f111fc80251e1e6107fbff1e5c4c73667762",
+    "6c0c75ab9b355e9e4e91b350711b7ab257755ff5",
+    "20c3e30c03cd058d8f7f35fe68fada617cffb674",
+    "e8b9c5ff978e0f14462514406ac86a71c4826425"
+  ],
+  "findings": [
+    {
+      "id": "GS2-06.7-SELECTOR-IMPLEMENTATION-MAJ-001",
+      "severity": "major",
+      "summary": "The initially accepted upstream change validated a fixed qualification corpus but did not implement the roadmap-required arbitrary-input selector and production workflow surfaces.",
+      "evidence": [
+        "Verification: the initial Coordination diff ff65faa6697ea5835de72c1e6fa1b53af0a883e3..3277a7a581f9b75001a851e0b614de3c1eadf812 contained qualification-contract, evidence, validator, test, work, and readiness files but no production Core selector, CLI command, composite action, or reusable/sentinel workflow.",
+        "Verification: protected Coordination main 57305e540267f3f4696ba5a6cdfc84361de577d3 exposed eleven exact expectedImpactBindings in GitHubWorkflowSelectionQualification.fs and no API that accepted a previously unseen changed-subject/non-file-input set and returned selected obligations."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: semantic repair PR https://github.com/FS-GG/FS.GG.Coordination/pull/269 maps candidate 2da51ef3a77ac826e16141418232a46d786388c6 to squash merge 286bde7afd607ac8e62a4ca71f6f82d363c052b4; review comment 5520730651, host comment 5520759515, protected runs 33717657519 and 33717657228, and delivery comment 5520832555 bind that exact chain.",
+        "Verification: detached protected Coordination head 6d3b7662ac4d9474a9976ac093ec910f55fb6087 contains WorkflowSelection.fs/.fsi, WorkflowSelectionCommand.fs, .github/actions/coordination-setup/action.yml, reusable-obligation-selection.yml, workflow-selection-sentinel.yml, workflow-selection-aggregate.sh, and workflow-selection-sentinel.sh.",
+        "Verification: executing the Release CLI at detached 6d3b7662 against an independently authored arbitrary request selected build, policy, and packaging roots and the six-obligation closure; a request containing assets/unseen.future exited 3 with reason unknown-changed-path.",
+        "Verification: superseding acceptance PR https://github.com/FS-GG/FS.GG.Coordination/pull/271 maps candidate 31eccc62a83ad4ae15cb0338156001cbb6e6eb77 to squash merge 6d3b7662ac4d9474a9976ac093ec910f55fb6087; review 5521120106, host 5521151909, protected runs 33720546807 and 33720546536, and delivery 5521183025 bind the reacceptance."
+      ]
+    },
+    {
+      "id": "GS2-06.7-MEASURED-BASELINES-MAJ-002",
+      "severity": "major",
+      "summary": "The initial Q7 evidence sealed uniform unexplained constants rather than measured per-repository baseline provenance.",
+      "evidence": [
+        "Verification: corpus.json at protected Coordination main 57305e540267f3f4696ba5a6cdfc84361de577d3 repeated the same baseline, target, and selected metrics for all ten repositories and carried no observation window, run identities, sample counts, source URLs, timestamps, or collector authority.",
+        "Verification: the initial Q7 compiler checked positivity and numeric ordering but did not establish that any baseline was observed or accepted."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: the repaired evidence at protected 6d3b7662 records a bounded observation schema and provenance for ten repositories, eight runs per repository, 80 unique workflow runs, and 305 unique jobs; independent enumeration reproduced those cardinalities.",
+        "Verification: GitHub Actions API comparison of all 80 retained run identities—repository, head SHA, workflow ID, attempt, and job count—found zero mismatches, and comparison of all 305 job IDs, conclusions, started timestamps, and completed timestamps found zero mismatches.",
+        "Verification: the repaired Q7 supply-chain validator exited zero with 12 controls, ten repositories, fleet disabled, and seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868."
+      ]
+    },
+    {
+      "id": "GS2-06.7-DELIVERY-FEEDBACK-MAJ-003",
+      "severity": "major",
+      "summary": "The initial projection feedback omitted the provider-repair delivery HTTP 405 and manual exact-head squash workaround recorded in FS-GG/.github#3169.",
+      "evidence": [
+        "Verification: https://github.com/FS-GG/.github/issues/3169 records that fsgg-coord delivery --apply received HTTP 405 on the squash-only Coordination repository because merge_method was omitted, followed by an exact-head squash merge.",
+        "Verification: feedback at initial projection head 5716707b1cf5c9a63816467b7629bb7bc189c176 omitted this event and contradicted it in its bypass/workaround account."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: feedback at repaired projection head dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 names and dispositions FS-GG/.github#3169 in sections 3, 4, 7, 8, 10, and 11.",
+        "Verification: the repaired feedback report SHA-256 is 51249be7da2fa95163cc8fd433ae2292be59b6d74e357f387a4047d5a47e1758, matching its audit, and the canonical validate-feedback-state.py command exits zero."
+      ]
+    },
+    {
+      "id": "GS2-06.7-PROJECTION-AUTHORITY-MAJ-004",
+      "severity": "major",
+      "summary": "The initial projection marked GS2-06.7 accepted before a validated critique and completed typed-cycle evidence existed.",
+      "evidence": [
+        "Verification: roadmap at initial projection head 5716707b1cf5c9a63816467b7629bb7bc189c176 checked GS2-06.7 and cited typed cycle <pending>, while git ls-tree showed no critique artifact at the required path.",
+        "Verification: the work-roadmap critique contract requires validated same-critic confirmation before advancement."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: projection commit ee95ba8ff066b4a883891bfaabfb1277c64cd993 rolled the roadmap back to an unchecked GS2-06.7 and restored GS2-06.7 as the next milestone.",
+        "Verification: after discovery of the current-authority finding, git diff --exit-code b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9 -- docs/github-substrate-v2-roadmap.md exits zero in the projection worktree, proving the roadmap is again byte-identical to the pre-projection base and unchecked.",
+        "Verification: typed cycle cycle-5c2c1d829da0bf43 is registered only and has not been advanced; FS-GG/.github#3168 is released Blocked by FS-GG/FS.GG.Coordination#276 pending an independently reviewed rollover repair."
+      ]
+    },
+    {
+      "id": "GS2-06.7-SENTINEL-CURRENT-AUTHORITY-MAJ-005",
+      "severity": "major",
+      "summary": "The scheduled production sentinel can accept stale retained authority because it supplies the retained base and settings values as their own current comparison values instead of deriving current checkout and settings authority.",
+      "evidence": [
+        "Verification: at detached protected Coordination head 6d3b7662ac4d9474a9976ac093ec910f55fb6087, evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json and runtime-request-sentinel.json both bind baseRevision 57305e540267f3f4696ba5a6cdfc84361de577d3 and settingsSha256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518.",
+        "Verification: eng/workflow-selection-sentinel.sh lines 119-126 at 6d3b7662 pass those same retained literals as --current-base and --current-settings; inspection of that script and .github/workflows/workflow-selection-sentinel.yml finds no comparison to the scheduled checkout HEAD or independently fetched/current repository settings.",
+        "Verification: because evidence and purported current authority are the same stale literals, the CLI freshness guard can succeed after protected main or repository settings have changed, so the scheduled sentinel does not fail closed against current production authority."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: Coordination #272/#273 maps final candidate 0705405ff76eaf5cf34b627017a40240396616f9 to squash merge 588e1a4bcceeef1cc5a110c924aa52636f263b07, the direct child of retained base 6d3b7662ac4d9474a9976ac093ec910f55fb6087; successor critique 5521920685, structured review/host records 5521926908 and 5521933056, successful protected runs 33726702726 and 33726701922, and done receipt 5522003177 bind that implementation chain.",
+        "Verification: at detached 588e1a4, a scheduled-event invocation of eng/workflow-selection-sentinel.sh --resolve-authority exits zero and emits baseRevision 6d3b7662ac4d9474a9976ac093ec910f55fb6087, currentRevision 588e1a4bcceeef1cc5a110c924aa52636f263b07, reviewed settings SHA-256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518, and queuedHead none; the original stale-self-authority failure is therefore repaired.",
+        "Verification: append-only receipt issue #274 and PR #275 map candidate 2cccbafbff064eb0c60734ee975296c06da6cbb9 to squash merge 1dd4f111fc80251e1e6107fbff1e5c4c73667762; exact-head critique 5522292283, structured review/host records 5522299239 and 5522303389, successful protected runs 33728419618 and 33728414137, and done receipt 5522351065 bind the immutable superseding receipt without rewriting prior receipts."
+      ]
+    },
+    {
+      "id": "GS2-06.7-SENTINEL-ROLLOVER-MAJ-006",
+      "severity": "major",
+      "summary": "The repaired scheduled sentinel is intentionally runnable only at the direct child of its retained base, so the append-only acceptance receipt and every later protected-main merge make the full-suite oracle refuse before it can compare failures.",
+      "evidence": [
+        "Verification: git history at protected Coordination main 1dd4f111fc80251e1e6107fbff1e5c4c73667762 is the exact two-commit chain 6d3b7662ac4d9474a9976ac093ec910f55fb6087 -> 588e1a4bcceeef1cc5a110c924aa52636f263b07 -> 1dd4f111fc80251e1e6107fbff1e5c4c73667762, and git rev-list --count 6d3b7662..1dd4f111 returns 2.",
+        "Verification: eng/workflow-selection-sentinel.sh at 1dd4f111 requires git rev-list distance exactly 1; an independent scheduled-event --resolve-authority invocation at that exact protected head exits 1 and writes a zero-byte authority output, while the architecture test explicitly expects refusal after a protected-head advancement.",
+        "Verification: .github/workflows/workflow-selection-sentinel.yml runs authority resolution as a preflight step before the full-suite/oracle step; at current protected main that preflight fails, no decision.json is produced, and the always-run upload declares decision.json mandatory, so the scheduled route cannot retain the required typed comparison decision.",
+        "Verification: gh run list -R FS-GG/FS.GG.Coordination --workflow workflow-selection-sentinel.yml returns an empty array, so no hosted scheduled or manual run demonstrates an operational full-suite sentinel at 1dd4f111.",
+        "Verification: roadmap GS2-06.7 lines 1103-1104 require scheduled full-suite sentinels that compare selected closure with actual failures and disable selection after a missed obligation; a route that predictably stops at authority preflight after normal protected advancement does not perform that operational acceptance behavior."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: Coordination #276/#277 maps candidate 45b2e994e2d49df1700f03e8051918ae3ac4b4f2 to squash merge 48a3880c695111df360fbe0efd8bf35071ce8194; independent review 5523013563, host acceptance 5523059801, successful protected runs 33735084054 and 33735083336, and delivery completion 5523113293 bind the implementation repair.",
+        "Verification: authority v2 at protected 6c0c75ab removes the exact-distance-one condition, requires the retained base to be an ancestor, cryptographically binds tracked inventory, source request, and separately reviewed settings receipt, derives currentRevision from checked-out HEAD/GITHUB_SHA, and retains independent content digests; architecture controls exercise multiple unrelated advances plus stale request, inventory, settings, ambiguous JSON, and authority-sensitive change refusals.",
+        "Verification: an independent invocation of the production eng/workflow-selection-sentinel.sh at exact receipt-advanced protected main 6c0c75ab9b355e9e4e91b350711b7ab257755ff5 with GITHUB_EVENT_NAME=schedule and matching GITHUB_SHA exits zero after a zero-warning/error build, 189/189 unit tests, 468/468 architecture tests, dependency/security policy, Q3 23 controls, Q7 12 controls over ten repositories, package-install smoke, and release-hardening 21 controls.",
+        "Verification: that exact current-main run emits workflow-selection-authority/2 with inventory base 6d3b7662ac4d9474a9976ac093ec910f55fb6087 and current/event revision 6c0c75ab9b355e9e4e91b350711b7ab257755ff5, then emits a typed sentinel decision with fullSuite=passed, missedObligation=false, missedObligations=[], fleetSelection=eligible, productionMutation=false, and Q7 seal 34cc3b592c9a67d26814cea8768b1864071ff261204d56d42ef8d38bcfbe8ad2.",
+        "Verification: append-only receipt issue #278 and PR #279 map candidate e8be64c02369942fc6efd58844be60d7214d021d to squash merge 6c0c75ab9b355e9e4e91b350711b7ab257755ff5; review/host records 5523497146 and 5523513052, successful protected runs 33738452137 and 33738452009, and delivery completion 5523563453 bind the current receipt head."
+      ]
+    },
+    {
+      "id": "GS2-06.7-HOSTED-Q2-MAJ-007",
+      "severity": "major",
+      "summary": "The first actual hosted full-suite sentinel could not execute the two registered Q2 validators because the hosted runner had no Quint executable.",
+      "evidence": [
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33740967246 at exact protected head 6c0c75ab9b355e9e4e91b350711b7ab257755ff5 failed with 466/468 architecture tests; WorkTaxonomyArchitectureTests and OrganizationIssueFieldsArchitectureTests each expected Q2 exit 0 and observed exit 1.",
+        "Verification: the retained decision artifact for run 33740967246 reported fullSuite=failed, missedObligation=true, missedObligations=[test], fleetSelection=disabled, and productionMutation=false, contradicting the earlier local-only hosted-operability claim while preserving the fail-closed fleet state."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: Coordination issue #280 and PR #281 map repaired candidate 20c3e30c03cd058d8f7f35fe68fada617cffb674 to squash merge 2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc; successor review 5524410118 and host acceptance 5524432557 bind checksum-pinned Quint 0.32.0 provisioning and the acquisition-failure inversion.",
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33744634200 executed the shipped workflow at exact candidate 20c3e30c03cd058d8f7f35fe68fada617cffb674 and passed the full-suite-sentinel job; the decision reports fullSuite=passed, missedObligation=false, fleetSelection=eligible, and productionMutation=false.",
+        "Verification: workflow_dispatch run https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33763107314 passed at exact final protected head e8b9c5ff978e0f14462514406ac86a71c4826425; downloaded non-expired artifact 9896556087 contains decision.json SHA-256 67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a with fullSuite=passed, missedObligation=false, missedObligations=[], fleetSelection=eligible, productionMutation=false, and Q7 seal 34cc3b592c9a67d26814cea8768b1864071ff261204d56d42ef8d38bcfbe8ad2."
+      ]
+    },
+    {
+      "id": "GS2-06.7-CANONICAL-SHIP-FIXED-POINT-MAJ-008",
+      "severity": "major",
+      "summary": "The protected provider retained verify-stage outputs but omitted the canonical ship and governance-handoff views, so FS.GG.SDD.Cli 1.0.0 ship was not a coherent no-change fixed point.",
+      "evidence": [
+        "Verification: fresh detached protected provider 26e7b3e1107d87a0b48aba5c708f512b9bc80730 passed canonical 1.0.0 verify twice as noChange/coherent=true, but ship reported coherent=false and proposed create operations for readiness/262-workflow-selection/ship.json and readiness/262-workflow-selection/governance-handoff.json.",
+        "Verification: git ls-files at 26e7b3e1 found analysis, work-model, verify, ship-verdict, and both TRX inputs but did not contain either proposed ship-stage output; the earlier durability guard therefore covered only the verify-stage subset."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: typed sdd-required repair issue #284 and PR #285 map reviewed candidate 4d1a1930082bfe7a3b23b4aaa19652e8af8fbf30 to protected merge e8b9c5ff978e0f14462514406ac86a71c4826425; review 5526638716, host acceptance 5526708654, protected Bootstrap 33762801775, and CodeQL 33762800840 bind the three-path repair.",
+        "Verification: fresh detached e8b9c5ff with FS.GG.SDD.Cli exactly 1.0.0 produced verify twice and ship twice with exit 0, outcome noChange, coherent=true, only noChange operations, zero diagnostics, shipReady with zero blockers, and a clean Git tree; tracked ship SHA-256 is 0b4e5756cdeefddf934aaacbf8f5683c13e1ad659a443899c87d4870eaec3b72 and governance-handoff SHA-256 is 6c4bd08e91b3a573e7d7e50c61ebd423f81a95f7b4e4891d39b5ed4d0f40c6ce.",
+        "Verification: exact e8b9c5ff focused architecture test sentinel authority survives unrelated protected advances and rejects stale paired evidence passed 1/1, including refusal legs for forged head, stale request, stale inventory, duplicate authority key, stale settings, and queued-head mismatch."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: initial projection SHA 5716707b1cf5c9a63816467b7629bb7bc189c176 and repaired projection SHA dff05c9d4e0ca7cc3b3eb56c7e05f0cca318d9d4 resolve locally; detached Coordination confirmation SHA resolves to protected main 6c0c75ab9b355e9e4e91b350711b7ab257755ff5, whose history contains implementation merge 48a3880c695111df360fbe0efd8bf35071ce8194 and append-only receipt merge 6c0c75ab9b355e9e4e91b350711b7ab257755ff5 after prior receipt head 1dd4f111fc80251e1e6107fbff1e5c4c73667762.",
+    "Verification: SHA-256 and self-digest pairs at protected 6c0c75ab are original acceptance 9a98a13213c9a6934b362a6cb75dc3b523800205961e76cd4de984157733dc0b/c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036, repair-268 37d36961589dbcd5db2b1d9deab09932dc9204fedaddb618eea5be6dfddbfd27/f0360e50a1c94262d8c1b83a12871276c8b1c58e6efceba14b49926dca00d45d, repair-272 fa0d1e78ac9528d1793d43e850bfc5479628ee242f0407c49d65d81cc74063da/e7d660e32f8f94762f9556ddf3552f343eb1fea6d4d53e3258b79b7387e4e3bf, and repair-276 3a2d42612f3480569e8a0f0ddc1a908456b12f3a1b456b4278b784d45dc6e5af/d52268765d8e55da1bcba530c54fb0eeb617776110af83af83a8029f02f953a7.",
+    "Verification: git diff --exit-code from each historical introduction commit to 6c0c75ab exits zero for accepted/GS2-06.7.json, repair-receipts/GS2-06.7-repair-268.json, and repair-receipts/GS2-06.7-repair-272.json; the new durable-authority receipt validator with --self-test exits zero and rejects all 13 mutation controls.",
+    "Verification: at detached Coordination 6d3b7662, dotnet build completes with zero warnings and zero errors; focused unit tests pass 189/189 and architecture tests pass 465/465.",
+    "Verification: at detached Coordination 6d3b7662, Q3 exits zero with 23 controls and Q7 exits zero with 12 controls, ten repositories, 80 runs, 305 jobs, fleet disabled, and shared seal 1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868.",
+    "Verification: the repair-receipt validator/self-test at 6d3b7662 passes seven mutation inversions; observed artifact hashes are analysis 75cad91363bc370af3838ddfa01ba02ad021526aa5b2d93563de5a401551c29e, work-model 5d4a3f00069e486620579824d80ad2618827c047111106e9747a5bf5fd0514b, verify 1a8b8aee909bd64ebcd0f7977ed5ed3d5bfd7d623278afee3a2299651a1bc40c, unit TRX a2746a37077d40e75d5c91c9e9cad61bcaf7d02f22f347b54735e078c222b215, and architecture TRX 13648d7ffca719debe2161a086cf936eb39a27dbc4da2f5d96cc114c0f798491.",
+    "Verification: fresh detached protected provider e8b9c5ff978e0f14462514406ac86a71c4826425 with FS.GG.SDD.Cli exactly 1.0.0 ran verify twice and ship twice; all four invocations exited zero with outcome noChange, coherent=true, only noChange operations, zero diagnostics, 38/38 obligations ready, 19/19 evidence and tests observed, shipReady, zero ship blockers, and an unchanged Git tree.",
+    "Verification: real authority resolution passed at implementation merge 48a3880c695111df360fbe0efd8bf35071ce8194, receipt descendant 6c0c75ab9b355e9e4e91b350711b7ab257755ff5, unrelated descendant 2f9d2e7dcb4dbc8519df0f8b685e6ffeb40c08cc, and current protected e8b9c5ff978e0f14462514406ac86a71c4826425; every row emitted authority/2 with its exact currentRevision, retained inventory base 6d3b7662ac4d9474a9976ac093ec910f55fb6087, queuedHead none, and reviewed settings SHA-256 5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518.",
+    "Verification: hosted workflow_dispatch run 33763107314 completed success at exact protected head e8b9c5ff978e0f14462514406ac86a71c4826425; complete run artifact census returned exactly one non-expired artifact, id 9896556087/name workflow-selection-sentinel-e8b9c5ff978e0f14462514406ac86a71c4826425, whose downloaded decision.json SHA-256 is 67c9d6283df2ec528e99052d0c9e88d10b083f0e7b3f36a813b8ecfa42040a6a and whose typed fields report the full suite passed with no missed obligations or production mutation.",
+    "Verification: semantic repair PR #269 candidate 2da51ef3a77ac826e16141418232a46d786388c6 maps to merge 286bde7afd607ac8e62a4ca71f6f82d363c052b4 with final review/host/delivery comments 5520730651/5520759515/5520832555 and successful protected runs 33717657519/33717657228.",
+    "Verification: superseding acceptance PR #271 candidate 31eccc62a83ad4ae15cb0338156001cbb6e6eb77 maps to merge 6d3b7662ac4d9474a9976ac093ec910f55fb6087 with final review/host/delivery comments 5521120106/5521151909/5521183025 and successful protected runs 33720546807/33720546536.",
+    "Verification: GS2-06.7 is an offline CI/workflow policy and roadmap-projection milestone, not reachable game functionality; game_functionality=false, no player journey is applicable, and no uncovered game functionality or entry-point exception exists."
+  ],
+  "confirmation": {
+    "reviewed_commit": "e8b9c5ff978e0f14462514406ac86a71c4826425",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
