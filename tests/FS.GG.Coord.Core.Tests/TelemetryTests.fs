@@ -42,6 +42,10 @@ module TelemetryTests =
         let result = RuntimeUsage.collectCodex "task" None false None None "1" "1" "1" (bytes invalid)
         Assert.True(Result.isError result)
         Assert.DoesNotContain("/home/", sprintf "%A" result)
+        let valid = invalid.Replace("\"total_tokens\":99", "\"total_tokens\":15")
+        let latestWithoutTimestamp = valid.Split('\n').[2].Replace("\"timestamp\":\"2026-01-01T00:01:00Z\",", "").Replace("response-1", "response-latest")
+        let latestResult = RuntimeUsage.collectCodex "task" None false None None "1" "1" "1" (bytes (valid + "\n" + latestWithoutTimestamp))
+        Assert.True(Result.isError latestResult)
 
     [<Fact>]
     let ``Claude collection binds model runtime and deterministic response identity`` () =

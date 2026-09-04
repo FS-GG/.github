@@ -105,7 +105,17 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
     same_verdict("collector invalid arithmetic",
                  run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
                  engine("telemetry", "usage", "collect", *args), False)
-    return positive, 1, session
+
+    latest = json.loads(session.read_text(encoding="utf-8").splitlines()[-1])
+    latest.pop("timestamp")
+    latest["payload"]["response_id"] = "response-latest-without-timestamp"
+    malformed_latest = directory / "malformed-latest-session.jsonl"
+    malformed_latest.write_text(session.read_text(encoding="utf-8") + json.dumps(latest) + "\n", encoding="utf-8")
+    args = ["codex", "--session-file", str(malformed_latest), *common]
+    same_verdict("collector malformed latest response cannot fall back to older response",
+                 run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
+                 engine("telemetry", "usage", "collect", *args), False)
+    return positive, 2, session
 
 
 def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:

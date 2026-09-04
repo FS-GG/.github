@@ -82,7 +82,7 @@ module RuntimeUsage =
             let errors = ensureVersions task coordinationVersion sddVersion contractsVersion
             if not errors.IsEmpty then Error errors else
             let contexts = Collections.Generic.Dictionary<string, string * string>()
-            let records = ResizeArray<string * JsonElement>()
+            let records = ResizeArray<string option * JsonElement>()
             let mutable runtimeVersion = ""
             Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries)
             |> Array.iteri (fun index line ->
@@ -100,8 +100,10 @@ module RuntimeUsage =
                             contexts[turn] <- model, effort
                         | _ -> ()
                     | "token_usage_record", Some value ->
-                        match value.TryGetProperty "turn_id", root.TryGetProperty "timestamp" with
-                        | (true, turn), (true, timestamp) when turn.ValueKind = JsonValueKind.String && timestamp.ValueKind = JsonValueKind.String -> records.Add(timestamp.GetString(), value.Clone())
+                        match value.TryGetProperty "turn_id" with
+                        | true, turn when turn.ValueKind = JsonValueKind.String ->
+                            let timestamp = match root.TryGetProperty "timestamp" with true, current when current.ValueKind = JsonValueKind.String -> Some(current.GetString()) | _ -> None
+                            records.Add(timestamp, value.Clone())
                         | _ -> ()
                     | _ -> ()
                 with :? JsonException as error -> raise (FormatException($"line %d{index + 1}: invalid JSON: %s{error.Message}")))
@@ -111,17 +113,17 @@ module RuntimeUsage =
                 let filtered =
                     records
                     |> Seq.filter (fun (timestamp, payload) -> turnId |> Option.forall (fun wanted -> payload.GetProperty("turn_id").GetString() = wanted))
-                    |> Seq.filter (fun (timestamp, _) -> sinceUtc |> Option.forall (fun since -> String.CompareOrdinal(timestamp, since) >= 0))
-                    |> Seq.filter (fun (timestamp, _) -> untilUtc |> Option.forall (fun until -> String.CompareOrdinal(timestamp, until) < 0))
+                    |> Seq.filter (fun (timestamp, _) -> sinceUtc |> Option.forall (fun since -> timestamp |> Option.exists (fun current -> String.CompareOrdinal(current, since) >= 0)))
+                    |> Seq.filter (fun (timestamp, _) -> untilUtc |> Option.forall (fun until -> timestamp |> Option.exists (fun current -> String.CompareOrdinal(current, until) < 0)))
                     |> List.ofSeq
                 if filtered.IsEmpty then Error [ "no token usage records matched the requested turn/time window" ] else
                 let selected = if allResponses then filtered else [ List.last filtered ]
                 let rows =
-                    selected |> List.map (fun (timestamp, payload) ->
+                    selected |> List.map (fun (timestampValue, payload) ->
                         let turn = payload.GetProperty("turn_id").GetString()
                         if not (contexts.ContainsKey turn) then Error $"no turn_context model for turn_id %s{turn}" else
-                        match text "payload" payload "session_id", text "payload" payload "thread_id", text "payload" payload "response_id", counts "usage" (payload.GetProperty "usage"), counts "turn_token_usage" (payload.GetProperty "turn_token_usage"), counts "thread_token_usage" (payload.GetProperty "thread_token_usage") with
-                        | Ok session, Ok thread, Ok response, Ok usage, Ok turnUsage, Ok threadUsage ->
+                        match TelemetryJson.required "timestamp" (timestampValue |> Option.defaultValue ""), text "payload" payload "session_id", text "payload" payload "thread_id", text "payload" payload "response_id", counts "usage" (payload.GetProperty "usage"), counts "turn_token_usage" (payload.GetProperty "turn_token_usage"), counts "thread_token_usage" (payload.GetProperty "thread_token_usage") with
+                        | Ok timestamp, Ok session, Ok thread, Ok response, Ok usage, Ok turnUsage, Ok threadUsage ->
                             let model, effort = contexts[turn]
                             Ok { Timestamp = timestamp; Task = task; SessionId = session; ThreadId = thread; TurnId = turn; ResponseId = response; Provider = "OpenAI"; Model = model; Effort = effort; RuntimeVersion = runtimeVersion; CoordinationVersion = coordinationVersion; SddVersion = sddVersion; ContractsVersion = contractsVersion; LedgerSchema = 1; Response = usage; Turn = turnUsage; Thread = Some threadUsage; Source = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes }
                         | values -> Error(sprintf "%A" values))
