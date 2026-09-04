@@ -505,8 +505,14 @@
        roadmap unit: digest-chained external phase authority, exact runtime/model/toolchain versions,
        discrete durations, and authoritative token reconciliation. Candidate heads no longer attempt
        to contain future review/merge facts; immutable repository logs are projections only. -->
+  <!-- 0.80.0 -> 0.80.1 (.github#3199/.github#3201): PATCH. The packed pnext-item and work-roadmap
+       supervision contract now makes post-response usage reconciliation an enforceable parent gate:
+       a child returns an unposted terminal draft, the parent harvests the completed Codex JSONL or
+       Claude SubagentStop record, and host acceptance, cycle completion, and Done fail closed until
+       measured or strictly qualified unavailable telemetry is sealed. This repairs lifecycle evidence
+       enforcement without changing a coordination-engine wire command, flag, result, or exit code. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.80.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.80.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
