@@ -82,9 +82,10 @@ module TelemetryCliTests =
     [<Fact>]
     let ``#3208 CSV append preserves one header and deduplicates response identity`` () =
         let sessionDisposable, sessionPath = temporary (codex 15)
-        let outputDisposable, outputPath = temporary ""
+        let outputDirectory = Path.Combine(Path.GetTempPath(), "fsgg-3208-append-" + Guid.NewGuid().ToString("n"))
+        let outputPath = Path.Combine(outputDirectory, "missing", "usage.csv")
         use _session = sessionDisposable
-        use _output = outputDisposable
+        use _output = { new IDisposable with member _.Dispose() = Directory.Delete(outputDirectory, true) }
         let args = [ "telemetry"; "usage"; "collect"; "codex"; "--session-file"; sessionPath; "--task"; "repo#1/claim"; "--coord-version"; "1"; "--sdd-version"; "1"; "--contracts-version"; "1"; "--append"; outputPath ]
         Assert.Equal(0, invoke args |> fun (code, _, _) -> code)
         Assert.Equal(0, invoke args |> fun (code, _, _) -> code)

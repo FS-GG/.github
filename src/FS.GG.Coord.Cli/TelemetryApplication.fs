@@ -32,9 +32,11 @@ module TelemetryApplication =
         match option "--output" args, option "--append" args with
         | Some _, Some _ -> Error [ "--output and --append are mutually exclusive" ]
         | _, Some path when format = "json" ->
+            Path.GetDirectoryName(Path.GetFullPath path) |> Directory.CreateDirectory |> ignore
             let rendered = RuntimeUsage.renderJsonLines rows
             File.AppendAllText(path, rendered, UTF8Encoding(false)); Ok ()
         | _, Some path ->
+            Path.GetDirectoryName(Path.GetFullPath path) |> Directory.CreateDirectory |> ignore
             let exists = File.Exists path && FileInfo(path).Length > 0L
             let filtered =
                 if not exists then Ok rows else
