@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3201-coherent-release",
+  "targetId": "codex",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/3201-coherent-release/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "a04cb54b67ce75b1dcc56c7f1883316ca5a831f8b322e3ae40033ac1deb956a1"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "75e1f5b85a4d776c57d9ea59a872c66197b4bc400ed51bca2dcaf88475ee0904"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, PD-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-001, FR-002, PD-002.",
+      "relatedIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering AC-001, FR-003, PD-003.",
+      "relatedIds": [
+        "AC-001",
+        "FR-003",
+        "PD-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Update contract surface PC-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering PC-001, PD-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Record verification evidence VO-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (done) covering PC-001, PD-001, VO-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Handle migration posture PM-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T006 (done) covering PC-001, PM-001.",
+      "relatedIds": [
+        "PC-001",
+        "PM-001"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Refresh generated view impact GV-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T007 (done) covering GV-001, PD-001.",
+      "relatedIds": [
+        "GV-001",
+        "PD-001"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "automated-tests",
+      "title": "automated-tests",
+      "capability": "Required by tasks: T005.",
+      "relatedIds": [
+        "T005"
+      ]
+    },
+    {
+      "id": "deterministic-json",
+      "title": "deterministic-json",
+      "capability": "Required by tasks: T007.",
+      "relatedIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "fsharp",
+      "title": "fsharp",
+      "capability": "Required by tasks: T001, T002, T003, T004.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004"
+      ]
+    },
+    {
+      "id": "implementation",
+      "title": "implementation",
+      "capability": "Required by tasks: T001, T002, T003.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003"
+      ]
+    },
+    {
+      "id": "readiness-evidence",
+      "title": "readiness-evidence",
+      "capability": "Required by tasks: T005.",
+      "relatedIds": [
+        "T005"
+      ]
+    },
+    {
+      "id": "schema-versioning",
+      "title": "schema-versioning",
+      "capability": "Required by tasks: T006.",
+      "relatedIds": [
+        "T006"
+      ]
+    }
+  ],
+  "renderedFiles": [
+    {
+      "path": "readiness/3201-coherent-release/agent-commands/codex/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/3201-coherent-release/agent-commands/codex/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": []
+}

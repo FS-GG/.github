@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.80.0 — version-qualified item lifecycle telemetry.
+    <PackageReleaseNotes>0.80.1 — supervisor-enforced post-response telemetry reconciliation.
 
-The packed pnext-item and work-roadmap skills now record every normal FS.GG item and roadmap phase in
-an externally durable digest chain, with discrete durations, exact model/effort, runtime, coordination,
-SDD and contracts versions, and authoritative token reconciliation. Raw runtime files remain private;
-stable content digests provide public provenance. Candidate branches no longer attempt to attest future
-review, merge, protected-main, projection, or cleanup facts from inside their own exact head.
+The packed pnext-item and work-roadmap skills now require a completed child to return an unposted
+terminal draft and exact runtime identity. Its parent harvests the post-response Codex JSONL record or
+Claude SubagentStop transcript, seals measured usage, and refuses host acceptance, cycle completion,
+or Done while reconciliation is absent. Strict lookup failure remains explicit rather than estimated,
+and legacy terminal timing excuses require a separate telemetry-reconciliation recovery phase.
 
 $(FsggStandingAdvisories)
 

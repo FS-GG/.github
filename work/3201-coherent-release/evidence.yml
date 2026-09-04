@@ -1,0 +1,227 @@
+schemaVersion: 1
+workId: 3201-coherent-release
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3201-coherent-release/spec.md
+sourceClarifications: work/3201-coherent-release/clarifications.md
+sourceChecklist: work/3201-coherent-release/checklist.md
+sourcePlan: work/3201-coherent-release/plan.md
+sourceTasks: work/3201-coherent-release/tasks.yml
+sourceAnalysis: readiness/3201-coherent-release/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3201-coherent-release/analysis.json
+    digest: ddb6c257efea0fd13910e412ff866cf0a38d26a8978d45c7eb275287697c2fd5
+    schemaVersion: 1
+  - label: checklist
+    path: work/3201-coherent-release/checklist.md
+    digest: 9a38b2b0038ec218614b8aca19fd7d8fe136bb3b154039c528edffed40b80928
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3201-coherent-release/clarifications.md
+    digest: 9e6818849383bc196f4f9f071d3bdbe881d93efcb3583676502dbaea6ab58e4c
+    schemaVersion: 1
+  - label: plan
+    path: work/3201-coherent-release/plan.md
+    digest: ea71b808c3842eec0f9e60aab8aeb2b89723b181075f07f8b2a2fb5fadd6440d
+    schemaVersion: 1
+  - label: spec
+    path: work/3201-coherent-release/spec.md
+    digest: 40097c1f87aafafe96501ed035ec989bf5ca7525eaa01968c1c134e408926ba0
+    schemaVersion: 1
+  - label: tasks
+    path: work/3201-coherent-release/tasks.yml
+    digest: 8e59d0e25a094824c237acfcae4449ea9705472aafad858f4cea15a8d411e9a2
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3201-coherent-release/test-results/candidate-release-gates.junit.xml
+      digest: "sha256:cc95ad296c0309a9b7cebb6013e1427e6fa4091ebcc0f029bb39045ae4422ec2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Candidate release gates passed; irreversible publication and protected-main observations remain delivery-phase obligations."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

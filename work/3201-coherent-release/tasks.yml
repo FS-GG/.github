@@ -1,0 +1,106 @@
+schemaVersion: 1
+work:
+  id: 3201-coherent-release
+  title: "Coherent Release 0.80.1"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/3201-coherent-release/spec.md
+  sourceClarifications: work/3201-coherent-release/clarifications.md
+  sourceChecklist: work/3201-coherent-release/checklist.md
+  sourcePlan: work/3201-coherent-release/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/3201-coherent-release/spec.md
+    digest: 40097c1f87aafafe96501ed035ec989bf5ca7525eaa01968c1c134e408926ba0
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3201-coherent-release/clarifications.md
+    digest: 9e6818849383bc196f4f9f071d3bdbe881d93efcb3583676502dbaea6ab58e4c
+    schemaVersion: 1
+  - label: checklist
+    path: work/3201-coherent-release/checklist.md
+    digest: 9a38b2b0038ec218614b8aca19fd7d8fe136bb3b154039c528edffed40b80928
+    schemaVersion: 1
+  - label: plan
+    path: work/3201-coherent-release/plan.md
+    digest: ea71b808c3842eec0f9e60aab8aeb2b89723b181075f07f8b2a2fb5fadd6440d
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV007]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 3201-coherent-release."

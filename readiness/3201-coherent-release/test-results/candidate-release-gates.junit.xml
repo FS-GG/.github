@@ -1,0 +1,29 @@
+<testsuite name="coherent-release-0.80.1-candidate" tests="7" failures="0" skipped="0">
+  <properties>
+    <property name="base" value="eb26e156827671382805500c71e4b4d04bbc6977" />
+    <property name="version" value="0.80.1" />
+    <property name="coordination" value="0.80.0.0" />
+    <property name="sdd-authoring" value="1.5.0" />
+  </properties>
+  <testcase name="supervisor telemetry source and packaged bytes">
+    <system-out><![CDATA[tests/skill-quality/run.sh: all semantic and 64 rejection cases passed. Canonical pnext-item and work-roadmap supervision files compare byte-identically to the locally packed FS.GG.Kit and FS.GG.Drivers 0.80.1 archives.]]></system-out>
+  </testcase>
+  <testcase name="coherent version and release notes">
+    <system-out><![CDATA[tests/coherent-set-version/run.sh: 13 passed, 0 failed. tests/engine-release-notes/run.sh: 27 passed, 0 failed. All three MSBuild Version values resolve to 0.80.1.]]></system-out>
+  </testcase>
+  <testcase name="automatic release saga topology">
+    <system-out><![CDATA[tests/release-saga/run.sh: prepare-once, durable journals, org barrier, exact-source recovery, identity validation, and promotion fixture passed.]]></system-out>
+  </testcase>
+  <testcase name="derived pull-request gate set">
+    <system-out><![CDATA[scripts/test --base origin/main selected 45 suites: 43 passed in the initial host environment; shell-lint then passed 62/62 with governed ShellCheck 0.11.0, and coord-engine writes passed 190/190 with its explicitly vetted fsgg-sdd 1.0.0 validator.]]></system-out>
+  </testcase>
+  <testcase name="release build and local pack">
+    <system-out><![CDATA[Release engine build succeeded with zero warnings/errors. FS.GG.Coord.Cli, FS.GG.Kit, and FS.GG.Drivers 0.80.1 packed successfully into an untracked temporary directory.]]></system-out>
+  </testcase>
+  <testcase name="current lifecycle authority">
+    <system-out><![CDATA[Issue 3201 contains an append-only digest-chained lifecycle ledger under claim generation 5541728079 with route, claim, SDD, and implementation transitions; terminal usage is reconciled before posting.]]></system-out>
+  </testcase>
+  <testcase name="migration and generated-view posture">
+    <system-out><![CDATA[readiness/3201-coherent-release/analysis.json is implementationReady with 25 ready relationships, zero blockers, and no migration required for consumers remaining on 0.80.0.]]></system-out>
+  </testcase>
+</testsuite>
