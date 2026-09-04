@@ -53,11 +53,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["Prepare-once run 33870032997 and exact-source publisher retries 33870221991, 33870222128, and 33870222012 succeeded from source 4b93b10d8baf67c283aeed2f71b955cc7e721872."]
@@ -80,11 +80,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["GitHub Packages and NuGet.org normalized payloads match; sibling tags resolve to the exact source; clean installs resolved all three 0.80.0 packages."]
@@ -107,11 +107,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["Promotion 33871002330 and coherence 33871002212 succeeded; 14 of 14 journal-bound receiver receipts verified with zero findings."]
@@ -134,11 +134,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["The issue ledger records phase-level model, toolchain, whole-minute duration, and honest unavailable token status for this unsplittable running turn."]
@@ -161,11 +161,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: [The published coord-engine package frontier is reconciled to 0.80.0 without changing the source API version scalar.]
@@ -188,11 +188,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["Public release, feed, clean-install, tag, stable-channel, and receiver observations passed."]
@@ -215,11 +215,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: ["No migration is required; existing consumers can remain on 0.79.0 or adopt 0.80.0 through normal receiver and Renovate paths."]
@@ -242,11 +242,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.trx
-      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
+      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 140
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Feed-derived registry and generated projections consistently report package-version 0.80.0.]
