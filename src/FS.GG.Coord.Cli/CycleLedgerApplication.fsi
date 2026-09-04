@@ -4,15 +4,15 @@ namespace FS.GG.Coord.Cli
 ///
 /// The ledger model, the transitions and every legality rule belong to `FS.GG.Coord.CycleLedger`.
 /// This module owns the boundary around them: decoding one snapshot document, running the provider
-/// validators that make a supplied artifact trustworthy, keeping the durable update journal, and
+/// compiled validators that make a supplied artifact trustworthy, keeping the durable update journal, and
 /// rendering one transition.
 ///
 /// VALIDATOR AUTHORITY TRAVELS WITH THE ENGINE, NEVER WITH THE ARTIFACT (.github#2133 repair-phase
 /// round 1). This is the module's central safety property and it is not visible from the types.
 /// Artifact roots are CALLER DATA, and caller data must never select executable code. So the
-/// `critique` and `feedback` adapters run validator scripts resolved beside the engine binary and
-/// pinned by SHA-256: a validator that has been replaced, or is missing, fails closed with its
-/// observed digest rather than running. A caller cannot point this command at a script of its own.
+/// `critique` and `feedback` adapters execute typed reducers compiled into the engine binary. A
+/// caller cannot point this command at validator code of its own, and a candidate checkout cannot
+/// replace validation policy without replacing the reviewed package.
 module CycleLedgerApplication =
 
     /// Run `cycle <inspect|register|advance|update|complete>` over a ledger snapshot supplied on

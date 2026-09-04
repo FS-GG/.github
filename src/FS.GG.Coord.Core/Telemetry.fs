@@ -1,0 +1,751 @@
+namespace FS.GG.Coord
+
+open System
+open System.Globalization
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json
+open System.Text.Json.Nodes
+open System.Text.RegularExpressions
+
+module private TelemetryJson =
+    let sha256 (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let required label (value: string) =
+        if String.IsNullOrWhiteSpace value then Error $"%s{label} must be a non-empty string" else Ok value
+
+    let canonical (node: JsonNode) =
+        let rec write (writer: Utf8JsonWriter) (value: JsonNode) =
+            match value with
+            | null -> writer.WriteNullValue()
+            | :? JsonObject as item ->
+                writer.WriteStartObject()
+                item |> Seq.sortBy _.Key |> Seq.iter (fun pair -> writer.WritePropertyName pair.Key; write writer pair.Value)
+                writer.WriteEndObject()
+            | :? JsonArray as item ->
+                writer.WriteStartArray()
+                item |> Seq.iter (write writer)
+                writer.WriteEndArray()
+            | _ -> value.WriteTo writer
+        use stream = new IO.MemoryStream()
+        use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
+        write writer node
+        writer.Flush()
+        Encoding.UTF8.GetString(stream.ToArray())
+
+module RuntimeUsage =
+    type TokenCounts =
+        { Input: int64; CachedInput: int64; CacheWriteInput: int64; Output: int64; Reasoning: int64 option; Total: int64 }
+    type UsageRow =
+        { Timestamp: string; Task: string; SessionId: string; ThreadId: string; TurnId: string; ResponseId: string
+          Provider: string; Model: string; Effort: string; RuntimeVersion: string; CoordinationVersion: string
+          SddVersion: string; ContractsVersion: string; LedgerSchema: int; Response: TokenCounts; Turn: TokenCounts
+          Thread: TokenCounts option; Source: string }
+    type Collection = { Rows: UsageRow list; SourceDigest: string }
+
+    let private text (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> Ok(value.GetString())
+        | _ -> Error $"%s{label}.%s{name} must be a non-empty string"
+
+    let private counts (label: string) (node: JsonElement) =
+        let number (name: string) =
+            match node.TryGetProperty name with
+            | true, value when value.ValueKind = JsonValueKind.Number ->
+                match value.TryGetInt64() with true, count when count >= 0L -> Ok count | _ -> Error $"%s{label}.%s{name} must be a non-negative integer"
+            | _ -> Error $"%s{label}.%s{name} must be a non-negative integer"
+        match number "input_tokens", number "cached_input_tokens", number "cache_write_input_tokens", number "output_tokens", number "reasoning_output_tokens", number "total_tokens" with
+        | Ok input, Ok cached, Ok write, Ok output, Ok reasoning, Ok total when total <> input + output -> Error $"%s{label}.total_tokens must equal input_tokens + output_tokens"
+        | Ok input, Ok cached, Ok write, Ok output, Ok reasoning, Ok _ when cached + write > input -> Error $"%s{label} cache token subsets exceed input_tokens"
+        | Ok _, Ok _, Ok _, Ok output, Ok reasoning, Ok _ when reasoning > output -> Error $"%s{label}.reasoning_output_tokens exceeds output_tokens"
+        | Ok input, Ok cached, Ok write, Ok output, Ok reasoning, Ok total -> Ok { Input = input; CachedInput = cached; CacheWriteInput = write; Output = output; Reasoning = Some reasoning; Total = total }
+        | values ->
+            [ match values with
+              | Error e, _, _, _, _, _ -> yield e | _ -> ()
+              match values with
+              | _, Error e, _, _, _, _ -> yield e | _ -> ()
+              match values with
+              | _, _, Error e, _, _, _ -> yield e | _ -> ()
+              match values with
+              | _, _, _, Error e, _, _ -> yield e | _ -> ()
+              match values with
+              | _, _, _, _, Error e, _ -> yield e | _ -> ()
+              match values with
+              | _, _, _, _, _, Error e -> yield e | _ -> () ] |> String.concat "; " |> Error
+
+    let private ensureVersions (task: string) (coordination: string) (sdd: string) (contracts: string) =
+        [ "task", task; "coordination version", coordination; "SDD version", sdd; "contracts version", contracts ]
+        |> List.choose (fun (label, value) -> match TelemetryJson.required label value with Ok _ -> None | Error e -> Some e)
+
+    let collectCodex (task: string) (turnId: string option) (allResponses: bool) (sinceUtc: string option) (untilUtc: string option) (coordinationVersion: string) (sddVersion: string) (contractsVersion: string) (bytes: byte array) =
+        try
+            let errors = ensureVersions task coordinationVersion sddVersion contractsVersion
+            if not errors.IsEmpty then Error errors else
+            let contexts = Collections.Generic.Dictionary<string, string * string>()
+            let records = ResizeArray<string * JsonElement>()
+            let mutable runtimeVersion = ""
+            Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            |> Array.iteri (fun index line ->
+                try
+                    use document = JsonDocument.Parse line
+                    let root = document.RootElement
+                    let kind = match root.TryGetProperty "type" with true, v when v.ValueKind = JsonValueKind.String -> v.GetString() | _ -> ""
+                    let payload = match root.TryGetProperty "payload" with true, v when v.ValueKind = JsonValueKind.Object -> Some v | _ -> None
+                    match kind, payload with
+                    | "session_meta", Some value -> runtimeVersion <- match value.TryGetProperty "cli_version" with true, v when v.ValueKind = JsonValueKind.String -> v.GetString() | _ -> ""
+                    | "turn_context", Some value ->
+                        match text "turn_context" value "turn_id", text "turn_context" value "model" with
+                        | Ok turn, Ok model ->
+                            let effort = match value.TryGetProperty "effort" with true, v when v.ValueKind = JsonValueKind.String -> v.GetString() | _ -> ""
+                            contexts[turn] <- model, effort
+                        | _ -> ()
+                    | "token_usage_record", Some value ->
+                        match value.TryGetProperty "turn_id", root.TryGetProperty "timestamp" with
+                        | (true, turn), (true, timestamp) when turn.ValueKind = JsonValueKind.String && timestamp.ValueKind = JsonValueKind.String -> records.Add(timestamp.GetString(), value.Clone())
+                        | _ -> ()
+                    | _ -> ()
+                with :? JsonException as error -> raise (FormatException($"line %d{index + 1}: invalid JSON: %s{error.Message}")))
+            if String.IsNullOrWhiteSpace runtimeVersion then Error [ "session_meta.cli_version must be a non-empty string" ]
+            elif records.Count = 0 then Error [ "no token_usage_record rows found" ]
+            else
+                let filtered =
+                    records
+                    |> Seq.filter (fun (timestamp, payload) -> turnId |> Option.forall (fun wanted -> payload.GetProperty("turn_id").GetString() = wanted))
+                    |> Seq.filter (fun (timestamp, _) -> sinceUtc |> Option.forall (fun since -> String.CompareOrdinal(timestamp, since) >= 0))
+                    |> Seq.filter (fun (timestamp, _) -> untilUtc |> Option.forall (fun until -> String.CompareOrdinal(timestamp, until) < 0))
+                    |> List.ofSeq
+                if filtered.IsEmpty then Error [ "no token usage records matched the requested turn/time window" ] else
+                let selected = if allResponses then filtered else [ List.last filtered ]
+                let rows =
+                    selected |> List.map (fun (timestamp, payload) ->
+                        let turn = payload.GetProperty("turn_id").GetString()
+                        if not (contexts.ContainsKey turn) then Error $"no turn_context model for turn_id %s{turn}" else
+                        match text "payload" payload "session_id", text "payload" payload "thread_id", text "payload" payload "response_id", counts "usage" (payload.GetProperty "usage"), counts "turn_token_usage" (payload.GetProperty "turn_token_usage"), counts "thread_token_usage" (payload.GetProperty "thread_token_usage") with
+                        | Ok session, Ok thread, Ok response, Ok usage, Ok turnUsage, Ok threadUsage ->
+                            let model, effort = contexts[turn]
+                            Ok { Timestamp = timestamp; Task = task; SessionId = session; ThreadId = thread; TurnId = turn; ResponseId = response; Provider = "OpenAI"; Model = model; Effort = effort; RuntimeVersion = runtimeVersion; CoordinationVersion = coordinationVersion; SddVersion = sddVersion; ContractsVersion = contractsVersion; LedgerSchema = 1; Response = usage; Turn = turnUsage; Thread = Some threadUsage; Source = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes }
+                        | values -> Error(sprintf "%A" values))
+                let failures = rows |> List.choose (function Error e -> Some e | _ -> None)
+                if failures.IsEmpty then Ok { Rows = rows |> List.choose (function Ok row -> Some row | _ -> None); SourceDigest = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes } else Error failures
+        with error -> Error [ error.Message ]
+
+    let collectClaude task coordinationVersion sddVersion contractsVersion (bytes: byte array) =
+        try
+            let errors = ensureVersions task coordinationVersion sddVersion contractsVersion
+            if not errors.IsEmpty then Error errors else
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            let modelNode = root.GetProperty "model"
+            let usage = root.GetProperty("context_window").GetProperty("current_usage")
+            let number (name: string) = let value = usage.GetProperty name in match value.TryGetInt64() with true, n when n >= 0L -> n | _ -> invalidArg name "must be a non-negative integer"
+            let uncached, cached, write, output = number "input_tokens", number "cache_read_input_tokens", number "cache_creation_input_tokens", number "output_tokens"
+            let input = uncached + cached + write
+            let tokenCounts = { Input = input; CachedInput = cached; CacheWriteInput = write; Output = output; Reasoning = None; Total = input + output }
+            let get (label: string) (node: JsonElement) (name: string) = match text label node name with Ok value -> value | Error e -> invalidArg name e
+            let timestamp, session, turn, model, version = get "snapshot" root "timestamp", get "snapshot" root "session_id", get "snapshot" root "prompt_id", get "model" modelNode "id", get "snapshot" root "version"
+            let effort =
+                match root.TryGetProperty "effort" with
+                | true, e when e.ValueKind = JsonValueKind.Object ->
+                    match e.TryGetProperty "level" with
+                    | true, level when level.ValueKind = JsonValueKind.String -> level.GetString()
+                    | _ -> ""
+                | _ -> ""
+            let responseKey = JsonObject()
+            responseKey["model"] <- JsonValue.Create(model: string)
+            responseKey["prompt_id"] <- JsonValue.Create(turn: string)
+            responseKey["session_id"] <- JsonValue.Create(session: string)
+            responseKey["timestamp"] <- JsonValue.Create(timestamp: string)
+            responseKey["usage"] <- JsonNode.Parse(usage.GetRawText())
+            let responseId = "claude-" + (TelemetryJson.canonical responseKey |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256)
+            let source = "claude-statusline-json:sha256:" + TelemetryJson.sha256 bytes
+            Ok { Rows = [ { Timestamp = timestamp; Task = task; SessionId = session; ThreadId = ""; TurnId = turn; ResponseId = responseId; Provider = "Anthropic"; Model = model; Effort = effort; RuntimeVersion = version; CoordinationVersion = coordinationVersion; SddVersion = sddVersion; ContractsVersion = contractsVersion; LedgerSchema = 1; Response = tokenCounts; Turn = tokenCounts; Thread = None; Source = source } ]; SourceDigest = source }
+        with error -> Error [ error.Message ]
+
+    let private csvEscape (value: string) = if value.IndexOfAny([| ','; '"'; '\n'; '\r' |]) >= 0 then "\"" + value.Replace("\"", "\"\"") + "\"" else value
+    let private optional = Option.map string >> Option.defaultValue ""
+    let private countValues (counts: TokenCounts) = [ string counts.Input; string counts.CachedInput; string counts.CacheWriteInput; string counts.Output; optional counts.Reasoning; string counts.Total ]
+    let private headers = [ "timestamp"; "task"; "session_id"; "thread_id"; "turn_id"; "response_id"; "provider"; "model"; "effort"; "runtime_version"; "coordination_version"; "sdd_version"; "contracts_version"; "ledger_schema"; "input"; "cached_input"; "cache_write_input"; "output"; "reasoning"; "total"; "turn_input"; "turn_cached_input"; "turn_cache_write_input"; "turn_output"; "turn_reasoning"; "turn_total"; "thread_input"; "thread_cached_input"; "thread_cache_write_input"; "thread_output"; "thread_reasoning"; "thread_total"; "source" ]
+    let private values (row: UsageRow) =
+        [ row.Timestamp; row.Task; row.SessionId; row.ThreadId; row.TurnId; row.ResponseId; row.Provider; row.Model; row.Effort; row.RuntimeVersion; row.CoordinationVersion; row.SddVersion; row.ContractsVersion; string row.LedgerSchema ] @ countValues row.Response @ countValues row.Turn @ (row.Thread |> Option.map countValues |> Option.defaultValue [ ""; ""; ""; ""; ""; "" ]) @ [ row.Source ]
+    let renderCsv (rows: UsageRow list) = String.concat "," headers + "\n" + (rows |> List.map (values >> List.map csvEscape >> String.concat ",") |> String.concat "\n") + (if rows.IsEmpty then "" else "\n")
+    let renderJsonLines (rows: UsageRow list) =
+        rows |> List.map (fun row ->
+            let numeric = Set.ofList [ "ledger_schema"; "input"; "cached_input"; "cache_write_input"; "output"; "reasoning"; "total"; "turn_input"; "turn_cached_input"; "turn_cache_write_input"; "turn_output"; "turn_reasoning"; "turn_total"; "thread_input"; "thread_cached_input"; "thread_cache_write_input"; "thread_output"; "thread_reasoning"; "thread_total" ]
+            let result = JsonObject()
+            List.zip headers (values row) |> List.iter (fun (name, value) ->
+                result[name] <- if numeric.Contains name && value <> "" then JsonValue.Create(Int64.Parse value) else JsonValue.Create(value))
+            TelemetryJson.canonical result) |> String.concat "\n" |> fun value -> if rows.IsEmpty then "" else value + "\n"
+
+    let parseJsonLines (jsonLines: string) =
+        let parse (lineNumber: int) (line: string) =
+            try
+                use document = JsonDocument.Parse line
+                let root = document.RootElement
+                let get (name: string) = match text "usage row" root name with Ok value -> value | Error reason -> invalidArg name reason
+                let optionalCount (name: string) =
+                    let value = root.GetProperty name
+                    if value.ValueKind = JsonValueKind.String && value.GetString() = "" then None
+                    elif value.ValueKind = JsonValueKind.Number then Some(value.GetInt64())
+                    else invalidArg name "must be a non-negative integer or empty string"
+                let count (prefix: string) =
+                    let name (value: string) = if prefix = "" then value else prefix + "_" + value
+                    let input = optionalCount (name "input") |> Option.defaultWith (fun () -> invalidArg (name "input") "is required")
+                    let cached = optionalCount (name "cached_input") |> Option.defaultWith (fun () -> invalidArg (name "cached_input") "is required")
+                    let write = optionalCount (name "cache_write_input") |> Option.defaultWith (fun () -> invalidArg (name "cache_write_input") "is required")
+                    let output = optionalCount (name "output") |> Option.defaultWith (fun () -> invalidArg (name "output") "is required")
+                    let total = optionalCount (name "total") |> Option.defaultWith (fun () -> invalidArg (name "total") "is required")
+                    let reasoning = optionalCount (name "reasoning")
+                    if List.exists (fun value -> value < 0L) [ input; cached; write; output; total ] then invalidArg prefix "counts must be non-negative"
+                    if total <> input + output then invalidArg prefix "total must equal input + output"
+                    if cached + write > input then invalidArg prefix "cache subsets exceed input"
+                    if reasoning |> Option.exists (fun value -> value < 0L || value > output) then invalidArg prefix "reasoning is invalid"
+                    { Input = input; CachedInput = cached; CacheWriteInput = write; Output = output; Reasoning = reasoning; Total = total }
+                let thread =
+                    match root.GetProperty("thread_input").ValueKind with
+                    | JsonValueKind.String when root.GetProperty("thread_input").GetString() = "" -> None
+                    | _ -> Some(count "thread")
+                let source = get "source"
+                if not (Regex.IsMatch(source, "^(codex-session-jsonl|claude-statusline-json):sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then invalidArg "source" "must be normalized content-digest provenance"
+                Ok
+                    { Timestamp = get "timestamp"; Task = get "task"; SessionId = get "session_id"; ThreadId = root.GetProperty("thread_id").GetString()
+                      TurnId = get "turn_id"; ResponseId = get "response_id"; Provider = get "provider"; Model = get "model"
+                      Effort = root.GetProperty("effort").GetString(); RuntimeVersion = get "runtime_version"; CoordinationVersion = get "coordination_version"
+                      SddVersion = get "sdd_version"; ContractsVersion = get "contracts_version"; LedgerSchema = root.GetProperty("ledger_schema").GetInt32()
+                      Response = count ""; Turn = count "turn"; Thread = thread; Source = source }
+            with error -> Error $"line %d{lineNumber}: %s{error.Message}"
+        let parsed = jsonLines.Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.mapi (fun index line -> parse (index + 1) line) |> List.ofArray
+        let errors = parsed |> List.choose (function Error reason -> Some reason | _ -> None)
+        if errors.IsEmpty then Ok(parsed |> List.choose (function Ok value -> Some value | _ -> None)) else Error errors
+
+    let private csvRecords (text: string) =
+        let records = ResizeArray<string list>()
+        let fields = ResizeArray<string>()
+        let field = StringBuilder()
+        let mutable quoted = false
+        let mutable index = 0
+        let finishField () = fields.Add(field.ToString()); field.Clear() |> ignore
+        let finishRecord () = finishField (); records.Add(List.ofSeq fields); fields.Clear()
+        while index < text.Length do
+            let current = text[index]
+            if quoted then
+                if current = '"' && index + 1 < text.Length && text[index + 1] = '"' then field.Append('"') |> ignore; index <- index + 1
+                elif current = '"' then quoted <- false
+                else field.Append current |> ignore
+            else
+                match current with
+                | '"' when field.Length = 0 -> quoted <- true
+                | ',' -> finishField ()
+                | '\n' -> finishRecord ()
+                | '\r' -> ()
+                | value -> field.Append value |> ignore
+            index <- index + 1
+        if quoted then Error [ "usage report has an unterminated quoted CSV field" ]
+        else
+            if field.Length > 0 || fields.Count > 0 then finishRecord ()
+            Ok(List.ofSeq records)
+
+    let parseCsvReceipt (bytes: byte array) =
+        match csvRecords (Encoding.UTF8.GetString bytes) with
+        | Error errors -> Error errors
+        | Ok [] -> Error [ "usage report is empty" ]
+        | Ok(header :: records) when header <> headers -> Error [ "usage report header does not match the stable collector schema" ]
+        | Ok(header :: records) ->
+            let numeric = Set.ofList [ "ledger_schema"; "input"; "cached_input"; "cache_write_input"; "output"; "reasoning"; "total"; "turn_input"; "turn_cached_input"; "turn_cache_write_input"; "turn_output"; "turn_reasoning"; "turn_total"; "thread_input"; "thread_cached_input"; "thread_cache_write_input"; "thread_output"; "thread_reasoning"; "thread_total" ]
+            let json =
+                records |> List.mapi (fun index values ->
+                    if values.Length <> header.Length then Error $"usage report line %d{index + 2} has %d{values.Length} fields; expected %d{header.Length}" else
+                    let item = JsonObject()
+                    List.zip header values |> List.iter (fun (name, value) -> item[name] <- if numeric.Contains name && value <> "" then JsonValue.Create(Int64.Parse value) else JsonValue.Create(value))
+                    Ok(TelemetryJson.canonical item))
+            let errors = json |> List.choose (function Error reason -> Some reason | _ -> None)
+            if not errors.IsEmpty then Error errors else
+            match parseJsonLines (json |> List.choose (function Ok value -> Some value | _ -> None) |> String.concat "\n") with
+            | Error errors -> Error errors
+            | Ok rows ->
+                let identities = rows |> List.map (fun row -> row.Provider, row.ResponseId)
+                if List.distinct identities <> identities then Error [ "usage report response identity is duplicated" ]
+                else Ok("runtime-usage-csv:sha256:" + TelemetryJson.sha256 bytes, rows)
+
+module LifecycleTelemetry =
+    type Transition = Started | Completed | Blocked | Resumed
+    type Finding =
+        | InvalidEvent of line: int * reason: string
+        | InvalidTransition of phase: string * reason: string
+        | EditedAuthorityComment of commentId: int64
+        | RejectedFork of winningCommentId: int64 * rejectedCommentId: int64
+    type Validation = { EventCount: int; CompletedPhases: string list; ActivePhases: string list; BlockedPhases: string list }
+
+    let private digest (value: JsonObject) =
+        let clone = value.DeepClone().AsObject()
+        clone.Remove "digest" |> ignore
+        TelemetryJson.canonical clone |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256
+    let private objects (text: string) =
+        text.Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.mapi (fun i line ->
+            try Ok(JsonNode.Parse(line).AsObject()) with error -> Error(InvalidEvent(i + 1, error.Message))) |> List.ofArray
+    let private stringAt (name: string) (item: JsonObject) = match item[name] with null -> "" | value -> value.GetValue<string>()
+    let private intAt (name: string) (item: JsonObject) = match item[name] with null -> 0 | value -> value.GetValue<int>()
+    let private keys (item: JsonObject) = item |> Seq.map _.Key |> Set.ofSeq
+    let private eventFields = Set.ofList [ "schema_version"; "run_id"; "unit_id"; "item"; "sequence"; "phase_order"; "phase"; "event"; "at"; "actor"; "model"; "source"; "evidence"; "actual_minutes"; "historical_durations_minutes"; "historical_average_minutes"; "token_usage"; "tooling"; "revision"; "previous_digest"; "digest"; "authority" ]
+    let private nonempty name (item: JsonObject) = not (String.IsNullOrWhiteSpace(stringAt name item))
+    let private exact expected (item: JsonObject) = keys item = Set.ofList expected
+    let private arrayStrings allowEmpty (node: JsonNode) =
+        match node with
+        | :? JsonArray as values -> (allowEmpty || values.Count > 0) && values |> Seq.forall (fun item -> item <> null && item.GetValueKind() = JsonValueKind.String && not (String.IsNullOrWhiteSpace(item.GetValue<string>())))
+        | _ -> false
+
+    let private validateModel line (node: JsonNode) (findings: ResizeArray<Finding>) =
+        match node with
+        | :? JsonObject as model ->
+            let status = stringAt "status" model
+            if status = "recorded" then
+                if not (exact [ "status"; "provider"; "name"; "source" ] model || exact [ "status"; "provider"; "name"; "effort"; "source" ] model) then findings.Add(InvalidEvent(line, "recorded model has missing or unexpected fields"))
+                for name in [ "provider"; "name"; "source" ] do if not (nonempty name model) then findings.Add(InvalidEvent(line, $"model.%s{name} must be non-empty"))
+            elif status = "unavailable" then
+                if not (exact [ "status"; "reason"; "source" ] model) then findings.Add(InvalidEvent(line, "unavailable model has missing or unexpected fields"))
+                for name in [ "reason"; "source" ] do if not (nonempty name model) then findings.Add(InvalidEvent(line, $"model.%s{name} must be non-empty"))
+            else findings.Add(InvalidEvent(line, "model status must be recorded or unavailable"))
+        | _ -> findings.Add(InvalidEvent(line, "model must be an object with status"))
+
+    let private validateTooling line (node: JsonNode) (findings: ResizeArray<Finding>) =
+        match node with
+        | :? JsonObject as tooling ->
+            if not (exact [ "ledger_schema"; "runtime"; "coordination"; "sdd"; "contracts" ] tooling) || intAt "ledger_schema" tooling <> 1 then findings.Add(InvalidEvent(line, "tooling must contain ledger_schema 1 and all four components"))
+            for name in [ "runtime"; "coordination"; "sdd"; "contracts" ] do
+                match tooling[name] with
+                | :? JsonObject as tool ->
+                    let status = stringAt "status" tool
+                    if status = "recorded" then
+                        if not (exact [ "status"; "name"; "version"; "source" ] tool) then findings.Add(InvalidEvent(line, $"recorded tooling.%s{name} has missing or unexpected fields"))
+                        for field in [ "name"; "version"; "source" ] do if not (nonempty field tool) then findings.Add(InvalidEvent(line, $"tooling.%s{name}.%s{field} must be non-empty"))
+                    elif status = "unavailable" || status = "not_applicable" then
+                        if not (exact [ "status"; "name"; "reason"; "source" ] tool) then findings.Add(InvalidEvent(line, $"%s{status} tooling.%s{name} has missing or unexpected fields"))
+                    else findings.Add(InvalidEvent(line, $"tooling.%s{name}.status is invalid"))
+                | _ -> findings.Add(InvalidEvent(line, $"tooling.%s{name} must be a status object"))
+        | _ -> findings.Add(InvalidEvent(line, "tooling must be an object"))
+
+    let private validateTokens line terminal (node: JsonNode) (findings: ResizeArray<Finding>) =
+        match node with
+        | :? JsonObject as usage ->
+            let status = stringAt "status" usage
+            if not terminal then
+                if not (exact [ "status" ] usage) || status <> "pending" then findings.Add(InvalidEvent(line, "started/resumed token_usage must be exactly pending"))
+            elif status = "measured" then
+                if not (exact [ "status"; "input"; "cached_input"; "cache_write_input"; "output"; "reasoning"; "total"; "source"; "session_ids"; "turn_ids" ] usage) then findings.Add(InvalidEvent(line, "measured token_usage has missing or unexpected fields"))
+                else
+                    let numbers = [ "input"; "cached_input"; "cache_write_input"; "output"; "total" ] |> List.map (fun name -> name, usage[name])
+                    let invalid = numbers |> List.exists (fun (_, value) -> value = null || value.GetValueKind() <> JsonValueKind.Number || value.GetValue<int64>() < 0L)
+                    if invalid then findings.Add(InvalidEvent(line, "measured token counts must be non-negative integers")) else
+                    let number (name: string) = usage[name].GetValue<int64>()
+                    if number "total" <> number "input" + number "output" then findings.Add(InvalidEvent(line, "measured total must equal input + output"))
+                    if number "cached_input" + number "cache_write_input" > number "input" then findings.Add(InvalidEvent(line, "measured cache counts exceed input"))
+                    match usage["reasoning"] with null -> () | value when value.GetValueKind() = JsonValueKind.Null -> () | value when value.GetValueKind() = JsonValueKind.Number && value.GetValue<int64>() >= 0L && value.GetValue<int64>() <= number "output" -> () | _ -> findings.Add(InvalidEvent(line, "measured reasoning is invalid"))
+                    if not (nonempty "source" usage) || not (arrayStrings false usage["session_ids"]) || not (arrayStrings false usage["turn_ids"]) then findings.Add(InvalidEvent(line, "measured usage provenance is incomplete"))
+            elif status = "unavailable" then
+                if not (exact [ "status"; "reason"; "source" ] usage) || not (nonempty "reason" usage) || not (nonempty "source" usage) then findings.Add(InvalidEvent(line, "unavailable token_usage has missing or invalid fields"))
+            elif status = "pending" then findings.Add(InvalidEvent(line, "terminal public events require token reconciliation"))
+            else findings.Add(InvalidEvent(line, "terminal token usage status is invalid; estimates are forbidden"))
+        | _ -> findings.Add(InvalidEvent(line, "token_usage must be an object with status"))
+
+    let validate (runId: string) (unitId: string) (requireTerminal: bool) (requiredPhases: string list) (jsonLines: string) =
+        let parsed = objects jsonLines
+        let parseErrors = parsed |> List.choose (function Error e -> Some e | _ -> None)
+        if not parseErrors.IsEmpty then Error parseErrors else
+        let events = parsed |> List.choose (function Ok v -> Some v | _ -> None)
+        if events.IsEmpty then Error [ InvalidEvent(0, "log is empty") ] else
+        let mutable previous: string option = None
+        let states = Collections.Generic.Dictionary<string, string * DateTime * DateTime * int * string * string>()
+        let findings = ResizeArray<Finding>()
+        if not (Regex.IsMatch(runId, "^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)) then findings.Add(InvalidEvent(0, "run id must be lowercase and path-safe"))
+        if not (Regex.IsMatch(unitId, "^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.CultureInvariant)) then findings.Add(InvalidEvent(0, "unit id must be path-safe"))
+        let mutable itemIdentity: string option = None
+        events |> List.iteri (fun index item ->
+            let line = index + 1
+            try
+                if keys item <> eventFields then findings.Add(InvalidEvent(line, "entry has missing or unexpected fields"))
+                if intAt "schema_version" item <> 1 then findings.Add(InvalidEvent(line, "schema_version must be 1"))
+                if stringAt "run_id" item <> runId || stringAt "unit_id" item <> unitId then findings.Add(InvalidEvent(line, "run_id or unit_id does not match"))
+                if intAt "sequence" item <> line || intAt "revision" item <> line then findings.Add(InvalidEvent(line, "sequence and revision must be contiguous and equal"))
+                let predecessor = match item["previous_digest"] with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value -> Some(value.GetValue<string>())
+                if predecessor <> previous then findings.Add(InvalidEvent(line, "previous_digest does not extend the canonical chain"))
+                let actualDigest = stringAt "digest" item
+                if actualDigest <> digest item then findings.Add(InvalidEvent(line, "digest does not bind the canonical event"))
+                previous <- Some actualDigest
+                let phase, event = stringAt "phase" item, stringAt "event" item
+                if not (Regex.IsMatch(phase, "^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)) then findings.Add(InvalidEvent(line, "phase must be lowercase and path-safe"))
+                if not (Set.contains event (Set.ofList [ "started"; "completed"; "blocked"; "resumed" ])) then findings.Add(InvalidEvent(line, "unknown event"))
+                if not (nonempty "actor" item) then findings.Add(InvalidEvent(line, "actor must be non-empty"))
+                validateModel line item["model"] findings
+                validateTooling line item["tooling"] findings
+                match item["authority"] with
+                | :? JsonObject as authority ->
+                    if not (exact [ "kind"; "subject"; "claim_generation" ] authority) || stringAt "kind" authority <> "github_issue_comment" || not (nonempty "subject" authority) || not (nonempty "claim_generation" authority) then findings.Add(InvalidEvent(line, "authority must bind GitHub issue subject and claim generation"))
+                | _ -> findings.Add(InvalidEvent(line, "authority must be an object"))
+                match item["item"] with
+                | :? JsonObject as identity ->
+                    let repo, number, url = stringAt "repo" identity, intAt "number" identity, stringAt "url" identity
+                    if not (exact [ "repo"; "number"; "url" ] identity) || not (Regex.IsMatch(repo, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) || number <= 0 || url <> $"https://github.com/%s{repo}/issues/%d{number}" then findings.Add(InvalidEvent(line, "item must be a canonical GitHub issue identity"))
+                    match item["authority"] with :? JsonObject as authority when stringAt "subject" authority <> $"%s{repo}#%d{number}" -> findings.Add(InvalidEvent(line, "authority.subject must equal canonical item")) | _ -> ()
+                    let current = TelemetryJson.canonical identity
+                    match itemIdentity with None -> itemIdentity <- Some current | Some original when original <> current -> findings.Add(InvalidEvent(line, "item identity changed within ledger")) | _ -> ()
+                | _ -> findings.Add(InvalidEvent(line, "item must be an object"))
+                match item["source"] with
+                | :? JsonObject as source ->
+                    let repository = stringAt "repository" source
+                    let revision, unavailable = source.ContainsKey "revision", source.ContainsKey "unavailable_reason"
+                    if not (Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) || revision = unavailable then findings.Add(InvalidEvent(line, "source must bind repository and exactly one revision state"))
+                    elif revision && not (Regex.IsMatch(stringAt "revision" source, "^[0-9a-f]{40}$")) then findings.Add(InvalidEvent(line, "source.revision must be lowercase 40-hex"))
+                | _ -> findings.Add(InvalidEvent(line, "source must be an object"))
+                if not (arrayStrings false item["evidence"]) then findings.Add(InvalidEvent(line, "evidence must be a non-empty string array"))
+                let at = DateTime.ParseExact(stringAt "at" item, "yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal ||| DateTimeStyles.AdjustToUniversal)
+                let tokenStatus = match item["token_usage"] with :? JsonObject as usage -> stringAt "status" usage | _ -> ""
+                validateTokens line (event = "completed" || event = "blocked") item["token_usage"] findings
+                let history = item["historical_durations_minutes"]
+                let historyValid = match history with :? JsonArray as values -> values |> Seq.forall (fun value -> value <> null && value.GetValueKind() = JsonValueKind.Number && value.GetValue<int>() >= 0) | _ -> false
+                if not historyValid then findings.Add(InvalidEvent(line, "historical durations must be non-negative whole minutes"))
+                if event <> "completed" && ((match history with :? JsonArray as values -> values.Count > 0 | _ -> false) || (item["historical_average_minutes"] <> null && item["historical_average_minutes"].GetValueKind() <> JsonValueKind.Null)) then findings.Add(InvalidEvent(line, "only completed events may carry historical averages"))
+                if event = "completed" && historyValid then
+                    let values = (history :?> JsonArray) |> Seq.map _.GetValue<int>() |> List.ofSeq
+                    let expectedAverage = if values.IsEmpty then None else Some((2 * List.sum values + values.Length) / (2 * values.Length))
+                    let actualAverage = match item["historical_average_minutes"] with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value -> Some(value.GetValue<int>())
+                    if actualAverage <> expectedAverage then findings.Add(InvalidEvent(line, "historical_average_minutes does not match its basis"))
+                match event, states.TryGetValue phase with
+                | "started", (false, _) ->
+                    let expectedOrder = states.Count + 1
+                    if intAt "phase_order" item <> expectedOrder then findings.Add(InvalidEvent(line, "phase_order must be contiguous in first-seen order"))
+                    if item["actual_minutes"] <> null && item["actual_minutes"].GetValueKind() <> JsonValueKind.Null then findings.Add(InvalidEvent(line, "started actual_minutes must be null"))
+                    states[phase] <- "active", at, at, intAt "phase_order" item, TelemetryJson.canonical item["model"], TelemetryJson.canonical item["tooling"]
+                | "resumed", (true, ("blocked", started, last, order, model, tooling)) ->
+                    if at < last then findings.Add(InvalidEvent(line, "timestamps must be nondecreasing within phase"))
+                    if intAt "phase_order" item <> order || TelemetryJson.canonical item["model"] <> model || TelemetryJson.canonical item["tooling"] <> tooling then findings.Add(InvalidEvent(line, "phase order, model, or tooling changed within phase"))
+                    if item["actual_minutes"] <> null && item["actual_minutes"].GetValueKind() <> JsonValueKind.Null then findings.Add(InvalidEvent(line, "resumed actual_minutes must be null"))
+                    states[phase] <- "active", started, at, order, model, tooling
+                | ("completed" | "blocked"), (true, ("active", started, last, order, model, tooling)) ->
+                    if at < last then findings.Add(InvalidEvent(line, "timestamps must be nondecreasing within phase"))
+                    if intAt "phase_order" item <> order || TelemetryJson.canonical item["model"] <> model || TelemetryJson.canonical item["tooling"] <> tooling then findings.Add(InvalidEvent(line, "phase order, model, or tooling changed within phase"))
+                    let expected = int (Math.Floor((at - started).TotalSeconds / 60.0 + 0.5))
+                    match item["actual_minutes"] with null -> findings.Add(InvalidEvent(line, "terminal actual_minutes is required")) | value when value.GetValue<int>() <> expected -> findings.Add(InvalidEvent(line, $"actual_minutes must equal rounded elapsed wall time (%d{expected})")) | _ -> ()
+                    states[phase] <- event, started, at, order, model, tooling
+                | _ -> findings.Add(InvalidTransition(phase, $"event %s{event} is invalid from the current phase state"))
+            with error -> findings.Add(InvalidEvent(line, error.Message)))
+        for phase in requiredPhases do if not (states.ContainsKey phase) then findings.Add(InvalidTransition(phase, "required phase is missing"))
+        let byState value = states |> Seq.choose (fun pair -> let status, _, _, _, _, _ = pair.Value in if status = value then Some pair.Key else None) |> Seq.sort |> List.ofSeq
+        let completed, active, blocked = byState "completed", byState "active", byState "blocked"
+        if requireTerminal && (not active.IsEmpty || not blocked.IsEmpty || states.Count <> completed.Length) then findings.Add(InvalidEvent(events.Length, "terminal log has active, blocked, or incomplete phases"))
+        if findings.Count = 0 then Ok { EventCount = events.Length; CompletedPhases = completed; ActivePhases = active; BlockedPhases = blocked } else Error(List.ofSeq findings)
+
+    type HistoryRow = { Phase: string; ToolingFingerprint: string; ActualMinutes: int; Source: string }
+
+    let parseHistoryCsv (text: string) =
+        let lines = text.Replace("\r\n", "\n").Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not)
+        if lines.Length = 0 || lines[0] <> "phase,tooling_fingerprint,actual_minutes,source" then Error [ "history report header must be phase,tooling_fingerprint,actual_minutes,source" ] else
+        let parsed =
+            lines[1..] |> Array.mapi (fun index line ->
+                match line.Split(',') with
+                | [| phase; fingerprint; minutes; source |] when Regex.IsMatch(fingerprint, "^[0-9a-f]{64}$") && Regex.IsMatch(source, "^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*$") ->
+                    match Int32.TryParse minutes with true, value when value >= 0 -> Ok { Phase = phase; ToolingFingerprint = fingerprint; ActualMinutes = value; Source = source } | _ -> Error $"history report line %d{index + 2}: actual_minutes must be a whole minute"
+                | _ -> Error $"history report line %d{index + 2} is invalid") |> List.ofArray
+        let errors = parsed |> List.choose (function Error reason -> Some reason | _ -> None)
+        let rows = parsed |> List.choose (function Ok row -> Some row | _ -> None)
+        if not errors.IsEmpty then Error errors
+        elif rows |> List.map _.Source |> List.distinct |> List.length <> rows.Length then Error [ "history report sources must be unique" ]
+        else Ok rows
+
+    let validateWithEvidence runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
+        match validate runId unitId requireTerminal requiredPhases jsonLines with
+        | Error errors -> Error errors
+        | Ok validation ->
+            let reports = Map.ofList usageReports
+            let findings = ResizeArray<Finding>()
+            let events = objects jsonLines |> List.choose (function Ok value -> Some value | _ -> None)
+            events |> List.iteri (fun index item ->
+                let line = index + 1
+                let phase = stringAt "phase" item
+                let toolingFingerprint = TelemetryJson.canonical item["tooling"] |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256
+                let expectedHistory = history |> List.filter (fun row -> row.Phase = phase && row.ToolingFingerprint = toolingFingerprint) |> List.map _.ActualMinutes
+                let actualHistory = (item["historical_durations_minutes"] :?> JsonArray) |> Seq.map _.GetValue<int>() |> List.ofSeq
+                if stringAt "event" item = "completed" && actualHistory <> expectedHistory then findings.Add(InvalidEvent(line, "historical durations do not equal supplied same-tooling history report"))
+                match item["token_usage"] with
+                | :? JsonObject as usage when stringAt "status" usage = "measured" ->
+                    let source = stringAt "source" usage
+                    match reports.TryFind source with
+                    | None -> findings.Add(InvalidEvent(line, "measured token usage has no matching immutable usage receipt digest"))
+                    | Some rows ->
+                        let ids (name: string) = (usage[name] :?> JsonArray) |> Seq.map _.GetValue<string>() |> Set.ofSeq
+                        let sessions, turns = ids "session_ids", ids "turn_ids"
+                        let identity = item["item"] :?> JsonObject
+                        let repo, number = stringAt "repo" identity, intAt "number" identity
+                        let task = $"%s{repo}#%d{number}/%s{phase}"
+                        let selected = rows |> List.filter (fun row -> sessions.Contains row.SessionId && turns.Contains row.TurnId && row.Task = task)
+                        if selected.IsEmpty then findings.Add(InvalidEvent(line, "measured token usage has no matching usage-report rows")) else
+                        let sum (selector: RuntimeUsage.UsageRow -> int64) = selected |> List.sumBy selector
+                        let compare (name: string) (observed: int64) = if usage[name].GetValue<int64>() <> observed then findings.Add(InvalidEvent(line, $"measured %s{name} does not equal usage-report sum (%d{observed})"))
+                        compare "input" (sum _.Response.Input)
+                        compare "cached_input" (sum _.Response.CachedInput)
+                        compare "cache_write_input" (sum _.Response.CacheWriteInput)
+                        compare "output" (sum _.Response.Output)
+                        compare "total" (sum _.Response.Total)
+                        let expectedReasoning = if selected |> List.forall (_.Response.Reasoning >> Option.isSome) then Some(selected |> List.sumBy (_.Response.Reasoning >> Option.defaultValue 0L)) else None
+                        let actualReasoning = match usage["reasoning"] with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value -> Some(value.GetValue<int64>())
+                        if actualReasoning <> expectedReasoning then findings.Add(InvalidEvent(line, "measured reasoning does not equal usage-report sum"))
+                        let model = item["model"] :?> JsonObject
+                        if stringAt "status" model = "recorded" then
+                            selected |> List.iter (fun row -> if row.Model <> stringAt "name" model || row.Provider <> stringAt "provider" model || row.Effort <> stringAt "effort" model then findings.Add(InvalidEvent(line, "model does not match authoritative usage report")))
+                        let tooling = item["tooling"] :?> JsonObject
+                        for name, observed in
+                            [ "runtime", (fun (row: RuntimeUsage.UsageRow) -> row.RuntimeVersion)
+                              "coordination", (fun row -> row.CoordinationVersion)
+                              "sdd", (fun row -> row.SddVersion)
+                              "contracts", (fun row -> row.ContractsVersion) ] do
+                            match tooling[name] with
+                            | :? JsonObject as tool when stringAt "status" tool = "recorded" -> selected |> List.iter (fun row -> if stringAt "version" tool <> observed row then findings.Add(InvalidEvent(line, $"tooling.%s{name}.version does not match usage report")))
+                            | _ -> ()
+                | _ -> ())
+            if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
+
+    let sealSuccessor (runId: string) (unitId: string) (existingJsonLines: string) (draftJson: string) =
+        match objects existingJsonLines, objects draftJson with
+        | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
+            let current = existing |> List.choose (function Ok value -> Some value | _ -> None)
+            let revision = current.Length + 1
+            draft["sequence"] <- JsonValue.Create revision
+            draft["revision"] <- JsonValue.Create revision
+            draft["previous_digest"] <- match current |> List.tryLast with Some item -> JsonValue.Create(stringAt "digest" item) | None -> null
+            draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
+            draft["digest"] <- JsonValue.Create(digest draft)
+            let rendered = TelemetryJson.canonical draft
+            match validate runId unitId false [] (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+        | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
+
+    let exportComments (runId: string) (unitId: string) (commentsJson: string) =
+        try
+            let root: JsonNode = JsonNode.Parse(commentsJson: string)
+            let comments =
+                match root with
+                | :? JsonArray as values -> values |> Seq.collect (function :? JsonArray as nested -> nested :> seq<JsonNode> | item -> Seq.singleton item) |> List.ofSeq
+                | _ -> raise (FormatException("GitHub comment export must be an array"))
+            let pattern = Regex("\\A<!-- fsgg:item-lifecycle/v1 -->\\n```json\\n([^\\n]+)\\n```\\n?\\z", RegexOptions.CultureInvariant)
+            let candidates =
+                comments |> List.choose (fun (node: JsonNode) ->
+                    let item = node.AsObject()
+                    let body = stringAt "body" item
+                    if not (body.StartsWith("<!-- fsgg:item-lifecycle/v1 -->", StringComparison.Ordinal)) then None else
+                    let id = item["id"].GetValue<int64>()
+                    if stringAt "created_at" item <> stringAt "updated_at" item then raise (InvalidOperationException($"edited:%d{id}"))
+                    let matched = pattern.Match body
+                    if not matched.Success then raise (FormatException($"comment %d{id} has malformed lifecycle body"))
+                    let event = JsonNode.Parse(matched.Groups[1].Value).AsObject()
+                    if stringAt "run_id" event = runId && stringAt "unit_id" event = unitId then Some(id, event) else None) |> List.sortBy fst
+            let canonical = ResizeArray<JsonObject>()
+            let rejected = ResizeArray<Finding>()
+            let mutable previous: string option = None
+            for id, event in candidates do
+                let expected = canonical.Count + 1
+                let predecessor = match event["previous_digest"] with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value -> Some(value.GetValue<string>())
+                if intAt "sequence" event = expected && intAt "revision" event = expected && predecessor = previous then canonical.Add event; previous <- Some(stringAt "digest" event)
+                elif intAt "sequence" event < expected && intAt "sequence" event = intAt "revision" event then rejected.Add(RejectedFork(0L, id))
+                else raise (FormatException($"comment %d{id} does not extend canonical revision %d{expected - 1}"))
+            let rendered = canonical |> Seq.map TelemetryJson.canonical |> String.concat "\n" |> fun value -> if value = "" then value else value + "\n"
+            match validate runId unitId false [] rendered with Ok _ -> Ok(rendered, List.ofSeq rejected) | Error errors -> Error errors
+        with
+        | :? InvalidOperationException as e when e.Message.StartsWith("edited:") -> Error [ EditedAuthorityComment(Int64.Parse(e.Message.Substring 7)) ]
+        | error -> Error [ InvalidEvent(1, error.Message) ]
+
+module TelemetrySummary =
+    type Summary =
+        { Responses: int; Sessions: int; Turns: int; Input: int64; CachedInput: int64
+          CacheWriteInput: int64; FreshInput: int64; Output: int64; Reasoning: int64 option; Total: int64 }
+    let summarize (rows: RuntimeUsage.UsageRow list) =
+        let sum selector = rows |> List.sumBy selector
+        let reasoning =
+            if rows |> List.forall (_.Response.Reasoning >> Option.isSome) then
+                Some(rows |> List.sumBy (_.Response.Reasoning >> Option.defaultValue 0L))
+            else None
+        let input = sum _.Response.Input
+        let cached = sum _.Response.CachedInput
+        let write = sum _.Response.CacheWriteInput
+        { Responses = rows.Length
+          Sessions = rows |> List.map _.SessionId |> List.distinct |> List.length
+          Turns = rows |> List.map _.TurnId |> List.distinct |> List.length
+          Input = input
+          CachedInput = cached
+          CacheWriteInput = write
+          FreshInput = input - cached - write
+          Output = sum _.Response.Output
+          Reasoning = reasoning
+          Total = sum _.Response.Total }
+
+module CritiqueReceipt =
+    type Receipt = { CycleId: string; ReviewedCommit: string; RepairRounds: int; GameFunctionality: bool; PlayerJourneyPassed: bool; ArtifactDigest: string }
+    let validate (expectedCycle: string) (expectedHead: string option) (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            let errors = ResizeArray<string>()
+            let has name = root.TryGetProperty(name: string) |> fst
+            let value name = match root.TryGetProperty(name: string) with true, item -> item | _ -> Unchecked.defaultof<JsonElement>
+            let stringValue (item: JsonElement) = if item.ValueKind = JsonValueKind.String then item.GetString() else ""
+            let nonempty (item: JsonElement) = not (String.IsNullOrWhiteSpace(stringValue item))
+            let strings (item: JsonElement) = item.ValueKind = JsonValueKind.Array && item.EnumerateArray() |> Seq.forall nonempty
+            let sha (value: string) = Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
+            let schema = if has "schema_version" && (value "schema_version").ValueKind = JsonValueKind.Number then (value "schema_version").GetInt32() else -1
+            let cycle = stringValue (value "cycle_id")
+            let rounds = if has "repair_rounds" && (value "repair_rounds").ValueKind = JsonValueKind.Number then (value "repair_rounds").GetInt32() else -1
+            let confirmation = value "confirmation"
+            let confirmationValue name = if confirmation.ValueKind = JsonValueKind.Object then match confirmation.TryGetProperty(name: string) with true, item -> item | _ -> Unchecked.defaultof<JsonElement> else Unchecked.defaultof<JsonElement>
+            let head, verdict = stringValue (confirmationValue "reviewed_commit"), stringValue (confirmationValue "verdict")
+            let game = has "game_functionality" && (value "game_functionality").ValueKind = JsonValueKind.True
+            let notOwnable = has "entry_point_not_test_ownable" && (value "entry_point_not_test_ownable").ValueKind = JsonValueKind.True
+            let journeys = value "player_journeys"
+            let journey = journeys.ValueKind = JsonValueKind.Array && journeys.EnumerateArray() |> Seq.exists (fun item ->
+                item.ValueKind = JsonValueKind.Object
+                && stringValue (match item.TryGetProperty "entry_point" with true, v -> v | _ -> Unchecked.defaultof<JsonElement>) = "product-boot"
+                && stringValue (match item.TryGetProperty "input_surface" with true, v -> v | _ -> Unchecked.defaultof<JsonElement>) = "player-control-messages"
+                && (match item.TryGetProperty "reached" with true, v -> v.ValueKind = JsonValueKind.True | _ -> false))
+            if schema <> 3 then errors.Add "schema_version must be 3"
+            if cycle <> expectedCycle then errors.Add "cycle_id does not match"
+            for name in [ "milestone"; "critic" ] do if not (nonempty (value name)) then errors.Add($"%s{name} must be a non-empty string")
+            let initialCommit = stringValue (value "initial_reviewed_commit")
+            if not (sha initialCommit) then errors.Add "initial_reviewed_commit must be a lowercase 40-character git SHA"
+            let requiredScope = Set.ofList [ "requirements"; "diff"; "tests"; "architecture"; "roadmap-evidence" ]
+            let scope = value "scope"
+            let actualScope = if scope.ValueKind = JsonValueKind.Array then scope.EnumerateArray() |> Seq.map stringValue |> List.ofSeq else []
+            if Set.ofList actualScope <> requiredScope || actualScope.Length <> requiredScope.Count then errors.Add "scope must contain each required review area exactly once"
+            let initialVerdict = stringValue (value "initial_verdict")
+            if initialVerdict <> "pass" && initialVerdict <> "changes-required" then errors.Add "initial_verdict must be pass or changes-required"
+            if not (has "game_functionality") || ((value "game_functionality").ValueKind <> JsonValueKind.True && (value "game_functionality").ValueKind <> JsonValueKind.False) then errors.Add "game_functionality must be a boolean"
+            if not (has "entry_point_not_test_ownable") || ((value "entry_point_not_test_ownable").ValueKind <> JsonValueKind.True && (value "entry_point_not_test_ownable").ValueKind <> JsonValueKind.False) then errors.Add "entry_point_not_test_ownable must be a boolean"
+            let ownableReason = value "entry_point_not_test_ownable_reason"
+            if notOwnable && not (nonempty ownableReason) then errors.Add "entry_point_not_test_ownable_reason must be non-empty when entry point is not test-ownable"
+            if not notOwnable && ownableReason.ValueKind <> JsonValueKind.Null then errors.Add "entry_point_not_test_ownable_reason must be null unless entry point is not test-ownable"
+            let uncovered = value "uncovered_functionality"
+            if uncovered.ValueKind <> JsonValueKind.Array || not (strings uncovered) then errors.Add "uncovered_functionality must be a string array"
+            if journeys.ValueKind <> JsonValueKind.Array then errors.Add "player_journeys must be an array"
+            else
+                journeys.EnumerateArray() |> Seq.iteri (fun index item ->
+                    let prefix = $"player_journeys[%d{index}]"
+                    if item.ValueKind <> JsonValueKind.Object then errors.Add($"%s{prefix} must be an object") else
+                    let field name = match item.TryGetProperty(name: string) with true, v -> v | _ -> Unchecked.defaultof<JsonElement>
+                    if not (nonempty (field "functionality")) then errors.Add($"%s{prefix}.functionality must be a non-empty string")
+                    if stringValue (field "entry_point") <> "product-boot" then errors.Add($"%s{prefix}.entry_point must be product-boot")
+                    if stringValue (field "input_surface") <> "player-control-messages" then errors.Add($"%s{prefix}.input_surface must be player-control-messages")
+                    if (field "reached").ValueKind <> JsonValueKind.True && (field "reached").ValueKind <> JsonValueKind.False then errors.Add($"%s{prefix}.reached must be a boolean")
+                    if not (strings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be a non-empty string array"))
+            if game && not notOwnable && (journeys.ValueKind <> JsonValueKind.Array || journeys.GetArrayLength() = 0) then errors.Add "player_journeys must contain an entry for game functionality"
+            if not game && journeys.ValueKind = JsonValueKind.Array && journeys.GetArrayLength() <> 0 then errors.Add "player_journeys must be empty when game_functionality is false"
+            if rounds < 0 || rounds > 10 then errors.Add "repair_rounds is outside 0 through 10"
+            let reviewed = value "reviewed_commits"
+            let reviewedCommits = if reviewed.ValueKind = JsonValueKind.Array then reviewed.EnumerateArray() |> Seq.map stringValue |> List.ofSeq else []
+            let validChain = rounds >= 0 && rounds <= 10 && reviewedCommits.Length = rounds + 1 && reviewedCommits |> List.forall sha && List.distinct reviewedCommits = reviewedCommits && reviewedCommits |> List.tryHead = Some initialCommit
+            if not validChain then errors.Add "reviewed_commits must be a unique ordered lowercase-SHA chain with one commit per repair round"
+            if verdict <> "pass" then errors.Add "confirmation verdict is not pass"
+            expectedHead |> Option.iter (fun expected -> if head <> expected then errors.Add "confirmation reviewed_commit does not match")
+            if game && not journey then errors.Add "game critique requires a passing product-entry player journey"
+            if validChain && head <> List.last reviewedCommits then errors.Add "confirmation.reviewed_commit must equal latest reviewed commit"
+            if not (sha head) then errors.Add "confirmation.reviewed_commit must be a lowercase 40-character git SHA"
+            let unresolved = confirmationValue "unresolved_blocker_major"
+            if unresolved.ValueKind <> JsonValueKind.Array || unresolved.GetArrayLength() <> 0 then errors.Add "confirmation.unresolved_blocker_major must be empty"
+            let findings = value "findings"
+            let findingIds = Collections.Generic.HashSet<string>()
+            let mutable blockerMajor = false
+            let mutable resolved = false
+            if findings.ValueKind <> JsonValueKind.Array then errors.Add "findings must be an array"
+            else
+                findings.EnumerateArray() |> Seq.iteri (fun index item ->
+                    let prefix = $"findings[%d{index}]"
+                    if item.ValueKind <> JsonValueKind.Object then errors.Add($"%s{prefix} must be an object") else
+                    let field name = match item.TryGetProperty(name: string) with true, v -> v | _ -> Unchecked.defaultof<JsonElement>
+                    let id, severity, disposition = stringValue (field "id"), stringValue (field "severity"), stringValue (field "disposition")
+                    if String.IsNullOrWhiteSpace id then errors.Add($"%s{prefix}.id must be non-empty") elif not (findingIds.Add id) then errors.Add($"%s{prefix}.id must be unique")
+                    if not (Set.contains severity (Set.ofList [ "blocker"; "major"; "minor" ])) then errors.Add($"%s{prefix}.severity is invalid")
+                    if severity = "blocker" || severity = "major" then blockerMajor <- true
+                    if not (nonempty (field "summary")) then errors.Add($"%s{prefix}.summary must be non-empty")
+                    if not (strings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be non-empty")
+                    if not (Set.contains disposition (Set.ofList [ "resolved"; "follow-up"; "unresolved" ])) then errors.Add($"%s{prefix}.disposition is invalid")
+                    if (severity = "blocker" || severity = "major") && disposition <> "resolved" then errors.Add($"%s{prefix} blocker/major finding must be resolved")
+                    if disposition = "resolved" then resolved <- true
+                    if not (strings (field "resolution_evidence")) then errors.Add($"%s{prefix}.resolution_evidence must be non-empty"))
+            if blockerMajor && initialVerdict <> "changes-required" then errors.Add "initial_verdict must be changes-required when blocker/major findings exist"
+            if rounds > 0 && initialVerdict <> "changes-required" then errors.Add "initial_verdict must be changes-required when repair_rounds is non-zero"
+            if initialVerdict = "changes-required" && not resolved then errors.Add "changes-required must have at least one resolved finding"
+            if rounds = 0 && resolved then errors.Add "repair_rounds cannot be 0 when a finding was resolved"
+            let escalation = value "human_escalation"
+            if escalation.ValueKind <> JsonValueKind.Null && escalation.ValueKind <> JsonValueKind.Undefined then errors.Add "human escalation is terminal and cannot satisfy milestone acceptance"
+            if errors.Count = 0 then Ok { CycleId = cycle; ReviewedCommit = head; RepairRounds = rounds; GameFunctionality = game; PlayerJourneyPassed = journey; ArtifactDigest = "sha256:" + TelemetryJson.sha256 bytes } else Error(List.ofSeq errors)
+        with error -> Error [ "critique artifact is invalid: " + error.Message ]
+
+module FeedbackReceipt =
+    type Receipt = { CycleId: string; Phases: string list; MaterialEvents: int; ReportDigest: string }
+    let validate (expectedCycle: string) (expectedPhases: string list) (reportPath: string) (reportBytes: byte array) (auditBytes: byte array) (checkpointJsonLines: string option) =
+        try
+            let text = Encoding.UTF8.GetString(reportBytes).Replace("\r\n", "\n").Replace("\r", "\n")
+            let front = Regex.Match(text, "\\A---\\n(.*?)\\n---", RegexOptions.Singleline)
+            if not front.Success then invalidArg "report" "frontmatter is missing"
+            let meta = front.Groups[1].Value.Split('\n') |> Array.choose (fun line -> let at = line.IndexOf ':' in if at > 0 then Some(line[..at-1].Trim(), line[at+1..].Trim()) else None) |> Map.ofArray
+            if meta.TryFind "feedbackSchema" <> Some "2" then invalidArg "feedbackSchema" "must be 2"
+            if meta.TryFind "cycle" <> Some expectedCycle then invalidArg "cycle" "does not match"
+            let section = Regex.Match(text, "(?ms)^## §1 Provenance and confidence\\s*$\\n(.*?)(?=^## §2\\s)")
+            if not section.Success then invalidArg "report" "must contain §1 followed by §2"
+            let field (name: string) = let values = Regex.Matches(section.Groups[1].Value, $"(?mi)^-\\s+\\*\\*%s{Regex.Escape name}:\\*\\*\\s+(.+?)\\s*$") in if values.Count <> 1 then invalidArg name "must occur exactly once" else values[0].Groups[1].Value.Trim()
+            if not ((field "activation").Equals("active", StringComparison.OrdinalIgnoreCase)) then invalidArg "activation" "must be active"
+            let phases = field "phases" |> _.Split(',') |> Array.map _.Trim() |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray
+            if phases <> expectedPhases then invalidArg "phases" "do not match expected order"
+            let events = match Int32.TryParse(field "material events") with true, value when value >= 0 -> value | _ -> invalidArg "material events" "must be a non-negative integer"
+            use audit = JsonDocument.Parse(ReadOnlyMemory auditBytes)
+            let auditRoot = audit.RootElement
+            if auditRoot.GetProperty("auditSchema").GetInt32() <> 1 || auditRoot.GetProperty("report").GetString().Replace('\\', '/') <> reportPath.Replace('\\', '/') || auditRoot.GetProperty("reportSha256").GetString() <> TelemetryJson.sha256 (Encoding.UTF8.GetBytes text) then invalidArg "audit" "does not bind current report"
+            let unresolved = auditRoot.GetProperty("findings").EnumerateArray() |> Seq.exists (fun finding -> let status = match finding.TryGetProperty "status" with true, v when v.ValueKind = JsonValueKind.String -> v.GetString() | _ -> "" in status = "incomplete" || status = "unsupported")
+            if unresolved then invalidArg "audit" "contains unresolved findings"
+            let actualEvents = checkpointJsonLines |> Option.map (fun lines -> lines.Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.length) |> Option.defaultValue 0
+            let reason = field "zero-event reason"
+            if events <> actualEvents then invalidArg "checkpoint" "material event count does not match"
+            if events = 0 && Set.contains (reason.ToLowerInvariant()) (Set.ofList [ ""; "n/a"; "none"; "none observed." ]) then invalidArg "zero-event reason" "must explain why no material event occurred"
+            if events > 0 && not (Set.contains (reason.ToLowerInvariant()) (Set.ofList [ "n/a"; "not applicable" ])) then invalidArg "zero-event reason" "must be n/a for material events"
+            Ok { CycleId = expectedCycle; Phases = phases; MaterialEvents = events; ReportDigest = "sha256:" + TelemetryJson.sha256 (Encoding.UTF8.GetBytes text) }
+        with error -> Error [ "feedback artifact is invalid: " + error.Message ]
+
+module RoadmapClosure =
+    type Check = { Name: string; Required: bool; Passed: bool; Owner: string option }
+    type Evidence = { UnitId: string; Title: string; RoadmapSourceDigest: string; AcceptedReceiptDigest: string; CandidateHead: string; ImplementationMergeHead: string; AcceptanceMergeHead: string; ReviewHead: string; FeedbackHead: string; CycleId: string; CycleUpdateDigest: string; CritiqueVerdict: string; RepairRounds: int; IssueUrl: string; PullRequestUrl: string; ClaimsRemaining: int; Checks: Check list }
+    type ExternalObligation = { Check: string; Owner: string; Reason: string }
+    type Closed = { Evidence: Evidence; ExternalObligations: ExternalObligation list }
+    let inspect (evidence: Evidence) =
+        let required (label: string) (value: string) = if String.IsNullOrWhiteSpace value then Some($"%s{label} is required") else None
+        let errors =
+            [ yield! [ "unit id", evidence.UnitId; "title", evidence.Title; "roadmap source digest", evidence.RoadmapSourceDigest; "accepted receipt digest", evidence.AcceptedReceiptDigest; "candidate head", evidence.CandidateHead; "implementation merge head", evidence.ImplementationMergeHead; "acceptance merge head", evidence.AcceptanceMergeHead; "review head", evidence.ReviewHead; "feedback head", evidence.FeedbackHead; "cycle id", evidence.CycleId; "cycle update digest", evidence.CycleUpdateDigest; "issue URL", evidence.IssueUrl; "pull request URL", evidence.PullRequestUrl ] |> List.choose (fun (label, value) -> required label value)
+              if evidence.CandidateHead <> evidence.ReviewHead then yield "review head does not match candidate head"
+              if evidence.AcceptanceMergeHead <> evidence.FeedbackHead then yield "feedback head does not match acceptance merge head"
+              if evidence.CritiqueVerdict <> "pass" then yield "critique verdict is not pass"
+              if evidence.RepairRounds < 0 || evidence.RepairRounds > 10 then yield "repair rounds are outside 0 through 10"
+              if evidence.ClaimsRemaining <> 0 then yield "claim census is not zero"
+              for check in evidence.Checks do if check.Required && not check.Passed then yield $"required check failed: %s{check.Name}" ]
+        if errors.IsEmpty then
+            let obligations = evidence.Checks |> List.choose (fun check -> if not check.Required && not check.Passed then check.Owner |> Option.map (fun owner -> { Check = check.Name; Owner = owner; Reason = "non-required failed check" }) else None)
+            Ok { Evidence = evidence; ExternalObligations = obligations }
+        else Error errors
+
+module RoadmapProjection =
+    let private startMarker (id: string) = $"<!-- fsgg:roadmap-unit/%s{id} -->"
+    let private endMarker (id: string) = $"<!-- /fsgg:roadmap-unit/%s{id} -->"
+    let renderBlock (closed: RoadmapClosure.Closed) =
+        let e = closed.Evidence
+        let requiredPassed = e.Checks |> List.filter _.Required |> List.filter _.Passed |> List.length
+        let requiredTotal = e.Checks |> List.filter _.Required |> List.length
+        [ startMarker e.UnitId
+          $"- [x] **%s{e.UnitId} — %s{e.Title}**"
+          $"  - Accepted receipt: `%s{e.AcceptedReceiptDigest}`; candidate `%s{e.CandidateHead}`; implementation merge `%s{e.ImplementationMergeHead}`; acceptance merge `%s{e.AcceptanceMergeHead}`."
+          $"  - Gates: %d{requiredPassed}/%d{requiredTotal} required passed; critique pass after %d{e.RepairRounds} repair round(s); cycle `%s{e.CycleId}` update `%s{e.CycleUpdateDigest}`."
+          $"  - Evidence: [issue](%s{e.IssueUrl}) · [pull request](%s{e.PullRequestUrl}); claim census 0."
+          endMarker e.UnitId ] |> String.concat "\n"
+    let private sourceDigest (bytes: byte array) = "sha256:" + TelemetryJson.sha256 bytes
+    let private bounds (text: string) (id: string) =
+        let first, last = startMarker id, endMarker id
+        let starts, ends = Regex.Matches(text, Regex.Escape first), Regex.Matches(text, Regex.Escape last)
+        if starts.Count <> 1 || ends.Count <> 1 || starts[0].Index >= ends[0].Index then Error [ "roadmap unit markers are missing, duplicated, or reversed" ] else Ok(starts[0].Index, ends[0].Index + ends[0].Length)
+    let render (expectedSourceDigest: string) (roadmapBytes: byte array) (closed: RoadmapClosure.Closed) =
+        let text = Encoding.UTF8.GetString roadmapBytes
+        if sourceDigest roadmapBytes <> expectedSourceDigest || closed.Evidence.RoadmapSourceDigest <> expectedSourceDigest then Error [ "roadmap source digest is stale" ] else
+        match bounds text closed.Evidence.UnitId with Error e -> Error e | Ok(first, last) -> Ok(text.Substring(0, first) + renderBlock closed + text.Substring(last))
+    let verify (expectedSourceDigest: string) (roadmapBytes: byte array) (closed: RoadmapClosure.Closed) =
+        let text = Encoding.UTF8.GetString roadmapBytes
+        if closed.Evidence.RoadmapSourceDigest <> expectedSourceDigest then Error [ "roadmap source digest is stale" ] else
+        match bounds text closed.Evidence.UnitId with Error e -> Error e | Ok(first, last) -> if text.Substring(first, last - first) = renderBlock closed then Ok () else Error [ "roadmap unit block differs from accepted evidence" ]

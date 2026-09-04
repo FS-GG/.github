@@ -623,16 +623,21 @@ let main argv =
 
     try
         try
-            match Options.parse (List.ofArray argv) with
-            | Error message ->
-                eprint $"fsgg-coord-engine: %s{message}"
-                eprint ""
-                eprint Options.usage
-                ExitError
+            match TelemetryApplication.tryRun (List.ofArray argv) with
+            | Some exitCode ->
+                invoked <- "telemetry"
+                exitCode
+            | None ->
+                match Options.parse (List.ofArray argv) with
+                | Error message ->
+                    eprint $"fsgg-coord-engine: %s{message}"
+                    eprint ""
+                    eprint Options.usage
+                    ExitError
 
-            | Ok opts ->
-                invoked <- Options.commandName opts.Command
-                commandHandlers[opts.Command] opts
+                | Ok opts ->
+                    invoked <- Options.commandName opts.Command
+                    commandHandlers[opts.Command] opts
 
         with e ->
             // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

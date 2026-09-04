@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.80.1 — supervisor-enforced post-response telemetry reconciliation.
+    <PackageReleaseNotes>0.81.0 — compiled lifecycle telemetry and bounded roadmap projection.
 
-The packed pnext-item and work-roadmap skills now require a completed child to return an unposted
-terminal draft and exact runtime identity. Its parent harvests the post-response Codex JSONL record or
-Claude SubagentStop transcript, seals measured usage, and refuses host acceptance, cycle completion,
-or Done while reconciliation is absent. Strict lookup failure remains explicit rather than estimated,
-and legacy terminal timing excuses require a separate telemetry-reconciliation recovery phase.
+The coordination engine now collects exact Codex and Claude runtime usage, validates and seals the
+append-only lifecycle ledger, summarizes phase totals, validates critique/feedback receipts from its
+own compiled bytes, and renders or verifies one marker-bounded roadmap unit without writing the source.
+The 0.80.1 skill helpers remain the frozen production oracle until this coherent set is published and
+verified; a following publish-before-adopt change will flip callers and remove their Python logic.
 
 $(FsggStandingAdvisories)
 
@@ -252,17 +252,12 @@ the standing safety advisories carry forward.
     <Compile Include="Client.fs" />
     <Compile Include="SemanticDiffApplication.fsi" />
     <Compile Include="SemanticDiffApplication.fs" />
+    <Compile Include="TelemetryApplication.fsi" />
+    <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <!-- Provider validator authority travels with the engine binary. Artifact roots are caller data;
-         they must never select executable code (#2133 repair-phase round 1). The pinned byte digests
-         in CycleLedgerApplication make an unreviewed validator replacement fail closed. -->
-    <None Include="../../.agents/skills/work-roadmap/scripts/validate-critique-state.py"
-          Link="provider-validators/validate-critique-state.py"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
-          Link="provider-validators/validate-feedback-state.py"
-          CopyToOutputDirectory="PreserveNewest" />
+    <!-- Provider validators are compiled into this immutable package. Artifact roots remain caller
+         data and can select no executable code (#2133, .github#3208). -->
   </ItemGroup>
 
   <ItemGroup>
