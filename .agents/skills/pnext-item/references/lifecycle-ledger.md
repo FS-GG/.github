@@ -116,6 +116,29 @@ response, not a whole multi-call turn; aggregate only captured requests. Claude'
 separate reasoning from output, so the report leaves `reasoning` empty rather than guessing. For
 non-interactive work, `--output-format json`/`stream-json` or the Agent SDK result is preferred.
 
+### Supervising a completed child
+
+Post-response collection is a parent responsibility, not a promise delegated to the response that is
+ending. Every child handoff returns its phase, actor, start/end timestamps, exact session and turn (or
+Claude prompt/transcript) identity, model/effort, tool versions, evidence, and an **unposted** terminal
+event draft whose token state is `pending final usage`. The supervising parent waits for the child to be
+terminal, then:
+
+1. resolves the named local session/transcript and confirms its terminal usage record was written after
+   the child's last response;
+2. runs `collect-runtime-usage.py` into a new private immutable receipt scoped only to that phase;
+3. seals and posts the terminal lifecycle event with `measured` usage and the receipt digest; and
+4. rejects the handoff, host acceptance, cycle completion, or Done while that seal is absent.
+
+For Codex, a parent may use a unique phase marker only when the child could not return the session/turn
+identity; multiple matching sessions are an attribution failure, not permission to choose one. For
+Claude Code, consume the `SubagentStop` `agent_transcript_path`, never the parent's transcript. A strict
+post-completion lookup that finds no unique terminal record, or a collector failure caused by internal
+schema drift, may seal `unavailable` only when the exact lookup and validation failure are recorded.
+“Final usage is written after this response” proves the state is pending and is forbidden as an
+`unavailable` reason. When an immutable legacy terminal event already contains that reason, append a
+separate `telemetry-reconciliation-<phase>` recovery phase carrying the measured record before advancing.
+
 ## Validation and completion
 
 Seal, post, and export without hand-authoring digests or editing accepted comments:
