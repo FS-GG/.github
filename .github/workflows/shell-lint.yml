@@ -169,7 +169,7 @@ jobs:
 
       - name: Preserve deterministic subject manifest and critical-path receipt
         if: ${{ always() && steps.check.outputs.rc != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shell-lint-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/shell-lint-evidence
