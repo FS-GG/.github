@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, and all GS2-06 units accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1205,8 +1205,26 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-04–GS2-06
 **Exit:** events and audits converge; merge-group policy is qualified before any production queue
 
-- [ ] **GS2-07.1 — Event envelope and cursor.** Normalize source, delivery/event identity, subject,
+- [x] **GS2-07.1 — Event envelope and cursor.** Normalize source, delivery/event identity, subject,
   revision, causation, correlation, and receipt; duplicate and reordered delivery is idempotent.
+
+  Coordination [issue 294](https://github.com/FS-GG/FS.GG.Coordination/issues/294) and
+  [PR 295](https://github.com/FS-GG/FS.GG.Coordination/pull/295) accepted a canonical length-framed
+  envelope and complete ordered cursor over source, delivery/event identity, subject, revision, causation,
+  correlation, and receipt. Candidate `b05804181117736dbcf47cf77ad0b130637b8105` passed 22 generated
+  and independently authored Q3 controls, 208 unit tests, 492 architecture tests, warning-free Release build,
+  exact roadmap gates, and clean-checkout SDD verify/ship fixed points. The independent critique repaired one
+  blocker and five majors in one round before confirming that exact candidate; implementation protected-merged
+  as `83facfdea578d2ceddb1a80da9b6255f5ff29bc8`.
+
+  Acceptance [PR 296](https://github.com/FS-GG/FS.GG.Coordination/pull/296) protected-merged the indexed,
+  append-only receipt as `37a8c8275e101f0da9f26b1d0ce120533a879833`, with canonical digest
+  `825781cedeebbd56aad3a3d41499d6f9bbc647da372f8a91df7c7e2a5ed336e1`; exact-main Bootstrap run
+  `33844921620` and CodeQL run `33844921088` succeeded, and #294 read back closed/Done with no live claim.
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m7-gs2-07-1-event-envelope.json)
+  and [schema-v2 feedback report](../feedback/2026-09-04-roadmap-github-substrate-v2-m7-gs2-07-1-event-envelope.md)
+  bind normalized SDD unit key `gs2-07-1` to typed cycle `cycle-dba9a7021f8c15c3`; its source-bound guarded
+  update digest is `sha256:a1628ad879bf9886dfc0a44f482366e0a45d04fb352afcb487d6d1d6d461e7e2`.
 - [ ] **GS2-07.2 — Narrow reconciliation.** Route supported issue, relation, Project, repository, ruleset,
   run/check, release, and installation events to a deduplicating subject queue. Commands and events only
   schedule work; the shared fresh-observe/reduce/sealed-plan/apply/verify reconciler is the exclusive normal
