@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "b290b79ba4099963ca20b1182db2e9c20e785df26bedaf9449ad93159cacc951",
-      "tree-sha256": "fe34b6029b089bc53a1a6408f5e43daa1bfda7d2e018258d5a839618d169b827",
+      "sha256": "004a3736a3b02053565a6ed6ea5ef3878ab6b438537d5f7406c84ed2a2b5c161",
+      "tree-sha256": "08696af7d7aa60550b5cee80516dd67a06bd393fa1818175558ae321581e0044",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "b290b79ba4099963ca20b1182db2e9c20e785df26bedaf9449ad93159cacc951",
+          "sha256": "004a3736a3b02053565a6ed6ea5ef3878ab6b438537d5f7406c84ed2a2b5c161",
           "executable": false
         },
         {
@@ -39,7 +39,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "dbe0d18514ccceff75bf0d914d43a431e4fe030833d73744ad4fe66f00b5a741",
+          "sha256": "3f2ca723f8d423c1e6442a76ae2c8e92a9a3ea031e83183999a55c018d6e5d0e",
           "executable": false
         },
         {
@@ -49,22 +49,22 @@
         },
         {
           "path": "scripts/collect-runtime-usage.py",
-          "sha256": "0f458b956d1b8d077a07fbc6e7058897142d9ae289e795904e65dfa12b6d901f",
+          "sha256": "24308852203f5cdd10117b328736b3ffa356150e601dd475e9b4bead0eecb1b4",
           "executable": true
         },
         {
           "path": "scripts/validate-critique-state.py",
           "sha256": "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9",
-          "executable": false
+          "executable": true
         },
         {
           "path": "scripts/validate-feedback-state.py",
           "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
-          "executable": false
+          "executable": true
         },
         {
           "path": "scripts/validate-lifecycle-log.py",
-          "sha256": "34cd5bc48437f9d13948fcc4cadfeffba650eed17990b08a3c4868a5b2420b22",
+          "sha256": "3641eedc4751e392fadc12ae7ff8ce4d542751eebe034a3db8e38bcb6555bfac",
           "executable": true
         }
       ],

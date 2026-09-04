@@ -28,6 +28,9 @@ Every line is one JSON object with these fields:
   `{"status":"unavailable","reason":"...","source":"..."}`.
   Never infer a model from an agent label. One phase binds one model; a model change starts a distinct
   continuation/recovery phase so its duration and tokens remain attributable.
+- `tooling`: `ledger_schema` plus versioned `runtime`, `coordination`, `sdd`, and `contracts`
+  components. Record exact versions and sources or an explicit unavailable/not-applicable reason.
+  Historical duration/token comparisons use only rows with the same canonical tooling fingerprint.
 - `source`: object containing `repository` and either a 40-hex `revision` or an
   `unavailable_reason` explaining why no source revision exists yet.
 - `evidence`: non-empty array of reproducible commands, paths, API calls, or URLs.

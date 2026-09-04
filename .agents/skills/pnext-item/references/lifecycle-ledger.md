@@ -22,7 +22,8 @@ reply is a projection of the ledger; prose and a GitHub timestamp are evidence, 
 
 Each JSONL line is one phase transition. The shared v1 fields are `schema_version`, `run_id`, `unit_id`,
 `item`, `sequence`, `phase_order`, `phase`, `event`, `at`, `actor`, `model`, `source`, `evidence`,
-`actual_minutes`, `historical_durations_minutes`, `historical_average_minutes`, and `token_usage`.
+`actual_minutes`, `historical_durations_minutes`, `historical_average_minutes`, `token_usage`, and
+`tooling`.
 
 - `item` contains the canonical GitHub `repo`, positive issue `number`, and exact HTTPS issue `url`.
 - `phase` is a lowercase stable identifier. Every numbered review, repair, recovery, merge, verification,
@@ -32,6 +33,12 @@ Each JSONL line is one phase transition. The shared v1 fields are `schema_versio
   nearest whole minute. Historical averages use prior completed durations for the same canonical phase
   and the same rounding rule.
 - `actor` is the minted worker, critic, or host identity.
+- `tooling` binds `ledger_schema` plus `runtime`, `coordination`, `sdd`, and `contracts` components.
+  Each component records its exact name/version/source or an explicit `unavailable`/`not_applicable`
+  reason. For Codex, take the runtime version from `session_meta.cli_version`; for Claude Code, take it
+  from status-line `version`. Capture `fsgg-coord --version`, `fsgg-sdd --version`, and the governed
+  contracts version at phase start. Historical comparisons must group by the canonicalized `tooling`
+  object; do not blend durations or token rates from different toolchain fingerprints.
 - `model` records `provider`, exact `name`/variant, optional `effort`, and authoritative `source`. A model
   switch begins a new phase. Never derive a model from an agent nickname.
 - `token_usage` on a start/resume is `pending`. On a terminal event it is `measured`, `pending`, or
@@ -51,16 +58,19 @@ receipt exists, or mark it unavailable with that exact limitation.
 The collector emits this stable report header:
 
 ```text
-timestamp,task,session_id,thread_id,turn_id,provider,model,effort,input,cached_input,cache_write_input,output,reasoning,total,thread_input,thread_cached_input,thread_cache_write_input,thread_output,thread_reasoning,thread_total,source
+timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,runtime_version,coordination_version,sdd_version,contracts_version,ledger_schema,input,cached_input,cache_write_input,output,reasoning,total,turn_input,turn_cached_input,turn_cache_write_input,turn_output,turn_reasoning,turn_total,thread_input,thread_cached_input,thread_cache_write_input,thread_output,thread_reasoning,thread_total,source
 ```
 
-Codex persists `token_usage_record` rows under `~/.codex/sessions/YYYY/MM/DD/`. Use the final record for
-the selected `turn_id`: its `turn_token_usage` is the completed-turn total, `thread_token_usage` is the
-full-thread total, and the matching `turn_context` supplies the exact model variant and effort. Run:
+Codex persists `token_usage_record` rows under `~/.codex/sessions/YYYY/MM/DD/`. Each row binds one
+`response_id`'s request usage plus current turn and full-thread totals; the matching `turn_context`
+supplies the exact model variant and effort. Capture all completed responses so long-running goal turns
+and user-steered continuations do not collapse into one misleading final row. Run:
 
 ```sh
 python3 .agents/skills/pnext-item/scripts/collect-runtime-usage.py codex \
-  --session-file <rollout.jsonl> --task <item/phase> --turn-id <turn-id> --append <usage.csv>
+  --session-file <rollout.jsonl> --task <item/phase> --turn-id <turn-id> \
+  --coord-version <version> --sdd-version <version> --contracts-version <version> \
+  --all-responses --append <usage.csv>
 ```
 
 The local Codex JSONL is an internal interface, so the collector validates every required key and fails

@@ -20,7 +20,7 @@ EVENTS = {"started", "completed", "blocked", "resumed"}
 FIELDS = {
     "schema_version", "run_id", "unit_id", "item", "sequence", "phase_order", "phase",
     "event", "at", "actor", "model", "source", "evidence", "actual_minutes",
-    "historical_durations_minutes", "historical_average_minutes", "token_usage",
+    "historical_durations_minutes", "historical_average_minutes", "token_usage", "tooling",
 }
 
 
@@ -107,6 +107,31 @@ def validate_model(value: object, line: int) -> None:
         fail(f"line {line}: model status must be recorded or unavailable; inference is forbidden")
 
 
+def validate_tooling(value: object, line: int) -> None:
+    expected = {"ledger_schema", "runtime", "coordination", "sdd", "contracts"}
+    if not isinstance(value, dict) or set(value) != expected or value.get("ledger_schema") != 1:
+        fail(f"line {line}: tooling must contain ledger_schema 1 and all four tool components")
+    for component in ("runtime", "coordination", "sdd", "contracts"):
+        item = value[component]
+        if not isinstance(item, dict) or not isinstance(item.get("status"), str):
+            fail(f"line {line}: tooling.{component} must be a status object")
+        status = item["status"]
+        if status == "recorded":
+            if set(item) != {"status", "name", "version", "source"}:
+                fail(f"line {line}: recorded tooling.{component} has missing or unexpected fields")
+            nonempty(item["name"], f"tooling.{component}.name", line)
+            nonempty(item["version"], f"tooling.{component}.version", line)
+            nonempty(item["source"], f"tooling.{component}.source", line)
+        elif status in {"unavailable", "not_applicable"}:
+            if set(item) != {"status", "name", "reason", "source"}:
+                fail(f"line {line}: {status} tooling.{component} has missing or unexpected fields")
+            nonempty(item["name"], f"tooling.{component}.name", line)
+            nonempty(item["reason"], f"tooling.{component}.reason", line)
+            nonempty(item["source"], f"tooling.{component}.source", line)
+        else:
+            fail(f"line {line}: tooling.{component}.status is invalid")
+
+
 def validate_source(value: object, line: int) -> None:
     if not isinstance(value, dict):
         fail(f"line {line}: source must be an object")
@@ -183,6 +208,7 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
             fail(f"line {index}: unknown event")
         nonempty(raw["actor"], "actor", index)
         validate_model(raw["model"], index)
+        validate_tooling(raw["tooling"], index)
         validate_source(raw["source"], index)
         evidence = raw["evidence"]
         if not isinstance(evidence, list) or not evidence or any(not isinstance(v, str) or not v.strip() for v in evidence):
@@ -279,6 +305,11 @@ def valid_fixture() -> list[object]:
     common = {"schema_version": 1, "run_id": "roadmap-v2", "unit_id": "GS2-01.1", "item": item,
               "actor": "worker-1234", "model": {"status": "recorded", "provider": "OpenAI",
               "name": "gpt-test", "source": "runtime receipt"}, "source": source,
+              "tooling": {"ledger_schema": 1,
+                           "runtime": {"status": "recorded", "name": "codex", "version": "1.2.3", "source": "session"},
+                           "coordination": {"status": "recorded", "name": "fsgg-coord", "version": "4.5.6", "source": "cli"},
+                           "sdd": {"status": "recorded", "name": "fsgg-sdd", "version": "7.8.9", "source": "cli"},
+                           "contracts": {"status": "recorded", "name": "fsgg-contracts", "version": "10.0.0", "source": "registry"}},
               "historical_average_minutes": None}
     return [
         {**common, "sequence": 1, "phase_order": 1, "phase": "claim", "event": "started",
@@ -313,6 +344,7 @@ def self_test() -> None:
         "wrong token total": lambda rows: rows[1]["token_usage"].__setitem__("total", 99),
         "estimated tokens": lambda rows: rows[1]["token_usage"].__setitem__("status", "estimated"),
         "inferred model": lambda rows: rows[1]["model"].__setitem__("status", "inferred"),
+        "missing tool version": lambda rows: rows[1]["tooling"]["sdd"].__setitem__("version", ""),
         "model changed in phase": lambda rows: rows[1].__setitem__("model", {"status": "recorded", "provider": "OpenAI", "name": "other", "source": "runtime receipt"}),
         "bad revision": lambda rows: rows[0]["source"].__setitem__("revision", "HEAD"),
         "empty evidence": lambda rows: rows[0].__setitem__("evidence", []),
