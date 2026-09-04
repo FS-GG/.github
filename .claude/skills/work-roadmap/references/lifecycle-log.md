@@ -89,6 +89,17 @@ phase events under the critic's minted identity; the implementer must not attrib
 itself. Cross-repository projection phases remain in the same item ledger and bind their repository/revision
 in `source`.
 
+The roadmap driver, as supervising parent, owns every post-child seal. A child returns an unposted
+terminal draft with `pending final usage` and its exact session/turn identity (or Claude prompt and
+`SubagentStop` transcript path). It does not post its own terminal lifecycle event, because the final
+usage row does not exist until after that response ends. Once the child is terminal, the driver locates
+the completed record, runs the strict collector into a phase-scoped immutable receipt, seals the terminal
+event as `measured`, and only then accepts the handoff. A statement that final usage will be written after
+the response means pending, never unavailable. Terminal `unavailable` requires a documented
+post-completion lookup that found no unique attributable record or a strict collector schema failure.
+If a legacy immutable event already used the timing excuse, append a separate
+`telemetry-reconciliation-<phase>` recovery phase before host acceptance, cycle completion, or Done.
+
 Codex's completed `token_usage_record` rows provide request, turn, and thread totals; matching
 `turn_context` rows provide the exact model variant and effort. Claude Code's status-line input provides
 the exact model ID and latest-response input/cache/output usage, while `Stop` and `SubagentStop` hooks

@@ -7,6 +7,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
 COMMAND_TESTS = ROOT / "tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs"
+SUPERVISION_CONTRACTS = {
+    ROOT / ".agents/skills/pnext-item/SKILL.md": [
+        "The supervising parent owns the post-child boundary",
+        "unposted terminal draft marked `pending final usage`",
+        "timing condition to `unavailable`",
+        "while any completed child lacks this reconciliation",
+    ],
+    ROOT / ".agents/skills/pnext-item/references/lifecycle-ledger.md": [
+        "Supervising a completed child",
+        "Post-response collection is a parent responsibility",
+        "multiple matching sessions are an attribution failure",
+        "`unavailable` reason",
+    ],
+    ROOT / ".agents/skills/work-roadmap/SKILL.md": [
+        "roadmap driver is the supervising parent",
+        "terminal draft with `pending final usage`",
+        "roadmap Done all fail closed",
+        "post-completion uniqueness lookup",
+    ],
+    ROOT / ".agents/skills/work-roadmap/references/lifecycle-log.md": [
+        "supervising parent, owns every post-child seal",
+        "It does not post its own terminal lifecycle event",
+        "the response means pending, never unavailable",
+        "telemetry-reconciliation-<phase>",
+    ],
+}
 PAGINATION_WITNESSES = [
     "lifecycle election sees a same-key competitor beyond one merged page",
     "paginated (comments merged)",
@@ -61,11 +87,23 @@ def validate_command_tests(text: str) -> None:
             raise ValueError(f"lifecycle append pagination control lost: {witness}")
 
 
+def validate_supervision_contracts(contents: dict[Path, str]) -> None:
+    for path, witnesses in SUPERVISION_CONTRACTS.items():
+        for witness in witnesses:
+            if witness not in contents[path]:
+                raise ValueError(f"{path.relative_to(ROOT)} lost post-child usage ownership: {witness}")
+        mirror = ROOT / ".claude" / path.relative_to(ROOT / ".agents")
+        if contents[path] != mirror.read_text(encoding="utf-8"):
+            raise ValueError(f"{path.relative_to(ROOT)} and {mirror.relative_to(ROOT)} diverged")
+
+
 def main() -> None:
     source = SOURCE.read_text(encoding="utf-8")
     validate(source)
     command_tests = COMMAND_TESTS.read_text(encoding="utf-8")
     validate_command_tests(command_tests)
+    supervision_contents = {path: path.read_text(encoding="utf-8") for path in SUPERVISION_CONTRACTS}
+    validate_supervision_contracts(supervision_contents)
     witnesses = [
         "target.Canonical <> item.Canonical",
         "Reads.requireCompleteMarkerScan item.Short",
@@ -93,7 +131,17 @@ def main() -> None:
         except ValueError:
             continue
         raise SystemExit(f"lifecycle append pagination mutation survived: {witness}")
-    print(f"PASS  lifecycle append authority: live claim serialization + {len(witnesses)} source mutations + executable merged-page control")
+    for path, contract_witnesses in SUPERVISION_CONTRACTS.items():
+        for witness in contract_witnesses:
+            mutated = dict(supervision_contents)
+            mutated[path] = mutated[path].replace(witness, "removed-supervision-witness", 1)
+            try:
+                validate_supervision_contracts(mutated)
+            except ValueError:
+                continue
+            raise SystemExit(f"post-child supervision mutation survived: {path.relative_to(ROOT)}: {witness}")
+    count = sum(len(value) for value in SUPERVISION_CONTRACTS.values())
+    print(f"PASS  lifecycle append authority: live claim serialization + {len(witnesses)} source mutations + executable merged-page control + {count} post-child supervision mutations")
 
 
 if __name__ == "__main__":

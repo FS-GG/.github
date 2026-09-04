@@ -72,6 +72,16 @@ Durations and historical averages are derived from recorded UTC timestamps and c
 evidence with the same tooling fingerprint, using only whole discrete minutes. Read [lifecycle-log](references/lifecycle-log.md) for the canonical path,
 schema, transition rules, token accounting, and exact validation command.
 
+The roadmap driver is the supervising parent for every dispatched worker, critic, confirmation,
+recovery, or host phase. A child returns an unposted terminal draft with `pending final usage` plus its
+exact session/turn or transcript identity. Only after that child is terminal does the driver harvest the
+completed local record, seal and post its measured terminal event, and accept the handoff. The driver
+must not interpret “the final count is written after my response” as terminal `unavailable`; host
+acceptance, cycle completion, cross-cycle roll-up, and roadmap Done all fail closed while a completed
+child lacks post-response reconciliation. A genuine unavailable result requires a documented
+post-completion uniqueness lookup or strict-schema failure. Repair an already-posted legacy timing reason
+with a distinct telemetry-reconciliation phase rather than editing the immutable event.
+
 ## Status position line
 
 Every intermediate roadmap-driver, worker, or critic-handoff status reply must start with:

@@ -22,6 +22,18 @@ provider response before closing the corresponding phase; never estimate from vi
 window. Freeze one private usage receipt per phase when cited; never append later phases to it. Each critic and recovery worker records its own runtime identity and usage rather than assigning
 it to the implementer.
 
+**The supervising parent owns the post-child boundary.** A worker, critic, confirmation, recovery, or
+host child cannot read usage written after its own final response. It therefore returns the exact
+session/turn identity and an unposted terminal draft marked `pending final usage`; it must not convert
+that timing condition to `unavailable` or post the terminal lifecycle comment itself. After the child is
+terminal, the parent locates that completed Codex JSONL (or Claude `SubagentStop` transcript), runs the
+strict collector, seals and posts the child's terminal event, and only then accepts the handoff. Host
+acceptance, cycle completion, and Done refuse while any completed child lacks this reconciliation.
+Terminal `unavailable` is allowed only after the parent performed a post-completion lookup and records
+that no unique terminal record exists or that strict schema validation failed; “the response had not
+finished” is never a terminal reason. If an older worker already posted that reason, append a distinct
+telemetry-reconciliation recovery phase before continuing; never edit the immutable event.
+
 Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,
 projection, and cleanup facts do not exist until after that candidate head was reviewed, so appending them
 to the candidate creates an unsatisfiable exact-head loop. Repository `logs/` files are immutable exported
