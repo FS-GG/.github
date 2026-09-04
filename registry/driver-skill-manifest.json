@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "f867d02e0a105d27fc8b73694427d1208987cec62e47fd896930b7eda0a15d4b",
-      "tree-sha256": "b7845234f1cf4eb4223157f12cb6b5bf60879f70e2dc435a488554a8594c1e50",
+      "sha256": "c5d94ca36e32c3891f42e0d3c0d8b76e766aa84681fb556d31d2772fbd49327f",
+      "tree-sha256": "781673c3bacf676a24fb637256982268b775fe3ae3b6ee85343ebc211f5d76b4",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "f867d02e0a105d27fc8b73694427d1208987cec62e47fd896930b7eda0a15d4b",
+          "sha256": "c5d94ca36e32c3891f42e0d3c0d8b76e766aa84681fb556d31d2772fbd49327f",
           "executable": false
         },
         {
@@ -39,7 +39,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "99ddbd6a1e3717123f4c2e8b2f8492e05e7b3446a6f9e76174940f480630cb50",
+          "sha256": "ded0a3b9897ba66874ad2c36ed8ecd26fc9643ccbe49b1e5370279589158b90b",
           "executable": false
         },
         {
@@ -64,7 +64,7 @@
         },
         {
           "path": "scripts/validate-lifecycle-log.py",
-          "sha256": "86e283d773faa7b02c08e2bba34eb95f45066b92eb57272f120f9be1e7b9afa3",
+          "sha256": "338f7f0165eee4fbca96ad6c1d7bb719b99bd85cc033f6569b404692163c8f8f",
           "executable": false
         }
       ],

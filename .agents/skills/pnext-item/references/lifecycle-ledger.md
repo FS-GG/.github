@@ -1,7 +1,7 @@
 # FS.GG item lifecycle ledger
 
 Every claimed item has one externally durable, append-only phase ledger on its canonical GitHub issue
-and one private append-only runtime-usage report. Each event is posted as an
+and one private immutable runtime-usage receipt per phase. Each event is posted as an
 `fsgg:item-lifecycle/v1` structured issue comment through `fsgg-coord comment create`, then read back and
 digest-verified. Optional immutable normal-item exports use:
 
@@ -23,7 +23,9 @@ The candidate branch is never the live authority. Review, merge, protected-main,
 facts occur after its exact head is fixed; appending them inside that branch would invalidate the review
 and can never converge. A tracked JSONL file is only an immutable export of a closed interval and never
 gates the PR that contains it. Export happens afterward under a distinct source-bound item. Raw usage
-CSVs and local session paths remain private and untracked.
+CSVs and local session paths remain private and untracked. A phase receipt may grow while that phase is
+active, but freezes when its digest is cited; later phases use new receipts so appends cannot invalidate
+earlier events.
 
 ## Phase events
 
@@ -52,9 +54,10 @@ Each JSONL line is one phase transition. The shared v1 fields are `schema_versio
   object; do not blend durations or token rates from different toolchain fingerprints.
 - `model` records `provider`, exact `name`/variant, optional `effort`, and authoritative `source`. A model
   switch begins a new phase. Never derive a model from an agent nickname.
-- `token_usage` on a start/resume is `pending`. On a terminal event it is `measured`, `pending`, or
-  `unavailable`. `pending` means the response containing the transition has not finished yet and must be
-  reconciled by the post-response collector. `unavailable` is allowed only after the named authoritative
+- `token_usage` on a start/resume is `pending`. A terminal event is drafted locally at the boundary but
+  posted only after the response has finished and the collector can seal it as `measured` or
+  `unavailable`. Never post a pending terminal comment and never edit an accepted comment. `unavailable`
+  is allowed only after the named authoritative
   source was checked and had no usable record.
 
 Measured phase usage records total input, cached input, cache-write input, output, reasoning output, and
@@ -67,7 +70,7 @@ receipt exists, or mark it unavailable with that exact limitation.
 
 ## Runtime collection
 
-The private collector emits this stable report header:
+Each private phase receipt uses this stable report header:
 
 ```text
 timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,runtime_version,coordination_version,sdd_version,contracts_version,ledger_schema,input,cached_input,cache_write_input,output,reasoning,total,turn_input,turn_cached_input,turn_cache_write_input,turn_output,turn_reasoning,turn_total,thread_input,thread_cached_input,thread_cache_write_input,thread_output,thread_reasoning,thread_total,source
@@ -83,8 +86,11 @@ content digest such as `codex-session-jsonl:sha256:<digest>`, never an absolute 
 python3 .agents/skills/pnext-item/scripts/collect-runtime-usage.py codex \
   --session-file <rollout.jsonl> --task <item/phase> --turn-id <turn-id> \
   --coord-version <version> --sdd-version <version> --contracts-version <version> \
-  --all-responses --append <private-untracked-usage.csv>
+  --all-responses --append <private-untracked-phase-usage.csv>
 ```
+
+Never append another phase to a receipt whose SHA-256 is already cited. The validator accepts repeated
+`--usage` arguments and resolves each event against the immutable receipt digest it names.
 
 The local Codex JSONL is an internal interface, so the collector validates every required key and fails
 closed on shape drift. For direct API work, prefer the stable response `usage` object.
@@ -101,13 +107,31 @@ non-interactive work, `--output-format json`/`stream-json` or the Agent SDK resu
 
 ## Validation and completion
 
+Seal, post, and export without hand-authoring digests or editing accepted comments:
+
+````sh
+python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
+  --seal-draft <unposted-events.jsonl> > <sealed-events.jsonl>
+while IFS= read -r event; do
+  printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
+  FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
+done < <sealed-events.jsonl>
+gh api repos/<owner>/<repo>/issues/<number>/comments --paginate --slurp > <comments.json>
+python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
+  --run <run-id> --unit <unit-id> --export-comments <comments.json> > <exported-lifecycle.jsonl>
+````
+
+The exporter accepts only exact markers, orders by immutable GitHub comment id, and rejects edited
+lifecycle comments. A correction is a later digest-chained event, never an edit.
+
 Run the validator at each handoff and gate. A normal item uses any stable lowercase `run_id` and path-safe
 `unit_id`; a roadmap supplies its cycle values:
 
 ```sh
 python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
   --root . --run <run-id> --unit <unit-id> --log <exported-lifecycle.jsonl> \
-  --usage <private-untracked-usage.csv> [--history-report <validated-history.csv>]
+  --usage <private-phase-1.csv> --usage <private-phase-2.csv> \
+  [--history-report <validated-history.csv>]
 ```
 
 Use `--require-terminal --require-reconciled` before a done stamp or roadmap roll-up. The first rejects an

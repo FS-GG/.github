@@ -19,7 +19,7 @@ the exact provider/model/variant and effort, authoritative token usage, and the 
 SDD CLI/contracts, and ledger-schema versions that make comparisons meaningful. Token accounting is a
 post-response operation: reconcile the completed runtime turn from its local session record or stable
 provider response before closing the corresponding phase; never estimate from visible text or a context
-window. Each critic and recovery worker records its own runtime identity and usage rather than assigning
+window. Freeze one private usage receipt per phase when cited; never append later phases to it. Each critic and recovery worker records its own runtime identity and usage rather than assigning
 it to the implementer.
 
 Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,

@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,8 +68,8 @@ def tooling_fingerprint(value: dict[str, object]) -> str:
 
 
 def validate_tokens(value: object, terminal: bool, line: int,
-                    usage_rows: list[dict[str, str]] | None,
-                    usage_source: str | None, model: object, tooling: object,
+                    usage_reports: dict[str, list[dict[str, str]]],
+                    model: object, tooling: object,
                     expected_task: str) -> None:
     if not isinstance(value, dict) or not isinstance(value.get("status"), str):
         fail(f"line {line}: token_usage must be an object with status")
@@ -78,8 +79,7 @@ def validate_tokens(value: object, terminal: bool, line: int,
             fail(f"line {line}: started/resumed token_usage must be exactly pending")
         return
     if status == "pending":
-        if value != {"status": "pending"}:
-            fail(f"line {line}: pending token_usage must contain only status")
+        fail(f"line {line}: terminal public events must be posted only after token reconciliation")
     elif status == "measured":
         expected = {"status", "input", "cached_input", "cache_write_input", "output", "reasoning",
                     "total", "source", "session_ids", "turn_ids"}
@@ -104,13 +104,14 @@ def validate_tokens(value: object, terminal: bool, line: int,
             if not isinstance(identifiers, list) or not identifiers or any(
                     not isinstance(item, str) or not item for item in identifiers):
                 fail(f"line {line}: measured {field} must be a non-empty string array")
+        usage_rows = usage_reports.get(value["source"])
         if usage_rows is None:
-            fail(f"line {line}: measured token usage requires an authoritative --usage report")
-        if value["source"] != usage_source:
-            fail(f"line {line}: token_usage.source does not bind the supplied usage report digest")
+            fail(f"line {line}: measured token usage has no matching immutable --usage receipt digest")
         assert isinstance(model, dict) and isinstance(tooling, dict)
         selected = [row for row in usage_rows
-                    if row.get("session_id") in value["session_ids"] and row.get("turn_id") in value["turn_ids"]]
+                    if row.get("session_id") in value["session_ids"]
+                    and row.get("turn_id") in value["turn_ids"]
+                    and row.get("task") == expected_task]
         if not selected:
             fail(f"line {line}: measured token usage has no matching usage-report rows")
         for field in ("input", "cached_input", "cache_write_input", "output", "total"):
@@ -226,8 +227,7 @@ def validate_source(value: object, line: int) -> None:
 def validate_lines(records: list[object], run_id: str, unit_id: str,
                    require_terminal: bool = False, require_reconciled: bool = False,
                    required_phases: list[str] | None = None,
-                   usage_rows: list[dict[str, str]] | None = None,
-                   usage_source: str | None = None,
+                   usage_reports: dict[str, list[dict[str, str]]] | None = None,
                    history_rows: list[dict[str, str]] | None = None) -> None:
     if not records:
         fail("log is empty")
@@ -314,7 +314,7 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         previous_at = timestamp
 
         terminal_event = event in {"completed", "blocked"}
-        validate_tokens(raw["token_usage"], terminal_event, index, usage_rows, usage_source,
+        validate_tokens(raw["token_usage"], terminal_event, index, usage_reports or {},
                         raw["model"], raw["tooling"], f"{repo}#{number}/{phase}")
         history = raw["historical_durations_minutes"]
         average = raw["historical_average_minutes"]
@@ -407,9 +407,7 @@ def load(path: Path) -> list[object]:
     return records
 
 
-def read_usage_csv(path: Path | None) -> tuple[list[dict[str, str]] | None, str | None]:
-    if path is None:
-        return None, None
+def read_usage_csv(path: Path) -> tuple[list[dict[str, str]], str]:
     content = path.read_bytes()
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -437,6 +435,16 @@ def read_usage_csv(path: Path | None) -> tuple[list[dict[str, str]] | None, str 
             fail(f"usage report line {index}: reasoning is invalid")
     digest = hashlib.sha256(content).hexdigest()
     return rows, f"runtime-usage-csv:sha256:{digest}"
+
+
+def read_usage_reports(paths: list[Path]) -> dict[str, list[dict[str, str]]]:
+    reports: dict[str, list[dict[str, str]]] = {}
+    for path in paths:
+        rows, source = read_usage_csv(path)
+        if source in reports:
+            fail(f"duplicate immutable usage receipt digest: {source}")
+        reports[source] = rows
+    return reports
 
 
 def read_history_csv(path: Path | None) -> list[dict[str, str]] | None:
@@ -470,6 +478,44 @@ def seal(records: list[object]) -> list[object]:
         raw["digest"] = canonical_digest(raw)
         previous = raw["digest"]
     return records
+
+
+def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        fail("GitHub comment export must be an array (use gh api --paginate --slurp)")
+    comments: list[object] = []
+    for value in raw:
+        if isinstance(value, list):
+            comments.extend(value)
+        else:
+            comments.append(value)
+    records: list[tuple[int, object]] = []
+    marker = re.compile(r"\A<!-- fsgg:item-lifecycle/v1 -->\n```json\n([^\n]+)\n```\n?\Z")
+    for index, value in enumerate(comments, 1):
+        if not isinstance(value, dict):
+            fail(f"GitHub comment export entry {index} is not an object")
+        body = value.get("body")
+        if not isinstance(body, str) or not body.startswith("<!-- fsgg:item-lifecycle/v1 -->"):
+            continue
+        match = marker.fullmatch(body)
+        if match is None:
+            fail(f"GitHub lifecycle comment {value.get('id')} has a malformed marker/body")
+        if value.get("created_at") != value.get("updated_at"):
+            fail(f"GitHub lifecycle comment {value.get('id')} was edited; append a correction instead")
+        try:
+            event = json.loads(match.group(1))
+        except json.JSONDecodeError as error:
+            fail(f"GitHub lifecycle comment {value.get('id')} contains invalid JSON: {error.msg}")
+        if isinstance(event, dict) and event.get("run_id") == run_id and event.get("unit_id") == unit_id:
+            comment_id = value.get("id")
+            if isinstance(comment_id, bool) or not isinstance(comment_id, int) or comment_id <= 0:
+                fail("GitHub lifecycle comment has no positive numeric id")
+            records.append((comment_id, event))
+    records.sort(key=lambda pair: pair[0])
+    if not records:
+        fail("GitHub comment export contains no matching lifecycle events")
+    return [event for _, event in records]
 
 
 def valid_fixture() -> list[object]:
@@ -519,7 +565,7 @@ def self_test() -> None:
         "reasoning": "2", "total": "15",
     }]
     validate_lines(base, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"],
-                   usage_rows, "runtime-usage-csv:sha256:fixture")
+                   {"runtime-usage-csv:sha256:fixture": usage_rows})
     mutations = {
         "sequence gap": lambda rows: rows[2].__setitem__("sequence", 4),
         "wrong issue URL": lambda rows: rows[0]["item"].__setitem__("url", "https://example.invalid/42"),
@@ -542,8 +588,8 @@ def self_test() -> None:
         mutate(rows)
         try:
             required = ["claim", "implement", "acceptance"] if name == "missing required phase" else ["claim", "implement"]
-            validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, required, usage_rows,
-                           "runtime-usage-csv:sha256:fixture")
+            validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, required,
+                           {"runtime-usage-csv:sha256:fixture": usage_rows})
         except InvalidLog:
             continue
         fail(f"self-test mutation was accepted: {name}")
@@ -560,11 +606,26 @@ def self_test() -> None:
         seal(rows)
         try:
             validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"],
-                           usage_rows, "runtime-usage-csv:sha256:fixture")
+                           {"runtime-usage-csv:sha256:fixture": usage_rows})
         except InvalidLog:
             continue
         fail(f"self-test provenance mutation was accepted: {name}")
-    print(f"lifecycle-log self-test: pass ({len(mutations) + len(provenance_mutations)} rejection cases)")
+    with tempfile.TemporaryDirectory() as directory:
+        comment_path = Path(directory) / "comments.json"
+        body = "<!-- fsgg:item-lifecycle/v1 -->\n```json\n" + json.dumps(base[0], sort_keys=True, separators=(",", ":")) + "\n```\n"
+        fixture_comment = {"id": 1, "created_at": "2026-09-04T08:00:00Z",
+                           "updated_at": "2026-09-04T08:00:00Z", "body": body}
+        comment_path.write_text(json.dumps([[fixture_comment]]), encoding="utf-8")
+        assert export_comments(comment_path, "roadmap-v2", "GS2-01.1") == [base[0]]
+        fixture_comment["updated_at"] = "2026-09-04T08:01:00Z"
+        comment_path.write_text(json.dumps([fixture_comment]), encoding="utf-8")
+        try:
+            export_comments(comment_path, "roadmap-v2", "GS2-01.1")
+        except InvalidLog:
+            pass
+        else:
+            fail("self-test accepted an edited authoritative lifecycle comment")
+    print(f"lifecycle-log self-test: pass ({len(mutations) + len(provenance_mutations) + 1} rejection cases)")
 
 
 def main() -> int:
@@ -573,8 +634,11 @@ def main() -> int:
     parser.add_argument("--run")
     parser.add_argument("--unit")
     parser.add_argument("--log")
-    parser.add_argument("--usage", help="private authoritative runtime-usage CSV used to reconcile measured rows")
+    parser.add_argument("--usage", action="append", default=[],
+                        help="immutable private runtime-usage receipt CSV; repeat for multiple phases")
     parser.add_argument("--history-report", help="validated prior-phase corpus: phase,tooling_fingerprint,actual_minutes")
+    parser.add_argument("--seal-draft", help="seal an unposted JSONL draft to stdout; never rewrites accepted comments")
+    parser.add_argument("--export-comments", help="GitHub REST comment JSON; emit matching unedited lifecycle events")
     parser.add_argument("--require-terminal", action="store_true")
     parser.add_argument("--require-reconciled", action="store_true")
     parser.add_argument("--required-phase", action="append", default=[])
@@ -584,17 +648,27 @@ def main() -> int:
         if args.self_test:
             self_test()
             return 0
+        if args.seal_draft:
+            draft = load(Path(args.seal_draft))
+            for record in seal(draft):
+                print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+            return 0
+        if args.export_comments:
+            if not args.run or not args.unit:
+                fail("--export-comments requires --run and --unit")
+            for record in export_comments(Path(args.export_comments), args.run, args.unit):
+                print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+            return 0
         if not args.run or not args.unit or not args.log:
             fail("--run, --unit, and --log are required unless --self-test is used")
         root = Path(args.root).resolve()
         path = (root / args.log).resolve()
         if not path.is_file():
             fail(f"log does not exist: {path}")
-        usage_path = (root / args.usage).resolve() if args.usage else None
+        usage_paths = [(root / value).resolve() for value in args.usage]
         history_path = (root / args.history_report).resolve() if args.history_report else None
-        usage_rows, usage_source = read_usage_csv(usage_path)
         validate_lines(load(path), args.run, args.unit, args.require_terminal, args.require_reconciled,
-                       args.required_phase, usage_rows, usage_source, read_history_csv(history_path))
+                       args.required_phase, read_usage_reports(usage_paths), read_history_csv(history_path))
         state = "terminal" if args.require_terminal else "valid"
         print(f"lifecycle-log: {state} — {path}")
         return 0

@@ -16,6 +16,8 @@ The candidate branch cannot be the live authority: critique, merge, protected-ma
 cleanup happen after its exact head is fixed, and appending those future facts would invalidate that
 head forever. Tracked JSONL is a later immutable projection under a distinct source-bound item and never
 gates the PR that carries it. Raw request-level usage and machine-local paths remain private/untracked.
+Each phase freezes its own immutable usage receipt when cited; later phases use new receipts, so new
+telemetry never changes an earlier event's provenance digest.
 
 ## Event contract
 
@@ -49,8 +51,9 @@ Every line is one JSON object with these fields:
   durations supplied by a validated history report for the same canonical phase and tooling fingerprint.
 - `historical_average_minutes`: `null` when the basis is empty; otherwise the nearest whole-minute
   arithmetic mean of `historical_durations_minutes`.
-- `token_usage`: `{"status":"pending"}` on `started`/`resumed`. A terminal event may remain pending only
-  until the response that closed it finishes. Reconcile it from the runtime record to
+- `token_usage`: `{"status":"pending"}` on `started`/`resumed`. Draft a terminal event locally at the
+  boundary, wait for the closing response to finish, then post it once with reconciled usage; never post
+  a pending terminal comment or edit an accepted comment. Reconcile it from the runtime record to
   `{"status":"measured","input":N,"cached_input":N,"cache_write_input":N,"output":N,"reasoning":N,
   "total":N,"source":"...","session_ids":[...],"turn_ids":[...]}` with non-negative integers and
   `total = input + output`, or
@@ -83,12 +86,21 @@ do not allocate or estimate shares.
 
 Run at every handoff and gate named by the skill:
 
-```sh
+````sh
+python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
+  --seal-draft <unposted-events.jsonl> > <sealed-events.jsonl>
+while IFS= read -r event; do
+  printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
+  FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
+done < <sealed-events.jsonl>
+gh api repos/<owner>/<repo>/issues/<number>/comments --paginate --slurp > <comments.json>
+python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
+  --run <run-id> --unit <unit-id> --export-comments <comments.json> > <exported-lifecycle.jsonl>
 python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
   --root . --run <run-id> --unit <unit-id> \
-  --log <exported-lifecycle.jsonl> --usage <private-untracked-usage.csv> \
+  --log <exported-lifecycle.jsonl> --usage <private-phase-1.csv> --usage <private-phase-2.csv> \
   [--history-report <validated-history.csv>]
-```
+````
 
 Use `--require-terminal --require-reconciled` before cycle completion and final roll-up. The host exports
 the issue-comment chain, joins it to the private usage report, and checks the command's exit status directly;
