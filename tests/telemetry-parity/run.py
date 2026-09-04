@@ -115,7 +115,12 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
     same_verdict("collector malformed latest response cannot fall back to older response",
                  run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
                  engine("telemetry", "usage", "collect", *args), False)
-    return positive, 2, session
+
+    args = ["codex", "--session-file", str(session), *common, "--unknown-flag"]
+    same_verdict("collector unknown option",
+                 run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
+                 engine("telemetry", "usage", "collect", *args), False)
+    return positive, 3, session
 
 
 def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
