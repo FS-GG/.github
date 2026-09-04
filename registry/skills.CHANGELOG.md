@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-04** — ADD (`fs-gg-sdd-typed-author`, `fs-gg-sdd-typed-inspect`, `fs-gg-sdd-typed-migrate`; owner `fs-gg-sdd`; FS.GG.SDD#924, .github#3187, parent .github#2995): reconciled the three already-published additive Typed SDD process-skill rows from FS.GG.SDD's emitted manifest at producer commit `9897eb51b7c351aac80fa97bf0edde1c2b384048`. Exact ids, `process` scope, `always` predicates, canonical source paths, and producer digests are preserved. This restores declared completeness only; Q6's package pin, backend selection, compatibility, architecture, and impact-metadata adoption remain deferred to .github#2995. registry = manifest = bytes.
+
 - **2026-09-02** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-09-01** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.

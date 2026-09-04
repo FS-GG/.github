@@ -76,15 +76,15 @@
 #     Rendering deliberately widened it from `profile == governed` to all five profiles on
 #     2026-07-04 (Rendering#90, commit f4abd68c — a cross-repo request FROM this repo, accepted), and
 #     the row sat stale for six days while every digest stayed green. Reconciled to the manifest.
-#   * PROCESS skills (16) — RECONCILED from SDD's EMITTED process producer manifest
+#   * PROCESS skills (19) — RECONCILED from SDD's EMITTED process producer manifest
 #     `.agents/skills/skill-manifest.json` (schema `skill-manifest` v1, FS.GG.SDD#111 closing
 #     cross-repo #109; regenerable/checkable via `fsgg-sdd registry skill-manifest --write|--check`,
 #     drift-guarded against `SeededSkills.skillNames` + the authored `SKILL.md` digests). Each
 #     `sha256` is the same `Fsgg.SkillMirror` canonical-body digest the registry declares
 #     (`sha256sum SKILL.md`-equivalent), so registry = manifest = bytes for the process set. The set
-#     grew 15→16: `fs-gg-sdd-troubleshooting` was added (SDD#108), and features 070/071 changed four
-#     bodies (checklist, clarify, lifecycle, tasks) after the .github#168 provisional snapshot — all
-#     re-reconciled here against the emitted manifest. All 16 are `always` (canonical grammar).
+#     grew 16→19 when SDD#924 published `fs-gg-sdd-typed-author`, `-typed-inspect`, and
+#     `-typed-migrate`; all rows are reconciled against the emitted manifest and all 19 are `always`
+#     (canonical grammar).
 #
 # BLOCKED-ON (final flip only): BOTH producer-side conditions are now CLEARED (.github#290) — the P2
 # process-manifest emission (SDD#111) and the Rendering predicate-grammar alignment (FS.GG.Rendering#77,
@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-09-02"
+updated: "2026-09-04"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -142,7 +142,7 @@ skills:
   # owner: fs-gg-sdd. `sha256` reconciled from SDD's EMITTED process manifest
   # (.agents/skills/skill-manifest.json, schema skill-manifest v1; SDD#111 closing #109) — the same
   # Fsgg.SkillMirror canonical-body digest declared here, so registry = manifest = bytes.
-  # `SeededSkills.skillNames` seeds exactly these 16 (it deliberately EXCLUDES
+  # `SeededSkills.skillNames` seeds exactly these 19 (it deliberately EXCLUDES
   # fs-gg-sdd-project — the product-internal project skill; see the fs-gg-project seam below).
   # ------------------------------------------------------------------------------------------------
   - { id: fs-gg-sdd-analyze,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-analyze/SKILL.md,             sha256: ae59ef0f6a58d70985b027e99ed728f687265d7631c600cc4998b040cd084bf3, materializes-when: always }
@@ -159,6 +159,9 @@ skills:
   - { id: fs-gg-sdd-specify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-specify/SKILL.md,             sha256: f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496, materializes-when: always }
   - { id: fs-gg-sdd-tasks,               scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-tasks/SKILL.md,               sha256: 33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548, materializes-when: always }
   - { id: fs-gg-sdd-troubleshooting,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-troubleshooting/SKILL.md,     sha256: e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf, materializes-when: always }
+  - { id: fs-gg-sdd-typed-author,        scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-author/SKILL.md,        sha256: d90ea8872c6ae871b1acf007da42c98c70c95e548a47a5f368d4d5490f1beac1, materializes-when: always }
+  - { id: fs-gg-sdd-typed-inspect,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-inspect/SKILL.md,       sha256: acf98b050f401ad583b2c4e651f8b090921c0df3b350f16a1ae4d9d0543bd266, materializes-when: always }
+  - { id: fs-gg-sdd-typed-migrate,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-migrate/SKILL.md,       sha256: 94ecee820b476651a1eb5a1e6b9d6483a14568a6b257eb8e10ffba5b40f7d2d4, materializes-when: always }
   - { id: fs-gg-sdd-validate,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-validate/SKILL.md,            sha256: 87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a, materializes-when: always }
   - { id: fs-gg-sdd-verify,              scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-verify/SKILL.md,              sha256: ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5, materializes-when: always }
 
