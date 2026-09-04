@@ -114,23 +114,23 @@ Run at every handoff and gate named by the skill:
 ````sh
 set -euo pipefail
 gh api repos/<owner>/<repo>/issues/<number>/comments --paginate --slurp > <comments.json>
-python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
-  --run <run-id> --unit <unit-id> --export-comments <comments.json> > <exported-lifecycle.jsonl>
-python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
-  --root . --run <run-id> --unit <unit-id> --existing <exported-lifecycle.jsonl> \
-  --seal-successor <one-unposted-event-without-chain-fields.json> \
-  --usage <every-cited-private-phase-receipt.csv> > <one-sealed-successor.json>
+scripts/fsgg-coord telemetry lifecycle export-comments \
+  --run <run-id> --unit <unit-id> --comments <comments.json> --output <exported-lifecycle.jsonl>
+scripts/fsgg-coord telemetry lifecycle seal-successor \
+  --run <run-id> --unit <unit-id> --existing <exported-lifecycle.jsonl> \
+  --draft <one-unposted-event-without-chain-fields.json> \
+  --usage <every-cited-private-phase-receipt.csv> --output <one-sealed-successor.json>
 event="$(<one-sealed-successor.json>)"
 test -n "$event"
 printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
 FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
-python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
-  --root . --run <run-id> --unit <unit-id> \
+scripts/fsgg-coord telemetry lifecycle validate \
+  --run <run-id> --unit <unit-id> \
   --log <exported-lifecycle.jsonl> --usage <private-phase-1.csv> --usage <private-phase-2.csv> \
   [--history-report <validated-history.csv>]
 ````
 
 Use `--require-terminal --require-reconciled` before cycle completion and final roll-up. The host exports
 the issue-comment chain, joins it to the private usage report, and checks the command's exit status directly;
-never mask it through a pipeline. Run
-`--self-test` after changing the validator.
+never mask it through a pipeline. Validate implementation changes through the CLI test suite and the
+frozen black-box parity corpus.

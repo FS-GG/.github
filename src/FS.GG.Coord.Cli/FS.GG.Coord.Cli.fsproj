@@ -130,13 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.81.0 — compiled lifecycle telemetry and bounded roadmap projection.
+    <PackageReleaseNotes>0.81.1 — compiled telemetry adoption and compatibility-helper removal.
 
-The coordination engine now collects exact Codex and Claude runtime usage, validates and seals the
-append-only lifecycle ledger, summarizes phase totals, validates critique/feedback receipts from its
-own compiled bytes, and renders or verifies one marker-bounded roadmap unit without writing the source.
-The 0.80.1 skill helpers remain the frozen production oracle until this coherent set is published and
-verified; a following publish-before-adopt change will flip callers and remove their Python logic.
+Packed roadmap and normal-item callers now invoke the 0.81.0 compiled telemetry surface directly.
+Cycle-ledger critique/feedback provider validation runs from the same compiled bytes, and the former
+Python compatibility payload is absent. Command, option, result, and exit-code vocabulary is unchanged;
+the independent frozen black-box corpus remains in the repository as the regression oracle.
 
 $(FsggStandingAdvisories)
 
@@ -256,14 +255,6 @@ the standing safety advisories carry forward.
     <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <!-- Stage A keeps the frozen Python provider oracles authoritative until compiled differential
-         parity is accepted. Stage C flips these consumers and deletes the compatibility payload. -->
-    <None Include="../../.agents/skills/work-roadmap/scripts/validate-critique-state.py"
-          Link="provider-validators/validate-critique-state.py"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
-          Link="provider-validators/validate-feedback-state.py"
-          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

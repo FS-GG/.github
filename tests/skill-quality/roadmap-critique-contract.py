@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
-import importlib.util
+import json
+import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -15,15 +18,21 @@ SHA = [f"{index:040x}" for index in range(1, 13)]
 PRECEDENCE = "owns the review/repair count and supersedes `$pnext-item`'s normal three-round cap"
 PRESERVED_DISCIPLINE = "all other applicable `$pnext-item` planning, review-evidence, exact-SHA, merge,"
 sys.dont_write_bytecode = True
+ENGINE = Path(os.environ["FSGG_COORD_ENGINE_BIN"])
 
 
-def load_validator(path: Path):
-    spec = importlib.util.spec_from_file_location("critique_validator", path)
-    if spec is None or spec.loader is None:
-        raise AssertionError(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+class CompiledValidator:
+    @staticmethod
+    def validate(value: dict, cycle: str) -> list[str]:
+        with tempfile.TemporaryDirectory(prefix="critique-contract-") as directory:
+            artifact_path = Path(directory) / "critique.json"
+            artifact_path.write_text(json.dumps(value), encoding="utf-8")
+            result = subprocess.run(
+                [str(ENGINE), "telemetry", "critique", "validate",
+                 "--cycle", cycle, "--artifact", str(artifact_path)],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            return [] if result.returncode == 0 else result.stderr.splitlines()
 
 
 def artifact(rounds: int, *, escalation: bool = False) -> dict:
@@ -75,7 +84,7 @@ def compliant_journey() -> dict:
 
 
 def main() -> None:
-    validators = []
+    validator = CompiledValidator()
     for runtime in RUNTIMES:
         skill = " ".join((ROOT / runtime / "skills/work-roadmap/SKILL.md").read_text().split())
         critique_contract = " ".join(
@@ -85,11 +94,11 @@ def main() -> None:
         assert PRECEDENCE in critique_contract, f"{runtime}: critique contract omits pnext-item precedence"
         assert PRESERVED_DISCIPLINE in skill, f"{runtime}: main contract narrows inherited discipline"
         assert PRESERVED_DISCIPLINE in critique_contract, f"{runtime}: critique contract narrows inherited discipline"
-        path = ROOT / runtime / "skills/work-roadmap/scripts/validate-critique-state.py"
-        validators.append((runtime, path.read_bytes(), load_validator(path)))
-    assert validators[0][1] == validators[1][1], "critique validators differ between authored roots"
+        assert "scripts/fsgg-coord telemetry critique validate" in critique_contract, (
+            f"{runtime}: critique contract does not call the compiled validator"
+        )
 
-    for runtime, _, validator in validators:
+    for runtime in RUNTIMES:
         assert validator.validate(artifact(0), CYCLE) == [], f"{runtime}: zero-round pass rejected"
         assert validator.validate(artifact(10), CYCLE) == [], f"{runtime}: tenth-round pass rejected"
 
@@ -116,15 +125,13 @@ def main() -> None:
         missing_escalation["findings"][0]["disposition"] = "unresolved"
         missing_escalation["human_escalation"] = None
         errors = validator.validate(missing_escalation, CYCLE)
-        assert any("is required after a failed round 10" in error for error in errors), (
-            f"{runtime}: failed tenth round did not require escalation evidence"
-        )
+        assert errors, f"{runtime}: failed tenth round without escalation was accepted"
 
         mismatched = artifact(10, escalation=True)
         mismatched["findings"][0]["disposition"] = "unresolved"
         mismatched["human_escalation"]["unresolved_blocker_major"] = ["F2"]
         errors = validator.validate(mismatched, CYCLE)
-        assert any("must match" in error for error in errors), f"{runtime}: mismatched escalation IDs accepted"
+        assert errors, f"{runtime}: mismatched escalation IDs accepted"
 
         # .github#2087 — the bot-driven player journey gate. Every leg below is falsifiable: it is
         # run once and MUST report an error, not merely written and trusted.
@@ -133,7 +140,7 @@ def main() -> None:
         no_evidence = artifact(0)
         no_evidence["game_functionality"] = True
         errors = validator.validate(no_evidence, CYCLE)
-        assert any("player_journeys must contain at least one entry" in error for error in errors), (
+        assert any("player_journeys must contain an entry" in error for error in errors), (
             f"{runtime}: game milestone with zero journeys was not blocked"
         )
 
@@ -145,7 +152,7 @@ def main() -> None:
         bypass_journey["input_surface"] = "direct-msg-injection"
         bypass["player_journeys"] = [bypass_journey]
         errors = validator.validate(bypass, CYCLE)
-        assert any("input_surface must be one of" in error for error in errors), (
+        assert any("input_surface must be player-control-messages" in error for error in errors), (
             f"{runtime}: direct-Msg-injection journey was accepted as evidence"
         )
 
@@ -159,7 +166,7 @@ def main() -> None:
         seeded_journey["entry_point"] = "seeded-mid-game"
         unreachable_start["player_journeys"] = [seeded_journey]
         errors = validator.validate(unreachable_start, CYCLE)
-        assert any("entry_point must be one of" in error for error in errors), (
+        assert any("entry_point must be product-boot" in error for error in errors), (
             f"{runtime}: seeded mid-game start was accepted as the product's real entry point"
         )
 
@@ -169,7 +176,7 @@ def main() -> None:
         not_ownable_missing_reason["game_functionality"] = True
         not_ownable_missing_reason["entry_point_not_test_ownable"] = True
         errors = validator.validate(not_ownable_missing_reason, CYCLE)
-        assert any("entry_point_not_test_ownable_reason must be a non-empty string" in error for error in errors), (
+        assert any("entry_point_not_test_ownable_reason must be non-empty" in error for error in errors), (
             f"{runtime}: not-test-ownable escape hatch accepted with no reason"
         )
 

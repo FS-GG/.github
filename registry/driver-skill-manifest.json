@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "4591d8e0bc7e1acb28d24caaf40cc98877c51c4479e75b403ab3611803b99005",
-      "tree-sha256": "368962069e48ccd77e0c54a676552b62da1e91ee8da56995597b64effb292221",
+      "tree-sha256": "d4050a385060c97314dba5c1311eeb04975f655b9e03d0b4ed534e8399fb7894",
       "files": [
         {
           "path": "SKILL.md",
@@ -19,7 +19,7 @@
         },
         {
           "path": "references/critique-contract.md",
-          "sha256": "00cfd9e21e5de88c4e1e30466a559e9e6a84b09c71f74fde52ad0bfa227aa183",
+          "sha256": "a5a6268aba163e1a735370de3114105eee9cc67dddfa4f41431c48ba884545d4",
           "executable": false
         },
         {
@@ -29,7 +29,7 @@
         },
         {
           "path": "references/feedback-contract.md",
-          "sha256": "aa96c7fa98903f8766597efd8c2d85dd6f1c43f3d96f9200bdf7735d19cef972",
+          "sha256": "7342aa0c2c86d2f157b360741426f2769d901c67e1f6ef4549ddbd83f12937f1",
           "executable": false
         },
         {
@@ -39,32 +39,12 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "d1adb590a80e7d82bd6db461a9ac59d3a80a674e43f6c0b84f05ff7d90be6173",
+          "sha256": "347d633fc997b684abb8a40af93ca2f9bbf89e93688aeefae83444700db31819",
           "executable": false
         },
         {
           "path": "references/roadmap-ledger.md",
           "sha256": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679",
-          "executable": false
-        },
-        {
-          "path": "scripts/collect-runtime-usage.py",
-          "sha256": "1b93f1033f33e744c39e02e51fe7a6cb4b53dc8e91800210643ccf91c2823a0d",
-          "executable": false
-        },
-        {
-          "path": "scripts/validate-critique-state.py",
-          "sha256": "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9",
-          "executable": false
-        },
-        {
-          "path": "scripts/validate-feedback-state.py",
-          "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
-          "executable": false
-        },
-        {
-          "path": "scripts/validate-lifecycle-log.py",
-          "sha256": "52215bb44d88abbbdf92844dcec52cb66989845276b455d24e99d73a717dd02c",
           "executable": false
         }
       ],
@@ -75,7 +55,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b",
-      "tree-sha256": "b896e87256fda62f3e8648565bedcc150113ae530830092af548a25b741c0a84",
+      "tree-sha256": "025d9a25e02e007e094f2ae2d184f40fc7082d0a5b00f71665808f4e441e9667",
       "files": [
         {
           "path": "SKILL.md",
@@ -99,7 +79,7 @@
         },
         {
           "path": "references/feedback-contract.md",
-          "sha256": "e0ae7d05c45241ae3f49abea9076449d3f3d746cc336d972438c6ac7cd9d7e00",
+          "sha256": "902d8d2ded50626492e6254a80c5ba0bb080bd47c3d23795ec5700982ee1bd41",
           "executable": false
         },
         {
@@ -110,11 +90,6 @@
         {
           "path": "references/workspace-scope.md",
           "sha256": "9435aa1fcc975aba3c3f22066b708a3061b13e9181f4c03fce6dc0526807e245",
-          "executable": false
-        },
-        {
-          "path": "scripts/validate-feedback-state.py",
-          "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
           "executable": false
         }
       ],
@@ -354,12 +329,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "622071b7ef7f803f7cd9f12fa5911cfe0b79cbf7988c05d0fc5d789f4c1ce323",
-      "tree-sha256": "eaf64c74e6a5d0e021b8131070a645e39189350b0466698b6d6ff972ccb324f5",
+      "sha256": "d91d4f25a4479d3fb4b4d18f843b4853ee7d920a9cba87ebf689a19549dae544",
+      "tree-sha256": "6e9355c9c2b76bdd44c21f677f4a5266d517dd65eae53f0383d5ad73e5255f99",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "622071b7ef7f803f7cd9f12fa5911cfe0b79cbf7988c05d0fc5d789f4c1ce323",
+          "sha256": "d91d4f25a4479d3fb4b4d18f843b4853ee7d920a9cba87ebf689a19549dae544",
           "executable": false
         },
         {

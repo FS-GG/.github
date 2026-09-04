@@ -1,0 +1,196 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  #2753: comment amend refuses a cross-thread id before PATCH with zero mutation
+PASS  #2137: delivery-route record posts exactly one current source-bound receipt
+PASS  #2137: stale delivery-route receipt is refused with zero writes
+PASS  #2298: an sdd-required receipt with no SDD package on disk yet still records, honestly not-ready
+PASS  #2298: mismatched workId SDD readiness records, reporting sddPackageReady=false
+PASS  #2298: unready status SDD readiness records, reporting sddPackageReady=false
+PASS  #2298: current implementationReady SDD readiness records, reporting sddPackageReady=true
+PASS  #2756 live review refuses absent/malformed wait authority before dispatch
+PASS  #2756 dispatch requires the exact canonical wait head and round
+PASS  #2859 engine-derived initial wait and pre-append structured-record evidence normalization
+PASS  #2859 canonical-generation suffix anchoring: legacy-compatible junk inversion completes unchanged
+PASS  #2859 host-owned successor wait derives the moved head and confirmation round
+PASS  M4 review record validates actual backlinks and retires an accepted generation after head movement
+PASS  #2756 review wait writer persists one fenced entry, refuses duplicate entry/terminal writes, and projects its consumed state
+PASS  #2756 a replacement claim cannot consume the preceding generation's wait receipt
+PASS  .github#2865: exhausted escalation plus newer claim enters one typed repair-phase chain and acceptance reports repairPhase=true
+PASS  .github#2819: one structured escalation crosses immutable round-three pass + settled-red claim turnover and every mutation refuses before write
+PASS  .github#3014: admitted round-4 exhaustion binds its terminal record and enters one typed repair phase
+PASS  M4 review record refuses legacy v1 authoring with zero writes
+PASS  claim WINS the CAS and reports the holder
+PASS  a second worker LOSES to the live lock (no double-claim)
+PASS  #2268: constrained force admission refuses before marker/status mutation
+PASS  #2268: exhausted force admission refuses before marker/status mutation
+PASS  #2268: unknown force admission refuses before marker/status mutation
+PASS  #2268: healthy force admission still steals the live claim
+PASS  heartbeat renews the lease the worker holds
+PASS  a non-holder cannot heartbeat (it names the real holder)
+PASS  .github#1620: adopt refuses a LIVE claim and prints a remedy command to follow
+PASS  .github#2772: a response-lost replacement POST reconciles both markers and returns the final census
+PASS  .github#2772: a response-lost replacement that already wins preserves authority without inventing theft
+PASS  .github#2772: response-lost recovery rejects a same-fields/different-body marker without deleting the incumbent
+PASS  .github#2772: ReplacementPostFailed emits a typed final-census receipt and human diagnostic
+PASS  .github#2772: CleanupRequired emits its retained replacement and final two-marker census
+PASS  .github#2772: PostStateUnreadable emits a typed receipt with an explicit null final census
+PASS  .github#2772: OldHolderStands emits its distinct typed final-census receipt
+PASS  .github#2772: NoHolderRemaining emits its readable empty final-census receipt
+PASS  .github#2772: ForcedClaimLost emits the post-withdrawal final-census receipt
+PASS  .github#1620/#2772: running the remedy takes the item and its receipt carries pre/post censuses
+PASS  .github#1620: the displaced holder's heartbeat FAILS LOUDLY and names the worker that took it
+PASS  .github#1620: ...and the steal is recorded on the item, in the displaced worker's inbox
+PASS  release drops the held lock
+PASS  the item is claimable again after release (the marker was removed)
+PASS  set-field writes a board column
+PASS  set-field refuses an unknown field
+PASS  child attaches the sub-issue
+PASS  say posts a message with no lock required
+PASS  #706: widen refuses when the caller does not hold the claim
+PASS  #1377: widen unions new paths into a HELD item's existing touch-set
+PASS  #1377: a second widen preserves every prior token
+PASS  #1377: repeated widen is idempotent
+PASS  #273/#1377: an unmatchable new token is refused without modifying the union
+PASS  #1377: set-paths explicitly replaces (and can narrow) the touch-set
+PASS  change-risk: standalone done refuses without any remote mutation and names delivery authority
+PASS  change-risk: standalone done preserves the live claim and cannot conscript a chore
+PASS  .github#2981: production completion replay observes the exact full GraphQL merge oid
+PASS  change-risk: FS.GG.SDD#42 cannot complete or offer a chore through standalone done
+PASS  change-risk: FS.GG.Legacy#60 cannot complete or offer a chore through standalone done
+PASS  .github#1535: the chore lock is free before the probe (the one variable is the verb)
+PASS  .github#1535: `batch --text` is the same decision and takes NO lock — the read half of the pair
+PASS  .github#1535: ...and it is the same ANSWER — one shared `nothingSchedulable` spelling, so the words cannot drift
+PASS  change-risk: next ignores legacy completion markers and takes no chore lock
+PASS  verify-paths: a PR inside its touch-set is OK (exit 0)
+PASS  verify-paths: a drifting PR names the out-of-bounds file and fails
+PASS  verify-paths --warn downgrades DRIFT to advisory (exit 0)
+PASS  #498: a regenerated CI-gated artifact is subtracted from drift, and reported as expected
+PASS  #498: real drift stays RED and is reported apart from the regenerated artifact
+PASS  #498: subtracts NOTHING when the checkout is not the PR's repo (drift stays reported)
+PASS  #498: an ABSENT generated-paths subtracts nothing (fails closed)
+PASS  #498: a FAILING generated-paths subtracts nothing (fails closed)
+PASS  #498: a failing generated-paths forwards its REASON — fails closed, and readably
+PASS  #498: an EMPTY generated-paths subtracts nothing (fails closed)
+PASS  #498: a HANGING generated-paths is killed and subtracts nothing (bounded, 2s)
+PASS  #498: the killed generator leaves no orphaned process behind
+PASS  #2211: cross-owner claim converges through the board-side item and Status read
+PASS  #2211: bare cross-owner release restores the pre-claim Backlog column
+PASS  #2211: fixture establishes a live external In progress column before add
+PASS  #2211: add preserves a live cross-owner Status instead of writing the Backlog default
+PASS  #1740: the fixture built the state — marker live, Status write DEFERRED, board row still reads 'Ready'
+PASS  #1740: a live claim whose Status column has NOT landed still COLLIDES (no false DISJOINT)
+PASS  #1779: the SAME state with an EMPTY deferral queue still collides — the marker carries it, not the queue
+PASS  #1779: control — the same colliding declaration with NO live claim reads DISJOINT (the marker is the lock)
+PASS  #1779: the fixture built the state — marker live, Status write FAILED, queue depth UNCHANGED at 1, column still 'Ready'
+PASS  #1779: a live claim whose Status write FAILED PERMANENTLY still COLLIDES
+PASS  #1779: the fixture built the state — marker live on #46, statusWrite=not-on-board, NO board row
+PASS  #1779: a live claim on an item the board has NEVER LISTED still COLLIDES
+PASS  #1779/#2250 AC2: overlap --active spent 6 REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 1 GraphQL board read for closed-unstamped holders
+PASS  #1740 AC5: a narrowing that collides is reported as PRE-EXISTING, not as introduced
+PASS  #1740 AC5: a WIDENING that collides is NOT reported as pre-existing (the sentences differ)
+PASS  #1569: batch is a valid never-write invocation (wire ledger empty)
+PASS  #1569: board is a valid never-write invocation (wire ledger empty)
+PASS  #1569: bootstrap is a valid never-write invocation (wire ledger empty)
+PASS  #1569: budget is a valid never-write invocation (wire ledger empty)
+PASS  #1569: command-contract is a valid never-write invocation (wire ledger empty)
+PASS  #1569: driver is a valid never-write invocation (wire ledger empty)
+PASS  #1569: facts is a valid never-write invocation (wire ledger empty)
+PASS  #1569: field-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: inbox is a valid never-write invocation (wire ledger empty)
+PASS  #1569: issues is a valid never-write invocation (wire ledger empty)
+PASS  #1569: option-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: scan is a valid never-write invocation (wire ledger empty)
+PASS  #1569: ready is a valid never-write invocation (wire ledger empty)
+PASS  #1569: who is a valid never-write invocation (wire ledger empty)
+PASS  #1569: landable reached its valid read verdict without mutating
+PASS  #1569: overlap is a valid never-write invocation (wire ledger empty)
+PASS  #1569: verify-paths is a valid never-write invocation (wire ledger empty)
+PASS  #1569: item-id is a valid never-write invocation (wire ledger empty)
+PASS  #1569: body-edits is a valid never-write invocation (wire ledger empty)
+PASS  #1569: graphql is a valid never-write invocation (wire ledger empty)
+PASS  #1569: lint is a valid never-write invocation (wire ledger empty)
+PASS  #1569: whoami is a valid never-write invocation (wire ledger empty)
+PASS  #2134: intake paths are validated in the draft target repository
+PASS  #2134: intake applies one public create and converged board projection
+PASS  #2134: missing Class persistence fails the intake transaction
+PASS  #2134: missing Phase persistence fails the intake transaction
+PASS  #2134: missing Severity persistence fails the intake transaction
+PASS  #2134: Blocked intake creates and projects Status plus dependency coherently
+PASS  #2134: queued intake projection retries to zero pending without a second create
+PASS  #1569: cycle is a valid never-write invocation (wire ledger empty)
+PASS  #2133: cycle production route rejects a cyclic ledger
+PASS  #2133: cycle production route emits the canonical registered cycle id
+PASS  #2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes
+PASS  #2133: production advance runs the exact schema-v3 critique validator against minimal lookalikes
+PASS  #2133: production advance runs the exact schema-v2 feedback validator against minimal lookalikes
+PASS  #2133: caller-controlled artifact roots cannot substitute a no-op critique validator
+PASS  #2133: caller-controlled artifact roots cannot substitute a no-op feedback validator
+PASS  #3208: the engine ships no external provider-validator payload
+PASS  #2133: production advance rejects supported-looking caller-authored provider envelopes
+PASS  #2465: an unvetted fsgg-sdd validator toolVersion fails closed and names the reported version
+PASS  #2133: production update emits a source/head/evidence/disposition-bound receipt
+PASS  #2133: production complete accepts the exact emitted guarded-update receipt
+PASS  #2133: production complete rejects a full recomputed receipt without durable update history
+PASS  #2133: production update resolves its default durable journal through a linked worktree gitdir
+PASS  #1569: followup is a valid never-write invocation (wire ledger empty)
+PASS  #1569: followup's local driver completed successfully
+scan: 11 candidate(s); 1 off-board blocker(s) resolved
+PASS  #1569: decide is a valid never-write invocation (wire ledger empty)
+scan: 11 candidate(s); 1 off-board blocker(s) resolved
+PASS  #1569: lanes is a valid never-write invocation (wire ledger empty)
+PASS  #2131: delivery --snapshot bare executes its lifecycle decision without a wire mutation
+PASS  #2131: delivery --snapshot apply executes its lifecycle decision without a wire mutation
+PASS  .github#2871: closed-item delivery reads authoritative Paths instead of the empty board projection
+PASS  .github#2871: unread authoritative Paths fail closed without blaming the issue body
+PASS  .github#2871: a readable body with no Paths retains the undeclared diagnosis
+PASS  #2175: review --snapshot reaches its typed state/action without a wire mutation
+PASS  #2207: an omitted legacy reviewProblem defaults to none, while an empty supplied diagnostic refuses
+PASS  #1569: predicate reached its valid read verdict without mutating
+PASS  #1569: diff-audit reached its valid read verdict without mutating
+PASS  #1569: packet is a valid never-write invocation (wire ledger empty)
+PASS  #2737: packet validate issued ZERO wire mutations — the sole predicate of this leg, so its red names mutation and nothing else
+PASS  #1569: next (argvCannotSay: after printing its answer it may post the chore offer) is a valid driver
+PASS  #1569: flush --dry-run is a valid never-write invocation (wire ledger empty)
+PASS  #1569: flush without --dry-run mutates the queued board write
+PASS  #1569: self-host is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: add is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: take precondition is a Ready #43 with no claim marker
+PASS  #1569: take is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: room open is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: reap (bare, expired claim) is a valid never-write invocation (wire ledger empty)
+PASS  #1569: reap --apply (expired claim) is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #1569: reconcile (bare, actionable chore) is a valid never-write invocation (wire ledger empty)
+PASS  #1569: reconcile --apply (actionable chore) is a valid always-write invocation (wire ledger observed a mutation)
+PASS  #2157: reducer result atomically writes/observes Status=Ready plus empty Blocked by and records its receipt
+PASS  #2157: partial Status-only projection fails closed and retains both fresh observations
+PASS  #2157: a missing fresh row cannot masquerade as BLOCKER-CLEARED convergence
+PASS  .github#2312: FS.GG.SDD's operation lock is free before the probe (the one variable is the verb)
+PASS  .github#2312: `op-lock acquire` succeeds and prints a grant and a 64-hex opkey
+PASS  .github#2312: the grant printed IS the server-assigned comment id of the marker on the lock issue
+PASS  .github#2312: a second executor is REFUSED with exit 6 and names the holder — the lock working
+PASS  .github#2312: a non-holder's `op-lock release` REFUSES and deletes nothing
+PASS  .github#2312: the holder's `op-lock release` drops the grant and the lock is free again
+PASS  .github#2312: FSGG_COORD_OP_LOCKS repoints the lock — the marker lands on the injected issue, not the embedded one
+PASS  .github#2801: arbitrary caller authority refs cannot create a second lease domain
+PASS  .github#2801: copied public lease values cannot spoof the live orchestrator caller
+PASS  .github#2801: active A performs the highest-safe board priority mutation before ordinary work
+PASS  .github#2801: reciprocal generation-bound waits create exactly one automatic room and both backrefs
+PASS  .github#2801: both-holder production freeze blocks mutation away before precedence
+PASS  .github#2801: precedence narrows the loser atomically without releasing its live claim
+PASS  .github#2801: production widen enforces the generation-bound freeze before PATCH
+PASS  .github#2801: locally manufactured or unfetched origin/main cannot satisfy loser resume
+PASS  .github#2801: a stale fetched origin/main ref cannot satisfy loser resume
+PASS  .github#2801: an open loser PR with no exact-head passing review cannot resume
+PASS  .github#2801: production resume gates winner-land, rebase, clear overlap and explicit re-widen
+PASS  #1569: every one of the 54 advertised contract rows has exactly one executable driver
+PASS  #1569: conditional contract polarity exercised: delivery:bare
+PASS  #1569: conditional contract polarity exercised: delivery:apply
+PASS  #1569: conditional contract polarity exercised: flush:dry-run
+PASS  #1569: conditional contract polarity exercised: flush:apply
+PASS  #1569: conditional contract polarity exercised: reap:bare
+PASS  #1569: conditional contract polarity exercised: reap:apply
+PASS  #1569: conditional contract polarity exercised: reconcile:bare
+PASS  #1569: conditional contract polarity exercised: reconcile:apply
+PASS  #1569: conditional contract polarity exercised: next:argvCannotSay
+
+coord-engine writes: 190 assertion(s), 190 passed, 0 failed
+green — the engine's write commands land, over HTTP, hermetically.
+]]></system-out></testcase></testsuite>

@@ -27,6 +27,8 @@ module CycleLedgerApplication =
         |> List.ofSeq
     let private bool (name: string) (node: JsonElement) : bool =
         match (property name node).ValueKind with | JsonValueKind.True -> true | JsonValueKind.False -> false | _ -> invalidArg name "must be a boolean"
+    let private integer (name: string) (node: JsonElement) : int =
+        match (property name node).TryGetInt32() with | true, value -> value | _ -> invalidArg name "must be an integer"
     let private optionalText (name: string) (node: JsonElement) = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString()) | true, value when value.ValueKind = JsonValueKind.Null -> None | false, _ -> None | _ -> invalidArg name "must be string or null"
     let private optionalBool (name: string) (node: JsonElement) = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.True -> true | true, value when value.ValueKind = JsonValueKind.False -> false | false, _ -> false | _ -> invalidArg name "must be boolean"
     let private ledger root =
@@ -86,19 +88,6 @@ module CycleLedgerApplication =
             invalidArg "artifactPath" "must resolve beneath rootPath"
         relative.Replace(Path.DirectorySeparatorChar, '/')
 
-    let private trustedValidator fileName expectedDigest =
-        let path = Path.Combine(AppContext.BaseDirectory, "provider-validators", fileName)
-        if not (File.Exists path) then
-            invalidOp $"trusted provider validator is missing beside the engine: %s{fileName}"
-        let digest =
-            File.ReadAllBytes path
-            |> Security.Cryptography.SHA256.HashData
-            |> Convert.ToHexString
-            |> _.ToLowerInvariant()
-        if digest <> expectedDigest then
-            invalidOp $"trusted provider validator identity is unsupported: %s{fileName} sha256:%s{digest}"
-        path
-
     // `FS.GG.SDD.Cli verify --dry-run` `toolVersion` identities this engine has explicitly vetted
     // against the #2133 provider-authority contract (validator identity must come from the engine,
     // never from the artifact or its caller). Adding a version here is a deliberate, reviewed act:
@@ -108,7 +97,7 @@ module CycleLedgerApplication =
     // An unlisted `toolVersion` fails closed with the exact value it reported, so a validator bump
     // that outruns this list surfaces as one specific, actionable refusal here — not as unrelated
     // downstream test failures a caller has to trace back to this comparison.
-    let private acceptedFsggSddValidatorVersions = [ "1.0.0" ]
+    let private acceptedFsggSddValidatorVersions = [ "1.0.0"; "1.5.0" ]
 
     let private validateProviderArtifact expectedIdentity provider node =
         let root = providerRoot node
@@ -129,17 +118,32 @@ module CycleLedgerApplication =
                 invalidArg "artifactPath" $"fsgg-sdd validator toolVersion %s{reportedVersion} is not vetted; accepted: %s{accepted}"
             if text "name" command <> "verify" || text "workId" context <> expectedIdentity then
                 invalidArg "artifactPath" "fsgg-sdd validator identity, command, or work binding is unsupported"
-            if not (bool "coherent" result) || text "outcome" result <> "noChange" then
-                invalidArg "artifactPath" "fsgg-sdd verify did not confirm a coherent, byte-current provider view"
+            let verification = property "verification" result
+            let outcome = text "outcome" result
+            let acceptedOutcome = outcome = "noChange" || outcome = "succeeded" || outcome = "succeededWithWarnings"
+            if not acceptedOutcome
+               || text "status" verification <> "verificationReady"
+               || text "readiness" verification <> "verificationReady"
+               || integer "blockingCount" verification <> 0
+               || integer "classifiedObligationsUnmetCount" verification <> 0
+               || integer "journeyObligationsUnmetCount" verification <> 0 then
+                invalidArg "artifactPath" "fsgg-sdd verify did not confirm a verification-ready provider view"
         | "critique" ->
-            let script = trustedValidator "validate-critique-state.py" "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9"
-            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--artifact"; relative ] |> ignore
+            match CritiqueReceipt.validate expectedIdentity None (File.ReadAllBytes(Path.GetFullPath(relative, root))) with
+            | Ok _ -> ()
+            | Error errors ->
+                let detail = String.concat "; " errors
+                invalidArg "artifactPath" $"provider validator refused the artifact: %s{detail}"
         | "feedback" ->
-            let script = trustedValidator "validate-feedback-state.py" "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
             let audit = text "auditPath" node |> relativeArtifact root
             let phases = strings "phases" node
             if List.isEmpty phases || phases |> List.exists String.IsNullOrWhiteSpace then invalidArg "phases" "must contain the exercised feedback phases"
-            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--report"; relative; "--audit"; audit; "--phases"; String.concat "," phases ] |> ignore
+            let checkpoint = optionalText "checkpointPath" node |> Option.map (fun path -> File.ReadAllText(Path.GetFullPath(relativeArtifact root path, root)))
+            match FeedbackReceipt.validate expectedIdentity phases relative (File.ReadAllBytes(Path.GetFullPath(relative, root))) (File.ReadAllBytes(Path.GetFullPath(audit, root))) checkpoint with
+            | Ok _ -> ()
+            | Error errors ->
+                let detail = String.concat "; " errors
+                invalidArg "artifactPath" $"provider validator refused the artifact: %s{detail}"
         | _ -> invalidArg "provider" $"unsupported provider adapter: %s{provider}"
 
     let private receipt expectedIdentity target source head provider node =

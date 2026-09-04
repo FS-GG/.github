@@ -515,8 +515,12 @@
        the typed telemetry usage/lifecycle/summary and bounded roadmap-close command families, and
        compiles critique/feedback validation into the immutable tool package. Existing Python skill
        helpers remain frozen oracles until this command-bearing release is published and verified. -->
+  <!-- 0.81.0 -> 0.81.1 (.github#3208): PATCH. This is the publish-before-adopt completion: packed
+       callers now invoke the already-published compiled telemetry surface, cycle-ledger provider
+       validation no longer shells out, and the compatibility helper payload is removed. No command,
+       option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.81.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.81.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

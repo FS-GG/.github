@@ -247,6 +247,19 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
         for row in contract.get("commands", [])
         if isinstance(row, dict) and isinstance(row.get("name"), str) and isinstance(row.get("flags"), list)
     }
+    # Telemetry is the local deterministic command family composed ahead of the
+    # network-capable Options/Client dispatcher, so it is intentionally absent
+    # from that dispatcher's command-contract projection. Keep its documented
+    # option surface explicit here so packaged lifecycle recipes receive the
+    # same unknown-command/unknown-flag audit.
+    commands["telemetry"] = {
+        "--session-file", "--snapshot", "--task", "--turn-id", "--since", "--until",
+        "--format", "--append", "--output", "--coord-version", "--sdd-version",
+        "--contracts-version", "--run", "--unit", "--comments", "--draft", "--usage",
+        "--history-report", "--existing", "--log", "--required-phase", "--require-terminal",
+        "--require-reconciled", "--cycle", "--artifact", "--head", "--report", "--audit",
+        "--phases", "--checkpoint", "--all-responses",
+    }
     if len(commands) < 35:
         fail(errors, f"command contract is implausibly small ({len(commands)} commands)")
         return
@@ -514,11 +527,10 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         driver_root = root / ROOTS[0] / driver
         body = (driver_root / "SKILL.md").read_text(encoding="utf-8")
         contract = (driver_root / "references/feedback-contract.md").read_text(encoding="utf-8")
-        gate = driver_root / "scripts/validate-feedback-state.py"
         if "feedback-contract" not in body:
             fail(errors, f"{driver}: triggered body does not route through the feedback contract")
-        if not gate.is_file():
-            fail(errors, f"{driver}: feedback-state validator is missing")
+        if "scripts/fsgg-coord telemetry feedback validate" not in contract:
+            fail(errors, f"{driver}: feedback completion contract does not call the compiled validator")
         for statement in required:
             if statement not in contract:
                 fail(errors, f"{driver}: feedback completion contract lost {statement!r}")

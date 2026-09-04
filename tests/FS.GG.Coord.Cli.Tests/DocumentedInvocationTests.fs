@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 open Xunit
+open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.Options
 
 /// THE PRESCRIBED-INVOCATION GATE (#919).
@@ -295,7 +296,11 @@ module DocumentedInvocationTests =
             prescribed ()
             |> List.filter (fun (_, _, argv) -> not (gapped argv))
             |> List.choose (fun (file, line, argv) ->
-                match parse argv with
+                let parsed =
+                    match TelemetryApplication.validateInvocation argv with
+                    | Some result -> result
+                    | None -> parse argv |> Result.map ignore
+                match parsed with
                 | Ok _ -> None
                 | Error e -> Some $"  %s{file}:%d{line}\n    argv:  %A{argv}\n    engine: %s{e}")
 
@@ -316,7 +321,11 @@ module DocumentedInvocationTests =
         let stale =
             knownGaps
             |> List.choose (fun (argv, why) ->
-                match parse argv with
+                let parsed =
+                    match TelemetryApplication.validateInvocation argv with
+                    | Some result -> result
+                    | None -> parse argv |> Result.map ignore
+                match parsed with
                 | Ok _ -> Some $"  %A{argv}\n    listed as: %s{why}"
                 | Error _ -> None)
 
