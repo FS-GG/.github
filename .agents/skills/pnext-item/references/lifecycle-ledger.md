@@ -3,7 +3,10 @@
 Every claimed item has one externally durable, append-only phase ledger on its canonical GitHub issue
 and one private immutable runtime-usage receipt per phase. Each event is posted as an
 `fsgg:item-lifecycle/v1` structured issue comment through `fsgg-coord comment create`, then read back and
-digest-verified. Optional immutable normal-item exports use:
+digest-verified. The live claim holder is the single append authority: critics and other actors return
+timestamped phase/usage receipts to it, and it records their `actor` unchanged. The command refuses a
+lifecycle write by any other worker or to any target other than the canonical item. Optional immutable
+normal-item exports use:
 
 ```text
 logs/items/<owner>.<repo>/<issue-number>/lifecycle.jsonl
@@ -26,6 +29,10 @@ gates the PR that contains it. Export happens afterward under a distinct source-
 CSVs and local session paths remain private and untracked. A phase receipt may grow while that phase is
 active, but freezes when its digest is cited; later phases use new receipts so appends cannot invalidate
 earlier events.
+
+GitHub comment ids are the server-assigned total order. For a legacy or pre-upgrade fork, export accepts
+the lowest-id child of a predecessor and reports every later sibling on stderr as preserved rejected-fork
+evidence. Never edit or delete either comment. The claim-holder-only boundary prevents new siblings.
 
 ## Phase events
 

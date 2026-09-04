@@ -2,7 +2,10 @@
 
 Each roadmap item has one externally durable append-only ledger on its canonical GitHub issue. Every
 event is a `fsgg:item-lifecycle/v1` structured comment posted through the verified `fsgg-coord comment`
-boundary. An optional immutable export uses:
+boundary by the live claim holder. That claim worker is the single append authority; critics and other
+actors return timestamped phase/usage receipts to it, and it records their `actor` unchanged. The command
+refuses lifecycle writes by any other worker or to any target other than the canonical item. An optional
+immutable export uses:
 
 ```text
 logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.jsonl
@@ -69,14 +72,20 @@ again, or complete. A completed phase is terminal. The status line still selects
 active process position and calls out concurrent work in prose. The final item ledger has no active or
 blocked phase.
 
+GitHub comment ids provide the server-assigned total order. If a legacy or pre-upgrade race left multiple
+children of one predecessor, export deterministically accepts the lowest comment id and reports every later
+sibling on stderr as preserved rejected-fork evidence. Never delete or edit those comments. Once the
+claim-holder write boundary is installed, a second actor cannot create another lifecycle sibling.
+
 ## Required phases and ownership
 
 Use the actual lifecycle, without collapsing work that has distinct authority or evidence. At minimum,
 represent intake/route/claim, SDD or planning, implementation and tests, initial critique, every numbered
 repair/confirmation, host acceptance, guarded merge, protected-main verification, receipt/projection, and
-cleanup when applicable. A critic appends its own phase events under its minted identity; the implementer
-must not attribute critic token usage to itself. Cross-repository projection phases remain in the same item
-ledger and bind their repository/revision in `source`.
+cleanup when applicable. A critic returns its frozen receipt to the claim holder, which appends the critic's
+phase events under the critic's minted identity; the implementer must not attribute critic token usage to
+itself. Cross-repository projection phases remain in the same item ledger and bind their repository/revision
+in `source`.
 
 Codex's completed `token_usage_record` rows provide request, turn, and thread totals; matching
 `turn_context` rows provide the exact model variant and effort. Claude Code's status-line input provides

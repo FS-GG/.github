@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "c5d94ca36e32c3891f42e0d3c0d8b76e766aa84681fb556d31d2772fbd49327f",
-      "tree-sha256": "c158612cacfb0dda4130cec6a8efd96db3a90261e6faebafaed1f525ac67055d",
+      "tree-sha256": "d07b60acfd610d4acb7d02db44a749cccf978da746fb18d1e68420190315d410",
       "files": [
         {
           "path": "SKILL.md",
@@ -39,7 +39,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "acdd604b697878f984a60cdfb4a1c68c9755387a622820eba4378752ce380804",
+          "sha256": "a3ba8dbd47a8f577ff307c30b251afff3b8087996d52ee8f91f61797b9ff2537",
           "executable": false
         },
         {
@@ -64,7 +64,7 @@
         },
         {
           "path": "scripts/validate-lifecycle-log.py",
-          "sha256": "89ee00a4f11168424ffed8aabfd5dcadc95ebc3358f5cf4a7ce338967a9fbf57",
+          "sha256": "c4bae55cabbed3bb180645e4eb6a0b264321177386759d8d5497cf506da96443",
           "executable": false
         }
       ],

@@ -532,7 +532,37 @@ def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
     records.sort(key=lambda pair: pair[0])
     if not records:
         fail("GitHub comment export contains no matching lifecycle events")
-    return [event for _, event in records]
+    canonical: list[object] = []
+    rejected_forks: list[int] = []
+    previous_digest: str | None = None
+    expected = 1
+    for comment_id, event in records:
+        if not isinstance(event, dict):
+            fail(f"GitHub lifecycle comment {comment_id} event is not an object")
+        sequence = event.get("sequence")
+        revision = event.get("revision")
+        predecessor = event.get("previous_digest")
+        if sequence == expected and revision == expected and predecessor == previous_digest:
+            digest = event.get("digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                fail(f"GitHub lifecycle comment {comment_id} has no canonical digest")
+            if canonical_digest(event) != digest:
+                fail(f"GitHub lifecycle comment {comment_id} digest does not match its event")
+            canonical.append(event)
+            previous_digest = digest
+            expected += 1
+        elif (isinstance(sequence, int) and not isinstance(sequence, bool) and sequence < expected
+              and isinstance(revision, int) and not isinstance(revision, bool) and revision < expected):
+            # GitHub assigns comment ids from one server-side total order. If two writers seal the same
+            # predecessor concurrently, the lower comment id deterministically wins and every later
+            # sibling is preserved as rejected audit evidence rather than corrupting the exported chain.
+            rejected_forks.append(comment_id)
+        else:
+            fail(f"GitHub lifecycle comment {comment_id} does not extend canonical revision {expected - 1}")
+    if rejected_forks:
+        print("lifecycle-log: ignored deterministic fork loser comment id(s): "
+              + ", ".join(str(value) for value in rejected_forks), file=sys.stderr)
+    return canonical
 
 
 def valid_fixture() -> list[object]:
@@ -648,6 +678,14 @@ def self_test() -> None:
         fixture_comment = {"id": 1, "created_at": "2026-09-04T08:00:00Z",
                            "updated_at": "2026-09-04T08:00:00Z", "body": body}
         comment_path.write_text(json.dumps([[fixture_comment]]), encoding="utf-8")
+        assert export_comments(comment_path, "roadmap-v2", "GS2-01.1") == [base[0]]
+        fork = copy.deepcopy(base[0])
+        fork["actor"] = "critic-2"
+        fork["digest"] = canonical_digest(fork)
+        fork_body = "<!-- fsgg:item-lifecycle/v1 -->\n```json\n" + json.dumps(fork, sort_keys=True, separators=(",", ":")) + "\n```\n"
+        fork_comment = {"id": 2, "created_at": "2026-09-04T08:00:01Z",
+                        "updated_at": "2026-09-04T08:00:01Z", "body": fork_body}
+        comment_path.write_text(json.dumps([[fixture_comment, fork_comment]]), encoding="utf-8")
         assert export_comments(comment_path, "roadmap-v2", "GS2-01.1") == [base[0]]
         fixture_comment["updated_at"] = "2026-09-04T08:01:00Z"
         comment_path.write_text(json.dumps([fixture_comment]), encoding="utf-8")

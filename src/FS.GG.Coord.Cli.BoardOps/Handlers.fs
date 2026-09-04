@@ -15,6 +15,7 @@ module Handlers =
     open FS.GG.Coord.Cli.Options
     open FS.GG.Coord.Cli.Render
     open FS.GG.Coord.Cli.Kernel
+    open FS.GG.Coord.Cli.Lifecycle
 
     // The Ready decision over ADR-0045's sole dependency-edge authority. Body prose is intentionally
     // absent from this function's inputs: `Blocked by:` is a human-readable projection, not a fact a
@@ -1436,6 +1437,38 @@ module Handlers =
             | Some path -> Error $"capability allocation failed; recovery capability preserved at %s{path}: %s{ex.Message}"
             | None -> Error ex.Message
 
+    [<Literal>]
+    let private LifecycleCommentMarker = "<!-- fsgg:item-lifecycle/v1 -->"
+
+    let private authorizeLifecycleComment
+        (ctx: Context)
+        (opts: Options)
+        (target: Ref)
+        (item: Ref)
+        (worker: Identity.Worker)
+        (body: string)
+        : Errors.IoResult<unit> =
+        if not (body.StartsWith(LifecycleCommentMarker, StringComparison.Ordinal)) then
+            Ok()
+        elif target.Canonical <> item.Canonical then
+            Error(Errors.Malformed(item.Short, "lifecycle comments must be appended to their canonical item, not another target"))
+        else
+            Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan item.Short)
+            |> Result.bind (fun markers ->
+                LiveHandlers.authorizedMarker opts.LeaseMinutes markers (fun () ->
+                    Reads.prAlive ctx.Transport item.Owner item.Repo item.Number))
+            |> Result.bind (function
+                | Some marker when marker.Worker.Value = worker.Id -> Ok()
+                | Some marker ->
+                    Error(
+                        Errors.Malformed(
+                            item.Short,
+                            $"lifecycle append authority belongs to claim worker '%s{marker.Worker.Value}', not '%s{worker.Id}'"
+                        )
+                    )
+                | None -> Error(Errors.Malformed(item.Short, "no live claim marker can serialize this lifecycle append")))
+
     let commentCmd (ctx: Context) (opts: Options) : int =
         let parsed =
             match opts.Args with
@@ -1457,38 +1490,43 @@ module Handlers =
                 match allocateCommentCapability w.Id item source with
                 | Error message -> eprint $"fsgg-coord-engine: comment: %s{message}"; ExitError
                 | Ok capability ->
-                    let result =
-                        match commentId with
-                        | None -> Writes.createVerifiedComment ctx.Transport target capability.Body
-                        | Some id -> Writes.amendVerifiedComment ctx.Transport target id capability.Body
-
-                    match result with
+                    match authorizeLifecycleComment ctx opts target item w capability.Body with
                     | Error error ->
-                        eprint $"fsgg-coord-engine: comment %s{operation} failed; recovery capability preserved at %s{capability.Path}"
+                        capability.Cleanup()
                         fail error
-                    | Ok receipt ->
-                        try
-                            capability.Cleanup()
+                    | Ok() ->
+                        let result =
+                            match commentId with
+                            | None -> Writes.createVerifiedComment ctx.Transport target capability.Body
+                            | Some id -> Writes.amendVerifiedComment ctx.Transport target id capability.Body
 
-                            match opts.Render with
-                            | Json ->
-                                JsonSerializer.Serialize(
-                                    {| schema = "fsgg.coord.comment-mutation-result/v1"
-                                       operation = operation
-                                       target = target.Canonical
-                                       item = item.Canonical
-                                       commentId = receipt.CommentId
-                                       byteLength = receipt.ByteLength
-                                       sha256 = receipt.Sha256
-                                       cleanup = "removed" |}
-                                ) |> printfn "%s"
-                            | Text ->
-                                printfn "comment %s verified: target=%s item=%s id=%d bytes=%d sha256=%s cleanup=removed" operation target.Canonical item.Canonical receipt.CommentId receipt.ByteLength receipt.Sha256
+                        match result with
+                        | Error error ->
+                            eprint $"fsgg-coord-engine: comment %s{operation} failed; recovery capability preserved at %s{capability.Path}"
+                            fail error
+                        | Ok receipt ->
+                            try
+                                capability.Cleanup()
 
-                            ExitGreen
-                        with ex ->
-                            eprint $"fsgg-coord-engine: comment %s{operation} was remotely verified, but cleanup failed; recovery capability remains at %s{capability.Path}: %s{ex.Message}"
-                            ExitError
+                                match opts.Render with
+                                | Json ->
+                                    JsonSerializer.Serialize(
+                                        {| schema = "fsgg.coord.comment-mutation-result/v1"
+                                           operation = operation
+                                           target = target.Canonical
+                                           item = item.Canonical
+                                           commentId = receipt.CommentId
+                                           byteLength = receipt.ByteLength
+                                           sha256 = receipt.Sha256
+                                           cleanup = "removed" |}
+                                    ) |> printfn "%s"
+                                | Text ->
+                                    printfn "comment %s verified: target=%s item=%s id=%d bytes=%d sha256=%s cleanup=removed" operation target.Canonical item.Canonical receipt.CommentId receipt.ByteLength receipt.Sha256
+
+                                ExitGreen
+                            with ex ->
+                                eprint $"fsgg-coord-engine: comment %s{operation} was remotely verified, but cleanup failed; recovery capability remains at %s{capability.Path}: %s{ex.Message}"
+                                ExitError
 
     // The column `add` writes when the caller names none (.github#1823).
     //
