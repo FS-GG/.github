@@ -1,0 +1,10 @@
+<testsuite name="engine-pin-adoption" tests="1" failures="0">
+  <properties>
+    <property name="command" value="python3 scripts/check-engine-pin.py" />
+    <property name="failedProtectedMainRun" value="https://github.com/FS-GG/.github/actions/runs/33875301578" />
+    <property name="protectedMainSource" value="9d88c7b7967e8d69c1b8873d718ee8f0f435afd9" />
+  </properties>
+  <testcase name="canonical manifest resolves newest public coordination engine">
+    <system-out><![CDATA[ok: .github's canonical fs.gg.coord.cli pin is 0.80.0, the newest FS.GG.Coord.Cli resolvable from nuget.org; the FS-GG feed agrees.]]></system-out>
+  </testcase>
+</testsuite>

@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3194-coherent-release/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3194-coherent-release/analysis.json
-    digest: 19189896a41b9da98edbb6d74067698f80415f4174000b025bf442d5be3e76be
+    digest: 3ca1a8dd7ba1c4502daf881fe226983700975b6479e3db33fb82bc1f2f03e135
     schemaVersion: 1
   - label: checklist
     path: work/3194-coherent-release/checklist.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/3194-coherent-release/tasks.yml
-    digest: 44a5b0c070d3fe803eb3a79b45a657f7467b4668515f1d0fc53756e8e3645269
+    digest: 931d11143a7c8574e3387a0e17d9e20e4f753cf9af7c5687db7c0a005ce714e5
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -250,5 +250,32 @@ evidence:
       failed: 0
       skipped: 0
     notes: [Feed-derived registry and generated projections consistently report package-version 0.80.0.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV009]
+    artifacts: [dist/dotnet/.config/dotnet-tools.json, scripts/check-engine-pin.py]
+    sourceRefs:
+      - kind: verification
+        path: scripts/check-engine-pin.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/engine-pin-adoption.junit.xml
+      digest: "sha256:1975682efea78904677e1cc84210aa9483c593e0485c3e65179cfceda4b66604"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Protected-main run 33875301578 proved the canonical repository tool manifest was still pinned to 0.79.0 after the 0.80.0 release; the manifest now pins 0.80.0 and check-engine-pin confirms both public feeds agree."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

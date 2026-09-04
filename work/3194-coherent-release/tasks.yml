@@ -108,6 +108,16 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV008]
+  - id: T009
+    title: Adopt the published coordination tool in the canonical repository manifest
+    status: complete
+    owner: sdd
+    dependencies: [T002, T003]
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [FR-003, PD-003]
+    requiredSkills: [schema-versioning, automated-tests, readiness-evidence]
+    requiredEvidence: [EV009]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

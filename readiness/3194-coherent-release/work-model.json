@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c4a73a68b8b057917d85d083c91b209fbe7efb7df25f65cdb37c726d47af8c89"
+        "value": "ba1c37f273868a14c4bd8d415e29b08b8cf8ee1c0c1d4e924a2d40904466378a"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "44a5b0c070d3fe803eb3a79b45a657f7467b4668515f1d0fc53756e8e3645269"
+        "value": "931d11143a7c8574e3387a0e17d9e20e4f753cf9af7c5687db7c0a005ce714e5"
       }
     }
   ],
@@ -183,10 +183,12 @@
         "column": 1
       },
       "linkedTaskIds": [
-        "T003"
+        "T003",
+        "T009"
       ],
       "linkedEvidenceIds": [
-        "EV003"
+        "EV003",
+        "EV009"
       ]
     },
     {
@@ -430,6 +432,37 @@
         "line": 8,
         "column": 1
       }
+    },
+    {
+      "id": "T009",
+      "title": "Adopt the published coordination tool in the canonical repository manifest",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T002",
+        "T003"
+      ],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence",
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/3194-coherent-release/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
     }
   ],
   "evidence": [
@@ -645,6 +678,33 @@
         "line": 8,
         "column": 1
       }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "dist/dotnet/.config/dotnet-tools.json",
+        "scripts/check-engine-pin.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3194-coherent-release/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
     }
   ],
   "generatedViews": [
@@ -701,7 +761,7 @@
           "path": "work/3194-coherent-release/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c4a73a68b8b057917d85d083c91b209fbe7efb7df25f65cdb37c726d47af8c89"
+            "value": "ba1c37f273868a14c4bd8d415e29b08b8cf8ee1c0c1d4e924a2d40904466378a"
           },
           "schemaVersion": 1
         },
@@ -725,14 +785,14 @@
           "path": "work/3194-coherent-release/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "44a5b0c070d3fe803eb3a79b45a657f7467b4668515f1d0fc53756e8e3645269"
+            "value": "931d11143a7c8574e3387a0e17d9e20e4f753cf9af7c5687db7c0a005ce714e5"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "b31977db7de3ad4015584f0c00047c61e2e1c583de090caf233073c34d7bef8c"
+        "value": "7290e99049739053b06abfa346f6f63b8941981eac983e4cbe077a98f2eaa43a"
       },
       "currency": "current"
     }
