@@ -41,7 +41,9 @@ Each JSONL line is one phase transition. The shared v1 fields are `schema_versio
 - `item` contains the canonical GitHub `repo`, positive issue `number`, and exact HTTPS issue `url`.
 - `phase` is a lowercase stable identifier. Every numbered review, repair, recovery, merge, verification,
   projection, and cleanup pass is distinct.
-- `event` is `started`, `completed`, `blocked`, or `resumed`; exactly one phase is active.
+- `event` is `started`, `completed`, `blocked`, or `resumed`. Independent actor phases may overlap;
+  transitions remain ordered within each phase. The status line still names exactly one primary active
+  process position and notes any concurrent phase in prose.
 - `at` is the actual observation time in canonical UTC; never pre-author another actor's start. Terminal
   duration is elapsed wall time from the first start, rounded to the nearest whole minute. Historical
   averages use a supplied validated prior-event corpus for the same phase and tooling fingerprint.
@@ -110,19 +112,25 @@ non-interactive work, `--output-format json`/`stream-json` or the Agent SDK resu
 Seal, post, and export without hand-authoring digests or editing accepted comments:
 
 ````sh
-python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
-  --seal-draft <unposted-events.jsonl> > <sealed-events.jsonl>
-while IFS= read -r event; do
-  printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
-  FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
-done < <sealed-events.jsonl>
+set -euo pipefail
 gh api repos/<owner>/<repo>/issues/<number>/comments --paginate --slurp > <comments.json>
 python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
   --run <run-id> --unit <unit-id> --export-comments <comments.json> > <exported-lifecycle.jsonl>
+python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
+  --root . --run <run-id> --unit <unit-id> --existing <exported-lifecycle.jsonl> \
+  --seal-successor <one-unposted-event-without-chain-fields.json> \
+  --usage <every-cited-private-phase-receipt.csv> > <one-sealed-successor.json>
+event="$(<one-sealed-successor.json>)"
+test -n "$event"
+printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
+FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
 ````
 
 The exporter accepts only exact markers, orders by immutable GitHub comment id, and rejects edited
-lifecycle comments. A correction is a later digest-chained event, never an edit.
+lifecycle comments. The successor sealer reads and validates the full existing chain plus exactly one
+draft, derives the next revision/digest, and emits only that new event; it cannot repost the prefix or
+seal an invalid terminal event. Run the recipe fail-fast exactly as shown: no comment write may run after
+a failed or empty seal. A correction is a later digest-chained event, never an edit.
 
 Run the validator at each handoff and gate. A normal item uses any stable lowercase `run_id` and path-safe
 `unit_id`; a roadmap supplies its cycle values:

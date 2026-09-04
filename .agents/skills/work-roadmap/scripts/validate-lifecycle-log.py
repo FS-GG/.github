@@ -238,9 +238,8 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
 
     item_identity: tuple[str, int, str] | None = None
     phases: dict[str, dict[str, object]] = {}
-    active: str | None = None
-    blocked: str | None = None
-    previous_at: datetime | None = None
+    active: set[str] = set()
+    blocked: set[str] = set()
     previous_digest: str | None = None
 
     for index, raw in enumerate(records, 1):
@@ -309,10 +308,6 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
             fail(f"line {index}: evidence must be a non-empty string array")
 
         timestamp = utc(raw["at"], index)
-        if previous_at is not None and timestamp < previous_at:
-            fail(f"line {index}: timestamps must be nondecreasing")
-        previous_at = timestamp
-
         terminal_event = event in {"completed", "blocked"}
         validate_tokens(raw["token_usage"], terminal_event, index, usage_reports or {},
                         raw["model"], raw["tooling"], f"{repo}#{number}/{phase}")
@@ -340,49 +335,51 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         if event == "started":
             if phase in phases:
                 fail(f"line {index}: phase may be started only once")
-            if active is not None or blocked is not None:
-                fail(f"line {index}: another phase is active or blocked")
             expected_order = len(phases) + 1
             if order != expected_order:
                 fail(f"line {index}: phase_order must be contiguous in first-seen order")
             if raw["actual_minutes"] is not None:
                 fail(f"line {index}: started actual_minutes must be null")
             phases[phase] = {"order": order, "status": "active", "started": timestamp,
-                             "model": raw["model"], "tooling": raw["tooling"]}
-            active = phase
+                             "last_at": timestamp, "model": raw["model"], "tooling": raw["tooling"]}
+            active.add(phase)
         elif phase not in phases or phases[phase]["order"] != order:
             fail(f"line {index}: event references an unknown phase/order")
+        elif timestamp < phases[phase]["last_at"]:
+            fail(f"line {index}: timestamps must be nondecreasing within a phase")
         elif phases[phase]["model"] != raw["model"]:
             fail(f"line {index}: model changed within one phase; start a distinct continuation phase")
         elif phases[phase]["tooling"] != raw["tooling"]:
             fail(f"line {index}: tooling changed within one phase; start a distinct continuation phase")
         elif event == "resumed":
-            if blocked != phase or active is not None or phases[phase]["status"] != "blocked":
+            if phase not in blocked or phase in active or phases[phase]["status"] != "blocked":
                 fail(f"line {index}: only the blocked phase may resume")
             if raw["actual_minutes"] is not None:
                 fail(f"line {index}: resumed actual_minutes must be null")
-            blocked = None
-            active = phase
+            blocked.remove(phase)
+            active.add(phase)
             phases[phase]["status"] = "active"
+            phases[phase]["last_at"] = timestamp
         else:
-            if active != phase or phases[phase]["status"] != "active":
+            if phase not in active or phases[phase]["status"] != "active":
                 fail(f"line {index}: only the active phase may {event}")
             elapsed = int((timestamp - phases[phase]["started"]).total_seconds())
             expected_minutes = (elapsed + 30) // 60
             actual = raw["actual_minutes"]
             if isinstance(actual, bool) or not isinstance(actual, int) or actual != expected_minutes:
                 fail(f"line {index}: actual_minutes must equal rounded elapsed wall time ({expected_minutes})")
-            active = None
+            active.remove(phase)
             phases[phase]["status"] = event
+            phases[phase]["last_at"] = timestamp
             if event == "blocked":
-                blocked = phase
+                blocked.add(phase)
 
     required = required_phases or []
     missing = [phase for phase in required if phase not in phases]
     if missing:
         fail("missing required phases: " + ", ".join(missing))
     if require_terminal:
-        if active is not None or blocked is not None:
+        if active or blocked:
             fail("terminal log must have no active or blocked phase")
         incomplete = [name for name, value in phases.items() if value["status"] != "completed"]
         if incomplete:
@@ -480,6 +477,26 @@ def seal(records: list[object]) -> list[object]:
     return records
 
 
+def seal_successor(existing: list[object], draft: list[object], run_id: str, unit_id: str,
+                   usage_reports: dict[str, list[dict[str, str]]],
+                   history_rows: list[dict[str, str]] | None) -> dict[str, object]:
+    if len(draft) != 1 or not isinstance(draft[0], dict):
+        fail("successor draft must contain exactly one JSON object")
+    chain_fields = {"sequence", "revision", "previous_digest", "digest"}
+    expected_draft_fields = FIELDS - chain_fields
+    if set(draft[0]) != expected_draft_fields:
+        fail("successor draft has missing or unexpected fields; omit sequence/revision/digest chain fields")
+    successor = copy.deepcopy(draft[0])
+    successor["sequence"] = len(existing) + 1
+    successor["revision"] = len(existing) + 1
+    successor["previous_digest"] = existing[-1]["digest"] if existing else None
+    successor["digest"] = "0" * 64
+    successor["digest"] = canonical_digest(successor)
+    chain = copy.deepcopy(existing) + [successor]
+    validate_lines(chain, run_id, unit_id, usage_reports=usage_reports, history_rows=history_rows)
+    return successor
+
+
 def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
@@ -566,6 +583,21 @@ def self_test() -> None:
     }]
     validate_lines(base, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"],
                    {"runtime-usage-csv:sha256:fixture": usage_rows})
+    chain_fields = {"sequence", "revision", "previous_digest", "digest"}
+    first_draft = [{key: value for key, value in base[0].items() if key not in chain_fields}]
+    first = seal_successor([], first_draft, "roadmap-v2", "GS2-01.1", {}, None)
+    terminal_draft = [{key: value for key, value in base[1].items() if key not in chain_fields}]
+    second = seal_successor([first], terminal_draft, "roadmap-v2", "GS2-01.1",
+                            {"runtime-usage-csv:sha256:fixture": usage_rows}, None)
+    assert second["revision"] == 2 and second["previous_digest"] == first["digest"]
+    unsafe = copy.deepcopy(terminal_draft)
+    unsafe[0]["token_usage"] = {"status": "pending"}
+    try:
+        seal_successor([first], unsafe, "roadmap-v2", "GS2-01.1", {}, None)
+    except InvalidLog:
+        pass
+    else:
+        fail("self-test successor sealer emitted an unreconciled terminal event")
     mutations = {
         "sequence gap": lambda rows: rows[2].__setitem__("sequence", 4),
         "wrong issue URL": lambda rows: rows[0]["item"].__setitem__("url", "https://example.invalid/42"),
@@ -637,7 +669,8 @@ def main() -> int:
     parser.add_argument("--usage", action="append", default=[],
                         help="immutable private runtime-usage receipt CSV; repeat for multiple phases")
     parser.add_argument("--history-report", help="validated prior-phase corpus: phase,tooling_fingerprint,actual_minutes")
-    parser.add_argument("--seal-draft", help="seal an unposted JSONL draft to stdout; never rewrites accepted comments")
+    parser.add_argument("--seal-successor", help="one unposted event draft; validate the full chain and emit only its successor")
+    parser.add_argument("--existing", help="exported existing issue-comment chain for --seal-successor")
     parser.add_argument("--export-comments", help="GitHub REST comment JSON; emit matching unedited lifecycle events")
     parser.add_argument("--require-terminal", action="store_true")
     parser.add_argument("--require-reconciled", action="store_true")
@@ -648,10 +681,18 @@ def main() -> int:
         if args.self_test:
             self_test()
             return 0
-        if args.seal_draft:
-            draft = load(Path(args.seal_draft))
-            for record in seal(draft):
-                print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+        if args.seal_successor:
+            if not args.run or not args.unit:
+                fail("--seal-successor requires --run and --unit")
+            root = Path(args.root).resolve()
+            existing = load((root / args.existing).resolve()) if args.existing else []
+            draft = load((root / args.seal_successor).resolve())
+            usage_paths = [(root / value).resolve() for value in args.usage]
+            history_path = ((root / args.history_report).resolve()
+                            if args.history_report else None)
+            record = seal_successor(existing, draft, args.run, args.unit,
+                                    read_usage_reports(usage_paths), read_history_csv(history_path))
+            print(json.dumps(record, sort_keys=True, separators=(",", ":")))
             return 0
         if args.export_comments:
             if not args.run or not args.unit:

@@ -32,7 +32,8 @@ Every line is one JSON object with these fields:
 - `phase_order`: positive contiguous integer in first-seen phase order.
 - `phase`: lowercase identifier; use a distinct identifier for every numbered repair.
 - `event`: `started`, `completed`, `blocked`, or `resumed`.
-- `at`: canonical UTC `YYYY-MM-DDTHH:MM:SSZ`, nondecreasing across the ledger.
+- `at`: canonical UTC `YYYY-MM-DDTHH:MM:SSZ`, nondecreasing within each phase. Comment/revision order
+  remains authoritative when independently measured actor phases overlap.
 - `actor`: minted worker, critic, or accountable host identity.
 - `model`: either `{"status":"recorded","provider":"...","name":"...","effort":"...","source":"..."}`
   from an authoritative host/runtime observation, or
@@ -62,9 +63,11 @@ Every line is one JSON object with these fields:
   Counts are phase-local deltas from an
   authoritative host/provider receipt, never estimates or context-window sizes.
 
-Only one phase may be active. A new phase starts only after the preceding phase completed. `blocked`
-leaves no active phase; only that same phase may `resume`, and it may block again or complete. A completed
-phase is terminal. The final item ledger has no active or blocked phase.
+Independent actor phases may overlap and their actual UTC intervals must be retained; events remain
+nondecreasing within each phase. `blocked` pauses only that phase; only the same phase may `resume`, block
+again, or complete. A completed phase is terminal. The status line still selects exactly one primary
+active process position and calls out concurrent work in prose. The final item ledger has no active or
+blocked phase.
 
 ## Required phases and ownership
 
@@ -87,15 +90,18 @@ do not allocate or estimate shares.
 Run at every handoff and gate named by the skill:
 
 ````sh
-python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
-  --seal-draft <unposted-events.jsonl> > <sealed-events.jsonl>
-while IFS= read -r event; do
-  printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
-  FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
-done < <sealed-events.jsonl>
+set -euo pipefail
 gh api repos/<owner>/<repo>/issues/<number>/comments --paginate --slurp > <comments.json>
 python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
   --run <run-id> --unit <unit-id> --export-comments <comments.json> > <exported-lifecycle.jsonl>
+python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
+  --root . --run <run-id> --unit <unit-id> --existing <exported-lifecycle.jsonl> \
+  --seal-successor <one-unposted-event-without-chain-fields.json> \
+  --usage <every-cited-private-phase-receipt.csv> > <one-sealed-successor.json>
+event="$(<one-sealed-successor.json>)"
+test -n "$event"
+printf '<!-- fsgg:item-lifecycle/v1 -->\n```json\n%s\n```\n' "$event" > <owned-comment-file>
+FSGG_WORKER=<worker> scripts/fsgg-coord comment create <item> <item> <owned-comment-file> --json
 python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
   --root . --run <run-id> --unit <unit-id> \
   --log <exported-lifecycle.jsonl> --usage <private-phase-1.csv> --usage <private-phase-2.csv> \
