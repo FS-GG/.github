@@ -36,6 +36,8 @@ advances the pin to that CLI.
 
 - **2026-09-04** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
+- **2026-09-04** — RECONCILE (`publishing-and-deployment`; .github#3206, release item .github#3201): after the 0.80.1 projection merge changed the producer bytes, `fsgg-skill-registry-check --write` reconciled the operator skill digest from `30d28555…` to `622071b7…`. registry = manifest = bytes.
+
 - **2026-09-04** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-09-04** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
