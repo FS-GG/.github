@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1 accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.2 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1225,10 +1225,28 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-04-roadmap-github-substrate-v2-m7-gs2-07-1-event-envelope.md)
   bind normalized SDD unit key `gs2-07-1` to typed cycle `cycle-dba9a7021f8c15c3`; its source-bound guarded
   update digest is `sha256:a1628ad879bf9886dfc0a44f482366e0a45d04fb352afcb487d6d1d6d461e7e2`.
-- [ ] **GS2-07.2 — Narrow reconciliation.** Route supported issue, relation, Project, repository, ruleset,
+- [x] **GS2-07.2 — Narrow reconciliation.** Route supported issue, relation, Project, repository, ruleset,
   run/check, release, and installation events to a deduplicating subject queue. Commands and events only
   schedule work; the shared fresh-observe/reduce/sealed-plan/apply/verify reconciler is the exclusive normal
   writer path.
+
+  Coordination [issue 299](https://github.com/FS-GG/FS.GG.Coordination/issues/299) and
+  [PR 300](https://github.com/FS-GG/FS.GG.Coordination/pull/300) accepted supported-event routing, a
+  deduplicating subject queue, and the exclusive fresh-observe/reduce/sealed-plan/apply/verify writer path.
+  Candidate `ba32c93adfe581dab113a692687314a345a3f013` passed 23 Q3 controls, 218 unit tests, 500
+  architecture tests, a warning-free Release build, exact roadmap gates, and clean provider verification.
+  The independent critique repaired three majors over two rounds before confirming implementation commit
+  `44fbef7e5b13ce4c9a954296d979767315cb929a`; implementation protected-merged as
+  `47d628dc16ca9cca12853dd5c55a016356998173`.
+
+  Acceptance [PR 301](https://github.com/FS-GG/FS.GG.Coordination/pull/301) protected-merged the indexed,
+  append-only receipt as `de1b7475505fa34748dc3b1b76d649f2bd3c84d3`, with canonical digest
+  `6ae56a7c9dce52f3ac25e39145b275ed5e8127a1020ee8c65a392b976661c298`; exact-main Bootstrap run
+  `33858431320` and CodeQL run `33858430654` succeeded, and #299 read back closed/Done with no live claim.
+  The validated [schema-v3 critique](../reviews/roadmap/roadmap-github-substrate-v2-m7-gs2-07-2-narrow-reconciliation.json)
+  and [schema-v2 feedback report](../feedback/2026-09-04-roadmap-github-substrate-v2-m7-gs2-07-2-narrow-reconciliation.md)
+  bind normalized SDD unit key `gs2-07-2` to typed cycle `cycle-c02683c1aead6745`; its source-bound guarded
+  update digest is `sha256:ea9c59e68dd5e15b9ea6e4d82c1974454431c0cfeb604974e63e97371091ea43`.
 - [ ] **GS2-07.3 — Audit repair.** Retain a complete scheduled audit as authority for dropped deliveries,
   preview gaps, external repositories, and schema drift; prove event/audit convergence under replay.
 - [ ] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
