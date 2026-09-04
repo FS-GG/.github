@@ -6,6 +6,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
+COMMAND_TESTS = ROOT / "tests/FS.GG.Coord.Cli.Tests/CommentMutationTests.fs"
+PAGINATION_WITNESSES = [
+    "lifecycle election sees a same-key competitor beyond one merged page",
+    "paginated (comments merged)",
+    "server-ordered winner is comment 101",
+]
 
 
 def validate(text: str) -> None:
@@ -49,9 +55,17 @@ def validate(text: str) -> None:
         raise ValueError("verified lifecycle create does not run the authoritative append election")
 
 
+def validate_command_tests(text: str) -> None:
+    for witness in PAGINATION_WITNESSES:
+        if witness not in text:
+            raise ValueError(f"lifecycle append pagination control lost: {witness}")
+
+
 def main() -> None:
     source = SOURCE.read_text(encoding="utf-8")
     validate(source)
+    command_tests = COMMAND_TESTS.read_text(encoding="utf-8")
+    validate_command_tests(command_tests)
     witnesses = [
         "target.Canonical <> item.Canonical",
         "Reads.requireCompleteMarkerScan item.Short",
@@ -73,7 +87,13 @@ def main() -> None:
         except ValueError:
             continue
         raise SystemExit(f"lifecycle append mutation survived: {witness}")
-    print(f"PASS  lifecycle append authority: live claim serialization + {len(witnesses)} mutations")
+    for witness in PAGINATION_WITNESSES:
+        try:
+            validate_command_tests(command_tests.replace(witness, "removed-pagination-witness", 1))
+        except ValueError:
+            continue
+        raise SystemExit(f"lifecycle append pagination mutation survived: {witness}")
+    print(f"PASS  lifecycle append authority: live claim serialization + {len(witnesses)} source mutations + executable merged-page control")
 
 
 if __name__ == "__main__":

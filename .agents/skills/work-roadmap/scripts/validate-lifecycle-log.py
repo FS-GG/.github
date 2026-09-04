@@ -70,7 +70,8 @@ def tooling_fingerprint(value: dict[str, object]) -> str:
 def validate_tokens(value: object, terminal: bool, line: int,
                     usage_reports: dict[str, list[dict[str, str]]],
                     model: object, tooling: object,
-                    expected_task: str) -> None:
+                    expected_task: str,
+                    verify_external_evidence: bool = True) -> None:
     if not isinstance(value, dict) or not isinstance(value.get("status"), str):
         fail(f"line {line}: token_usage must be an object with status")
     status = value["status"]
@@ -104,6 +105,8 @@ def validate_tokens(value: object, terminal: bool, line: int,
             if not isinstance(identifiers, list) or not identifiers or any(
                     not isinstance(item, str) or not item for item in identifiers):
                 fail(f"line {line}: measured {field} must be a non-empty string array")
+        if not verify_external_evidence:
+            return
         usage_rows = usage_reports.get(value["source"])
         if usage_rows is None:
             fail(f"line {line}: measured token usage has no matching immutable --usage receipt digest")
@@ -228,7 +231,8 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
                    require_terminal: bool = False, require_reconciled: bool = False,
                    required_phases: list[str] | None = None,
                    usage_reports: dict[str, list[dict[str, str]]] | None = None,
-                   history_rows: list[dict[str, str]] | None = None) -> None:
+                   history_rows: list[dict[str, str]] | None = None,
+                   verify_external_evidence: bool = True) -> None:
     if not records:
         fail("log is empty")
     if not LOWER_IDENTIFIER.fullmatch(run_id):
@@ -310,7 +314,8 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         timestamp = utc(raw["at"], index)
         terminal_event = event in {"completed", "blocked"}
         validate_tokens(raw["token_usage"], terminal_event, index, usage_reports or {},
-                        raw["model"], raw["tooling"], f"{repo}#{number}/{phase}")
+                        raw["model"], raw["tooling"], f"{repo}#{number}/{phase}",
+                        verify_external_evidence)
         history = raw["historical_durations_minutes"]
         average = raw["historical_average_minutes"]
         if not isinstance(history, list) or any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in history):
@@ -318,16 +323,18 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         if event != "completed" and (history or average is not None):
             fail(f"line {index}: only completed events may carry historical average evidence")
         if event == "completed":
-            fingerprint = tooling_fingerprint(raw["tooling"])
-            matching_history: list[int] = []
-            for history_row in history_rows or []:
-                if history_row.get("phase") == phase and history_row.get("tooling_fingerprint") == fingerprint:
-                    try:
-                        matching_history.append(int(history_row["actual_minutes"]))
-                    except (KeyError, ValueError):
-                        fail(f"line {index}: history report contains invalid actual_minutes")
-            if history != matching_history:
-                fail(f"line {index}: historical durations do not equal the supplied same-tooling history report")
+            matching_history: list[int] = history
+            if verify_external_evidence:
+                fingerprint = tooling_fingerprint(raw["tooling"])
+                matching_history = []
+                for history_row in history_rows or []:
+                    if history_row.get("phase") == phase and history_row.get("tooling_fingerprint") == fingerprint:
+                        try:
+                            matching_history.append(int(history_row["actual_minutes"]))
+                        except (KeyError, ValueError):
+                            fail(f"line {index}: history report contains invalid actual_minutes")
+                if history != matching_history:
+                    fail(f"line {index}: historical durations do not equal the supplied same-tooling history report")
             expected_average = None if not matching_history else (2 * sum(matching_history) + len(matching_history)) // (2 * len(matching_history))
             if average != expected_average:
                 fail(f"line {index}: historical_average_minutes does not match its basis")
@@ -558,6 +565,12 @@ def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
               and isinstance(event.get("digest"), str)
               and re.fullmatch(r"[0-9a-f]{64}", event["digest"])
               and canonical_digest(event) == event["digest"]):
+            # Validate the complete versioned event contract in the exact history the sibling claims,
+            # while deliberately omitting only joins to private usage/history receipts that an issue
+            # comment export cannot possess. A digest-valid object missing `actor` (or any other v1
+            # field) is malformed authority, never rejected-fork evidence.
+            validate_lines(canonical[:revision - 1] + [event], run_id, unit_id,
+                           verify_external_evidence=False)
             # GitHub assigns comment ids from one server-side total order. If two writers seal the same
             # predecessor concurrently, the lower comment id deterministically wins and every later
             # sibling is preserved as rejected audit evidence rather than corrupting the exported chain.
@@ -567,6 +580,7 @@ def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
     if rejected_forks:
         print("lifecycle-log: ignored deterministic fork loser comment id(s): "
               + ", ".join(str(value) for value in rejected_forks), file=sys.stderr)
+    validate_lines(canonical, run_id, unit_id, verify_external_evidence=False)
     return canonical
 
 
@@ -697,7 +711,10 @@ def self_test() -> None:
         alternate_history = copy.deepcopy(fork)
         alternate_history["previous_digest"] = "e" * 64
         alternate_history["digest"] = canonical_digest(alternate_history)
-        for invalid_fork in (bad_digest, alternate_history):
+        missing_actor = copy.deepcopy(fork)
+        del missing_actor["actor"]
+        missing_actor["digest"] = canonical_digest(missing_actor)
+        for invalid_fork in (bad_digest, alternate_history, missing_actor):
             invalid_body = "<!-- fsgg:item-lifecycle/v1 -->\n```json\n" + json.dumps(invalid_fork, sort_keys=True, separators=(",", ":")) + "\n```\n"
             invalid_comment = {"id": 2, "created_at": "2026-09-04T08:00:01Z",
                                "updated_at": "2026-09-04T08:00:01Z", "body": invalid_body}
