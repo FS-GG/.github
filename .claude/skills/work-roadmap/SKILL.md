@@ -47,6 +47,23 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
    cross-cycle critique and feedback roll-ups; a report that omits a cycle, critique disposition, or
    checkpoint disposition cannot finish.
 
+## Lifecycle log
+
+Create the item's tracked append-only lifecycle log before its first phase transition and append every
+phase start, completion, block, and resume. Include numbered critique/repair rounds, guarded landing,
+protected-main verification, receipt/projection, and cleanup as distinct phases. Validate the log at each
+worker/critic handoff, before host acceptance, before cycle completion, and in the final cross-cycle
+roll-up. A missing phase, sequence gap, invalid transition, or unresolved active phase fails closed.
+
+Record the exact provider/model variant and effort used for each phase and authoritative input, cached
+input, cache-write input, output, reasoning, and total token usage. Token accounting is reconciled after
+the response finishes from the runtime session record or stable provider response; a terminal phase may
+not turn a temporarily unavailable in-turn counter into permanent `unavailable`. When a runtime truly
+provides no authoritative record, retain the concrete host/source reason; never infer or estimate.
+Durations and historical averages are derived from recorded UTC timestamps and prior duration evidence,
+using only whole discrete minutes. Read [lifecycle-log](references/lifecycle-log.md) for the canonical path,
+schema, transition rules, token accounting, and exact validation command.
+
 ## Status position line
 
 Every intermediate roadmap-driver, worker, or critic-handoff status reply must start with:

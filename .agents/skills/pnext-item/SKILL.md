@@ -11,6 +11,21 @@ Run exactly one item from claim through verified done. The protocol is
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
+## Lifecycle ledger
+
+Create the item's tracked append-only lifecycle ledger before the first claim transition and keep it
+through verified done. Record every phase boundary, its whole-minute duration and historical average,
+the exact provider/model/variant and effort, and authoritative token usage. Token accounting is a
+post-response operation: reconcile the completed runtime turn from its local session record or stable
+provider response before closing the corresponding phase; never estimate from visible text or a context
+window. Each critic and recovery worker records its own runtime identity and usage rather than assigning
+it to the implementer.
+
+Read [lifecycle-ledger](references/lifecycle-ledger.md) for the canonical normal-item path, the roadmap
+extension, Codex and Claude collection rules, schema, and validation commands. Validate at every handoff,
+before host acceptance, and again with `--require-terminal` before the done stamp. The ledger is part of
+the item evidence in every FS.GG repository; it is not limited to roadmap-driven work.
+
 ## 0. Establish identity
 
 Each concurrent worker needs a freshly minted identity:
