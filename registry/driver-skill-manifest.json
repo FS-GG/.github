@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "136e3dd012779c1480724303875e6bc0986f257edccb3e432434424717c0fd99",
-      "tree-sha256": "992c248517d4bbd0b42e4cba36c48b7bba6d60b443a78d844d14abab3d1ca318",
+      "sha256": "c5d94ca36e32c3891f42e0d3c0d8b76e766aa84681fb556d31d2772fbd49327f",
+      "tree-sha256": "350904f0b05297d75eabfe7bd4726144a0717b83fb4a9f1e9c56628938f2b93d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "136e3dd012779c1480724303875e6bc0986f257edccb3e432434424717c0fd99",
+          "sha256": "c5d94ca36e32c3891f42e0d3c0d8b76e766aa84681fb556d31d2772fbd49327f",
           "executable": false
         },
         {
@@ -38,8 +38,18 @@
           "executable": false
         },
         {
+          "path": "references/lifecycle-log.md",
+          "sha256": "b65865cd9a612acd554cddf3b1622d1229aac698a8f5928f8af0f660717f99f6",
+          "executable": false
+        },
+        {
           "path": "references/roadmap-ledger.md",
           "sha256": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679",
+          "executable": false
+        },
+        {
+          "path": "scripts/collect-runtime-usage.py",
+          "sha256": "1b93f1033f33e744c39e02e51fe7a6cb4b53dc8e91800210643ccf91c2823a0d",
           "executable": false
         },
         {
@@ -50,6 +60,11 @@
         {
           "path": "scripts/validate-feedback-state.py",
           "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
+          "executable": false
+        },
+        {
+          "path": "scripts/validate-lifecycle-log.py",
+          "sha256": "52215bb44d88abbbdf92844dcec52cb66989845276b455d24e99d73a717dd02c",
           "executable": false
         }
       ],

@@ -127,11 +127,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "70c6c1f376a555dfb2ef9a23299ffba352d90e6cbfd538e0ed56b9108057d0b5",
+      "tree-sha256": "81c49b678f90e2150f76ccca6461bfee5fe7e1ae67a76ca7a3cd4d1df2a74563",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "741ad88e18e085a1617511d8a2d8cfbf87fc5dd4ee0d4b44d6233ceb3d7d5b67",
+          "sha256": "a85a98609fa983ddf1c195b1360586e9f4e7cf347aabc871338cf10e5dc571e7",
           "executable": false
         },
         {
@@ -165,6 +165,11 @@
           "executable": false
         },
         {
+          "path": "references/lifecycle-ledger.md",
+          "sha256": "4f401c6bfc3ee2fcbabe3e37f815f8d2bcdd1672f37791a258066e8c3d9b2483",
+          "executable": false
+        },
+        {
           "path": "references/measurement-discipline.md",
           "sha256": "af7105588c099794872378bc8ec07cc48a54e71d63c16815c62e0b02659eb092",
           "executable": false
@@ -177,6 +182,16 @@
         {
           "path": "references/performance-first.md",
           "sha256": "323937cc50305259a1b93f1b67c035206af64a658a3f845eaca31f6db5c96529",
+          "executable": false
+        },
+        {
+          "path": "scripts/collect-runtime-usage.py",
+          "sha256": "1b93f1033f33e744c39e02e51fe7a6cb4b53dc8e91800210643ccf91c2823a0d",
+          "executable": false
+        },
+        {
+          "path": "scripts/validate-lifecycle-log.py",
+          "sha256": "52215bb44d88abbbdf92844dcec52cb66989845276b455d24e99d73a717dd02c",
           "executable": false
         }
       ]

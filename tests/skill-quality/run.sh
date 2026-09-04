@@ -57,6 +57,11 @@ python3 "$ROOT/tests/skill-quality/recency-comment-edit.py"
 python3 "$ROOT/tests/skill-quality/analyst-dispatch.py"
 python3 "$ROOT/tests/skill-quality/validated-intake-filing.py"
 python3 "$ROOT/tests/skill-quality/test-report-roadmap-health.py"
+python3 "$ROOT/tests/skill-quality/lifecycle-append-authority.py"
+python3 "$ROOT/.agents/skills/work-roadmap/scripts/validate-lifecycle-log.py" --self-test
+python3 "$ROOT/.agents/skills/work-roadmap/scripts/collect-runtime-usage.py" --self-test
+python3 "$ROOT/.agents/skills/pnext-item/scripts/validate-lifecycle-log.py" --self-test
+python3 "$ROOT/.agents/skills/pnext-item/scripts/collect-runtime-usage.py" --self-test
 
 # .github#2666 — a gate nothing invokes is graded NOT_MEASURED at best. Each gate above asserts its
 # own workflow path filter, but the workflow only ever runs THIS file, so a gate dropped from the

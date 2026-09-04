@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.79.0 — repository-policy-aware guarded delivery.
+    <PackageReleaseNotes>0.80.0 — version-qualified item lifecycle telemetry.
 
-Delivery now observes each repository's enabled squash, rebase, and merge capabilities before a
-guarded landing, deterministically selects squash then rebase then merge, and sends that explicit
-method with the exact accepted head. Unreadable, incomplete, or all-disabled policy refuses before
-any merge write. This closes the squash-only HTTP 405 class tracked by .github#3091.
+The packed pnext-item and work-roadmap skills now record every normal FS.GG item and roadmap phase in
+an externally durable digest chain, with discrete durations, exact model/effort, runtime, coordination,
+SDD and contracts versions, and authoritative token reconciliation. Raw runtime files remain private;
+stable content digests provide public provenance. Candidate branches no longer attempt to attest future
+review, merge, protected-main, projection, or cleanup facts from inside their own exact head.
 
 $(FsggStandingAdvisories)
 

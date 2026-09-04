@@ -11,6 +11,28 @@ Run exactly one item from claim through verified done. The protocol is
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
+## Lifecycle ledger
+
+Create the item's externally durable append-only lifecycle ledger on the canonical GitHub issue before
+the first claim transition and keep it through verified done. Record every phase boundary, its whole-minute duration and historical average,
+the exact provider/model/variant and effort, authoritative token usage, and the runtime, coordination,
+SDD CLI/contracts, and ledger-schema versions that make comparisons meaningful. Token accounting is a
+post-response operation: reconcile the completed runtime turn from its local session record or stable
+provider response before closing the corresponding phase; never estimate from visible text or a context
+window. Freeze one private usage receipt per phase when cited; never append later phases to it. Each critic and recovery worker records its own runtime identity and usage rather than assigning
+it to the implementer.
+
+Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,
+projection, and cleanup facts do not exist until after that candidate head was reviewed, so appending them
+to the candidate creates an unsatisfiable exact-head loop. Repository `logs/` files are immutable exported
+snapshots only and never gate the PR that carries them. Keep raw per-response usage reports private and
+untracked; only phase aggregates and stable receipt digests enter the public issue ledger.
+
+Read [lifecycle-ledger](references/lifecycle-ledger.md) for the canonical issue-comment authority, optional
+snapshot paths, Codex and Claude collection rules, schema, and validation commands. Validate at every handoff,
+before host acceptance, and again with `--require-terminal` before the done stamp. The ledger is part of
+the item evidence in every FS.GG repository; it is not limited to roadmap-driven work.
+
 ## 0. Establish identity
 
 Each concurrent worker needs a freshly minted identity:

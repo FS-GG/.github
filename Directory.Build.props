@@ -500,8 +500,13 @@
   <!-- 0.78.0 to 0.78.1: mandatory post-merge patch bump and local pack after the
        documentation-only orchestration visualization design in PR #3138. No package behavior
        changes; the fresh identity belongs to the required post-merge verification artifacts. -->
+  <!-- 0.79.0 -> 0.80.0 (.github#3189): MINOR on the stable 0.x line. The packed pnext-item and
+       work-roadmap skills add receiver-visible lifecycle telemetry for every normal FS.GG item and
+       roadmap unit: digest-chained external phase authority, exact runtime/model/toolchain versions,
+       discrete durations, and authoritative token reconciliation. Candidate heads no longer attempt
+       to contain future review/merge facts; immutable repository logs are projections only. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.79.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.80.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

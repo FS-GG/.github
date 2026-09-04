@@ -47,6 +47,31 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
    cross-cycle critique and feedback roll-ups; a report that omits a cycle, critique disposition, or
    checkpoint disposition cannot finish.
 
+## Lifecycle log
+
+Create the item's externally durable, digest-chained lifecycle log on its canonical GitHub issue before its first phase transition and append every
+phase start, completion, block, and resume. Include numbered critique/repair rounds, guarded landing,
+protected-main verification, receipt/projection, and cleanup as distinct phases. Validate the log at each
+worker/critic handoff, before host acceptance, before cycle completion, and in the final cross-cycle
+roll-up. A missing phase, sequence gap, invalid transition, or unresolved active phase fails closed.
+
+The candidate branch must not be the live authority. Later review, merge, protected-main, projection, and
+cleanup events would change the very head they attest and create an infinite review loop. A tracked
+`logs/roadmap/` file is only an immutable export made after the covered interval; it never gates its own
+candidate head. Raw runtime reports remain private and untracked, while public events retain aggregate
+counts plus stable report digests and runtime identifiers.
+
+Record the exact provider/model variant and effort plus runtime, coordination, SDD CLI/contracts, and
+ledger-schema versions for each phase, alongside authoritative input, cached
+input, cache-write input, output, reasoning, and total token usage. Token accounting is reconciled after
+the response finishes from the runtime session record or stable provider response; a terminal phase may
+not turn a temporarily unavailable in-turn counter into permanent `unavailable`. When a runtime truly
+provides no authoritative record, retain the concrete host/source reason; never infer or estimate. Freeze
+one immutable private usage receipt per phase when cited so later appends cannot invalidate prior events.
+Durations and historical averages are derived from recorded UTC timestamps and comparable prior duration
+evidence with the same tooling fingerprint, using only whole discrete minutes. Read [lifecycle-log](references/lifecycle-log.md) for the canonical path,
+schema, transition rules, token accounting, and exact validation command.
+
 ## Status position line
 
 Every intermediate roadmap-driver, worker, or critic-handoff status reply must start with:

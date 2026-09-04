@@ -18,12 +18,47 @@ let private ok body =
           NextLink = None
           Headers = Map.empty }
 
+let private paginated body =
+    Ok
+        { Status = 200
+          Body = body
+          ETag = None
+          // `HttpTransport.Send` preserves page one's link after it has followed and merged every page.
+          NextLink = Some "https://example.test/comments?page=2"
+          Headers = Map.empty }
+
 let private comment id body =
     JsonSerializer.Serialize(
         [| {| id = id
               html_url = $"https://example.test/comments/%d{id}"
               body = body |} |]
     )
+
+let private comments (values: (int64 * string) list) =
+    values
+    |> List.map (fun (id, body) ->
+        {| id = id
+           html_url = $"https://example.test/comments/%d{id}"
+           body = body |})
+    |> List.toArray
+    |> JsonSerializer.Serialize
+
+let private liveClaim worker =
+    let updatedAt = DateTimeOffset.UtcNow.ToString "O"
+
+    JsonSerializer.Serialize(
+        [| {| id = 9001L
+              body = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld"
+              updated_at = updatedAt |} |]
+    )
+
+let private lifecycleBody run unit revision predecessor =
+    let previous =
+        match predecessor with
+        | Some digest -> $"\"%s{digest}\""
+        | None -> "null"
+
+    $"<!-- fsgg:item-lifecycle/v1 -->\n```json\n{{\"run_id\":\"%s{run}\",\"unit_id\":\"%s{unit}\",\"revision\":%d{revision},\"sequence\":%d{revision},\"previous_digest\":%s{previous}}}\n```\n"
 
 let private context (transport: IGitHubTransport) : Kernel.Context =
     { Transport = transport
@@ -148,6 +183,128 @@ let ``mismatched readback is a refusal rather than a write receipt`` () =
     | Ok receipt -> failwithf "mismatch unexpectedly produced receipt %A" receipt
     | Error(Malformed(_, detail)) -> Assert.Contains("readback mismatch", detail)
     | Error other -> failwithf "unexpected refusal: %A" other
+
+[<Fact>]
+let ``lifecycle create accepts only its server-ordered append-key winner`` () =
+    let worker = "heron-test-lifecycle-winner"
+    let body = lifecycleBody "roadmap-v2" "GS2-01.1" 2 (Some(String.replicate 64 "a"))
+    let source = Path.GetTempFileName()
+    let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+
+    try
+        File.WriteAllText(source, body)
+        Environment.SetEnvironmentVariable("FSGG_WORKER", worker)
+
+        let queue =
+            System.Collections.Generic.Queue<IoResult<Response>>(
+                [ ok (liveClaim worker)
+                  ok "{\"id\":42}"
+                  ok (comment 42L body)
+                  ok (comments [ 42L, body ]) ]
+            )
+
+        let transport = Fake.Recorder(fun _ -> queue.Dequeue())
+        let opts =
+            Options.parse [ "comment"; "create"; ".github#42"; ".github#42"; source; "--json" ]
+            |> Result.defaultWith failwith
+
+        Assert.Equal(0, Handlers.commentCmd (context transport) opts)
+        Assert.Equal(4, transport.RestCalls)
+    finally
+        Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+        File.Delete source
+
+[<Fact>]
+let ``lifecycle create preserves and rejects a later same-key sibling`` () =
+    let worker = "heron-test-lifecycle-loser"
+    let body = lifecycleBody "roadmap-v2" "GS2-01.1" 2 (Some(String.replicate 64 "a"))
+    let source = Path.GetTempFileName()
+    let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+    let stdout = Console.Out
+    let stderr = Console.Error
+
+    try
+        File.WriteAllText(source, body)
+        Environment.SetEnvironmentVariable("FSGG_WORKER", worker)
+
+        let queue =
+            System.Collections.Generic.Queue<IoResult<Response>>(
+                [ ok (liveClaim worker)
+                  ok "{\"id\":42}"
+                  ok (comment 42L body)
+                  ok (comments [ 41L, body; 42L, body ]) ]
+            )
+
+        let transport = Fake.Recorder(fun _ -> queue.Dequeue())
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+        Console.SetOut capturedOut
+        Console.SetError capturedErr
+
+        let opts =
+            Options.parse [ "comment"; "create"; ".github#42"; ".github#42"; source; "--json" ]
+            |> Result.defaultWith failwith
+
+        Assert.Equal(1, Handlers.commentCmd (context transport) opts)
+        Assert.Empty(capturedOut.ToString())
+        Assert.Contains("server-ordered winner is comment 41", capturedErr.ToString())
+        Assert.Contains("submitted comment 42 is preserved rejected-fork evidence", capturedErr.ToString())
+        Assert.Equal(4, transport.RestCalls)
+    finally
+        Console.SetOut stdout
+        Console.SetError stderr
+        Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+        File.Delete source
+
+[<Fact>]
+let ``lifecycle election sees a same-key competitor beyond one merged page`` () =
+    let worker = "heron-test-lifecycle-paginated"
+    let body = lifecycleBody "roadmap-v2" "GS2-01.1" 2 (Some(String.replicate 64 "a"))
+    let source = Path.GetTempFileName()
+    let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+    let stdout = Console.Out
+    let stderr = Console.Error
+
+    try
+        File.WriteAllText(source, body)
+        Environment.SetEnvironmentVariable("FSGG_WORKER", worker)
+
+        let unrelated =
+            [ 1L..100L ]
+            |> List.map (fun id -> id, $"ordinary comment %d{id}")
+
+        // The competitor is deliberately element 101, beyond GitHub's requested page size. The fake
+        // response has the same already-merged shape `HttpTransport.Send` supplies and retains the
+        // first page's NextLink, so this test fails if the election truncates that transport contract.
+        let merged = unrelated @ [ 101L, body; 200L, body ]
+        let queue =
+            System.Collections.Generic.Queue<IoResult<Response>>(
+                [ ok (liveClaim worker)
+                  ok "{\"id\":200}"
+                  ok (comment 200L body)
+                  paginated (comments merged) ]
+            )
+
+        let transport = Fake.Recorder(fun _ -> queue.Dequeue())
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+        Console.SetOut capturedOut
+        Console.SetError capturedErr
+
+        let opts =
+            Options.parse [ "comment"; "create"; ".github#42"; ".github#42"; source; "--json" ]
+            |> Result.defaultWith failwith
+
+        Assert.Equal(1, Handlers.commentCmd (context transport) opts)
+        Assert.Empty(capturedOut.ToString())
+        Assert.Contains("server-ordered winner is comment 101", capturedErr.ToString())
+        Assert.Contains("submitted comment 200 is preserved rejected-fork evidence", capturedErr.ToString())
+        Assert.Equal(4, transport.RestCalls)
+    finally
+        Console.SetOut stdout
+        Console.SetError stderr
+        Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+        File.Delete source
 
 [<Fact>]
 let ``missing source refuses before transport or capability allocation`` () =
