@@ -1,0 +1,105 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-1-event-envelope",
+  "milestone": "M7 — GS2-07.1 event envelope and cursor",
+  "critic": "snipe-1dce",
+  "initial_reviewed_commit": "8067301d179837a2cb64cc12fc729dd79aa7344d",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "8067301d179837a2cb64cc12fc729dd79aa7344d",
+    "b05804181117736dbcf47cf77ad0b130637b8105"
+  ],
+  "findings": [
+    {
+      "id": "GS2-07.1-C1-F01",
+      "severity": "blocker",
+      "summary": "Verification accepted structurally tampered envelopes and silently normalized schema, order, and duplicate changes.",
+      "evidence": [
+        "Verification: exact-head probes against 8067301 showed verify returning Ok after schema mutation, delivery reversal, and duplicate append; durable review comment 5536232071 records the changes-required verdict."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 compares schema and exact canonical delivery structure before seal acceptance; unit negative cases and direct probes reject all three mutations."
+      ]
+    },
+    {
+      "id": "GS2-07.1-C1-F02",
+      "severity": "major",
+      "summary": "Subject, causation, and correlation relationships were not enforced as one coherent event chain.",
+      "evidence": [
+        "Verification: direct 8067301 probes accepted cross-subject input, dangling causation event-999, and a changed correlation within one chain."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 enforces one subject, prior-event causation, and stable correlation; exact-head adversarial probes return typed refusals."
+      ]
+    },
+    {
+      "id": "GS2-07.1-C1-F03",
+      "severity": "major",
+      "summary": "Distinct deliveries could reuse one receipt identity without a conflict.",
+      "evidence": [
+        "Verification: candidate 8067301 grouped delivery, event, and cursor conflicts but accepted a second delivery carrying the first receipt ID."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 rejects conflicting receipt reuse and the exact-head reuse probe returns ReceiptMismatch."
+      ]
+    },
+    {
+      "id": "GS2-07.1-C1-F04",
+      "severity": "major",
+      "summary": "Unframed cursor concatenation aliased delimiter-bearing delivery and event identities.",
+      "evidence": [
+        "Verification: candidate 8067301 produced the same public cursor for delivery/event pairs a:b+c and a+b:c."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 length-frames every cursor component; the delimiter-bearing identities now produce distinct cursors."
+      ]
+    },
+    {
+      "id": "GS2-07.1-C1-F05",
+      "severity": "major",
+      "summary": "The nominally independent controls shared the generated executor and did not independently establish the adversarial contract.",
+      "evidence": [
+        "Verification: the initial Q3 path used the generated control switch, baseline, and implementation for both retained inventories."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 has separate generated and independently authored executors, distinct retained 22-case inventories, and Q3 passed all controls."
+      ]
+    },
+    {
+      "id": "GS2-07.1-C1-F06",
+      "severity": "major",
+      "summary": "The initial SDD handoff was not reproducible from a clean exact checkout and reused one focused artifact for unrelated build and suite claims.",
+      "evidence": [
+        "Verification: the initial branch omitted required SDD provider files and did not retain distinct build, Q3, focused, unit, and architecture evidence artifacts."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: candidate b058041 tracks the complete provider package and distinct evidence files; clean detached verify→ship fixed points passed with 208 unit and 492 architecture tests."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "b05804181117736dbcf47cf77ad0b130637b8105",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
