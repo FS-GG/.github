@@ -49,28 +49,30 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 
 ## Status position line
 
-Every intermediate status reply from the roadmap driver, worker, or critic handoff must include one
-compact, ordered process-position line. Keep the line current as the lifecycle advances and use these
-portable color markers:
+Every intermediate roadmap-driver, worker, or critic-handoff status reply must start with:
+
+`Roadmap item: **<unit-id> — <name>** · GitHub: <linked owner/repo#number>`
+
+Make the issue label a Markdown hyperlink to its canonical GitHub issue URL.
+
+Follow it with one current, compact, ordered process-position line using:
 
 - `✅` completed
 - `🟢` active (exactly one while work is progressing)
 - `⚪` pending
 - `🔴` blocked (and no `🟢` while blocked)
 
-Name the numbered repair round when a repair is active. Every completed step must show both its actual
-duration and the historical average for the same canonical step. The active step must show elapsed
-time so far. Express every duration as a whole, discrete number of minutes: floor active elapsed time;
-round a completed duration and an arithmetic historical average to the nearest minute. Compute the
-average from prior completed occurrences in the current roadmap run, excluding the current occurrence;
-use `avg n/a` when no prior observation exists. Derive durations from recorded lifecycle timestamps;
-never invent timing evidence.
+Name active repair rounds. Show each completed step's actual duration and historical average for that
+canonical step; show active elapsed time. Use only whole minutes: floor active elapsed; round completed
+actuals and arithmetic averages to nearest. Average prior completed occurrences in this roadmap run,
+excluding the current one; use `avg n/a` without a prior observation. Use recorded lifecycle timestamps,
+never invented timing evidence. Give each concurrently reported item its own header and position line.
 
 Example:
 
 `✅ Intake (actual 2 min · avg 3 min) → ✅ Claim (actual 1 min · avg n/a) → 🟢 Repair round 3 (active · elapsed 4 min) → ⚪ Host acceptance → ⚪ Guarded merge`
 
-This line complements the prose and evidence summary; it does not replace either one.
+The header and line complement, not replace, prose and evidence.
 
 Milestones are sequential unless the roadmap explicitly establishes disjoint parallel milestones and
 the user authorized parallel execution. Load [host-loop](references/host-loop.md) for shared
