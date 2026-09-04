@@ -86,6 +86,19 @@ module CycleLedgerApplication =
             invalidArg "artifactPath" "must resolve beneath rootPath"
         relative.Replace(Path.DirectorySeparatorChar, '/')
 
+    let private trustedValidator fileName expectedDigest =
+        let path = Path.Combine(AppContext.BaseDirectory, "provider-validators", fileName)
+        if not (File.Exists path) then
+            invalidOp $"trusted provider validator is missing beside the engine: %s{fileName}"
+        let digest =
+            File.ReadAllBytes path
+            |> Security.Cryptography.SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+        if digest <> expectedDigest then
+            invalidOp $"trusted provider validator identity is unsupported: %s{fileName} sha256:%s{digest}"
+        path
+
     // `FS.GG.SDD.Cli verify --dry-run` `toolVersion` identities this engine has explicitly vetted
     // against the #2133 provider-authority contract (validator identity must come from the engine,
     // never from the artifact or its caller). Adding a version here is a deliberate, reviewed act:
@@ -119,20 +132,14 @@ module CycleLedgerApplication =
             if not (bool "coherent" result) || text "outcome" result <> "noChange" then
                 invalidArg "artifactPath" "fsgg-sdd verify did not confirm a coherent, byte-current provider view"
         | "critique" ->
-            let expected = $"reviews/roadmap/%s{expectedIdentity}.json"
-            if relative <> expected then invalidArg "artifactPath" $"critique artifact must be %s{expected}"
-            match CritiqueReceipt.validate expectedIdentity None (File.ReadAllBytes(Path.Combine(root, relative))) with
-            | Ok _ -> ()
-            | Error errors -> invalidArg "artifactPath" (String.concat "; " errors)
+            let script = trustedValidator "validate-critique-state.py" "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9"
+            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--artifact"; relative ] |> ignore
         | "feedback" ->
+            let script = trustedValidator "validate-feedback-state.py" "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
             let audit = text "auditPath" node |> relativeArtifact root
             let phases = strings "phases" node
             if List.isEmpty phases || phases |> List.exists String.IsNullOrWhiteSpace then invalidArg "phases" "must contain the exercised feedback phases"
-            let checkpointPath = Path.Combine(root, "feedback", "checkpoints", expectedIdentity + ".jsonl")
-            let checkpoint = if File.Exists checkpointPath then Some(File.ReadAllText checkpointPath) else None
-            match FeedbackReceipt.validate expectedIdentity phases relative (File.ReadAllBytes(Path.Combine(root, relative))) (File.ReadAllBytes(Path.Combine(root, audit))) checkpoint with
-            | Ok _ -> ()
-            | Error errors -> invalidArg "artifactPath" (String.concat "; " errors)
+            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--report"; relative; "--audit"; audit; "--phases"; String.concat "," phases ] |> ignore
         | _ -> invalidArg "provider" $"unsupported provider adapter: %s{provider}"
 
     let private receipt expectedIdentity target source head provider node =

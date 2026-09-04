@@ -1139,3 +1139,17 @@ install is what keeps the composition honest. See the
 > update [`registry/dependencies.yml`](../registry/dependencies.yml) first (the
 > protocol), then this page. See the
 > [coordination protocol](coordination/README.md#system-overview--the-architecture-map).
+
+## Compiled telemetry and bounded roadmap projection
+
+Runtime usage, lifecycle chains, critique/feedback structure, and roadmap acceptance projection are one
+compiled `FS.GG.Coord.Cli` authority. Provider adapters immediately reduce JSON/CSV into closed F# records;
+canonical output exposes content digests and aggregate counters, never source paths or conversation content.
+Lifecycle terminal events join immutable runtime/history receipts before sealing, and GitHub comment ids
+elect concurrent children. Roadmap closure derives heads and outcomes from content-addressed receipt bytes,
+then limits rendering and verification to one marker-bounded unit. Semantic critique, finding disposition,
+exceptions, and merge authorization remain independent judgment boundaries.
+
+Adoption is publish-before-use: release the compiled command family, verify a receiver against those exact
+package bytes, flip both item-process skills together, regenerate Claude projections from `.agents`, and
+only then delete the Python compatibility implementations and references.

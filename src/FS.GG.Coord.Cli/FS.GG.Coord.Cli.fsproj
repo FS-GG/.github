@@ -256,8 +256,14 @@ the standing safety advisories carry forward.
     <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <!-- Provider validators are compiled into this immutable package. Artifact roots remain caller
-         data and can select no executable code (#2133, .github#3208). -->
+    <!-- Stage A keeps the frozen Python provider oracles authoritative until compiled differential
+         parity is accepted. Stage C flips these consumers and deletes the compatibility payload. -->
+    <None Include="../../.agents/skills/work-roadmap/scripts/validate-critique-state.py"
+          Link="provider-validators/validate-critique-state.py"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
+          Link="provider-validators/validate-feedback-state.py"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

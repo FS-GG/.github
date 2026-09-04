@@ -126,7 +126,11 @@ module RuntimeUsage =
                             Ok { Timestamp = timestamp; Task = task; SessionId = session; ThreadId = thread; TurnId = turn; ResponseId = response; Provider = "OpenAI"; Model = model; Effort = effort; RuntimeVersion = runtimeVersion; CoordinationVersion = coordinationVersion; SddVersion = sddVersion; ContractsVersion = contractsVersion; LedgerSchema = 1; Response = usage; Turn = turnUsage; Thread = Some threadUsage; Source = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes }
                         | values -> Error(sprintf "%A" values))
                 let failures = rows |> List.choose (function Error e -> Some e | _ -> None)
-                if failures.IsEmpty then Ok { Rows = rows |> List.choose (function Ok row -> Some row | _ -> None); SourceDigest = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes } else Error failures
+                if not failures.IsEmpty then Error failures else
+                let accepted = rows |> List.choose (function Ok row -> Some row | _ -> None)
+                let identities = accepted |> List.map (fun row -> row.Provider, row.ResponseId)
+                if List.distinct identities <> identities then Error [ "token usage response identity is duplicated" ]
+                else Ok { Rows = accepted; SourceDigest = "codex-session-jsonl:sha256:" + TelemetryJson.sha256 bytes }
         with error -> Error [ error.Message ]
 
     let collectClaude task coordinationVersion sddVersion contractsVersion (bytes: byte array) =
@@ -215,7 +219,10 @@ module RuntimeUsage =
             with error -> Error $"line %d{lineNumber}: %s{error.Message}"
         let parsed = jsonLines.Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.mapi (fun index line -> parse (index + 1) line) |> List.ofArray
         let errors = parsed |> List.choose (function Error reason -> Some reason | _ -> None)
-        if errors.IsEmpty then Ok(parsed |> List.choose (function Ok value -> Some value | _ -> None)) else Error errors
+        if not errors.IsEmpty then Error errors else
+        let rows = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+        let identities = rows |> List.map (fun row -> row.Provider, row.ResponseId)
+        if List.distinct identities <> identities then Error [ "usage report response identity is duplicated" ] else Ok rows
 
     let private csvRecords (text: string) =
         let records = ResizeArray<string list>()
@@ -255,8 +262,14 @@ module RuntimeUsage =
                 records |> List.mapi (fun index values ->
                     if values.Length <> header.Length then Error $"usage report line %d{index + 2} has %d{values.Length} fields; expected %d{header.Length}" else
                     let item = JsonObject()
-                    List.zip header values |> List.iter (fun (name, value) -> item[name] <- if numeric.Contains name && value <> "" then JsonValue.Create(Int64.Parse value) else JsonValue.Create(value))
-                    Ok(TelemetryJson.canonical item))
+                    let mutable error = None
+                    List.zip header values |> List.iter (fun (name, value) ->
+                        if numeric.Contains name && value <> "" then
+                            match Int64.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture) with
+                            | true, parsed -> item[name] <- JsonValue.Create parsed
+                            | _ -> error <- Some $"usage report line %d{index + 2} field %s{name} is not a non-negative integer"
+                        else item[name] <- JsonValue.Create(value))
+                    match error with Some reason -> Error reason | None -> Ok(TelemetryJson.canonical item))
             let errors = json |> List.choose (function Error reason -> Some reason | _ -> None)
             if not errors.IsEmpty then Error errors else
             match parseJsonLines (json |> List.choose (function Ok value -> Some value | _ -> None) |> String.concat "\n") with
@@ -502,19 +515,27 @@ module LifecycleTelemetry =
                 | _ -> ())
             if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
 
-    let sealSuccessor (runId: string) (unitId: string) (existingJsonLines: string) (draftJson: string) =
+    let sealSuccessorWithEvidence (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
         match objects existingJsonLines, objects draftJson with
         | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
-            let current = existing |> List.choose (function Ok value -> Some value | _ -> None)
-            let revision = current.Length + 1
-            draft["sequence"] <- JsonValue.Create revision
-            draft["revision"] <- JsonValue.Create revision
-            draft["previous_digest"] <- match current |> List.tryLast with Some item -> JsonValue.Create(stringAt "digest" item) | None -> null
-            draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
-            draft["digest"] <- JsonValue.Create(digest draft)
-            let rendered = TelemetryJson.canonical draft
-            match validate runId unitId false [] (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+            let suppliedChainFields = [ "sequence"; "revision"; "previous_digest"; "digest" ] |> List.filter draft.ContainsKey
+            if not suppliedChainFields.IsEmpty then
+                let fieldNames = String.concat ", " suppliedChainFields
+                Error [ InvalidEvent(1, $"successor draft must omit chain-owned fields: %s{fieldNames}") ]
+            else
+                let current = existing |> List.choose (function Ok value -> Some value | _ -> None)
+                let revision = current.Length + 1
+                draft["sequence"] <- JsonValue.Create revision
+                draft["revision"] <- JsonValue.Create revision
+                draft["previous_digest"] <- match current |> List.tryLast with Some item -> JsonValue.Create(stringAt "digest" item) | None -> null
+                draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
+                draft["digest"] <- JsonValue.Create(digest draft)
+                let rendered = TelemetryJson.canonical draft
+                match validateWithEvidence runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
         | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
+
+    let sealSuccessor runId unitId existingJsonLines draftJson =
+        sealSuccessorWithEvidence runId unitId [] [] existingJsonLines draftJson
 
     let exportComments (runId: string) (unitId: string) (commentsJson: string) =
         try
@@ -536,14 +557,29 @@ module LifecycleTelemetry =
                     let event = JsonNode.Parse(matched.Groups[1].Value).AsObject()
                     if stringAt "run_id" event = runId && stringAt "unit_id" event = unitId then Some(id, event) else None) |> List.sortBy fst
             let canonical = ResizeArray<JsonObject>()
+            let canonicalCommentIds = ResizeArray<int64>()
             let rejected = ResizeArray<Finding>()
             let mutable previous: string option = None
             for id, event in candidates do
+                if id <= 0L then raise (FormatException("GitHub lifecycle comment has no positive numeric id"))
                 let expected = canonical.Count + 1
                 let predecessor = match event["previous_digest"] with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value -> Some(value.GetValue<string>())
-                if intAt "sequence" event = expected && intAt "revision" event = expected && predecessor = previous then canonical.Add event; previous <- Some(stringAt "digest" event)
-                elif intAt "sequence" event < expected && intAt "sequence" event = intAt "revision" event then rejected.Add(RejectedFork(0L, id))
+                if intAt "sequence" event = expected && intAt "revision" event = expected && predecessor = previous then
+                    canonical.Add event
+                    canonicalCommentIds.Add id
+                    previous <- Some(stringAt "digest" event)
+                elif intAt "sequence" event >= 1 && intAt "sequence" event < expected && intAt "sequence" event = intAt "revision" event then
+                    let revision = intAt "revision" event
+                    let claimedPredecessor = if revision = 1 then None else Some(stringAt "digest" canonical[revision - 2])
+                    let claimedDigest = stringAt "digest" event
+                    if predecessor <> claimedPredecessor || not (Regex.IsMatch(claimedDigest, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant)) || digest event <> claimedDigest then
+                        raise (FormatException($"comment %d{id} is not a digest-valid sibling of canonical revision %d{revision}"))
+                    let claimedHistory = [ yield! canonical |> Seq.take (revision - 1) |> Seq.map TelemetryJson.canonical; TelemetryJson.canonical event ] |> String.concat "\n"
+                    match validate runId unitId false [] claimedHistory with
+                    | Error errors -> raise (FormatException($"comment %d{id} is not a valid lifecycle sibling: %A{errors}"))
+                    | Ok _ -> rejected.Add(RejectedFork(canonicalCommentIds[revision - 1], id))
                 else raise (FormatException($"comment %d{id} does not extend canonical revision %d{expected - 1}"))
+            if canonical.Count = 0 then raise (FormatException("GitHub comment export contains no matching lifecycle events"))
             let rendered = canonical |> Seq.map TelemetryJson.canonical |> String.concat "\n" |> fun value -> if value = "" then value else value + "\n"
             match validate runId unitId false [] rendered with Ok _ -> Ok(rendered, List.ofSeq rejected) | Error errors -> Error errors
         with
@@ -586,6 +622,7 @@ module CritiqueReceipt =
             let stringValue (item: JsonElement) = if item.ValueKind = JsonValueKind.String then item.GetString() else ""
             let nonempty (item: JsonElement) = not (String.IsNullOrWhiteSpace(stringValue item))
             let strings (item: JsonElement) = item.ValueKind = JsonValueKind.Array && item.EnumerateArray() |> Seq.forall nonempty
+            let nonemptyStrings (item: JsonElement) = strings item && item.GetArrayLength() > 0
             let sha (value: string) = Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
             let schema = if has "schema_version" && (value "schema_version").ValueKind = JsonValueKind.Number then (value "schema_version").GetInt32() else -1
             let cycle = stringValue (value "cycle_id")
@@ -629,9 +666,10 @@ module CritiqueReceipt =
                     if stringValue (field "entry_point") <> "product-boot" then errors.Add($"%s{prefix}.entry_point must be product-boot")
                     if stringValue (field "input_surface") <> "player-control-messages" then errors.Add($"%s{prefix}.input_surface must be player-control-messages")
                     if (field "reached").ValueKind <> JsonValueKind.True && (field "reached").ValueKind <> JsonValueKind.False then errors.Add($"%s{prefix}.reached must be a boolean")
-                    if not (strings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be a non-empty string array"))
+                    if not (nonemptyStrings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be a non-empty string array"))
             if game && not notOwnable && (journeys.ValueKind <> JsonValueKind.Array || journeys.GetArrayLength() = 0) then errors.Add "player_journeys must contain an entry for game functionality"
             if not game && journeys.ValueKind = JsonValueKind.Array && journeys.GetArrayLength() <> 0 then errors.Add "player_journeys must be empty when game_functionality is false"
+            if not game && notOwnable then errors.Add "entry_point_not_test_ownable is only meaningful when game_functionality is true"
             if rounds < 0 || rounds > 10 then errors.Add "repair_rounds is outside 0 through 10"
             let reviewed = value "reviewed_commits"
             let reviewedCommits = if reviewed.ValueKind = JsonValueKind.Array then reviewed.EnumerateArray() |> Seq.map stringValue |> List.ofSeq else []
@@ -639,7 +677,7 @@ module CritiqueReceipt =
             if not validChain then errors.Add "reviewed_commits must be a unique ordered lowercase-SHA chain with one commit per repair round"
             if verdict <> "pass" then errors.Add "confirmation verdict is not pass"
             expectedHead |> Option.iter (fun expected -> if head <> expected then errors.Add "confirmation reviewed_commit does not match")
-            if game && not journey then errors.Add "game critique requires a passing product-entry player journey"
+            if game && not notOwnable && not journey then errors.Add "game critique requires a passing product-entry player journey"
             if validChain && head <> List.last reviewedCommits then errors.Add "confirmation.reviewed_commit must equal latest reviewed commit"
             if not (sha head) then errors.Add "confirmation.reviewed_commit must be a lowercase 40-character git SHA"
             let unresolved = confirmationValue "unresolved_blocker_major"
@@ -659,11 +697,11 @@ module CritiqueReceipt =
                     if not (Set.contains severity (Set.ofList [ "blocker"; "major"; "minor" ])) then errors.Add($"%s{prefix}.severity is invalid")
                     if severity = "blocker" || severity = "major" then blockerMajor <- true
                     if not (nonempty (field "summary")) then errors.Add($"%s{prefix}.summary must be non-empty")
-                    if not (strings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be non-empty")
+                    if not (nonemptyStrings (field "evidence")) then errors.Add($"%s{prefix}.evidence must be non-empty")
                     if not (Set.contains disposition (Set.ofList [ "resolved"; "follow-up"; "unresolved" ])) then errors.Add($"%s{prefix}.disposition is invalid")
                     if (severity = "blocker" || severity = "major") && disposition <> "resolved" then errors.Add($"%s{prefix} blocker/major finding must be resolved")
                     if disposition = "resolved" then resolved <- true
-                    if not (strings (field "resolution_evidence")) then errors.Add($"%s{prefix}.resolution_evidence must be non-empty"))
+                    if not (nonemptyStrings (field "resolution_evidence")) then errors.Add($"%s{prefix}.resolution_evidence must be non-empty"))
             if blockerMajor && initialVerdict <> "changes-required" then errors.Add "initial_verdict must be changes-required when blocker/major findings exist"
             if rounds > 0 && initialVerdict <> "changes-required" then errors.Add "initial_verdict must be changes-required when repair_rounds is non-zero"
             if initialVerdict = "changes-required" && not resolved then errors.Add "changes-required must have at least one resolved finding"
@@ -695,11 +733,25 @@ module FeedbackReceipt =
             if auditRoot.GetProperty("auditSchema").GetInt32() <> 1 || auditRoot.GetProperty("report").GetString().Replace('\\', '/') <> reportPath.Replace('\\', '/') || auditRoot.GetProperty("reportSha256").GetString() <> TelemetryJson.sha256 (Encoding.UTF8.GetBytes text) then invalidArg "audit" "does not bind current report"
             let unresolved = auditRoot.GetProperty("findings").EnumerateArray() |> Seq.exists (fun finding -> let status = match finding.TryGetProperty "status" with true, v when v.ValueKind = JsonValueKind.String -> v.GetString() | _ -> "" in status = "incomplete" || status = "unsupported")
             if unresolved then invalidArg "audit" "contains unresolved findings"
-            let actualEvents = checkpointJsonLines |> Option.map (fun lines -> lines.Split('\n') |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.length) |> Option.defaultValue 0
             let reason = field "zero-event reason"
-            if events <> actualEvents then invalidArg "checkpoint" "material event count does not match"
-            if events = 0 && Set.contains (reason.ToLowerInvariant()) (Set.ofList [ ""; "n/a"; "none"; "none observed." ]) then invalidArg "zero-event reason" "must explain why no material event occurred"
-            if events > 0 && not (Set.contains (reason.ToLowerInvariant()) (Set.ofList [ "n/a"; "not applicable" ])) then invalidArg "zero-event reason" "must be n/a for material events"
+            if events = 0 then
+                if checkpointJsonLines.IsSome then invalidArg "checkpoint" "must be absent when material events is zero"
+                if Set.contains (reason.ToLowerInvariant()) (Set.ofList [ ""; "n/a"; "none"; "none observed." ]) then invalidArg "zero-event reason" "must explain why no material event occurred"
+            else
+                let checkpoint = checkpointJsonLines |> Option.defaultWith (fun () -> invalidArg "checkpoint" "is required when material events is non-zero")
+                let normalized = checkpoint.Replace("\r\n", "\n").Replace("\r", "\n")
+                let allLines = normalized.Split('\n')
+                let lines = if allLines.Length > 0 && allLines[allLines.Length - 1] = "" then allLines[..allLines.Length - 2] else allLines
+                if lines.Length = 0 then invalidArg "checkpoint" "must not be empty"
+                lines |> Array.iteri (fun index line ->
+                    if String.IsNullOrWhiteSpace line then invalidArg "checkpoint" $"contains an empty line at %d{index + 1}"
+                    use row = JsonDocument.Parse line
+                    if row.RootElement.ValueKind <> JsonValueKind.Object then invalidArg "checkpoint" $"line %d{index + 1} must be an object"
+                    match row.RootElement.TryGetProperty "cycle" with
+                    | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = expectedCycle -> ()
+                    | _ -> invalidArg "checkpoint" $"line %d{index + 1} does not declare cycle %s{expectedCycle}")
+                if events <> lines.Length then invalidArg "checkpoint" "material event count does not match"
+                if not (Set.contains (reason.ToLowerInvariant()) (Set.ofList [ "n/a"; "not applicable" ])) then invalidArg "zero-event reason" "must be n/a for material events"
             Ok { CycleId = expectedCycle; Phases = phases; MaterialEvents = events; ReportDigest = "sha256:" + TelemetryJson.sha256 (Encoding.UTF8.GetBytes text) }
         with error -> Error [ "feedback artifact is invalid: " + error.Message ]
 
@@ -708,20 +760,129 @@ module RoadmapClosure =
     type Evidence = { UnitId: string; Title: string; RoadmapSourceDigest: string; AcceptedReceiptDigest: string; CandidateHead: string; ImplementationMergeHead: string; AcceptanceMergeHead: string; ReviewHead: string; FeedbackHead: string; CycleId: string; CycleUpdateDigest: string; CritiqueVerdict: string; RepairRounds: int; IssueUrl: string; PullRequestUrl: string; ClaimsRemaining: int; Checks: Check list }
     type ExternalObligation = { Check: string; Owner: string; Reason: string }
     type Closed = { Evidence: Evidence; ExternalObligations: ExternalObligation list }
-    let inspect (evidence: Evidence) =
-        let required (label: string) (value: string) = if String.IsNullOrWhiteSpace value then Some($"%s{label} is required") else None
-        let errors =
-            [ yield! [ "unit id", evidence.UnitId; "title", evidence.Title; "roadmap source digest", evidence.RoadmapSourceDigest; "accepted receipt digest", evidence.AcceptedReceiptDigest; "candidate head", evidence.CandidateHead; "implementation merge head", evidence.ImplementationMergeHead; "acceptance merge head", evidence.AcceptanceMergeHead; "review head", evidence.ReviewHead; "feedback head", evidence.FeedbackHead; "cycle id", evidence.CycleId; "cycle update digest", evidence.CycleUpdateDigest; "issue URL", evidence.IssueUrl; "pull request URL", evidence.PullRequestUrl ] |> List.choose (fun (label, value) -> required label value)
-              if evidence.CandidateHead <> evidence.ReviewHead then yield "review head does not match candidate head"
-              if evidence.AcceptanceMergeHead <> evidence.FeedbackHead then yield "feedback head does not match acceptance merge head"
-              if evidence.CritiqueVerdict <> "pass" then yield "critique verdict is not pass"
-              if evidence.RepairRounds < 0 || evidence.RepairRounds > 10 then yield "repair rounds are outside 0 through 10"
-              if evidence.ClaimsRemaining <> 0 then yield "claim census is not zero"
-              for check in evidence.Checks do if check.Required && not check.Passed then yield $"required check failed: %s{check.Name}" ]
-        if errors.IsEmpty then
-            let obligations = evidence.Checks |> List.choose (fun check -> if not check.Required && not check.Passed then check.Owner |> Option.map (fun owner -> { Check = check.Name; Owner = owner; Reason = "non-required failed check" }) else None)
+    type Inputs =
+        { UnitId: string; Title: string; RoadmapSourceDigest: string
+          AcceptedReceipt: byte array; DeliveryReceipt: byte array; Critique: byte array
+          FeedbackReportPath: string; FeedbackReport: byte array; FeedbackAudit: byte array
+          FeedbackPhases: string list; FeedbackCheckpoint: string option; FeedbackBinding: byte array
+          CycleUpdate: byte array; CheckReceipts: byte array list }
+
+    let private shaPattern = "^[0-9a-f]{64}$"
+    let private headPattern = "^[0-9a-f]{40}$"
+    let private digest bytes = TelemetryJson.sha256 bytes
+    let private nodeAt (name: string) (node: JsonObject) =
+        let mutable value: JsonNode = null
+        if node.TryGetPropertyValue(name, &value) then value else null
+    let private selfReceipt (label: string) (expectedSchema: string) (bytes: byte array) =
+        let node = JsonNode.Parse(bytes).AsObject()
+        let get (name: string) = match nodeAt name node with null -> "" | value when value.GetValueKind() = JsonValueKind.String -> value.GetValue<string>() | _ -> ""
+        if get "schema" <> expectedSchema then Error $"%s{label} schema is not %s{expectedSchema}" else
+        let claimed = get "digest"
+        let clone = node.DeepClone().AsObject()
+        clone.Remove "digest" |> ignore
+        let actual = TelemetryJson.canonical clone |> Encoding.UTF8.GetBytes |> digest
+        if not (Regex.IsMatch(claimed, shaPattern, RegexOptions.CultureInvariant)) || claimed <> actual then Error $"%s{label} self-digest does not bind its canonical bytes"
+        else Ok(node, claimed)
+    let private text (label: string) (name: string) (node: JsonObject) =
+        match nodeAt name node with
+        | null -> Error $"%s{label}.%s{name} is required"
+        | value when value.GetValueKind() = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetValue<string>())) -> Ok(value.GetValue<string>())
+        | _ -> Error $"%s{label}.%s{name} must be a non-empty string"
+    let private integer (label: string) (name: string) (node: JsonObject) =
+        match nodeAt name node with
+        | null -> Error $"%s{label}.%s{name} is required"
+        | value when value.GetValueKind() = JsonValueKind.Number ->
+            try Ok(value.GetValue<int>()) with _ -> Error $"%s{label}.%s{name} must be an integer"
+        | _ -> Error $"%s{label}.%s{name} must be an integer"
+    let private boolean (label: string) (name: string) (node: JsonObject) =
+        match nodeAt name node with
+        | null -> Error $"%s{label}.%s{name} is required"
+        | value when value.GetValueKind() = JsonValueKind.True -> Ok true
+        | value when value.GetValueKind() = JsonValueKind.False -> Ok false
+        | _ -> Error $"%s{label}.%s{name} must be a boolean"
+    let private result (errors: ResizeArray<string>) (label: string) (value: Result<'a, string>) =
+        match value with Ok item -> Some item | Error error -> errors.Add($"%s{label}: %s{error}"); None
+
+    let inspect (inputs: Inputs) =
+        try
+            let errors = ResizeArray<string>()
+            if String.IsNullOrWhiteSpace inputs.UnitId then errors.Add "unit id is required"
+            if String.IsNullOrWhiteSpace inputs.Title then errors.Add "title is required"
+            if not (Regex.IsMatch(inputs.RoadmapSourceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then errors.Add "roadmap source digest must be sha256 content identity"
+
+            let accepted = selfReceipt "accepted receipt" "fsgg.coordination.unit-acceptance/1" inputs.AcceptedReceipt |> result errors "accepted receipt"
+            let delivery = selfReceipt "delivery receipt" "fsgg.roadmap.delivery/1" inputs.DeliveryReceipt |> result errors "delivery receipt"
+            let feedbackBinding = selfReceipt "feedback binding" "fsgg.roadmap.feedback-binding/1" inputs.FeedbackBinding |> result errors "feedback binding"
+            let cycleUpdate = selfReceipt "cycle update" "fsgg.roadmap.cycle-update/1" inputs.CycleUpdate |> result errors "cycle update"
+            let checkNodes = inputs.CheckReceipts |> List.mapi (fun index bytes -> selfReceipt $"check receipt %d{index + 1}" "fsgg.roadmap.check/1" bytes |> result errors $"check receipt %d{index + 1}") |> List.choose id
+
+            let getText label name node = text label name node |> result errors label |> Option.defaultValue ""
+            let getInt label name node = integer label name node |> result errors label |> Option.defaultValue -1
+            let getBool label name node = boolean label name node |> result errors label |> Option.defaultValue false
+            let acceptedNode, acceptedDigest = accepted |> Option.defaultValue (JsonObject(), "")
+            let deliveryNode, _ = delivery |> Option.defaultValue (JsonObject(), "")
+            let feedbackNode, _ = feedbackBinding |> Option.defaultValue (JsonObject(), "")
+            let cycleNode, cycleDigest = cycleUpdate |> Option.defaultValue (JsonObject(), "")
+            let candidate = getText "delivery receipt" "candidateHead" deliveryNode
+            let implementationMerge = getText "delivery receipt" "implementationMergeHead" deliveryNode
+            let acceptanceMerge = getText "delivery receipt" "acceptanceMergeHead" deliveryNode
+            let issueUrl = getText "delivery receipt" "issueUrl" deliveryNode
+            let pullRequestUrl = getText "delivery receipt" "pullRequestUrl" deliveryNode
+            let claimsRemaining = getInt "delivery receipt" "claimsRemaining" deliveryNode
+            let cycleId = getText "cycle update" "cycleId" cycleNode
+            let feedbackHead = getText "feedback binding" "head" feedbackNode
+
+            for label, head in [ "candidate", candidate; "implementation merge", implementationMerge; "acceptance merge", acceptanceMerge; "feedback", feedbackHead ] do
+                if not (Regex.IsMatch(head, headPattern, RegexOptions.CultureInvariant)) then errors.Add($"%s{label} head must be a lowercase 40-character git SHA")
+            if getText "accepted receipt" "unitId" acceptedNode <> inputs.UnitId || getText "accepted receipt" "state" acceptedNode <> "accepted" then errors.Add "accepted receipt does not accept this unit"
+            if getText "accepted receipt" "sourceRevision" acceptedNode <> candidate then errors.Add "accepted receipt source revision does not match candidate head"
+            let hasCandidateArtifact =
+                match nodeAt "artifacts" acceptedNode with
+                | :? JsonArray as artifacts ->
+                    artifacts |> Seq.exists (fun node ->
+                        match node with
+                        | :? JsonObject as artifact ->
+                            match text "artifact" "name" artifact, text "artifact" "sha256" artifact with
+                            | Ok name, Ok hash when Regex.IsMatch(hash, shaPattern, RegexOptions.CultureInvariant) -> name = "implementation-candidate-" + candidate
+                            | _ -> false
+                        | _ -> false)
+                | _ -> false
+            if not hasCandidateArtifact then errors.Add "accepted receipt does not bind the implementation candidate artifact"
+            if getText "delivery receipt" "unitId" deliveryNode <> inputs.UnitId then errors.Add "delivery receipt unit does not match"
+            if claimsRemaining <> 0 then errors.Add "claim census is not zero"
+            if not (Regex.IsMatch(issueUrl, "^https://github.com/[^/]+/[^/]+/issues/[1-9][0-9]*$")) then errors.Add "issue URL is not canonical"
+            if not (Regex.IsMatch(pullRequestUrl, "^https://github.com/[^/]+/[^/]+/pull/[1-9][0-9]*$")) then errors.Add "pull request URL is not canonical"
+
+            let critique = CritiqueReceipt.validate cycleId (Some candidate) inputs.Critique
+            let critiqueReceipt = match critique with Ok value -> Some value | Error values -> errors.AddRange(values |> List.map (fun value -> "critique: " + value)); None
+            let feedback = FeedbackReceipt.validate cycleId inputs.FeedbackPhases inputs.FeedbackReportPath inputs.FeedbackReport inputs.FeedbackAudit inputs.FeedbackCheckpoint
+            if feedback |> Result.isError then match feedback with Error values -> errors.AddRange(values |> List.map (fun value -> "feedback: " + value)) | _ -> ()
+            if getText "feedback binding" "unitId" feedbackNode <> inputs.UnitId || getText "feedback binding" "cycleId" feedbackNode <> cycleId then errors.Add "feedback binding identity does not match unit and cycle"
+            if feedbackHead <> acceptanceMerge then errors.Add "feedback head does not match acceptance merge head"
+            if getText "feedback binding" "reportSha256" feedbackNode <> digest inputs.FeedbackReport || getText "feedback binding" "auditSha256" feedbackNode <> digest inputs.FeedbackAudit then errors.Add "feedback binding does not bind report and audit bytes"
+            if getText "cycle update" "unitId" cycleNode <> inputs.UnitId || getText "cycle update" "head" cycleNode <> acceptanceMerge then errors.Add "cycle update does not bind unit and acceptance merge head"
+
+            let checks =
+                checkNodes |> List.map (fun (node, _) ->
+                    let check = { Name = getText "check receipt" "name" node; Required = getBool "check receipt" "required" node; Passed = getBool "check receipt" "passed" node; Owner = match nodeAt "owner" node with null -> None | value when value.GetValueKind() = JsonValueKind.Null -> None | value when value.GetValueKind() = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetValue<string>())) -> Some(value.GetValue<string>()) | _ -> errors.Add "check receipt owner must be null or a non-empty string"; None }
+                    if getText "check receipt" "unitId" node <> inputs.UnitId || getText "check receipt" "head" node <> acceptanceMerge then errors.Add($"check receipt %s{check.Name} does not bind unit and acceptance merge head")
+                    if check.Required && not check.Passed then errors.Add($"required check failed: %s{check.Name}")
+                    if not check.Required && not check.Passed && check.Owner.IsNone then errors.Add($"failed non-required check has no separate owner: %s{check.Name}")
+                    check)
+            if checks.IsEmpty then errors.Add "at least one content-addressed check receipt is required"
+            if (checks |> List.map _.Name |> List.distinct |> List.length) <> checks.Length then errors.Add "check receipt names must be unique"
+
+            if errors.Count > 0 then Error(List.ofSeq errors) else
+            let review = critiqueReceipt.Value
+            let evidence =
+                { UnitId = inputs.UnitId; Title = inputs.Title; RoadmapSourceDigest = inputs.RoadmapSourceDigest
+                  AcceptedReceiptDigest = "sha256:" + acceptedDigest; CandidateHead = candidate; ImplementationMergeHead = implementationMerge
+                  AcceptanceMergeHead = acceptanceMerge; ReviewHead = review.ReviewedCommit; FeedbackHead = feedbackHead
+                  CycleId = cycleId; CycleUpdateDigest = "sha256:" + cycleDigest; CritiqueVerdict = "pass"; RepairRounds = review.RepairRounds
+                  IssueUrl = issueUrl; PullRequestUrl = pullRequestUrl; ClaimsRemaining = claimsRemaining; Checks = checks }
+            let obligations = checks |> List.choose (fun check -> if not check.Required && not check.Passed then check.Owner |> Option.map (fun owner -> { Check = check.Name; Owner = owner; Reason = "non-required failed check" }) else None)
             Ok { Evidence = evidence; ExternalObligations = obligations }
-        else Error errors
+        with error -> Error [ "roadmap closure evidence is invalid: " + error.Message ]
 
 module RoadmapProjection =
     let private startMarker (id: string) = $"<!-- fsgg:roadmap-unit/%s{id} -->"
@@ -744,8 +905,21 @@ module RoadmapProjection =
     let render (expectedSourceDigest: string) (roadmapBytes: byte array) (closed: RoadmapClosure.Closed) =
         let text = Encoding.UTF8.GetString roadmapBytes
         if sourceDigest roadmapBytes <> expectedSourceDigest || closed.Evidence.RoadmapSourceDigest <> expectedSourceDigest then Error [ "roadmap source digest is stale" ] else
-        match bounds text closed.Evidence.UnitId with Error e -> Error e | Ok(first, last) -> Ok(text.Substring(0, first) + renderBlock closed + text.Substring(last))
-    let verify (expectedSourceDigest: string) (roadmapBytes: byte array) (closed: RoadmapClosure.Closed) =
-        let text = Encoding.UTF8.GetString roadmapBytes
-        if closed.Evidence.RoadmapSourceDigest <> expectedSourceDigest then Error [ "roadmap source digest is stale" ] else
-        match bounds text closed.Evidence.UnitId with Error e -> Error e | Ok(first, last) -> if text.Substring(first, last - first) = renderBlock closed then Ok () else Error [ "roadmap unit block differs from accepted evidence" ]
+        match bounds text closed.Evidence.UnitId with
+        | Error e -> Error e
+        | Ok(first, last) ->
+            let existing = text.Substring(first, last - first)
+            let accepted = renderBlock closed
+            if existing.Contains("- [x]", StringComparison.Ordinal) && existing <> accepted then Error [ "already-checked roadmap unit differs from accepted evidence" ]
+            else Ok(text.Substring(0, first) + accepted + text.Substring(last))
+    let verify (expectedSourceDigest: string) (sourceRoadmapBytes: byte array) (candidateRoadmapBytes: byte array) (closed: RoadmapClosure.Closed) =
+        let sourceText, candidateText = Encoding.UTF8.GetString sourceRoadmapBytes, Encoding.UTF8.GetString candidateRoadmapBytes
+        if sourceDigest sourceRoadmapBytes <> expectedSourceDigest || closed.Evidence.RoadmapSourceDigest <> expectedSourceDigest then Error [ "roadmap source digest is stale" ] else
+        match bounds sourceText closed.Evidence.UnitId, bounds candidateText closed.Evidence.UnitId with
+        | Error e, _ | _, Error e -> Error e
+        | Ok(sourceFirst, sourceLast), Ok(candidateFirst, candidateLast) ->
+            let sourcePrefix, sourceSuffix = sourceText.Substring(0, sourceFirst), sourceText.Substring(sourceLast)
+            let candidatePrefix, candidateSuffix = candidateText.Substring(0, candidateFirst), candidateText.Substring(candidateLast)
+            if sourcePrefix <> candidatePrefix || sourceSuffix <> candidateSuffix then Error [ "roadmap content outside the bounded unit was modified" ]
+            elif candidateText.Substring(candidateFirst, candidateLast - candidateFirst) <> renderBlock closed then Error [ "roadmap unit block differs from accepted evidence" ]
+            else Ok ()

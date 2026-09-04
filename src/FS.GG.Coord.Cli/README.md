@@ -72,6 +72,26 @@ These are the **engine's**, not the client's — the client translates them.
 
 An unreachable answer is not a negative one. That rule is the whole point.
 
+## Telemetry and roadmap closure (0.81.0)
+
+The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the
+stable runtime-usage CSV (or canonical JSONL), including exact model and coherent tool versions; `--append`
+retains one CSV header and ignores an already-recorded response identity. `telemetry lifecycle
+export-comments|seal-successor|validate` elects GitHub-comment order, seals the SHA-256 chain, and requires
+immutable `--usage` and optional `--history-report` receipts before measured terminal evidence is accepted.
+`telemetry summarize`, `telemetry critique validate`, and `telemetry feedback validate` are read-only.
+
+`roadmap close inspect|render|verify` consumes an evidence manifest whose relative artifact paths bind an
+accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback
+binding, cycle update, and one or more check receipts. Every machine receipt is canonical and self-digested;
+all unit, head, cycle, report, audit, claim, and check identities are joined before rendering. `render`
+prints only a candidate document. `verify` additionally requires `--source-roadmap`, authenticates its
+`--source-digest`, and proves that the candidate changed no bytes outside the marked unit block.
+
+Version 0.81.0 is the publish-before-adopt stage. The packaged Python provider validators remain the frozen
+authority for cycle-ledger consumers until differential parity is accepted. The following coherent release
+flips `work-roadmap` and `pnext-item` to these compiled commands and removes the compatibility helpers.
+
 ## License
 
 MIT

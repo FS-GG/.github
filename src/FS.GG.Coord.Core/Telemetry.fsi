@@ -63,6 +63,7 @@ module LifecycleTelemetry =
           Source: string }
 
     val sealSuccessor: runId: string -> unitId: string -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
+    val sealSuccessorWithEvidence: runId: string -> unitId: string -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
     val validate: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> jsonLines: string -> Result<Validation, Finding list>
     val validateWithEvidence: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
     val parseHistoryCsv: string -> Result<HistoryRow list, string list>
@@ -122,9 +123,24 @@ module RoadmapClosure =
           Checks: Check list }
     type ExternalObligation = { Check: string; Owner: string; Reason: string }
     type Closed = { Evidence: Evidence; ExternalObligations: ExternalObligation list }
-    val inspect: Evidence -> Result<Closed, string list>
+    type Inputs =
+        { UnitId: string
+          Title: string
+          RoadmapSourceDigest: string
+          AcceptedReceipt: byte array
+          DeliveryReceipt: byte array
+          Critique: byte array
+          FeedbackReportPath: string
+          FeedbackReport: byte array
+          FeedbackAudit: byte array
+          FeedbackPhases: string list
+          FeedbackCheckpoint: string option
+          FeedbackBinding: byte array
+          CycleUpdate: byte array
+          CheckReceipts: byte array list }
+    val inspect: Inputs -> Result<Closed, string list>
 
 module RoadmapProjection =
     val renderBlock: RoadmapClosure.Closed -> string
     val render: expectedSourceDigest: string -> roadmapBytes: byte array -> RoadmapClosure.Closed -> Result<string, string list>
-    val verify: expectedSourceDigest: string -> roadmapBytes: byte array -> RoadmapClosure.Closed -> Result<unit, string list>
+    val verify: expectedSourceDigest: string -> sourceRoadmapBytes: byte array -> candidateRoadmapBytes: byte array -> RoadmapClosure.Closed -> Result<unit, string list>

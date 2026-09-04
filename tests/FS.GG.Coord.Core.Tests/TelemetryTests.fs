@@ -11,6 +11,9 @@ module TelemetryTests =
     let private bytes (value: string) = Encoding.UTF8.GetBytes value
     let private sha (value: byte array) = SHA256.HashData value |> Convert.ToHexString |> _.ToLowerInvariant()
     let private unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+    let private sealedReceipt (payload: string) =
+        let digest = sha (bytes payload)
+        bytes (payload[..payload.Length - 2] + $",\"digest\":\"%s{digest}\"}}")
 
     [<Fact>]
     let ``Codex collection preserves stable schema and exact counter arithmetic`` () =
@@ -27,6 +30,8 @@ module TelemetryTests =
         Assert.Equal(2L, result.Rows.Head.Response.Reasoning.Value)
         Assert.StartsWith("codex-session-jsonl:sha256:", result.SourceDigest)
         Assert.StartsWith("timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,runtime_version,coordination_version,sdd_version,contracts_version,ledger_schema", RuntimeUsage.renderCsv result.Rows)
+        let duplicated = RuntimeUsage.renderJsonLines [ result.Rows.Head; result.Rows.Head ]
+        Assert.True(RuntimeUsage.parseJsonLines duplicated |> Result.isError)
 
     [<Fact>]
     let ``Codex collection rejects malformed arithmetic and never exports source paths`` () =
@@ -59,6 +64,9 @@ module TelemetryTests =
         Assert.True(LifecycleTelemetry.validate "run" "unit" false [] sealedStarted |> Result.isOk)
         let pendingCompletion = common "completed" "2026-09-04T08:01:00Z" "1" "{\"status\":\"pending\"}"
         Assert.True(LifecycleTelemetry.sealSuccessor "run" "unit" sealedStarted pendingCompletion |> Result.isError)
+        let invented = common "completed" "2026-09-04T08:01:00Z" "1" "{\"status\":\"measured\",\"input\":1,\"cached_input\":0,\"cache_write_input\":0,\"output\":1,\"reasoning\":0,\"total\":2,\"source\":\"runtime-usage-csv:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"session_ids\":[\"s\"],\"turn_ids\":[\"t\"]}"
+        Assert.True(LifecycleTelemetry.sealSuccessor "run" "unit" sealedStarted invented |> Result.isError)
+        Assert.True(LifecycleTelemetry.sealSuccessor "run" "unit" "" sealedStarted |> Result.isError)
 
     [<Fact>]
     let ``critique and feedback receipts bind current evidence`` () =
@@ -67,6 +75,8 @@ module TelemetryTests =
         let reviewed = CritiqueReceipt.validate "cycle-1" (Some head) (bytes critique) |> unwrap
         Assert.Equal(0, reviewed.RepairRounds)
         Assert.True(CritiqueReceipt.validate "cycle-2" (Some head) (bytes critique) |> Result.isError)
+        let emptyFindingEvidence = critique.Replace("\"findings\":[]", "\"findings\":[{\"id\":\"minor-1\",\"severity\":\"minor\",\"summary\":\"gap\",\"evidence\":[],\"disposition\":\"follow-up\",\"resolution_evidence\":[]}]")
+        Assert.True(CritiqueReceipt.validate "cycle-1" (Some head) (bytes emptyFindingEvidence) |> Result.isError)
 
         let report = """---
 feedbackSchema: 2
@@ -84,38 +94,54 @@ None.
         let audit = $"""{{"auditSchema":1,"report":"feedback/report.md","reportSha256":"%s{digest}","findings":[]}}"""
         let receipt = FeedbackReceipt.validate "cycle-1" [ "claim"; "implementation" ] "feedback/report.md" (bytes report) (bytes audit) None |> unwrap
         Assert.Equal(0, receipt.MaterialEvents)
+        Assert.True(FeedbackReceipt.validate "cycle-1" [ "claim"; "implementation" ] "feedback/report.md" (bytes report) (bytes audit) (Some "not-json-and-wrong-cycle") |> Result.isError)
 
-    let private closure sourceDigest =
-        RoadmapClosure.inspect
-            { UnitId = "GS2-01.1"; Title = "Typed thing"; RoadmapSourceDigest = sourceDigest
-              AcceptedReceiptDigest = "sha256:receipt"; CandidateHead = "candidate"; ImplementationMergeHead = "implementation"
-              AcceptanceMergeHead = "acceptance"; ReviewHead = "candidate"; FeedbackHead = "acceptance"
-              CycleId = "cycle-1"; CycleUpdateDigest = "sha256:update"; CritiqueVerdict = "pass"; RepairRounds = 1
-              IssueUrl = "https://github.com/FS-GG/repo/issues/1"; PullRequestUrl = "https://github.com/FS-GG/repo/pull/2"
-              ClaimsRemaining = 0
-              Checks = [ { Name = "required"; Required = true; Passed = true; Owner = None }
-                         { Name = "unrelated"; Required = false; Passed = false; Owner = Some "FS-GG/other#3" } ] }
-        |> unwrap
+    let private closureInputs sourceDigest =
+        let candidate, implementation, acceptance = String.replicate 40 "a", String.replicate 40 "b", String.replicate 40 "c"
+        let critique = $"""{{"schema_version":3,"cycle_id":"cycle-1","milestone":"GS2-01.1","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}""" |> bytes
+        let report = "---\nfeedbackSchema: 2\ncycle: cycle-1\n---\n## §1 Provenance and confidence\n- **activation:** active\n- **phases:** claim, implementation\n- **material events:** 0\n- **zero-event reason:** all exercised surfaces behaved as expected\n## §2 Findings\nNone.\n" |> bytes
+        let reportHash, auditArtifactHash, contractHash = sha report, String.replicate 64 "d", String.replicate 64 "e"
+        let audit = $"""{{"auditSchema":1,"report":"feedback/report.md","reportSha256":"%s{reportHash}","findings":[]}}""" |> bytes
+        let auditHash = sha audit
+        let accepted = sealedReceipt $"""{{"acceptedAt":"2026-01-01T00:00:00Z","artifacts":[{{"name":"implementation-candidate-%s{candidate}","sha256":"%s{auditArtifactHash}"}}],"schema":"fsgg.coordination.unit-acceptance/1","sourceRevision":"%s{candidate}","state":"accepted","unitContractSha256":"%s{contractHash}","unitId":"GS2-01.1"}}"""
+        let delivery = sealedReceipt $"""{{"acceptanceMergeHead":"%s{acceptance}","candidateHead":"%s{candidate}","claimsRemaining":0,"implementationMergeHead":"%s{implementation}","issueUrl":"https://github.com/FS-GG/repo/issues/1","pullRequestUrl":"https://github.com/FS-GG/repo/pull/2","schema":"fsgg.roadmap.delivery/1","unitId":"GS2-01.1"}}"""
+        let feedbackBinding = sealedReceipt $"""{{"auditSha256":"%s{auditHash}","cycleId":"cycle-1","head":"%s{acceptance}","reportSha256":"%s{reportHash}","schema":"fsgg.roadmap.feedback-binding/1","unitId":"GS2-01.1"}}"""
+        let cycle = sealedReceipt $"""{{"cycleId":"cycle-1","head":"%s{acceptance}","schema":"fsgg.roadmap.cycle-update/1","unitId":"GS2-01.1"}}"""
+        let check = sealedReceipt $"""{{"head":"%s{acceptance}","name":"required","owner":null,"passed":true,"required":true,"schema":"fsgg.roadmap.check/1","unitId":"GS2-01.1"}}"""
+        { UnitId = "GS2-01.1"; Title = "Typed thing"; RoadmapSourceDigest = sourceDigest
+          AcceptedReceipt = accepted; DeliveryReceipt = delivery; Critique = critique
+          FeedbackReportPath = "feedback/report.md"; FeedbackReport = report; FeedbackAudit = audit
+          FeedbackPhases = [ "claim"; "implementation" ]; FeedbackCheckpoint = None; FeedbackBinding = feedbackBinding
+          CycleUpdate = cycle; CheckReceipts = [ check ] } : RoadmapClosure.Inputs
+
+    let private closure sourceDigest = closureInputs sourceDigest |> RoadmapClosure.inspect |> unwrap
 
     [<Fact>]
     let ``roadmap rendering is bounded deterministic and keeps unrelated failures external`` () =
         let original = "before\n<!-- fsgg:roadmap-unit/GS2-01.1 -->\nold\n<!-- /fsgg:roadmap-unit/GS2-01.1 -->\nafter\n"
         let sourceDigest = "sha256:" + sha (bytes original)
         let accepted = closure sourceDigest
-        Assert.Single(accepted.ExternalObligations) |> ignore
+        Assert.Empty(accepted.ExternalObligations)
         let rendered = RoadmapProjection.render sourceDigest (bytes original) accepted |> unwrap
         let renderedAgain = RoadmapProjection.render sourceDigest (bytes original) accepted |> unwrap
         Assert.Equal(rendered, renderedAgain)
         Assert.StartsWith("before\n", rendered)
         Assert.EndsWith("\nafter\n", rendered)
         Assert.Contains("- [x] **GS2-01.1 — Typed thing**", rendered)
+        let tamperedOutside = rendered.Replace("before", "tampered")
+        Assert.True(RoadmapProjection.verify sourceDigest (bytes original) (bytes tamperedOutside) accepted |> Result.isError)
+        Assert.True(RoadmapProjection.verify sourceDigest (bytes original) (bytes rendered) accepted |> Result.isOk)
+        Assert.True(RoadmapProjection.render ("sha256:" + sha (bytes rendered)) (bytes rendered) accepted |> Result.isError)
 
     [<Fact>]
     let ``roadmap closure refuses required failure and ambiguous marker authority`` () =
-        let failed =
-            RoadmapClosure.inspect
-                { (closure "sha256:x").Evidence with Checks = [ { Name = "required"; Required = true; Passed = false; Owner = None } ] }
-        Assert.True(Result.isError failed)
+        let inputs = closureInputs ("sha256:" + String.replicate 64 "a")
+        let tampered = { inputs with AcceptedReceipt = inputs.AcceptedReceipt |> Array.copy }
+        tampered.AcceptedReceipt[10] <- byte 'X'
+        Assert.True(RoadmapClosure.inspect tampered |> Result.isError)
+        let acceptance = String.replicate 40 "c"
+        let ownerless = sealedReceipt $"""{{"head":"%s{acceptance}","name":"unrelated","owner":null,"passed":false,"required":false,"schema":"fsgg.roadmap.check/1","unitId":"GS2-01.1"}}"""
+        Assert.True(RoadmapClosure.inspect { inputs with CheckReceipts = [ ownerless ] } |> Result.isError)
         let ambiguous = "<!-- fsgg:roadmap-unit/GS2-01.1 -->\n<!-- fsgg:roadmap-unit/GS2-01.1 -->\n<!-- /fsgg:roadmap-unit/GS2-01.1 -->"
         let digest = "sha256:" + sha (bytes ambiguous)
         Assert.True(RoadmapProjection.render digest (bytes ambiguous) (closure digest) |> Result.isError)
