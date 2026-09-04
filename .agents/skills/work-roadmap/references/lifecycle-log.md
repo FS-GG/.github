@@ -74,8 +74,10 @@ blocked phase.
 
 GitHub comment ids provide the server-assigned total order. If a legacy or pre-upgrade race left multiple
 children of one predecessor, export deterministically accepts the lowest comment id and reports every later
-sibling on stderr as preserved rejected-fork evidence. Never delete or edit those comments. Once the
-claim-holder write boundary is installed, a second actor cannot create another lifecycle sibling.
+sibling on stderr as preserved rejected-fork evidence. Never delete or edit those comments. Comment
+creation then re-reads the complete live authority and elects the lowest GitHub comment id among the
+same run/unit/revision/predecessor key; it succeeds only for that winner. Thus even concurrent calls by
+the same claim worker have one accepted successor, while every loser remains explicit rejected evidence.
 
 ## Required phases and ownership
 

@@ -30,6 +30,23 @@ def validate(text: str) -> None:
     mutation = command.find("Writes.createVerifiedComment", authorization)
     if authorization < 0 or mutation < 0 or authorization > mutation:
         raise ValueError("comment create can mutate before lifecycle append authorization")
+    election_start = text.find("let private electLifecycleAppend")
+    election_end = text.find("    let private authorizeLifecycleComment", election_start)
+    if election_start < 0 or election_end < 0:
+        raise ValueError("comment handler has no post-create lifecycle append election")
+    election = text[election_start:election_end]
+    election_required = {
+        "complete authoritative reread": "Reads.commentsWithIdentity ctx.Transport",
+        "same append-key competition": "candidate = proposed",
+        "server-id winner": "let winner = List.min candidates",
+        "submitted-id comparison": "winner = receipt.CommentId",
+        "explicit rejected loser": "is preserved rejected-fork evidence",
+    }
+    for label, witness in election_required.items():
+        if witness not in election:
+            raise ValueError(f"lifecycle append election lost {label}")
+    if "Result.bind (electLifecycleAppend ctx item capability.Body)" not in command:
+        raise ValueError("verified lifecycle create does not run the authoritative append election")
 
 
 def main() -> None:
@@ -43,6 +60,12 @@ def main() -> None:
         "marker.Worker.Value = worker.Id",
         "no live claim marker can serialize this lifecycle append",
         "authorizeLifecycleComment ctx opts target item w capability.Body",
+        "Reads.commentsWithIdentity ctx.Transport",
+        "candidate = proposed",
+        "let winner = List.min candidates",
+        "winner = receipt.CommentId",
+        "is preserved rejected-fork evidence",
+        "Result.bind (electLifecycleAppend ctx item capability.Body)",
     ]
     for witness in witnesses:
         try:

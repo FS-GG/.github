@@ -32,7 +32,9 @@ earlier events.
 
 GitHub comment ids are the server-assigned total order. For a legacy or pre-upgrade fork, export accepts
 the lowest-id child of a predecessor and reports every later sibling on stderr as preserved rejected-fork
-evidence. Never edit or delete either comment. The claim-holder-only boundary prevents new siblings.
+evidence. Never edit or delete either comment. After create, the command re-reads complete live authority
+and elects the lowest GitHub comment id for the same run/unit/revision/predecessor key; only that call
+succeeds. Concurrent calls by the same claim worker therefore still yield one accepted successor.
 
 ## Phase events
 

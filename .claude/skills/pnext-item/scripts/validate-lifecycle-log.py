@@ -551,8 +551,13 @@ def export_comments(path: Path, run_id: str, unit_id: str) -> list[object]:
             canonical.append(event)
             previous_digest = digest
             expected += 1
-        elif (isinstance(sequence, int) and not isinstance(sequence, bool) and sequence < expected
-              and isinstance(revision, int) and not isinstance(revision, bool) and revision < expected):
+        elif (isinstance(sequence, int) and not isinstance(sequence, bool)
+              and isinstance(revision, int) and not isinstance(revision, bool)
+              and 1 <= revision == sequence < expected
+              and predecessor == (None if revision == 1 else canonical[revision - 2]["digest"])
+              and isinstance(event.get("digest"), str)
+              and re.fullmatch(r"[0-9a-f]{64}", event["digest"])
+              and canonical_digest(event) == event["digest"]):
             # GitHub assigns comment ids from one server-side total order. If two writers seal the same
             # predecessor concurrently, the lower comment id deterministically wins and every later
             # sibling is preserved as rejected audit evidence rather than corrupting the exported chain.
@@ -687,6 +692,22 @@ def self_test() -> None:
                         "updated_at": "2026-09-04T08:00:01Z", "body": fork_body}
         comment_path.write_text(json.dumps([[fixture_comment, fork_comment]]), encoding="utf-8")
         assert export_comments(comment_path, "roadmap-v2", "GS2-01.1") == [base[0]]
+        bad_digest = copy.deepcopy(fork)
+        bad_digest["digest"] = "f" * 64
+        alternate_history = copy.deepcopy(fork)
+        alternate_history["previous_digest"] = "e" * 64
+        alternate_history["digest"] = canonical_digest(alternate_history)
+        for invalid_fork in (bad_digest, alternate_history):
+            invalid_body = "<!-- fsgg:item-lifecycle/v1 -->\n```json\n" + json.dumps(invalid_fork, sort_keys=True, separators=(",", ":")) + "\n```\n"
+            invalid_comment = {"id": 2, "created_at": "2026-09-04T08:00:01Z",
+                               "updated_at": "2026-09-04T08:00:01Z", "body": invalid_body}
+            comment_path.write_text(json.dumps([[fixture_comment, invalid_comment]]), encoding="utf-8")
+            try:
+                export_comments(comment_path, "roadmap-v2", "GS2-01.1")
+            except InvalidLog:
+                pass
+            else:
+                fail("self-test accepted a rejected fork without exact predecessor/digest provenance")
         fixture_comment["updated_at"] = "2026-09-04T08:01:00Z"
         comment_path.write_text(json.dumps([fixture_comment]), encoding="utf-8")
         try:
