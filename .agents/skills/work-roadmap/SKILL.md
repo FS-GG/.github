@@ -47,6 +47,31 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
    cross-cycle critique and feedback roll-ups; a report that omits a cycle, critique disposition, or
    checkpoint disposition cannot finish.
 
+## Status position line
+
+Every intermediate status reply from the roadmap driver, worker, or critic handoff must include one
+compact, ordered process-position line. Keep the line current as the lifecycle advances and use these
+portable color markers:
+
+- `✅` completed
+- `🟢` active (exactly one while work is progressing)
+- `⚪` pending
+- `🔴` blocked (and no `🟢` while blocked)
+
+Name the numbered repair round when a repair is active. Every completed step must show both its actual
+duration and the historical average for the same canonical step. The active step must show elapsed
+time so far. Express every duration as a whole, discrete number of minutes: floor active elapsed time;
+round a completed duration and an arithmetic historical average to the nearest minute. Compute the
+average from prior completed occurrences in the current roadmap run, excluding the current occurrence;
+use `avg n/a` when no prior observation exists. Derive durations from recorded lifecycle timestamps;
+never invent timing evidence.
+
+Example:
+
+`✅ Intake (actual 2 min · avg 3 min) → ✅ Claim (actual 1 min · avg n/a) → 🟢 Repair round 3 (active · elapsed 4 min) → ⚪ Host acceptance → ⚪ Guarded merge`
+
+This line complements the prose and evidence summary; it does not replace either one.
+
 Milestones are sequential unless the roadmap explicitly establishes disjoint parallel milestones and
 the user authorized parallel execution. Load [host-loop](references/host-loop.md) for shared
 fresh-worker and verification rules and [roadmap-ledger](references/roadmap-ledger.md) for markdown
