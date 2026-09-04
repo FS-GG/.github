@@ -1,20 +1,29 @@
 # Roadmap lifecycle log
 
-Each roadmap item has one tracked append-only JSONL ledger:
+Each roadmap item has one externally durable append-only ledger on its canonical GitHub issue. Every
+event is a `fsgg:item-lifecycle/v1` structured comment posted through the verified `fsgg-coord comment`
+boundary. An optional immutable export uses:
 
 ```text
 logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.jsonl
 ```
 
-Create it when the item begins. Never rewrite, delete, reorder, or renumber accepted entries. Append an
-entry immediately when a phase starts, completes, blocks, or resumes. A status reply is a projection of
+Create it when the item begins. Never edit, delete, reorder, or renumber accepted comments. Append an
+event immediately when a phase starts, completes, blocks, or resumes. A status reply is a projection of
 this ledger; prose is not a substitute for it.
+
+The candidate branch cannot be the live authority: critique, merge, protected-main, projection, and
+cleanup happen after its exact head is fixed, and appending those future facts would invalidate that
+head forever. Tracked JSONL is a later immutable projection under a distinct source-bound item and never
+gates the PR that carries it. Raw request-level usage and machine-local paths remain private/untracked.
 
 ## Event contract
 
 Every line is one JSON object with these fields:
 
 - `schema_version`: integer `1`.
+- `revision`, `previous_digest`, `digest`: contiguous digest chain over canonical event JSON.
+- `authority`: `github_issue_comment`, canonical item subject, and exact claim generation.
 - `run_id`, `unit_id`: lowercase identifiers matching the validator arguments.
 - `item`: `repo`, positive `number`, and exact HTTPS `url` for that issue.
 - `sequence`: positive contiguous integer, starting at `1`.
@@ -37,7 +46,7 @@ Every line is one JSON object with these fields:
 - `actual_minutes`: `null` on `started`/`resumed`; on `blocked`/`completed`, elapsed wall time from the
   phase's first `started` event, rounded to the nearest whole minute.
 - `historical_durations_minutes`: empty on non-`completed` events; on `completed`, the prior completed
-  durations used for the same canonical phase across this roadmap run.
+  durations supplied by a validated history report for the same canonical phase and tooling fingerprint.
 - `historical_average_minutes`: `null` when the basis is empty; otherwise the nearest whole-minute
   arithmetic mean of `historical_durations_minutes`.
 - `token_usage`: `{"status":"pending"}` on `started`/`resumed`. A terminal event may remain pending only
@@ -45,7 +54,9 @@ Every line is one JSON object with these fields:
   `{"status":"measured","input":N,"cached_input":N,"cache_write_input":N,"output":N,"reasoning":N,
   "total":N,"source":"...","session_ids":[...],"turn_ids":[...]}` with non-negative integers and
   `total = input + output`, or
-  `{"status":"unavailable","reason":"...","source":"..."}`. Counts are phase-local deltas from an
+  `{"status":"unavailable","reason":"...","source":"..."}`. The validator joins measured rows to
+  the private usage report and verifies counts, model, runtime, coordination, SDD, and contracts versions.
+  Counts are phase-local deltas from an
   authoritative host/provider receipt, never estimates or context-window sizes.
 
 Only one phase may be active. A new phase starts only after the preceding phase completed. `blocked`
@@ -75,9 +86,11 @@ Run at every handoff and gate named by the skill:
 ```sh
 python3 .agents/skills/work-roadmap/scripts/validate-lifecycle-log.py \
   --root . --run <run-id> --unit <unit-id> \
-  --log logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.jsonl
+  --log <exported-lifecycle.jsonl> --usage <private-untracked-usage.csv> \
+  [--history-report <validated-history.csv>]
 ```
 
-Use `--require-terminal --require-reconciled` before cycle completion and final roll-up. The host repeats the command against
-the exact merged artifact and checks its exit status directly; never mask it through a pipeline. Run
+Use `--require-terminal --require-reconciled` before cycle completion and final roll-up. The host exports
+the issue-comment chain, joins it to the private usage report, and checks the command's exit status directly;
+never mask it through a pipeline. Run
 `--self-test` after changing the validator.

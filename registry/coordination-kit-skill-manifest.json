@@ -127,11 +127,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "9d1f1854da1d21021fefa6b0ca2d1b1621d97002b408773c2942b40de82d44bc",
+      "tree-sha256": "147dba643cb37dc21f548a1be83dc783d36cdafa33cc69ce89fdc2079bef0b0f",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "a6e0322da36745f063ac2cde95cf6ce01265a495456e3d2566a60b175997a7c6",
+          "sha256": "738e8417ed80c02847fe4c4e0f92b510a53dbb60d8cd9d1d8d256984621ee73f",
           "executable": false
         },
         {
@@ -166,7 +166,7 @@
         },
         {
           "path": "references/lifecycle-ledger.md",
-          "sha256": "e34b13a8d8f31b42f16d646b0cce4f4478a3f4564b83ad13d5016a40b3c7fe00",
+          "sha256": "908ef42eed2e70884367c83da6c8e328f3c61b474f777d763e608aa3224e3b34",
           "executable": false
         },
         {
@@ -186,13 +186,13 @@
         },
         {
           "path": "scripts/collect-runtime-usage.py",
-          "sha256": "24308852203f5cdd10117b328736b3ffa356150e601dd475e9b4bead0eecb1b4",
-          "executable": true
+          "sha256": "1b93f1033f33e744c39e02e51fe7a6cb4b53dc8e91800210643ccf91c2823a0d",
+          "executable": false
         },
         {
           "path": "scripts/validate-lifecycle-log.py",
-          "sha256": "9972a259a36cfdc4e51e4ad08b409129faedb018eeadd33917f8dea0c27dbc14",
-          "executable": true
+          "sha256": "86e283d773faa7b02c08e2bba34eb95f45066b92eb57272f120f9be1e7b9afa3",
+          "executable": false
         }
       ]
     }

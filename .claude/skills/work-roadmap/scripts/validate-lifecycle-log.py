@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import argparse
 import copy
+import csv
+import hashlib
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,10 +18,19 @@ LOWER_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 EVENTS = {"started", "completed", "blocked", "resumed"}
+USAGE_FIELDS = [
+    "timestamp", "task", "session_id", "thread_id", "turn_id", "response_id", "provider", "model", "effort",
+    "runtime_version", "coordination_version", "sdd_version", "contracts_version", "ledger_schema",
+    "input", "cached_input", "cache_write_input", "output", "reasoning", "total",
+    "turn_input", "turn_cached_input", "turn_cache_write_input", "turn_output", "turn_reasoning",
+    "turn_total", "thread_input", "thread_cached_input", "thread_cache_write_input", "thread_output",
+    "thread_reasoning", "thread_total", "source",
+]
 FIELDS = {
     "schema_version", "run_id", "unit_id", "item", "sequence", "phase_order", "phase",
     "event", "at", "actor", "model", "source", "evidence", "actual_minutes",
     "historical_durations_minutes", "historical_average_minutes", "token_usage", "tooling",
+    "revision", "previous_digest", "digest", "authority",
 }
 
 
@@ -47,7 +57,19 @@ def nonempty(value: object, label: str, line: int) -> str:
     return value
 
 
-def validate_tokens(value: object, terminal: bool, line: int) -> None:
+def canonical_digest(value: dict[str, object]) -> str:
+    unsigned = {key: item for key, item in value.items() if key != "digest"}
+    return hashlib.sha256(json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def tooling_fingerprint(value: dict[str, object]) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def validate_tokens(value: object, terminal: bool, line: int,
+                    usage_rows: list[dict[str, str]] | None,
+                    usage_source: str | None, model: object, tooling: object,
+                    expected_task: str) -> None:
     if not isinstance(value, dict) or not isinstance(value.get("status"), str):
         fail(f"line {line}: token_usage must be an object with status")
     status = value["status"]
@@ -63,15 +85,18 @@ def validate_tokens(value: object, terminal: bool, line: int) -> None:
                     "total", "source", "session_ids", "turn_ids"}
         if set(value) != expected:
             fail(f"line {line}: measured token_usage has missing or unexpected fields")
-        counts = [value[name] for name in ("input", "cached_input", "cache_write_input", "output",
-                                           "reasoning", "total")]
+        counts = [value[name] for name in ("input", "cached_input", "cache_write_input", "output", "total")]
         if any(isinstance(count, bool) or not isinstance(count, int) or count < 0 for count in counts):
             fail(f"line {line}: measured token counts must be non-negative integers")
+        if value["reasoning"] is not None and (isinstance(value["reasoning"], bool)
+                                                or not isinstance(value["reasoning"], int)
+                                                or value["reasoning"] < 0):
+            fail(f"line {line}: measured reasoning must be a non-negative integer or null when unavailable")
         if value["total"] != value["input"] + value["output"]:
             fail(f"line {line}: measured token total must equal input + output")
         if value["cached_input"] + value["cache_write_input"] > value["input"]:
             fail(f"line {line}: measured cache counts exceed input")
-        if value["reasoning"] > value["output"]:
+        if value["reasoning"] is not None and value["reasoning"] > value["output"]:
             fail(f"line {line}: measured reasoning exceeds output")
         nonempty(value["source"], "token_usage.source", line)
         for field in ("session_ids", "turn_ids"):
@@ -79,6 +104,51 @@ def validate_tokens(value: object, terminal: bool, line: int) -> None:
             if not isinstance(identifiers, list) or not identifiers or any(
                     not isinstance(item, str) or not item for item in identifiers):
                 fail(f"line {line}: measured {field} must be a non-empty string array")
+        if usage_rows is None:
+            fail(f"line {line}: measured token usage requires an authoritative --usage report")
+        if value["source"] != usage_source:
+            fail(f"line {line}: token_usage.source does not bind the supplied usage report digest")
+        assert isinstance(model, dict) and isinstance(tooling, dict)
+        selected = [row for row in usage_rows
+                    if row.get("session_id") in value["session_ids"] and row.get("turn_id") in value["turn_ids"]]
+        if not selected:
+            fail(f"line {line}: measured token usage has no matching usage-report rows")
+        for field in ("input", "cached_input", "cache_write_input", "output", "total"):
+            try:
+                observed = sum(int(row[field]) for row in selected)
+            except (KeyError, ValueError):
+                fail(f"line {line}: usage report has invalid {field}")
+            if observed != value[field]:
+                fail(f"line {line}: measured {field} does not equal usage-report sum ({observed})")
+        reasoning_values = [row.get("reasoning", "") for row in selected]
+        if value["reasoning"] is None:
+            if any(reasoning_values):
+                fail(f"line {line}: null reasoning conflicts with measured usage-report reasoning")
+        else:
+            try:
+                observed_reasoning = sum(int(current) for current in reasoning_values)
+            except ValueError:
+                fail(f"line {line}: mixed available/unavailable reasoning rows cannot be aggregated")
+            if observed_reasoning != value["reasoning"]:
+                fail(f"line {line}: measured reasoning does not equal usage-report sum ({observed_reasoning})")
+        expected_model = model.get("name") if model.get("status") == "recorded" else None
+        expected_provider = model.get("provider") if model.get("status") == "recorded" else None
+        expected_effort = model.get("effort", "") if model.get("status") == "recorded" else None
+        for row in selected:
+            if row.get("task") != expected_task:
+                fail(f"line {line}: usage-report task is not bound to this item/phase")
+            if expected_model is not None and (row.get("model") != expected_model
+                                               or row.get("provider") != expected_provider
+                                               or row.get("effort", "") != expected_effort):
+                fail(f"line {line}: model does not match authoritative usage report")
+            versions = {
+                "runtime": row.get("runtime_version"), "coordination": row.get("coordination_version"),
+                "sdd": row.get("sdd_version"), "contracts": row.get("contracts_version"),
+            }
+            for component, observed in versions.items():
+                current = tooling.get(component)
+                if isinstance(current, dict) and current.get("status") == "recorded" and current.get("version") != observed:
+                    fail(f"line {line}: tooling.{component}.version does not match usage report")
     elif status == "unavailable":
         if set(value) != {"status", "reason", "source"}:
             fail(f"line {line}: unavailable token_usage has missing or unexpected fields")
@@ -155,7 +225,10 @@ def validate_source(value: object, line: int) -> None:
 
 def validate_lines(records: list[object], run_id: str, unit_id: str,
                    require_terminal: bool = False, require_reconciled: bool = False,
-                   required_phases: list[str] | None = None) -> None:
+                   required_phases: list[str] | None = None,
+                   usage_rows: list[dict[str, str]] | None = None,
+                   usage_source: str | None = None,
+                   history_rows: list[dict[str, str]] | None = None) -> None:
     if not records:
         fail("log is empty")
     if not LOWER_IDENTIFIER.fullmatch(run_id):
@@ -168,6 +241,7 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
     active: str | None = None
     blocked: str | None = None
     previous_at: datetime | None = None
+    previous_digest: str | None = None
 
     for index, raw in enumerate(records, 1):
         if not isinstance(raw, dict):
@@ -180,6 +254,24 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
             fail(f"line {index}: run_id/unit_id does not match validator arguments")
         if raw["sequence"] != index:
             fail(f"line {index}: sequence must be contiguous and equal line number")
+        if raw["revision"] != index:
+            fail(f"line {index}: revision must be contiguous and equal line number")
+        if raw["previous_digest"] != previous_digest:
+            fail(f"line {index}: previous_digest does not bind the preceding event")
+        digest = raw["digest"]
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            fail(f"line {index}: digest must be lowercase sha256")
+        if digest != canonical_digest(raw):
+            fail(f"line {index}: digest does not match canonical event bytes")
+        previous_digest = digest
+
+        authority = raw["authority"]
+        if not isinstance(authority, dict) or set(authority) != {"kind", "subject", "claim_generation"}:
+            fail(f"line {index}: authority must bind GitHub issue subject and claim generation")
+        if authority.get("kind") != "github_issue_comment":
+            fail(f"line {index}: live authority must be an append-only GitHub issue comment")
+        nonempty(authority.get("subject"), "authority.subject", index)
+        nonempty(authority.get("claim_generation"), "authority.claim_generation", index)
 
         item = raw["item"]
         if not isinstance(item, dict) or set(item) != {"repo", "number", "url"}:
@@ -193,6 +285,8 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
             fail(f"line {index}: item.number must be a positive integer")
         if url != f"https://github.com/{repo}/issues/{number}":
             fail(f"line {index}: item.url must be the canonical GitHub issue URL")
+        if authority["subject"] != f"{repo}#{number}":
+            fail(f"line {index}: authority.subject must equal the canonical item")
         current_item = (repo, number, url)
         if item_identity is None:
             item_identity = current_item
@@ -220,7 +314,8 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         previous_at = timestamp
 
         terminal_event = event in {"completed", "blocked"}
-        validate_tokens(raw["token_usage"], terminal_event, index)
+        validate_tokens(raw["token_usage"], terminal_event, index, usage_rows, usage_source,
+                        raw["model"], raw["tooling"], f"{repo}#{number}/{phase}")
         history = raw["historical_durations_minutes"]
         average = raw["historical_average_minutes"]
         if not isinstance(history, list) or any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in history):
@@ -228,7 +323,17 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
         if event != "completed" and (history or average is not None):
             fail(f"line {index}: only completed events may carry historical average evidence")
         if event == "completed":
-            expected_average = None if not history else (2 * sum(history) + len(history)) // (2 * len(history))
+            fingerprint = tooling_fingerprint(raw["tooling"])
+            matching_history: list[int] = []
+            for history_row in history_rows or []:
+                if history_row.get("phase") == phase and history_row.get("tooling_fingerprint") == fingerprint:
+                    try:
+                        matching_history.append(int(history_row["actual_minutes"]))
+                    except (KeyError, ValueError):
+                        fail(f"line {index}: history report contains invalid actual_minutes")
+            if history != matching_history:
+                fail(f"line {index}: historical durations do not equal the supplied same-tooling history report")
+            expected_average = None if not matching_history else (2 * sum(matching_history) + len(matching_history)) // (2 * len(matching_history))
             if average != expected_average:
                 fail(f"line {index}: historical_average_minutes does not match its basis")
 
@@ -242,12 +347,15 @@ def validate_lines(records: list[object], run_id: str, unit_id: str,
                 fail(f"line {index}: phase_order must be contiguous in first-seen order")
             if raw["actual_minutes"] is not None:
                 fail(f"line {index}: started actual_minutes must be null")
-            phases[phase] = {"order": order, "status": "active", "started": timestamp, "model": raw["model"]}
+            phases[phase] = {"order": order, "status": "active", "started": timestamp,
+                             "model": raw["model"], "tooling": raw["tooling"]}
             active = phase
         elif phase not in phases or phases[phase]["order"] != order:
             fail(f"line {index}: event references an unknown phase/order")
         elif phases[phase]["model"] != raw["model"]:
             fail(f"line {index}: model changed within one phase; start a distinct continuation phase")
+        elif phases[phase]["tooling"] != raw["tooling"]:
+            fail(f"line {index}: tooling changed within one phase; start a distinct continuation phase")
         elif event == "resumed":
             if blocked != phase or active is not None or phases[phase]["status"] != "blocked":
                 fail(f"line {index}: only the blocked phase may resume")
@@ -299,19 +407,86 @@ def load(path: Path) -> list[object]:
     return records
 
 
+def read_usage_csv(path: Path | None) -> tuple[list[dict[str, str]] | None, str | None]:
+    if path is None:
+        return None, None
+    content = path.read_bytes()
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != USAGE_FIELDS:
+            fail("usage report header does not match the stable collector schema")
+        rows = list(reader)
+    seen: set[tuple[str, str]] = set()
+    for index, row in enumerate(rows, 2):
+        identity = (row.get("provider", ""), row.get("response_id", ""))
+        if not all(identity) or identity in seen:
+            fail(f"usage report line {index}: response identity is empty or duplicated")
+        seen.add(identity)
+        source = row.get("source", "")
+        if not re.fullmatch(r"(?:codex-session-jsonl|claude-statusline-json):sha256:[0-9a-f]{64}", source):
+            fail(f"usage report line {index}: source is not normalized content-digest provenance")
+        for field in ("input", "cached_input", "cache_write_input", "output", "total"):
+            try:
+                value = int(row[field])
+            except (KeyError, ValueError):
+                fail(f"usage report line {index}: {field} is not a non-negative integer")
+            if value < 0:
+                fail(f"usage report line {index}: {field} is not a non-negative integer")
+        reasoning = row.get("reasoning", "")
+        if reasoning and (not reasoning.isdigit() or int(reasoning) > int(row["output"])):
+            fail(f"usage report line {index}: reasoning is invalid")
+    digest = hashlib.sha256(content).hexdigest()
+    return rows, f"runtime-usage-csv:sha256:{digest}"
+
+
+def read_history_csv(path: Path | None) -> list[dict[str, str]] | None:
+    if path is None:
+        return None
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["phase", "tooling_fingerprint", "actual_minutes", "source"]:
+            fail("history report header must be phase,tooling_fingerprint,actual_minutes,source")
+        rows = list(reader)
+    seen: set[str] = set()
+    for index, row in enumerate(rows, 2):
+        source = row.get("source", "")
+        if source in seen or not re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*", source):
+            fail(f"history report line {index}: source must be a unique canonical issue-comment URL")
+        seen.add(source)
+        if not re.fullmatch(r"[0-9a-f]{64}", row.get("tooling_fingerprint", "")):
+            fail(f"history report line {index}: tooling_fingerprint must be sha256")
+        if not row.get("actual_minutes", "").isdigit():
+            fail(f"history report line {index}: actual_minutes must be a whole minute")
+    return rows
+
+
+def seal(records: list[object]) -> list[object]:
+    previous: str | None = None
+    for index, raw in enumerate(records, 1):
+        assert isinstance(raw, dict)
+        raw["revision"] = index
+        raw["previous_digest"] = previous
+        raw["digest"] = "0" * 64
+        raw["digest"] = canonical_digest(raw)
+        previous = raw["digest"]
+    return records
+
+
 def valid_fixture() -> list[object]:
     item = {"repo": "FS-GG/.github", "number": 42, "url": "https://github.com/FS-GG/.github/issues/42"}
     source = {"repository": "FS-GG/.github", "revision": "a" * 40}
     common = {"schema_version": 1, "run_id": "roadmap-v2", "unit_id": "GS2-01.1", "item": item,
               "actor": "worker-1234", "model": {"status": "recorded", "provider": "OpenAI",
-              "name": "gpt-test", "source": "runtime receipt"}, "source": source,
+              "name": "gpt-test", "effort": "high", "source": "runtime receipt"}, "source": source,
+              "authority": {"kind": "github_issue_comment", "subject": "FS-GG/.github#42",
+                            "claim_generation": "claim-generation-1"},
               "tooling": {"ledger_schema": 1,
                            "runtime": {"status": "recorded", "name": "codex", "version": "1.2.3", "source": "session"},
                            "coordination": {"status": "recorded", "name": "fsgg-coord", "version": "4.5.6", "source": "cli"},
                            "sdd": {"status": "recorded", "name": "fsgg-sdd", "version": "7.8.9", "source": "cli"},
                            "contracts": {"status": "recorded", "name": "fsgg-contracts", "version": "10.0.0", "source": "registry"}},
               "historical_average_minutes": None}
-    return [
+    return seal([
         {**common, "sequence": 1, "phase_order": 1, "phase": "claim", "event": "started",
          "at": "2026-09-04T08:00:00Z", "evidence": ["issue URL"], "actual_minutes": None,
          "historical_durations_minutes": [], "token_usage": {"status": "pending"}},
@@ -320,21 +495,31 @@ def valid_fixture() -> list[object]:
          "historical_durations_minutes": [],
          "token_usage": {"status": "measured", "input": 10, "cached_input": 4,
                          "cache_write_input": 0, "output": 5, "reasoning": 2, "total": 15,
-                         "source": "provider receipt", "session_ids": ["session-1"],
+                         "source": "runtime-usage-csv:sha256:fixture", "session_ids": ["session-1"],
                          "turn_ids": ["turn-1"]}},
         {**common, "sequence": 3, "phase_order": 2, "phase": "implement", "event": "started",
          "at": "2026-09-04T08:01:29Z", "evidence": ["commit base"], "actual_minutes": None,
          "historical_durations_minutes": [], "token_usage": {"status": "pending"}},
         {**common, "sequence": 4, "phase_order": 2, "phase": "implement", "event": "completed",
          "at": "2026-09-04T08:04:00Z", "evidence": ["green tests"], "actual_minutes": 3,
-         "historical_durations_minutes": [2, 3], "historical_average_minutes": 3,
+         "historical_durations_minutes": [], "historical_average_minutes": None,
          "token_usage": {"status": "unavailable", "reason": "host exposes no phase counters", "source": "host usage API"}},
-    ]
+    ])
 
 
 def self_test() -> None:
     base = valid_fixture()
-    validate_lines(base, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"])
+    usage_rows = [{
+        "session_id": "session-1", "turn_id": "turn-1", "response_id": "response-1",
+        "task": "FS-GG/.github#42/claim",
+        "provider": "OpenAI", "model": "gpt-test", "effort": "high",
+        "runtime_version": "1.2.3", "coordination_version": "4.5.6",
+        "sdd_version": "7.8.9", "contracts_version": "10.0.0",
+        "input": "10", "cached_input": "4", "cache_write_input": "0", "output": "5",
+        "reasoning": "2", "total": "15",
+    }]
+    validate_lines(base, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"],
+                   usage_rows, "runtime-usage-csv:sha256:fixture")
     mutations = {
         "sequence gap": lambda rows: rows[2].__setitem__("sequence", 4),
         "wrong issue URL": lambda rows: rows[0]["item"].__setitem__("url", "https://example.invalid/42"),
@@ -357,11 +542,29 @@ def self_test() -> None:
         mutate(rows)
         try:
             required = ["claim", "implement", "acceptance"] if name == "missing required phase" else ["claim", "implement"]
-            validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, required)
+            validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, required, usage_rows,
+                           "runtime-usage-csv:sha256:fixture")
         except InvalidLog:
             continue
         fail(f"self-test mutation was accepted: {name}")
-    print(f"lifecycle-log self-test: pass ({len(mutations)} rejection cases)")
+    provenance_mutations = {
+        "forged token report join": lambda rows: rows[1]["token_usage"].update({"input": 1_000_000_999,
+                                                                                 "total": 1_000_001_004}),
+        "forged tooling version": lambda rows: rows[1]["tooling"]["sdd"].update({"version": "999.999.999"}),
+        "invented historical corpus": lambda rows: rows[3].update({"historical_durations_minutes": [999],
+                                                                    "historical_average_minutes": 999}),
+    }
+    for name, mutate in provenance_mutations.items():
+        rows = copy.deepcopy(base)
+        mutate(rows)
+        seal(rows)
+        try:
+            validate_lines(rows, "roadmap-v2", "GS2-01.1", True, True, ["claim", "implement"],
+                           usage_rows, "runtime-usage-csv:sha256:fixture")
+        except InvalidLog:
+            continue
+        fail(f"self-test provenance mutation was accepted: {name}")
+    print(f"lifecycle-log self-test: pass ({len(mutations) + len(provenance_mutations)} rejection cases)")
 
 
 def main() -> int:
@@ -370,6 +573,8 @@ def main() -> int:
     parser.add_argument("--run")
     parser.add_argument("--unit")
     parser.add_argument("--log")
+    parser.add_argument("--usage", help="private authoritative runtime-usage CSV used to reconcile measured rows")
+    parser.add_argument("--history-report", help="validated prior-phase corpus: phase,tooling_fingerprint,actual_minutes")
     parser.add_argument("--require-terminal", action="store_true")
     parser.add_argument("--require-reconciled", action="store_true")
     parser.add_argument("--required-phase", action="append", default=[])
@@ -383,23 +588,15 @@ def main() -> int:
             fail("--run, --unit, and --log are required unless --self-test is used")
         root = Path(args.root).resolve()
         path = (root / args.log).resolve()
-        try:
-            relative = path.relative_to(root)
-        except ValueError:
-            fail("log path escapes root")
-        parts = relative.parts
-        if len(parts) < 5 or parts[:2] != ("logs", "roadmap") or parts[-2] != args.run or parts[-1] != f"{args.unit}.jsonl":
-            fail("log path must be logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.jsonl")
         if not path.is_file():
-            fail(f"log does not exist: {relative}")
-        tracked = subprocess.run(["git", "-C", str(root), "ls-files", "--error-unmatch", str(relative)],
-                                 text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if tracked.returncode != 0:
-            fail(f"log is not tracked: {relative}")
+            fail(f"log does not exist: {path}")
+        usage_path = (root / args.usage).resolve() if args.usage else None
+        history_path = (root / args.history_report).resolve() if args.history_report else None
+        usage_rows, usage_source = read_usage_csv(usage_path)
         validate_lines(load(path), args.run, args.unit, args.require_terminal, args.require_reconciled,
-                       args.required_phase)
+                       args.required_phase, usage_rows, usage_source, read_history_csv(history_path))
         state = "terminal" if args.require_terminal else "valid"
-        print(f"lifecycle-log: {state} — {relative}")
+        print(f"lifecycle-log: {state} — {path}")
         return 0
     except (InvalidLog, OSError) as error:
         print(f"lifecycle-log: invalid — {error}", file=sys.stderr)

@@ -1,37 +1,48 @@
 # FS.GG item lifecycle ledger
 
-Every claimed item has one tracked, append-only JSONL phase ledger and one append-only runtime-usage
-report. Normal items use:
+Every claimed item has one externally durable, append-only phase ledger on its canonical GitHub issue
+and one private append-only runtime-usage report. Each event is posted as an
+`fsgg:item-lifecycle/v1` structured issue comment through `fsgg-coord comment create`, then read back and
+digest-verified. Optional immutable normal-item exports use:
 
 ```text
 logs/items/<owner>.<repo>/<issue-number>/lifecycle.jsonl
-logs/items/<owner>.<repo>/<issue-number>/usage.csv
 ```
 
-A roadmap item uses its roadmap path instead:
+A roadmap export uses its roadmap path instead:
 
 ```text
 logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.jsonl
-logs/roadmap/<roadmap-slug>/<run-id>/<unit-id>.usage.csv
 ```
 
-Create the ledger when work begins. Never rewrite, delete, reorder, or renumber accepted rows. A status
-reply is a projection of the ledger; prose and a GitHub timestamp are evidence, not substitutes.
+Create the ledger when work begins. Never edit, delete, reorder, or renumber accepted comments. Bind
+each event to the previous digest, item, live claim generation, and review generation when applicable.
+A status reply is a projection of the ledger; prose and a GitHub timestamp are evidence, not substitutes.
+
+The candidate branch is never the live authority. Review, merge, protected-main, projection, and cleanup
+facts occur after its exact head is fixed; appending them inside that branch would invalidate the review
+and can never converge. A tracked JSONL file is only an immutable export of a closed interval and never
+gates the PR that contains it. Export happens afterward under a distinct source-bound item. Raw usage
+CSVs and local session paths remain private and untracked.
 
 ## Phase events
 
 Each JSONL line is one phase transition. The shared v1 fields are `schema_version`, `run_id`, `unit_id`,
 `item`, `sequence`, `phase_order`, `phase`, `event`, `at`, `actor`, `model`, `source`, `evidence`,
-`actual_minutes`, `historical_durations_minutes`, `historical_average_minutes`, `token_usage`, and
-`tooling`.
+`actual_minutes`, `historical_durations_minutes`, `historical_average_minutes`, `token_usage`, `tooling`,
+`revision`, `previous_digest`, `digest`, and `authority`.
+
+- `revision` is contiguous. `previous_digest` is null only at revision 1 and otherwise equals the prior
+  event digest. `digest` is SHA-256 over compact sorted-key JSON excluding `digest` itself.
+- `authority` binds `github_issue_comment`, the canonical issue subject, and live claim generation.
 
 - `item` contains the canonical GitHub `repo`, positive issue `number`, and exact HTTPS issue `url`.
 - `phase` is a lowercase stable identifier. Every numbered review, repair, recovery, merge, verification,
   projection, and cleanup pass is distinct.
 - `event` is `started`, `completed`, `blocked`, or `resumed`; exactly one phase is active.
-- `at` is canonical UTC. Terminal duration is elapsed wall time from the first start, rounded to the
-  nearest whole minute. Historical averages use prior completed durations for the same canonical phase
-  and the same rounding rule.
+- `at` is the actual observation time in canonical UTC; never pre-author another actor's start. Terminal
+  duration is elapsed wall time from the first start, rounded to the nearest whole minute. Historical
+  averages use a supplied validated prior-event corpus for the same phase and tooling fingerprint.
 - `actor` is the minted worker, critic, or host identity.
 - `tooling` binds `ledger_schema` plus `runtime`, `coordination`, `sdd`, and `contracts` components.
   Each component records its exact name/version/source or an explicit `unavailable`/`not_applicable`
@@ -47,7 +58,8 @@ Each JSONL line is one phase transition. The shared v1 fields are `schema_versio
   source was checked and had no usable record.
 
 Measured phase usage records total input, cached input, cache-write input, output, reasoning output, and
-total tokens. Cached/cache-write counts are subsets or components of input according to the provider;
+total tokens. The validator joins its session/turn identities to the private report and requires counts,
+exact model, and all four tool versions to match. Cached/cache-write counts are subsets or components of input according to the provider;
 `total = input + output`, and reasoning output is already included in output. Bind the measurement to one
 or more `session_id`/`turn_id` rows in the usage report. When a phase spans turns, sum completed-turn
 records. When a turn spans phases, do not invent a split: keep the affected phase pending until a boundary
@@ -55,7 +67,7 @@ receipt exists, or mark it unavailable with that exact limitation.
 
 ## Runtime collection
 
-The collector emits this stable report header:
+The private collector emits this stable report header:
 
 ```text
 timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,runtime_version,coordination_version,sdd_version,contracts_version,ledger_schema,input,cached_input,cache_write_input,output,reasoning,total,turn_input,turn_cached_input,turn_cache_write_input,turn_output,turn_reasoning,turn_total,thread_input,thread_cached_input,thread_cache_write_input,thread_output,thread_reasoning,thread_total,source
@@ -64,13 +76,14 @@ timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,ru
 Codex persists `token_usage_record` rows under `~/.codex/sessions/YYYY/MM/DD/`. Each row binds one
 `response_id`'s request usage plus current turn and full-thread totals; the matching `turn_context`
 supplies the exact model variant and effort. Capture all completed responses so long-running goal turns
-and user-steered continuations do not collapse into one misleading final row. Run:
+and user-steered continuations do not collapse into one misleading final row. Public provenance is a
+content digest such as `codex-session-jsonl:sha256:<digest>`, never an absolute local path. Run:
 
 ```sh
 python3 .agents/skills/pnext-item/scripts/collect-runtime-usage.py codex \
   --session-file <rollout.jsonl> --task <item/phase> --turn-id <turn-id> \
   --coord-version <version> --sdd-version <version> --contracts-version <version> \
-  --all-responses --append <usage.csv>
+  --all-responses --append <private-untracked-usage.csv>
 ```
 
 The local Codex JSONL is an internal interface, so the collector validates every required key and fails
@@ -80,7 +93,8 @@ Claude Code exposes `session_id`, `prompt_id`, `model.id`, effort, and the lates
 cache-creation, cache-read, and output usage to a status-line command. Persist those snapshots after each
 assistant message. A `Stop` hook runs after the main response finishes and receives `session_id` and
 `transcript_path`; use it to append the saved snapshot. `SubagentStop` supplies a separate
-`agent_transcript_path`, so subagent usage must remain separate. The status-line value is one latest API
+`agent_transcript_path`, so subagent usage must remain separate. The collector derives a stable response
+identity from session, prompt, timestamp, model, and usage, so repeated hook delivery is idempotent. The status-line value is one latest API
 response, not a whole multi-call turn; aggregate only captured requests. Claude's ordinary usage does not
 separate reasoning from output, so the report leaves `reasoning` empty rather than guessing. For
 non-interactive work, `--output-format json`/`stream-json` or the Agent SDK result is preferred.
@@ -92,7 +106,8 @@ Run the validator at each handoff and gate. A normal item uses any stable lowerc
 
 ```sh
 python3 .agents/skills/pnext-item/scripts/validate-lifecycle-log.py \
-  --root . --run <run-id> --unit <unit-id> --log <lifecycle.jsonl>
+  --root . --run <run-id> --unit <unit-id> --log <exported-lifecycle.jsonl> \
+  --usage <private-untracked-usage.csv> [--history-report <validated-history.csv>]
 ```
 
 Use `--require-terminal --require-reconciled` before a done stamp or roadmap roll-up. The first rejects an

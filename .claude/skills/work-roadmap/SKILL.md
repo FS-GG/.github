@@ -49,11 +49,17 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 
 ## Lifecycle log
 
-Create the item's tracked append-only lifecycle log before its first phase transition and append every
+Create the item's externally durable, digest-chained lifecycle log on its canonical GitHub issue before its first phase transition and append every
 phase start, completion, block, and resume. Include numbered critique/repair rounds, guarded landing,
 protected-main verification, receipt/projection, and cleanup as distinct phases. Validate the log at each
 worker/critic handoff, before host acceptance, before cycle completion, and in the final cross-cycle
 roll-up. A missing phase, sequence gap, invalid transition, or unresolved active phase fails closed.
+
+The candidate branch must not be the live authority. Later review, merge, protected-main, projection, and
+cleanup events would change the very head they attest and create an infinite review loop. A tracked
+`logs/roadmap/` file is only an immutable export made after the covered interval; it never gates its own
+candidate head. Raw runtime reports remain private and untracked, while public events retain aggregate
+counts plus stable report digests and runtime identifiers.
 
 Record the exact provider/model variant and effort plus runtime, coordination, SDD CLI/contracts, and
 ledger-schema versions for each phase, alongside authoritative input, cached

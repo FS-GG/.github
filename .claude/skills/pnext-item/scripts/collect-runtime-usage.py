@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 FIELDS = [
@@ -139,10 +141,15 @@ def claude_row(snapshot: dict[str, object], task: str, source: str) -> dict[str,
         raise InvalidUsage("Claude usage counts must be non-negative integers")
     input_total = uncached + cached + cache_write
     effort = snapshot.get("effort", {})
+    response_key = json.dumps({
+        "session_id": snapshot.get("session_id"), "prompt_id": snapshot.get("prompt_id"),
+        "timestamp": snapshot.get("timestamp"), "model": model.get("id"), "usage": usage,
+    }, sort_keys=True, separators=(",", ":")).encode()
+    response_id = "claude-" + hashlib.sha256(response_key).hexdigest()
     return {
         "timestamp": required_text(snapshot.get("timestamp"), "timestamp"), "task": task,
         "session_id": required_text(snapshot.get("session_id"), "session_id"), "thread_id": "",
-        "turn_id": required_text(snapshot.get("prompt_id"), "prompt_id"), "response_id": "",
+        "turn_id": required_text(snapshot.get("prompt_id"), "prompt_id"), "response_id": response_id,
         "provider": "Anthropic",
         "model": required_text(model.get("id"), "model.id"),
         "effort": effort.get("level", "") if isinstance(effort, dict) else "",
@@ -166,7 +173,7 @@ def emit(rows: list[dict[str, object]], output_format: str, append: Path | None)
         if append is not None and not needs_header:
             with append.open(encoding="utf-8", newline="") as handle:
                 existing = {row.get("response_id", "") for row in csv.DictReader(handle)}
-            rows = [row for row in rows if not row.get("response_id") or row.get("response_id") not in existing]
+            rows = [row for row in rows if row.get("response_id") not in existing]
         if needs_header:
             writer.writeheader()
         writer.writerows(rows)
@@ -198,7 +205,22 @@ def self_test() -> None:
     try:
         codex_rows([json.dumps(context), json.dumps(bad)], "task", None, "fixture")
     except InvalidUsage:
-        print("runtime-usage self-test: pass (1 positive, 1 rejection)")
+        claude = {
+            "timestamp": "2026-01-01T00:02:00Z", "session_id": "claude-session",
+            "prompt_id": "prompt-1", "version": "2.3.4", "model": {"id": "claude-test"},
+            "effort": {"level": "high"}, "context_window": {"current_usage": {
+                "input_tokens": 7, "cache_read_input_tokens": 2,
+                "cache_creation_input_tokens": 1, "output_tokens": 3}},
+        }
+        claude_usage = claude_row(claude, "task", "claude-statusline:sha256:fixture")
+        assert claude_usage["response_id"].startswith("claude-")
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "usage.csv"
+            emit([claude_usage], "csv", report)
+            emit([claude_usage], "csv", report)
+            with report.open(encoding="utf-8", newline="") as handle:
+                assert len(list(csv.DictReader(handle))) == 1
+        print("runtime-usage self-test: pass (2 positive, 1 rejection, append dedupe)")
         return
     raise InvalidUsage("self-test accepted an invalid total")
 
@@ -228,14 +250,18 @@ def main() -> int:
         if args.runtime == "codex":
             if args.session_file is None:
                 raise InvalidUsage("codex requires --session-file")
-            rows = codex_rows(args.session_file.read_text(encoding="utf-8").splitlines(), task,
-                              args.turn_id, str(args.session_file), args.all_responses,
+            session_bytes = args.session_file.read_bytes()
+            source = "codex-session-jsonl:sha256:" + hashlib.sha256(session_bytes).hexdigest()
+            rows = codex_rows(session_bytes.decode("utf-8").splitlines(), task,
+                              args.turn_id, source, args.all_responses,
                               args.since, args.until)
         elif args.runtime == "claude":
             if args.snapshot is None:
                 raise InvalidUsage("claude requires --snapshot")
-            snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
-            rows = [claude_row(snapshot, task, str(args.snapshot))]
+            snapshot_bytes = args.snapshot.read_bytes()
+            snapshot = json.loads(snapshot_bytes.decode("utf-8"))
+            source = "claude-statusline-json:sha256:" + hashlib.sha256(snapshot_bytes).hexdigest()
+            rows = [claude_row(snapshot, task, source)]
         else:
             raise InvalidUsage("runtime is required")
         for label, value in (("--coord-version", args.coord_version), ("--sdd-version", args.sdd_version),
