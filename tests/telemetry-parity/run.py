@@ -211,6 +211,9 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
         "forged token report join": lambda rows: rows[1]["token_usage"].update({"input": 1_000_000_999, "total": 1_000_001_004}),
         "forged tooling version": lambda rows: rows[1]["tooling"]["sdd"].update({"version": "999.999.999"}),
         "invented historical corpus": lambda rows: rows[3].update({"historical_durations_minutes": [999], "historical_average_minutes": 999}),
+        "extra source member": lambda rows: rows[0]["source"].update({"unexpected": "must-be-rejected"}),
+        "blank source unavailable reason": lambda rows: rows[0].__setitem__("source", {"repository": "FS-GG/.github", "unavailable_reason": ""}),
+        "blank tooling unavailable reason": lambda rows: rows[0]["tooling"].__setitem__("sdd", {"status": "unavailable", "name": "fsgg-sdd", "reason": "", "source": "runtime"}),
     }
     for name, mutate in provenance.items():
         rows = copy.deepcopy(base)

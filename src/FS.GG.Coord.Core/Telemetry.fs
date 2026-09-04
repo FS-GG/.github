@@ -334,6 +334,9 @@ module LifecycleTelemetry =
                         for field in [ "name"; "version"; "source" ] do if not (nonempty field tool) then findings.Add(InvalidEvent(line, $"tooling.%s{name}.%s{field} must be non-empty"))
                     elif status = "unavailable" || status = "not_applicable" then
                         if not (exact [ "status"; "name"; "reason"; "source" ] tool) then findings.Add(InvalidEvent(line, $"%s{status} tooling.%s{name} has missing or unexpected fields"))
+                        for field in [ "name"; "reason"; "source" ] do
+                            if not (nonempty field tool) then
+                                findings.Add(InvalidEvent(line, $"tooling.%s{name}.%s{field} must be non-empty"))
                     else findings.Add(InvalidEvent(line, $"tooling.%s{name}.status is invalid"))
                 | _ -> findings.Add(InvalidEvent(line, $"tooling.%s{name} must be a status object"))
         | _ -> findings.Add(InvalidEvent(line, "tooling must be an object"))
@@ -408,7 +411,10 @@ module LifecycleTelemetry =
                     let repository = stringAt "repository" source
                     let revision, unavailable = source.ContainsKey "revision", source.ContainsKey "unavailable_reason"
                     if not (Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) || revision = unavailable then findings.Add(InvalidEvent(line, "source must bind repository and exactly one revision state"))
+                    elif revision && not (exact [ "repository"; "revision" ] source) then findings.Add(InvalidEvent(line, "source has unexpected fields"))
+                    elif unavailable && not (exact [ "repository"; "unavailable_reason" ] source) then findings.Add(InvalidEvent(line, "source has unexpected fields"))
                     elif revision && not (Regex.IsMatch(stringAt "revision" source, "^[0-9a-f]{40}$")) then findings.Add(InvalidEvent(line, "source.revision must be lowercase 40-hex"))
+                    elif unavailable && not (nonempty "unavailable_reason" source) then findings.Add(InvalidEvent(line, "source.unavailable_reason must be non-empty"))
                 | _ -> findings.Add(InvalidEvent(line, "source must be an object"))
                 if not (arrayStrings false item["evidence"]) then findings.Add(InvalidEvent(line, "evidence must be a non-empty string array"))
                 let at = DateTime.ParseExact(stringAt "at" item, "yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal ||| DateTimeStyles.AdjustToUniversal)
