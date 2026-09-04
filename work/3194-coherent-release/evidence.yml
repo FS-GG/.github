@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 3194-coherent-release
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3194-coherent-release/spec.md
+sourceClarifications: work/3194-coherent-release/clarifications.md
+sourceChecklist: work/3194-coherent-release/checklist.md
+sourcePlan: work/3194-coherent-release/plan.md
+sourceTasks: work/3194-coherent-release/tasks.yml
+sourceAnalysis: readiness/3194-coherent-release/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3194-coherent-release/analysis.json
+    digest: 19189896a41b9da98edbb6d74067698f80415f4174000b025bf442d5be3e76be
+    schemaVersion: 1
+  - label: checklist
+    path: work/3194-coherent-release/checklist.md
+    digest: 51a251925087e7b3dbcb0dcb9a1349563adefa3be7abd8effbfa2305835c3625
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3194-coherent-release/clarifications.md
+    digest: ab60473af9b4d2f95b3068d053e51fc2053a5bdd2a31e9d174863a97e6ed0f56
+    schemaVersion: 1
+  - label: plan
+    path: work/3194-coherent-release/plan.md
+    digest: f38716394c9980a39f7d6dbdee5da17f4705e30f1b0c474c7aa5b27b3cebca4c
+    schemaVersion: 1
+  - label: spec
+    path: work/3194-coherent-release/spec.md
+    digest: f9b654d4c9947a3cc4351ad022ae359556f0013822aa0d760cb8ba6d63bdd18d
+    schemaVersion: 1
+  - label: tasks
+    path: work/3194-coherent-release/tasks.yml
+    digest: 44a5b0c070d3fe803eb3a79b45a657f7467b4668515f1d0fc53756e8e3645269
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [registry/dependencies.yml, tests/release-coherence/run.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["Prepare-once run 33870032997 and exact-source publisher retries 33870221991, 33870222128, and 33870222012 succeeded from source 4b93b10d8baf67c283aeed2f71b955cc7e721872."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [registry/dependencies.yml, tests/release-coherence/run.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["GitHub Packages and NuGet.org normalized payloads match; sibling tags resolve to the exact source; clean installs resolved all three 0.80.0 packages."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [registry/dependencies.yml, tests/release-coherence/run.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["Promotion 33871002330 and coherence 33871002212 succeeded; 14 of 14 journal-bound receiver receipts verified with zero findings."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [tests/release-saga/run.sh, work/3194-coherent-release/evidence.yml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["The issue ledger records phase-level model, toolchain, whole-minute duration, and honest unavailable token status for this unsplittable running turn."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [docs/architecture.md, docs/registry/compatibility.md, registry/dependencies.yml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [The published coord-engine package frontier is reconciled to 0.80.0 without changing the source API version scalar.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [tests/release-coherence/run.sh, tests/release-saga/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["Public release, feed, clean-install, tag, stable-channel, and receiver observations passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: ["No migration is required; existing consumers can remain on 0.79.0 or adopt 0.80.0 through normal receiver and Renovate paths."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [".agents/skills/publishing-and-deployment/SKILL.md", ".claude/skills/publishing-and-deployment/SKILL.md", docs/architecture.md, docs/registry/compatibility.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-saga/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3194-coherent-release/test-results/3194-release.trx
+      digest: "sha256:e1256b34b8fe678a51f2ce33fd6c03d7684931981ce04faa9a570fbe637fcae5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 140
+      failed: 0
+      skipped: 0
+    notes: [Feed-derived registry and generated projections consistently report package-version 0.80.0.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

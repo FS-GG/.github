@@ -19,6 +19,17 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-04** — **coordination coherent set `github:0.80.0` published and fully reconciled**
+  (owner github; [.github#3194](https://github.com/FS-GG/.github/issues/3194),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.80.0)):
+  advances the observed Coord.Cli package frontier from 0.78.1 to 0.80.0 after prepare run
+  [33870032997](https://github.com/FS-GG/.github/actions/runs/33870032997) packed the coherent set once.
+  Exact-source publisher recoveries 33870221991/33870222128/33870222012 verified the same artifacts
+  on GitHub Packages and nuget.org; promotion 33871002330 and coherence 33871002212 sealed source
+  `4b93b10d8baf67c283aeed2f71b955cc7e721872` as content
+  `sha256:fed9f415161a1d8aae4a951d756ece1712dd85a1e86cb37f35acf00e9d97177b`.
+  All fourteen journal-bound Kit and Coord receiver receipts verified with zero findings.
+
 - **2026-09-01** — **auto-publish evidence: FS.GG.Kit 0.78.1** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/actions/runs/33517994174) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.78.1/FS.GG.Kit.0.78.1.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.78.1/fs.gg.kit.0.78.1.nupkg). Both served nuspecs record repository commit c028d0ca62347e4cf94270cee59c4f84c482b738.
 
 - **2026-08-31** — **`new-sdd-workspace` 0.11.1 published and reconciled**
