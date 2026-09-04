@@ -1,0 +1,70 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[projections: current — the protocol is stated once, and every projection agrees with it.
+generate-driver-manifest: registry/driver-skill-manifest.json and registry/coordination-kit-skill-manifest.json are current.
+registry changelog protocol holds (top entry and updated: 2026-09-04)
+  ok   framework: exits 0
+  ok   framework: all three fields advanced
+  ok   framework: every provenance comment survives the write
+  ok   framework: neighbouring contract rows untouched
+  ok   template-only: classified as template-only
+  ok   template-only: the pin HOLDS while the package advances
+  ok   template-only: no library snapshot tag demanded
+  ok   partial publish: refused as a finding (exit 1)
+  ok   partial publish: registry left BYTE-IDENTICAL
+  ok   18th member left behind: SEEN and refused (the .github#933 blind spot)
+  ok   18th member left behind: the straggler is NAMED in the finding
+  ok   18th member left behind: registry left BYTE-IDENTICAL
+  ok   18th member published too: still a clean framework release
+  ok   18th member published too: the derived set GREW to 18 with no code edit
+  ok   BOM unreadable: refuses, naming the BOM it could not read
+  ok   BOM unreadable: registry untouched — the set is never guessed from a baked-in list
+  ok   BOM with an empty dependency set: refused, not read as 'everything published'
+  ok   BOM with an empty dependency set: registry untouched
+  ok   package with no tag: refused (exit 1)
+  ok   package with no tag: registry untouched
+  ok   phantom tags: a full tag triple with no package never becomes a candidate
+  ok   framework with an incomplete tag triple: refused (exit 1)
+  ok   tag triple spanning three commits: refused (exit 1)
+  ok   registry ahead of the feed: refused (exit 1)
+  ok   registry ahead of the feed: NOT wound back
+  ok   already coherent: changed=false
+  ok   already coherent: file untouched
+  ok   stale prose: reported
+  ok   stale prose: NOT rewritten (judgement stays human)
+  ok   coherent prose: not flagged
+  ok   stale prose: framework heads and tag chains are reported without ADVANCED
+  ok   stale prose: non-ADVANCED judgement remains human-authored
+  ok   stale prose: shared NuGet grammar and anchored provenance forms
+  ok   fixture hook refuses without FSGG_FEED_FIXTURE_OK=1
+  ok   no token: refuses rather than reporting green
+  ok   unreadable member: exits 2 rather than classifying on partial data
+  ok   no package-bearing subject: a loud defect, not silence
+  ok   a mapped row present but stripped of `package-version`: refused as a defect, naming the row
+  ok   the stripped-key refusal leaves the registry BYTE-IDENTICAL
+  ok   the stripped-key refusal withholds the OTHER rows' flips too
+  ok   member with only prereleases: refused as a finding
+  ok   member with only prereleases: registry untouched
+  ok   missing field: reported as MISSING, not as a quoting bug
+  ok   unquoted version: refused as a finding
+  ok   generic single: classified single, exits 0
+  ok   generic single: package-version flipped to the feed newest
+  ok   generic single: version is LEFT UNTOUCHED (not the feed's to decide)
+  ok   generic ahead: refused as a finding (exit 1), not wound back
+  ok   generic ahead: registry untouched
+  ok   coherent set: every member at one version -> flip
+  ok   coherent set partial: refused, straggler named
+  ok   coherent set partial: registry untouched
+  ok   multi-row: rc 1 (a finding exists)
+  ok   multi-row: the clean row flipped, the refused row is byte-identical
+  ok   multi-row: PR body carries the flip, issue body carries the finding
+  ok   unmapped subject: a loud defect (rc 2), not a silent skip
+  ok   closure: stale projections name all projected values and the package tag moved coherently
+  ok   closure (decoupled): stale projections name every projected value and the tag moved coherently
+  ok   closure (decoupled): regeneration greens both projection gates
+  ok   closure (decoupled): staging exactly matches the actual registry/generated diff
+  ok   closure (coupled): stale projections name every projected value and the tag moved coherently
+  ok   closure (coupled): regeneration greens both projection gates
+  ok   closure (coupled): staging exactly matches the actual registry/generated diff
+  ok   closure guard: exactly the bot's flip-closure regenerates on a registry flip [scripts/generate-projections]
+
+64 passed, 0 failed
+]]></system-out></testcase></testsuite>

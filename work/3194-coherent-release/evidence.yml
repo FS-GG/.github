@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/release-saga.junit.xml
+      digest: "sha256:deb6571bf964b3b2c5fb9bc15e3958b9c36485df342282dbe3f8a79e25f2cec9"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/release-coherence.junit.xml
+      digest: "sha256:9a480420872c2b4a9f255ada438828ffb9aa1abe45913576873fa32aa415b13a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/receiver-verification.junit.xml
+      digest: "sha256:69118388234130c4187d45e38ecb0bb852e43b0c293f5daae116f689eb79ce70"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/lifecycle-ledger.junit.xml
+      digest: "sha256:29ac1a65465b30a708bea03c5e5e677c48c62d5732a0aa4351a8352caaa3517b"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -161,8 +161,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/registry-reconciliation.junit.xml
+      digest: "sha256:600170115a583b0e7ecead170ede32a05951c514d1f6a0c0627eabbd64be48b3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -188,8 +188,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/release-identity.junit.xml
+      digest: "sha256:97046af8901e7b9a11f1d34050d0859b866c1d2a33e580adfa0896eb464a6114"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -215,8 +215,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/public-install.junit.xml
+      digest: "sha256:56df96c21b900f50e70ec171333338f1f0e3bbe4fe026d108892dbae12fbd968"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -242,8 +242,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3194-coherent-release/test-results/3194-release.junit.xml
-      digest: "sha256:7a10a6b15920a026fc17ed0fa9e4f77b7860cf35f3c253a884189d61a5f42d37"
+      source: readiness/3194-coherent-release/test-results/generated-projections.junit.xml
+      digest: "sha256:96636b1daaf8b5c5f5f84ecc516a21d2e36f6f14e921ee39e3cda24899398fd8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1

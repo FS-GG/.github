@@ -1,0 +1,4 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[You can invoke the tool using the following command: fsgg-coord-engine
+Tool 'fs.gg.coord.cli' (version '0.80.0') was successfully installed.
+public tool version: 0.80.0.0
+]]></system-out></testcase></testsuite>

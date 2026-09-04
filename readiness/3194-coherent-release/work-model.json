@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a58f8cf295678ffa3af124dcb73eaaf3a8e6b275bc796497dbe0ab6803694011"
+        "value": "c4a73a68b8b057917d85d083c91b209fbe7efb7df25f65cdb37c726d47af8c89"
       }
     },
     {
@@ -701,7 +701,7 @@
           "path": "work/3194-coherent-release/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a58f8cf295678ffa3af124dcb73eaaf3a8e6b275bc796497dbe0ab6803694011"
+            "value": "c4a73a68b8b057917d85d083c91b209fbe7efb7df25f65cdb37c726d47af8c89"
           },
           "schemaVersion": 1
         },
@@ -732,7 +732,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "0ce196786871b9da6cec48cf24eebf98f83542e061325c013a076976212a853e"
+        "value": "b31977db7de3ad4015584f0c00047c61e2e1c583de090caf233073c34d7bef8c"
       },
       "currency": "current"
     }

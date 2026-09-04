@@ -1,0 +1,39 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[--- the green baseline: newest fully-coherent trio (0.23.0) served by all three, both feeds ---
+PASS  all three serve the newest coordinated release on both feeds
+PASS  the NEWER of two fully-coherent trios (0.23.0, not 0.22.0) is chosen as the target
+
+--- the defect the gate was built for: precondition passed, one sibling's publish did not ---
+PASS  Drivers's precondition passed but its own publish never completed
+
+--- matching all three passes (the converse of the case above) ---
+PASS  Drivers republishes and all three re-agree
+
+--- the OTHER half-completion: one package's own two feeds disagree (dual-publish gap) ---
+PASS  coord-engine reached the org feed but nuget.org's push did not complete
+
+--- the legitimate BOOTSTRAP state: no coordinated release has ever completed — never a red ---
+PASS  no coordinated release yet is a clean pass, not a failure
+PASS  the bootstrap state names itself explicitly, so a silent pass is never mistaken for a check
+
+--- a tag existing on only TWO of three names no target (no shared trio) — still a clean pass ---
+PASS  the newest SHARED trio (0.22.0, since 0.23.0 lost coord-engine) is the target and it is met
+
+--- fails CLOSED: an absent/empty/prerelease-only/unreadable subject is an ERROR, not a skip ---
+PASS  a package missing from the org feed (404) fails, not skips
+PASS  a package the feed serves zero versions for fails
+PASS  a package with only prereleases on a feed fails (none of the three ever ships one)
+PASS  an unreadable tag namespace (git ls-remote failure equivalent) fails
+
+--- fails CLOSED on a missing token (no --fixture-*, live path) ---
+PASS  a missing token fails the gate rather than skipping it
+
+--- --remote is refused when it names a different repository (offline: checked before any read) ---
+PASS  a --remote naming a different repository is refused before any network read
+
+--- fixture mode announces itself, requires ALL THREE flags together, and is locked to this harness ---
+PASS  fixture mode prints a banner
+PASS  two of three fixture flags without the third refuses rather than reading one subject live
+PASS  fixture flags refuse to run without FSGG_RELEASE_COHERENCE_FIXTURE_OK
+
+17 passed, 0 failed.
+]]></system-out></testcase></testsuite>

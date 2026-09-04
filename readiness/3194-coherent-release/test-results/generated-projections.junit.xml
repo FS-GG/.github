@@ -1,0 +1,46 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[projections: current — the protocol is stated once, and every projection agrees with it.
+generate-driver-manifest: registry/driver-skill-manifest.json and registry/coordination-kit-skill-manifest.json are current.
+projection fixture
+PASS  agent contract version is stable under unchanged-source regeneration
+PASS  agent contract version refuses an unreadable skill root
+PASS  agent contract version is one lowercase SHA-256 digest
+PASS  agent contract version moves when a canonical skill root changes
+PASS  agent contract version refuses an empty skill root
+PASS  coordination dispatch exports the sole producer's agent contract version
+PASS  well-formed projection passes
+PASS  prose Version cell may drift — it is no longer gated
+PASS  stale prerelease literal (0.4.0 vs 0.4.0-preview.1)
+PASS  stale prerelease literal (0.4.0 vs 0.4.0-preview.1) — and the old substring test was green here (non-vacuous)
+PASS  version literal in the wrong column does not count (9.9.9 in version, 0.4.0 in package-version)
+PASS  version literal in the wrong column does not count (9.9.9 in version, 0.4.0 in package-version) — and the old substring test was green here (non-vacuous)
+PASS  bare version 1 vs cell 1.2.0
+PASS  bare version 1 vs cell 1.2.0 — and the old substring test was green here (non-vacuous)
+PASS  quad registry 1.2.1 vs cell 1.2.1.1
+PASS  quad registry 1.2.1 vs cell 1.2.1.1 — and the old substring test was green here (non-vacuous)
+PASS  outright wrong version
+PASS  quad 1.2.1.1 vs truncated cell 1.2.1
+PASS  missing contract row
+PASS  missing coherence row
+PASS  coherent flag contradicts
+PASS  stale orchestrator current floor reds despite matching headline/history
+PASS  duplicate contradictory Current authority reds
+PASS  missing Current authority reds
+PASS  divergent provider-family floors red even when Current mentions both
+PASS  missing workspace provider-family floor reds
+PASS  missing all provider-family floors reds
+PASS  version column absent
+PASS  package-version column absent
+PASS  Coherent? column absent
+PASS  empty version cell reds
+PASS  unquoted version 1.10 (YAML-coerced to float 1.1) reds as not-a-string
+PASS  unquoted version 1.10 (YAML-coerced to float 1.1) reds as not-a-string — and the old substring test was green here (non-vacuous)
+PASS  contract missing a version literal reds
+PASS  contract missing a version literal reds — and the old substring test was green here (non-vacuous)
+PASS  version with a trailing period still matches
+PASS  version is not matched inside a longer 4-segment version
+PASS  escaped pipe in a cell does not shift columns
+PASS  checked-in registry projects cleanly
+PASS  projection report records the sole producer's agent contract version
+projection fixture — 40 assertion(s): 40 passed, 0 failed
+projection fixture — OK
+]]></system-out></testcase></testsuite>

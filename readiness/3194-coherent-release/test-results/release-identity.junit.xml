@@ -1,0 +1,6 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[manifest release/version/source/policy identity verified
+manifest-bound artifact hashes verified
+kit/v0.80.0 -> 4b93b10d8baf67c283aeed2f71b955cc7e721872
+coord-engine/v0.80.0 -> 4b93b10d8baf67c283aeed2f71b955cc7e721872
+drivers/v0.80.0 -> 4b93b10d8baf67c283aeed2f71b955cc7e721872
+]]></system-out></testcase></testsuite>
