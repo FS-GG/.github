@@ -56,6 +56,7 @@ on:
       # selectively silent, and quietest on the additive variants (.github#2551).
       - "tests/delivery-leading-line/**"
       - "tests/coord-engine-e2e/**"
+      - "tests/telemetry-parity/**"
       - "tests/coord-engine-parity/**"
       - "tests/coord-engine-mutation/**"
       - "tests/coord-engine-replay/**"
@@ -158,6 +159,9 @@ jobs:
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Prove compiled telemetry matches every frozen helper route
+        run: python3 tests/telemetry-parity/run.py
 
       - name: Assert optimized CI scheduling remains fail-closed and non-vacuous
         run: bash tests/ci-runtime-optimization/run.sh

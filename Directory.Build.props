@@ -511,8 +511,12 @@
        Claude SubagentStop record, and host acceptance, cycle completion, and Done fail closed until
        measured or strictly qualified unavailable telemetry is sealed. This repairs lifecycle evidence
        enforcement without changing a coordination-engine wire command, flag, result, or exit code. -->
+  <!-- 0.80.1 -> 0.81.0 (.github#3208): MINOR on the stable 0.x line. The coordination engine adds
+       the typed telemetry usage/lifecycle/summary and bounded roadmap-close command families, and
+       compiles critique/feedback validation into the immutable tool package. Existing Python skill
+       helpers remain frozen oracles until this command-bearing release is published and verified. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.80.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.81.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
