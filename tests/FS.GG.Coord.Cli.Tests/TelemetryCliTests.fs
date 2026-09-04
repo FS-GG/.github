@@ -80,6 +80,21 @@ module TelemetryCliTests =
         Assert.Contains("total_tokens must equal", stderr)
 
     [<Fact>]
+    let ``#3208 telemetry commands reject unknown missing-value and positional arguments`` () =
+        let disposable, path = temporary (codex 15)
+        use _ = disposable
+        let common = [ "telemetry"; "usage"; "collect"; "codex"; "--session-file"; path; "--task"; "repo#1/claim"; "--coord-version"; "1"; "--sdd-version"; "1"; "--contracts-version"; "1" ]
+        let cases =
+            [ common @ [ "--unknown-flag" ], "unrecognized argument '--unknown-flag'"
+              common @ [ "--format" ], "--format requires a value"
+              common @ [ "unexpected" ], "unexpected positional argument 'unexpected'" ]
+        for args, expected in cases do
+            let code, stdout, stderr = invoke args
+            Assert.NotEqual(ExitCode.toInt ExitCode.Green, code)
+            Assert.Equal("", stdout)
+            Assert.Contains(expected, stderr)
+
+    [<Fact>]
     let ``#3208 CSV append preserves one header and deduplicates response identity`` () =
         let sessionDisposable, sessionPath = temporary (codex 15)
         let outputDirectory = Path.Combine(Path.GetTempPath(), "fsgg-3208-append-" + Guid.NewGuid().ToString("n"))

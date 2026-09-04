@@ -14,10 +14,30 @@ module TelemetryApplication =
         error
 
     let private option (name: string) (args: string list) =
-        args |> List.tryFindIndex ((=) name) |> Option.bind (fun index -> args |> List.tryItem (index + 1))
+        args
+        |> List.indexed
+        |> List.rev
+        |> List.tryPick (fun (index, value) -> if value = name then args |> List.tryItem (index + 1) else None)
     let private options (name: string) (args: string list) =
         args |> List.indexed |> List.choose (fun (index, value) -> if value = name then args |> List.tryItem (index + 1) else None)
     let private has (name: string) (args: string list) = List.contains name args
+    let private validateArgs (valueOptions: string list) (switches: string list) (args: string list) =
+        let values, flags = Set.ofList valueOptions, Set.ofList switches
+        let rec validate remaining =
+            match remaining with
+            | [] -> Ok ()
+            | name :: tail when Set.contains name values ->
+                match tail with
+                | value :: rest when not (value.StartsWith("-", StringComparison.Ordinal)) -> validate rest
+                | _ -> Error $"%s{name} requires a value"
+            | name :: tail when Set.contains name flags -> validate tail
+            | name :: _ when name.StartsWith("-", StringComparison.Ordinal) -> Error $"unrecognized argument '%s{name}'"
+            | value :: _ -> Error $"unexpected positional argument '%s{value}'"
+        validate args
+    let private validated family valueOptions switches args run =
+        match validateArgs valueOptions switches args with
+        | Ok () -> run args
+        | Error reason -> fail family [ reason ]
     let private required (name: string) (args: string list) =
         match option name args |> Option.filter (String.IsNullOrWhiteSpace >> not) with
         | Some value -> Ok value
@@ -228,10 +248,30 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
-        | "telemetry" :: "usage" :: "collect" :: runtime :: args -> Some(usage runtime args)
-        | "telemetry" :: "lifecycle" :: action :: args -> Some(lifecycle action args)
-        | "telemetry" :: "critique" :: "validate" :: args -> Some(critique args)
-        | "telemetry" :: "feedback" :: "validate" :: args -> Some(feedback args)
-        | "roadmap" :: "close" :: action :: args -> Some(roadmap action args)
-        | "telemetry" :: "summarize" :: args -> Some(summarize args)
+        | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
+            Some(validated "telemetry usage"
+                    [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version" ]
+                    [ "--all-responses" ] args (usage runtime))
+        | "telemetry" :: "lifecycle" :: action :: args ->
+            let valueOptions, switches =
+                match action with
+                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--history-report"; "--required-phase" ], [ "--require-terminal" ]
+                | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--history-report"; "--output" ], []
+                | "export-comments" -> [ "--run"; "--unit"; "--comments"; "--output" ], []
+                | _ -> [], []
+            Some(validated "telemetry lifecycle" valueOptions switches args (lifecycle action))
+        | "telemetry" :: "critique" :: "validate" :: args ->
+            Some(validated "telemetry critique" [ "--cycle"; "--artifact"; "--head" ] [] args critique)
+        | "telemetry" :: "feedback" :: "validate" :: args ->
+            Some(validated "telemetry feedback" [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args feedback)
+        | "roadmap" :: "close" :: action :: args ->
+            let valueOptions =
+                match action with
+                | "inspect" -> [ "--evidence" ]
+                | "render" -> [ "--evidence"; "--roadmap"; "--source-digest"; "--output" ]
+                | "verify" -> [ "--evidence"; "--roadmap"; "--source-digest"; "--source-roadmap" ]
+                | _ -> []
+            Some(validated "roadmap close" valueOptions [] args (roadmap action))
+        | "telemetry" :: "summarize" :: args ->
+            Some(validated "telemetry summarize" [ "--usage" ] [] args summarize)
         | _ -> None
