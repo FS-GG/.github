@@ -3,30 +3,30 @@
      sources:
        - readiness/3201-coherent-release/agent-commands/claude/guidance.json  digest:8dff54975233c04c3a4785a7baf002d3507953aafd85a0f9ec8f246dc8cf8cba  schema:1(current)
        - readiness/3201-coherent-release/agent-commands/codex/guidance.json  digest:cbc1412029b43212bc8a960252330c9087917001b80e517138ccfb28021bb536  schema:1(current)
-       - readiness/3201-coherent-release/analysis.json  digest:2abf877f78358966b72ca9d7a9dbb94f7ede747b2e6e182ede236305576bfd06  schema:1(current)
+       - readiness/3201-coherent-release/analysis.json  digest:ddb6c257efea0fd13910e412ff866cf0a38d26a8978d45c7eb275287697c2fd5  schema:1(current)
+       - readiness/3201-coherent-release/ship.json  digest:941cba8230846e0a82372f6aa05a03ea047a4fb7598fcf414a8d80410ba33f8a  schema:1(current)
+       - readiness/3201-coherent-release/verify.json  digest:5e533e0d83e4d37b477a8d2531d0f7a37db907f9bbc07e8bfe6c8fa1a25d6327  schema:1(current)
        - readiness/3201-coherent-release/work-model.json  digest:a04cb54b67ce75b1dcc56c7f1883316ca5a831f8b322e3ae40033ac1deb956a1  schema:1(current)
-     outputDigest: 10000e0a2748afc96aca8b84b8e37c48d3f1b6a5061daab0263a6363486c19d8 -->
+     outputDigest: cfa3eb685ce4e5355c51b8cb5ba1d8140eb3cb2b299433736b5cb14058839a75 -->
 
 # Readiness Summary — 3201-coherent-release
 
-**Lifecycle stage**: refresh  **Outcome**: succeededWithWarnings  **Disposition**: awaiting-lifecycle
+**Lifecycle stage**: refresh  **Outcome**: succeeded  **Disposition**: refreshed-current
 
 ## Generated-view currency
 | View | State |
 |---|---|
 | work-model | current |
 | analysis | current |
-| verify | missing |
-| ship | missing |
-| ship-verdict | missing |
-| governance-handoff | missing |
+| verify | current |
+| ship | current |
+| ship-verdict | current |
+| governance-handoff | current |
 | agent-commands | current |
 | summary | current |
 
 ## Diagnostics
-- refresh.notYetGenerated (info) readiness/3201-coherent-release/ship-verdict.json: Generated view 'readiness/3201-coherent-release/ship-verdict.json' has not been produced at the current lifecycle state. — Run `fsgg-sdd ship` for this work item; refresh reports downstream lifecycle views but does not generate them out of order.
-- refresh.notYetGenerated (info) readiness/3201-coherent-release/ship.json: Generated view 'readiness/3201-coherent-release/ship.json' has not been produced at the current lifecycle state. — Run `fsgg-sdd ship` for this work item; refresh reports downstream lifecycle views but does not generate them out of order.
-- refresh.notYetGenerated (info) readiness/3201-coherent-release/verify.json: Generated view 'readiness/3201-coherent-release/verify.json' has not been produced at the current lifecycle state. — Run `fsgg-sdd verify` for this work item; refresh reports downstream lifecycle views but does not generate them out of order.
+None
 
 ## Next action
-Run the next lifecycle command named by the not-yet-generated view; refresh does not generate lifecycle views out of order.
+Generated views are current; rely on the refreshed readiness for the selected work item.
