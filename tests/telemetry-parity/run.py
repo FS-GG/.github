@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Stage-A black-box differential gate for every frozen helper surface (#3208)."""
+"""Stage-C black-box gate over the frozen helper corpus (#3208)."""
 
 from __future__ import annotations
 
 import copy
 import hashlib
-import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -15,9 +15,46 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.dont_write_bytecode = True
-ENGINE = ROOT / "src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine.dll"
-WORK = ROOT / ".agents/skills/work-roadmap/scripts"
-PNEXT = ROOT / ".agents/skills/pnext-item/scripts"
+ENGINE = Path(os.environ["FSGG_COORD_ENGINE_BIN"])
+FIXTURES = ROOT / "tests/telemetry-parity/fixtures"
+
+
+def helper_absence() -> None:
+    removed = (
+        "collect-runtime-" + "usage.py",
+        "validate-lifecycle-" + "log.py",
+        "validate-critique-" + "state.py",
+        "validate-feedback-" + "state.py",
+    )
+    live_roots = (
+        ROOT / ".agents/skills",
+        ROOT / ".claude/skills",
+        ROOT / "src",
+        ROOT / ".github/workflows",
+    )
+    findings: list[str] = []
+    for live_root in live_roots:
+        for path in live_root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(ROOT).as_posix()
+            if {"bin", "obj"} & set(path.relative_to(live_root).parts):
+                continue
+            if any(name in relative for name in removed):
+                findings.append(relative)
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if any(name in text for name in removed):
+                findings.append(relative)
+    for manifest in (ROOT / "registry/driver-skill-manifest.json", ROOT / "registry/coordination-kit-skill-manifest.json"):
+        text = manifest.read_text(encoding="utf-8")
+        if any(name in text for name in removed):
+            findings.append(manifest.relative_to(ROOT).as_posix())
+    if findings:
+        raise SystemExit("removed telemetry compatibility helper remains in a live/package surface: " + ", ".join(sorted(set(findings))))
 
 
 def run(args: list[str], *, cwd: Path = ROOT, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -28,22 +65,14 @@ def run(args: list[str], *, cwd: Path = ROOT, check: bool = False) -> subprocess
 
 
 def engine(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
-    return run(["dotnet", str(ENGINE), *args], cwd=cwd)
+    return run([str(ENGINE), *args], cwd=cwd)
 
 
-def load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def same_verdict(label: str, python: subprocess.CompletedProcess[str], compiled: subprocess.CompletedProcess[str], expected: bool) -> None:
-    if (python.returncode == 0, compiled.returncode == 0) != (expected, expected):
+def expect_verdict(label: str, compiled: subprocess.CompletedProcess[str], expected: bool) -> None:
+    if (compiled.returncode == 0) != expected:
         raise SystemExit(
-            f"{label} differential verdict failed: python={python.returncode}, compiled={compiled.returncode}\n"
-            f"python stderr={python.stderr}\ncompiled stderr={compiled.stderr}"
+            f"{label} frozen verdict failed: compiled={compiled.returncode}\n"
+            f"compiled stderr={compiled.stderr}"
         )
 
 
@@ -61,6 +90,21 @@ def codex_session(path: Path) -> None:
     path.write_text("\n".join(json.dumps(row, separators=(",", ":")) for row in rows) + "\n", encoding="utf-8")
 
 
+def canonical_digest(event: dict) -> str:
+    payload = {key: value for key, value in event.items() if key != "digest"}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def seal(events: list[dict]) -> None:
+    previous = None
+    for index, event in enumerate(events, 1):
+        event["sequence"] = index
+        event["revision"] = index
+        event["previous_digest"] = previous
+        event["digest"] = canonical_digest(event)
+        previous = event["digest"]
+
+
 def collector_parity(directory: Path) -> tuple[int, int, Path]:
     session = directory / "session.jsonl"
     codex_session(session)
@@ -75,24 +119,48 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
     common = ["--task", "repo#1/claim", "--coord-version", "4.5.6", "--sdd-version", "7.8.9", "--contracts-version", "10.0.0"]
     runtimes = [("codex", "--session-file", session), ("claude", "--snapshot", snapshot)]
     positive = 0
+    frozen = {
+        "codex": {
+            "response_id": "response-1", "source": "codex-session-jsonl:sha256:bea5edd51a341797657e24c0fec9d0f4519ea6e543823042fb858d3fce0ae750",
+            "provider": "OpenAI", "model": "gpt-test", "runtime_version": "1.2.3", "input": 10,
+            "cached_input": 4, "cache_write_input": 0, "output": 5, "reasoning": 2, "total": 15,
+        },
+        "claude": {
+            "response_id": "claude-a1130b5757513393219ca24fd4146dd62ff53576907763cf13ff39f88fc021a0",
+            "source": "claude-statusline-json:sha256:f0f4542d369b3608ea1b99150bed10b5128fd0f830631f5056e29a1abc70adb0",
+            "provider": "Anthropic", "model": "claude-test", "runtime_version": "2.3.4", "input": 10,
+            "cached_input": 2, "cache_write_input": 1, "output": 3, "reasoning": "", "total": 13,
+        },
+    }
     for runtime, source_flag, source in runtimes:
         for output_format in ("csv", "json"):
             args = [runtime, source_flag, str(source), *common, "--format", output_format]
-            python = run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args], check=True)
             compiled = engine("telemetry", "usage", "collect", *args)
-            if compiled.returncode or compiled.stdout != python.stdout:
-                raise SystemExit(f"collector {runtime}/{output_format} parity failed\npython={python.stdout!r}\ncompiled={compiled.stdout!r}\n{compiled.stderr}")
+            if compiled.returncode:
+                raise SystemExit(f"collector {runtime}/{output_format} frozen positive failed\n{compiled.stderr}")
+            expected = frozen[runtime]
+            if output_format == "json":
+                row = json.loads(compiled.stdout)
+                for key, value in expected.items():
+                    if row.get(key) != value:
+                        raise SystemExit(f"collector {runtime} changed frozen {key}: {row.get(key)!r} != {value!r}")
+                if json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n" != compiled.stdout:
+                    raise SystemExit(f"collector {runtime} JSON is not canonical")
+            else:
+                lines = compiled.stdout.splitlines()
+                if len(lines) != 2 or lines[0] != "timestamp,task,session_id,thread_id,turn_id,response_id,provider,model,effort,runtime_version,coordination_version,sdd_version,contracts_version,ledger_schema,input,cached_input,cache_write_input,output,reasoning,total,turn_input,turn_cached_input,turn_cache_write_input,turn_output,turn_reasoning,turn_total,thread_input,thread_cached_input,thread_cache_write_input,thread_output,thread_reasoning,thread_total,source":
+                    raise SystemExit(f"collector {runtime} changed the frozen CSV contract")
+                if expected["response_id"] not in lines[1] or expected["source"] not in lines[1]:
+                    raise SystemExit(f"collector {runtime} CSV lost frozen identity bindings")
             positive += 1
 
-            python_path = directory / "python" / runtime / output_format / "nested" / f"usage.{output_format}l"
             compiled_path = directory / "compiled" / runtime / output_format / "nested" / f"usage.{output_format}l"
-            for target, prefix in ((python_path, ["python3", str(PNEXT / "collect-runtime-usage.py")]),
-                                   (compiled_path, ["dotnet", str(ENGINE), "telemetry", "usage", "collect"])):
-                append_args = [*prefix, *args, "--append", str(target)]
-                run(append_args, check=True)
-                run(append_args, check=True)
-            if python_path.read_bytes() != compiled_path.read_bytes():
-                raise SystemExit(f"collector {runtime}/{output_format} append parity failed")
+            append_args = [str(ENGINE), "telemetry", "usage", "collect", *args, "--append", str(compiled_path)]
+            run(append_args, check=True)
+            first = compiled_path.read_bytes()
+            run(append_args, check=True)
+            if compiled_path.read_bytes() != first:
+                raise SystemExit(f"collector {runtime}/{output_format} append is not idempotent")
             positive += 1
 
     bad_lines = session.read_text(encoding="utf-8").splitlines()
@@ -102,9 +170,7 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
     invalid = directory / "bad-session.jsonl"
     invalid.write_text("\n".join(bad_lines) + "\n", encoding="utf-8")
     args = ["codex", "--session-file", str(invalid), *common]
-    same_verdict("collector invalid arithmetic",
-                 run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
-                 engine("telemetry", "usage", "collect", *args), False)
+    expect_verdict("collector invalid arithmetic", engine("telemetry", "usage", "collect", *args), False)
 
     latest = json.loads(session.read_text(encoding="utf-8").splitlines()[-1])
     latest.pop("timestamp")
@@ -112,36 +178,31 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
     malformed_latest = directory / "malformed-latest-session.jsonl"
     malformed_latest.write_text(session.read_text(encoding="utf-8") + json.dumps(latest) + "\n", encoding="utf-8")
     args = ["codex", "--session-file", str(malformed_latest), *common]
-    same_verdict("collector malformed latest response cannot fall back to older response",
-                 run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
-                 engine("telemetry", "usage", "collect", *args), False)
+    expect_verdict("collector malformed latest response cannot fall back to older response", engine("telemetry", "usage", "collect", *args), False)
 
     args = ["codex", "--session-file", str(session), *common, "--unknown-flag"]
-    same_verdict("collector unknown option",
-                 run(["python3", str(PNEXT / "collect-runtime-usage.py"), *args]),
-                 engine("telemetry", "usage", "collect", *args), False)
+    expect_verdict("collector unknown option", engine("telemetry", "usage", "collect", *args), False)
     return positive, 3, session
 
 
 def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
-    oracle = load("lifecycle_oracle", PNEXT / "validate-lifecycle-log.py")
     usage = directory / "usage.csv"
-    collected = run(["python3", str(PNEXT / "collect-runtime-usage.py"), "codex", "--session-file", str(session),
-                     "--task", "FS-GG/.github#42/claim", "--coord-version", "4.5.6",
-                     "--sdd-version", "7.8.9", "--contracts-version", "10.0.0"], check=True)
+    collected = engine("telemetry", "usage", "collect", "codex", "--session-file", str(session),
+                       "--task", "FS-GG/.github#42/claim", "--coord-version", "4.5.6",
+                       "--sdd-version", "7.8.9", "--contracts-version", "10.0.0")
+    if collected.returncode:
+        raise SystemExit(collected.stderr)
     usage.write_text(collected.stdout, encoding="utf-8")
     source = "runtime-usage-csv:sha256:" + hashlib.sha256(usage.read_bytes()).hexdigest()
-    base = oracle.valid_fixture()
+    base = [json.loads(line) for line in (FIXTURES / "lifecycle-valid.jsonl").read_text(encoding="utf-8").splitlines()]
     base[1]["token_usage"]["source"] = source
-    oracle.seal(base)
+    seal(base)
     log = directory / "lifecycle.jsonl"
     log.write_text("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for row in base) + "\n", encoding="utf-8")
 
     shared = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--log", str(log), "--usage", str(usage),
               "--required-phase", "claim", "--required-phase", "implement", "--require-terminal"]
-    same_verdict("lifecycle validate",
-                 run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *shared]),
-                 engine("telemetry", "lifecycle", "validate", *shared), True)
+    expect_verdict("lifecycle validate", engine("telemetry", "lifecycle", "validate", *shared), True)
     positive = 1
 
     chain_fields = {"sequence", "revision", "previous_digest", "digest"}
@@ -151,10 +212,9 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
     draft.write_text(json.dumps({key: value for key, value in base[1].items() if key not in chain_fields},
                                 sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
     seal_args = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--existing", str(existing), "--usage", str(usage)]
-    python = run(["python3", str(PNEXT / "validate-lifecycle-log.py"), "--seal-successor", str(draft), *seal_args])
     compiled = engine("telemetry", "lifecycle", "seal-successor", "--draft", str(draft), *seal_args)
-    if python.returncode or compiled.returncode or python.stdout != compiled.stdout:
-        raise SystemExit(f"lifecycle seal parity failed\npython={python.stdout!r} {python.stderr}\ncompiled={compiled.stdout!r} {compiled.stderr}")
+    if compiled.returncode or json.loads(compiled.stdout) != base[1]:
+        raise SystemExit(f"lifecycle seal frozen output failed\n{compiled.stdout!r} {compiled.stderr}")
     positive += 1
 
     def comment(event: dict, number: int, updated: bool = False) -> dict:
@@ -165,20 +225,18 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
     comments = directory / "comments.json"
     comments.write_text(json.dumps([[comment(base[0], 1)]]), encoding="utf-8")
     export_args = ["--run", "roadmap-v2", "--unit", "GS2-01.1"]
-    python = run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *export_args, "--export-comments", str(comments)])
     compiled = engine("telemetry", "lifecycle", "export-comments", *export_args, "--comments", str(comments))
-    if python.returncode or compiled.returncode or python.stdout != compiled.stdout:
-        raise SystemExit("lifecycle export parity failed")
+    if compiled.returncode or compiled.stdout != json.dumps(base[0], sort_keys=True, separators=(",", ":")) + "\n":
+        raise SystemExit("lifecycle export changed frozen output")
     positive += 1
 
     fork = copy.deepcopy(base[0])
     fork["actor"] = "critic-2"
-    fork["digest"] = oracle.canonical_digest(fork)
+    fork["digest"] = canonical_digest(fork)
     comments.write_text(json.dumps([[comment(base[0], 1), comment(fork, 2)]]), encoding="utf-8")
-    python = run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *export_args, "--export-comments", str(comments)])
     compiled = engine("telemetry", "lifecycle", "export-comments", *export_args, "--comments", str(comments))
-    if python.returncode or compiled.returncode or python.stdout != compiled.stdout:
-        raise SystemExit("lifecycle deterministic-fork export parity failed")
+    if compiled.returncode or compiled.stdout != json.dumps(base[0], sort_keys=True, separators=(",", ":")) + "\n":
+        raise SystemExit("lifecycle deterministic-fork export changed frozen election")
     positive += 1
 
     mutations = {
@@ -207,9 +265,7 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
         phases = ["claim", "implement", "acceptance"] if name == "missing required phase" else ["claim", "implement"]
         phase_args = [value for phase in phases for value in ("--required-phase", phase)]
         args = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--log", str(candidate), "--usage", str(usage), *phase_args, "--require-terminal"]
-        same_verdict(f"lifecycle rejection: {name}",
-                     run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *args]),
-                     engine("telemetry", "lifecycle", "validate", *args), False)
+        expect_verdict(f"lifecycle rejection: {name}", engine("telemetry", "lifecycle", "validate", *args), False)
         rejected += 1
 
     provenance = {
@@ -223,26 +279,23 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
     for name, mutate in provenance.items():
         rows = copy.deepcopy(base)
         mutate(rows)
-        oracle.seal(rows)
+        seal(rows)
         candidate = directory / f"lifecycle-provenance-{rejected}.jsonl"
         candidate.write_text("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for row in rows) + "\n", encoding="utf-8")
         args = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--log", str(candidate), "--usage", str(usage),
                 "--required-phase", "claim", "--required-phase", "implement", "--require-terminal"]
-        same_verdict(f"lifecycle rejection: {name}",
-                     run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *args]),
-                     engine("telemetry", "lifecycle", "validate", *args), False)
+        expect_verdict(f"lifecycle rejection: {name}", engine("telemetry", "lifecycle", "validate", *args), False)
         rejected += 1
 
     invalid_forks = []
     bad_digest = copy.deepcopy(fork); bad_digest["digest"] = "f" * 64; invalid_forks.append((bad_digest, False))
-    alternate = copy.deepcopy(fork); alternate["previous_digest"] = "e" * 64; alternate["digest"] = oracle.canonical_digest(alternate); invalid_forks.append((alternate, False))
-    missing_actor = copy.deepcopy(fork); del missing_actor["actor"]; missing_actor["digest"] = oracle.canonical_digest(missing_actor); invalid_forks.append((missing_actor, False))
+    alternate = copy.deepcopy(fork); alternate["previous_digest"] = "e" * 64; alternate["digest"] = canonical_digest(alternate); invalid_forks.append((alternate, False))
+    missing_actor = copy.deepcopy(fork); del missing_actor["actor"]; missing_actor["digest"] = canonical_digest(missing_actor); invalid_forks.append((missing_actor, False))
     invalid_forks.append((base[0], True))
     for event, edited in invalid_forks:
         comments.write_text(json.dumps([[comment(base[0], 1), comment(event, 2, edited)]]), encoding="utf-8")
-        same_verdict("lifecycle rejected fork/comment",
-                     run(["python3", str(PNEXT / "validate-lifecycle-log.py"), *export_args, "--export-comments", str(comments)]),
-                     engine("telemetry", "lifecycle", "export-comments", *export_args, "--comments", str(comments)), False)
+        expect_verdict("lifecycle rejected fork/comment",
+                       engine("telemetry", "lifecycle", "export-comments", *export_args, "--comments", str(comments)), False)
         rejected += 1
     return positive, rejected
 
@@ -254,9 +307,8 @@ def critique_parity(directory: Path) -> tuple[int, int]:
         cycle, head = data.get("cycle_id"), data.get("confirmation", {}).get("reviewed_commit")
         if not isinstance(cycle, str) or not isinstance(head, str):
             continue
-        python = run(["python3", str(WORK / "validate-critique-state.py"), "--root", str(ROOT), "--cycle", cycle, "--artifact", str(artifact.relative_to(ROOT))])
         compiled = engine("telemetry", "critique", "validate", "--cycle", cycle, "--head", head, "--artifact", str(artifact))
-        same_verdict(f"critique positive {artifact.name}", python, compiled, True)
+        expect_verdict(f"critique positive {artifact.name}", compiled, True)
         positive += 1
 
     source = next(path for path in sorted((ROOT / "reviews/roadmap").glob("*.json")) if json.loads(path.read_text())["findings"])
@@ -281,9 +333,8 @@ def critique_parity(directory: Path) -> tuple[int, int]:
         candidate = copy.deepcopy(base)
         mutate(candidate)
         target.write_text(json.dumps(candidate), encoding="utf-8")
-        same_verdict(f"critique rejection: {name}",
-                     run(["python3", str(WORK / "validate-critique-state.py"), "--root", str(directory), "--cycle", cycle, "--artifact", str(relative)]),
-                     engine("telemetry", "critique", "validate", "--cycle", cycle, "--head", head, "--artifact", str(relative), cwd=directory), False)
+        expect_verdict(f"critique rejection: {name}",
+                       engine("telemetry", "critique", "validate", "--cycle", cycle, "--head", head, "--artifact", str(relative), cwd=directory), False)
         rejected += 1
     return positive, rejected
 
@@ -298,9 +349,8 @@ def feedback_parity(directory: Path) -> tuple[int, int]:
         if not cycle or not phases or not audit.is_file():
             continue
         phase_value = phases.group(1)
-        python = run(["python3", str(WORK / "validate-feedback-state.py"), "--root", str(ROOT), "--cycle", cycle.group(1), "--report", str(report.relative_to(ROOT)), "--audit", str(audit.relative_to(ROOT)), "--phases", phase_value])
         compiled = engine("telemetry", "feedback", "validate", "--cycle", cycle.group(1), "--report", str(report.relative_to(ROOT)), "--audit", str(audit.relative_to(ROOT)), "--phases", phase_value)
-        same_verdict(f"feedback positive {report.name}", python, compiled, True)
+        expect_verdict(f"feedback positive {report.name}", compiled, True)
         positive += 1
 
     cycle = "roadmap-parity-m1-feedback"
@@ -331,11 +381,10 @@ def feedback_parity(directory: Path) -> tuple[int, int]:
 
     def verdict(label: str, expected: bool) -> None:
         common = ["--cycle", cycle, "--report", str(report_rel), "--audit", str(audit_rel), "--phases", "claim, implementation"]
-        python = run(["python3", str(WORK / "validate-feedback-state.py"), "--root", str(directory), *common])
         compiled_args = ["telemetry", "feedback", "validate", *common]
         if checkpoint_path.exists():
             compiled_args.extend(["--checkpoint", str(checkpoint_rel)])
-        same_verdict(label, python, engine(*compiled_args, cwd=directory), expected)
+        expect_verdict(label, engine(*compiled_args, cwd=directory), expected)
 
     write_case(report_text(), None)
     verdict("feedback synthetic zero-event positive", True)
@@ -362,9 +411,7 @@ def feedback_parity(directory: Path) -> tuple[int, int]:
 
 
 def main() -> int:
-    run(["dotnet", "build", str(ROOT / "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"), "-c", "Release", "--no-restore"], check=True)
-    run(["python3", str(PNEXT / "collect-runtime-usage.py"), "--self-test"], check=True)
-    run(["python3", str(PNEXT / "validate-lifecycle-log.py"), "--self-test"], check=True)
+    helper_absence()
     positive = rejected = 0
     with tempfile.TemporaryDirectory(prefix="fsgg-3208-parity-") as path:
         directory = Path(path)
@@ -372,7 +419,7 @@ def main() -> int:
         p, r = lifecycle_parity(directory, session); positive += p; rejected += r
         p, r = critique_parity(directory / "critique"); positive += p; rejected += r
         p, r = feedback_parity(directory / "feedback-root"); positive += p; rejected += r
-    print(f"telemetry-parity: pass ({positive} positive and {rejected} rejection differential cases across the full frozen helper corpus)")
+    print(f"telemetry-parity: pass ({positive} positive and {rejected} rejection cases across the full frozen helper corpus)")
     return 0
 
 

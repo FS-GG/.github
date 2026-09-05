@@ -1,0 +1,29 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  0. a fresh offender with an empty baseline is a FINDING (rc=1)
+PASS  0b. the finding names the offending file
+PASS  1. all 7 banned spellings are caught individually
+PASS  2. six genuinely safe spellings are NOT flagged (rc=0)
+PASS  2b. a mid-pipeline grep is not read as an early-exiting reader
+PASS  3. a file that does not set pipefail is out of scope (rc=0)
+PASS  4. a whole-line comment quoting the idiom is exempt (rc=0)
+PASS  4b. the pragma WITH a reason suppresses the site (rc=0)
+PASS  4c. the pragma WITHOUT a reason suppresses NOTHING (rc=1)
+PASS  5. a count that matches the tree EXACTLY is green (rc=0)
+PASS  6. MORE sites than the baseline allows is a finding (a new site arrived) (rc=1)
+PASS  7. FEWER sites than the baseline claims is ALSO a finding (the baseline is stale) (rc=1)
+PASS  7b. the stale finding says so, and prints the lower number to write
+PASS  8. converting sites WITHOUT decrementing the baseline reds (the ratchet bites)
+PASS  8b. the same conversion WITH its decrement, in one commit, is green (rc=0)
+PASS  9. a baseline entry for a path that no longer exists is a finding (rc=1)
+PASS  10. a command-named shell file with NO extension is discovered (rc=1)
+PASS  10b. zsh/python/fish are not shell, and are not accused (rc=0)
+PASS  11. a corpus with ZERO shell files is NO VERDICT, not green (rc=3)
+PASS  12. shell files but NONE setting pipefail is NO VERDICT, not green (rc=3)
+PASS  13. an unreadable/missing baseline is NO VERDICT, not green (rc=3)
+PASS  14. a malformed baseline entry is NO VERDICT, not green (rc=3)
+PASS  14b. a duplicated baseline entry is NO VERDICT, not green (rc=3)
+PASS  15. this repo matches tests/pipefail-assertions/baseline.txt exactly
+PASS  15b. the baseline still describes a real corpus (54 files, 1166 sites)
+
+pipefail-assertions fixture: 25 passed, 0 failed
+pipefail-assertions fixture: OK
+]]></system-out></testcase></testsuite>

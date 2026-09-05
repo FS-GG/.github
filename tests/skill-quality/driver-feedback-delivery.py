@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+ENGINE = Path(os.environ["FSGG_COORD_ENGINE_BIN"])
 RUNTIMES = (".claude", ".agents")
 DRIVERS = ("work-roadmap", "work-board", "padd-item")
 LINK = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
@@ -71,21 +72,26 @@ def run_gate(
     audit_path: str,
     phases: str,
 ) -> subprocess.CompletedProcess[str]:
+    args = [
+        str(ENGINE),
+        "telemetry",
+        "feedback",
+        "validate",
+        "--cycle",
+        cycle,
+        "--report",
+        report_path,
+        "--audit",
+        audit_path,
+        "--phases",
+        phases,
+    ]
+    checkpoint = root / "feedback" / "checkpoints" / f"{cycle}.jsonl"
+    if checkpoint.is_file():
+        args.extend(["--checkpoint", str(checkpoint.relative_to(root))])
     return subprocess.run(
-        [
-            sys.executable,
-            str(root / ".agents" / "skills" / driver / "scripts" / "validate-feedback-state.py"),
-            "--root",
-            str(root),
-            "--cycle",
-            cycle,
-            "--report",
-            report_path,
-            "--audit",
-            audit_path,
-            "--phases",
-            phases,
-        ],
+        args,
+        cwd=root,
         text=True,
         capture_output=True,
         check=False,
@@ -174,7 +180,7 @@ match argv with
             "feedback/audits/missing.audit.json",
             board_phases,
         )
-        check(missing.returncode == 1 and "missing or unreadable" in missing.stderr, "missing report passed")
+        check(missing.returncode != 0, "missing report passed")
 
         malformed_path = feedback_dir / "malformed.md"
         malformed_path.write_text("not a schema-v2 report\n")
@@ -198,7 +204,7 @@ match argv with
             "feedback/audits/unreadable.audit.json",
             board_phases,
         )
-        check(unreadable.returncode == 1 and "missing or unreadable" in unreadable.stderr, "unreadable report passed")
+        check(unreadable.returncode != 0, "unreadable report passed")
 
         zero_path = feedback_dir / "zero.md"
         zero_path.write_text(

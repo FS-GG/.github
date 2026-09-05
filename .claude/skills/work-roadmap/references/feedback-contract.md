@@ -41,8 +41,8 @@ envelope and the same audit/report binding:
 ```sh
 dotnet fsi .agents/skills/fs-gg-feedback-report/scripts/feedback-tool.fsx -- \
   validate feedback/<report>.md --audit feedback/audits/<report-stem>.audit.json
-python3 .agents/skills/work-roadmap/scripts/validate-feedback-state.py \
-  --root . --cycle <cycle-id> --report feedback/<report>.md \
+scripts/fsgg-coord telemetry feedback validate \
+  --cycle <cycle-id> --report feedback/<report>.md \
   --audit feedback/audits/<report-stem>.audit.json \
   --phases onboarding-first-build,lifecycle-authoring,implementation-test-evidence,verify-ship-pr
 ```
@@ -52,8 +52,8 @@ milestone. A command passes only when the validator itself exits `0`; capture it
 and test that exit status immediately. For example:
 
 ```sh
-validation_output="$(python3 .agents/skills/work-roadmap/scripts/validate-feedback-state.py \
-  --root . --cycle <cycle-id> --report feedback/<report>.md \
+validation_output="$(scripts/fsgg-coord telemetry feedback validate \
+  --cycle <cycle-id> --report feedback/<report>.md \
   --audit feedback/audits/<report-stem>.audit.json \
   --phases onboarding-first-build,lifecycle-authoring,implementation-test-evidence,verify-ship-pr)"
 validation_status=$?

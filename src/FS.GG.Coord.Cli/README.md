@@ -88,9 +88,9 @@ all unit, head, cycle, report, audit, claim, and check identities are joined bef
 prints only a candidate document. `verify` additionally requires `--source-roadmap`, authenticates its
 `--source-digest`, and proves that the candidate changed no bytes outside the marked unit block.
 
-Version 0.81.0 is the publish-before-adopt stage. The packaged Python provider validators remain the frozen
-authority for cycle-ledger consumers until differential parity is accepted. The following coherent release
-flips `work-roadmap` and `pnext-item` to these compiled commands and removes the compatibility helpers.
+Version 0.81.0 established the publish-before-adopt boundary. Current callers and cycle-ledger provider
+validation use these compiled commands directly; the frozen Python differential corpus remains an
+independent test oracle, while no Python compatibility helper is packaged or invoked at runtime.
 
 ## License
 

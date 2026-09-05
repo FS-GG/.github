@@ -49,6 +49,8 @@ if [ "$ENGINE_STATE_BEFORE" != "$ENGINE_STATE_AFTER" ]; then
   exit 1
 fi
 echo "PASS  .github#2653: check-skill-quality left this checkout's in-tree engine artifacts untouched"
+FSGG_COORD_ENGINE_BIN="$($ROOT/scripts/build-gate-engine)"
+export FSGG_COORD_ENGINE_BIN
 python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
@@ -58,10 +60,7 @@ python3 "$ROOT/tests/skill-quality/analyst-dispatch.py"
 python3 "$ROOT/tests/skill-quality/validated-intake-filing.py"
 python3 "$ROOT/tests/skill-quality/test-report-roadmap-health.py"
 python3 "$ROOT/tests/skill-quality/lifecycle-append-authority.py"
-python3 "$ROOT/.agents/skills/work-roadmap/scripts/validate-lifecycle-log.py" --self-test
-python3 "$ROOT/.agents/skills/work-roadmap/scripts/collect-runtime-usage.py" --self-test
-python3 "$ROOT/.agents/skills/pnext-item/scripts/validate-lifecycle-log.py" --self-test
-python3 "$ROOT/.agents/skills/pnext-item/scripts/collect-runtime-usage.py" --self-test
+python3 "$ROOT/tests/telemetry-parity/run.py"
 
 # .github#2666 — a gate nothing invokes is graded NOT_MEASURED at best. Each gate above asserts its
 # own workflow path filter, but the workflow only ever runs THIS file, so a gate dropped from the

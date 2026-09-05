@@ -1,0 +1,1352 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "3208-fsharp-roadmap-telemetry-projection",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cf604e0e1444466d5a07e8b4058c613c64df07db3db1d3ea8ca0fae3dbb85bb3"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "78e4b8b964e46844262a4028960a78156a462e454a3f8a1268c834c82d30bb5d"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "744f26ede589217dcd1bb5f0a8e4451a86b0fe5813142c306758c54911291372"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "3add83ce0d6e8671c07e5964ad52985d6b8b6e1f2d5848b552a339994983d220"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "4f1557d86451aceb2e51d889f251cdfb41ce806d5d4281ebbddf3569ea1cc568"
+      }
+    },
+    {
+      "path": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "18388385b3c870737f6717ced6eaf68fa405afd292317b307585803277b332d7"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "3208-fsharp-roadmap-telemetry-projection",
+    "title": "Typed F# roadmap telemetry and projection automation",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Add closed F# domain types and pure reducers for runtime usage, lifecycle events and comment election, critique schema v3, feedback schema v2/audit, telemetry summaries, roadmap closure, and bounded projection. (Stories: US-001; Acceptance: AC-001, AC-002)",
+      "text": "Add closed F# domain types and pure reducers for runtime usage, lifecycle events and comment election, critique schema v3, feedback schema v2/audit, telemetry summaries, roadmap closure, and bounded projection. (Stories: US-001; Acceptance: AC-001, AC-002)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 46,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Expose \u0060telemetry usage collect\u0060, \u0060telemetry lifecycle export-comments|seal-successor|validate\u0060, \u0060telemetry summarize\u0060, and \u0060roadmap close inspect|render|verify\u0060 through one coherent CLI family. (Stories: US-001, US-002; Acceptance: AC-001, AC-003)",
+      "text": "Expose \u0060telemetry usage collect\u0060, \u0060telemetry lifecycle export-comments|seal-successor|validate\u0060, \u0060telemetry summarize\u0060, and \u0060roadmap close inspect|render|verify\u0060 through one coherent CLI family. (Stories: US-001, US-002; Acceptance: AC-001, AC-003)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 47,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Preserve the stable CSV header, compact canonical JSON, SHA-256 chain, token arithmetic, provider/model/tool binding, duration/history rules, GitHub server-order fork election, and established exit behavior. (Stories: US-001; Acceptance: AC-001, AC-002)",
+      "text": "Preserve the stable CSV header, compact canonical JSON, SHA-256 chain, token arithmetic, provider/model/tool binding, duration/history rules, GitHub server-order fork election, and established exit behavior. (Stories: US-001; Acceptance: AC-001, AC-002)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 48,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Roadmap rendering is pure and marker-bounded; it joins accepted receipt, candidate/merge/check/review/feedback/cycle identities and refuses tampering, ambiguity, successor authority, and unaccepted input. (Stories: US-002; Acceptance: AC-003, AC-004)",
+      "text": "Roadmap rendering is pure and marker-bounded; it joins accepted receipt, candidate/merge/check/review/feedback/cycle identities and refuses tampering, ambiguity, successor authority, and unaccepted input. (Stories: US-002; Acceptance: AC-003, AC-004)",
+      "acceptanceCriteria": [
+        "AC-003",
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 49,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ],
+      "linkedEvidenceIds": [
+        "EV008"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Freeze every current Python positive fixture and rejection mutation, require differential parity, and retain independent black-box inversion controls. (Stories: US-003; Acceptance: AC-005)",
+      "text": "Freeze every current Python positive fixture and rejection mutation, require differential parity, and retain independent black-box inversion controls. (Stories: US-003; Acceptance: AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 50,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ],
+      "linkedEvidenceIds": [
+        "EV009"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Publish the compiled coherent set before migrating pnext-item and work-roadmap callers; any compatibility launcher is logic-free, receiver-proven, and limited to one coherent release. (Stories: US-003; Acceptance: AC-005, AC-007)",
+      "text": "Publish the compiled coherent set before migrating pnext-item and work-roadmap callers; any compatibility launcher is logic-free, receiver-proven, and limited to one coherent release. (Stories: US-003; Acceptance: AC-005, AC-007)",
+      "acceptanceCriteria": [
+        "AC-005",
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 51,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T010"
+      ],
+      "linkedEvidenceIds": [
+        "EV010"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "Generate \u0060.claude\u0060 mirrors from \u0060.agents\u0060; delete collect-runtime-usage.py, validate-lifecycle-log.py, validate-critique-state.py, validate-feedback-state.py, and every package/registry reference at the accepted compatibility boundary. (Stories: US-003; Acceptance: AC-005, AC-006)",
+      "text": "Generate \u0060.claude\u0060 mirrors from \u0060.agents\u0060; delete collect-runtime-usage.py, validate-lifecycle-log.py, validate-critique-state.py, validate-feedback-state.py, and every package/registry reference at the accepted compatibility boundary. (Stories: US-003; Acceptance: AC-005, AC-006)",
+      "acceptanceCriteria": [
+        "AC-005",
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 52,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T011"
+      ],
+      "linkedEvidenceIds": [
+        "EV011"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "Classify unrelated non-required failures as separately owned obligations and forbid automatic reopening without a typed materiality record. (Stories: US-004; Acceptance: AC-007)",
+      "text": "Classify unrelated non-required failures as separately owned obligations and forbid automatic reopening without a typed materiality record. (Stories: US-004; Acceptance: AC-007)",
+      "acceptanceCriteria": [
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 53,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T012"
+      ],
+      "linkedEvidenceIds": [
+        "EV012"
+      ]
+    },
+    {
+      "id": "FR-009",
+      "title": "Runtime adapters never export raw runtime content or absolute local paths; public records contain only aggregates, stable content digests, and runtime identifiers. (Stories: US-001; Acceptance: AC-008)",
+      "text": "Runtime adapters never export raw runtime content or absolute local paths; public records contain only aggregates, stable content digests, and runtime identifiers. (Stories: US-001; Acceptance: AC-008)",
+      "acceptanceCriteria": [
+        "AC-008"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 54,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T013"
+      ],
+      "linkedEvidenceIds": [
+        "EV013"
+      ]
+    },
+    {
+      "id": "FR-010",
+      "title": "Keep semantic adequacy, novel finding disposition, exceptions, and external merge authorization as independently reviewed inputs rather than reducer outputs. (Stories: US-002, US-004; Acceptance: AC-003, AC-007)",
+      "text": "Keep semantic adequacy, novel finding disposition, exceptions, and external merge authorization as independently reviewed inputs rather than reducer outputs. (Stories: US-002, US-004; Acceptance: AC-003, AC-007)",
+      "acceptanceCriteria": [
+        "AC-003",
+        "AC-007"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 55,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T014"
+      ],
+      "linkedEvidenceIds": [
+        "EV014"
+      ]
+    },
+    {
+      "id": "FR-011",
+      "title": "Run warning-as-error builds, Core/CLI unit suites, engine E2E writes, skill/projection/package gates, clean-receiver smoke tests, two-pass replay, tamper controls, and final helper-absence search before delivery. (Stories: US-001, US-003; Acceptance: AC-001, AC-002, AC-005, AC-006)",
+      "text": "Run warning-as-error builds, Core/CLI unit suites, engine E2E writes, skill/projection/package gates, clean-receiver smoke tests, two-pass replay, tamper controls, and final helper-absence search before delivery. (Stories: US-001, US-003; Acceptance: AC-001, AC-002, AC-005, AC-006)",
+      "acceptanceCriteria": [
+        "AC-001",
+        "AC-002",
+        "AC-005",
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+      "sourceLocation": {
+        "line": 56,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T015"
+      ],
+      "linkedEvidenceIds": [
+        "EV015"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-003",
+        "PD-011",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001",
+        "PD-011"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-003",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "AC-007",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Implement requirement FR-007",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "AC-006",
+        "FR-007",
+        "PD-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Implement requirement FR-008",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-007",
+        "FR-008",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Implement requirement FR-009",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-009"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-008",
+        "FR-009",
+        "PD-009"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Implement requirement FR-010",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-010"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "AC-007",
+        "FR-010",
+        "PD-010"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "T015",
+      "title": "Implement requirement FR-011",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-011"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-005",
+        "AC-006",
+        "FR-011",
+        "PD-011"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV015"
+      ],
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [
+        "FR-009"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [
+        "FR-010"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV015",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T015",
+      "taskRefs": [
+        "T015"
+      ],
+      "requirementRefs": [
+        "FR-011"
+      ],
+      "artifactRefs": [
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/cli.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/core.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/e2e.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/full-gates.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/packages.junit.xml",
+        "readiness/3208-fsharp-roadmap-telemetry-projection/test-results/skill-quality.junit.xml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/3208-fsharp-roadmap-telemetry-projection/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.5.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cf604e0e1444466d5a07e8b4058c613c64df07db3db1d3ea8ca0fae3dbb85bb3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "78e4b8b964e46844262a4028960a78156a462e454a3f8a1268c834c82d30bb5d"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "744f26ede589217dcd1bb5f0a8e4451a86b0fe5813142c306758c54911291372"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "3add83ce0d6e8671c07e5964ad52985d6b8b6e1f2d5848b552a339994983d220"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "4f1557d86451aceb2e51d889f251cdfb41ce806d5d4281ebbddf3569ea1cc568"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/3208-fsharp-roadmap-telemetry-projection/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "18388385b3c870737f6717ced6eaf68fa405afd292317b307585803277b332d7"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "d11baf349e333cd821f179e0bd7e52a5b150932a6b7a8c396f7d95c8da58314a"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

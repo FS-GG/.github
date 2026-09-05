@@ -2213,12 +2213,10 @@ else
   bad "#2133: production advance must reject feedback-shaped files the canonical validator rejects" "rc=$minimal_feedback_rc output=$minimal_feedback"
 fi
 
-# The artifact root is data, never validator authority. A caller used to place no-op scripts under
-# this alternate root and thereby turn the two canonical validator checks into unconditional passes.
+# The artifact root is data, never validator authority. Invalid caller-owned artifacts remain unable
+# to bypass the compiled validators even when moved beneath an alternate root.
 malicious_root="$CYCLE_FIX/caller-validator-root"
-mkdir -p "$malicious_root/.agents/skills/work-roadmap/scripts" "$malicious_root/reviews/roadmap" "$malicious_root/feedback/audits"
-printf '%s\n' '#!/usr/bin/env python3' 'raise SystemExit(0)' >"$malicious_root/.agents/skills/work-roadmap/scripts/validate-critique-state.py"
-printf '%s\n' '#!/usr/bin/env python3' 'raise SystemExit(0)' >"$malicious_root/.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
+mkdir -p "$malicious_root/reviews/roadmap" "$malicious_root/feedback/audits"
 printf '%s\n' "{\"schema_version\":3,\"cycle_id\":\"$provider_cycle\",\"repair_rounds\":0,\"confirmation\":{\"reviewed_commit\":\"$candidate_head\",\"verdict\":\"pass\"},\"game_functionality\":false,\"player_journeys\":[],\"uncovered_functionality\":[]}" >"$malicious_root/reviews/roadmap/$provider_cycle.json"
 printf '%s\n' '---' 'feedbackSchema: 2' "cycle: $provider_cycle" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** implementation-test-evidence, verify-ship-pr' '## §2 Findings' >"$malicious_root/feedback/$provider_cycle.md"
 printf '%s\n' '{}' >"$malicious_root/feedback/audits/$provider_cycle.audit.json"
@@ -2239,15 +2237,10 @@ else
   bad "#2133: feedback validator authority must come from the engine, not artifact rootPath" "rc=$substituted_feedback_rc output=$substituted_feedback"
 fi
 
-trusted_critique_validator="$(dirname "$ENGINE")/provider-validators/validate-critique-state.py"
-cp "$trusted_critique_validator" "$CYCLE_FIX/trusted-critique-validator.py"
-printf '%s\n' '# unsupported validator mutation' >>"$trusted_critique_validator"
-tampered_validator="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; tampered_validator_rc=$?
-mv "$CYCLE_FIX/trusted-critique-validator.py" "$trusted_critique_validator"
-if [ "$tampered_validator_rc" -ne 0 ] && printf '%s' "$tampered_validator" | grep -q 'validator identity is unsupported'; then
-  ok "#2133: engine-shipped provider validator bytes are bound to a supported identity digest"
+if [ -z "$(find "$(dirname "$ENGINE")/provider-validators" -maxdepth 1 -type f -print 2>/dev/null)" ]; then
+  ok "#3208: the engine ships no external provider-validator payload"
 else
-  bad "#2133: an unpinned engine-side validator replacement must fail closed" "rc=$tampered_validator_rc output=$tampered_validator"
+  bad "#3208: compiled provider validation must not retain an external compatibility payload" "$(find "$(dirname "$ENGINE")/provider-validators" -maxdepth 1 -type f -print)"
 fi
 
 printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"2206-board-roster-closure\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"$candidate_head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"

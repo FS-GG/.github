@@ -38,6 +38,27 @@ module TelemetryApplication =
         match validateArgs valueOptions switches args with
         | Ok () -> run args
         | Error reason -> fail family [ reason ]
+
+    let validateInvocation argv =
+        let shape valueOptions switches args = validateArgs valueOptions switches args |> Some
+        match argv with
+        | [ "telemetry"; "usage"; "collect" ] -> Some(Ok())
+        | "telemetry" :: "usage" :: "collect" :: runtime :: args when runtime = "codex" || runtime = "claude" ->
+            shape
+                [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version" ]
+                [ "--all-responses" ] args
+        | "telemetry" :: "lifecycle" :: action :: args
+            when action = "export-comments" || action = "seal-successor" || action = "validate" ->
+            shape
+                [ "--run"; "--unit"; "--comments"; "--draft"; "--usage"; "--history-report"; "--existing"; "--log"; "--output"; "--required-phase" ]
+                [ "--require-terminal"; "--require-reconciled" ] args
+        | "telemetry" :: "critique" :: "validate" :: args ->
+            shape [ "--cycle"; "--artifact"; "--head" ] [] args
+        | "telemetry" :: "feedback" :: "validate" :: args ->
+            shape [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args
+        | "telemetry" :: "summarize" :: args -> shape [ "--usage" ] [] args
+        | "telemetry" :: _ -> Some(Error "unknown telemetry command shape")
+        | _ -> None
     let private required (name: string) (args: string list) =
         match option name args |> Option.filter (String.IsNullOrWhiteSpace >> not) with
         | Some value -> Ok value
@@ -53,8 +74,18 @@ module TelemetryApplication =
         | Some _, Some _ -> Error [ "--output and --append are mutually exclusive" ]
         | _, Some path when format = "json" ->
             Path.GetDirectoryName(Path.GetFullPath path) |> Directory.CreateDirectory |> ignore
-            let rendered = RuntimeUsage.renderJsonLines rows
-            File.AppendAllText(path, rendered, UTF8Encoding(false)); Ok ()
+            let exists = File.Exists path && FileInfo(path).Length > 0L
+            let filtered =
+                if not exists then Ok rows else
+                match RuntimeUsage.parseJsonLines (File.ReadAllText path) with
+                | Error errors -> Error errors
+                | Ok current ->
+                    let identities = current |> List.map (fun row -> row.Provider, row.ResponseId) |> Set.ofList
+                    Ok(rows |> List.filter (fun row -> not (Set.contains (row.Provider, row.ResponseId) identities)))
+            match filtered with
+            | Error errors -> Error errors
+            | Ok values ->
+                File.AppendAllText(path, RuntimeUsage.renderJsonLines values, UTF8Encoding(false)); Ok ()
         | _, Some path ->
             Path.GetDirectoryName(Path.GetFullPath path) |> Directory.CreateDirectory |> ignore
             let exists = File.Exists path && FileInfo(path).Length > 0L
@@ -255,7 +286,7 @@ module TelemetryApplication =
         | "telemetry" :: "lifecycle" :: action :: args ->
             let valueOptions, switches =
                 match action with
-                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--history-report"; "--required-phase" ], [ "--require-terminal" ]
+                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--history-report"; "--required-phase" ], [ "--require-terminal"; "--require-reconciled" ]
                 | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--history-report"; "--output" ], []
                 | "export-comments" -> [ "--run"; "--unit"; "--comments"; "--output" ], []
                 | _ -> [], []

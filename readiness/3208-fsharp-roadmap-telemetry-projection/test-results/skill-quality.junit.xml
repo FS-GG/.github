@@ -1,0 +1,80 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[skill-quality: OK — 19 skills; metadata, mirrors, links, modes, budgets, commands, semantics, and triggers verified
+{"authoredChars": 4541, "ceiling": 4600, "headroom": 59, "roots": [".agents/skills"]}
+projections: current — the protocol is stated once, and every projection agrees with it.
+PASS  .github#2653: check-skill-quality left this checkout's in-tree engine artifacts untouched
+driver feedback delivery fixture: all cases passed
+review-round-contract: structured v2 ledger, digest chain, round bounds, and new-only authority hold
+roadmap-critique-contract: ten rounds, ordered SHAs, terminal human escalation, and the bot-driven player journey gate all hold
+agent-definition-coverage: 6 definitions cover 2 routes (best, normal) at their mandated model/effort, 4 skill-named types resolve across 110 skill file(s) in 2 declared root(s), and the gate triggers on its own subject
+recency-comment-edit: 144 authored file(s) across 4 root(s) name no recency-based comment edit, 6 agent definition(s) carry the canonical hazard statement verbatim, and 5 trigger path(s) keep CI reaching all of it
+analyst-dispatch: 4 board host loop(s) across 2 root(s) carry the canonical dispatch step verbatim, 8 routed variant(s) restate none of it, 2 finder contract(s) keep the no-analyst branch an analyst reaches no receiver to override, 12 file(s) were read, and 4 trigger path(s) keep CI reaching all of it
+validated-intake-filing: OK — validated filing prescribed; command-wrapped bypass and inverted validate/apply order rejected
+report-roadmap-health: raw census, exact Git derivation, and invalid evidence controls hold
+PASS  lifecycle append authority: live claim serialization + 13 source mutations + executable merged-page control + 16 post-child supervision mutations
+telemetry-parity: pass (42 positive and 42 rejection cases across the full frozen helper corpus)
+PASS  documented option must belong to its verb
+PASS  broken relative links fail before distribution
+PASS  a kit skill link resolving outside every kit-delivered directory is rejected
+PASS  a missing forward trigger class is rejected
+PASS  drive-board cannot terminate over actionable backlog
+PASS  p-add cannot duplicate an existing matching issue
+PASS  padd-item cannot fall back from the workspace's configured board
+PASS  work-board missing wiring fails without mutation
+PASS  work-board promotion remains scheduler-selected and collision-safe
+PASS  work-board sees worker-filed backlog on the next wave
+PASS  work-board cannot terminate over actionable backlog
+PASS  work-board reports parked and human backlog without spinning
+PASS  drive-board cannot vary the generated consolidation threshold
+PASS  work-board's review slots stay reserved rather than fillable by implementers
+PASS  work-board cannot scope an EX_RATE stop to a single wave
+PASS  the two host-loop copies cannot state the wave model differently
+PASS  a routed variant cannot restate the two-wave contract instead of inheriting it
+PASS  an unsupported contract schema cannot silently disarm the polarity gate
+PASS  stale generated board/version truth is rejected
+PASS  driver manifest refuses stale projection inputs before digesting them
+PASS  driver manifest write projects before digesting
+PASS  packing rule (stage-drivers.py DELIVERED_SCOPES) stages scope: driver, as --which assumes
+PASS  kit-tracked (packed in FS.GG.Kit)
+PASS  scope: driver, packed in FS.GG.Drivers per the packing rule
+PASS  scope: operator ships in NO package (ADR-0057) — distinct stdout, exit 1 (not a fresh code)
+PASS  publishing-and-deployment is itself scope: operator, not scope: driver — no release owed
+PASS  an id in no population at all is reported, never silent
+PASS  an unknown id is reported, never silent, and never confused with operator-scope
+PASS  flipping drive-board's scope operator->driver moves the answer to FS.GG.Drivers
+PASS  flipping work-board's scope driver->operator moves the answer off FS.GG.Drivers
+PASS  adding a package producer changes inventory membership and producer count
+PASS  removing a package producer changes inventory membership
+PASS  splitting one producer's package versions splits its coherent set
+PASS  changing a published package version changes its real release grouping
+PASS  same-version Audio and Net remain independent coherent sets
+PASS  hand-authored duplicate wave literals are rejected
+PASS  a route named by a skill with no definition shipped
+PASS  no agent directory at all is the original defect
+PASS  a definition downgraded below its routing table
+PASS  a definition that drops the effort only frontmatter can set
+PASS  a skill naming a type no route defines
+PASS  a definition no route and no skill reaches
+PASS  two variants disagreeing about one route's tier
+PASS  declared skill roots that resolve to nothing clear every named type
+PASS  declared skill roots that exist but hold no skills clear every named type
+PASS  the gate no longer triggers on its own subject
+PASS  an analyst binding missing for a defined route
+PASS  taking the analyst role back out of ROLES strands its shipped definitions
+PASS  an analyst definition downgraded below its routing table
+PASS  declared skill roots that hold nothing clear a named analyst type by default
+PASS  an instruction to edit a comment by recency is rejected
+PASS  a definition that drops the hazard statement is rejected
+PASS  a definition whose copy of the statement drifted is rejected
+PASS  a declared root that exists but holds no prose sweeps nothing
+PASS  a declared root that resolves to nothing leaves that surface unswept
+PASS  the gate no longer triggers on its own source
+PASS  a host loop that never collects finding packets is rejected
+PASS  a routed variant that restates analyst-dispatch protocol is rejected
+PASS  deleting the no-analyst branch every kit receiver reads is rejected
+PASS  an analyst that starts materializing to receivers is rejected
+PASS  a variant glob that matches nothing sweeps no restatement
+PASS  variant directories holding no markdown sweep nothing
+PASS  the gate no longer triggers on its own source
+PASS  the gate no longer triggers on the registry it reads
+skill-quality fixture: all 64 rejection cases passed
+]]></system-out></testcase></testsuite>

@@ -142,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
-          dotnet tool install --global FS.GG.SDD.Cli --version 1.0.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 1.5.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       # Locked restore. A silent version SUBSTITUTION fails here rather than quietly changing what the
@@ -162,6 +162,8 @@ jobs:
 
       - name: Prove compiled telemetry matches every frozen helper route
         run: python3 tests/telemetry-parity/run.py
+        env:
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 
       - name: Assert optimized CI scheduling remains fail-closed and non-vacuous
         run: bash tests/ci-runtime-optimization/run.sh

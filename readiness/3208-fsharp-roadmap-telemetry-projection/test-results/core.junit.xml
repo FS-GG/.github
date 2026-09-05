@@ -1,0 +1,7 @@
+<testsuite name="dotnet" tests="1" failures="0"><testcase name="dotnet"><system-out><![CDATA[  FS.GG.Coord.Core -> /tmp/fsgg-3208-fsharp-roadmap-telemetry/src/FS.GG.Coord.Core/bin/Release/net10.0/FS.GG.Coord.Core.dll
+  FS.GG.Coord.Core.Tests -> /tmp/fsgg-3208-fsharp-roadmap-telemetry/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll
+Test run for /tmp/fsgg-3208-fsharp-roadmap-telemetry/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   942, Skipped:     0, Total:   942, Duration: 1 s - FS.GG.Coord.Core.Tests.dll (net10.0)
+]]></system-out></testcase></testsuite>

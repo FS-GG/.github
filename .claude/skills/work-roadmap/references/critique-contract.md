@@ -153,8 +153,8 @@ round count. Only an explicit human decision may start separately scoped renewed
 Before handoff, the worker validates the artifact:
 
 ```sh
-python3 .agents/skills/work-roadmap/scripts/validate-critique-state.py \
-  --root . --cycle <cycle-id> --artifact reviews/roadmap/<cycle-id>.json
+scripts/fsgg-coord telemetry critique validate \
+  --cycle <cycle-id> --artifact reviews/roadmap/<cycle-id>.json
 ```
 
 The host repeats that exact command against the merged artifact. Missing, unreadable, malformed,
