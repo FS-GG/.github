@@ -130,14 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.82.0 — deterministic qualification and evidence runner.
+    <PackageReleaseNotes>0.83.0 — deterministic roadmap work-unit compiler and acceptance transaction.
 
-Adds strict telemetry qualification validate/run commands over an isolated exact checkout and closed
-execution manifest. Accepted receipts bind canonical subject, tool, executor, command, artifact,
-result, claim, independently executed mutation-fixture, fixed-point replay, converged GitHub
-run/job/check, exact-head PR-obligation, and independent semantic-review evidence into one digest.
-Dirty checkouts, stale subjects, tool or executor drift, reused artifacts, generic mutation refusals,
-stale hosted aggregates, and missing or duplicate obligation declarations fail closed.
+Adds strict roadmap unit prepare/accept inspect, render, and verify commands plus a live acceptance seal. Preparation compiles
+authoritative Roadmap Markdown and the canonical roadmap catalog into byte-stable staged intake
+drafts. Pure acceptance validates only internal candidate coherence. The seal reruns qualification and
+independently observes unedited lifecycle/review authority, raw SDD outputs, merged PRs, remote commit
+trees, protected main, and acceptance time before sealing a self-digested two-member bundle.
+Stale or reordered authority, ambiguous frontiers, drifted contracts, malformed evidence, collapsed
+phase identities, and non-atomic receipt/index transactions fail closed.
 
 $(FsggStandingAdvisories)
 

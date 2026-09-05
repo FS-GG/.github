@@ -7,6 +7,7 @@ module Handlers =
     open System.Security.Cryptography
     open System.Text
     open System.Text.Json
+    open System.Text.RegularExpressions
     open FS.GG.Coord
     open FS.GG.Coord.Types
     open FS.GG.Coord.GitHub
@@ -33,6 +34,79 @@ module Handlers =
         match before, after with
         | Some earlier, Some current -> earlier.Revision <> current.Revision
         | _ -> false
+
+    type LifecycleAuthorityExpectation =
+        { Repository: string
+          Number: int
+          Url: string
+          Subject: string
+          CurrentClaimGeneration: string
+          ImplementationRepository: string
+          ImplementationCandidate: string
+          ImplementationMerge: string
+          AcceptanceCandidate: string
+          AcceptanceMerge: string
+          ProtectedMain: string }
+
+    let validateLifecycleAuthority expectation (lifecycleLog: string) =
+        let errors = ResizeArray<string>()
+        let rec expectedRevision phase =
+            match phase with
+            | "merge" | "post-merge-obligations" -> expectation.ImplementationMerge
+            | "acceptance-candidate" -> expectation.AcceptanceCandidate
+            | "acceptance" | "protected-main-verification" | "receipt-projection" | "cleanup" -> expectation.AcceptanceMerge
+            | value when value.StartsWith("telemetry-reconciliation-", StringComparison.Ordinal) ->
+                expectedRevision (value.Substring("telemetry-reconciliation-".Length))
+            | _ -> expectation.ImplementationCandidate
+        let lines = lifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        if lines.Length = 0 then errors.Add("lifecycle authority ledger is empty")
+        lines
+        |> Array.iteri (fun index line ->
+            try
+                use event = JsonDocument.Parse line
+                let root = event.RootElement
+                let item = root.GetProperty "item"
+                let source = root.GetProperty "source"
+                let authority = root.GetProperty "authority"
+                if item.GetProperty("repo").GetString() <> expectation.Repository
+                   || item.GetProperty("number").GetInt32() <> expectation.Number
+                   || item.GetProperty("url").GetString() <> expectation.Url then
+                    errors.Add($"lifecycle event %d{index + 1} is not bound to the applied unit issue")
+                if authority.GetProperty("subject").GetString() <> expectation.Subject then
+                    errors.Add($"lifecycle event %d{index + 1} authority subject differs from the applied unit issue")
+                let generation = authority.GetProperty("claim_generation").GetString()
+                match Int64.TryParse generation with
+                | true, value when value > 0L -> ()
+                | _ -> errors.Add($"lifecycle event %d{index + 1} claim generation is not a GitHub-issued comment id")
+                if index = lines.Length - 1 && generation <> expectation.CurrentClaimGeneration then
+                    errors.Add("terminal lifecycle event claim generation is not the live winning claim")
+                let phase = root.GetProperty("phase").GetString()
+                let revision = source.GetProperty("revision").GetString()
+                let expectedRevision = expectedRevision phase
+                if source.GetProperty("repository").GetString() <> expectation.ImplementationRepository
+                   || revision <> expectedRevision then
+                    errors.Add($"lifecycle event %d{index + 1} source revision is invalid for phase %s{phase}")
+            with error -> errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
+        List.ofSeq errors
+
+    let validateCompleteSddWorkModel expectedWorkId (workModelJson: string) =
+        let errors = ResizeArray<string>()
+        try
+            use document = JsonDocument.Parse workModelJson
+            let root = document.RootElement
+            if root.GetProperty("workId").GetString() <> expectedWorkId then
+                errors.Add("SDD work model does not name the applied unit work id")
+            let tasks = root.GetProperty "tasks"
+            if tasks.ValueKind <> JsonValueKind.Array || tasks.GetArrayLength() = 0 then
+                errors.Add("SDD work model declares no tasks")
+            else
+                tasks.EnumerateArray()
+                |> Seq.iter (fun task ->
+                    let id = task.GetProperty("id").GetString()
+                    let status = task.GetProperty("status").GetString()
+                    if status <> "done" then errors.Add($"SDD task %s{id} is %s{status}, expected done"))
+        with error -> errors.Add("invalid SDD work model: " + error.Message)
+        List.ofSeq errors
 
     [<Literal>]
     let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
@@ -2496,6 +2570,561 @@ module Handlers =
                                                     ExitGreen
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
+
+    let roadmapUnitPrepareApply (ctx: Context) (opts: Options) : int =
+        let parseArguments values =
+            let rec loop remaining seen =
+                match remaining with
+                | [] -> Ok seen
+                | name :: value :: tail when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] ->
+                    if value.StartsWith("--", StringComparison.Ordinal) then Error($"%s{name} requires a value")
+                    elif Map.containsKey name seen then Error($"%s{name} may be supplied only once")
+                    else loop tail (Map.add name value seen)
+                | name :: _ when name.StartsWith("--", StringComparison.Ordinal) -> Error($"unknown argument: %s{name}")
+                | [ name ] when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] -> Error($"%s{name} requires a value")
+                | value :: _ -> Error($"unexpected positional argument: %s{value}")
+            loop values Map.empty
+            |> Result.bind (fun parsed ->
+                [ "--input"; "--roadmap"; "--catalog" ]
+                |> List.tryFind (fun name -> not (Map.containsKey name parsed))
+                |> function Some name -> Error($"%s{name} is required") | None -> Ok parsed)
+
+        let applyRegistration opts registration =
+            let path = Path.GetTempFileName()
+            try
+                File.WriteAllText(path, RoadmapWorkUnit.canonicalIntakeDraft registration, UTF8Encoding(false))
+                let priorOutput = Console.Out
+                use suppressedOutput = new StringWriter()
+                let exitCode =
+                    try
+                        Console.SetOut suppressedOutput
+                        intakeCmd ctx { opts with Args = [ "apply"; path ] }
+                    finally
+                        Console.SetOut priorOutput
+                if exitCode <> ExitGreen then Error exitCode
+                else
+                    match Cache.getIntakeReceipt registration.Id with
+                    | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
+                    | Ok None -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: intake receipt is missing for %s{registration.Id}"; Error ExitError
+                    | Ok(Some receipt) ->
+                        match IntakeReceipt.validate registration.Draft receipt with
+                        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
+                        | Ok accepted ->
+                            let canonical = $"%s{accepted.Owner}/%s{accepted.Repository}#%d{accepted.IssueNumber}"
+                            Ok
+                                ({ Id = registration.Id; Kind = registration.Kind
+                                   DraftSha256 = IntakeReceipt.digest registration.Draft
+                                   Issue = canonical
+                                   IssueUrl = $"https://github.com/%s{accepted.Owner}/%s{accepted.Repository}/issues/%d{accepted.IssueNumber}" }
+                                 : RoadmapWorkUnit.AppliedRegistration)
+            finally
+                if File.Exists path then File.Delete path
+
+        match parseArguments opts.Args with
+        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+        | Ok args ->
+            try
+                let request =
+                    File.ReadAllBytes args["--input"]
+                    |> RoadmapWorkUnit.parsePreparationRequest
+                    |> Result.mapError (String.concat "; ")
+                let plan =
+                    request
+                    |> Result.bind (fun request ->
+                        RoadmapWorkUnit.compilePreparation (File.ReadAllBytes args["--roadmap"]) (File.ReadAllBytes args["--catalog"]) request
+                        |> Result.mapError (List.map string >> String.concat "; "))
+                match plan with
+                | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+                | Ok plan ->
+                    let rec apply remaining accepted =
+                        match remaining with
+                        | [] -> Ok(List.rev accepted)
+                        | registration :: tail ->
+                            match applyRegistration opts registration with
+                            | Error exitCode -> Error exitCode
+                            | Ok result -> apply tail (result :: accepted)
+                    match apply plan.Registrations [] with
+                    | Error exitCode -> exitCode
+                    | Ok registrations ->
+                        match RoadmapWorkUnit.sealPreparationApplication plan registrations with
+                        | Error findings ->
+                            findings |> List.iter (fun finding -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %O{finding}")
+                            ExitError
+                        | Ok receipt ->
+                            let rendered = RoadmapWorkUnit.canonicalPreparationApplication receipt
+                            match Map.tryFind "--output" args with
+                            | Some output -> File.WriteAllText(output, rendered, UTF8Encoding(false))
+                            | None -> printf "%s" rendered
+                            ExitGreen
+            with error -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"; ExitError
+
+    let internal validateImmutablePreparation (input: RoadmapWorkUnit.AcceptanceInput) (roadmap: string) (catalog: string) =
+        match input.Plan.Registrations |> List.tryFind (fun registration -> registration.Kind = "unit") with
+        | None -> Error [ "preparation plan has no unit registration" ]
+        | Some registration ->
+            let request: RoadmapWorkUnit.PreparationRequest =
+                { Schema = RoadmapWorkUnit.PreparationInputSchema
+                  RoadmapRevision = input.Identities.ImplementationCandidate
+                  AuthorityIssue = input.Plan.Authority.Issue
+                  SddWorkId = input.Plan.SddWorkId
+                  RegistrationOwner = registration.Draft.Owner
+                  RegistrationRepository = registration.Draft.Repository
+                  RegistrationPaths = registration.Draft.Paths }
+            match RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request with
+            | Error findings -> Error(findings |> List.map (fun finding -> "immutable preparation authority: " + string finding))
+            | Ok observed when RoadmapWorkUnit.canonicalPlan observed <> RoadmapWorkUnit.canonicalPlan input.Plan ->
+                Error [ "preparation plan differs from the plan recompiled at the immutable implementation candidate" ]
+            | Ok _ -> Ok()
+
+    let private roadmapUnitAcceptCore runQualification observerOverrides (ctx: Context) (opts: Options) : int =
+        let fail reasons =
+            reasons |> List.iter (fun reason -> eprint $"fsgg-coord-engine: roadmap unit accept: %s{reason}")
+            ExitError
+
+        let parseArguments values =
+            match values with
+            | action :: tail when action = "seal" ->
+                let rec loop remaining seen =
+                    match remaining with
+                    | [] -> Ok(action, seen)
+                    | name :: value :: rest when List.contains name [ "--input"; "--qualification-input"; "--qualification-execution"; "--bundle"; "--output" ] ->
+                        if value.StartsWith("--", StringComparison.Ordinal) then Error($"%s{name} requires a value")
+                        elif Map.containsKey name seen then Error($"%s{name} may be supplied only once")
+                        else loop rest (Map.add name value seen)
+                    | name :: _ when name.StartsWith("--", StringComparison.Ordinal) -> Error($"unknown argument: %s{name}")
+                    | [ name ] when List.contains name [ "--input"; "--qualification-input"; "--qualification-execution"; "--bundle"; "--output" ] -> Error($"%s{name} requires a value")
+                    | value :: _ -> Error($"unexpected positional argument: %s{value}")
+                loop tail Map.empty
+                |> Result.bind (fun (action, args) ->
+                    [ "--input"; "--qualification-input"; "--qualification-execution" ]
+                    |> List.tryFind (fun name -> not (Map.containsKey name args))
+                    |> function
+                        | Some name -> Error($"%s{name} is required")
+                        | None -> Ok(action, args))
+            | _ -> Error("action must be seal")
+
+        let parseIssueRef (value: string) =
+            let matched = Regex.Match(value, "^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
+            if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
+            else Error($"invalid issue identity: %s{value}")
+
+        let parseCommentUrl (value: string) =
+            let matched = Regex.Match(value, "^https://github[.]com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:pull|issues)/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$", RegexOptions.CultureInvariant)
+            if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value, Int64.Parse matched.Groups[4].Value)
+            else Error($"invalid review evidence URL: %s{value}")
+
+        let canonicalJson (text: string) =
+            CanonicalJson.canonicalize (Encoding.UTF8.GetBytes text)
+            |> Result.mapError (fun reason -> $"invalid canonical JSON authority: %s{reason}")
+
+        let runPinnedProcess executable workingDirectory arguments timeoutSeconds =
+            let info = ProcessStartInfo(executable)
+            info.WorkingDirectory <- workingDirectory
+            info.UseShellExecute <- false
+            info.RedirectStandardOutput <- true
+            info.RedirectStandardError <- true
+            info.Environment.Clear()
+            info.Environment["PATH"] <- "/usr/bin:/bin"
+            info.Environment["DOTNET_ROOT"] <- "/usr/share/dotnet"
+            info.Environment["HOME"] <- workingDirectory
+            arguments |> List.iter info.ArgumentList.Add
+            use child = Process.Start info
+            let stdout = child.StandardOutput.ReadToEndAsync()
+            let stderr = child.StandardError.ReadToEndAsync()
+            if not (child.WaitForExit(timeoutSeconds * 1000)) then
+                try child.Kill(true) with _ -> ()
+                Error($"%s{Path.GetFileName executable} timed out after %d{timeoutSeconds}s")
+            else
+                let output = stdout.GetAwaiter().GetResult()
+                let error = stderr.GetAwaiter().GetResult()
+                if child.ExitCode = 0 then Ok output
+                else Error($"%s{Path.GetFileName executable} exited %d{child.ExitCode}: %s{error.Trim()}")
+
+        let independentlyObserveSdd (input: RoadmapWorkUnit.AcceptanceInput) =
+            let implementationParts = input.ImplementationBinding.Repository.Split('/')
+            if implementationParts.Length <> 2 then Error [ "implementation repository identity is malformed" ]
+            else
+                let operationRoot = Path.Combine(Path.GetTempPath(), "fsgg-roadmap-unit-observation", Guid.NewGuid().ToString("N"))
+                let checkout = Path.Combine(operationRoot, "checkout")
+                let git = "/usr/bin/git"
+                let sdd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "tools", "fsgg-sdd")
+                try
+                    try
+                        Directory.CreateDirectory checkout |> ignore
+                        let run executable directory arguments timeout = runPinnedProcess executable directory arguments timeout
+                        let result =
+                            if not (File.Exists git) then Error [ "pinned system git /usr/bin/git is unavailable" ]
+                            elif not (File.Exists sdd) then Error [ $"host-installed fsgg-sdd is unavailable at %s{sdd}" ]
+                            else
+                                run sdd checkout [ "--version" ] 30
+                                |> Result.mapError List.singleton
+                                |> Result.bind (fun version ->
+                                    if version.Trim() = "1.5.0" then Ok()
+                                    else Error [ $"host-installed fsgg-sdd is %s{version.Trim()}, expected pinned 1.5.0" ])
+                                |> Result.bind (fun () -> run git checkout [ "init"; "--quiet" ] 30 |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ -> run git checkout [ "remote"; "add"; "origin"; $"https://github.com/%s{input.ImplementationBinding.Repository}.git" ] 30 |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ -> run git checkout [ "fetch"; "--quiet"; "--depth=1"; "origin"; input.Identities.ImplementationCandidate ] 300 |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ -> run git checkout [ "checkout"; "--quiet"; "--detach"; "FETCH_HEAD" ] 30 |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ ->
+                                    [ "analyze"; "verify"; "ship" ]
+                                    |> List.fold (fun state stage ->
+                                        state |> Result.bind (fun () ->
+                                            run sdd checkout [ stage; "--work"; input.SddWorkId ] 300
+                                            |> Result.mapError (fun reason -> [ $"independent SDD %s{stage}: %s{reason}" ])
+                                            |> Result.map ignore)) (Ok()))
+                                |> Result.bind (fun () ->
+                                    let files = [ "analyze", "analysis.json"; "verify", "verify.json"; "ship", "ship-verdict.json" ]
+                                    let errors =
+                                        files
+                                        |> List.choose (fun (stage, fileName) ->
+                                            let expected = input.SddObservations |> List.tryFind (fun value -> value.Stage = stage)
+                                            let path = Path.Combine(checkout, "readiness", input.SddWorkId, fileName)
+                                            match expected with
+                                            | None -> Some($"SDD %s{stage} observation is missing")
+                                            | Some _ when not (File.Exists path) -> Some($"independent SDD %s{stage} did not produce %s{fileName}")
+                                            | Some observation ->
+                                                match canonicalJson (File.ReadAllText path), canonicalJson observation.ArtifactJson with
+                                                | Ok observed, Ok supplied when observed = supplied -> None
+                                                | Ok _, Ok _ -> Some($"independent SDD %s{stage} artifact differs from the acceptance input")
+                                                | Error reason, _ | _, Error reason -> Some reason)
+                                    let workModelPath = Path.Combine(checkout, "readiness", input.SddWorkId, "work-model.json")
+                                    if not (File.Exists workModelPath) then
+                                        errors @ [ "independent SDD execution did not produce work-model.json" ] |> Error
+                                    else
+                                        let taskErrors = validateCompleteSddWorkModel input.SddWorkId (File.ReadAllText workModelPath)
+                                        let allErrors = errors @ taskErrors
+                                        if allErrors.IsEmpty then Ok() else Error allErrors)
+                                |> Result.bind (fun () ->
+                                    run git checkout [ "rev-parse"; "HEAD" ] 30
+                                    |> Result.mapError List.singleton
+                                    |> Result.bind (fun revision ->
+                                        if revision.Trim() = input.Identities.ImplementationCandidate then Ok()
+                                        else Error [ "independent checkout moved away from the implementation candidate" ]))
+                                |> Result.bind (fun () ->
+                                    run git checkout [ "status"; "--porcelain" ] 30
+                                    |> Result.mapError List.singleton
+                                    |> Result.bind (fun status ->
+                                        if String.IsNullOrWhiteSpace status then Ok()
+                                        else Error [ "independent SDD execution changed the immutable candidate checkout" ]))
+                        result
+                    with error -> Error [ "independent SDD observation: " + error.Message ]
+                finally
+                    if Directory.Exists operationRoot then Directory.Delete(operationRoot, true)
+
+        let observePull owner repo number candidate merge =
+            let subject = $"%s{owner}/%s{repo} PR #%d{number} roadmap acceptance"
+            let request: Request =
+                { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/pulls/%d{number}"; Query = []
+                  Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            ctx.Transport.Send request
+            |> Result.mapError Errors.explain
+            |> Result.bind (fun response ->
+                try
+                    use document = JsonDocument.Parse response.Body
+                    let root = document.RootElement
+                    let head = root.GetProperty("head").GetProperty("sha").GetString()
+                    let merged = root.GetProperty("merged").GetBoolean()
+                    let mergeSha = root.GetProperty("merge_commit_sha").GetString()
+                    let mergedAt = root.GetProperty("merged_at").GetString()
+                    let baseRef = root.GetProperty("base").GetProperty("ref").GetString()
+                    if head <> candidate then Error($"PR #%d{number} head is %s{head}, expected %s{candidate}")
+                    elif not merged then Error($"PR #%d{number} is not merged")
+                    elif mergeSha <> merge then Error($"PR #%d{number} merge is %s{mergeSha}, expected %s{merge}")
+                    elif baseRef <> "main" then Error($"PR #%d{number} base is %s{baseRef}, expected main")
+                    elif String.IsNullOrWhiteSpace mergedAt then Error($"PR #%d{number} has no merged_at authority")
+                    else Ok mergedAt
+                with error -> Error($"malformed %s{subject}: %s{error.Message}"))
+
+        let observeAuthorities (input: RoadmapWorkUnit.AcceptanceInput) =
+            let errors = ResizeArray<string>()
+            let retain = function Ok () -> () | Error reason -> errors.Add reason
+            let registrationRepository =
+                input.Plan.Registrations
+                |> List.tryFind (fun registration -> registration.Kind = "unit")
+                |> Option.map (fun registration -> registration.Draft.Owner + "/" + registration.Draft.Repository)
+                |> Option.defaultValue ""
+
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error error -> errors.Add(Errors.explain error)
+            | Ok board ->
+                for registration in input.Plan.Registrations do
+                    match input.PreparationApplication.Registrations |> List.tryFind (fun applied -> applied.Id = registration.Id) with
+                    | None -> errors.Add($"applied registration %s{registration.Id} is missing")
+                    | Some applied ->
+                        match parseIssueRef applied.Issue with
+                        | Error reason -> errors.Add reason
+                        | Ok(owner, repo, number) ->
+                            match Reads.issueBody ctx.Transport owner repo number with
+                            | Error error -> errors.Add(Errors.explain error)
+                            | Ok body ->
+                                let marker = IntakeReceipt.marker registration.Draft
+                                let first = body.IndexOf(marker, StringComparison.Ordinal)
+                                let last = body.LastIndexOf(marker, StringComparison.Ordinal)
+                                if first <> 0 || last <> first then
+                                    errors.Add($"%s{applied.Issue} does not carry one exact leading intake receipt for %s{registration.Id}")
+                            let projected =
+                                [ "Status", Some registration.Draft.Status
+                                  "Class", Some registration.Draft.Class
+                                  "Phase", registration.Draft.Phase
+                                  "Severity", registration.Draft.Severity
+                                  "Blocked by", registration.Draft.BlockedBy ]
+                                |> List.choose (fun (field, value) -> value |> Option.map (fun expected -> field, expected))
+                            for field, expected in projected do
+                                match Board.itemFieldValue ctx.Transport board owner repo number field with
+                                | Error error -> errors.Add(Errors.explain error)
+                                | Ok(Some actual) when actual = expected -> ()
+                                | Ok actual -> errors.Add($"%s{applied.Issue} live %s{field} is %A{actual}, expected %s{expected}")
+
+            let appliedUnitIssue =
+                input.Plan.Registrations
+                |> List.tryFind (fun registration -> registration.Kind = "unit")
+                |> Option.bind (fun registration ->
+                    input.PreparationApplication.Registrations
+                    |> List.tryFind (fun applied -> applied.Id = registration.Id))
+                |> Option.map _.Issue
+            match appliedUnitIssue with
+            | None -> errors.Add("applied unit registration is unavailable for lifecycle authority")
+            | Some issue ->
+              match parseIssueRef issue with
+              | Error reason -> errors.Add reason
+              | Ok(owner, repo, number) ->
+                let expectedItem = $"%s{owner}/%s{repo}"
+                let expectedSubject = $"%s{expectedItem}#%d{number}"
+                let expectedUrl = $"https://github.com/%s{expectedItem}/issues/%d{number}"
+                let winningClaim =
+                    match Reads.markerScan ctx.Transport owner repo number with
+                    | Error error -> errors.Add(Errors.explain error); None
+                    | Ok scan ->
+                        match Reads.requireCompleteMarkerScan expectedSubject scan with
+                        | Error error -> errors.Add(Errors.explain error); None
+                        | Ok markers ->
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | None -> errors.Add("authority issue has no live winning claim"); None
+                            | Some marker -> Some(string marker.Id)
+                match Reads.authorityComments ctx.Transport owner repo number with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok comments ->
+                    let commentsJson =
+                        comments
+                        |> List.map (fun comment ->
+                            {| id = comment.Id; html_url = comment.Url; body = comment.Body
+                               created_at = comment.CreatedAt; updated_at = comment.UpdatedAt |})
+                        |> JsonSerializer.Serialize
+                    match LifecycleTelemetry.exportComments input.LifecycleRunId input.LifecycleUnitId commentsJson with
+                    | Error findings -> findings |> List.iter (fun finding -> errors.Add($"lifecycle authority: %O{finding}"))
+                    | Ok(exported, rejected) when not rejected.IsEmpty -> errors.Add("lifecycle authority contains a rejected fork")
+                    | Ok(exported, _) when exported <> input.LifecycleLog -> errors.Add("lifecycle input differs byte-for-byte from the canonical GitHub comment ledger")
+                    | Ok _ -> ()
+                    match winningClaim with
+                    | None -> ()
+                    | Some claim ->
+                        validateLifecycleAuthority
+                            { Repository = expectedItem
+                              Number = number
+                              Url = expectedUrl
+                              Subject = expectedSubject
+                              CurrentClaimGeneration = claim
+                              ImplementationRepository = input.ImplementationBinding.Repository
+                              ImplementationCandidate = input.Identities.ImplementationCandidate
+                              ImplementationMerge = input.Identities.ImplementationMerge
+                              AcceptanceCandidate = input.Identities.AcceptanceCandidate
+                              AcceptanceMerge = input.Identities.AcceptanceMerge
+                              ProtectedMain = input.Identities.ProtectedMain }
+                            input.LifecycleLog
+                        |> List.iter errors.Add
+
+            match parseCommentUrl input.ReviewEvidence with
+            | Error reason -> errors.Add reason
+            | Ok(owner, repo, number, commentId) ->
+                match Reads.authorityComments ctx.Transport owner repo number with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok comments ->
+                    match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.ReviewEvidence) with
+                    | None -> errors.Add("review evidence comment is absent from the authoritative GitHub ledger")
+                    | Some comment when comment.CreatedAt <> comment.UpdatedAt -> errors.Add("review evidence comment was edited")
+                    | Some comment ->
+                        match canonicalJson (Qualification.canonicalResult input.Qualification), canonicalJson input.ReviewReceipt with
+                        | Ok qualification, Ok critique ->
+                            let expected = $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{qualification}\n```\n```json\n%s{critique}\n```"
+                            if comment.Body.TrimEnd() <> expected then errors.Add("review evidence is not the exact leading-marker qualification/critique envelope")
+                        | Error reason, _ | _, Error reason -> errors.Add reason
+
+            let implementationParts = input.ImplementationBinding.Repository.Split('/')
+            let acceptanceParts = input.AcceptanceBinding.Repository.Split('/')
+            if implementationParts.Length <> 2 then errors.Add("implementation repository identity is malformed")
+            elif acceptanceParts.Length <> 2 then errors.Add("acceptance repository identity is malformed")
+            else
+              match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] "docs/github-substrate-v2-roadmap.md" input.Identities.ImplementationCandidate,
+                    Reads.fileAtRef ctx.Transport acceptanceParts[0] acceptanceParts[1] "eng/github-substrate-v2-units.json" input.Identities.AcceptanceCandidate with
+              | Error error, _ | _, Error error -> errors.Add(Errors.explain error)
+              | Ok roadmap, Ok catalog ->
+                  validateImmutablePreparation input roadmap catalog
+                  |> Result.mapError (List.iter errors.Add)
+                  |> ignore
+              match Reads.authorityComments ctx.Transport implementationParts[0] implementationParts[1] input.Identities.ImplementationPullRequest with
+              | Error error -> errors.Add(Errors.explain error)
+              | Ok comments ->
+                comments
+                |> List.filter (fun comment -> comment.Body.StartsWith("<!-- fsgg:review-", StringComparison.Ordinal) && comment.CreatedAt <> comment.UpdatedAt)
+                |> List.iter (fun comment -> errors.Add($"structured review authority comment %d{comment.Id} was edited"))
+                let projected = comments |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                let live = Driver.liveReviewComments input.Identities.ImplementationCandidate projected
+                let phaseFacts = Driver.reviewPhaseFacts projected
+                if not live.Diagnostics.IsEmpty || not live.StructuredErrors.IsEmpty then errors.Add("structured review authority contains diagnostics")
+                if phaseFacts.LatestReviewUrl <> Some input.StructuredReviewEvidence then
+                    errors.Add("structured review evidence is not the latest review record for the implementation candidate")
+                match parseCommentUrl input.StructuredReviewEvidence with
+                | Error reason -> errors.Add reason
+                | Ok(owner, repo, number, commentId)
+                    when owner <> implementationParts[0]
+                         || repo <> implementationParts[1]
+                         || number <> input.Identities.ImplementationPullRequest ->
+                    errors.Add("structured review evidence is not on the implementation pull request")
+                | Ok(_, _, _, commentId) ->
+                    match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.StructuredReviewEvidence) with
+                    | None -> errors.Add("structured review evidence comment is absent from the authoritative pull-request ledger")
+                    | Some comment when comment.CreatedAt <> comment.UpdatedAt -> errors.Add("structured review evidence comment was edited")
+                    | Some _ -> ()
+                match Driver.parseEffectiveReviewComments input.Identities.ImplementationCandidate projected with
+                | Error reasons -> reasons |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
+                | Ok chain ->
+                    Driver.validateReviewChainStructure 12 chain |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
+                    if chain.HeadSha <> Some input.Identities.ImplementationCandidate then errors.Add("structured review does not bind the implementation candidate")
+                    if chain.CriticIdentity.IsNone then errors.Add("structured review has no critic identity")
+                    if not chain.HostAccepted then errors.Add("structured review has no host acceptance")
+                    try
+                        use critique = JsonDocument.Parse input.ReviewReceipt
+                        let root = critique.RootElement
+                        let critic = root.GetProperty("critic").GetString()
+                        let cycle = root.GetProperty("cycle_id").GetString()
+                        let confirmation = root.GetProperty("confirmation")
+                        let reviewed = confirmation.GetProperty("reviewed_commit").GetString()
+                        let verdict = confirmation.GetProperty("verdict").GetString()
+                        let implementationActors =
+                            input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                            |> Array.choose (fun line ->
+                                use event = JsonDocument.Parse line
+                                let root = event.RootElement
+                                let phase = root.GetProperty("phase").GetString()
+                                if phase = "implementation" || phase.StartsWith("repair", StringComparison.Ordinal) then
+                                    Some(root.GetProperty("actor").GetString())
+                                else None)
+                            |> Set.ofArray
+                        if chain.CriticIdentity <> Some critic then errors.Add("critique critic differs from the live structured review critic")
+                        if Set.contains critic implementationActors then errors.Add("structured review critic is not independent from the implementation actor")
+                        if cycle <> input.ReviewCycleId then errors.Add("critique cycle differs from the acceptance review cycle")
+                        if reviewed <> input.Identities.ImplementationCandidate || verdict <> "pass" then errors.Add("critique confirmation does not pass the implementation candidate")
+                    with error -> errors.Add("critique/live review binding: " + error.Message)
+
+            if implementationParts.Length = 2 then
+                let artifactPaths = [ "analyze", "analysis.json"; "verify", "verify.json"; "ship", "ship-verdict.json" ]
+                for stage, fileName in artifactPaths do
+                    match input.SddObservations |> List.tryFind (fun observation -> observation.Stage = stage) with
+                    | None -> errors.Add($"SDD %s{stage} observation is missing")
+                    | Some observation ->
+                        let path = $"readiness/%s{input.SddWorkId}/%s{fileName}"
+                        match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] path input.Identities.ImplementationCandidate with
+                        | Error error -> errors.Add(Errors.explain error)
+                        | Ok observed ->
+                            match canonicalJson observed, canonicalJson observation.ArtifactJson with
+                            | Ok left, Ok right when left = right -> ()
+                            | Ok _, Ok _ -> errors.Add($"SDD %s{stage} artifact differs from immutable candidate %s{input.Identities.ImplementationCandidate}")
+                            | Error reason, _ | _, Error reason -> errors.Add reason
+                let workModelPath = $"readiness/%s{input.SddWorkId}/work-model.json"
+                match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] workModelPath input.Identities.ImplementationCandidate with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok workModel -> validateCompleteSddWorkModel input.SddWorkId workModel |> List.iter errors.Add
+
+            if registrationRepository <> input.AcceptanceBinding.Repository then errors.Add("acceptance repository differs from the applied unit registration")
+            if implementationParts.Length = 2 && acceptanceParts.Length = 2 then
+                let implementationOwner, implementationRepo = implementationParts[0], implementationParts[1]
+                let acceptanceOwner, acceptanceRepo = acceptanceParts[0], acceptanceParts[1]
+                observePull implementationOwner implementationRepo input.Identities.ImplementationPullRequest input.Identities.ImplementationCandidate input.Identities.ImplementationMerge |> Result.map ignore |> retain
+                match observePull acceptanceOwner acceptanceRepo input.Identities.AcceptancePullRequest input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge with
+                | Error reason -> errors.Add reason
+                | Ok mergedAt when mergedAt = input.AcceptedAt -> ()
+                | Ok mergedAt -> errors.Add($"acceptedAt is caller-authored (%s{input.AcceptedAt}); expected acceptance PR merged_at %s{mergedAt}")
+                match Reads.prBaseTipSha ctx.Transport acceptanceOwner acceptanceRepo input.Identities.AcceptancePullRequest with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok tip when tip = input.Identities.ProtectedMain -> ()
+                | Ok tip -> errors.Add($"protected main is %s{tip}, expected %s{input.Identities.ProtectedMain}")
+                let observeRemoteBinding label candidate merge (binding: RoadmapWorkUnit.RevisionBinding) =
+                    let repository = binding.Repository.Split('/')
+                    match Reads.commitTreeSha ctx.Transport repository[0] repository[1] candidate, Reads.commitTreeSha ctx.Transport repository[0] repository[1] merge with
+                    | Error error, _ | _, Error error -> Error(Errors.explain error)
+                    | Ok candidateTree, Ok mergeTree when candidateTree <> binding.CandidateTree || mergeTree <> binding.MergeTree -> Error($"remote %s{label} trees differ from the supplied binding")
+                    | Ok candidateTree, Ok mergeTree when candidateTree <> mergeTree -> Error($"remote %s{label} merge does not preserve the candidate tree")
+                    | Ok _, Ok _ -> Ok()
+                observeRemoteBinding "implementation" input.Identities.ImplementationCandidate input.Identities.ImplementationMerge input.ImplementationBinding |> retain
+                observeRemoteBinding "acceptance" input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge input.AcceptanceBinding |> retain
+
+            if errors.Count = 0 then Ok() else Error(List.ofSeq errors)
+
+        match parseArguments opts.Args with
+        | Error reason -> fail [ reason ]
+        | Ok(action, args) ->
+            try
+                match File.ReadAllBytes args["--input"] |> RoadmapWorkUnit.parseAcceptanceInput with
+                | Error reasons -> fail reasons
+                | Ok input ->
+                    match RoadmapWorkUnit.inspectAcceptanceCandidate input with
+                    | Error findings -> fail (findings |> List.map string)
+                    | Ok candidate ->
+                        let qualificationInput = Qualification.parseInput (File.ReadAllBytes args["--qualification-input"])
+                        let sddExecutionBinding =
+                            qualificationInput
+                            |> Result.mapError (List.map string)
+                            |> Result.bind (fun qualification ->
+                                let expected =
+                                    [ "analyze", Qualification.Analyze; "verify", Qualification.Verify; "ship", Qualification.Ship ]
+                                let errors =
+                                    expected
+                                    |> List.choose (fun (stage, kind) ->
+                                        let observation = input.SddObservations |> List.find (fun value -> value.Stage = stage)
+                                        let artifactDigest = CanonicalJson.sha256 (Encoding.UTF8.GetBytes observation.ArtifactJson)
+                                        qualification.Operations
+                                        |> List.tryFind (fun operation -> operation.Kind = kind)
+                                        |> function
+                                            | Some operation when List.contains artifactDigest operation.ArtifactSha256 -> None
+                                            | _ -> Some($"SDD %s{stage} artifact is not an output of the production qualification operation"))
+                                if errors.IsEmpty then Ok() else Error errors)
+                        match sddExecutionBinding with
+                        | Error reasons -> fail reasons
+                        | Ok () ->
+                            match runQualification input.ImplementationBinding.CandidateTree args["--qualification-input"] args["--qualification-execution"] with
+                            | Error reasons -> fail (reasons |> List.map (fun reason -> "production qualification: " + reason))
+                            | Ok observedQualification when Qualification.canonicalResult observedQualification <> Qualification.canonicalResult input.Qualification ->
+                                fail [ "production qualification result differs from the acceptance input" ]
+                            | Ok _ ->
+                                let observeSdd, observeLiveAuthorities =
+                                    match observerOverrides with
+                                    | Some(observeSdd, Some observeAuthorities) -> observeSdd, observeAuthorities
+                                    | Some(observeSdd, None) -> observeSdd, observeAuthorities
+                                    | None -> independentlyObserveSdd, observeAuthorities
+                                match observeSdd input with
+                                | Error reasons -> fail reasons
+                                | Ok () ->
+                                    match observeLiveAuthorities input with
+                                    | Error reasons -> fail reasons
+                                    | Ok () ->
+                                        let observed = RoadmapWorkUnit.observeAcceptance candidate
+                                        let accepted = RoadmapWorkUnit.sealObservedAcceptance observed
+                                        match action with
+                                        | "seal" ->
+                                            let rendered = RoadmapWorkUnit.acceptedBundle accepted
+                                            match Map.tryFind "--output" args with Some path -> File.WriteAllText(path, rendered, UTF8Encoding(false)) | None -> printf "%s" rendered
+                                            ExitGreen
+                                        | _ -> ExitError
+            with error -> fail [ error.Message ]
+
+    let roadmapUnitAccept runQualification ctx opts =
+        roadmapUnitAcceptCore runQualification None ctx opts
+
+    let internal roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities ctx opts =
+        roadmapUnitAcceptCore runQualification (Some(observeSdd, Some observeAuthorities)) ctx opts
+
+    let internal roadmapUnitAcceptWithSddObserver runQualification observeSdd ctx opts =
+        roadmapUnitAcceptCore runQualification (Some(observeSdd, None)) ctx opts
 
     // Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     // are the append-only receipt ledger: a failure in either direction is not a missing decision.

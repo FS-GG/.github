@@ -1,0 +1,848 @@
+schemaVersion: 1
+workId: 3210-roadmap-work-unit-compiler
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3210-roadmap-work-unit-compiler/spec.md
+sourceClarifications: work/3210-roadmap-work-unit-compiler/clarifications.md
+sourceChecklist: work/3210-roadmap-work-unit-compiler/checklist.md
+sourcePlan: work/3210-roadmap-work-unit-compiler/plan.md
+sourceTasks: work/3210-roadmap-work-unit-compiler/tasks.yml
+sourceAnalysis: readiness/3210-roadmap-work-unit-compiler/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3210-roadmap-work-unit-compiler/analysis.json
+    digest: 730eea45413a5f90c4153b1342af10c3057214431aa53702548635766beb2554
+    schemaVersion: 1
+  - label: checklist
+    path: work/3210-roadmap-work-unit-compiler/checklist.md
+    digest: 64b28b6193a1711ed8c59ee35cf6c24001c1f4cb7031ca91e1f3f0b7e175ab39
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3210-roadmap-work-unit-compiler/clarifications.md
+    digest: 89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef
+    schemaVersion: 1
+  - label: plan
+    path: work/3210-roadmap-work-unit-compiler/plan.md
+    digest: 7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938
+    schemaVersion: 1
+  - label: spec
+    path: work/3210-roadmap-work-unit-compiler/spec.md
+    digest: 143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd
+    schemaVersion: 1
+  - label: tasks
+    path: work/3210-roadmap-work-unit-compiler/tasks.yml
+    digest: 1d782fd42eaf746723ed3cbd5b2582613eb8225b6188ada3eb507bcb855a3fde
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV010]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV013]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV014]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV015]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV016]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV018]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV019]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV021]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV022]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV023]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV026]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV029]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV030]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
+      digest: "sha256:e60b36a23abbc2afe8e8b46e0bc8d87a664c50fc1ca0631169730cbcfbe8e627"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 965
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 966, CLI 433, BoardOps 270, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; the exact Core TRX receipt is retained at work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

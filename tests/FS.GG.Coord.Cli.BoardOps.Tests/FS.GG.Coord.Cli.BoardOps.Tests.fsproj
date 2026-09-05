@@ -12,6 +12,7 @@
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="IntakeCliTests.fs" />
     <Compile Include="IntakeTransactionTests.fs" />
+    <Compile Include="RoadmapWorkUnitTransactionTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
     <Compile Include="WidenRefusalTests.fs" />
     <Compile Include="BlockerLintTests.fs" />

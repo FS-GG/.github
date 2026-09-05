@@ -290,6 +290,44 @@ module Qualification =
 
     let canonicalResult accepted = canonicalAccepted accepted true + "\n"
 
+    let parseResult (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            strictObject "qualificationResult"
+                [ "schema"; "subject"; "subjectRevision"; "toolCount"; "operationCount"
+                  "claimCount"; "mutationCount"; "hostedCheckCount"; "obligationCount"
+                  "semanticReviewEvidence"; "evidenceDigest"; "digest" ] root
+            let accepted =
+                { Schema = text "qualificationResult" "schema" root
+                  Subject = text "qualificationResult" "subject" root
+                  SubjectRevision = text "qualificationResult" "subjectRevision" root
+                  ToolCount = integer "qualificationResult" "toolCount" root
+                  OperationCount = integer "qualificationResult" "operationCount" root
+                  ClaimCount = integer "qualificationResult" "claimCount" root
+                  MutationCount = integer "qualificationResult" "mutationCount" root
+                  HostedCheckCount = integer "qualificationResult" "hostedCheckCount" root
+                  ObligationCount = integer "qualificationResult" "obligationCount" root
+                  SemanticReviewEvidence = text "qualificationResult" "semanticReviewEvidence" root
+                  EvidenceDigest = text "qualificationResult" "evidenceDigest" root
+                  Digest = text "qualificationResult" "digest" root }
+            let counts =
+                [ accepted.ToolCount; accepted.OperationCount; accepted.ClaimCount; accepted.MutationCount
+                  accepted.HostedCheckCount; accepted.ObligationCount ]
+            if accepted.Schema <> ResultSchema then Error [ $"qualification result schema is not %s{ResultSchema}" ]
+            elif not (subjectPattern.IsMatch accepted.Subject) then Error [ "qualification result subject is invalid" ]
+            elif not (revisionPattern.IsMatch accepted.SubjectRevision) then Error [ "qualification result subject revision is invalid" ]
+            elif counts |> List.exists (fun value -> value < 0) then Error [ "qualification result counts must be non-negative" ]
+            elif not (shaPattern.IsMatch accepted.EvidenceDigest) then Error [ "qualification result evidence digest is invalid" ]
+            elif not (shaPattern.IsMatch accepted.Digest) then Error [ "qualification result digest is invalid" ]
+            else
+                let actual = canonicalAccepted { accepted with Digest = "" } false |> Encoding.UTF8.GetBytes |> CanonicalJson.sha256
+                if actual <> accepted.Digest then Error [ "qualification result digest does not bind its canonical content" ] else Ok accepted
+        with
+        | :? JsonException as error -> Error [ $"invalid qualification result JSON: %s{error.Message}" ]
+        | :? FormatException as error -> Error [ error.Message ]
+        | error -> Error [ $"invalid qualification result: %s{error.Message}" ]
+
     let validate (input: Input) =
         let findings = ResizeArray<Finding>()
         if input.Schema <> InputSchema then findings.Add(InvalidSchema(InputSchema, input.Schema))

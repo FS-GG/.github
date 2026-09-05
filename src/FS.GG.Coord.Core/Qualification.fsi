@@ -144,4 +144,5 @@ module Qualification =
 
     val validate: Input -> Result<Accepted, Finding list>
     val canonicalResult: Accepted -> string
+    val parseResult: bytes: byte array -> Result<Accepted, string list>
     val parseInput: bytes: byte array -> Result<Input, string list>

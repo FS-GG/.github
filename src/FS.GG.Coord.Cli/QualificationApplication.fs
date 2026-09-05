@@ -335,3 +335,45 @@ module QualificationApplication =
                              Operations = List.ofSeq observed; Mutations = mutations; HostedObservations = hosted
                              Obligations = obligations |> Result.defaultValue input.Obligations }
             Qualification.validate qualified |> Result.mapError (List.map string)
+
+    // Production acceptance uses this route so the caller-authored execution resolver cannot
+    // substitute the repository identity. The ordinary `run` entry point remains useful for
+    // isolated qualification authoring and tests; only this adapter seals roadmap acceptance.
+    let runBoundToTree expectedTree inputPath executionPath =
+        match parseExecution executionPath with
+        | Error errors -> Error errors
+        | Ok execution ->
+            let errors = ResizeArray<string>()
+            let checkout = fullPath execution.Checkout
+            if execution.Environment |> List.exists (fun (name, _) -> name.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)) then
+                errors.Add "production qualification environment may not override GIT_* authority"
+            for tool in execution.Tools do
+                let resolved = resolvePath checkout tool.Path
+                let trustedExternal =
+                    resolved = "/usr/bin/git"
+                    || resolved = "/usr/bin/dotnet"
+                    || resolved = "/usr/share/dotnet/dotnet"
+                    || resolved = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "tools", "fsgg-sdd")
+                if tool.Id = "git" && resolved <> "/usr/bin/git" then
+                    errors.Add "production qualification must resolve tool id 'git' to /usr/bin/git"
+                elif not trustedExternal && (under checkout resolved |> Result.isError) then
+                    errors.Add($"production qualification tool '%s{tool.Id}' escapes the candidate checkout")
+            for fixture in execution.Fixtures do
+                if under checkout fixture.Path |> Result.isError then
+                    errors.Add($"production qualification fixture '%s{fixture.MutationId}' escapes the candidate checkout")
+            if not (File.Exists "/usr/bin/git") then errors.Add "pinned system git /usr/bin/git is unavailable"
+            elif Directory.Exists checkout then
+                let trustedEnvironment =
+                    [ "PATH", "/usr/bin:/bin"
+                      "HOME", checkout
+                      "GIT_CONFIG_NOSYSTEM", "1"
+                      "GIT_CONFIG_GLOBAL", "/dev/null"
+                      "GIT_NO_REPLACE_OBJECTS", "1" ]
+                match runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "rev-parse"; "HEAD^{tree}" ],
+                      runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "status"; "--porcelain"; "--untracked-files=all" ] with
+                | Ok tree, Ok status when tree.ExitCode = 0 && status.ExitCode = 0 ->
+                    if tree.Stdout.Trim() <> expectedTree then errors.Add($"trusted checkout tree '%s{tree.Stdout.Trim()}' does not match expected candidate tree '%s{expectedTree}'")
+                    if not (String.IsNullOrEmpty status.Stdout) then errors.Add "trusted candidate checkout is not clean"
+                | values -> errors.Add($"trusted git could not establish production checkout identity: %A{values}")
+            else errors.Add($"checkout does not exist: %s{checkout}")
+            if errors.Count > 0 then Error(List.ofSeq errors) else run inputPath executionPath

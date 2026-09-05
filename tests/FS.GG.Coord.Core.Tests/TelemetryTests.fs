@@ -73,6 +73,80 @@ module TelemetryTests =
         Assert.True(LifecycleTelemetry.sealSuccessor "run" "unit" "" sealedStarted |> Result.isError)
 
     [<Fact>]
+    let ``#3210 reconciled validation requires an exact-digest measured recovery for timing placeholders`` () =
+        let tooling = """{"ledger_schema":1,"runtime":{"status":"recorded","name":"codex","version":"1.2.3","source":"session"},"coordination":{"status":"recorded","name":"fsgg-coord","version":"4.5.6","source":"cli"},"sdd":{"status":"recorded","name":"fsgg-sdd","version":"7.8.9","source":"cli"},"contracts":{"status":"recorded","name":"fsgg-contracts","version":"10.0.0","source":"registry"}}"""
+        let model = """{"status":"recorded","provider":"OpenAI","name":"gpt-test","effort":"high","source":"runtime receipt"}"""
+        let draft order phase event at actual usage evidence =
+            $"""{{"schema_version":1,"run_id":"run","unit_id":"unit","item":{{"repo":"FS-GG/.github","number":42,"url":"https://github.com/FS-GG/.github/issues/42"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":%s{model},"source":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}"}},"evidence":%s{JsonSerializer.Serialize evidence},"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":%s{tooling},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#42","claim_generation":"1"}}}}"""
+        let started = LifecycleTelemetry.sealSuccessor "run" "unit" "" (draft 1 "claim" "started" "2026-09-04T08:00:00Z" "null" "{\"status\":\"pending\"}" [ "claim" ]) |> unwrap
+        let legacy =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"final usage is written after this response\",\"source\":\"legacy child\"}" [ "legacy" ])
+            |> unwrap
+        let unreconciled = started + legacy
+        Assert.True(LifecycleTelemetry.validateWithEvidence "run" "unit" true [] [] [] unreconciled |> Result.isOk)
+        Assert.True(LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] unreconciled |> Result.isError)
+        use legacyJson = JsonDocument.Parse legacy
+        let legacyDigest = legacyJson.RootElement.GetProperty("digest").GetString()
+        let counts: RuntimeUsage.TokenCounts =
+            { Input = 10L; CachedInput = 4L; CacheWriteInput = 0L; Output = 5L; Reasoning = Some 2L; Total = 15L }
+        let row: RuntimeUsage.UsageRow =
+            { Timestamp = "2026-09-04T08:03:00Z"; Task = "FS-GG/.github#42/telemetry-reconciliation-claim"
+              SessionId = "session-1"; ThreadId = "thread-1"; TurnId = "turn-1"; ResponseId = "response-1"
+              Provider = "OpenAI"; Model = "gpt-test"; Effort = "high"; RuntimeVersion = "1.2.3"
+              CoordinationVersion = "4.5.6"; SddVersion = "7.8.9"; ContractsVersion = "10.0.0"
+              LedgerSchema = 1; Response = counts; Turn = counts; Thread = Some counts
+              Source = "codex-session-jsonl:sha256:" + String.replicate 64 "f" }
+        let usageReceipt = RuntimeUsage.renderCsv [ row ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
+        let usageDigest, _ = usageReceipt
+        let recoveryStarted =
+            LifecycleTelemetry.sealSuccessor "run" "unit" unreconciled
+                (draft 2 "telemetry-reconciliation-claim" "started" "2026-09-04T08:02:00Z" "null" "{\"status\":\"pending\"}" [ "recovery" ])
+            |> unwrap
+        let withRecoveryStarted = unreconciled + recoveryStarted
+        let measured = $"""{{"status":"measured","input":10,"cached_input":4,"cache_write_input":0,"output":5,"reasoning":2,"total":15,"source":"%s{usageDigest}","session_ids":["session-1"],"turn_ids":["turn-1"]}}"""
+        let recovered =
+            LifecycleTelemetry.sealSuccessorWithEvidence "run" "unit" [ usageReceipt ] [] withRecoveryStarted
+                (draft 2 "telemetry-reconciliation-claim" "completed" "2026-09-04T08:03:00Z" "1" measured [ "supersedes-lifecycle-digest:" + legacyDigest ])
+            |> unwrap
+        let complete = withRecoveryStarted + recovered
+        LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [ usageReceipt ] [] complete |> unwrap |> ignore
+        let recoveredWithExtraEvidence =
+            LifecycleTelemetry.sealSuccessorWithEvidence "run" "unit" [ usageReceipt ] [] withRecoveryStarted
+                (draft 2 "telemetry-reconciliation-claim" "completed" "2026-09-04T08:03:00Z" "1" measured
+                    [ "supersedes-lifecycle-digest:" + legacyDigest; "unrelated:evidence" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence
+                "run" "unit" true [] [ usageReceipt ] [] (withRecoveryStarted + recoveredWithExtraEvidence)
+            |> Result.isError)
+        let paraphrasedLegacy =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"usage unavailable because the child response is still running\",\"source\":\"legacy child\"}"
+                    [ "legacy" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + paraphrasedLegacy)
+            |> Result.isError)
+        let misleadingMissing =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"usage missing because the child response is still running\",\"source\":\"legacy child\"}"
+                    [ "legacy" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + misleadingMissing)
+            |> Result.isError)
+        let genuineFailure =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"post-completion collector schema validation failed: total field missing\",\"source\":\"collector\"}"
+                    [ "failure" ])
+            |> unwrap
+        LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + genuineFailure) |> unwrap |> ignore
+
+    [<Fact>]
     let ``critique and feedback receipts bind current evidence`` () =
         let head = String.replicate 40 "a"
         let critique = $"""{{"schema_version":3,"cycle_id":"cycle-1","milestone":"GS2-01.1","critic":"critic-1","initial_reviewed_commit":"%s{head}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{head}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{head}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""

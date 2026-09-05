@@ -5,3 +5,5 @@ open FS.GG.Coord
 /// Deterministic local execution boundary for a typed qualification input.
 module QualificationApplication =
     val run: inputPath: string -> executionPath: string -> Result<Qualification.Accepted, string list>
+    /// Runs production qualification only after pinned Git proves the clean checkout has the expected tree.
+    val runBoundToTree: expectedTree: string -> inputPath: string -> executionPath: string -> Result<Qualification.Accepted, string list>

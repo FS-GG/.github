@@ -240,6 +240,25 @@ module TelemetryCliTests =
         Assert.StartsWith("timestamp,task,session_id", lines[0])
 
     [<Fact>]
+    let ``#3210 require-reconciled is an active exact-digest lifecycle gate`` () =
+        let draft event at actual usage =
+            $"""{{"schema_version":1,"run_id":"run","unit_id":"unit","item":{{"repo":"FS-GG/.github","number":42,"url":"https://github.com/FS-GG/.github/issues/42"}},"phase_order":1,"phase":"claim","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt-test","effort":"high","source":"runtime"}},"source":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}"}},"evidence":["fixture"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"runtime"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"cli"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"cli"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"registry"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#42","claim_generation":"1"}}}}"""
+        let started = LifecycleTelemetry.sealSuccessor "run" "unit" "" (draft "started" "2026-09-04T08:00:00Z" "null" "{\"status\":\"pending\"}") |> Result.defaultWith (sprintf "%A" >> failwith)
+        let completed =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft "completed" "2026-09-04T08:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"final usage is written after this response\",\"source\":\"legacy\"}")
+            |> Result.defaultWith (sprintf "%A" >> failwith)
+        let disposable, path = temporary (started + completed)
+        use _ = disposable
+        let ordinary, _, ordinaryError = invoke [ "telemetry"; "lifecycle"; "validate"; "--run"; "run"; "--unit"; "unit"; "--log"; path; "--require-terminal" ]
+        Assert.Equal(0, ordinary)
+        Assert.Equal("", ordinaryError)
+        let reconciled, output, error = invoke [ "telemetry"; "lifecycle"; "validate"; "--run"; "run"; "--unit"; "unit"; "--log"; path; "--require-terminal"; "--require-reconciled" ]
+        Assert.NotEqual(0, reconciled)
+        Assert.Equal("", output)
+        Assert.Contains("superseded by telemetry-reconciliation-claim with exact digest", error)
+
+    [<Fact>]
     let ``#3208 roadmap render is bounded deterministic and does not mutate its input`` () =
         let roadmap = "before\n<!-- fsgg:roadmap-unit/GS2-01.1 -->\nold\n<!-- /fsgg:roadmap-unit/GS2-01.1 -->\nafter\n"
         let digest = "sha256:" + (SHA256.HashData(Encoding.UTF8.GetBytes roadmap) |> Convert.ToHexString |> _.ToLowerInvariant())
@@ -398,6 +417,26 @@ module TelemetryCliTests =
         Assert.Equal("", firstError + secondError)
         Assert.Contains("\"operationCount\":6", first)
         Assert.DoesNotContain(inputPath, first)
+
+    [<Fact>]
+    let ``#3210 production qualification pins trusted git tree and environment`` () =
+        let disposable, inputPath, executionPath = qualificationRunFixture ()
+        use _ = disposable
+        let checkout = Path.GetDirectoryName inputPath
+        let tree = command checkout "/usr/bin/git" [ "rev-parse"; "HEAD^{tree}" ]
+        Assert.True(QualificationApplication.runBoundToTree tree inputPath executionPath |> Result.isOk)
+        Assert.True(QualificationApplication.runBoundToTree (String.replicate 40 "0") inputPath executionPath |> Result.isError)
+
+        let execution = File.ReadAllText executionPath
+        let fakeGitPath = JsonSerializer.Serialize(Path.Combine(checkout, "qualification-tool.sh"))
+        File.WriteAllText(executionPath, execution.Replace("\"id\":\"git\",\"path\":\"/usr/bin/git\"", $"\"id\":\"git\",\"path\":%s{fakeGitPath}"))
+        let fakeGit = QualificationApplication.runBoundToTree tree inputPath executionPath
+        let fakeGitErrors = match fakeGit with Error errors -> String.concat "\n" errors | Ok _ -> ""
+        Assert.Contains("must resolve tool id 'git' to /usr/bin/git", fakeGitErrors)
+
+        File.WriteAllText(executionPath, execution.Replace("\"name\":\"LANG\"", "\"name\":\"GIT_DIR\""))
+        let injected = QualificationApplication.runBoundToTree tree inputPath executionPath
+        Assert.Contains("may not override GIT_*", match injected with Error errors -> String.concat "\n" errors | Ok _ -> "")
 
     [<Fact>]
     let ``#3209 qualification runner refuses dirty checkout before execution`` () =

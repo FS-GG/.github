@@ -35,6 +35,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Accepted roadmap receipts are a capability of the live authority adapter, not a public
+         constructor over caller-authored JSON. The core regression suite sees the boundary directly. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Coord.Cli.BoardOps</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Coord.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="ExitCode.fsi" />
     <Compile Include="ExitCode.fs" />
     <Compile Include="RepoScope.fsi" />
@@ -126,6 +137,8 @@
     <Compile Include="Telemetry.fs" />
     <Compile Include="Qualification.fsi" />
     <Compile Include="Qualification.fs" />
+    <Compile Include="RoadmapWorkUnit.fsi" />
+    <Compile Include="RoadmapWorkUnit.fs" />
     <!-- Review (.github#2175) layers the typed, resumable review/repair protocol over Driver's existing
          marker-chain validator, and Delivery.fromReviewAcceptance folds its accepted-current-head
          receipt into Delivery's Snapshot — so it compiles after Driver and before Delivery. -->
