@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3209-deterministic-qualification-evidence-runner",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "896bb3b1edba03f08e63b83f3713199f97da61a6b00a45d19c5ea3d85d31c12d"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 38,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 38
+  },
+  "disposition": {
+    "state": "advisory",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

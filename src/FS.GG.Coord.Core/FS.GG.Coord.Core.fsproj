@@ -124,6 +124,8 @@
     <Compile Include="CycleLedger.fs" />
     <Compile Include="Telemetry.fsi" />
     <Compile Include="Telemetry.fs" />
+    <Compile Include="Qualification.fsi" />
+    <Compile Include="Qualification.fs" />
     <!-- Review (.github#2175) layers the typed, resumable review/repair protocol over Driver's existing
          marker-chain validator, and Delivery.fromReviewAcceptance folds its accepted-current-head
          receipt into Delivery's Snapshot — so it compiles after Driver and before Delivery. -->

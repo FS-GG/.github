@@ -519,8 +519,14 @@
        callers now invoke the already-published compiled telemetry surface, cycle-ledger provider
        validation no longer shells out, and the compatibility helper payload is removed. No command,
        option, result, or exit-code vocabulary changes. -->
+  <!-- 0.81.1 -> 0.82.0 (.github#3209): MINOR on the stable 0.x line. The coordination engine adds
+       the receiver-visible telemetry qualification validate/run command family, a strict closed
+       execution manifest, content-addressed claim evidence, independent mutation fixtures, exact
+       checkout/tool/executor identity, converged GitHub run/job/check observations, and typed
+       current-head PR obligation comments. This is additive public behavior and therefore not a
+       patch under the same criterion used for 0.81.0. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.81.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.82.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

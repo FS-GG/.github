@@ -1,0 +1,1064 @@
+schemaVersion: 1
+workId: 3209-deterministic-qualification-evidence-runner
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3209-deterministic-qualification-evidence-runner/spec.md
+sourceClarifications: work/3209-deterministic-qualification-evidence-runner/clarifications.md
+sourceChecklist: work/3209-deterministic-qualification-evidence-runner/checklist.md
+sourcePlan: work/3209-deterministic-qualification-evidence-runner/plan.md
+sourceTasks: work/3209-deterministic-qualification-evidence-runner/tasks.yml
+sourceAnalysis: readiness/3209-deterministic-qualification-evidence-runner/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3209-deterministic-qualification-evidence-runner/analysis.json
+    digest: 66a3f2a5f57d5fc15b05e9e677b086bd35db2d6861a19afff61e12a44a850c19
+    schemaVersion: 1
+  - label: checklist
+    path: work/3209-deterministic-qualification-evidence-runner/checklist.md
+    digest: 9d51fa3df458114afce08cf81ab23c4a1cc1afa94b7e1937b0493745dd698351
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3209-deterministic-qualification-evidence-runner/clarifications.md
+    digest: 8dfc276d697537c34c990bfc1ae1500e68605bf9a42a609258e4230959670f9c
+    schemaVersion: 1
+  - label: plan
+    path: work/3209-deterministic-qualification-evidence-runner/plan.md
+    digest: e76273a05df2823bc6c7cada6131a54ccb86861c3e45a1a4683fbe85d4e6514e
+    schemaVersion: 1
+  - label: spec
+    path: work/3209-deterministic-qualification-evidence-runner/spec.md
+    digest: 5147abde5ff1bf0f269297d555bcfd8aa5f0dc54f4291091073575de823e4a92
+    schemaVersion: 1
+  - label: tasks
+    path: work/3209-deterministic-qualification-evidence-runner/tasks.yml
+    digest: 88053c3881301761bec719eb2332f5684c3133d8b07ed672af48f275633b2518
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-011]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV012]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV013]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV014]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV015]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV016]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV017]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV018]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV019]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV020]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-011]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-011]
+    obligationRefs: [EV021]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV023]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV024]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV025]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV026]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV027]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV028]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV029]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV030]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV031]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV032
+    kind: verification
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV032]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV033
+    kind: verification
+    subject:
+      type: task
+      id: T033
+    taskRefs: [T033]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV033]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV034
+    kind: verification
+    subject:
+      type: task
+      id: T034
+    taskRefs: [T034]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV034]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV035
+    kind: verification
+    subject:
+      type: task
+      id: T035
+    taskRefs: [T035]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV035]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV036
+    kind: verification
+    subject:
+      type: task
+      id: T036
+    taskRefs: [T036]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV036]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV037
+    kind: verification
+    subject:
+      type: task
+      id: T037
+    taskRefs: [T037]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV037]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+  - id: EV038
+    kind: verification
+    subject:
+      type: task
+      id: T038
+    taskRefs: [T038]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV038]
+    artifacts: [readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
+      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 423
+      failed: 0
+      skipped: 0
+    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

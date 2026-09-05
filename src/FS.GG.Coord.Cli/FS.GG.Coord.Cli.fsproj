@@ -130,12 +130,14 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.81.1 — compiled telemetry adoption and compatibility-helper removal.
+    <PackageReleaseNotes>0.82.0 — deterministic qualification and evidence runner.
 
-Packed roadmap and normal-item callers now invoke the 0.81.0 compiled telemetry surface directly.
-Cycle-ledger critique/feedback provider validation runs from the same compiled bytes, and the former
-Python compatibility payload is absent. Command, option, result, and exit-code vocabulary is unchanged;
-the independent frozen black-box corpus remains in the repository as the regression oracle.
+Adds strict telemetry qualification validate/run commands over an isolated exact checkout and closed
+execution manifest. Accepted receipts bind canonical subject, tool, executor, command, artifact,
+result, claim, independently executed mutation-fixture, fixed-point replay, converged GitHub
+run/job/check, exact-head PR-obligation, and independent semantic-review evidence into one digest.
+Dirty checkouts, stale subjects, tool or executor drift, reused artifacts, generic mutation refusals,
+stale hosted aggregates, and missing or duplicate obligation declarations fail closed.
 
 $(FsggStandingAdvisories)
 
@@ -251,6 +253,8 @@ the standing safety advisories carry forward.
     <Compile Include="Client.fs" />
     <Compile Include="SemanticDiffApplication.fsi" />
     <Compile Include="SemanticDiffApplication.fs" />
+    <Compile Include="QualificationApplication.fsi" />
+    <Compile Include="QualificationApplication.fs" />
     <Compile Include="TelemetryApplication.fsi" />
     <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />

@@ -56,6 +56,10 @@ module TelemetryApplication =
             shape [ "--cycle"; "--artifact"; "--head" ] [] args
         | "telemetry" :: "feedback" :: "validate" :: args ->
             shape [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args
+        | "telemetry" :: "qualification" :: "validate" :: args ->
+            shape [ "--input"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "run" :: args ->
+            shape [ "--input"; "--execution"; "--output" ] [] args
         | "telemetry" :: "summarize" :: args -> shape [ "--usage" ] [] args
         | "telemetry" :: _ -> Some(Error "unknown telemetry command shape")
         | _ -> None
@@ -277,6 +281,26 @@ module TelemetryApplication =
                   match values with _, _, _, Error e -> yield e | _ -> () ] |> fail "telemetry feedback"
         with ex -> fail "telemetry feedback" [ ex.Message ]
 
+    let private qualification action args =
+        try
+            match required "--input" args with
+            | Error reason -> fail "telemetry qualification" [ reason ]
+            | Ok path ->
+                let result =
+                    match action with
+                    | "validate" ->
+                        Qualification.parseInput (read path)
+                        |> Result.bind (Qualification.validate >> Result.mapError (List.map string))
+                    | "run" ->
+                        match required "--execution" args with
+                        | Error reason -> Error [ reason ]
+                        | Ok execution -> QualificationApplication.run path execution
+                    | _ -> Error [ "action must be run or validate" ]
+                match result with
+                | Error reasons -> fail "telemetry qualification" reasons
+                | Ok accepted -> writeOrPrint args (Qualification.canonicalResult accepted); green
+        with ex -> fail "telemetry qualification" [ ex.Message ]
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
@@ -295,6 +319,10 @@ module TelemetryApplication =
             Some(validated "telemetry critique" [ "--cycle"; "--artifact"; "--head" ] [] args critique)
         | "telemetry" :: "feedback" :: "validate" :: args ->
             Some(validated "telemetry feedback" [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args feedback)
+        | "telemetry" :: "qualification" :: "validate" :: args ->
+            Some(validated "telemetry qualification" [ "--input"; "--output" ] [] args (qualification "validate"))
+        | "telemetry" :: "qualification" :: "run" :: args ->
+            Some(validated "telemetry qualification" [ "--input"; "--execution"; "--output" ] [] args (qualification "run"))
         | "roadmap" :: "close" :: action :: args ->
             let valueOptions =
                 match action with
