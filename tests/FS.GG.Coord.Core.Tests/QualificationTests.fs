@@ -54,9 +54,17 @@ module QualificationTests =
                 ObservedRefusal = "REFUSED wrong subject"
                 ProductionImplementationSha256 = executor.ImplementationSha256
                 FixtureImplementationSha256 = sha 'f'
-                FixtureExecutorId = "fixture-executor" } ]
+                FixtureExecutorId = "fixture-executor"
+                FixtureExecutorRole = "mutation-fixture" } ]
           HostedObservations = [ { Complete = true; Checks = hostedChecks }; { Complete = true; Checks = hostedChecks } ]
-          Obligations = { HeadSha = revision; Declarations = [ NoObligations ] }
+          Obligations =
+            { HeadSha = revision
+              Declarations = [ NoObligations ]
+              Readback =
+                Some
+                    { CommentId = 1L
+                      Url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"
+                      Author = "github-actions[bot]" } }
           SemanticReview = { SubjectRevision = revision; Accepted = true; Evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" } }
 
     let private findings input =
@@ -137,7 +145,8 @@ module QualificationTests =
             { input.Mutations.Head with
                 ObservedRefusal = "REFUSED something else"
                 FixtureImplementationSha256 = executor.ImplementationSha256
-                FixtureExecutorId = executor.Id }
+                FixtureExecutorId = executor.Id
+                FixtureExecutorRole = executor.Role }
         let values = findings { input with Mutations = [ mutation ] }
         contains (function MutationRefusalMismatch "wrong-subject" -> true | _ -> false) values
         contains (function MutationFixtureNotIndependent "wrong-subject" -> true | _ -> false) values
@@ -167,6 +176,13 @@ module QualificationTests =
         let input = acceptedInput ()
         contains (function ObligationDeclarationMissing -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Declarations = [] } })
         contains (function ObligationIdDuplicate "publish" -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Declarations = [ Obligations [ "publish"; "publish" ] ] } })
+
+    [<Fact>]
+    let ``#3209 obligation acceptance requires authoritative readback identity`` () =
+        let input = acceptedInput ()
+        contains (function ObligationReadbackMissing -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readback = None } })
+        let invalid = { CommentId = 0L; Url = "file:///tmp/asserted"; Author = "" }
+        contains (function ObligationReadbackInvalid -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readback = Some invalid } })
 
     [<Fact>]
     let ``#3209 semantic review is mandatory and exact-subject`` () =

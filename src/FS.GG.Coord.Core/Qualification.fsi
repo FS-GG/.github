@@ -45,7 +45,8 @@ module Qualification =
           ObservedRefusal: string
           ProductionImplementationSha256: string
           FixtureImplementationSha256: string
-          FixtureExecutorId: string }
+          FixtureExecutorId: string
+          FixtureExecutorRole: string }
 
     type HostedCheck =
         { Scope: string
@@ -60,9 +61,15 @@ module Qualification =
 
     type ObligationDeclaration = NoObligations | Obligations of ids: string list
 
+    type ObligationAuthority =
+        { CommentId: int64
+          Url: string
+          Author: string }
+
     type ObligationObservation =
         { HeadSha: string
-          Declarations: ObligationDeclaration list }
+          Declarations: ObligationDeclaration list
+          Readback: ObligationAuthority option }
 
     type SemanticReview =
         { SubjectRevision: string
@@ -112,6 +119,8 @@ module Qualification =
         | ObligationDeclarationMissing
         | ObligationDeclarationDuplicate of count: int
         | ObligationIdDuplicate of id: string
+        | ObligationReadbackMissing
+        | ObligationReadbackInvalid
         | SemanticReviewMissing
         | SemanticReviewStale of observedRevision: string
 

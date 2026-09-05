@@ -5,6 +5,7 @@ open System.IO
 open System.Text
 open System.Text.Json
 open FS.GG.Coord
+open FS.GG.Coord.GitHub
 
 module TelemetryApplication =
     let private green = ExitCode.toInt ExitCode.Green
@@ -60,6 +61,10 @@ module TelemetryApplication =
             shape [ "--input"; "--output" ] [] args
         | "telemetry" :: "qualification" :: "run" :: args ->
             shape [ "--input"; "--execution"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "obligation" :: "render" :: args ->
+            shape [ "--head"; "--kind"; "--id"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
+            shape [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args
         | "telemetry" :: "summarize" :: args -> shape [ "--usage" ] [] args
         | "telemetry" :: _ -> Some(Error "unknown telemetry command shape")
         | _ -> None
@@ -301,6 +306,54 @@ module TelemetryApplication =
                 | Ok accepted -> writeOrPrint args (Qualification.canonicalResult accepted); green
         with ex -> fail "telemetry qualification" [ ex.Message ]
 
+    let private obligationDeclaration args =
+        match required "--kind" args with
+        | Error reason -> Error [ reason ]
+        | Ok "none" when options "--id" args |> List.isEmpty -> Ok Qualification.NoObligations
+        | Ok "some" when options "--id" args |> List.isEmpty -> Error [ "--kind some requires at least one --id" ]
+        | Ok "some" when options "--id" args |> List.distinct |> List.length <> (options "--id" args |> List.length) ->
+            Error [ "--id values must be unique" ]
+        | Ok "some" -> Ok(Qualification.Obligations(options "--id" args))
+        | Ok "none" -> Error [ "--kind none does not accept --id" ]
+        | Ok value -> Error [ $"--kind must be none or some, observed '%s{value}'" ]
+
+    let private qualificationObligation action args =
+        try
+            match required "--head" args, obligationDeclaration args with
+            | Error reason, _ -> fail "telemetry qualification obligation" [ reason ]
+            | _, Error reasons -> fail "telemetry qualification obligation" reasons
+            | Ok head, _ when head.Length <> 40 || (head |> Seq.exists (fun value -> not (Char.IsAsciiHexDigitLower value))) ->
+                fail "telemetry qualification obligation" [ "--head must be exactly 40 lowercase hexadecimal characters" ]
+            | Ok head, Ok declaration when action = "render" ->
+                writeOrPrint args (QualificationEvidence.renderObligationComment head declaration)
+                green
+            | Ok head, Ok declaration when action = "verify" ->
+                let receipts =
+                    options "--readback" args
+                    |> List.map (fun path -> QualificationEvidence.parseObligationReadback (read path))
+                let errors = receipts |> List.collect (function Error values -> values | _ -> [])
+                if not errors.IsEmpty then fail "telemetry qualification obligation" errors else
+                let comments = receipts |> List.choose (function Ok value -> Some value | _ -> None)
+                match QualificationEvidence.inspectObligationComments head declaration comments with
+                | Error reasons -> fail "telemetry qualification obligation" reasons
+                | Ok(QualificationEvidence.GuardedCreateIntent _) ->
+                    fail "telemetry qualification obligation" [ "no authoritative current-head readback exists; run obligation render and create it through the guarded comment boundary" ]
+                | Ok(QualificationEvidence.VerifiedReadback observation) ->
+                    let authority = observation.Readback |> Option.get
+                    let value =
+                        JsonSerializer.SerializeToUtf8Bytes
+                            {| schema = "fsgg.qualification.obligation-verification/1"
+                               headSha = observation.HeadSha
+                               commentId = authority.CommentId
+                               url = authority.Url
+                               author = authority.Author |}
+                        |> CanonicalJson.canonicalize
+                        |> Result.defaultWith invalidOp
+                    writeOrPrint args (value + "\n")
+                    green
+            | _, _ -> fail "telemetry qualification obligation" [ "action must be render or verify" ]
+        with ex -> fail "telemetry qualification obligation" [ ex.Message ]
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
@@ -323,6 +376,10 @@ module TelemetryApplication =
             Some(validated "telemetry qualification" [ "--input"; "--output" ] [] args (qualification "validate"))
         | "telemetry" :: "qualification" :: "run" :: args ->
             Some(validated "telemetry qualification" [ "--input"; "--execution"; "--output" ] [] args (qualification "run"))
+        | "telemetry" :: "qualification" :: "obligation" :: "render" :: args ->
+            Some(validated "telemetry qualification obligation" [ "--head"; "--kind"; "--id"; "--output" ] [] args (qualificationObligation "render"))
+        | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
+            Some(validated "telemetry qualification obligation" [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args (qualificationObligation "verify"))
         | "roadmap" :: "close" :: action :: args ->
             let valueOptions =
                 match action with

@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "de89d356c3e4a82bda0d1dae53196a250172dc55e8e509d19af284377f9c9925"
+        "value": "88053c3881301761bec719eb2332f5684c3133d8b07ed672af48f275633b2518"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -963,7 +963,7 @@
     "status": "implementationReady",
     "readyCount": 87,
     "advisoryCount": 0,
-    "warningCount": 0,
+    "warningCount": 1,
     "blockingCount": 0,
     "staleSourceCount": 0,
     "missingDispositionCount": 0,
@@ -971,13 +971,38 @@
     "generatedViewFindingCount": 0,
     "acceptedDeferralCount": 0
   },
-  "findings": [],
+  "findings": [
+    {
+      "id": "AF001",
+      "category": "warning",
+      "severity": "warning",
+      "state": "open",
+      "path": "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
+      "relatedIds": [
+        "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped"
+      ],
+      "message": "Generated view \u0027readiness/3209-deterministic-qualification-evidence-runner/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view."
+    }
+  ],
   "generatedViews": [
     {
       "path": "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
       "kind": "workModel",
       "currency": "missing",
-      "diagnosticIds": []
+      "diagnosticIds": [
+        "workModelNotGenerated"
+      ]
     }
   ],
   "optionalBoundaryFacts": [
@@ -1003,7 +1028,28 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "id": "workModelNotGenerated",
+      "severity": "warning",
+      "artifact": "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
+      "message": "Generated view \u0027readiness/3209-deterministic-qualification-evidence-runner/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view.",
+      "relatedIds": [
+        "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped",
+        "requirementNotTyped"
+      ]
+    }
+  ],
   "nextAction": {
     "actionId": "analysis.next.implement",
     "command": null,

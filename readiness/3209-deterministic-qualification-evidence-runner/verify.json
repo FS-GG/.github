@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "66a3f2a5f57d5fc15b05e9e677b086bd35db2d6861a19afff61e12a44a850c19"
+        "value": "f9ab38e16eae33c67f779af67d3137eb91ea7235ce89913ee5f3cc32f6ce94c1"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "8a93c583083c94cc98b88e0a305e9f8f9bf9836d004e932a1d7a40675cc01bb7"
+        "value": "c51c91fbed16bde68dbcc1c06a1caf47104c404dbe0c1910fd54b1c5f2822041"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -1824,6 +1824,22 @@
       "id": "VF001",
       "severity": "warning",
       "category": "warning",
+      "path": "work/3209-deterministic-qualification-evidence-runner/evidence.yml",
+      "relatedIds": [
+        "analysis",
+        "checklist",
+        "clarifications",
+        "plan",
+        "spec",
+        "tasks"
+      ],
+      "message": "One or more evidence source snapshots no longer match current source digests.",
+      "correction": "Rerun the evidence command after reviewing the changed source artifacts."
+    },
+    {
+      "id": "VF002",
+      "severity": "warning",
+      "category": "warning",
       "path": "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
       "relatedIds": [
         "readiness/3209-deterministic-qualification-evidence-runner/work-model.json",
@@ -1866,6 +1882,21 @@
     }
   ],
   "diagnostics": [
+    {
+      "id": "evidence.staleEvidenceSource",
+      "severity": "warning",
+      "artifact": "work/3209-deterministic-qualification-evidence-runner/evidence.yml",
+      "message": "One or more evidence source snapshots no longer match current source digests.",
+      "correction": "Rerun the evidence command after reviewing the changed source artifacts.",
+      "relatedIds": [
+        "analysis",
+        "checklist",
+        "clarifications",
+        "plan",
+        "spec",
+        "tasks"
+      ]
+    },
     {
       "id": "workModelNotGenerated",
       "severity": "warning",

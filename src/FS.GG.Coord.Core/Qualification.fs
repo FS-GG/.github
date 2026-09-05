@@ -22,11 +22,14 @@ module Qualification =
     type Claim = { Id: string; SubjectRevision: string; RequiredKinds: OperationKind list; EvidenceIds: string list }
     type MutationEvidence =
         { Id: string; OperationId: string; ExpectedRefusal: string; ObservedRefusal: string
-          ProductionImplementationSha256: string; FixtureImplementationSha256: string; FixtureExecutorId: string }
+          ProductionImplementationSha256: string; FixtureImplementationSha256: string
+          FixtureExecutorId: string; FixtureExecutorRole: string }
     type HostedCheck = { Scope: string; Id: string; SubjectRevision: string; State: string; Conclusion: string }
     type HostedObservation = { Complete: bool; Checks: HostedCheck list }
     type ObligationDeclaration = NoObligations | Obligations of ids: string list
-    type ObligationObservation = { HeadSha: string; Declarations: ObligationDeclaration list }
+    type ObligationAuthority = { CommentId: int64; Url: string; Author: string }
+    type ObligationObservation =
+        { HeadSha: string; Declarations: ObligationDeclaration list; Readback: ObligationAuthority option }
     type SemanticReview = { SubjectRevision: string; Accepted: bool; Evidence: string }
     type Input =
         { Schema: string; Subject: string; SubjectRevision: string; CheckoutClean: bool
@@ -63,6 +66,8 @@ module Qualification =
         | ObligationDeclarationMissing
         | ObligationDeclarationDuplicate of count: int
         | ObligationIdDuplicate of id: string
+        | ObligationReadbackMissing
+        | ObligationReadbackInvalid
         | SemanticReviewMissing
         | SemanticReviewStale of observedRevision: string
 
@@ -193,14 +198,15 @@ module Qualification =
                     let label = $"mutations[%d{index}]"
                     strictObject label
                         [ "id"; "operationId"; "expectedRefusal"; "observedRefusal"; "productionImplementationSha256"
-                          "fixtureImplementationSha256"; "fixtureExecutorId" ] item
+                          "fixtureImplementationSha256"; "fixtureExecutorId"; "fixtureExecutorRole" ] item
                     { Id = text label "id" item
                       OperationId = text label "operationId" item
                       ExpectedRefusal = text label "expectedRefusal" item
                       ObservedRefusal = text label "observedRefusal" item
                       ProductionImplementationSha256 = text label "productionImplementationSha256" item
                       FixtureImplementationSha256 = text label "fixtureImplementationSha256" item
-                      FixtureExecutorId = text label "fixtureExecutorId" item })
+                      FixtureExecutorId = text label "fixtureExecutorId" item
+                      FixtureExecutorRole = text label "fixtureExecutorRole" item })
             let hosted =
                 array "input" "hostedObservations" root
                 |> List.mapi (fun observationIndex observation ->
@@ -216,7 +222,7 @@ module Qualification =
                               State = text checkLabel "state" check; Conclusion = text checkLabel "conclusion" check })
                     { Complete = boolean label "complete" observation; Checks = checks })
             let obligationElement = property "obligations" root
-            strictObject "obligations" [ "headSha"; "declarations" ] obligationElement
+            strictObject "obligations" [ "headSha"; "declarations"; "readback" ] obligationElement
             let declarations =
                 array "obligations" "declarations" obligationElement
                 |> List.mapi (fun index declaration ->
@@ -226,6 +232,18 @@ module Qualification =
                     | "none", [] -> NoObligations
                     | "some", ids when not ids.IsEmpty -> Obligations ids
                     | kind, _ -> raise (FormatException($"%s{label} has invalid kind/ids combination '%s{kind}'")))
+            let readbackElement = property "readback" obligationElement
+            let readback =
+                match readbackElement.ValueKind with
+                | JsonValueKind.Null -> None
+                | JsonValueKind.Object ->
+                    strictObject "obligations.readback" [ "commentId"; "url"; "author" ] readbackElement
+                    let commentId = readbackElement.GetProperty("commentId").GetInt64()
+                    Some
+                        { CommentId = commentId
+                          Url = text "obligations.readback" "url" readbackElement
+                          Author = text "obligations.readback" "author" readbackElement }
+                | _ -> raise (FormatException("obligations.readback must be null or an object"))
             let semantic = property "semanticReview" root
             strictObject "semanticReview" [ "subjectRevision"; "accepted"; "evidence" ] semantic
             Ok
@@ -239,7 +257,10 @@ module Qualification =
                   Claims = claims
                   Mutations = mutations
                   HostedObservations = hosted
-                  Obligations = { HeadSha = text "obligations" "headSha" obligationElement; Declarations = declarations }
+                  Obligations =
+                    { HeadSha = text "obligations" "headSha" obligationElement
+                      Declarations = declarations
+                      Readback = readback }
                   SemanticReview =
                     { SubjectRevision = text "semanticReview" "subjectRevision" semantic
                       Accepted = boolean "semanticReview" "accepted" semantic
@@ -247,6 +268,7 @@ module Qualification =
         with
         | :? JsonException as error -> Error [ $"invalid qualification JSON: %s{error.Message}" ]
         | :? FormatException as error -> Error [ error.Message ]
+        | error -> Error [ $"invalid qualification input: %s{error.Message}" ]
 
     let private canonicalAccepted (accepted: Accepted) includeDigest =
         let payload =
@@ -341,7 +363,9 @@ module Qualification =
                || mutation.ProductionImplementationSha256 = mutation.FixtureImplementationSha256
                || mutation.FixtureExecutorId = input.Executor.Id
                || not (shaPattern.IsMatch mutation.FixtureImplementationSha256)
-               || String.IsNullOrWhiteSpace mutation.FixtureExecutorId then
+               || String.IsNullOrWhiteSpace mutation.FixtureExecutorId
+               || String.IsNullOrWhiteSpace mutation.FixtureExecutorRole
+               || mutation.FixtureExecutorRole = input.Executor.Role then
                 findings.Add(MutationFixtureNotIndependent mutation.Id)
 
         if input.HostedObservations.Length < 2 then findings.Add HostedSetNotConverged
@@ -367,6 +391,19 @@ module Qualification =
             findings.AddRange(duplicates "obligation" ids)
             for id, count in List.countBy id ids do if count > 1 then findings.Add(ObligationIdDuplicate id)
         | declarations -> findings.Add(ObligationDeclarationDuplicate declarations.Length)
+        match input.Obligations.Readback with
+        | None -> findings.Add ObligationReadbackMissing
+        | Some readback ->
+            let validUrl =
+                match Uri.TryCreate(readback.Url, UriKind.Absolute) with
+                | true, uri ->
+                    uri.Scheme = Uri.UriSchemeHttps
+                    && uri.Host = "github.com"
+                    && uri.AbsolutePath.Contains("/pull/", StringComparison.Ordinal)
+                    && uri.Fragment = $"#issuecomment-%d{readback.CommentId}"
+                | _ -> false
+            if readback.CommentId <= 0L || String.IsNullOrWhiteSpace readback.Author || not validUrl then
+                findings.Add ObligationReadbackInvalid
 
         if not input.SemanticReview.Accepted || String.IsNullOrWhiteSpace input.SemanticReview.Evidence then findings.Add SemanticReviewMissing
         if input.SemanticReview.SubjectRevision <> input.SubjectRevision then findings.Add(SemanticReviewStale input.SemanticReview.SubjectRevision)
@@ -390,7 +427,8 @@ module Qualification =
             [ claim.Id; claim.SubjectRevision ] @ addList (claim.RequiredKinds |> List.map operationKindName) @ addList claim.EvidenceIds
         let mutationValues (mutation: MutationEvidence) =
             [ mutation.Id; mutation.OperationId; mutation.ExpectedRefusal; mutation.ObservedRefusal
-              mutation.ProductionImplementationSha256; mutation.FixtureImplementationSha256; mutation.FixtureExecutorId ]
+              mutation.ProductionImplementationSha256; mutation.FixtureImplementationSha256
+              mutation.FixtureExecutorId; mutation.FixtureExecutorRole ]
         let hostedValues (observation: HostedObservation) =
             [ string observation.Complete; string observation.Checks.Length ]
             @ (observation.Checks |> List.collect (fun check -> [ check.Scope; check.Id; check.SubjectRevision; check.State; check.Conclusion ]))
@@ -406,6 +444,9 @@ module Qualification =
             @ addList (input.Mutations |> List.collect mutationValues)
             @ addList (input.HostedObservations |> List.collect hostedValues)
             @ [ input.Obligations.HeadSha ] @ addList obligationValues
+            @ (match input.Obligations.Readback with
+               | Some readback -> [ string readback.CommentId; readback.Url; readback.Author ]
+               | None -> [ ""; ""; "" ])
             @ [ input.SemanticReview.SubjectRevision; string input.SemanticReview.Accepted; input.SemanticReview.Evidence ]
         let evidenceDigest = evidenceValues |> List.map frame |> String.concat "|" |> Encoding.UTF8.GetBytes |> CanonicalJson.sha256
         let draft =

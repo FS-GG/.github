@@ -72,7 +72,7 @@ These are the **engine's**, not the client's — the client translates them.
 
 An unreachable answer is not a negative one. That rule is the whole point.
 
-## Telemetry and roadmap closure (0.81.0)
+## Telemetry, qualification, and roadmap closure (0.82.0)
 
 The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the
 stable runtime-usage CSV (or canonical JSONL), including exact model and coherent tool versions; `--append`
@@ -80,6 +80,9 @@ retains one CSV header and ignores an already-recorded response identity. `telem
 export-comments|seal-successor|validate` elects GitHub-comment order, seals the SHA-256 chain, and requires
 immutable `--usage` and optional `--history-report` receipts before measured terminal evidence is accepted.
 `telemetry summarize`, `telemetry critique validate`, and `telemetry feedback validate` are read-only.
+`telemetry qualification validate|run` validates or executes the closed exact-checkout qualification
+contract. `telemetry qualification obligation render|verify` emits a guarded current-head declaration
+body or verifies a strict GitHub PR comment readback receipt whose URL and comment id agree.
 
 `roadmap close inspect|render|verify` consumes an evidence manifest whose relative artifact paths bind an
 accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback

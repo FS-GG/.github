@@ -16,7 +16,8 @@ module QualificationApplication =
     type private ToolResolver = { Id: string; Path: string; VersionArguments: string list }
     type private OperationResolver = { Id: string; Arguments: string list; Artifacts: string list }
     type private ExecutorResolver = { Id: string; Role: string }
-    type private FixtureResolver = { MutationId: string; ExecutorId: string; Path: string; Arguments: string list }
+    type private FixtureResolver =
+        { MutationId: string; ExecutorId: string; ExecutorRole: string; Path: string; Arguments: string list }
     type private Execution =
         { Checkout: string; Environment: (string * string) list; TimeoutSeconds: int
           Executor: ExecutorResolver; Tools: ToolResolver list; Operations: OperationResolver list
@@ -89,8 +90,9 @@ module QualificationApplication =
                 array "execution" "fixtures" root
                 |> List.mapi (fun index item ->
                     let label = $"fixtures[%d{index}]"
-                    strictObject label [ "mutationId"; "executorId"; "path"; "arguments" ] item
+                    strictObject label [ "mutationId"; "executorId"; "executorRole"; "path"; "arguments" ] item
                     { MutationId = text label "mutationId" item; ExecutorId = text label "executorId" item
+                      ExecutorRole = text label "executorRole" item
                       Path = text label "path" item; Arguments = strings label "arguments" item })
             Ok { Checkout = text "execution" "checkout" root; Environment = environment; TimeoutSeconds = timeout
                  Executor = executor; Tools = tools; Operations = operations; Fixtures = fixtures
@@ -100,6 +102,7 @@ module QualificationApplication =
         | :? JsonException as error -> Error [ $"invalid execution JSON: %s{error.Message}" ]
         | :? FormatException as error -> Error [ error.Message ]
         | :? IOException as error -> Error [ error.Message ]
+        | error -> Error [ $"invalid execution input: %s{error.Message}" ]
 
     let private duplicates (label: string) (values: string list) =
         values |> List.countBy id |> List.choose (fun (value, count) -> if count > 1 then Some($"duplicate %s{label} identity '%s{value}'") else None)
@@ -152,6 +155,10 @@ module QualificationApplication =
             errors.AddRange(duplicates "tool" (execution.Tools |> List.map _.Id))
             errors.AddRange(duplicates "operation" (execution.Operations |> List.map _.Id))
             errors.AddRange(duplicates "fixture mutation" (execution.Fixtures |> List.map _.MutationId))
+            let hostedObservationPaths =
+                execution.HostedObservationPaths
+                |> List.map (fun path -> under checkout path |> Result.defaultValue (resolvePath checkout path))
+            errors.AddRange(duplicates "hosted observation path" hostedObservationPaths)
             let manifestToolIds = input.ToolManifest |> List.map _.Id |> Set.ofList
             let resolverToolIds = execution.Tools |> List.map _.Id |> Set.ofList
             if manifestToolIds <> resolverToolIds then errors.Add "execution tools do not exactly match the closed tool manifest"
@@ -255,6 +262,7 @@ module QualificationApplication =
                     let fixture = fixtureResolvers[mutation.Id]
                     let fixturePath = resolvePath checkout fixture.Path
                     if fixture.ExecutorId = resolvedExecutor.Id then errors.Add($"mutation fixture '%s{mutation.Id}' reuses the production executor identity")
+                    if fixture.ExecutorRole = resolvedExecutor.Role then errors.Add($"mutation fixture '%s{mutation.Id}' reuses the production executor role")
                     if not (File.Exists fixturePath) then errors.Add($"mutation fixture '%s{mutation.Id}' implementation does not exist")
                     let fixtureDigest = if File.Exists fixturePath then digestFile fixturePath else mutation.FixtureImplementationSha256
                     if fixtureDigest = resolvedExecutor.ImplementationSha256 then errors.Add($"mutation fixture '%s{mutation.Id}' reuses the production implementation")
@@ -267,7 +275,9 @@ module QualificationApplication =
                     | Some operation ->
                         { mutation with ObservedRefusal = operation.Refusal |> Option.defaultValue ""
                                         ProductionImplementationSha256 = resolvedExecutor.ImplementationSha256
-                                        FixtureImplementationSha256 = fixtureDigest; FixtureExecutorId = fixture.ExecutorId }
+                                        FixtureImplementationSha256 = fixtureDigest
+                                        FixtureExecutorId = fixture.ExecutorId
+                                        FixtureExecutorRole = fixture.ExecutorRole }
                     | None -> mutation)
             if errors.Count > 0 then Error(List.ofSeq errors) else
             let hostedArtifacts =
@@ -289,15 +299,18 @@ module QualificationApplication =
                         | Error reasons -> errors.AddRange reasons; None
                         | Ok snapshot -> Some(QualificationEvidence.observeHosted snapshot))
                 |> List.choose id
-            let obligationBodies =
+            let obligationComments =
                 execution.ObligationCommentPaths
                 |> List.choose (fun path ->
                     match under checkout path with
                     | Error reason -> errors.Add reason; None
                     | Ok resolved when not (Set.contains resolved hostedArtifacts) -> errors.Add($"obligation comment is not an artifact of a hosted operation: %s{path}"); None
                     | Ok resolved when not (File.Exists resolved) -> errors.Add($"obligation comment does not exist: %s{path}"); None
-                    | Ok resolved -> Some(File.ReadAllText resolved))
-            let obligations = QualificationEvidence.readObligationComments input.SubjectRevision obligationBodies
+                    | Ok resolved ->
+                        match QualificationEvidence.parseObligationReadback (File.ReadAllBytes resolved) with
+                        | Error reasons -> errors.AddRange reasons; None
+                        | Ok comment -> Some comment)
+            let obligations = QualificationEvidence.readObligationComments input.SubjectRevision obligationComments
             match obligations with Error reasons -> errors.AddRange reasons | Ok _ -> ()
             if errors.Count > 0 then Error(List.ofSeq errors) else
             let qualified =

@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV007
     kind: verification
     subject:
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV008
     kind: verification
     subject:
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV009
     kind: verification
     subject:
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV010
     kind: verification
     subject:
@@ -297,13 +297,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV011
     kind: verification
     subject:
@@ -324,13 +324,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV012
     kind: verification
     subject:
@@ -351,13 +351,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV013
     kind: verification
     subject:
@@ -378,13 +378,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV014
     kind: verification
     subject:
@@ -405,13 +405,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV015
     kind: verification
     subject:
@@ -432,13 +432,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV016
     kind: verification
     subject:
@@ -459,13 +459,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV017
     kind: verification
     subject:
@@ -486,13 +486,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV018
     kind: verification
     subject:
@@ -513,13 +513,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV019
     kind: verification
     subject:
@@ -540,13 +540,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV020
     kind: verification
     subject:
@@ -567,13 +567,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV021
     kind: verification
     subject:
@@ -594,13 +594,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV022
     kind: verification
     subject:
@@ -621,13 +621,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV023
     kind: verification
     subject:
@@ -648,13 +648,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV024
     kind: verification
     subject:
@@ -675,13 +675,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV025
     kind: verification
     subject:
@@ -702,13 +702,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV026
     kind: verification
     subject:
@@ -729,13 +729,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV027
     kind: verification
     subject:
@@ -756,13 +756,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV028
     kind: verification
     subject:
@@ -783,13 +783,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV029
     kind: verification
     subject:
@@ -810,13 +810,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV030
     kind: verification
     subject:
@@ -837,13 +837,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV031
     kind: verification
     subject:
@@ -864,13 +864,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV032
     kind: verification
     subject:
@@ -891,13 +891,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV033
     kind: verification
     subject:
@@ -918,13 +918,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV034
     kind: verification
     subject:
@@ -945,13 +945,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV035
     kind: verification
     subject:
@@ -972,13 +972,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV036
     kind: verification
     subject:
@@ -999,13 +999,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV037
     kind: verification
     subject:
@@ -1026,13 +1026,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
   - id: EV038
     kind: verification
     subject:
@@ -1053,12 +1053,12 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3209-deterministic-qualification-evidence-runner/test-results/qualification.trx
-      digest: "sha256:e92e22ee36a9d358984ad9a66274ba47fd73b639e4910bacaf58703323afdf42"
+      digest: "sha256:ba76a8ef69b2f1575069d73ee3185484506b58b8b55b0a8b47ba85b4a7ac8deb"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 423
+      passed: 427
       failed: 0
       skipped: 0
-    notes: ["Release CLI suite passed 423 tests; full Core 955, GitHub 693, e2e 24, and parity 616 assertions also passed."]
+    notes: ["Release CLI suite passed 427 tests; full Core 956, GitHub 696, e2e 24, and parity 616 assertions also passed."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

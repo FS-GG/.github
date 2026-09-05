@@ -88,11 +88,14 @@ module TelemetryCliTests =
                    operation "fixed" "fixed-point" 0 None (Some(digest 'e'))
                    operation "mutation" "mutation" 3 (Some "REFUSED wrong subject") None ]
                claims = [ {| id = "all"; subjectRevision = revision; requiredKinds = [ "analyze"; "verify"; "ship"; "hosted"; "fixed-point" ]; evidenceIds = [ "analyze"; "verify"; "ship"; "hosted"; "fixed" ] |} ]
-               mutations = [ {| id = "wrong-subject"; operationId = "mutation"; expectedRefusal = "REFUSED wrong subject"; observedRefusal = "REFUSED wrong subject"; productionImplementationSha256 = digest 'b'; fixtureImplementationSha256 = digest 'f'; fixtureExecutorId = "fixture-executor" |} ]
+               mutations = [ {| id = "wrong-subject"; operationId = "mutation"; expectedRefusal = "REFUSED wrong subject"; observedRefusal = "REFUSED wrong subject"; productionImplementationSha256 = digest 'b'; fixtureImplementationSha256 = digest 'f'; fixtureExecutorId = "fixture-executor"; fixtureExecutorRole = "mutation-fixture" |} ]
                hostedObservations =
                  [ {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |}
                    {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |} ]
-               obligations = {| headSha = revision; declarations = [ {| kind = "none"; ids = List.empty<string> |} ] |}
+               obligations =
+                 {| headSha = revision
+                    declarations = [ {| kind = "none"; ids = List.empty<string> |} ]
+                    readback = Some {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "github-actions[bot]" |} |}
                semanticReview = {| subjectRevision = revision; accepted = true; evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" |} |}
 
     let private qualificationRunFixture () =
@@ -133,11 +136,14 @@ module TelemetryCliTests =
                        operation "fixed" "fixed-point" 0 None (Some(digest 'e'))
                        operation "mutation" "mutation" 3 (Some "REFUSED wrong subject") None ]
                    claims = [ {| id = "all"; subjectRevision = revision; requiredKinds = [ "analyze"; "verify"; "ship"; "hosted"; "fixed-point" ]; evidenceIds = [ "analyze"; "verify"; "ship"; "hosted"; "fixed" ] |} ]
-                   mutations = [ {| id = "wrong-subject"; operationId = "mutation"; expectedRefusal = "REFUSED wrong subject"; observedRefusal = "pending"; productionImplementationSha256 = digest 'b'; fixtureImplementationSha256 = digest 'f'; fixtureExecutorId = "fixture-executor" |} ]
+                   mutations = [ {| id = "wrong-subject"; operationId = "mutation"; expectedRefusal = "REFUSED wrong subject"; observedRefusal = "pending"; productionImplementationSha256 = digest 'b'; fixtureImplementationSha256 = digest 'f'; fixtureExecutorId = "fixture-executor"; fixtureExecutorRole = "mutation-fixture" |} ]
                    hostedObservations =
                      [ {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |}
                        {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |} ]
-                   obligations = {| headSha = revision; declarations = [ {| kind = "none"; ids = List.empty<string> |} ] |}
+                   obligations =
+                     {| headSha = revision
+                        declarations = [ {| kind = "none"; ids = List.empty<string> |} ]
+                        readback = Some {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "template" |} |}
                    semanticReview = {| subjectRevision = revision; accepted = true; evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" |} |}
         let operation id artifact =
             {| id = id
@@ -149,8 +155,15 @@ module TelemetryCliTests =
                 {| schema = QualificationEvidence.HostedSchema; complete = true
                    items = [ {| scope = "check"; id = "1"; headSha = revision; state = "completed"; conclusion = Some "success" |} ] |}
         let obligationComment = QualificationEvidence.renderObligationComment revision Qualification.NoObligations
+        let obligationReadback =
+            JsonSerializer.Serialize
+                {| schema = QualificationEvidence.ObligationReadbackSchema
+                   commentId = 123L
+                   url = "https://github.com/FS-GG/.github/pull/3221#issuecomment-123"
+                   author = "github-actions[bot]"
+                   body = obligationComment |}
         let hostedOperation =
-            {| id = "hosted"; arguments = [ "hosted"; hostedPath1; hostedJson; hostedPath2; obligationPath; obligationComment ]
+            {| id = "hosted"; arguments = [ "hosted"; hostedPath1; hostedJson; hostedPath2; obligationPath; obligationReadback ]
                artifacts = [ hostedPath1; hostedPath2; obligationPath ] |}
         let execution =
             JsonSerializer.Serialize
@@ -167,7 +180,7 @@ module TelemetryCliTests =
                        hostedOperation
                        operation "fixed" "evidence/fixed.txt"
                        operation "mutation" "" ]
-                   fixtures = [ {| mutationId = "wrong-subject"; executorId = "fixture-executor"; path = fixturePath; arguments = List.empty<string> |} ]
+                   fixtures = [ {| mutationId = "wrong-subject"; executorId = "fixture-executor"; executorRole = "mutation-fixture"; path = fixturePath; arguments = List.empty<string> |} ]
                    hostedObservationPaths = [ hostedPath1; hostedPath2 ]
                    obligationCommentPaths = [ obligationPath ] |}
         let inputPath, executionPath = Path.Combine(directory, "input.json"), Path.Combine(directory, "execution.json")
@@ -301,6 +314,30 @@ module TelemetryCliTests =
             Assert.Contains(expected, stderr)
 
     [<Fact>]
+    let ``#3209 qualification obligation commands render intent and verify authoritative readback`` () =
+        let head = String.replicate 40 "1"
+        let renderArgs = [ "telemetry"; "qualification"; "obligation"; "render"; "--head"; head; "--kind"; "none" ]
+        let renderCode, body, renderError = invoke renderArgs
+        Assert.Equal(0, renderCode)
+        Assert.Equal("", renderError)
+        Assert.Contains("fsgg:qualification-obligations/v1", body)
+        let receipt =
+            JsonSerializer.Serialize
+                {| schema = QualificationEvidence.ObligationReadbackSchema
+                   commentId = 77L
+                   url = "https://github.com/FS-GG/.github/pull/3221#issuecomment-77"
+                   author = "github-actions[bot]"
+                   body = body |}
+        let disposable, receiptPath = temporary receipt
+        use _ = disposable
+        let code, stdout, stderr =
+            invoke [ "telemetry"; "qualification"; "obligation"; "verify"; "--head"; head; "--kind"; "none"; "--readback"; receiptPath ]
+        Assert.Equal(0, code)
+        Assert.Equal("", stderr)
+        Assert.Contains("\"schema\":\"fsgg.qualification.obligation-verification/1\"", stdout)
+        Assert.Contains("\"commentId\":77", stdout)
+
+    [<Fact>]
     let ``#3209 qualification runner executes exact clean checkout and fixed point`` () =
         let disposable, inputPath, executionPath = qualificationRunFixture ()
         use _ = disposable
@@ -338,6 +375,17 @@ module TelemetryCliTests =
         Assert.Contains("artifact is reused by unrelated operations", stderr)
 
     [<Fact>]
+    let ``#3209 qualification runner requires two distinct hosted observation artifacts`` () =
+        let disposable, inputPath, executionPath = qualificationRunFixture ()
+        use _ = disposable
+        let execution = File.ReadAllText executionPath
+        File.WriteAllText(executionPath, execution.Replace("\"hostedObservationPaths\":[\"evidence/hosted-1.json\",\"evidence/hosted-2.json\"]", "\"hostedObservationPaths\":[\"evidence/hosted-1.json\",\"evidence/hosted-1.json\"]"))
+        let code, stdout, stderr = invoke [ "telemetry"; "qualification"; "run"; "--input"; inputPath; "--execution"; executionPath ]
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+        Assert.Contains("duplicate hosted observation path", stderr)
+
+    [<Fact>]
     let ``#3209 qualification runner independently executes exact mutation fixture refusal`` () =
         let disposable, inputPath, executionPath = qualificationRunFixture ()
         use _ = disposable
@@ -348,6 +396,28 @@ module TelemetryCliTests =
         Assert.NotEqual(0, code)
         Assert.Equal("", stdout)
         Assert.Contains("fixture 'wrong-subject' refusal did not match exactly", stderr)
+
+    [<Fact>]
+    let ``#3209 qualification runner requires a distinct mutation fixture role`` () =
+        let disposable, inputPath, executionPath = qualificationRunFixture ()
+        use _ = disposable
+        let execution = File.ReadAllText executionPath
+        File.WriteAllText(executionPath, execution.Replace("\"executorRole\":\"mutation-fixture\"", "\"executorRole\":\"implementer\""))
+        let code, stdout, stderr = invoke [ "telemetry"; "qualification"; "run"; "--input"; inputPath; "--execution"; executionPath ]
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+        Assert.Contains("reuses the production executor role", stderr)
+
+    [<Fact>]
+    let ``#3209 qualification runner refuses non-authoritative obligation readback receipts`` () =
+        let disposable, inputPath, executionPath = qualificationRunFixture ()
+        use _ = disposable
+        let execution = File.ReadAllText executionPath
+        File.WriteAllText(executionPath, execution.Replace("https://github.com/FS-GG/.github/pull/3221#issuecomment-123", "file:///tmp/asserted"))
+        let code, stdout, stderr = invoke [ "telemetry"; "qualification"; "run"; "--input"; inputPath; "--execution"; executionPath ]
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+        Assert.Contains("readback url must be an exact GitHub PR issuecomment URL", stderr)
 
     [<Fact>]
     let ``#3209 fixed point refuses replay that changes only artifact bytes`` () =
