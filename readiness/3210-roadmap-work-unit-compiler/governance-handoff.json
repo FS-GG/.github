@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/ship.json",
-      "digest": "sha256:72f292f33f32497ca443a52c872f917b6c6844006b70e869d86e6653b5252d69",
+      "digest": "sha256:1fe9b0a987a38d58135bfe9096df36d138726421288ccb8b6353235c6bce5948",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/verify.json",
-      "digest": "sha256:a4e7da86f4587386c21acfd5ea1848ec36d4fb821be2550b704ade6f52b9ae65",
+      "digest": "sha256:7c2782ff8e30a675682dcb4617b04bf67b1754725332554fc6f5b0be01b7e675",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/work-model.json",
-      "digest": "sha256:98cc0d1aa0af47c0e46dfec321ce979b313ad8631ad9fa5c304018c557d26c4a",
+      "digest": "sha256:f94a413d352f9586b52581e71fa36d50283459a20f38a5d2d8a76b3a927704f2",
       "schemaVersion": 1
     }
   ],
