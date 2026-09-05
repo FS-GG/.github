@@ -130,11 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.83.1 — accept ordered partial roadmap catalogs during work-unit preparation.
+    <PackageReleaseNotes>0.83.2 — accept independently regenerated ignored SDD artifacts.
 
-Repairs work-unit preparation for production catalogs that intentionally omit already-accepted
-historical roadmap rows. Catalog rows must still follow canonical roadmap order, the selected unit
-must still be the first unchecked row, and its immediate accepted prerequisite must still be present.
+Repairs live roadmap work-unit acceptance so candidate commits are not required to track generated
+SDD outputs that repository policy intentionally ignores. Acceptance still checks out the exact
+candidate revision, runs the pinned SDD analyze, verify, and ship commands independently, compares
+their canonical outputs with the supplied observations, and rejects revision or cleanliness drift.
 No command, option, result, or exit-code vocabulary changes.
 
 $(FsggStandingAdvisories)

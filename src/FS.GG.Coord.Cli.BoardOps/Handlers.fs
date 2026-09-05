@@ -3016,25 +3016,6 @@ module Handlers =
                         if reviewed <> input.Identities.ImplementationCandidate || verdict <> "pass" then errors.Add("critique confirmation does not pass the implementation candidate")
                     with error -> errors.Add("critique/live review binding: " + error.Message)
 
-            if implementationParts.Length = 2 then
-                let artifactPaths = [ "analyze", "analysis.json"; "verify", "verify.json"; "ship", "ship-verdict.json" ]
-                for stage, fileName in artifactPaths do
-                    match input.SddObservations |> List.tryFind (fun observation -> observation.Stage = stage) with
-                    | None -> errors.Add($"SDD %s{stage} observation is missing")
-                    | Some observation ->
-                        let path = $"readiness/%s{input.SddWorkId}/%s{fileName}"
-                        match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] path input.Identities.ImplementationCandidate with
-                        | Error error -> errors.Add(Errors.explain error)
-                        | Ok observed ->
-                            match canonicalJson observed, canonicalJson observation.ArtifactJson with
-                            | Ok left, Ok right when left = right -> ()
-                            | Ok _, Ok _ -> errors.Add($"SDD %s{stage} artifact differs from immutable candidate %s{input.Identities.ImplementationCandidate}")
-                            | Error reason, _ | _, Error reason -> errors.Add reason
-                let workModelPath = $"readiness/%s{input.SddWorkId}/work-model.json"
-                match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] workModelPath input.Identities.ImplementationCandidate with
-                | Error error -> errors.Add(Errors.explain error)
-                | Ok workModel -> validateCompleteSddWorkModel input.SddWorkId workModel |> List.iter errors.Add
-
             if registrationRepository <> input.AcceptanceBinding.Repository then errors.Add("acceptance repository differs from the applied unit registration")
             if implementationParts.Length = 2 && acceptanceParts.Length = 2 then
                 let implementationOwner, implementationRepo = implementationParts[0], implementationParts[1]

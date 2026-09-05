@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.83.2` source prepared**
+  (owner github; [.github#3242](https://github.com/FS-GG/.github/issues/3242)):
+  advances the source frontier from 0.83.1 to 0.83.2. Live roadmap acceptance no longer requires
+  ignored generated SDD outputs to exist in the candidate commit; its independent exact-revision
+  observer still regenerates and canonical-compares analyze, verify, and ship outputs and retains
+  revision and clean-tree enforcement. The published frontier remains 0.83.1 until this exact
+  accepted merge is single-packed and promoted through the release saga.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.1` published; registry reconciliation**
   (owner github; [.github#3233](https://github.com/FS-GG/.github/issues/3233),
   [source PR #3235](https://github.com/FS-GG/.github/pull/3235),
