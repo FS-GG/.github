@@ -124,7 +124,10 @@ module RoadmapWorkUnit =
           LifecycleUnitId: string
           LifecycleLog: string
           RequiredLifecyclePhases: string list
+          LifecycleUsageReceipts: string list
+          LifecycleHistoryReport: string
           ReviewEvidence: string
+          StructuredReviewEvidence: string
           ReviewCycleId: string
           ReviewReceipt: string
           SddWorkId: string

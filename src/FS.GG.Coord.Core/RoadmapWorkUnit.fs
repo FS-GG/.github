@@ -55,7 +55,8 @@ module RoadmapWorkUnit =
         { Schema: string; Plan: PreparationPlan; PreparationApplication: PreparationApplication
           Qualification: Qualification.Accepted
           LifecycleRunId: string; LifecycleUnitId: string; LifecycleLog: string
-          RequiredLifecyclePhases: string list; ReviewEvidence: string; ReviewCycleId: string; ReviewReceipt: string; SddWorkId: string
+          RequiredLifecyclePhases: string list; LifecycleUsageReceipts: string list; LifecycleHistoryReport: string
+          ReviewEvidence: string; StructuredReviewEvidence: string; ReviewCycleId: string; ReviewReceipt: string; SddWorkId: string
           SddObservations: SddObservation list; Identities: RevisionIdentities
           ImplementationBinding: RevisionBinding; AcceptanceBinding: RevisionBinding; AcceptedAt: string }
     type EvidenceEntry = { Name: string; Sha256: string; Source: string }
@@ -90,7 +91,9 @@ module RoadmapWorkUnit =
     let private issue = Regex("^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private issueRef = Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private token = Regex("^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)
-    let private acceptanceLifecyclePhases = [ "implementation"; "review"; "acceptance" ]
+    let private acceptanceLifecyclePhases =
+        [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
+          "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
     let private digest bytes = CanonicalJson.sha256 bytes
     let private utf8 (value: string) = Encoding.UTF8.GetBytes value
     let private canonical bytes = CanonicalJson.canonicalize bytes |> Result.defaultWith invalidOp
@@ -595,7 +598,11 @@ module RoadmapWorkUnit =
           yield { Name = "qualification"; Sha256 = input.Qualification.Digest; Source = input.Qualification.Subject }
           yield { Name = "qualification-evidence"; Sha256 = input.Qualification.EvidenceDigest; Source = input.Qualification.SemanticReviewEvidence }
           yield { Name = "lifecycle"; Sha256 = digest (utf8 input.LifecycleLog); Source = $"%s{input.LifecycleRunId}/%s{input.LifecycleUnitId}" }
+          yield { Name = "lifecycle-history"; Sha256 = digest (utf8 input.LifecycleHistoryReport); Source = input.LifecycleRunId }
+          for index, receipt in input.LifecycleUsageReceipts |> List.indexed do
+              yield { Name = $"lifecycle-usage-%d{index + 1}"; Sha256 = digest (utf8 receipt); Source = input.LifecycleRunId }
           yield { Name = "review"; Sha256 = digest (utf8 input.ReviewReceipt); Source = input.ReviewEvidence }
+          yield { Name = "structured-review"; Sha256 = digest (utf8 input.StructuredReviewEvidence); Source = input.StructuredReviewEvidence }
           yield { Name = "revision-binding-implementation"; Sha256 = input.ImplementationBinding.Digest; Source = input.ImplementationBinding.Repository + ":" + input.ImplementationBinding.Candidate + ".." + input.ImplementationBinding.Merge }
           yield { Name = "revision-binding-acceptance"; Sha256 = input.AcceptanceBinding.Digest; Source = input.AcceptanceBinding.Repository + ":" + input.AcceptanceBinding.Candidate + ".." + input.AcceptanceBinding.Merge }
           for observation in input.SddObservations do yield { Name = "sdd-" + observation.Stage; Sha256 = digest (utf8 observation.ArtifactJson); Source = input.SddWorkId } ]
@@ -687,6 +694,12 @@ module RoadmapWorkUnit =
         match Qualification.parseResult (utf8 (Qualification.canonicalResult input.Qualification)) with
         | Error errors -> errors |> List.iter (QualificationMismatch >> findings.Add)
         | Ok _ -> ()
+        let appliedUnit =
+            input.Plan.Registrations
+            |> List.tryFind (fun value -> value.Kind = "unit")
+            |> Option.bind (fun unitRegistration ->
+                input.PreparationApplication.Registrations
+                |> List.tryFind (fun value -> value.Id = unitRegistration.Id))
         match input.Plan.Registrations |> List.tryFind (fun value -> value.Kind = "unit") with
         | None -> findings.Add(RegistrationInvalid(input.Plan.Unit.UnitId, "plan has no unit registration"))
         | Some unitRegistration ->
@@ -697,17 +710,68 @@ module RoadmapWorkUnit =
         if input.Qualification.SubjectRevision <> input.Identities.ImplementationCandidate then findings.Add(QualificationMismatch "subject revision is not the implementation candidate")
         if input.LifecycleUnitId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "lifecycle unit id is not the selected roadmap unit")
         if input.LifecycleRunId <> "roadmap-unit-" + input.Plan.Unit.UnitId.ToLowerInvariant() then findings.Add(LifecycleInvalid "lifecycle run id is not the deterministic selected-unit run")
-        if input.RequiredLifecyclePhases <> acceptanceLifecyclePhases then findings.Add(LifecycleInvalid "required lifecycle phases are not the closed implementation/review/acceptance sequence")
+        if input.RequiredLifecyclePhases <> acceptanceLifecyclePhases then findings.Add(LifecycleInvalid "required lifecycle phases are not the compiler-derived intake-through-acceptance sequence")
         if input.ReviewCycleId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "review cycle id is not the selected roadmap unit")
-        if input.SddWorkId <> input.Plan.SddWorkId then findings.Add(SddObservationInvalid("work", "SDD work id is not the preparation-plan work identity"))
-        if String.IsNullOrWhiteSpace input.Qualification.SemanticReviewEvidence || String.IsNullOrWhiteSpace input.ReviewEvidence then findings.Add ReviewEvidenceMissing
+        let expectedUnitSddWorkId =
+            input.PreparationApplication.Registrations
+            |> List.tryFind (fun registration -> registration.Kind = "unit")
+            |> Option.bind (fun registration ->
+                let matched = Regex.Match(registration.Issue, "#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
+                if matched.Success then
+                    Some($"%s{matched.Groups[1].Value}-roadmap-%s{input.Plan.Unit.UnitId.ToLowerInvariant().Replace('.', '-')}" )
+                else None)
+        match expectedUnitSddWorkId with
+        | None -> findings.Add(SddObservationInvalid("work", "applied unit issue cannot derive the unit SDD work identity"))
+        | Some expected when input.SddWorkId <> expected -> findings.Add(SddObservationInvalid("work", $"SDD work id must be derived from the applied unit issue as %s{expected}"))
+        | Some _ when input.SddWorkId = input.Plan.SddWorkId -> findings.Add(SddObservationInvalid("work", "unit SDD work id must be distinct from the compiler authority work id"))
+        | Some _ -> ()
+        if String.IsNullOrWhiteSpace input.Qualification.SemanticReviewEvidence
+           || String.IsNullOrWhiteSpace input.ReviewEvidence
+           || String.IsNullOrWhiteSpace input.StructuredReviewEvidence then findings.Add ReviewEvidenceMissing
         if input.Qualification.SemanticReviewEvidence <> input.ReviewEvidence then findings.Add(QualificationMismatch "semantic review evidence locator differs from the review authority")
         match CritiqueReceipt.validate input.ReviewCycleId (Some input.Identities.ImplementationCandidate) (utf8 input.ReviewReceipt) with
         | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid("review receipt: " + error)))
         | Ok _ -> ()
-        match LifecycleTelemetry.validate input.LifecycleRunId input.LifecycleUnitId true input.RequiredLifecyclePhases input.LifecycleLog with
-        | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid(string error)))
-        | Ok _ -> ()
+        let usageResults =
+            input.LifecycleUsageReceipts
+            |> List.map (utf8 >> RuntimeUsage.parseCsvReceipt)
+        usageResults
+        |> List.choose (function Error errors -> Some errors | Ok _ -> None)
+        |> List.collect id
+        |> List.iter (LifecycleInvalid >> findings.Add)
+        let usageReports = usageResults |> List.choose Result.toOption
+        match LifecycleTelemetry.parseHistoryCsv input.LifecycleHistoryReport with
+        | Error errors -> errors |> List.iter (LifecycleInvalid >> findings.Add)
+        | Ok history ->
+            match LifecycleTelemetry.validateWithEvidence input.LifecycleRunId input.LifecycleUnitId true acceptanceLifecyclePhases usageReports history input.LifecycleLog with
+            | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid(string error)))
+            | Ok _ -> ()
+        match appliedUnit with
+        | None -> ()
+        | Some applied ->
+            let issueMatch = Regex.Match(applied.Issue, "^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
+            if not issueMatch.Success then findings.Add(LifecycleInvalid "applied unit issue identity is malformed")
+            else
+                let expectedRepo = issueMatch.Groups[1].Value
+                let expectedNumber = Int32.Parse issueMatch.Groups[2].Value
+                let expectedUrl = $"https://github.com/%s{expectedRepo}/issues/%d{expectedNumber}"
+                input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                |> Array.iteri (fun index line ->
+                    try
+                        use event = JsonDocument.Parse line
+                        let root = event.RootElement
+                        let item = root.GetProperty "item"
+                        let source = root.GetProperty "source"
+                        let authority = root.GetProperty "authority"
+                        if item.GetProperty("repo").GetString() <> expectedRepo
+                           || item.GetProperty("number").GetInt32() <> expectedNumber
+                           || item.GetProperty("url").GetString() <> expectedUrl
+                           || authority.GetProperty("subject").GetString() <> applied.Issue then
+                            findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} is not bound to the applied unit issue"))
+                        if source.GetProperty("repository").GetString() <> input.ImplementationBinding.Repository
+                           || source.GetProperty("revision").GetString() <> input.Identities.ImplementationCandidate then
+                            findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} is not bound to the implementation candidate"))
+                    with error -> findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} binding: %s{error.Message}")))
         let requiredStages = [ "analyze", "implementationReady"; "verify", "verificationReady"; "ship", "shipReady" ]
         for stage, status in requiredStages do
             match input.SddObservations |> List.filter (fun value -> value.Stage = stage) with
@@ -812,7 +876,8 @@ module RoadmapWorkUnit =
                qualification = JsonNode.Parse(Qualification.canonicalResult input.Qualification)
                lifecycleRunId = input.LifecycleRunId; lifecycleUnitId = input.LifecycleUnitId
                lifecycleLog = input.LifecycleLog; requiredLifecyclePhases = input.RequiredLifecyclePhases
-               reviewEvidence = input.ReviewEvidence; reviewCycleId = input.ReviewCycleId
+               lifecycleUsageReceipts = input.LifecycleUsageReceipts; lifecycleHistoryReport = input.LifecycleHistoryReport
+               reviewEvidence = input.ReviewEvidence; structuredReviewEvidence = input.StructuredReviewEvidence; reviewCycleId = input.ReviewCycleId
                reviewReceipt = input.ReviewReceipt; sddWorkId = input.SddWorkId; sddObservations = observations
                identities = {| implementationPullRequest = input.Identities.ImplementationPullRequest; implementationCandidate = input.Identities.ImplementationCandidate; implementationMerge = input.Identities.ImplementationMerge; acceptancePullRequest = input.Identities.AcceptancePullRequest; acceptanceCandidate = input.Identities.AcceptanceCandidate; acceptanceMerge = input.Identities.AcceptanceMerge; protectedMain = input.Identities.ProtectedMain |}
                implementationBinding = JsonNode.Parse(canonicalRevisionBinding input.ImplementationBinding)
@@ -825,7 +890,7 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "acceptanceInput" [ "schema"; "plan"; "preparationApplication"; "qualification"; "lifecycleRunId"; "lifecycleUnitId"; "lifecycleLog"; "requiredLifecyclePhases"; "reviewEvidence"; "reviewCycleId"; "reviewReceipt"; "sddWorkId"; "sddObservations"; "identities"; "implementationBinding"; "acceptanceBinding"; "acceptedAt" ] root
+            strict "acceptanceInput" [ "schema"; "plan"; "preparationApplication"; "qualification"; "lifecycleRunId"; "lifecycleUnitId"; "lifecycleLog"; "requiredLifecyclePhases"; "lifecycleUsageReceipts"; "lifecycleHistoryReport"; "reviewEvidence"; "structuredReviewEvidence"; "reviewCycleId"; "reviewReceipt"; "sddWorkId"; "sddObservations"; "identities"; "implementationBinding"; "acceptanceBinding"; "acceptedAt" ] root
             let plan = parsePlan (utf8 ((prop "plan" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
             let preparationApplication = parsePreparationApplication (utf8 ((prop "preparationApplication" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
             let qualification = Qualification.parseResult (utf8 ((prop "qualification" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
@@ -833,7 +898,10 @@ module RoadmapWorkUnit =
             Ok { Schema = text "acceptanceInput" "schema" root; Plan = plan; PreparationApplication = preparationApplication; Qualification = qualification
                  LifecycleRunId = text "acceptanceInput" "lifecycleRunId" root; LifecycleUnitId = text "acceptanceInput" "lifecycleUnitId" root
                  LifecycleLog = text "acceptanceInput" "lifecycleLog" root; RequiredLifecyclePhases = strings "acceptanceInput" "requiredLifecyclePhases" root
+                 LifecycleUsageReceipts = strings "acceptanceInput" "lifecycleUsageReceipts" root
+                 LifecycleHistoryReport = text "acceptanceInput" "lifecycleHistoryReport" root
                  ReviewEvidence = text "acceptanceInput" "reviewEvidence" root
+                 StructuredReviewEvidence = text "acceptanceInput" "structuredReviewEvidence" root
                  ReviewCycleId = text "acceptanceInput" "reviewCycleId" root
                  ReviewReceipt = text "acceptanceInput" "reviewReceipt" root
                  SddWorkId = text "acceptanceInput" "sddWorkId" root; SddObservations = observations

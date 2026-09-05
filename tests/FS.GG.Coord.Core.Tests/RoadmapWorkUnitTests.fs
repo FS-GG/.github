@@ -87,8 +87,9 @@ module RoadmapWorkUnitTests =
 
     let private lifecycle () =
         let common order phase event at actual tokens =
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{head 'a'}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
-        [ "implementation"; "review"; "acceptance" ]
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":400,"url":"https://github.com/FS-GG/.github/issues/400"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{head 'a'}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#400","claim_generation":"1"}}}}"""
+        [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
+          "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)
         |> List.fold (fun log (order, phase) ->
             let started = common order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}"
@@ -114,7 +115,7 @@ module RoadmapWorkUnitTests =
         let unitIssue = application.Registrations |> List.find (fun value -> value.Kind = "unit") |> _.Issue
         let observation stage status : RoadmapWorkUnit.SddObservation =
             { Stage = stage; SubjectRevision = candidate
-              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/3210-roadmap-work-unit-compiler/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"3210-roadmap-work-unit-compiler"}}""" }
+              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/400-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-roadmap-gs2-07-3"}}""" }
         let review = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
         let binding candidate merge tree =
             RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
@@ -123,8 +124,14 @@ module RoadmapWorkUnitTests =
               AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema
           Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate; LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"
-          LifecycleLog = lifecycle (); RequiredLifecyclePhases = [ "implementation"; "review"; "acceptance" ]; ReviewEvidence = review
-          ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "3210-roadmap-work-unit-compiler"
+          LifecycleLog = lifecycle ()
+          RequiredLifecyclePhases =
+            [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
+              "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
+          LifecycleUsageReceipts = []
+          LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
+          ReviewEvidence = review; StructuredReviewEvidence = review
+          ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "400-roadmap-gs2-07-3"
           SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities
           ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e')
@@ -224,6 +231,12 @@ module RoadmapWorkUnitTests =
         Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ImplementationBinding = wrongTree } |> Result.isError)
         let wrongCommand = { input.ImplementationBinding with CommandSha256 = sha '0' }
         Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ImplementationBinding = wrongCommand } |> Result.isError)
+        let wrongLifecycleIssue = input.LifecycleLog.Replace("FS-GG/.github#400", "FS-GG/.github#3210").Replace("/issues/400", "/issues/3210").Replace("\"number\":400", "\"number\":3210")
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with LifecycleLog = wrongLifecycleIssue } |> Result.isError)
+        let wrongLifecycleRevision = input.LifecycleLog.Replace(head 'a', head '9')
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with LifecycleLog = wrongLifecycleRevision } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with RequiredLifecyclePhases = input.RequiredLifecyclePhases.Tail } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with LifecycleHistoryReport = "not,csv\n" } |> Result.isError)
         Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ReviewReceipt = input.ReviewReceipt.Replace("\"verdict\":\"pass\"", "\"verdict\":\"red\"") } |> Result.isError)
         let candidateEnvelope = RoadmapWorkUnit.inspectAcceptanceCandidate input |> unwrap
         let observed = RoadmapWorkUnit.observeAcceptance candidateEnvelope

@@ -634,7 +634,7 @@ let main argv =
                 invoked <- "roadmap-unit-accept"
                 match Options.parse [ "intake"; "apply"; "/dev/null" ] with
                 | Error message -> eprint $"fsgg-coord-engine: internal roadmap acceptance options: %s{message}"; ExitDefect
-                | Ok opts -> Client.executeWithContext (Handlers.roadmapUnitAccept QualificationApplication.run) { opts with Args = "seal" :: args }
+                | Ok opts -> Client.executeWithContext (Handlers.roadmapUnitAccept QualificationApplication.runBoundToTree) { opts with Args = "seal" :: args }
             | _ ->
                 match TelemetryApplication.tryRun arguments with
                 | Some exitCode ->

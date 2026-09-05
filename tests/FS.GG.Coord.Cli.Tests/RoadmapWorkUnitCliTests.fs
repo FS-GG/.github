@@ -77,8 +77,9 @@ module RoadmapWorkUnitCliTests =
 
     let private lifecycle candidate =
         let draft order phase event at actual usage =
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{candidate}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
-        [ "implementation"; "review"; "acceptance" ]
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":500,"url":"https://github.com/FS-GG/.github/issues/500"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{candidate}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#500","claim_generation":"1"}}}}"""
+        [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
+          "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)
         |> List.fold (fun log (order, phase) ->
             let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log (draft order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
@@ -100,12 +101,19 @@ module RoadmapWorkUnitCliTests =
             { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = head 'b'
               AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         let binding candidate merge tree = RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
-        let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/3210-roadmap-work-unit-compiler/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"3210-roadmap-work-unit-compiler"}}""" }
+        let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/500-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"500-roadmap-gs2-07-3"}}""" }
         let critique = $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate
-          LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate; RequiredLifecyclePhases = [ "implementation"; "review"; "acceptance" ]
-          ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"; ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique
-          SddWorkId = "3210-roadmap-work-unit-compiler"; SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
+          LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate
+          RequiredLifecyclePhases =
+            [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
+              "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
+          LifecycleUsageReceipts = []
+          LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
+          ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
+          StructuredReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
+          ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique
+          SddWorkId = "500-roadmap-gs2-07-3"; SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e')
           AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (head 'f'); AcceptedAt = "2026-09-05T06:02:00Z" } : RoadmapWorkUnit.AcceptanceInput
 

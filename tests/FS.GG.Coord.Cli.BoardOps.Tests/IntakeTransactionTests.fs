@@ -833,8 +833,11 @@ module IntakeTransactionTests =
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
             | other -> failwithf "receipt was not durably persisted: %A" other
 
-    [<Fact>]
-    let ``#3210 roadmap preparation applies through staged intake and replay creates no duplicates`` () =
+    [<Theory>]
+    [<InlineData(1)>]
+    [<InlineData(2)>]
+    [<InlineData(3)>]
+    let ``#3210 roadmap preparation resumes after every nested intake durable boundary without duplicates`` failureOrdinal =
         withCache <| fun cache ->
             let shaText (value: string) =
                 SHA256.HashData(Encoding.UTF8.GetBytes value)
@@ -860,6 +863,7 @@ module IntakeTransactionTests =
             let bodies = Collections.Generic.Dictionary<int, string>()
             let boardItems = Collections.Generic.HashSet<int>()
             let projected = Collections.Generic.HashSet<int>()
+            let mutable injectedFailure = false
             let world = Fake.Recorder(fun req ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
@@ -906,6 +910,9 @@ module IntakeTransactionTests =
                         ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
                     | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
                     | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> boardItems.Add currentIssue |> ignore; ok ($"{{\"data\":{{\"addProjectV2ItemById\":{{\"item\":{{\"id\":\"PI-%d{currentIssue}\"}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}")
+                    | Query(doc, _) when doc.Contains "f0:" && currentIssue = 76 + failureOrdinal && not injectedFailure ->
+                        injectedFailure <- true
+                        Error(NotFound "injected nested intake projection boundary failure")
                     | Query(doc, _) when doc.Contains "f0:" -> projected.Add currentIssue |> ignore; ok "{\"data\":{\"f0\":{\"clientMutationId\":null},\"f1\":{\"clientMutationId\":null},\"f2\":{\"clientMutationId\":null},\"f3\":{\"clientMutationId\":null}}}"
                     | _ -> Error(NotFound "unrecognized roadmap preparation board request")
                 | _ -> Error(NotFound "unrecognized roadmap preparation request"))
@@ -920,6 +927,11 @@ module IntakeTransactionTests =
                     Handlers.roadmapUnitPrepareApply (context world) options, captured.ToString()
                 finally
                     Console.SetOut priorOutput
+            let interrupted, _ = invokeApply opts
+            Assert.NotEqual(Kernel.ExitGreen, interrupted)
+            Assert.True(injectedFailure)
+            Assert.Equal(failureOrdinal, creates)
+
             let first, firstOutput = invokeApply opts
             if first <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal("", firstOutput)

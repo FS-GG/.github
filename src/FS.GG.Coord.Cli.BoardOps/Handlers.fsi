@@ -48,7 +48,7 @@ module Handlers =
     /// Re-observe every acceptance authority from GitHub and Git before an opaque accepted receipt can
     /// be sealed. Pure candidate inspection is intentionally insufficient at this boundary.
     val roadmapUnitAccept:
-        runQualification: (string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
+        runQualification: (string -> string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
         Context ->
         Options.Options ->
             int

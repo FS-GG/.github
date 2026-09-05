@@ -400,6 +400,26 @@ module TelemetryCliTests =
         Assert.DoesNotContain(inputPath, first)
 
     [<Fact>]
+    let ``#3210 production qualification pins trusted git tree and environment`` () =
+        let disposable, inputPath, executionPath = qualificationRunFixture ()
+        use _ = disposable
+        let checkout = Path.GetDirectoryName inputPath
+        let tree = command checkout "/usr/bin/git" [ "rev-parse"; "HEAD^{tree}" ]
+        Assert.True(QualificationApplication.runBoundToTree tree inputPath executionPath |> Result.isOk)
+        Assert.True(QualificationApplication.runBoundToTree (String.replicate 40 "0") inputPath executionPath |> Result.isError)
+
+        let execution = File.ReadAllText executionPath
+        let fakeGitPath = JsonSerializer.Serialize(Path.Combine(checkout, "qualification-tool.sh"))
+        File.WriteAllText(executionPath, execution.Replace("\"id\":\"git\",\"path\":\"/usr/bin/git\"", $"\"id\":\"git\",\"path\":%s{fakeGitPath}"))
+        let fakeGit = QualificationApplication.runBoundToTree tree inputPath executionPath
+        let fakeGitErrors = match fakeGit with Error errors -> String.concat "\n" errors | Ok _ -> ""
+        Assert.Contains("must resolve tool id 'git' to /usr/bin/git", fakeGitErrors)
+
+        File.WriteAllText(executionPath, execution.Replace("\"name\":\"LANG\"", "\"name\":\"GIT_DIR\""))
+        let injected = QualificationApplication.runBoundToTree tree inputPath executionPath
+        Assert.Contains("may not override GIT_*", match injected with Error errors -> String.concat "\n" errors | Ok _ -> "")
+
+    [<Fact>]
     let ``#3209 qualification runner refuses dirty checkout before execution`` () =
         let disposable, inputPath, executionPath = qualificationRunFixture ()
         use _ = disposable

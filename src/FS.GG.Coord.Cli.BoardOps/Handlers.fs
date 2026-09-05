@@ -2617,11 +2617,6 @@ module Handlers =
             if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
             else Error($"invalid issue identity: %s{value}")
 
-        let parseIssueUrl (value: string) =
-            let matched = Regex.Match(value, "^https://github[.]com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)$", RegexOptions.CultureInvariant)
-            if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
-            else Error($"invalid authority issue URL: %s{value}")
-
         let parseCommentUrl (value: string) =
             let matched = Regex.Match(value, "^https://github[.]com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:pull|issues)/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$", RegexOptions.CultureInvariant)
             if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value, Int64.Parse matched.Groups[4].Value)
@@ -2783,9 +2778,19 @@ module Handlers =
                                 | Ok(Some actual) when actual = expected -> ()
                                 | Ok actual -> errors.Add($"%s{applied.Issue} live %s{field} is %A{actual}, expected %s{expected}")
 
-            match parseIssueUrl input.Plan.Authority.Issue with
-            | Error reason -> errors.Add reason
-            | Ok(owner, repo, number) ->
+            let appliedUnitIssue =
+                input.Plan.Registrations
+                |> List.tryFind (fun registration -> registration.Kind = "unit")
+                |> Option.bind (fun registration ->
+                    input.PreparationApplication.Registrations
+                    |> List.tryFind (fun applied -> applied.Id = registration.Id))
+                |> Option.map _.Issue
+            match appliedUnitIssue with
+            | None -> errors.Add("applied unit registration is unavailable for lifecycle authority")
+            | Some issue ->
+              match parseIssueRef issue with
+              | Error reason -> errors.Add reason
+              | Ok(owner, repo, number) ->
                 let expectedItem = $"%s{owner}/%s{repo}"
                 let expectedSubject = $"%s{expectedItem}#%d{number}"
                 let expectedUrl = $"https://github.com/%s{expectedItem}/issues/%d{number}"
@@ -2824,9 +2829,9 @@ module Handlers =
                             if item.GetProperty("repo").GetString() <> expectedItem
                                || item.GetProperty("number").GetInt32() <> number
                                || item.GetProperty("url").GetString() <> expectedUrl then
-                                errors.Add($"lifecycle event %d{index + 1} is not bound to the preparation authority issue")
+                                errors.Add($"lifecycle event %d{index + 1} is not bound to the applied unit issue")
                             if authority.GetProperty("subject").GetString() <> expectedSubject then
-                                errors.Add($"lifecycle event %d{index + 1} authority subject differs from the preparation authority issue")
+                                errors.Add($"lifecycle event %d{index + 1} authority subject differs from the applied unit issue")
                             match winningClaim with
                             | Some claim when authority.GetProperty("claim_generation").GetString() <> claim ->
                                 errors.Add($"lifecycle event %d{index + 1} claim generation is not the live winning claim")
@@ -2885,7 +2890,22 @@ module Handlers =
                 |> List.iter (fun comment -> errors.Add($"structured review authority comment %d{comment.Id} was edited"))
                 let projected = comments |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
                 let live = Driver.liveReviewComments input.Identities.ImplementationCandidate projected
+                let phaseFacts = Driver.reviewPhaseFacts projected
                 if not live.Diagnostics.IsEmpty || not live.StructuredErrors.IsEmpty then errors.Add("structured review authority contains diagnostics")
+                if phaseFacts.LatestReviewUrl <> Some input.StructuredReviewEvidence then
+                    errors.Add("structured review evidence is not the latest review record for the implementation candidate")
+                match parseCommentUrl input.StructuredReviewEvidence with
+                | Error reason -> errors.Add reason
+                | Ok(owner, repo, number, commentId)
+                    when owner <> implementationParts[0]
+                         || repo <> implementationParts[1]
+                         || number <> input.Identities.ImplementationPullRequest ->
+                    errors.Add("structured review evidence is not on the implementation pull request")
+                | Ok(_, _, _, commentId) ->
+                    match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.StructuredReviewEvidence) with
+                    | None -> errors.Add("structured review evidence comment is absent from the authoritative pull-request ledger")
+                    | Some comment when comment.CreatedAt <> comment.UpdatedAt -> errors.Add("structured review evidence comment was edited")
+                    | Some _ -> ()
                 match Driver.parseEffectiveReviewComments input.Identities.ImplementationCandidate projected with
                 | Error reasons -> reasons |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
                 | Ok chain ->
@@ -2901,7 +2921,18 @@ module Handlers =
                         let confirmation = root.GetProperty("confirmation")
                         let reviewed = confirmation.GetProperty("reviewed_commit").GetString()
                         let verdict = confirmation.GetProperty("verdict").GetString()
+                        let implementationActors =
+                            input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                            |> Array.choose (fun line ->
+                                use event = JsonDocument.Parse line
+                                let root = event.RootElement
+                                let phase = root.GetProperty("phase").GetString()
+                                if phase = "implementation" || phase.StartsWith("repair", StringComparison.Ordinal) then
+                                    Some(root.GetProperty("actor").GetString())
+                                else None)
+                            |> Set.ofArray
                         if chain.CriticIdentity <> Some critic then errors.Add("critique critic differs from the live structured review critic")
+                        if Set.contains critic implementationActors then errors.Add("structured review critic is not independent from the implementation actor")
                         if cycle <> input.ReviewCycleId then errors.Add("critique cycle differs from the acceptance review cycle")
                         if reviewed <> input.Identities.ImplementationCandidate || verdict <> "pass" then errors.Add("critique confirmation does not pass the implementation candidate")
                     with error -> errors.Add("critique/live review binding: " + error.Message)
@@ -2977,7 +3008,7 @@ module Handlers =
                         match sddExecutionBinding with
                         | Error reasons -> fail reasons
                         | Ok () ->
-                            match runQualification args["--qualification-input"] args["--qualification-execution"] with
+                            match runQualification input.ImplementationBinding.CandidateTree args["--qualification-input"] args["--qualification-execution"] with
                             | Error reasons -> fail (reasons |> List.map (fun reason -> "production qualification: " + reason))
                             | Ok observedQualification when Qualification.canonicalResult observedQualification <> Qualification.canonicalResult input.Qualification ->
                                 fail [ "production qualification result differs from the acceptance input" ]
