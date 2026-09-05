@@ -537,8 +537,12 @@
        generated SDD outputs as candidate-tree authority; the independent exact-revision observer
        still regenerates, validates, and canonical-compares every required SDD result. No command,
        option, result, or exit-code vocabulary changes. -->
+  <!-- 0.83.2 -> 0.83.3 (.github#3247): PATCH. Roadmap acceptance now gives the immutable acceptance
+       envelope its own post-create comment identity, binds qualification to the preceding structured
+       review authority, and reads the SDD work identity from the current structured route ledger.
+       No command, option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.83.3</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

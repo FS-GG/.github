@@ -79,6 +79,14 @@ module Handlers =
         roadmap: string ->
         catalog: string ->
             Result<unit, string list>
+    /// Require the complete structured route ledger to bind acceptance to the current SDD work package.
+    val internal validateAcceptanceSddRoute:
+        subject: string -> expectedWorkId: string -> comments: string list -> string list
+    /// Validate the separately-created immutable qualification/critique acceptance envelope.
+    val internal validateAcceptanceEvidenceComment:
+        input: FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput ->
+        comment: FS.GG.Coord.GitHub.Reads.AuthorityComment ->
+            string list
     /// Exercise the same parsing, qualification-binding, observation, and sealing route as production
     /// with authority observers supplied by a deterministic test host.
     val internal roadmapUnitAcceptWithObservers:

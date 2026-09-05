@@ -1,0 +1,235 @@
+schemaVersion: 1
+workId: 3247-roadmap-acceptance-authoring
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3247-roadmap-acceptance-authoring/spec.md
+sourceClarifications: work/3247-roadmap-acceptance-authoring/clarifications.md
+sourceChecklist: work/3247-roadmap-acceptance-authoring/checklist.md
+sourcePlan: work/3247-roadmap-acceptance-authoring/plan.md
+sourceTasks: work/3247-roadmap-acceptance-authoring/tasks.yml
+sourceAnalysis: readiness/3247-roadmap-acceptance-authoring/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3247-roadmap-acceptance-authoring/analysis.json
+    digest: 9aefda4f4d0e51841723cbbfdd520cbc679483078d566a977288b43fb49b43bf
+    schemaVersion: 1
+  - label: checklist
+    path: work/3247-roadmap-acceptance-authoring/checklist.md
+    digest: 5970b167c037780525d58385a7415dff5a28af571de1819bda38da9bd652e9b1
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3247-roadmap-acceptance-authoring/clarifications.md
+    digest: 55ab01edaaaf4f9e90d48031e0db32d1e555ef5c2cab7ddd70eddc357d4f0bd1
+    schemaVersion: 1
+  - label: plan
+    path: work/3247-roadmap-acceptance-authoring/plan.md
+    digest: 546216a9f9e78b79ea3955839680c448320fdc6603d200c57602164f87a7b765
+    schemaVersion: 1
+  - label: spec
+    path: work/3247-roadmap-acceptance-authoring/spec.md
+    digest: e6a8a15480cbcd4572d3d92969ab83476a0cdedc4fc032841bc07c188b1820be
+    schemaVersion: 1
+  - label: tasks
+    path: work/3247-roadmap-acceptance-authoring/tasks.yml
+    digest: d6c16237284ae9a3c350b3c8aa9ec00782c55e616863a389f91d148162ce5b97
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3247-roadmap-acceptance-authoring/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/core.test-report.xml
+      digest: "sha256:b47377f6903da3b9ac0b2936aa3ef0ae25ac68a9b35216a89eebebc617845172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 968
+      failed: 0
+      skipped: 0
+    notes: [Core suite proves qualification binds structured review while the acceptance envelope has a distinct identity.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/RoadmapWorkUnitTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml
+      digest: "sha256:193a0d76f7b12369afa3d82ac42ea9b729e9db1c7829f0bcc07cdca5a8cd4c5f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 274
+      failed: 0
+      skipped: 0
+    notes: [BoardOps suite proves current route work identity is required and missing or mismatched ledgers refuse.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml, work/3247-roadmap-acceptance-authoring/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml
+      digest: "sha256:193a0d76f7b12369afa3d82ac42ea9b729e9db1c7829f0bcc07cdca5a8cd4c5f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 274
+      failed: 0
+      skipped: 0
+    notes: [The validation-only repair preserves the existing candidate and lifecycle authority shape.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml
+      digest: "sha256:88912e644944e16fb42bb6a3e58a61dd38339c86f39db9f265283698d16bf30d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["The existing acceptance input and CLI vocabulary remain unchanged; 0.83.3 is a patch."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml, work/3247-roadmap-acceptance-authoring/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/RoadmapWorkUnitTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/boardops.test-report.xml
+      digest: "sha256:193a0d76f7b12369afa3d82ac42ea9b729e9db1c7829f0bcc07cdca5a8cd4c5f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 274
+      failed: 0
+      skipped: 0
+    notes: [Core 968/968 and BoardOps 274/274 pass, including a production-composition regression for both live authority calls.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [Directory.Build.props, registry/dependencies.yml, work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: Directory.Build.props
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml
+      digest: "sha256:88912e644944e16fb42bb6a3e58a61dd38339c86f39db9f265283698d16bf30d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: ["No input schema migration is needed; source advances to 0.83.3 while package remains 0.83.2 until promotion."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [docs/architecture.md, docs/registry/compatibility.md, registry/driver-skill-manifest.json, work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: scripts/generate-driver-manifest
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3247-roadmap-acceptance-authoring/verification/release-projection.test-report.xml
+      digest: "sha256:88912e644944e16fb42bb6a3e58a61dd38339c86f39db9f265283698d16bf30d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: [Coherent-set compatibility projections and the packed driver manifest were refreshed for source 0.83.3.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

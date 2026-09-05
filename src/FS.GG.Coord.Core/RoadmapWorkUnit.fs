@@ -730,23 +730,14 @@ module RoadmapWorkUnit =
         if input.LifecycleRunId <> "roadmap-unit-" + input.Plan.Unit.UnitId.ToLowerInvariant() then findings.Add(LifecycleInvalid "lifecycle run id is not the deterministic selected-unit run")
         if input.RequiredLifecyclePhases <> acceptanceLifecyclePhases then findings.Add(LifecycleInvalid "required lifecycle phases are not the compiler-derived intake-through-acceptance sequence")
         if input.ReviewCycleId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "review cycle id is not the selected roadmap unit")
-        let expectedUnitSddWorkId =
-            input.PreparationApplication.Registrations
-            |> List.tryFind (fun registration -> registration.Kind = "unit")
-            |> Option.bind (fun registration ->
-                let matched = Regex.Match(registration.Issue, "#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
-                if matched.Success then
-                    Some($"%s{matched.Groups[1].Value}-roadmap-%s{input.Plan.Unit.UnitId.ToLowerInvariant().Replace('.', '-')}" )
-                else None)
-        match expectedUnitSddWorkId with
-        | None -> findings.Add(SddObservationInvalid("work", "applied unit issue cannot derive the unit SDD work identity"))
-        | Some expected when input.SddWorkId <> expected -> findings.Add(SddObservationInvalid("work", $"SDD work id must be derived from the applied unit issue as %s{expected}"))
-        | Some _ when input.SddWorkId = input.Plan.SddWorkId -> findings.Add(SddObservationInvalid("work", "unit SDD work id must be distinct from the compiler authority work id"))
-        | Some _ -> ()
+        if String.IsNullOrWhiteSpace input.SddWorkId then
+            findings.Add(SddObservationInvalid("work", "unit SDD work id is required"))
+        elif input.SddWorkId = input.Plan.SddWorkId then
+            findings.Add(SddObservationInvalid("work", "unit SDD work id must be distinct from the compiler authority work id"))
         if String.IsNullOrWhiteSpace input.Qualification.SemanticReviewEvidence
            || String.IsNullOrWhiteSpace input.ReviewEvidence
            || String.IsNullOrWhiteSpace input.StructuredReviewEvidence then findings.Add ReviewEvidenceMissing
-        if input.Qualification.SemanticReviewEvidence <> input.ReviewEvidence then findings.Add(QualificationMismatch "semantic review evidence locator differs from the review authority")
+        if input.Qualification.SemanticReviewEvidence <> input.StructuredReviewEvidence then findings.Add(QualificationMismatch "semantic review evidence locator differs from the structured review authority")
         match CritiqueReceipt.validate input.ReviewCycleId (Some input.Identities.ImplementationCandidate) (utf8 input.ReviewReceipt) with
         | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid("review receipt: " + error)))
         | Ok _ -> ()
