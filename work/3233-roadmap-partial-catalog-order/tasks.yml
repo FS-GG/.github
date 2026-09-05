@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 3233-roadmap-partial-catalog-order
+  title: "Accept ordered partial roadmap catalogs"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/3233-roadmap-partial-catalog-order/spec.md
+  sourceClarifications: work/3233-roadmap-partial-catalog-order/clarifications.md
+  sourceChecklist: work/3233-roadmap-partial-catalog-order/checklist.md
+  sourcePlan: work/3233-roadmap-partial-catalog-order/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/3233-roadmap-partial-catalog-order/spec.md
+    digest: 73a42865bf610bcd345b28288ac43a9537780bf3df27adc1859d06d068ea3c28
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3233-roadmap-partial-catalog-order/clarifications.md
+    digest: 4fc2233cc879f6a5ba0c640f95de1cba555b16017ffc00b236999f90831f3913
+    schemaVersion: 1
+  - label: checklist
+    path: work/3233-roadmap-partial-catalog-order/checklist.md
+    digest: 1549ab98ca61837193886e80440ae84d7dfb9da050a724236aaf61747d304688
+    schemaVersion: 1
+  - label: plan
+    path: work/3233-roadmap-partial-catalog-order/plan.md
+    digest: ec9f5bc990880994eff987a8473096cb3819fbeb676f10d5e8098ff03fb53102
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 3233-roadmap-partial-catalog-order."

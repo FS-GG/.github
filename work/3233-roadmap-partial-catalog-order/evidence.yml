@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 3233-roadmap-partial-catalog-order
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3233-roadmap-partial-catalog-order/spec.md
+sourceClarifications: work/3233-roadmap-partial-catalog-order/clarifications.md
+sourceChecklist: work/3233-roadmap-partial-catalog-order/checklist.md
+sourcePlan: work/3233-roadmap-partial-catalog-order/plan.md
+sourceTasks: work/3233-roadmap-partial-catalog-order/tasks.yml
+sourceAnalysis: readiness/3233-roadmap-partial-catalog-order/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3233-roadmap-partial-catalog-order/analysis.json
+    digest: f217e6477e9305555980609b3132d171e49c7f19b2b94f84eecfb7bf5cdaf80e
+    schemaVersion: 1
+  - label: checklist
+    path: work/3233-roadmap-partial-catalog-order/checklist.md
+    digest: 1549ab98ca61837193886e80440ae84d7dfb9da050a724236aaf61747d304688
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3233-roadmap-partial-catalog-order/clarifications.md
+    digest: 4fc2233cc879f6a5ba0c640f95de1cba555b16017ffc00b236999f90831f3913
+    schemaVersion: 1
+  - label: plan
+    path: work/3233-roadmap-partial-catalog-order/plan.md
+    digest: ec9f5bc990880994eff987a8473096cb3819fbeb676f10d5e8098ff03fb53102
+    schemaVersion: 1
+  - label: spec
+    path: work/3233-roadmap-partial-catalog-order/spec.md
+    digest: 73a42865bf610bcd345b28288ac43a9537780bf3df27adc1859d06d068ea3c28
+    schemaVersion: 1
+  - label: tasks
+    path: work/3233-roadmap-partial-catalog-order/tasks.yml
+    digest: de4c978c12c57f5378403ddb99f5c90f1e2364262a3e83598ada6ab1466f026d
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml
+      digest: "sha256:432f9f2b47a85abbc25e9d91b020043b8b4e457f9c92f29d93a18c5cdfdc1302"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
