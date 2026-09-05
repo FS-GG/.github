@@ -2,6 +2,10 @@ namespace FS.GG.Coord
 
 open System
 
+module CanonicalJson =
+    val sha256: bytes: byte array -> string
+    val canonicalize: bytes: byte array -> Result<string, string>
+
 module RuntimeUsage =
     type TokenCounts =
         { Input: int64

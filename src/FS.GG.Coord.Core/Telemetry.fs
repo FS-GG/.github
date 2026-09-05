@@ -33,6 +33,17 @@ module private TelemetryJson =
         writer.Flush()
         Encoding.UTF8.GetString(stream.ToArray())
 
+module CanonicalJson =
+    let sha256 bytes = TelemetryJson.sha256 bytes
+
+    let canonicalize (bytes: byte array) =
+        try
+            let node = JsonNode.Parse(bytes)
+            if isNull node then Error "JSON root must not be null"
+            else Ok(TelemetryJson.canonical node)
+        with :? JsonException as error ->
+            Error $"invalid JSON: %s{error.Message}"
+
 module RuntimeUsage =
     type TokenCounts =
         { Input: int64; CachedInput: int64; CacheWriteInput: int64; Output: int64; Reasoning: int64 option; Total: int64 }

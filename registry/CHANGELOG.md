@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.82.0` source prepared**
+  (owner github; [.github#3209](https://github.com/FS-GG/.github/issues/3209)):
+  advances the source frontier from 0.81.1 to 0.82.0 for the additive deterministic
+  qualification/evidence runner. The published frontier remains 0.81.1 until the exact accepted
+  merge is single-packed and promoted through the release saga; the runner binds exact checkout,
+  tool, executor, command, artifact, claim, independent mutation fixture, converged hosted checks,
+  typed PR obligations, and semantic-review evidence into a content-addressed result.
+
 - **2026-09-05** — **coordination coherent set `github:0.81.1` published and fully reconciled**
   (owner github; [.github#3208](https://github.com/FS-GG/.github/issues/3208),
   [source PR #3215](https://github.com/FS-GG/.github/pull/3215),

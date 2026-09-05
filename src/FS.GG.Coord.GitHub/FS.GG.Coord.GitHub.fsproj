@@ -57,6 +57,8 @@
     <Compile Include="GraphQl.fs" />
     <Compile Include="OperationalGraphQl.fsi" />
     <Compile Include="OperationalGraphQl.fs" />
+    <Compile Include="QualificationEvidence.fsi" />
+    <Compile Include="QualificationEvidence.fs" />
     <Compile Include="Reads.fsi" />
     <Compile Include="Reads.fs" />
     <Compile Include="Writes.fsi" />

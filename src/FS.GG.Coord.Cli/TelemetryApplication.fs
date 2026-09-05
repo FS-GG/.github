@@ -4,7 +4,9 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 open FS.GG.Coord
+open FS.GG.Coord.GitHub
 
 module TelemetryApplication =
     let private green = ExitCode.toInt ExitCode.Green
@@ -56,6 +58,14 @@ module TelemetryApplication =
             shape [ "--cycle"; "--artifact"; "--head" ] [] args
         | "telemetry" :: "feedback" :: "validate" :: args ->
             shape [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args
+        | "telemetry" :: "qualification" :: "validate" :: args ->
+            shape [ "--input"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "run" :: args ->
+            shape [ "--input"; "--execution"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "obligation" :: "render" :: args ->
+            shape [ "--head"; "--kind"; "--id"; "--output" ] [] args
+        | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
+            shape [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args
         | "telemetry" :: "summarize" :: args -> shape [ "--usage" ] [] args
         | "telemetry" :: _ -> Some(Error "unknown telemetry command shape")
         | _ -> None
@@ -277,6 +287,91 @@ module TelemetryApplication =
                   match values with _, _, _, Error e -> yield e | _ -> () ] |> fail "telemetry feedback"
         with ex -> fail "telemetry feedback" [ ex.Message ]
 
+    let private qualification action args =
+        try
+            match required "--input" args with
+            | Error reason -> fail "telemetry qualification" [ reason ]
+            | Ok path ->
+                let result =
+                    match action with
+                    | "validate" ->
+                        Qualification.parseInput (read path)
+                        |> Result.bind (Qualification.validate >> Result.mapError (List.map string))
+                    | "run" ->
+                        match required "--execution" args with
+                        | Error reason -> Error [ reason ]
+                        | Ok execution -> QualificationApplication.run path execution
+                    | _ -> Error [ "action must be run or validate" ]
+                match result with
+                | Error reasons -> fail "telemetry qualification" reasons
+                | Ok accepted -> writeOrPrint args (Qualification.canonicalResult accepted); green
+        with ex -> fail "telemetry qualification" [ ex.Message ]
+
+    let private obligationDeclaration args =
+        match required "--kind" args with
+        | Error reason -> Error [ reason ]
+        | Ok "none" when options "--id" args |> List.isEmpty -> Ok Qualification.NoObligations
+        | Ok "none" -> Error [ "--kind none does not accept --id" ]
+        | Ok kind ->
+            match options "--id" args with
+            | [ id ] when Regex.IsMatch(id, "^[a-z0-9][a-z0-9._-]*$") && Regex.IsMatch(kind, "^[a-z0-9][a-z0-9_-]*$") ->
+                Ok(Qualification.Obligation { Id = id; Kind = kind })
+            | [ _ ] -> Error [ "delivery obligation id or kind has invalid characters" ]
+            | _ -> Error [ "a delivery obligation kind requires exactly one --id" ]
+
+    let private inspectObligationComments head declaration (comments: QualificationEvidence.ObligationComment list) =
+        let reviewComments =
+            comments
+            |> List.map (fun comment ->
+                ({ Id = comment.CommentId; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+        DeliveryApplication.obligationsFromComments head reviewComments
+        |> Result.mapError List.singleton
+        |> Result.bind (fun observed ->
+            let expected =
+                match declaration with
+                | Qualification.NoObligations -> []
+                | Qualification.Obligation obligation -> [ obligation.Id, obligation.Kind ]
+            let actual = observed |> List.map (fun obligation -> obligation.Id, obligation.Kind)
+            if actual = expected && comments.Length = 1 then Ok comments.Head
+            else Error [ "obligation readback does not exactly match the expected current-head delivery declaration" ])
+
+    let private qualificationObligation action args =
+        try
+            match required "--head" args, obligationDeclaration args with
+            | Error reason, _ -> fail "telemetry qualification obligation" [ reason ]
+            | _, Error reasons -> fail "telemetry qualification obligation" reasons
+            | Ok head, _ when head.Length <> 40 || (head |> Seq.exists (fun value -> not (Char.IsAsciiHexDigitLower value))) ->
+                fail "telemetry qualification obligation" [ "--head must be exactly 40 lowercase hexadecimal characters" ]
+            | Ok head, Ok declaration when action = "render" ->
+                writeOrPrint args (QualificationEvidence.renderObligationComment head declaration)
+                green
+            | Ok head, Ok declaration when action = "verify" ->
+                let receipts =
+                    options "--readback" args
+                    |> List.map (fun path -> QualificationEvidence.parseObligationReadback (read path))
+                let errors = receipts |> List.collect (function Error values -> values | _ -> [])
+                if not errors.IsEmpty then fail "telemetry qualification obligation" errors else
+                let comments = receipts |> List.choose (function Ok value -> Some value | _ -> None)
+                if comments.IsEmpty then
+                    fail "telemetry qualification obligation" [ "no authoritative current-head readback exists; run obligation render and create it through the guarded comment boundary" ]
+                else
+                match inspectObligationComments head declaration comments with
+                | Error reasons -> fail "telemetry qualification obligation" reasons
+                | Ok authority ->
+                    let value =
+                        JsonSerializer.SerializeToUtf8Bytes
+                            {| schema = "fsgg.qualification.obligation-verification/1"
+                               headSha = head
+                               commentId = authority.CommentId
+                               url = authority.Url
+                               author = authority.Author |}
+                        |> CanonicalJson.canonicalize
+                        |> Result.defaultWith invalidOp
+                    writeOrPrint args (value + "\n")
+                    green
+            | _, _ -> fail "telemetry qualification obligation" [ "action must be render or verify" ]
+        with ex -> fail "telemetry qualification obligation" [ ex.Message ]
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
@@ -295,6 +390,14 @@ module TelemetryApplication =
             Some(validated "telemetry critique" [ "--cycle"; "--artifact"; "--head" ] [] args critique)
         | "telemetry" :: "feedback" :: "validate" :: args ->
             Some(validated "telemetry feedback" [ "--cycle"; "--report"; "--audit"; "--phases"; "--checkpoint" ] [] args feedback)
+        | "telemetry" :: "qualification" :: "validate" :: args ->
+            Some(validated "telemetry qualification" [ "--input"; "--output" ] [] args (qualification "validate"))
+        | "telemetry" :: "qualification" :: "run" :: args ->
+            Some(validated "telemetry qualification" [ "--input"; "--execution"; "--output" ] [] args (qualification "run"))
+        | "telemetry" :: "qualification" :: "obligation" :: "render" :: args ->
+            Some(validated "telemetry qualification obligation" [ "--head"; "--kind"; "--id"; "--output" ] [] args (qualificationObligation "render"))
+        | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
+            Some(validated "telemetry qualification obligation" [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args (qualificationObligation "verify"))
         | "roadmap" :: "close" :: action :: args ->
             let valueOptions =
                 match action with
