@@ -13,11 +13,11 @@ work:
 sources:
   - label: spec
     path: work/3210-roadmap-work-unit-compiler/spec.md
-    digest: 3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680
+    digest: 143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd
     schemaVersion: 1
   - label: clarifications
     path: work/3210-roadmap-work-unit-compiler/clarifications.md
-    digest: 29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff
+    digest: 89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef
     schemaVersion: 1
   - label: checklist
     path: work/3210-roadmap-work-unit-compiler/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/3210-roadmap-work-unit-compiler/plan.md
-    digest: a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd
+    digest: 7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938
     schemaVersion: 1
 tasks:
   - id: T001

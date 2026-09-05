@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "fd5c7582fb324cce468ef239c665a18963e1cbb8c3e72fba5602cf82f831f92a"
+        "value": "1cda957f03b01c649300851a688ad5e711659388a75ecb73ffbee2746040e4a8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "cb72cc2359d4256b43e4a4ea7419bb38d59bc5e896d15d569a552e329b475193"
+        "value": "98cc0d1aa0af47c0e46dfec321ce979b313ad8631ad9fa5c304018c557d26c4a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "clarification",
       "digest": {
         "algorithm": "sha256",
-        "value": "29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff"
+        "value": "89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "620e66f7a737fad8c2fec49420514260bf140d39a4a00c55bfd913e03fd5c957"
+        "value": "95d2d3acb4badc439d0d2a2121db7ab70a62fbdd5571b8399ba9008c800d090c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd"
+        "value": "7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680"
+        "value": "143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "69b7445272af4516786a8a9214e56a19ba79987efa03ed3555bd6d70ca289b95"
+        "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

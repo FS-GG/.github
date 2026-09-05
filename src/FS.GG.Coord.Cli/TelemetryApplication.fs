@@ -240,7 +240,7 @@ module TelemetryApplication =
                 | Ok closed ->
                     match action with
                     | "inspect" ->
-                        printfn "{\"schema\":\"fsgg.roadmap-closure/1\",\"verdict\":\"accepted\",\"unitId\":%s,\"externalObligations\":%d}" (JsonSerializer.Serialize closed.Evidence.UnitId) closed.ExternalObligations.Length
+                        printfn "{\"schema\":\"fsgg.roadmap-closure-candidate/1\",\"verdict\":\"internally-coherent-close-candidate\",\"unitId\":%s,\"externalObligations\":%d}" (JsonSerializer.Serialize closed.Evidence.UnitId) closed.ExternalObligations.Length
                         green
                     | "render" | "verify" ->
                         match required "--roadmap" args, required "--source-digest" args with
@@ -250,7 +250,7 @@ module TelemetryApplication =
                             else
                                 match required "--source-roadmap" args with
                                 | Error reason -> fail "roadmap close" [ reason ]
-                                | Ok sourcePath -> match RoadmapProjection.verify digest (read sourcePath) (read path) closed with Error reasons -> fail "roadmap close" reasons | Ok () -> printfn "FSGG-ROADMAP-VERIFIED %s" closed.Evidence.UnitId; green
+                                | Ok sourcePath -> match RoadmapProjection.verify digest (read sourcePath) (read path) closed with Error reasons -> fail "roadmap close" reasons | Ok () -> printfn "FSGG-ROADMAP-CLOSE-CANDIDATE-VERIFIED %s" closed.Evidence.UnitId; green
                         | Error reason, _ | _, Error reason -> fail "roadmap close" [ reason ]
                     | _ -> fail "roadmap close" [ "action must be inspect, render, or verify" ]
         with ex -> fail "roadmap close" [ ex.Message ]
@@ -410,7 +410,7 @@ module TelemetryApplication =
             | Error reason, _, _ | _, Error reason, _ | _, _, Error reason -> fail "roadmap unit prepare" [ reason ]
         with ex -> fail "roadmap unit prepare" [ ex.Message ]
 
-    let private acceptance action args =
+    let private acceptanceCandidate action args =
         try
             match required "--input" args with
             | Error reason -> fail "roadmap unit accept" [ reason ]
@@ -418,20 +418,28 @@ module TelemetryApplication =
                 match RoadmapWorkUnit.parseAcceptanceInput (read inputPath) with
                 | Error reasons -> fail "roadmap unit accept" reasons
                 | Ok input ->
-                    match action, RoadmapWorkUnit.inspectAcceptance input with
-                    | _, Error findings -> fail "roadmap unit accept" (findings |> List.map string)
-                    | "inspect", Ok accepted ->
-                        printfn "{\"schema\":\"fsgg.roadmap-unit.acceptance-verdict/1\",\"unitId\":%s,\"digest\":%s,\"verdict\":\"accepted\"}" (JsonSerializer.Serialize input.Plan.Unit.UnitId) (JsonSerializer.Serialize accepted.Digest)
-                        green
-                    | "render", Ok accepted -> writeOrPrint args accepted.BundleJson; green
-                    | "verify", Ok _ ->
-                        match required "--bundle" args with
-                        | Error reason -> fail "roadmap unit accept" [ reason ]
-                        | Ok bundle ->
-                            match RoadmapWorkUnit.verifyAcceptance input (read bundle) with
-                            | Error findings -> fail "roadmap unit accept" (findings |> List.map string)
-                            | Ok accepted -> printfn "FSGG-ROADMAP-UNIT-ACCEPTANCE-VERIFIED %s %s" input.Plan.Unit.UnitId accepted.Digest; green
-                    | _ -> fail "roadmap unit accept" [ "action must be inspect, render, or verify" ]
+                    match RoadmapWorkUnit.inspectAcceptanceCandidate input with
+                    | Error findings -> fail "roadmap unit accept" (findings |> List.map string)
+                    | Ok candidate ->
+                        match action with
+                        | "inspect" ->
+                            printfn "{\"schema\":\"fsgg.roadmap-unit.acceptance-candidate-verdict/1\",\"unitId\":%s,\"digest\":%s,\"verdict\":\"internally-coherent-candidate\"}" (JsonSerializer.Serialize input.Plan.Unit.UnitId) (JsonSerializer.Serialize(RoadmapWorkUnit.candidateDigest candidate))
+                            green
+                        | "render" -> writeOrPrint args (RoadmapWorkUnit.canonicalAcceptanceInput input); green
+                        | "verify" ->
+                            match required "--bundle" args with
+                            | Error reason -> fail "roadmap unit accept" [ reason ]
+                            | Ok bundle ->
+                                match RoadmapWorkUnit.parseAcceptanceInput (read bundle) with
+                                | Error reasons -> fail "roadmap unit accept" reasons
+                                | Ok observed ->
+                                    match RoadmapWorkUnit.inspectAcceptanceCandidate observed with
+                                    | Error findings -> fail "roadmap unit accept" (findings |> List.map string)
+                                    | Ok replay when RoadmapWorkUnit.candidateDigest replay = RoadmapWorkUnit.candidateDigest candidate ->
+                                        printfn "FSGG-ROADMAP-UNIT-CANDIDATE-VERIFIED %s %s" input.Plan.Unit.UnitId (RoadmapWorkUnit.candidateDigest candidate)
+                                        green
+                                    | Ok _ -> fail "roadmap unit accept" [ "candidate envelope differs from the expected canonical input" ]
+                        | _ -> fail "roadmap unit accept" [ "action must be inspect, render, or verify" ]
         with ex -> fail "roadmap unit accept" [ ex.Message ]
 
     let private revisionBinding args =
@@ -452,9 +460,9 @@ module TelemetryApplication =
             | Ok repository, Ok repositoryId, Ok candidate, Ok merge ->
                 let candidateExit, candidateTree, candidateError = runGit repository [ "rev-parse"; candidate + "^{tree}" ]
                 let mergeExit, mergeTree, mergeError = runGit repository [ "rev-parse"; merge + "^{tree}" ]
-                let ancestryExit, _, ancestryError = runGit repository [ "merge-base"; "--is-ancestor"; candidate; merge ]
-                if candidateExit <> 0 || mergeExit <> 0 || ancestryExit <> 0 then
-                    fail "roadmap unit revision" [ candidateError; mergeError; ancestryError ]
+                let equalityExit, _, equalityError = runGit repository [ "diff"; "--quiet"; candidate + "^{tree}"; merge + "^{tree}" ]
+                if candidateExit <> 0 || mergeExit <> 0 || equalityExit <> 0 then
+                    fail "roadmap unit revision" [ candidateError; mergeError; equalityError ]
                 else
                     let binding = RoadmapWorkUnit.sealRevisionBinding repositoryId candidate merge candidateTree mergeTree 0
                     writeOrPrint args (RoadmapWorkUnit.canonicalRevisionBinding binding)
@@ -500,8 +508,9 @@ module TelemetryApplication =
         | "roadmap" :: "unit" :: "prepare" :: "apply" :: _ -> None
         | "roadmap" :: "unit" :: "prepare" :: action :: args ->
             Some(validated "roadmap unit prepare" [ "--input"; "--roadmap"; "--catalog"; "--registry"; "--source-registry"; "--output" ] [] args (preparation action))
+        | "roadmap" :: "unit" :: "accept" :: "seal" :: _ -> None
         | "roadmap" :: "unit" :: "accept" :: action :: args ->
-            Some(validated "roadmap unit accept" [ "--input"; "--bundle"; "--output" ] [] args (acceptance action))
+            Some(validated "roadmap unit accept" [ "--input"; "--bundle"; "--output" ] [] args (acceptanceCandidate action))
         | "roadmap" :: "unit" :: "revision" :: "inspect" :: args ->
             Some(validated "roadmap unit revision" [ "--repository"; "--repository-id"; "--candidate"; "--merge"; "--output" ] [] args revisionBinding)
         | "telemetry" :: "summarize" :: args ->

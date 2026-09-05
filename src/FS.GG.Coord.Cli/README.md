@@ -89,19 +89,27 @@ delivery parser, with URL and comment id agreement; it introduces no second mark
 roadmap-index alongside a narrow `--input` registration request. It authenticates the catalog's source
 digest and per-unit contract hashes, then compiles the first unchecked row whose immediate predecessor is
 accepted into a content-addressed authority pin, unit/gate registrations, staged-intake drafts, and evidence obligations.
-The render/verify pair changes only the selected unit's explicit registration marker block; each draft is
-accepted by the existing `intake validate|apply` transaction, so this family performs no GitHub write.
-`roadmap unit accept inspect|render|verify` consumes the canonical qualification result, terminal lifecycle
-ledger, validated schema-v3 independent review receipt, observed SDD stage receipts, distinct revision identities,
-and content-addressed candidate/merge tree bindings. It emits an atomic self-digested bundle containing the
-cross-digested acceptance receipt and evidence index; the extracted exact receipt is
-receipt is accepted by `roadmap close` without schema translation.
+The render/verify pair changes only the selected unit's explicit registration marker block and performs no
+GitHub write. `roadmap unit prepare apply` is the explicit mutating arm: it routes every compiled draft
+through the existing receipt-first `intake apply` transaction, verifies the authoritative receipt readback,
+and emits exactly one canonical preparation-application receipt (or writes it with `--output`); replay reuses
+the bound issues and never creates duplicates.
+`roadmap unit accept inspect|render|verify` checks only that a caller-authored envelope is internally coherent;
+its verdict is explicitly `internally-coherent-candidate` and these pure actions cannot construct or print an
+accepted receipt. `roadmap unit accept seal` is the sole acceptance boundary. It requires
+`--qualification-input` and `--qualification-execution`, reruns the production qualification, then independently
+checks pinned `fsgg-sdd` 1.5.0 analyze/verify/ship in a fresh remote checkout. It re-compiles the plan from the
+immutable `.github` roadmap and `FS.GG.Coordination` catalog and independently re-reads exact intake receipts
+and board projections, the unedited lifecycle ledger bound to the live winning claim and implementation commit,
+the typed review chain and exact evidence comment, immutable SDD artifacts, merged PR facts, remote commit trees,
+and protected main. Only after those observations agree does it emit the atomic,
+self-digested accepted bundle consumed by `roadmap close` without schema translation.
 
-`roadmap close inspect|render|verify` consumes an evidence manifest whose relative artifact paths bind an
+`roadmap close inspect|render|verify` is likewise a pure candidate projection: it consumes an evidence manifest whose relative artifact paths bind an
 accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback
 binding, cycle update, and one or more check receipts. Every machine receipt is canonical and self-digested;
 all unit, head, cycle, report, audit, claim, and check identities are joined before rendering. `render`
-prints only a candidate document. `verify` additionally requires `--source-roadmap`, authenticates its
+prints only a candidate document and never confers acceptance. `verify` additionally requires `--source-roadmap`, authenticates its
 `--source-digest`, and proves that the candidate changed no bytes outside the marked unit block.
 
 Version 0.81.0 established the publish-before-adopt boundary. Current callers and cycle-ledger provider

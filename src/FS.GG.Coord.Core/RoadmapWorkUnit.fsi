@@ -96,8 +96,10 @@ module RoadmapWorkUnit =
           ArtifactJson: string }
 
     type RevisionIdentities =
-        { ImplementationCandidate: string
+        { ImplementationPullRequest: int
+          ImplementationCandidate: string
           ImplementationMerge: string
+          AcceptancePullRequest: int
           AcceptanceCandidate: string
           AcceptanceMerge: string
           ProtectedMain: string }
@@ -137,11 +139,15 @@ module RoadmapWorkUnit =
           Sha256: string
           Source: string }
 
-    type Accepted =
-        { ReceiptJson: string
-          EvidenceIndexJson: string
-          BundleJson: string
-          Digest: string }
+    /// A caller-authored acceptance envelope whose internal relationships are coherent. This is not
+    /// authority and cannot be rendered as an accepted receipt.
+    type AcceptanceCandidate
+
+    /// Opaque capability minted only after the live adapter has completed every authority read.
+    type ObservedAcceptance
+
+    /// An accepted receipt can only be constructed by the live BoardOps authority adapter.
+    type Accepted
 
     type Finding =
         | InvalidSchema of expected: string * observed: string
@@ -182,8 +188,13 @@ module RoadmapWorkUnit =
     val renderPreparation: source: byte array -> PreparationPlan -> Result<string, Finding list>
     val verifyPreparation: source: byte array -> candidate: byte array -> PreparationPlan -> Result<unit, Finding list>
 
-    val inspectAcceptance: AcceptanceInput -> Result<Accepted, Finding list>
+    val inspectAcceptanceCandidate: AcceptanceInput -> Result<AcceptanceCandidate, Finding list>
+    val candidateDigest: AcceptanceCandidate -> string
     val canonicalAcceptanceInput: AcceptanceInput -> string
     val parseAcceptanceInput: bytes: byte array -> Result<AcceptanceInput, string list>
-    val verifyAcceptance: expected: AcceptanceInput -> bundle: byte array -> Result<Accepted, Finding list>
-    val acceptedReceipt: Accepted -> byte array
+    val internal observeAcceptance: AcceptanceCandidate -> ObservedAcceptance
+    val internal sealObservedAcceptance: ObservedAcceptance -> Accepted
+    val internal acceptedDigest: Accepted -> string
+    val internal acceptedBundle: Accepted -> string
+    val internal verifyObservedAcceptance: expected: ObservedAcceptance -> bundle: byte array -> Result<Accepted, Finding list>
+    val internal acceptedReceipt: Accepted -> byte array

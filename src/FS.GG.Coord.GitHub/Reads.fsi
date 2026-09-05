@@ -409,6 +409,21 @@ module Reads =
     val commentsWithIdentity:
         transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
 
+    /// Exact, edit-aware comment facts for authority ledgers. Unlike the display-oriented comment
+    /// reader, these timestamps let consumers reject edited evidence.
+    type AuthorityComment =
+        { Id: int64
+          Url: string
+          Body: string
+          CreatedAt: string
+          UpdatedAt: string }
+
+    val authorityComments:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<AuthorityComment list>
+
+    /// Immutable tree identity from GitHub's commit object, independent of the caller's local object DB.
+    val commitTreeSha: transport: IGitHubTransport -> owner: string -> repo: string -> sha: string -> IoResult<string>
+
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 

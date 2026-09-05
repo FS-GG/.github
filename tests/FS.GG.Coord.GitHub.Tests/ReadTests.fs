@@ -3106,3 +3106,25 @@ let ``#2905 incomplete Actions inventory fails closed`` () =
     match Reads.postMergeVerification transport "FS-GG" ".github" 2905 with
     | Error(Malformed(_, reason)) -> Assert.Contains("incomplete evidence", reason)
     | result -> failwithf "expected unreadable inventory refusal, got %A" result
+
+[<Fact>]
+let ``#3210 authority comment reader retains edit timestamps and rejects incomplete evidence`` () =
+    let valid = serving """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger","created_at":"2026-09-05T00:00:00Z","updated_at":"2026-09-05T00:00:00Z"}]"""
+    match Reads.authorityComments valid "FS-GG" ".github" 3210 with
+    | Ok [ comment ] ->
+        Assert.Equal(7L, comment.Id)
+        Assert.Equal(comment.CreatedAt, comment.UpdatedAt)
+    | result -> failwithf "expected exact authority comment: %A" result
+
+    let incomplete = serving """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger"}]"""
+    match Reads.authorityComments incomplete "FS-GG" ".github" 3210 with
+    | Error(Malformed(_, reason)) -> Assert.Contains("created_at", reason)
+    | result -> failwithf "incomplete authority must fail closed: %A" result
+
+[<Fact>]
+let ``#3210 remote commit tree observation is independent of local Git`` () =
+    let tree = String.replicate 40 "a"
+    let transport = serving ($"{{\"tree\":{{\"sha\":\"%s{tree}\"}}}}")
+    match Reads.commitTreeSha transport "FS-GG" ".github" (String.replicate 40 "b") with
+    | Ok observed -> Assert.Equal(tree, observed)
+    | result -> failwithf "expected remote tree identity: %A" result

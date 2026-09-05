@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff"
+        "value": "89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "20c1e74cf258418c0252271f0685ad032e2cf65f492d62178b926e6fa171c8e3"
+        "value": "c352ee25e41b83ff154a67a5b45ceb7b12ba848c27b12953fa9ff48758e1c4fa"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd"
+        "value": "7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680"
+        "value": "143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "69b7445272af4516786a8a9214e56a19ba79987efa03ed3555bd6d70ca289b95"
+        "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
       }
     }
   ],
@@ -170,8 +170,8 @@
     },
     {
       "id": "FR-003",
-      "title": "Reuse #3208 canonical lifecycle/review validation and #3209 qualification result validation, binding every input to the selected unit, exact subject revision, role, actor, digest, and declared obligation. (Stories: US-001; Acceptance: AC-003)",
-      "text": "Reuse #3208 canonical lifecycle/review validation and #3209 qualification result validation, binding every input to the selected unit, exact subject revision, role, actor, digest, and declared obligation. (Stories: US-001; Acceptance: AC-003)",
+      "title": "Recompile the plan from the immutable \u0060.github\u0060 roadmap and \u0060FS.GG.Coordination\u0060 catalog; reuse #3208 canonical lifecycle/review validation against exact unedited GitHub comment exports bound to the live claim and implementation commit; rerun #3209 through its production qualification executor; and independently run pinned \u0060fsgg-sdd\u0060 1.5.0 in a fresh remote checkout, binding each artifact to the immutable candidate. (Stories: US-001; Acceptance: AC-003)",
+      "text": "Recompile the plan from the immutable \u0060.github\u0060 roadmap and \u0060FS.GG.Coordination\u0060 catalog; reuse #3208 canonical lifecycle/review validation against exact unedited GitHub comment exports bound to the live claim and implementation commit; rerun #3209 through its production qualification executor; and independently run pinned \u0060fsgg-sdd\u0060 1.5.0 in a fresh remote checkout, binding each artifact to the immutable candidate. (Stories: US-001; Acceptance: AC-003)",
       "acceptanceCriteria": [
         "AC-003"
       ],
@@ -212,8 +212,8 @@
     },
     {
       "id": "FR-005",
-      "title": "Validate distinct implementation candidate/merge, acceptance candidate/merge, and protected-main identities plus required ancestry/equality relations without collapsing phase-specific authority. (Stories: US-001; Acceptance: AC-005)",
-      "text": "Validate distinct implementation candidate/merge, acceptance candidate/merge, and protected-main identities plus required ancestry/equality relations without collapsing phase-specific authority. (Stories: US-001; Acceptance: AC-005)",
+      "title": "Validate distinct implementation candidate/merge, acceptance candidate/merge, and protected-main identities plus exact remote candidate/merge tree equality without collapsing phase-specific authority. (Stories: US-001; Acceptance: AC-005)",
+      "text": "Validate distinct implementation candidate/merge, acceptance candidate/merge, and protected-main identities plus exact remote candidate/merge tree equality without collapsing phase-specific authority. (Stories: US-001; Acceptance: AC-005)",
       "acceptanceCriteria": [
         "AC-005"
       ],
@@ -233,8 +233,8 @@
     },
     {
       "id": "FR-006",
-      "title": "Render and seal the acceptance receipt and evidence index as one canonical transaction whose cross-digests prevent partial or substituted acceptance. (Stories: US-001; Acceptance: AC-006)",
-      "text": "Render and seal the acceptance receipt and evidence index as one canonical transaction whose cross-digests prevent partial or substituted acceptance. (Stories: US-001; Acceptance: AC-006)",
+      "title": "Keep caller input as an opaque internally coherent candidate and permit only the live BoardOps adapter to mint the opaque observed capability that seals the acceptance receipt and evidence index. (Stories: US-001; Acceptance: AC-006)",
+      "text": "Keep caller input as an opaque internally coherent candidate and permit only the live BoardOps adapter to mint the opaque observed capability that seals the acceptance receipt and evidence index. (Stories: US-001; Acceptance: AC-006)",
       "acceptanceCriteria": [
         "AC-006"
       ],
@@ -1948,7 +1948,7 @@
           "path": "work/3210-roadmap-work-unit-compiler/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff"
+            "value": "89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef"
           },
           "schemaVersion": 1
         },
@@ -1956,7 +1956,7 @@
           "path": "work/3210-roadmap-work-unit-compiler/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "20c1e74cf258418c0252271f0685ad032e2cf65f492d62178b926e6fa171c8e3"
+            "value": "c352ee25e41b83ff154a67a5b45ceb7b12ba848c27b12953fa9ff48758e1c4fa"
           },
           "schemaVersion": 1
         },
@@ -1964,7 +1964,7 @@
           "path": "work/3210-roadmap-work-unit-compiler/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd"
+            "value": "7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938"
           },
           "schemaVersion": 1
         },
@@ -1972,7 +1972,7 @@
           "path": "work/3210-roadmap-work-unit-compiler/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680"
+            "value": "143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd"
           },
           "schemaVersion": 1
         },
@@ -1980,14 +1980,14 @@
           "path": "work/3210-roadmap-work-unit-compiler/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "69b7445272af4516786a8a9214e56a19ba79987efa03ed3555bd6d70ca289b95"
+            "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "db7bd01794517343cacd50d789695b4eef227c65787e2cb94e3e938d2c863d27"
+        "value": "e1ac53611e1e6ce919995888b79417fa44130da202af75802585e353d48adea1"
       },
       "currency": "current"
     }

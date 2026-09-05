@@ -763,6 +763,49 @@ module Reads =
                         (Ok [])
                     |> Result.map List.rev
 
+    type AuthorityComment =
+        { Id: int64; Url: string; Body: string; CreatedAt: string; UpdatedAt: string }
+
+    let authorityComments (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
+        let subject = $"%s{owner}/%s{repo}#%d{number} authority comments"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                if document.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    document.RootElement.EnumerateArray()
+                    |> Seq.map (fun comment ->
+                        match comment.TryGetProperty "id", str comment "html_url", str comment "body", str comment "created_at", str comment "updated_at" with
+                        | (true, id), Some url, Some body, Some createdAt, Some updatedAt when id.ValueKind = JsonValueKind.Number ->
+                            Ok { Id = id.GetInt64(); Url = url; Body = body; CreatedAt = createdAt; UpdatedAt = updatedAt }
+                        | _ -> Error(Malformed(subject, "an authority comment lacks id, html_url, body, created_at, or updated_at")))
+                    |> Seq.fold (fun state next -> Result.bind (fun values -> Result.map (fun value -> value :: values) next) state) (Ok [])
+                    |> Result.map List.rev
+
+    let commitTreeSha (transport: IGitHubTransport) (owner: string) (repo: string) (sha: string) =
+        let subject = $"%s{owner}/%s{repo} commit %s{sha} tree"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/git/commits/%s{sha}"
+              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                match document.RootElement.TryGetProperty "tree" with
+                | true, tree when tree.ValueKind = JsonValueKind.Object ->
+                    match str tree "sha" with Some value when not (String.IsNullOrWhiteSpace value) -> Ok value | _ -> Error(Malformed(subject, "commit tree has no sha"))
+                | _ -> Error(Malformed(subject, "commit has no tree object"))
+
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
 

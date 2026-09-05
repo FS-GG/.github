@@ -76,10 +76,14 @@ module RoadmapWorkUnitCliTests =
         |> Qualification.validate |> unwrap
 
     let private lifecycle candidate =
-        let draft event at actual usage =
-            $"""{{"schema_version":1,"run_id":"pilot","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":1,"phase":"implementation","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{candidate}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
-        let first = LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" "" (draft "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
-        first + (LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" first (draft "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture\",\"source\":\"test\"}") |> unwrap)
+        let draft order phase event at actual usage =
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{candidate}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
+        [ "implementation"; "review"; "acceptance" ]
+        |> List.mapi (fun index phase -> index + 1, phase)
+        |> List.fold (fun log (order, phase) ->
+            let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log (draft order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
+            let current = log + first
+            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture\",\"source\":\"test\"}") |> unwrap)) ""
 
     let private acceptanceInput (plan: RoadmapWorkUnit.PreparationPlan) =
         let candidate = head 'a'
@@ -92,12 +96,14 @@ module RoadmapWorkUnitCliTests =
                  : RoadmapWorkUnit.AppliedRegistration))
         let application = RoadmapWorkUnit.sealPreparationApplication plan applied |> unwrap
         let unitIssue = application.Registrations |> List.find (fun value -> value.Kind = "unit") |> _.Issue
-        let identities: RoadmapWorkUnit.RevisionIdentities = { ImplementationCandidate = candidate; ImplementationMerge = head 'b'; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
+        let identities: RoadmapWorkUnit.RevisionIdentities =
+            { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = head 'b'
+              AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         let binding candidate merge tree = RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
         let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/3210-roadmap-work-unit-compiler/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"3210-roadmap-work-unit-compiler"}}""" }
         let critique = $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate
-          LifecycleRunId = "pilot"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate; RequiredLifecyclePhases = [ "implementation" ]
+          LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate; RequiredLifecyclePhases = [ "implementation"; "review"; "acceptance" ]
           ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"; ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique
           SddWorkId = "3210-roadmap-work-unit-compiler"; SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e')
@@ -118,21 +124,26 @@ module RoadmapWorkUnitCliTests =
         Assert.Contains("FSGG-ROADMAP-UNIT-PREPARATION-VERIFIED GS2-07.3", stdout)
 
     [<Fact>]
-    let ``#3210 accept inspect render verify is a deterministic CLI round trip`` () =
+    let ``#3210 pure acceptance actions emit only an internally coherent candidate`` () =
         let disposable, request, roadmap, catalog, _, _ = fixture ()
         use _ = disposable
         let _, planJson, _ = invoke [ "roadmap"; "unit"; "prepare"; "inspect"; "--input"; request; "--roadmap"; roadmap; "--catalog"; catalog ]
         let plan = RoadmapWorkUnit.parsePlan (Encoding.UTF8.GetBytes planJson) |> unwrap
         let input = acceptanceInput plan
         let directory = Path.GetDirectoryName request
-        let inputPath, bundlePath = Path.Combine(directory, "acceptance.json"), Path.Combine(directory, "bundle.json")
+        let inputPath, candidatePath = Path.Combine(directory, "acceptance.json"), Path.Combine(directory, "candidate.json")
         File.WriteAllText(inputPath, RoadmapWorkUnit.canonicalAcceptanceInput input, UTF8Encoding(false))
         let inspectCode, stdout, inspectError = invoke [ "roadmap"; "unit"; "accept"; "inspect"; "--input"; inputPath ]
-        Assert.Equal(ExitCode.toInt ExitCode.Green, inspectCode); Assert.Equal("", inspectError); Assert.Contains("\"verdict\":\"accepted\"", stdout)
-        let renderCode, _, renderError = invoke [ "roadmap"; "unit"; "accept"; "render"; "--input"; inputPath; "--output"; bundlePath ]
+        Assert.Equal(ExitCode.toInt ExitCode.Green, inspectCode)
+        Assert.Equal("", inspectError)
+        Assert.Contains("\"verdict\":\"internally-coherent-candidate\"", stdout)
+        Assert.DoesNotContain("\"verdict\":\"accepted\"", stdout)
+        let renderCode, _, renderError = invoke [ "roadmap"; "unit"; "accept"; "render"; "--input"; inputPath; "--output"; candidatePath ]
         Assert.Equal(ExitCode.toInt ExitCode.Green, renderCode); Assert.Equal("", renderError)
-        let verifyCode, verified, verifyError = invoke [ "roadmap"; "unit"; "accept"; "verify"; "--input"; inputPath; "--bundle"; bundlePath ]
-        Assert.Equal(ExitCode.toInt ExitCode.Green, verifyCode); Assert.Equal("", verifyError); Assert.Contains("FSGG-ROADMAP-UNIT-ACCEPTANCE-VERIFIED GS2-07.3", verified)
+        let verifyCode, verified, verifyError = invoke [ "roadmap"; "unit"; "accept"; "verify"; "--input"; inputPath; "--bundle"; candidatePath ]
+        Assert.Equal(ExitCode.toInt ExitCode.Green, verifyCode); Assert.Equal("", verifyError)
+        Assert.Contains("FSGG-ROADMAP-UNIT-CANDIDATE-VERIFIED GS2-07.3", verified)
+        Assert.DoesNotContain("ACCEPTANCE-VERIFIED", verified)
 
     [<Fact>]
     let ``#3210 prepare refuses unrecognized arguments before file IO`` () =
@@ -144,7 +155,10 @@ module RoadmapWorkUnitCliTests =
     let ``#3210 revision inspect emits a sealed binding from observed Git identities`` () =
         let repository = Directory.GetCurrentDirectory()
         let merge = git repository [ "rev-parse"; "HEAD" ]
-        let candidate = git repository [ "rev-parse"; "HEAD^" ]
+        // A squash merge is accepted by tree identity, not ancestry.  Using the same immutable commit
+        // for both sides isolates this command's observation/sealing contract from this test checkout's
+        // unrelated parent-tree contents.
+        let candidate = merge
         let code, stdout, stderr =
             invoke
                 [ "roadmap"; "unit"; "revision"; "inspect"

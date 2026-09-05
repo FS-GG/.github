@@ -630,6 +630,11 @@ let main argv =
                 match Options.parse [ "intake"; "apply"; "/dev/null" ] with
                 | Error message -> eprint $"fsgg-coord-engine: internal roadmap apply options: %s{message}"; ExitDefect
                 | Ok opts -> Client.executeWithContext Handlers.roadmapUnitPrepareApply { opts with Args = args }
+            | "roadmap" :: "unit" :: "accept" :: "seal" :: args ->
+                invoked <- "roadmap-unit-accept"
+                match Options.parse [ "intake"; "apply"; "/dev/null" ] with
+                | Error message -> eprint $"fsgg-coord-engine: internal roadmap acceptance options: %s{message}"; ExitDefect
+                | Ok opts -> Client.executeWithContext (Handlers.roadmapUnitAccept QualificationApplication.run) { opts with Args = "seal" :: args }
             | _ ->
                 match TelemetryApplication.tryRun arguments with
                 | Some exitCode ->

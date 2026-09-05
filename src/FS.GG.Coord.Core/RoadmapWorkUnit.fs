@@ -46,8 +46,8 @@ module RoadmapWorkUnit =
     type SddObservation =
         { Stage: string; SubjectRevision: string; ArtifactJson: string }
     type RevisionIdentities =
-        { ImplementationCandidate: string; ImplementationMerge: string; AcceptanceCandidate: string
-          AcceptanceMerge: string; ProtectedMain: string }
+        { ImplementationPullRequest: int; ImplementationCandidate: string; ImplementationMerge: string
+          AcceptancePullRequest: int; AcceptanceCandidate: string; AcceptanceMerge: string; ProtectedMain: string }
     type RevisionBinding =
         { Schema: string; Repository: string; Candidate: string; Merge: string
           CandidateTree: string; MergeTree: string; CommandSha256: string; ExitCode: int; Digest: string }
@@ -59,7 +59,9 @@ module RoadmapWorkUnit =
           SddObservations: SddObservation list; Identities: RevisionIdentities
           ImplementationBinding: RevisionBinding; AcceptanceBinding: RevisionBinding; AcceptedAt: string }
     type EvidenceEntry = { Name: string; Sha256: string; Source: string }
-    type Accepted = { ReceiptJson: string; EvidenceIndexJson: string; BundleJson: string; Digest: string }
+    type AcceptanceCandidate = private AcceptanceCandidate of AcceptanceInput
+    type ObservedAcceptance = private ObservedAcceptance of AcceptanceInput
+    type Accepted = private { ReceiptJson: string; EvidenceIndexJson: string; BundleJson: string; Digest: string }
     type Finding =
         | InvalidSchema of expected: string * observed: string
         | InvalidDigest of field: string * observed: string
@@ -88,6 +90,7 @@ module RoadmapWorkUnit =
     let private issue = Regex("^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private issueRef = Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private token = Regex("^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)
+    let private acceptanceLifecyclePhases = [ "implementation"; "review"; "acceptance" ]
     let private digest bytes = CanonicalJson.sha256 bytes
     let private utf8 (value: string) = Encoding.UTF8.GetBytes value
     let private canonical bytes = CanonicalJson.canonicalize bytes |> Result.defaultWith invalidOp
@@ -197,7 +200,7 @@ module RoadmapWorkUnit =
         String.concat "\n"
             [ $"git -C %s{repository} rev-parse %s{candidate}^{{tree}}"
               $"git -C %s{repository} rev-parse %s{merge}^{{tree}}"
-              $"git -C %s{repository} merge-base --is-ancestor %s{candidate} %s{merge}" ]
+              $"git -C %s{repository} diff --quiet %s{candidate}^{{tree}} %s{merge}^{{tree}}" ]
         + "\n"
 
     let private revisionBindingPayload (binding: RevisionBinding) includeDigest =
@@ -615,8 +618,10 @@ module RoadmapWorkUnit =
         let identityNode = JsonObject()
         identityNode["implementationCandidate"] <- JsonValue.Create identities.ImplementationCandidate
         identityNode["implementationMerge"] <- JsonValue.Create identities.ImplementationMerge
+        identityNode["implementationPullRequest"] <- JsonValue.Create identities.ImplementationPullRequest
         identityNode["acceptanceCandidate"] <- JsonValue.Create identities.AcceptanceCandidate
         identityNode["acceptanceMerge"] <- JsonValue.Create identities.AcceptanceMerge
+        identityNode["acceptancePullRequest"] <- JsonValue.Create identities.AcceptancePullRequest
         identityNode["protectedMain"] <- JsonValue.Create identities.ProtectedMain
         let obligationNodes = JsonArray()
         input.Plan.EvidenceObligations |> List.iter (JsonValue.Create >> obligationNodes.Add)
@@ -668,7 +673,7 @@ module RoadmapWorkUnit =
         let bundleJson = canonical (JsonSerializer.SerializeToUtf8Bytes bundle) + "\n"
         { ReceiptJson = receiptJson; EvidenceIndexJson = indexJson; BundleJson = bundleJson; Digest = receiptBase["digest"].GetValue<string>() }
 
-    let inspectAcceptance (input: AcceptanceInput) =
+    let inspectAcceptanceCandidate (input: AcceptanceInput) =
         let findings = ResizeArray<Finding>()
         if input.Schema <> AcceptanceInputSchema then findings.Add(InvalidSchema(AcceptanceInputSchema, input.Schema))
         match parsePlan (utf8 (canonicalPlan input.Plan)) with
@@ -691,6 +696,8 @@ module RoadmapWorkUnit =
             | None -> findings.Add(RegistrationInvalid(unitRegistration.Id, "applied unit registration is missing"))
         if input.Qualification.SubjectRevision <> input.Identities.ImplementationCandidate then findings.Add(QualificationMismatch "subject revision is not the implementation candidate")
         if input.LifecycleUnitId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "lifecycle unit id is not the selected roadmap unit")
+        if input.LifecycleRunId <> "roadmap-unit-" + input.Plan.Unit.UnitId.ToLowerInvariant() then findings.Add(LifecycleInvalid "lifecycle run id is not the deterministic selected-unit run")
+        if input.RequiredLifecyclePhases <> acceptanceLifecyclePhases then findings.Add(LifecycleInvalid "required lifecycle phases are not the closed implementation/review/acceptance sequence")
         if input.ReviewCycleId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "review cycle id is not the selected roadmap unit")
         if input.SddWorkId <> input.Plan.SddWorkId then findings.Add(SddObservationInvalid("work", "SDD work id is not the preparation-plan work identity"))
         if String.IsNullOrWhiteSpace input.Qualification.SemanticReviewEvidence || String.IsNullOrWhiteSpace input.ReviewEvidence then findings.Add ReviewEvidenceMissing
@@ -734,7 +741,8 @@ module RoadmapWorkUnit =
                     | Ok _ when schemaVersion = 1 && not (String.IsNullOrWhiteSpace viewVersion)
                                 && Regex.IsMatch(generator, "^FS[.]GG[.]SDD[.]Artifacts/[0-9]+[.][0-9]+[.][0-9]+$", RegexOptions.CultureInvariant)
                                 && sources.ValueKind = JsonValueKind.Array && sources.GetArrayLength() > 0 && hasWorkModelSource
-                                && findingsNode.ValueKind = JsonValueKind.Array && diagnostics.ValueKind = JsonValueKind.Array
+                                && findingsNode.ValueKind = JsonValueKind.Array && findingsNode.GetArrayLength() = 0
+                                && diagnostics.ValueKind = JsonValueKind.Array && diagnostics.GetArrayLength() = 0
                                 && observedStage = stage && observedStatus = status && readiness = status
                                 && observedWork = input.SddWorkId && observation.SubjectRevision = input.Identities.ImplementationCandidate -> ()
                     | Ok _ -> findings.Add(SddObservationInvalid(stage, $"stage=%s{observedStage} status=%s{observedStatus} work=%s{observedWork} subject=%s{observation.SubjectRevision}"))
@@ -748,15 +756,24 @@ module RoadmapWorkUnit =
               "acceptanceMerge", input.Identities.AcceptanceMerge
               "protectedMain", input.Identities.ProtectedMain ]
         for name, value in named do if not (revision.IsMatch value) then findings.Add(InvalidIdentity(name, value))
+        if input.Identities.ImplementationPullRequest < 1 then findings.Add(InvalidIdentity("implementationPullRequest", string input.Identities.ImplementationPullRequest))
+        if input.Identities.AcceptancePullRequest < 1 then findings.Add(InvalidIdentity("acceptancePullRequest", string input.Identities.AcceptancePullRequest))
+        if input.Identities.ImplementationPullRequest = input.Identities.AcceptancePullRequest then findings.Add(RevisionRelationInvalid "implementation and acceptance pull requests must be distinct")
         let distinct = named |> List.take 4
         for i in 0 .. distinct.Length - 1 do for j in i + 1 .. distinct.Length - 1 do if snd distinct[i] = snd distinct[j] then findings.Add(RevisionIdentityCollapse(fst distinct[i], fst distinct[j]))
         if input.Identities.ProtectedMain <> input.Identities.AcceptanceMerge then findings.Add(RevisionRelationInvalid "protected main must equal the observed acceptance merge")
-        let expectedRepository =
+        let acceptanceRepository =
             input.Plan.Registrations
             |> List.tryFind (fun value -> value.Kind = "unit")
             |> Option.map (fun value -> value.Draft.Owner + "/" + value.Draft.Repository)
             |> Option.defaultValue ""
-        let verifyBinding label candidate merge (binding: RevisionBinding) =
+        let implementationRepository =
+            let matched = issue.Match input.Plan.Authority.Issue
+            if matched.Success then
+                let uri = Uri input.Plan.Authority.Issue
+                uri.AbsolutePath.Trim('/').Split('/') |> Array.take 2 |> String.concat "/"
+            else ""
+        let verifyBinding label expectedRepository candidate merge (binding: RevisionBinding) =
             if binding.Candidate <> candidate || binding.Merge <> merge then findings.Add(RevisionRelationInvalid($"%s{label} binding does not match its named candidate and merge"))
             if binding.Schema <> RevisionBindingSchema || binding.Repository <> expectedRepository then findings.Add(RevisionRelationInvalid($"%s{label} binding does not name the authoritative repository"))
             if not (revision.IsMatch binding.CandidateTree) || not (revision.IsMatch binding.MergeTree) then findings.Add(RevisionRelationInvalid($"%s{label} binding tree identity is invalid"))
@@ -764,14 +781,17 @@ module RoadmapWorkUnit =
             let expectedCommand = digest (utf8 (canonicalRevisionCommand binding.Repository binding.Candidate binding.Merge))
             if binding.CommandSha256 <> expectedCommand || binding.ExitCode <> 0 then findings.Add(RevisionRelationInvalid($"%s{label} binding lacks a successful canonical Git observation"))
             if not (sha.IsMatch binding.Digest) || digest (utf8 (revisionBindingPayload binding false)) <> binding.Digest then findings.Add(RevisionRelationInvalid($"%s{label} binding digest is invalid"))
-        verifyBinding "implementation" input.Identities.ImplementationCandidate input.Identities.ImplementationMerge input.ImplementationBinding
-        verifyBinding "acceptance" input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge input.AcceptanceBinding
+        verifyBinding "implementation" implementationRepository input.Identities.ImplementationCandidate input.Identities.ImplementationMerge input.ImplementationBinding
+        verifyBinding "acceptance" acceptanceRepository input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge input.AcceptanceBinding
         match DateTimeOffset.TryParse input.AcceptedAt with true, _ -> () | _ -> findings.Add(InvalidIdentity("acceptedAt", input.AcceptedAt))
-        if findings.Count = 0 then Ok(buildAcceptance input) else Error(List.ofSeq findings)
+        if findings.Count = 0 then Ok(AcceptanceCandidate input)
+        else Error(List.ofSeq findings)
 
     let private parseIdentities (value: JsonElement) : RevisionIdentities =
-        strict "identities" [ "implementationCandidate"; "implementationMerge"; "acceptanceCandidate"; "acceptanceMerge"; "protectedMain" ] value
-        { ImplementationCandidate = text "identities" "implementationCandidate" value; ImplementationMerge = text "identities" "implementationMerge" value
+        strict "identities" [ "implementationPullRequest"; "implementationCandidate"; "implementationMerge"; "acceptancePullRequest"; "acceptanceCandidate"; "acceptanceMerge"; "protectedMain" ] value
+        { ImplementationPullRequest = (prop "implementationPullRequest" value).GetInt32()
+          ImplementationCandidate = text "identities" "implementationCandidate" value; ImplementationMerge = text "identities" "implementationMerge" value
+          AcceptancePullRequest = (prop "acceptancePullRequest" value).GetInt32()
           AcceptanceCandidate = text "identities" "acceptanceCandidate" value; AcceptanceMerge = text "identities" "acceptanceMerge" value
           ProtectedMain = text "identities" "protectedMain" value }
 
@@ -794,7 +814,7 @@ module RoadmapWorkUnit =
                lifecycleLog = input.LifecycleLog; requiredLifecyclePhases = input.RequiredLifecyclePhases
                reviewEvidence = input.ReviewEvidence; reviewCycleId = input.ReviewCycleId
                reviewReceipt = input.ReviewReceipt; sddWorkId = input.SddWorkId; sddObservations = observations
-               identities = {| implementationCandidate = input.Identities.ImplementationCandidate; implementationMerge = input.Identities.ImplementationMerge; acceptanceCandidate = input.Identities.AcceptanceCandidate; acceptanceMerge = input.Identities.AcceptanceMerge; protectedMain = input.Identities.ProtectedMain |}
+               identities = {| implementationPullRequest = input.Identities.ImplementationPullRequest; implementationCandidate = input.Identities.ImplementationCandidate; implementationMerge = input.Identities.ImplementationMerge; acceptancePullRequest = input.Identities.AcceptancePullRequest; acceptanceCandidate = input.Identities.AcceptanceCandidate; acceptanceMerge = input.Identities.AcceptanceMerge; protectedMain = input.Identities.ProtectedMain |}
                implementationBinding = JsonNode.Parse(canonicalRevisionBinding input.ImplementationBinding)
                acceptanceBinding = JsonNode.Parse(canonicalRevisionBinding input.AcceptanceBinding)
                acceptedAt = input.AcceptedAt |}
@@ -823,13 +843,18 @@ module RoadmapWorkUnit =
                  AcceptedAt = text "acceptanceInput" "acceptedAt" root }
         with error -> Error [ $"invalid roadmap acceptance input: %s{error.Message}" ]
 
-    let verifyAcceptance (expected: AcceptanceInput) (bundle: byte array) =
-        match inspectAcceptance expected with
-        | Error findings -> Error findings
-        | Ok accepted ->
-            match CanonicalJson.canonicalize bundle with
-            | Error reason -> Error [ AcceptanceBundleInvalid reason ]
-            | Ok observed when observed + "\n" = accepted.BundleJson -> Ok accepted
-            | Ok _ -> Error [ AcceptanceBundleInvalid "bundle bytes differ from the canonical sealed receipt and evidence index" ]
+    let candidateDigest (AcceptanceCandidate input) = canonicalAcceptanceInput input |> utf8 |> digest
+
+    let observeAcceptance (AcceptanceCandidate input) = ObservedAcceptance input
+    let sealObservedAcceptance (ObservedAcceptance input) = buildAcceptance input
+    let acceptedDigest accepted = accepted.Digest
+    let acceptedBundle accepted = accepted.BundleJson
+
+    let verifyObservedAcceptance (ObservedAcceptance input) (bundle: byte array) =
+        let accepted = buildAcceptance input
+        match CanonicalJson.canonicalize bundle with
+        | Error reason -> Error [ AcceptanceBundleInvalid reason ]
+        | Ok observed when observed + "\n" = accepted.BundleJson -> Ok accepted
+        | Ok _ -> Error [ AcceptanceBundleInvalid "bundle bytes differ from the canonical sealed receipt and evidence index" ]
 
     let acceptedReceipt (accepted: Accepted) = utf8 accepted.ReceiptJson

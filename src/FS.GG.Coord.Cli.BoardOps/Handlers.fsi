@@ -45,5 +45,12 @@ module Handlers =
     /// Compile authoritative roadmap/catalog bytes, then apply every generated draft through the
     /// existing receipt-first intake transaction. A retry resumes from persisted per-draft receipts.
     val roadmapUnitPrepareApply: Context -> Options.Options -> int
+    /// Re-observe every acceptance authority from GitHub and Git before an opaque accepted receipt can
+    /// be sealed. Pure candidate inspection is intentionally insufficient at this boundary.
+    val roadmapUnitAccept:
+        runQualification: (string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
+        Context ->
+        Options.Options ->
+            int
     val handlers: (Options.Command * HandlerRegistration.Handler) list
     val programHandlers: runWithContext: (Options.Options -> int) -> (Options.Command * (Options.Options -> int)) list

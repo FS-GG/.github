@@ -86,13 +86,16 @@ module RoadmapWorkUnitTests =
         input |> Qualification.validate |> unwrap
 
     let private lifecycle () =
-        let common event at actual tokens =
-            $"""{{"schema_version":1,"run_id":"pilot","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":1,"phase":"implementation","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{head 'a'}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
-        let started = common "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}"
-        let first = LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" "" started |> unwrap
-        let completed = common "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture has no runtime\",\"source\":\"test fixture\"}"
-        let second = LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" first completed |> unwrap
-        first + second
+        let common order phase event at actual tokens =
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":3210,"url":"https://github.com/FS-GG/.github/issues/3210"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{head 'a'}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#3210","claim_generation":"1"}}}}"""
+        [ "implementation"; "review"; "acceptance" ]
+        |> List.mapi (fun index phase -> index + 1, phase)
+        |> List.fold (fun log (order, phase) ->
+            let started = common order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}"
+            let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log started |> unwrap
+            let current = log + first
+            let completed = common order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture has no runtime\",\"source\":\"test fixture\"}"
+            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current completed |> unwrap)) ""
 
     let private critique candidate =
         $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
@@ -116,10 +119,11 @@ module RoadmapWorkUnitTests =
         let binding candidate merge tree =
             RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
         let identities: RoadmapWorkUnit.RevisionIdentities =
-            { ImplementationCandidate = candidate; ImplementationMerge = head 'b'; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
+            { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = head 'b'
+              AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema
-          Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate; LifecycleRunId = "pilot"; LifecycleUnitId = "GS2-07.3"
-          LifecycleLog = lifecycle (); RequiredLifecyclePhases = [ "implementation" ]; ReviewEvidence = review
+          Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate; LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"
+          LifecycleLog = lifecycle (); RequiredLifecyclePhases = [ "implementation"; "review"; "acceptance" ]; ReviewEvidence = review
           ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "3210-roadmap-work-unit-compiler"
           SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities
@@ -177,12 +181,13 @@ module RoadmapWorkUnitTests =
     [<Fact>]
     let ``#3210 acceptance consumes qualified lifecycle and observed SDD evidence atomically`` () =
         let input = acceptanceInput ()
-        let accepted = RoadmapWorkUnit.inspectAcceptance input |> unwrap
-        Assert.False(accepted.BundleJson = accepted.ReceiptJson)
-        Assert.Contains("\"evidenceIndex\"", accepted.BundleJson)
-        Assert.Contains("\"receipt\"", accepted.BundleJson)
-        Assert.True(RoadmapWorkUnit.verifyAcceptance input (bytes accepted.BundleJson) |> Result.isOk)
-        Assert.Equal(accepted.ReceiptJson, Encoding.UTF8.GetString(RoadmapWorkUnit.acceptedReceipt accepted))
+        let candidateEnvelope = RoadmapWorkUnit.inspectAcceptanceCandidate input |> unwrap
+        let observed = RoadmapWorkUnit.observeAcceptance candidateEnvelope
+        let accepted = RoadmapWorkUnit.sealObservedAcceptance observed
+        let bundle = RoadmapWorkUnit.acceptedBundle accepted
+        Assert.Contains("\"evidenceIndex\"", bundle)
+        Assert.Contains("\"receipt\"", bundle)
+        Assert.True(RoadmapWorkUnit.verifyObservedAcceptance observed (bytes bundle) |> Result.isOk)
 
         let candidate, implementation, acceptance = input.Identities.ImplementationCandidate, input.Identities.ImplementationMerge, input.Identities.AcceptanceMerge
         let report = "---\nfeedbackSchema: 2\ncycle: GS2-07.3\n---\n## §1 Provenance and confidence\n- **activation:** active\n- **phases:** implementation, acceptance\n- **material events:** 0\n- **zero-event reason:** compiled pilot produced no material feedback\n## §2 Findings\nNone.\n"
@@ -200,34 +205,37 @@ module RoadmapWorkUnitTests =
                   CycleUpdate = bytes cycle; CheckReceipts = [ bytes check ] }
             |> unwrap
         Assert.Equal("GS2-07.3", closed.Evidence.UnitId)
-        Assert.Equal(accepted.Digest, closed.Evidence.AcceptedReceiptDigest.Substring("sha256:".Length))
+        Assert.Equal(RoadmapWorkUnit.acceptedDigest accepted, closed.Evidence.AcceptedReceiptDigest.Substring("sha256:".Length))
 
     [<Fact>]
     let ``#3210 manually flipped SDD state identity collapse and bundle tamper refuse`` () =
         let input = acceptanceInput ()
         let forged = { input.SddObservations.Head with ArtifactJson = input.SddObservations.Head.ArtifactJson.Replace("implementationReady", "authoredReady") }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with SddObservations = forged :: input.SddObservations.Tail } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with SddObservations = forged :: input.SddObservations.Tail } |> Result.isError)
         let minimal = { input.SddObservations.Head with ArtifactJson = "{\"stage\":\"analyze\",\"status\":\"implementationReady\",\"workId\":\"GS2-07.3\"}" }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with SddObservations = minimal :: input.SddObservations.Tail } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with SddObservations = minimal :: input.SddObservations.Tail } |> Result.isError)
         let wrongSubject = { input.Qualification with Subject = "FS-GG/.github#9999" }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with Qualification = wrongSubject } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with Qualification = wrongSubject } |> Result.isError)
         let forgedApplication = { input.PreparationApplication with PlanDigest = sha '0' }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with PreparationApplication = forgedApplication } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with PreparationApplication = forgedApplication } |> Result.isError)
         let collapsed = { input.Identities with ImplementationMerge = input.Identities.ImplementationCandidate }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with Identities = collapsed } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with Identities = collapsed } |> Result.isError)
         let wrongTree = { input.ImplementationBinding with MergeTree = head '0' }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with ImplementationBinding = wrongTree } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ImplementationBinding = wrongTree } |> Result.isError)
         let wrongCommand = { input.ImplementationBinding with CommandSha256 = sha '0' }
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with ImplementationBinding = wrongCommand } |> Result.isError)
-        Assert.True(RoadmapWorkUnit.inspectAcceptance { input with ReviewReceipt = input.ReviewReceipt.Replace("\"verdict\":\"pass\"", "\"verdict\":\"red\"") } |> Result.isError)
-        let accepted = RoadmapWorkUnit.inspectAcceptance input |> unwrap
-        Assert.True(RoadmapWorkUnit.verifyAcceptance input (bytes (accepted.BundleJson.Replace("accepted", "tampered"))) |> Result.isError)
-        Assert.True(RoadmapWorkUnit.verifyAcceptance input (bytes accepted.ReceiptJson) |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ImplementationBinding = wrongCommand } |> Result.isError)
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate { input with ReviewReceipt = input.ReviewReceipt.Replace("\"verdict\":\"pass\"", "\"verdict\":\"red\"") } |> Result.isError)
+        let candidateEnvelope = RoadmapWorkUnit.inspectAcceptanceCandidate input |> unwrap
+        let observed = RoadmapWorkUnit.observeAcceptance candidateEnvelope
+        let accepted = RoadmapWorkUnit.sealObservedAcceptance observed
+        let bundle = RoadmapWorkUnit.acceptedBundle accepted
+        Assert.True(RoadmapWorkUnit.verifyObservedAcceptance observed (bytes (bundle.Replace("accepted", "tampered"))) |> Result.isError)
+        Assert.True(RoadmapWorkUnit.verifyObservedAcceptance observed (RoadmapWorkUnit.acceptedReceipt accepted) |> Result.isError)
 
     [<Fact>]
     let ``#3210 closed acceptance wire input parses and replays the same receipt bytes`` () =
         let input = acceptanceInput ()
         let parsed = RoadmapWorkUnit.parseAcceptanceInput (bytes (RoadmapWorkUnit.canonicalAcceptanceInput input)) |> unwrap
-        let direct = RoadmapWorkUnit.inspectAcceptance input |> unwrap
-        let roundTrip = RoadmapWorkUnit.inspectAcceptance parsed |> unwrap
-        Assert.Equal(direct.BundleJson, roundTrip.BundleJson)
+        let direct = RoadmapWorkUnit.inspectAcceptanceCandidate input |> unwrap
+        let roundTrip = RoadmapWorkUnit.inspectAcceptanceCandidate parsed |> unwrap
+        Assert.Equal(RoadmapWorkUnit.candidateDigest direct, RoadmapWorkUnit.candidateDigest roundTrip)

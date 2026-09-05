@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3210-roadmap-work-unit-compiler/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3210-roadmap-work-unit-compiler/analysis.json
-    digest: fd5c7582fb324cce468ef239c665a18963e1cbb8c3e72fba5602cf82f831f92a
+    digest: 1cda957f03b01c649300851a688ad5e711659388a75ecb73ffbee2746040e4a8
     schemaVersion: 1
   - label: checklist
     path: work/3210-roadmap-work-unit-compiler/checklist.md
@@ -19,19 +19,19 @@ sourceSnapshots:
     schemaVersion: 1
   - label: clarifications
     path: work/3210-roadmap-work-unit-compiler/clarifications.md
-    digest: 29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff
+    digest: 89e580141f45e2f9261182fe872ed2476f6000b6f162ddf2aa6984ba7a185eef
     schemaVersion: 1
   - label: plan
     path: work/3210-roadmap-work-unit-compiler/plan.md
-    digest: a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd
+    digest: 7c2209a18ee2a9518530bcca8f5e26363a467d4c9d23119a160c681c014c0938
     schemaVersion: 1
   - label: spec
     path: work/3210-roadmap-work-unit-compiler/spec.md
-    digest: 3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680
+    digest: 143680caafdf93a3d6441e534732043dd50cc365ee40a7927a97c825e6e9c6cd
     schemaVersion: 1
   - label: tasks
     path: work/3210-roadmap-work-unit-compiler/tasks.yml
-    digest: 69b7445272af4516786a8a9214e56a19ba79987efa03ed3555bd6d70ca289b95
+    digest: 5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV007
     kind: verification
     subject:
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV008
     kind: verification
     subject:
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV009
     kind: verification
     subject:
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV010
     kind: verification
     subject:
@@ -297,13 +297,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV011
     kind: verification
     subject:
@@ -324,13 +324,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV012
     kind: verification
     subject:
@@ -351,13 +351,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV013
     kind: verification
     subject:
@@ -378,13 +378,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV014
     kind: verification
     subject:
@@ -405,13 +405,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV015
     kind: verification
     subject:
@@ -432,13 +432,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV016
     kind: verification
     subject:
@@ -459,13 +459,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV017
     kind: verification
     subject:
@@ -486,13 +486,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV018
     kind: verification
     subject:
@@ -513,13 +513,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV019
     kind: verification
     subject:
@@ -540,13 +540,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV020
     kind: verification
     subject:
@@ -567,13 +567,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV021
     kind: verification
     subject:
@@ -594,13 +594,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV022
     kind: verification
     subject:
@@ -621,13 +621,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV023
     kind: verification
     subject:
@@ -648,13 +648,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV024
     kind: verification
     subject:
@@ -675,13 +675,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV025
     kind: verification
     subject:
@@ -702,13 +702,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV026
     kind: verification
     subject:
@@ -729,13 +729,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV027
     kind: verification
     subject:
@@ -756,13 +756,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV028
     kind: verification
     subject:
@@ -783,13 +783,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV029
     kind: verification
     subject:
@@ -810,13 +810,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
   - id: EV030
     kind: verification
     subject:
@@ -837,12 +837,12 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:62bc2886afbfc9e8f988256d774e00f42df6a9529349ac2c6067e7f5ff3ee470"
+      digest: "sha256:3bf148e6cd7f7b1bb9288e44905fe1878fb44555ae25921cdec6714ccb3f6547"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
       failed: 0
       skipped: 0
-    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+    notes: ["Release Core 963, CLI 431, BoardOps 262, GitHub 698, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

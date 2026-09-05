@@ -912,14 +912,31 @@ module IntakeTransactionTests =
 
             let parsed = Options.parse [ "intake"; "apply"; "/dev/null" ] |> Result.defaultWith failwith
             let opts = { parsed with Args = [ "--input"; requestPath; "--roadmap"; roadmapPath; "--catalog"; catalogPath; "--output"; outputPath ] }
-            let first = Handlers.roadmapUnitPrepareApply (context world) opts
+            let invokeApply options =
+                let priorOutput = Console.Out
+                use captured = new StringWriter()
+                try
+                    Console.SetOut captured
+                    Handlers.roadmapUnitPrepareApply (context world) options, captured.ToString()
+                finally
+                    Console.SetOut priorOutput
+            let first, firstOutput = invokeApply opts
             if first <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal("", firstOutput)
             let firstBytes = File.ReadAllBytes outputPath
             let application = RoadmapWorkUnit.parsePreparationApplication firstBytes |> Result.defaultWith (String.concat "; " >> failwith)
             Assert.Equal(3, application.Registrations.Length)
             Assert.Equal(3, creates)
 
-            let second = Handlers.roadmapUnitPrepareApply (context world) opts
+            let second, secondOutput = invokeApply opts
             if second <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal("", secondOutput)
             Assert.True(firstBytes.AsSpan().SequenceEqual((File.ReadAllBytes outputPath).AsSpan()))
+            Assert.Equal(3, creates)
+
+            let stdoutOptions = { opts with Args = opts.Args |> List.take (opts.Args.Length - 2) }
+            let third, receiptOutput = invokeApply stdoutOptions
+            if third <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            let stdoutReceipt = RoadmapWorkUnit.parsePreparationApplication (Encoding.UTF8.GetBytes receiptOutput) |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal(application.Digest, stdoutReceipt.Digest)
             Assert.Equal(3, creates)
