@@ -111,6 +111,31 @@ module TelemetryTests =
             |> unwrap
         let complete = withRecoveryStarted + recovered
         LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [ usageReceipt ] [] complete |> unwrap |> ignore
+        let recoveredWithExtraEvidence =
+            LifecycleTelemetry.sealSuccessorWithEvidence "run" "unit" [ usageReceipt ] [] withRecoveryStarted
+                (draft 2 "telemetry-reconciliation-claim" "completed" "2026-09-04T08:03:00Z" "1" measured
+                    [ "supersedes-lifecycle-digest:" + legacyDigest; "unrelated:evidence" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence
+                "run" "unit" true [] [ usageReceipt ] [] (withRecoveryStarted + recoveredWithExtraEvidence)
+            |> Result.isError)
+        let paraphrasedLegacy =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"usage unavailable because the child response is still running\",\"source\":\"legacy child\"}"
+                    [ "legacy" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + paraphrasedLegacy)
+            |> Result.isError)
+        let genuineFailure =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"post-completion collector schema validation failed: total field missing\",\"source\":\"collector\"}"
+                    [ "failure" ])
+            |> unwrap
+        LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + genuineFailure) |> unwrap |> ignore
 
     [<Fact>]
     let ``critique and feedback receipts bind current evidence`` () =

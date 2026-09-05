@@ -39,7 +39,7 @@ module RoadmapWorkUnitCliTests =
     let private fixture () =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-3210-cli-" + Guid.NewGuid().ToString("n"))
         Directory.CreateDirectory directory |> ignore
-        let input = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+        let input = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","roadmapRevision":"%s{String.replicate 40 "a"}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
         let roadmap = "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compiler.** next\n"
         let roadmapDigest = SHA256.HashData(Encoding.UTF8.GetBytes roadmap) |> Convert.ToHexString |> _.ToLowerInvariant()
         let unit id title prerequisites qGates commands =
@@ -89,7 +89,7 @@ module RoadmapWorkUnitCliTests =
         |> List.fold (fun log (order, phase) ->
             let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log (draft order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
             let current = log + first
-            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture\",\"source\":\"test\"}") |> unwrap)) ""
+            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"post-completion runtime usage lookup failed: test fixture has no source\",\"source\":\"test\"}") |> unwrap)) ""
 
     let private acceptanceInput (plan: RoadmapWorkUnit.PreparationPlan) =
         let candidate = head 'a'

@@ -83,5 +83,13 @@ module Handlers =
         Context ->
         Options.Options ->
             int
+    /// Keep the production GitHub/Git authority observer active while replacing only the expensive
+    /// independent SDD runner in deterministic integration tests.
+    val internal roadmapUnitAcceptWithSddObserver:
+        runQualification: (string -> string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
+        observeSdd: (FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput -> Result<unit, string list>) ->
+        Context ->
+        Options.Options ->
+            int
     val handlers: (Options.Command * HandlerRegistration.Handler) list
     val programHandlers: runWithContext: (Options.Options -> int) -> (Options.Command * (Options.Options -> int)) list

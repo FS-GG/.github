@@ -37,7 +37,8 @@ module RoadmapWorkUnit =
           Gates: string list }
 
     type AuthorityPin =
-        { RoadmapDigest: string
+        { RoadmapRevision: string
+          RoadmapDigest: string
           CatalogDigest: string
           Issue: string }
 
@@ -48,6 +49,7 @@ module RoadmapWorkUnit =
 
     type PreparationInput =
         { Schema: string
+          RoadmapRevision: string
           RoadmapSourceDigest: string
           CatalogSourceDigest: string
           Catalog: CatalogRow list
@@ -60,6 +62,7 @@ module RoadmapWorkUnit =
 
     type PreparationRequest =
         { Schema: string
+          RoadmapRevision: string
           AuthorityIssue: string
           SddWorkId: string
           RegistrationOwner: string

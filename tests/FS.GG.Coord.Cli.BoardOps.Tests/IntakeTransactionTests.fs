@@ -850,7 +850,7 @@ module IntakeTransactionTests =
             let roadmap = "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compile roadmap units.** next\n"
             let catalog =
                 $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{String('a', 40)}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "Previous" "[\"GS2-07.1\"]" "[]" "[\"previous\"]"},%s{unit "GS2-07.3" "Compile roadmap units" "[\"GS2-07.2\"]" "[\"Q3\"]" "[\"acceptance\"]"}]}}"""
-            let request = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+            let request = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","roadmapRevision":"%s{String.replicate 40 "a"}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
             let requestPath = Path.Combine(cache, "request.json")
             let roadmapPath = Path.Combine(cache, "roadmap.md")
             let catalogPath = Path.Combine(cache, "catalog.json")

@@ -25,6 +25,7 @@ module RoadmapWorkUnitTests =
             { UnitId = "GS2-07.3"; Title = "Compile roadmap units"; State = RoadmapWorkUnit.Unchecked
               Prerequisite = Some previous.UnitId; Gates = [ "implementation"; "acceptance" ]; EvidenceObligations = obligations; ContractSha256 = sha 'f' }
         { Schema = RoadmapWorkUnit.PreparationInputSchema
+          RoadmapRevision = head '1'
           RoadmapSourceDigest = "sha256:" + sha 'a'
           CatalogSourceDigest = "sha256:" + sha 'b'
           Catalog = [ previous; selected ]
@@ -43,7 +44,7 @@ module RoadmapWorkUnitTests =
         let catalog =
             $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{head '1'}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{roadmapHash}"}},"units":[%s{unit "GS2-07.2" "Previous" "[\"GS2-07.1\"]" "[]" "[\"previous\"]"},%s{unit "GS2-07.3" "Compile roadmap units" "[\"GS2-07.2\"]" "[\"Q3\"]" "[\"acceptance\"]"}]}}"""
         let request: RoadmapWorkUnit.PreparationRequest =
-            { Schema = RoadmapWorkUnit.PreparationInputSchema; AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
+            { Schema = RoadmapWorkUnit.PreparationInputSchema; RoadmapRevision = head '1'; AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
               SddWorkId = "3210-roadmap-work-unit-compiler"
               RegistrationOwner = "FS-GG"; RegistrationRepository = ".github"; RegistrationPaths = [ "src" ] }
         roadmap, catalog, request
@@ -100,7 +101,7 @@ module RoadmapWorkUnitTests =
             let started = common order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}"
             let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log started |> unwrap
             let current = log + first
-            let completed = common order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture has no runtime\",\"source\":\"test fixture\"}"
+            let completed = common order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"post-completion runtime usage lookup failed: test fixture has no source\",\"source\":\"test fixture\"}"
             current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current completed |> unwrap)) ""
 
     let private critique candidate =
@@ -160,6 +161,9 @@ module RoadmapWorkUnitTests =
         let plan = RoadmapWorkUnit.compilePreparation (bytes roadmap) (bytes catalog) request |> unwrap
         Assert.Equal("GS2-07.3", plan.Unit.UnitId)
         Assert.Equal(shaText roadmap, plan.Authority.RoadmapDigest.Substring("sha256:".Length))
+        Assert.True(
+            RoadmapWorkUnit.compilePreparation (bytes roadmap) (bytes (catalog.Replace(head '1', head '9'))) request
+            |> Result.isError)
         Assert.True(RoadmapWorkUnit.compilePreparation (bytes (roadmap + "drift")) (bytes catalog) request |> Result.isError)
         Assert.True(RoadmapWorkUnit.compilePreparation (bytes roadmap) (bytes (catalog.Replace(plan.Unit.ContractSha256, sha '0'))) request |> Result.isError)
         let misordered = roadmap.Replace("- [ ] **GS2-07.3", "- [x] **GS2-07.3")
@@ -177,6 +181,24 @@ module RoadmapWorkUnitTests =
             RoadmapWorkUnit.compilePreparation (bytes omittedRoadmap) (bytes pinned) request
             |> function Error values -> values | Ok value -> failwithf "unsafe later unit selected: %s" value.Unit.UnitId
         Assert.Contains(RoadmapWorkUnit.RoadmapIdentityMismatch "catalog omits or reorders the canonical first unchecked roadmap row", findings)
+
+    [<Fact>]
+    let ``#3210 catalog accepted prefix must preserve canonical roadmap order`` () =
+        let roadmap =
+            "- [x] **GS2-07.1 — First.** done\n- [x] **GS2-07.2 — Second.** done\n- [ ] **GS2-07.3 — Compile roadmap units.** next\n"
+        let unit id title prerequisites =
+            let unsigned =
+                $"""{{"exitGate":"test","gateCommands":["acceptance"],"id":"%s{id}","owner":"FS.GG.Coordination","permissionCeiling":["local"],"prerequisites":%s{prerequisites},"qGates":[],"title":"%s{title}"}}"""
+            unsigned[..unsigned.Length - 2] + $",\"contractSha256\":\"%s{shaText unsigned}\"}}"
+        let catalog =
+            $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{head '1'}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "Second" "[\"GS2-07.1\"]"},%s{unit "GS2-07.1" "First" "[\"GS2-07.0\"]"},%s{unit "GS2-07.3" "Compile roadmap units" "[\"GS2-07.1\"]"}]}}"""
+        let _, _, request = sourcePreparation ()
+        let findings =
+            RoadmapWorkUnit.compilePreparation (bytes roadmap) (bytes catalog) request
+            |> function Error values -> values | Ok value -> failwithf "misordered prefix accepted: %s" value.Unit.UnitId
+        Assert.Contains(
+            RoadmapWorkUnit.RoadmapIdentityMismatch "catalog prefix does not match canonical roadmap order through the first unchecked row",
+            findings)
 
     [<Fact>]
     let ``#3210 selection refuses ambiguous authority prerequisite and catalog drift`` () =

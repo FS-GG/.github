@@ -26,14 +26,14 @@ module RoadmapWorkUnit =
         { UnitId: string; Title: string; State: UnitState; Prerequisite: string option
           Gates: string list; EvidenceObligations: string list; ContractSha256: string }
     type RoadmapRow = { UnitId: string; Title: string; Prerequisite: string option; Gates: string list }
-    type AuthorityPin = { RoadmapDigest: string; CatalogDigest: string; Issue: string }
+    type AuthorityPin = { RoadmapRevision: string; RoadmapDigest: string; CatalogDigest: string; Issue: string }
     type Registration = { Id: string; Kind: string; Draft: Intake.Draft }
     type PreparationInput =
-        { Schema: string; RoadmapSourceDigest: string; CatalogSourceDigest: string; Catalog: CatalogRow list; RoadmapRow: RoadmapRow
+        { Schema: string; RoadmapRevision: string; RoadmapSourceDigest: string; CatalogSourceDigest: string; Catalog: CatalogRow list; RoadmapRow: RoadmapRow
           AuthorityIssue: string; SddWorkId: string; RegistrationOwner: string; RegistrationRepository: string
           RegistrationPaths: string list }
     type PreparationRequest =
-        { Schema: string; AuthorityIssue: string; SddWorkId: string; RegistrationOwner: string
+        { Schema: string; RoadmapRevision: string; AuthorityIssue: string; SddWorkId: string; RegistrationOwner: string
           RegistrationRepository: string; RegistrationPaths: string list }
     type PreparationPlan =
         { Schema: string; Unit: CatalogRow; AcceptedPrerequisite: string; Authority: AuthorityPin
@@ -121,7 +121,7 @@ module RoadmapWorkUnit =
             |> List.map (fun value -> {| id = value.Id; kind = value.Kind; draft = draftDto value.Draft |})
         JsonSerializer.SerializeToUtf8Bytes
             {| schema = plan.Schema; unit = rowDto plan.Unit; acceptedPrerequisite = plan.AcceptedPrerequisite
-               authority = {| roadmapDigest = plan.Authority.RoadmapDigest; catalogDigest = plan.Authority.CatalogDigest; issue = plan.Authority.Issue |}
+               authority = {| roadmapRevision = plan.Authority.RoadmapRevision; roadmapDigest = plan.Authority.RoadmapDigest; catalogDigest = plan.Authority.CatalogDigest; issue = plan.Authority.Issue |}
                sddWorkId = plan.SddWorkId; registrations = registrations; gateRegistrations = plan.GateRegistrations
                evidenceObligations = plan.EvidenceObligations
                digest = if includeDigest then plan.Digest else "" |}
@@ -251,6 +251,7 @@ module RoadmapWorkUnit =
     let inspectPreparation (input: PreparationInput) =
         let findings = ResizeArray<Finding>()
         if input.Schema <> PreparationInputSchema then findings.Add(InvalidSchema(PreparationInputSchema, input.Schema))
+        if not (revision.IsMatch input.RoadmapRevision) then findings.Add(InvalidIdentity("roadmapRevision", input.RoadmapRevision))
         if not (Regex.IsMatch(input.RoadmapSourceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then findings.Add(InvalidDigest("roadmapSourceDigest", input.RoadmapSourceDigest))
         if not (Regex.IsMatch(input.CatalogSourceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then findings.Add(InvalidDigest("catalogSourceDigest", input.CatalogSourceDigest))
         if not (issue.IsMatch input.AuthorityIssue) then findings.Add(InvalidIdentity("authorityIssue", input.AuthorityIssue))
@@ -304,7 +305,7 @@ module RoadmapWorkUnit =
         if findings.Count > 0 then Error(List.ofSeq findings) else
         let draft =
             { Schema = PreparationPlanSchema; Unit = selected; AcceptedPrerequisite = prerequisite
-              Authority = { RoadmapDigest = input.RoadmapSourceDigest; CatalogDigest = input.CatalogSourceDigest; Issue = input.AuthorityIssue }
+              Authority = { RoadmapRevision = input.RoadmapRevision; RoadmapDigest = input.RoadmapSourceDigest; CatalogDigest = input.CatalogSourceDigest; Issue = input.AuthorityIssue }
               SddWorkId = input.SddWorkId; Registrations = registrations; GateRegistrations = gateRegistrations
               EvidenceObligations = selected.EvidenceObligations; Digest = "" }
         let planDigest = canonicalPlanPayload draft false |> utf8 |> digest
@@ -435,8 +436,8 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "preparationInput" [ "schema"; "roadmapSourceDigest"; "catalogSourceDigest"; "catalog"; "roadmapRow"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
-            Ok { Schema = text "preparationInput" "schema" root; RoadmapSourceDigest = text "preparationInput" "roadmapSourceDigest" root; CatalogSourceDigest = text "preparationInput" "catalogSourceDigest" root
+            strict "preparationInput" [ "schema"; "roadmapRevision"; "roadmapSourceDigest"; "catalogSourceDigest"; "catalog"; "roadmapRow"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
+            Ok { Schema = text "preparationInput" "schema" root; RoadmapRevision = text "preparationInput" "roadmapRevision" root; RoadmapSourceDigest = text "preparationInput" "roadmapSourceDigest" root; CatalogSourceDigest = text "preparationInput" "catalogSourceDigest" root
                  Catalog = array "catalog" root |> List.mapi (fun index row -> parseRow $"catalog[%d{index}]" row)
                  RoadmapRow = parseRoadmapRow "roadmapRow" (prop "roadmapRow" root)
                  AuthorityIssue = text "preparationInput" "authorityIssue" root; SddWorkId = text "preparationInput" "sddWorkId" root; RegistrationOwner = text "preparationInput" "registrationOwner" root
@@ -447,8 +448,9 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "preparationRequest" [ "schema"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
+            strict "preparationRequest" [ "schema"; "roadmapRevision"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
             Ok { Schema = text "preparationRequest" "schema" root
+                 RoadmapRevision = text "preparationRequest" "roadmapRevision" root
                  AuthorityIssue = text "preparationRequest" "authorityIssue" root
                  SddWorkId = text "preparationRequest" "sddWorkId" root
                  RegistrationOwner = text "preparationRequest" "registrationOwner" root
@@ -502,6 +504,7 @@ module RoadmapWorkUnit =
             if text "catalog.roadmap" "path" authority <> "docs/github-substrate-v2-roadmap.md" then findings.Add(RoadmapIdentityMismatch "path")
             let pinnedRevision = text "catalog.roadmap" "revision" authority
             if not (revision.IsMatch pinnedRevision) then findings.Add(InvalidIdentity("catalog.roadmap.revision", pinnedRevision))
+            elif pinnedRevision <> request.RoadmapRevision then findings.Add(RoadmapIdentityMismatch "catalog.roadmap.revision")
             let pinnedDigest = text "catalog.roadmap" "sha256" authority
             if pinnedDigest <> roadmapDigest then findings.Add(InvalidDigest("catalog.roadmap.sha256", pinnedDigest))
             for index, unit in array "units" root |> List.indexed do
@@ -551,6 +554,10 @@ module RoadmapWorkUnit =
             | None -> Error [ NextUnitMissing ]
             | Some index when firstUncheckedRoadmap <> Some rows[index].UnitId ->
                 Error [ RoadmapIdentityMismatch "catalog omits or reorders the canonical first unchecked roadmap row" ]
+            | Some index when
+                (rows |> List.take (index + 1) |> List.map _.UnitId)
+                <> (roadmapRows |> List.take (index + 1) |> List.map fst) ->
+                Error [ RoadmapIdentityMismatch "catalog prefix does not match canonical roadmap order through the first unchecked row" ]
             | Some index ->
                 let selected = rows[index]
                 let accepted = rows |> List.take index |> List.map _.UnitId |> Set.ofList
@@ -562,6 +569,7 @@ module RoadmapWorkUnit =
                 | Some _ ->
                     inspectPreparation
                         { Schema = request.Schema
+                          RoadmapRevision = request.RoadmapRevision
                           RoadmapSourceDigest = "sha256:" + roadmapDigest
                           CatalogSourceDigest = "sha256:" + digest catalogBytes
                           Catalog = rows |> List.take (index + 1)
@@ -588,11 +596,11 @@ module RoadmapWorkUnit =
             let root = document.RootElement
             strict "plan" [ "schema"; "unit"; "acceptedPrerequisite"; "authority"; "sddWorkId"; "registrations"; "gateRegistrations"; "evidenceObligations"; "digest" ] root
             let authority = prop "authority" root
-            strict "authority" [ "roadmapDigest"; "catalogDigest"; "issue" ] authority
+            strict "authority" [ "roadmapRevision"; "roadmapDigest"; "catalogDigest"; "issue" ] authority
             let registrations = array "registrations" root |> List.mapi (fun index item -> strict $"registrations[%d{index}]" [ "id"; "kind"; "draft" ] item; { Id = text "registration" "id" item; Kind = text "registration" "kind" item; Draft = parseDraft "registration.draft" (prop "draft" item) })
             let plan =
                 { Schema = text "plan" "schema" root; Unit = parseRow "unit" (prop "unit" root); AcceptedPrerequisite = text "plan" "acceptedPrerequisite" root
-                  Authority = { RoadmapDigest = text "authority" "roadmapDigest" authority; CatalogDigest = text "authority" "catalogDigest" authority; Issue = text "authority" "issue" authority }
+                  Authority = { RoadmapRevision = text "authority" "roadmapRevision" authority; RoadmapDigest = text "authority" "roadmapDigest" authority; CatalogDigest = text "authority" "catalogDigest" authority; Issue = text "authority" "issue" authority }
                   SddWorkId = text "plan" "sddWorkId" root; Registrations = registrations
                   GateRegistrations = strings "plan" "gateRegistrations" root
                   EvidenceObligations = strings "plan" "evidenceObligations" root; Digest = text "plan" "digest" root }

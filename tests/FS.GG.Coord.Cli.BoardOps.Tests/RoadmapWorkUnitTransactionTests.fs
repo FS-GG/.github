@@ -20,6 +20,7 @@ module RoadmapWorkUnitTransactionTests =
         let previous: RoadmapWorkUnit.CatalogRow = { UnitId = "GS2-07.2"; Title = "previous"; State = RoadmapWorkUnit.Accepted; Prerequisite = Some "GS2-07.1"; Gates = []; EvidenceObligations = obligations; ContractSha256 = String.replicate 64 "e" }
         let selected: RoadmapWorkUnit.CatalogRow = { UnitId = "GS2-07.3"; Title = "compiler"; State = RoadmapWorkUnit.Unchecked; Prerequisite = Some previous.UnitId; Gates = [ "implementation"; "acceptance" ]; EvidenceObligations = obligations; ContractSha256 = String.replicate 64 "f" }
         ({ Schema = RoadmapWorkUnit.PreparationInputSchema
+           RoadmapRevision = String.replicate 40 "a"
            RoadmapSourceDigest = "sha256:" + String.replicate 64 "a"
            CatalogSourceDigest = "sha256:" + String.replicate 64 "b"
            Catalog = [ previous; selected ]
@@ -102,7 +103,7 @@ module RoadmapWorkUnitTransactionTests =
         |> List.fold (fun log (order, phase) ->
             let first = LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" log (draft order phase "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
             let current = log + first
-            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture\",\"source\":\"test\"}") |> unwrap)) ""
+            current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"post-completion runtime usage lookup failed: test fixture has no source\",\"source\":\"test\"}") |> unwrap)) ""
 
     let private authorityRouteFixture () =
         let plan = makePlan ()
@@ -165,7 +166,7 @@ module RoadmapWorkUnitTransactionTests =
               AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (String.replicate 40 "f"); AcceptedAt = "2026-09-05T06:02:00Z" }
         input, qualificationJson
 
-    let private invokeAuthorityRoute observeSdd observeAuthorities =
+    let private invokeAuthorityRouteUsing productionAuthorities observeSdd observeAuthorities =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-3210-authority-route-" + Guid.NewGuid().ToString("n"))
         Directory.CreateDirectory directory |> ignore
         try
@@ -180,7 +181,9 @@ module RoadmapWorkUnitTransactionTests =
             let parsed =
                 { baseOptions with
                     Args = [ "seal"; "--input"; inputPath; "--qualification-input"; qualificationPath; "--qualification-execution"; executionPath ] }
-            let transport = Fake.Recorder(fun _ -> Error(NotFound "injected observers must prevent live transport"))
+            let transport =
+                Fake.Recorder(fun _ ->
+                    Error(NotFound(if productionAuthorities then "production authority observer reached" else "injected observers must prevent live transport")))
             let context: Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
             let previousOut, previousError = Console.Out, Console.Error
             use stdout = new StringWriter()
@@ -188,10 +191,17 @@ module RoadmapWorkUnitTransactionTests =
             try
                 Console.SetOut stdout; Console.SetError stderr
                 let runQualification _ _ _ = Ok input.Qualification
-                let code = Handlers.roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities context parsed
+                let code =
+                    if productionAuthorities then
+                        Handlers.roadmapUnitAcceptWithSddObserver runQualification observeSdd context parsed
+                    else
+                        Handlers.roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities context parsed
                 code, stdout.ToString(), stderr.ToString()
             finally Console.SetOut previousOut; Console.SetError previousError
         finally Directory.Delete(directory, true)
+
+    let private invokeAuthorityRoute observeSdd observeAuthorities =
+        invokeAuthorityRouteUsing false observeSdd observeAuthorities
 
     [<Fact>]
     let ``#3210 production acceptance route seals only after both live observer boundaries pass`` () =
@@ -210,3 +220,11 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Equal(ExitError, refused)
         Assert.Equal("", refusedOutput)
         Assert.Contains("inverted live authority", refusedError)
+
+    [<Fact>]
+    let ``#3210 production composition keeps the live authority observer active`` () =
+        let code, output, error =
+            invokeAuthorityRouteUsing true (fun _ -> Ok()) (fun _ -> failwith "production authority observer was replaced")
+        Assert.Equal(ExitError, code)
+        Assert.Equal("", output)
+        Assert.Contains("production authority observer reached", error)

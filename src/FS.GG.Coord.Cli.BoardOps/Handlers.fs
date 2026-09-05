@@ -2942,6 +2942,7 @@ module Handlers =
               | Some registration ->
                 let request: RoadmapWorkUnit.PreparationRequest =
                     { Schema = input.Plan.Schema
+                      RoadmapRevision = input.Identities.ImplementationCandidate
                       AuthorityIssue = input.Plan.Authority.Issue
                       SddWorkId = input.Plan.SddWorkId
                       RegistrationOwner = registration.Draft.Owner
@@ -3093,7 +3094,8 @@ module Handlers =
                             | Ok _ ->
                                 let observeSdd, observeLiveAuthorities =
                                     match observerOverrides with
-                                    | Some supplied -> supplied
+                                    | Some(observeSdd, Some observeAuthorities) -> observeSdd, observeAuthorities
+                                    | Some(observeSdd, None) -> observeSdd, observeAuthorities
                                     | None -> independentlyObserveSdd, observeAuthorities
                                 match observeSdd input with
                                 | Error reasons -> fail reasons
@@ -3115,7 +3117,10 @@ module Handlers =
         roadmapUnitAcceptCore runQualification None ctx opts
 
     let internal roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities ctx opts =
-        roadmapUnitAcceptCore runQualification (Some(observeSdd, observeAuthorities)) ctx opts
+        roadmapUnitAcceptCore runQualification (Some(observeSdd, Some observeAuthorities)) ctx opts
+
+    let internal roadmapUnitAcceptWithSddObserver runQualification observeSdd ctx opts =
+        roadmapUnitAcceptCore runQualification (Some(observeSdd, None)) ctx opts
 
     // Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     // are the append-only receipt ledger: a failure in either direction is not a missing decision.

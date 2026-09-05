@@ -556,11 +556,10 @@ module LifecycleTelemetry =
                     elif stringAt "event" item = "started" || stringAt "event" item = "resumed" then None
                     else
                         let targets =
-                            evidenceValues item
-                            |> List.choose (fun value ->
-                                if value.StartsWith(supersessionPrefix, StringComparison.Ordinal) then
-                                    Some(value.Substring(supersessionPrefix.Length))
-                                else None)
+                            match evidenceValues item with
+                            | [ value ] when value.StartsWith(supersessionPrefix, StringComparison.Ordinal) ->
+                                [ value.Substring(supersessionPrefix.Length) ]
+                            | _ -> []
                         let usage = item["token_usage"] :?> JsonObject
                         if stringAt "event" item <> "completed" then
                             findings.Add(InvalidEvent(index + 1, "telemetry reconciliation must be completed"))
@@ -586,9 +585,13 @@ module LifecycleTelemetry =
                         findings.Add(InvalidEvent(line, $"telemetry reconciliation phase must be telemetry-reconciliation-%s{targetPhase}"))
                     if stringAt "status" targetUsage <> "unavailable" then
                         findings.Add(InvalidEvent(line, "telemetry reconciliation may supersede only an unavailable terminal usage record"))
-            let requiresRecovery (reason: string) =
-                [ "after this response"; "pending final usage"; "response had not finished"; "final usage is written after" ]
-                |> List.exists (fun fragment -> reason.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            let isGenuinePostCompletionFailure (reason: string) =
+                let containsAny (fragments: string list) =
+                    fragments
+                    |> List.exists (fun fragment -> reason.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+                containsAny [ "failed"; "failure"; "error"; "unreadable"; "not found"; "denied"; "missing" ]
+                && containsAny [ "collector"; "lookup"; "schema"; "runtime"; "token"; "usage" ]
+            let requiresRecovery reason = not (isGenuinePostCompletionFailure reason)
             events
             |> List.indexed
             |> List.iter (fun (index, item) ->
