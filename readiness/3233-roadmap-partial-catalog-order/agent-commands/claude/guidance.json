@@ -11,7 +11,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "04ec3248410f56c88fdd6b1231aa68d382bcd7f76c32fc79cc72f6ea288b3ea0"
+        "value": "9336ca62d09d0e94f1baa1f7e00f4d3f71348bc9502076f03697ed277d7294de"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -19,7 +19,7 @@
   ],
   "behaviorModelDigest": {
     "algorithm": "sha256",
-    "value": "8921cf646beb5e03a130e4d2129b85421ac0847dc7f2345fb1dd785e72feeaa6"
+    "value": "b638a0afdb35bef281976991cfb38b60ecfa2dea2b3434bf34dac3f77fb6dd79"
   },
   "commands": [
     {
@@ -89,7 +89,7 @@
     },
     {
       "id": "T007",
-      "title": "Handle migration posture PM-001",
+      "title": "Prepare publish-before-adopt source frontier and delivery handoff",
       "stage": "specify",
       "purpose": "Carry out lifecycle task T007 (pending) covering PC-001, PM-001.",
       "relatedIds": [
@@ -175,5 +175,16 @@
       "kind": "skills"
     }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "id": "agents.staleGeneratedGuidance",
+      "severity": "warning",
+      "artifact": "readiness/3233-roadmap-partial-catalog-order/agent-commands/claude/guidance.json",
+      "message": "Generated agent guidance for target \u0027claude\u0027 no longer matches the current normalized work model.",
+      "correction": "Regenerate agent guidance so the generated view matches the current work model.",
+      "relatedIds": [
+        "claude"
+      ]
+    }
+  ]
 }

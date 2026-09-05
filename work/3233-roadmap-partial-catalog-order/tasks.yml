@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/3233-roadmap-partial-catalog-order/plan.md
-    digest: ec9f5bc990880994eff987a8473096cb3819fbeb676f10d5e8098ff03fb53102
+    digest: ac3e8a526475f88c9ce951b5719e6dc5b70bd980488f9b01913d6e0fa747939f
     schemaVersion: 1
 tasks:
   - id: T001
@@ -89,7 +89,7 @@ tasks:
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV006]
   - id: T007
-    title: Handle migration posture PM-001
+    title: Prepare publish-before-adopt source frontier and delivery handoff
     status: completed
     owner: sdd
     dependencies: [T001]

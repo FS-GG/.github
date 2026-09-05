@@ -42,7 +42,7 @@ Prose status: planned
 No performance intent is declared for this work item.
 
 ## Migration Posture
-- PM-001 [PC-001] publishBeforeAdopt: Publish the exact accepted merge as coherent set 0.83.1, adopt it in SDD, and rerun the GS2-07.3 production pilot before registry reconciliation and completion.
+- PM-001 [PC-001] publishBeforeAdopt: Prepare the 0.83.1 source frontier while holding package-version at 0.83.0, and declare exact-head post-merge obligations for automatic-release verification, SDD adoption, the GS2-07.3 pilot, and registry reconciliation.
 
 ## Generated View Impact
 - GV-001 [PD-001] registryProjections: Regenerate compatibility, architecture, publishing inventory, and driver-manifest projections from the 0.83.1 source frontier; keep package-version at 0.83.0 until publication.

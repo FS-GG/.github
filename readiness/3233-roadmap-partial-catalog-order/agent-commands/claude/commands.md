@@ -33,7 +33,7 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Purpose: Carry out lifecycle task T006 (pending) covering PC-001, PD-001, VO-001.
 - Related: PC-001, PD-001, VO-001
 
-## T007 — Handle migration posture PM-001
+## T007 — Prepare publish-before-adopt source frontier and delivery handoff
 - Stage: specify
 - Purpose: Carry out lifecycle task T007 (pending) covering PC-001, PM-001.
 - Related: PC-001, PM-001

@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ec9f5bc990880994eff987a8473096cb3819fbeb676f10d5e8098ff03fb53102"
+        "value": "ac3e8a526475f88c9ce951b5719e6dc5b70bd980488f9b01913d6e0fa747939f"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "de4c978c12c57f5378403ddb99f5c90f1e2364262a3e83598ada6ab1466f026d"
+        "value": "849df6e36306379a2e2721937c8d62730016b4be7bc51336d4c8bf0a06963e8e"
       }
     }
   ],
@@ -381,7 +381,7 @@
     },
     {
       "id": "T007",
-      "title": "Handle migration posture PM-001",
+      "title": "Prepare publish-before-adopt source frontier and delivery handoff",
       "status": "pending",
       "owner": "sdd",
       "dependencies": [
@@ -696,7 +696,7 @@
           "path": "work/3233-roadmap-partial-catalog-order/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "ec9f5bc990880994eff987a8473096cb3819fbeb676f10d5e8098ff03fb53102"
+            "value": "ac3e8a526475f88c9ce951b5719e6dc5b70bd980488f9b01913d6e0fa747939f"
           },
           "schemaVersion": 1
         },
@@ -712,14 +712,14 @@
           "path": "work/3233-roadmap-partial-catalog-order/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "de4c978c12c57f5378403ddb99f5c90f1e2364262a3e83598ada6ab1466f026d"
+            "value": "849df6e36306379a2e2721937c8d62730016b4be7bc51336d4c8bf0a06963e8e"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "b8dc4dcc6354d490c9d0449fb8f2ee02634910d28eba0a1b827f173f948c18c3"
+        "value": "d34b50607b5ff916a7eae2b377ad9594c5acf938c407b7c1e16b7c346d9c50fa"
       },
       "currency": "current"
     }
