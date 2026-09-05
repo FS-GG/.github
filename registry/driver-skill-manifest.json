@@ -54,12 +54,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "81aac8e4aa0abf5e2442da4aa3c8dd40167b247eb2774932a2dd27788855119f",
-      "tree-sha256": "b8b987562849f7557041c2c94538d6ff5ab66bba670040121490368077be9e56",
+      "sha256": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b",
+      "tree-sha256": "025d9a25e02e007e094f2ae2d184f40fc7082d0a5b00f71665808f4e441e9667",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "81aac8e4aa0abf5e2442da4aa3c8dd40167b247eb2774932a2dd27788855119f",
+          "sha256": "c4da9c8e0ee92112dd2a0d27e16d2f96244afa3ffdd73852020d96b181ea4a0b",
           "executable": false
         },
         {
@@ -85,11 +85,6 @@
         {
           "path": "references/host-loop.md",
           "sha256": "88c5d8152eb7861b01806954539c175b69f853796f5bacfa49aabe2279cbbea3",
-          "executable": false
-        },
-        {
-          "path": "references/orchestrator-room.md",
-          "sha256": "528fbb717a2fa79b9e41e6b3bfc6e6690df881b12715c77c37d54455c4c4897f",
           "executable": false
         },
         {
@@ -164,12 +159,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "638e8fd65bc20d1471b586c09d508d04be3b069cd3598d561dedbb016dfce771",
-      "tree-sha256": "009ba073f046a37328e5db91f7c8676cf246c5368e119c8a14eecaa641291134",
+      "sha256": "4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c",
+      "tree-sha256": "e4e51542106482df83994f1c9c88179637b151bdec21d361797ba463d15da703",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "638e8fd65bc20d1471b586c09d508d04be3b069cd3598d561dedbb016dfce771",
+          "sha256": "4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c",
           "executable": false
         },
         {
@@ -190,11 +185,6 @@
         {
           "path": "references/host-loop.md",
           "sha256": "e2e4bb8d7c6cbdaafed92fc2c49c398e75fe03836bbf0be9b22f1ceb05c045da",
-          "executable": false
-        },
-        {
-          "path": "references/orchestrator-room.md",
-          "sha256": "0264bf5ca001f6539eb053634a001d53fc4462ec3b632c474647319565766e11",
           "executable": false
         },
         {

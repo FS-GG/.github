@@ -8,15 +8,6 @@ description: Use when explicitly asked to burn down the org-wide FS-GG Coordinat
 Burn down the org-wide Coordination board across repositories. The board is the ledger; this skill owns
 cross-repo allocation, not item implementation.
 
-## Permanent orchestrator room
-
-At host entry, before every dispatch, recovery, or force-claim, and at every wait/yield/terminal
-transition, follow [the permanent orchestrator-room procedure](references/orchestrator-room.md).
-Room [FS-GG/.github#3227](https://github.com/FS-GG/.github/issues/3227) is the append-only host-presence
-ledger. A latest `active` or `waiting` status for the target item from another orchestrator forbids a
-force-claim until that orchestrator posts `yielded` or explicitly hands off in the room. An unreadable,
-malformed, or contradictory room/claim state fails closed; item-scoped `say`/`inbox` is not a substitute.
-
 1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and consume its complete
    four-part result before making a scheduling decision.
 2. Run the [backlog-triage](references/backlog-triage.md) stage. Classify every relevant `Backlog`

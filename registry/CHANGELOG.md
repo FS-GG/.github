@@ -25,9 +25,7 @@ no gate behaviour changes — this is purely how humans record the log.
   compiler and atomic acceptance transaction. The published frontier remains 0.82.0 until the exact
   accepted merge is single-packed and promoted through the release saga. Preparation derives the
   next unit and staged registrations from authoritative roadmap/catalog bytes; acceptance binds
-  qualification, lifecycle, semantic critique, SDD, revision/tree, and evidence identities. The same
-  coherent set adds the Kit-delivered `scripts/check-orchestrator-room` reader so every receiving
-  orchestrator authenticates status actors and refuses malformed-newest fallback.
+  qualification, lifecycle, semantic critique, SDD, revision/tree, and evidence identities.
 
 - **2026-09-05** — **coordination coherent set `github:0.82.0` published and fully reconciled**
   (owner github; [.github#3209](https://github.com/FS-GG/.github/issues/3209),
