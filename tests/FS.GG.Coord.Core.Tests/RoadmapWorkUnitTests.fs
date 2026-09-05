@@ -32,7 +32,7 @@ module RoadmapWorkUnitTests =
           RoadmapRow = { UnitId = selected.UnitId; Title = selected.Title; Prerequisite = selected.Prerequisite; Gates = selected.Gates }
           AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
           SddWorkId = "3210-roadmap-work-unit-compiler"
-          RegistrationOwner = "FS-GG"; RegistrationRepository = ".github"
+          RegistrationOwner = "FS-GG"; RegistrationRepository = "FS.GG.Coordination"
           RegistrationPaths = [ "src/FS.GG.Coord.Core" ] }
 
     let private sourcePreparation () =
@@ -86,14 +86,14 @@ module RoadmapWorkUnitTests =
               SemanticReview = { SubjectRevision = candidate; Accepted = true; Evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2" } }
         input |> Qualification.validate |> unwrap
 
-    let private lifecycle () =
+    let private lifecycle acceptanceMerge =
         let common order phase event at actual tokens =
             let sourceRevision =
                 match phase with
                 | "merge" -> head 'b'
-                | "acceptance" -> head 'd'
+                | "acceptance" -> acceptanceMerge
                 | _ -> head 'a'
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":400,"url":"https://github.com/FS-GG/.github/issues/400"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#400","claim_generation":"1"}}}}"""
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/FS.GG.Coordination","number":400,"url":"https://github.com/FS-GG/FS.GG.Coordination/issues/400"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/FS.GG.Coordination","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/FS.GG.Coordination#400","claim_generation":"1"}}}}"""
         [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
           "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)
@@ -115,30 +115,30 @@ module RoadmapWorkUnitTests =
             |> List.mapi (fun index registration ->
                 let number = 400 + index
                 ({ Id = registration.Id; Kind = registration.Kind; DraftSha256 = IntakeReceipt.digest registration.Draft
-                   Issue = $"FS-GG/.github#%d{number}"; IssueUrl = $"https://github.com/FS-GG/.github/issues/%d{number}" }
+                   Issue = $"%s{registration.Draft.Owner}/%s{registration.Draft.Repository}#%d{number}"; IssueUrl = $"https://github.com/%s{registration.Draft.Owner}/%s{registration.Draft.Repository}/issues/%d{number}" }
                  : RoadmapWorkUnit.AppliedRegistration))
         let application = RoadmapWorkUnit.sealPreparationApplication plan applied |> unwrap
         let unitIssue = application.Registrations |> List.find (fun value -> value.Kind = "unit") |> _.Issue
         let observation stage status : RoadmapWorkUnit.SddObservation =
             { Stage = stage; SubjectRevision = candidate
-              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/400-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-roadmap-gs2-07-3"}}""" }
+              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/400-gs2-07-3-audit-repair/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-gs2-07-3-audit-repair"}}""" }
         let structuredReview = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
         let acceptanceEnvelope = "https://github.com/FS-GG/.github/pull/1#issuecomment-3"
         let binding candidate merge tree =
-            RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
+            RoadmapWorkUnit.sealRevisionBinding "FS-GG/FS.GG.Coordination" candidate merge tree tree 0
         let identities: RoadmapWorkUnit.RevisionIdentities =
             { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = head 'b'
               AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema
           Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate; LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"
-          LifecycleLog = lifecycle ()
+          LifecycleLog = lifecycle (head 'd')
           RequiredLifecyclePhases =
             [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
               "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
           LifecycleUsageReceipts = []
           LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
           ReviewEvidence = acceptanceEnvelope; StructuredReviewEvidence = structuredReview
-          ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "400-roadmap-gs2-07-3"
+          ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "400-gs2-07-3-audit-repair"
           SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities
           ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e')
@@ -280,6 +280,36 @@ module RoadmapWorkUnitTests =
             |> function Error values -> values | Ok _ -> failwith "mismatched structured review reached acceptance"
         Assert.Contains(
             RoadmapWorkUnit.QualificationMismatch "semantic review evidence locator differs from the structured review authority",
+            findings)
+
+    [<Fact>]
+    let ``#3251 one immutable unit PR binds both roles and a preceding work-cycle critique`` () =
+        let input = acceptanceInput ()
+        let identities =
+            { input.Identities with
+                AcceptancePullRequest = input.Identities.ImplementationPullRequest
+                AcceptanceCandidate = input.Identities.ImplementationCandidate
+                AcceptanceMerge = input.Identities.ImplementationMerge
+                ProtectedMain = input.Identities.ImplementationMerge }
+        let reviewed = head '9'
+        let workCritique =
+            (critique reviewed).Replace("\"cycle_id\":\"GS2-07.3\"", "\"cycle_id\":\"roadmap-github-substrate-v2-m7-gs2-07-3-audit-repair\"")
+        let shared =
+            { input with
+                Identities = identities
+                AcceptanceBinding = input.ImplementationBinding
+                LifecycleLog = lifecycle identities.AcceptanceMerge
+                ReviewReceipt = workCritique }
+        RoadmapWorkUnit.inspectAcceptanceCandidate shared |> unwrap |> ignore
+
+        let unrelated =
+            { shared with
+                ReviewReceipt = workCritique.Replace("gs2-07-3-audit-repair", "gs2-99-9-unrelated") }
+        let findings =
+            RoadmapWorkUnit.inspectAcceptanceCandidate unrelated
+            |> function Error values -> values | Ok _ -> failwith "unrelated critique cycle reached acceptance"
+        Assert.Contains(
+            RoadmapWorkUnit.LifecycleInvalid "review receipt cycle does not bind the selected roadmap unit work identity",
             findings)
 
     [<Fact>]

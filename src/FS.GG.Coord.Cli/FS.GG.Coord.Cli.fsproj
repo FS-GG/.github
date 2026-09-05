@@ -130,14 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.83.3 — make roadmap acceptance evidence authorable.
+    <PackageReleaseNotes>0.83.4 — seal a single-PR roadmap unit identity.
 
-Separates the immutable acceptance-envelope comment from the preceding structured review comment,
-so both identities can be authored without editing GitHub authority. Live acceptance also binds the
-SDD observation to the current structured delivery-route work identity on the applied unit issue,
-instead of deriving a work-directory name. Existing exact candidate, review, lifecycle,
-qualification, and independent SDD observation checks remain strict. No command, option, result, or
-exit-code vocabulary changes.
+Compiled roadmap acceptance now permits one immutable unit PR to fulfill implementation and
+acceptance, derives both repository bindings from the applied unit registration, and recognizes the
+unit's canonical work-cycle critique before the final evidence-bearing candidate commit. Candidate
+and merge trees, live Git observations, protected-main identity, qualification, lifecycle, and SDD
+observations remain strict. No command, option, result, or exit-code vocabulary changes.
 
 $(FsggStandingAdvisories)
 

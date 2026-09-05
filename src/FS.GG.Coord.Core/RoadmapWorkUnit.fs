@@ -738,8 +738,26 @@ module RoadmapWorkUnit =
            || String.IsNullOrWhiteSpace input.ReviewEvidence
            || String.IsNullOrWhiteSpace input.StructuredReviewEvidence then findings.Add ReviewEvidenceMissing
         if input.Qualification.SemanticReviewEvidence <> input.StructuredReviewEvidence then findings.Add(QualificationMismatch "semantic review evidence locator differs from the structured review authority")
-        match CritiqueReceipt.validate input.ReviewCycleId (Some input.Identities.ImplementationCandidate) (utf8 input.ReviewReceipt) with
+        let receiptCycle =
+            try
+                use receipt = JsonDocument.Parse input.ReviewReceipt
+                receipt.RootElement.GetProperty("cycle_id").GetString()
+            with _ -> ""
+        let workCycleSuffix =
+            let work = Regex.Match(input.SddWorkId, "^[1-9][0-9]*-(.+)$", RegexOptions.CultureInvariant)
+            if work.Success then work.Groups[1].Value else ""
+        let receiptBindsUnit =
+            receiptCycle = input.ReviewCycleId
+            || (not (String.IsNullOrWhiteSpace receiptCycle)
+                && not (String.IsNullOrWhiteSpace workCycleSuffix)
+                && receiptCycle.EndsWith("-" + workCycleSuffix, StringComparison.OrdinalIgnoreCase))
+        if not receiptBindsUnit then
+            findings.Add(LifecycleInvalid "review receipt cycle does not bind the selected roadmap unit work identity")
+        let reviewedHead = if receiptCycle = input.ReviewCycleId then Some input.Identities.ImplementationCandidate else None
+        match CritiqueReceipt.validate receiptCycle reviewedHead (utf8 input.ReviewReceipt) with
         | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid("review receipt: " + error)))
+        | Ok receipt when receiptCycle <> input.ReviewCycleId && receipt.ReviewedCommit = input.Identities.ImplementationMerge ->
+            findings.Add(LifecycleInvalid "review receipt cannot claim the generated implementation merge as its reviewed commit")
         | Ok _ -> ()
         let usageResults =
             input.LifecycleUsageReceipts
@@ -841,9 +859,21 @@ module RoadmapWorkUnit =
         for name, value in named do if not (revision.IsMatch value) then findings.Add(InvalidIdentity(name, value))
         if input.Identities.ImplementationPullRequest < 1 then findings.Add(InvalidIdentity("implementationPullRequest", string input.Identities.ImplementationPullRequest))
         if input.Identities.AcceptancePullRequest < 1 then findings.Add(InvalidIdentity("acceptancePullRequest", string input.Identities.AcceptancePullRequest))
-        if input.Identities.ImplementationPullRequest = input.Identities.AcceptancePullRequest then findings.Add(RevisionRelationInvalid "implementation and acceptance pull requests must be distinct")
-        let distinct = named |> List.take 4
-        for i in 0 .. distinct.Length - 1 do for j in i + 1 .. distinct.Length - 1 do if snd distinct[i] = snd distinct[j] then findings.Add(RevisionIdentityCollapse(fst distinct[i], fst distinct[j]))
+        let sharedPullRequest = input.Identities.ImplementationPullRequest = input.Identities.AcceptancePullRequest
+        if sharedPullRequest then
+            if input.Identities.ImplementationCandidate <> input.Identities.AcceptanceCandidate then
+                findings.Add(RevisionRelationInvalid "a shared implementation and acceptance pull request must name one candidate")
+            if input.Identities.ImplementationMerge <> input.Identities.AcceptanceMerge then
+                findings.Add(RevisionRelationInvalid "a shared implementation and acceptance pull request must name one merge")
+        else
+            let distinct = named |> List.take 4
+            for i in 0 .. distinct.Length - 1 do
+                for j in i + 1 .. distinct.Length - 1 do
+                    if snd distinct[i] = snd distinct[j] then findings.Add(RevisionIdentityCollapse(fst distinct[i], fst distinct[j]))
+        if input.Identities.ImplementationCandidate = input.Identities.ImplementationMerge then
+            findings.Add(RevisionIdentityCollapse("implementationCandidate", "implementationMerge"))
+        if input.Identities.AcceptanceCandidate = input.Identities.AcceptanceMerge then
+            findings.Add(RevisionIdentityCollapse("acceptanceCandidate", "acceptanceMerge"))
         if input.Identities.ProtectedMain <> input.Identities.AcceptanceMerge then findings.Add(RevisionRelationInvalid "protected main must equal the observed acceptance merge")
         let acceptanceRepository =
             input.Plan.Registrations
@@ -851,11 +881,11 @@ module RoadmapWorkUnit =
             |> Option.map (fun value -> value.Draft.Owner + "/" + value.Draft.Repository)
             |> Option.defaultValue ""
         let implementationRepository =
-            let matched = issue.Match input.Plan.Authority.Issue
-            if matched.Success then
-                let uri = Uri input.Plan.Authority.Issue
-                uri.AbsolutePath.Trim('/').Split('/') |> Array.take 2 |> String.concat "/"
-            else ""
+            appliedUnit
+            |> Option.bind (fun applied ->
+                let matched = Regex.Match(applied.Issue, "^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#[1-9][0-9]*$", RegexOptions.CultureInvariant)
+                if matched.Success then Some matched.Groups[1].Value else None)
+            |> Option.defaultValue ""
         let verifyBinding label expectedRepository candidate merge (binding: RevisionBinding) =
             if binding.Candidate <> candidate || binding.Merge <> merge then findings.Add(RevisionRelationInvalid($"%s{label} binding does not match its named candidate and merge"))
             if binding.Schema <> RevisionBindingSchema || binding.Repository <> expectedRepository then findings.Add(RevisionRelationInvalid($"%s{label} binding does not name the authoritative repository"))

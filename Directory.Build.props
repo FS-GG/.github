@@ -541,8 +541,12 @@
        envelope its own post-create comment identity, binds qualification to the preceding structured
        review authority, and reads the SDD work identity from the current structured route ledger.
        No command, option, result, or exit-code vocabulary changes. -->
+  <!-- 0.83.3 -> 0.83.4 (.github#3251): PATCH. Compiled roadmap acceptance now supports one immutable
+       unit PR fulfilling implementation and acceptance, derives its repository from the applied unit
+       registration, and accepts the unit's canonical work-cycle critique before the final evidence
+       commit. No command, option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.3</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.83.4</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
