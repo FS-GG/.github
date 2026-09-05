@@ -1,0 +1,258 @@
+schemaVersion: 1
+workId: 3242-ignore-generated-sdd-artifacts
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3242-ignore-generated-sdd-artifacts/spec.md
+sourceClarifications: work/3242-ignore-generated-sdd-artifacts/clarifications.md
+sourceChecklist: work/3242-ignore-generated-sdd-artifacts/checklist.md
+sourcePlan: work/3242-ignore-generated-sdd-artifacts/plan.md
+sourceTasks: work/3242-ignore-generated-sdd-artifacts/tasks.yml
+sourceAnalysis: readiness/3242-ignore-generated-sdd-artifacts/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3242-ignore-generated-sdd-artifacts/analysis.json
+    digest: b4e4feb9e29173886dde8817148636d70fc95dc905ac91868e1fc3310676d96b
+    schemaVersion: 1
+  - label: checklist
+    path: work/3242-ignore-generated-sdd-artifacts/checklist.md
+    digest: c85bf800246df4eb5c3dd749d52327cbf2a663d0b7d4666adacdd45b2c008e27
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3242-ignore-generated-sdd-artifacts/clarifications.md
+    digest: 95238983ee9e8c3e9ab281a7964d9c1eadb6d5cc13f8e14a7a3a7d00c600c136
+    schemaVersion: 1
+  - label: plan
+    path: work/3242-ignore-generated-sdd-artifacts/plan.md
+    digest: 6bbc5f0b3848dbe4d9a6d85ee053bc63ec01e6ed5fe9cb20ad5f3dc51a80dfda
+    schemaVersion: 1
+  - label: spec
+    path: work/3242-ignore-generated-sdd-artifacts/spec.md
+    digest: 847080e794e67c4df6fb02fd30165df8d73c685f7873fdefa40f935062523d6d
+    schemaVersion: 1
+  - label: tasks
+    path: work/3242-ignore-generated-sdd-artifacts/tasks.yml
+    digest: 7e9c699efdd86a7339ad4cca9decfc1805b78084e21c00c05bfc03ef79305465
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: [Full BoardOps Release suite passed 271/271 after removing only the redundant candidate-tree reads.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: ["Pinned independent SDD observation, canonical comparison, exact HEAD, and clean-tree checks remain."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-002]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: ["Existing qualification, lifecycle, review, merge, protected-main, preparation, and revision refusals remain green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-001, AC-002]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/RoadmapWorkUnitTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: [Regression proves remote generated files are unnecessary and independent observation remains mandatory.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: ["Authority source changes compatibly; command and result vocabulary is unchanged."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV006]
+    artifacts: [work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/boardops.test-report.xml
+      digest: "sha256:241b0dbbdbdf1d508a1f78891ecbe12a2324af19f0e06c29fd704b34214443d9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 271
+      failed: 0
+      skipped: 0
+    notes: [Full BoardOps Release suite passed 271/271 with no failures or skips.]
+  - id: EV007
+    kind: implementation
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [Directory.Build.props, registry/dependencies.yml, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/3242-ignore-generated-sdd-artifacts/verification/release-projection.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: scripts/check-engine-freshness.py
+      - kind: implementation
+        path: scripts/check-engine-release-notes.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/release-projection.test-report.xml
+      digest: "sha256:a8c0775d61c86a86962891a3a24fc5866522597d2cb4164f7be8262ed1ebf31a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: [Source frontier is 0.83.2 while package-version remains at published 0.83.1.]
+  - id: EV008
+    kind: generated-view
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [docs/architecture.md, docs/registry/compatibility.md, registry/driver-skill-manifest.json, work/3242-ignore-generated-sdd-artifacts/verification/release-projection.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: scripts/generate-projections
+      - kind: implementation
+        path: scripts/generate-driver-manifest
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3242-ignore-generated-sdd-artifacts/verification/release-projection.test-report.xml
+      digest: "sha256:a8c0775d61c86a86962891a3a24fc5866522597d2cb4164f7be8262ed1ebf31a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: [Release inventory and driver-manifest projections were regenerated for 0.83.2.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

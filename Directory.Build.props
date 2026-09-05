@@ -533,8 +533,12 @@
        catalog that omits already-accepted historical roadmap rows while preserving canonical order,
        first-unchecked selection, and immediate-prerequisite validation. No command, option, result,
        or exit-code vocabulary changes. -->
+  <!-- 0.83.1 -> 0.83.2 (.github#3242): PATCH. Live work-unit acceptance no longer treats ignored
+       generated SDD outputs as candidate-tree authority; the independent exact-revision observer
+       still regenerates, validates, and canonical-compares every required SDD result. No command,
+       option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.83.2</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

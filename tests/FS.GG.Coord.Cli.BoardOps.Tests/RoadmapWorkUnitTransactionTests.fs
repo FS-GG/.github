@@ -236,6 +236,22 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Contains("production authority observer reached", error)
 
     [<Fact>]
+    let ``#3242 live acceptance does not require ignored generated SDD files from the candidate`` () =
+        let accepted, output, error =
+            invokeAuthorityRoute (fun _ -> Ok()) (fun _ -> Ok())
+        Assert.Equal(ExitGreen, accepted)
+        Assert.Contains("fsgg.roadmap-unit.acceptance-bundle/1", output)
+        Assert.Equal("", error)
+
+        let refused, refusedOutput, refusedError =
+            invokeAuthorityRoute
+                (fun _ -> Error [ "independent SDD observation refused" ])
+                (fun _ -> Ok())
+        Assert.Equal(ExitError, refused)
+        Assert.Equal("", refusedOutput)
+        Assert.Contains("independent SDD observation refused", refusedError)
+
+    [<Fact>]
     let ``#3210 production immutable preparation observer has a green route and refuses revision drift`` () =
         let input, _ = authorityRouteFixture ()
         let roadmap, catalog = preparationSources ()
