@@ -406,8 +406,25 @@ module Reads =
     type CommentBody =
         { Id: int64; Url: string; Body: string }
 
+    type AuthorityComment =
+        { Id: int64
+          Url: string
+          Body: string
+          Author: string
+          CreatedAt: System.DateTimeOffset
+          UpdatedAt: System.DateTimeOffset }
+
     val commentsWithIdentity:
         transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
+
+    val commentsWithAuthority:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<AuthorityComment list>
+
+    val authenticatedLogin: transport: IGitHubTransport -> IoResult<string>
+
+    /// Same-repository PR numbers durably cross-referenced from this item through its complete timeline.
+    val crossReferencedPullRequests:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int list>
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>

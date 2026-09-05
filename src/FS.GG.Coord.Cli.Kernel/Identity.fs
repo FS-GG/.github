@@ -196,6 +196,19 @@ module Identity =
         let suffix = ((int bytes.[1] <<< 8) ||| int bytes.[2]).ToString("x4")
         $"%s{word}-%s{suffix}"
 
+    /// Does this already-resolved canonical id have exactly the shape emitted by `mint`?
+    /// Raw `$FSGG_WORKER` spelling is deliberately not inspected here: `resolve` owns normalization,
+    /// so equivalent raw spellings that slug to the same id name the same worker.
+    let isMintedWorkerId (id: string) =
+        if String.IsNullOrEmpty id || id <> slug id then false
+        else
+            let split = id.LastIndexOf('-')
+            split > 0
+            && split = id.Length - 5
+            && (words |> Array.contains (id.Substring(0, split)))
+            && (id.Substring(split + 1)
+                |> Seq.forall (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+
     let explain (worker: Worker) =
         let rule =
             match worker.Provenance with

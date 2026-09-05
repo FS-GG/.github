@@ -22,6 +22,78 @@ namespace FS.GG.Coord.Cli
 /// refusing direction.
 module ReviewApplication =
 
+    type AnsweredDecisionKey =
+        { Subject: string
+          DecisionId: int64
+          DecisionUrl: string
+          DecisionBodySha256: string
+          HeadSha: string
+          Critic: string
+          Kind: string
+          Round: int
+          Verdict: string }
+
+    type ReviewHostGrant =
+        { Decision: AnsweredDecisionKey
+          GrantedBy: string
+          Provenance: string
+          HostGrantDigest: string }
+
+    type ReviewHostGrantComment =
+        { Id: int64
+          Url: string
+          Body: string
+          Author: string
+          CreatedAt: System.DateTimeOffset
+          UpdatedAt: System.DateTimeOffset }
+
+    [<Literal>]
+    val ReviewHostGrantMarker: string = "<!-- fsgg:review-host-grant/v1 -->"
+
+    [<Literal>]
+    val ReviewHostGrantProvenance: string = "env-minted/v1"
+
+    val sha256Utf8: value: string -> string
+    val createReviewHostGrant: decision: AnsweredDecisionKey -> grantedBy: string -> ReviewHostGrant
+    val encodeReviewHostGrant: grant: ReviewHostGrant -> string
+    val tryDecodeReviewHostGrant: body: string -> Result<ReviewHostGrant option, string>
+    val reviewHostGrantsFromComments: expectedAuthor: string -> comments: ReviewHostGrantComment list -> ReviewHostGrant list
+
+    type RepairAssertionPurpose =
+        | Confirmation
+        | RepairPhaseEntry
+
+    type RepairAssertionAuthority =
+        { Purpose: RepairAssertionPurpose
+          HostGrantDigest: string
+          PredecessorProvenance: string
+          Receipt: FS.GG.Coord.Review.RepairAssertionReceipt }
+
+    [<Literal>]
+    val RepairAssertionMarker: string = "<!-- fsgg:repair-assertion/v1 -->"
+
+    /// Encode the one canonical append-only accountable same-head repair assertion.
+    val encodeRepairAssertion:
+        subject: string -> RepairAssertionAuthority -> string
+
+    /// Decode one anchored assertion marker. Non-marker comments are ignored; malformed markers fail.
+    val tryDecodeRepairAssertion:
+        body: string -> Result<(string * RepairAssertionAuthority) option, string>
+
+    /// Read exactly zero or one assertion for this PR subject; malformed, wrong-subject, or duplicate
+    /// authority fails closed instead of choosing a latest comment.
+    val repairAssertionFromComments:
+        expectedSubject: string ->
+        comments: FS.GG.Coord.Driver.ReviewComment list ->
+        Result<RepairAssertionAuthority option, string list>
+
+    /// Independently parsed exact-subject facts for the monotone live grant-set adapter. Malformed,
+    /// unrelated, and duplicate physical projections are non-authorizing noise.
+    val repairAssertionsFromComments:
+        expectedSubject: string ->
+        comments: FS.GG.Coord.Driver.ReviewComment list ->
+        RepairAssertionAuthority list
+
     /// Render one review-protocol verdict from a binding and facts the caller already holds — the
     /// LIVE path's entry point, used by `Client.review`'s `review <ref> --pr N`.
     ///
@@ -41,6 +113,25 @@ module ReviewApplication =
     /// Live projection including the durable review-wait ledger parsed from PR comments.
     val renderWithWait:
         Options.Options -> FS.GG.Coord.Review.Binding -> FS.GG.Coord.Review.Facts -> FS.GG.Coord.ReviewWait.State -> int
+
+    /// Live projection with both durable wait and accountable repair-assertion comment authority.
+    val renderWithWaitAndRepairAssertion:
+        Options.Options ->
+        FS.GG.Coord.Review.Binding ->
+        FS.GG.Coord.Review.Facts ->
+        FS.GG.Coord.Review.RepairAssertionReceipt option ->
+        FS.GG.Coord.ReviewWait.State ->
+        int
+
+    /// Live projection with durable predecessor-escalation context for exact repair-purpose guidance.
+    val renderLiveWithWaitAndRepairAssertion:
+        Options.Options ->
+        FS.GG.Coord.Review.Binding ->
+        FS.GG.Coord.Review.Facts ->
+        FS.GG.Coord.Review.RepairAssertionReceipt option ->
+        FS.GG.Coord.ReviewWait.State ->
+        repairPhaseEntryExpected: bool ->
+        int
 
     /// Run `review --snapshot FILE` (or read the snapshot from stdin), printing one verdict.
     ///

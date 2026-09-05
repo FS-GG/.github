@@ -3,9 +3,61 @@ namespace FS.GG.Coord.Cli
 module ReviewApplication =
     open System
     open System.IO
+    open System.Security.Cryptography
+    open System.Text
     open System.Text.Json
     open FS.GG.Coord
     open FS.GG.Coord.Cli.Options
+
+    [<Literal>]
+    let RepairAssertionMarker = "<!-- fsgg:repair-assertion/v1 -->"
+
+    [<Literal>]
+    let private RepairAssertionSchema = "fsgg.coord.repair-assertion/v1"
+
+    [<Literal>]
+    let ReviewHostGrantMarker = "<!-- fsgg:review-host-grant/v1 -->"
+
+    [<Literal>]
+    let private ReviewHostGrantSchema = "fsgg.coord.review-host-grant/v1"
+
+    [<Literal>]
+    let ReviewHostGrantProvenance = "env-minted/v1"
+
+    type AnsweredDecisionKey =
+        { Subject: string
+          DecisionId: int64
+          DecisionUrl: string
+          DecisionBodySha256: string
+          HeadSha: string
+          Critic: string
+          Kind: string
+          Round: int
+          Verdict: string }
+
+    type ReviewHostGrant =
+        { Decision: AnsweredDecisionKey
+          GrantedBy: string
+          Provenance: string
+          HostGrantDigest: string }
+
+    type ReviewHostGrantComment =
+        { Id: int64
+          Url: string
+          Body: string
+          Author: string
+          CreatedAt: DateTimeOffset
+          UpdatedAt: DateTimeOffset }
+
+    type RepairAssertionPurpose =
+        | Confirmation
+        | RepairPhaseEntry
+
+    type RepairAssertionAuthority =
+        { Purpose: RepairAssertionPurpose
+          HostGrantDigest: string
+          PredecessorProvenance: string
+          Receipt: Review.RepairAssertionReceipt }
 
     let private eprint (message: string) = Console.Error.WriteLine(message)
 
@@ -44,6 +96,211 @@ module ReviewApplication =
         | JsonValueKind.True -> true
         | JsonValueKind.False -> false
         | _ -> invalidArg name "must be a boolean"
+
+    let private purposeName = function Confirmation -> "confirmation" | RepairPhaseEntry -> "repair-phase-entry"
+
+    let sha256Utf8 (value: string) =
+        value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private hostGrantSemanticJson (decision: AnsweredDecisionKey) grantedBy provenance =
+        JsonSerializer.Serialize
+            {| schema = ReviewHostGrantSchema
+               subject = decision.Subject
+               answeredDecisionId = decision.DecisionId
+               answeredDecisionUrl = decision.DecisionUrl
+               answeredDecisionBodySha256 = decision.DecisionBodySha256
+               headSha = decision.HeadSha
+               critic = decision.Critic
+               kind = decision.Kind
+               round = decision.Round
+               verdict = decision.Verdict
+               grantedBy = grantedBy
+               provenance = provenance |}
+
+    let createReviewHostGrant decision grantedBy =
+        let semantic = hostGrantSemanticJson decision grantedBy ReviewHostGrantProvenance
+        { Decision = decision
+          GrantedBy = grantedBy
+          Provenance = ReviewHostGrantProvenance
+          HostGrantDigest = sha256Utf8 semantic }
+
+    let private hostGrantJson (grant: ReviewHostGrant) =
+        let decision = grant.Decision
+        JsonSerializer.Serialize
+            {| schema = ReviewHostGrantSchema
+               subject = decision.Subject
+               answeredDecisionId = decision.DecisionId
+               answeredDecisionUrl = decision.DecisionUrl
+               answeredDecisionBodySha256 = decision.DecisionBodySha256
+               headSha = decision.HeadSha
+               critic = decision.Critic
+               kind = decision.Kind
+               round = decision.Round
+               verdict = decision.Verdict
+               grantedBy = grant.GrantedBy
+               provenance = grant.Provenance
+               hostGrantDigest = grant.HostGrantDigest |}
+
+    let encodeReviewHostGrant grant = ReviewHostGrantMarker + "\n" + hostGrantJson grant + "\n"
+
+    let tryDecodeReviewHostGrant (body: string) : Result<ReviewHostGrant option, string> =
+        if not (body.StartsWith(ReviewHostGrantMarker, StringComparison.Ordinal)) then Ok None
+        elif not (body.StartsWith(ReviewHostGrantMarker + "\n", StringComparison.Ordinal)) then
+            Error "review-host-grant marker must be followed immediately by one canonical JSON object"
+        else
+            try
+                let json = body.Substring(ReviewHostGrantMarker.Length + 1)
+                if not (json.EndsWith("\n", StringComparison.Ordinal)) then invalidArg "reviewHostGrant" "canonical body must end with LF"
+                use document = JsonDocument.Parse(json.Substring(0, json.Length - 1))
+                let root = document.RootElement
+                if root.ValueKind <> JsonValueKind.Object then invalidArg "reviewHostGrant" "must be one JSON object"
+                let known =
+                    Set.ofList [ "schema"; "subject"; "answeredDecisionId"; "answeredDecisionUrl"
+                                 "answeredDecisionBodySha256"; "headSha"; "critic"; "kind"; "round"; "verdict"
+                                 "grantedBy"; "provenance"; "hostGrantDigest" ]
+                let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                match names |> List.countBy id |> List.tryFind (fun (_, count) -> count <> 1) with
+                | Some(name, _) -> invalidArg "reviewHostGrant" $"contains duplicate field '%s{name}'"
+                | None -> ()
+                let unknown = names |> List.filter (known.Contains >> not)
+                if not unknown.IsEmpty then
+                    let fields = String.concat ", " unknown
+                    invalidArg "reviewHostGrant" $"contains unknown fields: %s{fields}"
+                if readString "schema" root <> ReviewHostGrantSchema then invalidArg "schema" $"must be '%s{ReviewHostGrantSchema}'"
+                let decision =
+                    { Subject = readString "subject" root
+                      DecisionId = readInt64 "answeredDecisionId" root
+                      DecisionUrl = readString "answeredDecisionUrl" root
+                      DecisionBodySha256 = readString "answeredDecisionBodySha256" root
+                      HeadSha = readString "headSha" root
+                      Critic = readString "critic" root
+                      Kind = readString "kind" root
+                      Round = readInteger "round" root
+                      Verdict = readString "verdict" root }
+                let grant =
+                    { Decision = decision
+                      GrantedBy = readString "grantedBy" root
+                      Provenance = readString "provenance" root
+                      HostGrantDigest = readString "hostGrantDigest" root }
+                let expected = createReviewHostGrant decision grant.GrantedBy
+                if grant.Provenance <> ReviewHostGrantProvenance then invalidArg "provenance" $"must be '%s{ReviewHostGrantProvenance}'"
+                if grant.HostGrantDigest <> expected.HostGrantDigest then invalidArg "hostGrantDigest" "does not match the canonical semantic content"
+                if body <> encodeReviewHostGrant expected then invalidArg "reviewHostGrant" "body is not the canonical UTF-8/LF projection"
+                Ok(Some expected)
+            with error -> Error error.Message
+
+    /// Parse independently: invalid physical records are non-authorizing audit noise and never revoke a
+    /// valid grant.  Edited comments and comments not authored by the authenticated automation actor are
+    /// likewise ineligible.
+    let reviewHostGrantsFromComments expectedAuthor (comments: ReviewHostGrantComment list) =
+        comments
+        |> List.choose (fun comment ->
+            if not (comment.Author.Equals(expectedAuthor, StringComparison.OrdinalIgnoreCase))
+               || comment.CreatedAt <> comment.UpdatedAt then None
+            else
+                match tryDecodeReviewHostGrant comment.Body with
+                | Ok(Some grant) -> Some grant
+                | _ -> None)
+        |> List.distinctBy (fun grant -> grant.HostGrantDigest)
+
+    let encodeRepairAssertion (subject: string) (authority: RepairAssertionAuthority) =
+        let receipt = authority.Receipt
+        let payload =
+            {| schema = RepairAssertionSchema
+               subject = subject
+               purpose = purposeName authority.Purpose
+               answeredReviewUrl = receipt.AnsweredReviewUrl
+               candidateHeadSha = receipt.CandidateHeadSha
+               grantedBy = receipt.GrantedBy
+               hostGrantDigest = authority.HostGrantDigest
+               predecessorProvenance = authority.PredecessorProvenance |}
+        RepairAssertionMarker + "\n" + JsonSerializer.Serialize payload + "\n"
+
+    let tryDecodeRepairAssertion (body: string) : Result<(string * RepairAssertionAuthority) option, string> =
+        if not (body.StartsWith(RepairAssertionMarker, StringComparison.Ordinal)) then
+            Ok None
+        elif not (body.StartsWith(RepairAssertionMarker + "\n", StringComparison.Ordinal)) then
+            Error "repair-assertion marker must be followed immediately by one JSON object"
+        else
+            try
+                let json = body.Substring(RepairAssertionMarker.Length + 1)
+                if not (json.EndsWith("\n", StringComparison.Ordinal)) then invalidArg "repairAssertion" "canonical body must end with LF"
+                use document = JsonDocument.Parse(json.Substring(0, json.Length - 1))
+                let root = document.RootElement
+                if root.ValueKind <> JsonValueKind.Object then
+                    invalidArg "repairAssertion" "must be one JSON object"
+                let known = Set.ofList [ "schema"; "subject"; "purpose"; "answeredReviewUrl"; "candidateHeadSha"; "grantedBy"; "hostGrantDigest"; "predecessorProvenance" ]
+                let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                let unknown = names |> List.filter (known.Contains >> not)
+                let duplicate = names |> List.countBy id |> List.tryFind (fun (_, count) -> count <> 1)
+                if not (List.isEmpty unknown) then
+                    let unknownFields = String.concat ", " unknown
+                    invalidArg "repairAssertion" $"contains unknown fields: %s{unknownFields}"
+                match duplicate with
+                | Some(name, _) -> invalidArg "repairAssertion" $"contains duplicate field '%s{name}'"
+                | None -> ()
+                let schema = readString "schema" root
+                if schema <> RepairAssertionSchema then
+                    invalidArg "schema" $"must be '%s{RepairAssertionSchema}'"
+                let subject = readString "subject" root
+                let purpose =
+                    match readString "purpose" root with
+                    | "confirmation" -> Confirmation
+                    | "repair-phase-entry" -> RepairPhaseEntry
+                    | other -> invalidArg "purpose" $"must be 'confirmation' or 'repair-phase-entry', got '%s{other}'"
+                let receipt: Review.RepairAssertionReceipt =
+                    { AnsweredReviewUrl = readString "answeredReviewUrl" root
+                      CandidateHeadSha = readString "candidateHeadSha" root
+                      GrantedBy = readString "grantedBy" root
+                      Reason = "review-host-grant:" + readString "hostGrantDigest" root }
+                let authority =
+                    { Purpose = purpose
+                      HostGrantDigest = readString "hostGrantDigest" root
+                      PredecessorProvenance = readString "predecessorProvenance" root
+                      Receipt = receipt }
+                if body <> encodeRepairAssertion subject authority then invalidArg "repairAssertion" "body is not the canonical UTF-8/LF projection"
+                Ok(Some(subject, authority))
+            with error -> Error error.Message
+
+    let repairAssertionFromComments
+        (expectedSubject: string)
+        (comments: Driver.ReviewComment list)
+        : Result<RepairAssertionAuthority option, string list> =
+        let decoded = comments |> List.map (fun comment -> comment, tryDecodeRepairAssertion comment.Body)
+        let errors =
+            decoded
+            |> List.choose (fun (comment, result) ->
+                match result with
+                | Error error -> Some($"repair assertion comment %s{comment.Url} is malformed: %s{error}")
+                | Ok _ -> None)
+        let assertions =
+            decoded
+            |> List.choose (fun (comment, result) ->
+                match result with
+                | Ok(Some(subject, authority)) -> Some(comment, subject, authority)
+                | _ -> None)
+        if not (List.isEmpty errors) then Error errors
+        else
+            match assertions with
+            | [] -> Ok None
+            | [ _, subject, authority ] when subject = expectedSubject -> Ok(Some authority)
+            | [ comment, subject, _ ] ->
+                Error [ $"repair assertion comment %s{comment.Url} names subject '%s{subject}', expected '%s{expectedSubject}'" ]
+            | many ->
+                let urls = many |> List.map (fun (comment, _, _) -> comment.Url) |> String.concat ", "
+                Error [ $"multiple repair assertions are present; append-only authority does not use latest-wins: %s{urls}" ]
+
+    /// Additive live reader: parse each physical assertion independently and retain only exact-subject
+    /// facts.  Grant linkage and live role eligibility are deliberately evaluated by the application
+    /// adapter, which has the current decision and physical provenance.  Invalid noise cannot revoke a
+    /// valid fact and multiple accountable hosts coexist.
+    let repairAssertionsFromComments expectedSubject (comments: Driver.ReviewComment list) =
+        comments
+        |> List.choose (fun comment ->
+            match tryDecodeRepairAssertion comment.Body with
+            | Ok(Some(subject, authority)) when subject = expectedSubject -> Some authority
+            | _ -> None)
+        |> List.distinct
 
     // The seven-word `PrState` wire vocabulary `Landable.name` renders — read here in reverse. Not a
     // second authority: `Landable.name` is forward-only (`PrState -> string`), so the reverse parser is
@@ -245,6 +502,19 @@ module ReviewApplication =
         | Review.Park reason -> Some reason
         | _ -> None
 
+    let private nextCommand (binding: Review.Binding) (action: Review.NextAction) =
+        match action with
+        | Review.DispatchCritic
+        | Review.DispatchSuccessor _ ->
+            Some $"scripts/fsgg-coord review wait enter %s{binding.ItemRef} --pr %d{binding.Pr} --json"
+        | _ -> None
+
+    let private repairAssertionCommand _ (binding: Review.Binding) (_: Review.Facts) (action: Review.NextAction) =
+        match action with
+        | Review.ResumeImplementer _ ->
+            Some $"scripts/fsgg-coord review host-grant %s{binding.ItemRef} --pr %d{binding.Pr} --json"
+        | _ -> None
+
     let private receiptJson (receipt: Review.RepairPhaseReceipt) =
         {| exhaustedPr = receipt.ExhaustedPr
            escalationCommentId = receipt.EscalationCommentId
@@ -357,6 +627,7 @@ module ReviewApplication =
         (successionGranted: Review.CriticSuccessionReceipt option)
         (repairAssertionGranted: Review.RepairAssertionReceipt option)
         (waitState: ReviewWait.State option)
+        (repairPhaseEntryExpected: bool)
         : int =
         let exhaustionDecision = ordinaryExhaustionDecision binding facts waitState
         let ordinaryExhaustionCompleted =
@@ -404,6 +675,8 @@ module ReviewApplication =
                        stateErrors = stateErrors verdict.State
                        action = actionName verdict.NextAction
                        actionReason = actionReason verdict.NextAction
+                       nextCommand = nextCommand binding verdict.NextAction
+                       repairAssertionCommand = repairAssertionCommand repairPhaseEntryExpected binding facts verdict.NextAction
                        repairPhaseReceipt =
                         match verdict.NextAction with
                         | Review.EnterRepairPhase receipt -> Some(receiptJson receipt)
@@ -442,10 +715,29 @@ module ReviewApplication =
                 ExitCode.toInt ExitCode.Green
 
     let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
-        renderVerdict opts binding facts None None None
+        renderVerdict opts binding facts None None None false
 
     let renderWithWait (opts: Options) (binding: Review.Binding) (facts: Review.Facts) (waitState: ReviewWait.State) : int =
-        renderVerdict opts binding facts None None (Some waitState)
+        renderVerdict opts binding facts None None (Some waitState) false
+
+    let renderWithWaitAndRepairAssertion
+        (opts: Options)
+        (binding: Review.Binding)
+        (facts: Review.Facts)
+        (repairAssertionGranted: Review.RepairAssertionReceipt option)
+        (waitState: ReviewWait.State)
+        : int =
+        renderVerdict opts binding facts None repairAssertionGranted (Some waitState) false
+
+    let renderLiveWithWaitAndRepairAssertion
+        (opts: Options)
+        (binding: Review.Binding)
+        (facts: Review.Facts)
+        (repairAssertionGranted: Review.RepairAssertionReceipt option)
+        (waitState: ReviewWait.State)
+        (repairPhaseEntryExpected: bool)
+        : int =
+        renderVerdict opts binding facts None repairAssertionGranted (Some waitState) repairPhaseEntryExpected
 
     let run (opts: Options) : int =
         let raw = input opts
@@ -458,4 +750,4 @@ module ReviewApplication =
                 eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
             | Ok(binding, facts, successionGranted, repairAssertionGranted) ->
-                renderVerdict opts binding facts successionGranted repairAssertionGranted None
+                renderVerdict opts binding facts successionGranted repairAssertionGranted None false

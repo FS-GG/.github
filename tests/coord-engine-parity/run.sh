@@ -3012,7 +3012,7 @@ if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
     && ok "case14: EPIC-ROLLUP-READY fires on exactly the epic whose every child is resolved (#470)" \
     || bad "case14: EPIC-ROLLUP-READY must fire on exactly 470" "$(codeids EPIC-ROLLUP-READY)"
   [ "$(jq -r '[.[] | select(.code=="EPIC-ROLLUP-READY" and (.id|test("440|404")))] | length' <<<"$lej")" = "0" ] \
-    && ok "case14: ...and NOT on the childless (#440) or truncated (#404) epic — `forall` is vacuously true over both" \
+    && ok "case14: ...and NOT on the childless (#440) or truncated (#404) epic — 'forall' is vacuously true over both" \
     || bad "case14: ROLLUP-READY must not fire on 440/404 — the vacuous-truth guards" "$lej"
   # A NOTE, not an error: it reports a question nobody has been asked, and reddening a gate on one
   # teaches #698's lesson (the gate is noise, merge anyway). `--strict` is for the caller who wants it fatal.
@@ -4162,7 +4162,18 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
 
   # 1. `who` preserves the anti-reap signal but defers finished/landing authority. PR #701 has green checks
   #    and an open structured `changes-required` review; describing it as finished would bypass that review.
-  review970="$(FSGG_WORKER=heron-970 lnd review FS-GG/FS.GG.SDD#970 --pr 701 --json 2>/dev/null)"
+  # This is deliberately the pure snapshot boundary. The surrounding case models a STALE orphaned
+  # claim, while live `review REF --pr` correctly requires a LIVE claim; asking that live adapter to
+  # parse this ledger made the precondition structurally unreachable. Preserve the stale production
+  # topology and feed the exact fixture PR comments into the IO-free parser instead.
+  review970_comments="$(curl -fsS "http://127.0.0.1:$LND_PORT/repos/FS-GG/FS.GG.SDD/issues/701/comments" \
+    | jq '[.[] | select(.body | startswith("<!-- fsgg:review-decision/v2 -->")) | {id, url:.html_url, body}]')"
+  review970_snapshot="$(mktemp)"
+  jq -n --argjson comments "$review970_comments" \
+    '{binding:{itemRef:"FS-GG/FS.GG.SDD#970",pr:701,headSha:("a"*40),claimGeneration:"970",implementerIdentity:"ghost-970",phase:"ordinary",round:1},facts:{comments:$comments,checks:"green",repairPhaseGranted:null,repairRouteAvailable:true}}' \
+    >"$review970_snapshot"
+  review970="$(lnd review --snapshot "$review970_snapshot" --json 2>/dev/null)"
+  rm -f "$review970_snapshot"
   [ "$(printf '%s' "$review970" | jq -r '.state + ":" + .action')" = 'awaitingImplementerRepair:resumeImplementer' ] \
     && ok "#2854 inversion precondition: fixture review ledger parses as open changes-required (case 30)" \
     || bad "#2854 inversion precondition" "$review970"
