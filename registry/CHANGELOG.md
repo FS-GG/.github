@@ -19,6 +19,17 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.83.0` published and fully reconciled**
+  (owner github; [.github#3210](https://github.com/FS-GG/.github/issues/3210),
+  [source PR #3231](https://github.com/FS-GG/.github/pull/3231),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.83.0)):
+  advances the observed Coord.Cli package frontier from 0.82.0 to 0.83.0. Initial publishers
+  33972163855/33972163763/33972163743 pushed the prepared set but exceeded the bounded NuGet.org
+  indexing wait; exact-source recoveries 33972651542/33972650606/33972649873 and direct recovery
+  33973287883 verified the already-published bytes on both feeds. Promotion 33973425850 sealed source
+  `fe13bf08d82091a3d024583e0315c50d30c59376` as content
+  `sha256:0e0df10f52fdd68747739aa6083f7d5b34cdaffd35e6d16976bcfdfa1106ebaa`.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.0` source prepared**
   (owner github; [.github#3210](https://github.com/FS-GG/.github/issues/3210)):
   advances the source frontier from 0.82.0 to 0.83.0 for the additive typed roadmap work-unit
