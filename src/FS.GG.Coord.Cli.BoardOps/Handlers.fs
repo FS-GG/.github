@@ -3095,7 +3095,7 @@ module Handlers =
     let roadmapUnitAccept runQualification ctx opts =
         roadmapUnitAcceptCore runQualification None ctx opts
 
-    let roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities ctx opts =
+    let internal roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities ctx opts =
         roadmapUnitAcceptCore runQualification (Some(observeSdd, observeAuthorities)) ctx opts
 
     // Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments

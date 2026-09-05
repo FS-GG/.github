@@ -8,6 +8,13 @@
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The deterministic observer seam exercises the production acceptance pipeline without
+         exporting a caller-controlled route that can mint accepted receipts. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Coord.Cli.BoardOps.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/Snapshot.fsi" Link="Snapshot.fsi" />
     <Compile Include="../FS.GG.Coord.Cli/Snapshot.fs" Link="Snapshot.fs" />
     <Compile Include="../FS.GG.Coord.Cli/KitDigest.fsi" Link="KitDigest.fsi" />

@@ -72,7 +72,7 @@ module Handlers =
             int
     /// Exercise the same parsing, qualification-binding, observation, and sealing route as production
     /// with authority observers supplied by a deterministic test host.
-    val roadmapUnitAcceptWithObservers:
+    val internal roadmapUnitAcceptWithObservers:
         runQualification: (string -> string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
         observeSdd: (FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput -> Result<unit, string list>) ->
         observeAuthorities: (FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput -> Result<unit, string list>) ->
