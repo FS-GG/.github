@@ -19,6 +19,17 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.81.1` published and fully reconciled**
+  (owner github; [.github#3208](https://github.com/FS-GG/.github/issues/3208),
+  [source PR #3215](https://github.com/FS-GG/.github/pull/3215),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.81.1)):
+  advances the observed Coord.Cli package frontier from 0.81.0 to 0.81.1. Initial publisher runs
+  33935162335/33935162444/33935162562 pushed the one prepared artifact set but exceeded the bounded
+  nuget.org indexing wait; exact-source recoveries 33935518019/33935625458/33935519974 verified the
+  already-published bytes on both feeds. Promotion 33935697166 and coherence 33935697176 sealed source
+  `09b26807055141dcb19655bd0991ed4cbfb83709` as content
+  `sha256:e1169e8b806624f0af3a883bc6317be63a54d762a102b40fa8e51f9c1e32a3a7`.
+
 - **2026-09-04** — **coordination coherent set `github:0.81.0` published; `0.81.1` adoption source prepared** (owner github; [.github#3208](https://github.com/FS-GG/.github/issues/3208), [Stage A PR #3214](https://github.com/FS-GG/.github/pull/3214), [immutable 0.81.0 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.81.0)): the exact Stage A merge `a8be130e7c05e7d154ac6423aff8fa265060991b` is promoted on both feeds with the typed telemetry and roadmap-close command family. The follow-up patch source switches roadmap and normal-item callers plus cycle-ledger provider validation to those compiled bytes, removes the four compatibility-helper identities from Kit, Drivers, and CLI payloads, and retains their frozen positive/refusal corpus as an independent black-box regression gate. The registry therefore records source `0.81.1` ahead of published `0.81.0` until that exact adoption merge is promoted.
 
 - **2026-09-04** — **coordination coherent set `github:0.80.1` published and fully reconciled** (owner github; [.github#3201](https://github.com/FS-GG/.github/issues/3201), [registry PR #3206](https://github.com/FS-GG/.github/pull/3206), [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.80.1)): the permanent lifecycle telemetry process for normal `pnext-item` and roadmap `work-roadmap` items is now served in FS.GG.Kit/Drivers, with exact Codex/Claude usage collection, provider/model/effort, tooling/SDD/contracts versions, and discrete actual/average phase minutes. Both feeds serve all three manifest-bound packages with identical normalized payloads from source `87ee31a69140c00db7546dd8570bb3064945bbb1`; the `coord-engine` package frontier advances `0.80.0` → `0.80.1`.
