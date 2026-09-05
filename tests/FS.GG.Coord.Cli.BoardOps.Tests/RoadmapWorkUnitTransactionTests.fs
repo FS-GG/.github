@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Security.Cryptography
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Cli
@@ -15,22 +16,27 @@ open FS.GG.Coord.GitHub.Errors
 
 module RoadmapWorkUnitTransactionTests =
     let private unwrap = function Ok value -> value | Error values -> failwithf "%A" values
+    let private shaText (value: string) = SHA256.HashData(Encoding.UTF8.GetBytes value) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private preparationSources () =
+        let roadmap = "- [x] **GS2-07.2 — previous.** done\n- [ ] **GS2-07.3 — compiler.** next\n"
+        let unit id title prerequisites gates =
+            let unsigned =
+                $"""{{"exitGate":"test","gateCommands":%s{gates},"id":"%s{id}","owner":"FS.GG.Coordination","permissionCeiling":["local"],"prerequisites":%s{prerequisites},"qGates":[],"title":"%s{title}"}}"""
+            unsigned[..unsigned.Length - 2] + $",\"contractSha256\":\"%s{shaText unsigned}\"}}"
+        let catalog =
+            $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "previous" "[\"GS2-07.1\"]" "[]"},%s{unit "GS2-07.3" "compiler" "[\"GS2-07.2\"]" "[\"implementation\",\"acceptance\"]"}]}}"""
+        roadmap, catalog
     let private makePlan () =
-        let obligations = [ "sdd:analyze"; "sdd:verify"; "sdd:ship"; "qualification"; "lifecycle"; "review" ]
-        let previous: RoadmapWorkUnit.CatalogRow = { UnitId = "GS2-07.2"; Title = "previous"; State = RoadmapWorkUnit.Accepted; Prerequisite = Some "GS2-07.1"; Gates = []; EvidenceObligations = obligations; ContractSha256 = String.replicate 64 "e" }
-        let selected: RoadmapWorkUnit.CatalogRow = { UnitId = "GS2-07.3"; Title = "compiler"; State = RoadmapWorkUnit.Unchecked; Prerequisite = Some previous.UnitId; Gates = [ "implementation"; "acceptance" ]; EvidenceObligations = obligations; ContractSha256 = String.replicate 64 "f" }
-        ({ Schema = RoadmapWorkUnit.PreparationInputSchema
-           RoadmapRevision = String.replicate 40 "a"
-           RoadmapSourceDigest = "sha256:" + String.replicate 64 "a"
-           CatalogSourceDigest = "sha256:" + String.replicate 64 "b"
-           Catalog = [ previous; selected ]
-           RoadmapRow = { UnitId = selected.UnitId; Title = selected.Title; Prerequisite = selected.Prerequisite; Gates = selected.Gates }
-           AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
-           SddWorkId = "3210-roadmap-work-unit-compiler"
-           RegistrationOwner = "FS-GG"
-           RegistrationRepository = ".github"
-           RegistrationPaths = [ "src/FS.GG.Coord.Core" ] } : RoadmapWorkUnit.PreparationInput)
-        |> RoadmapWorkUnit.inspectPreparation |> unwrap
+        let roadmap, catalog = preparationSources ()
+        let request: RoadmapWorkUnit.PreparationRequest =
+            { Schema = RoadmapWorkUnit.PreparationInputSchema
+              RoadmapRevision = String.replicate 40 "a"
+              AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
+              SddWorkId = "3210-roadmap-work-unit-compiler"
+              RegistrationOwner = "FS-GG"
+              RegistrationRepository = ".github"
+              RegistrationPaths = [ "src/FS.GG.Coord.Core" ] }
+        RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request |> unwrap
 
     [<Fact>]
     let ``#3210 compiler registrations are byte-stable inputs to the sole staged-intake transaction`` () =
@@ -228,3 +234,14 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Equal(ExitError, code)
         Assert.Equal("", output)
         Assert.Contains("production authority observer reached", error)
+
+    [<Fact>]
+    let ``#3210 production immutable preparation observer has a green route and refuses revision drift`` () =
+        let input, _ = authorityRouteFixture ()
+        let roadmap, catalog = preparationSources ()
+        Handlers.validateImmutablePreparation input roadmap catalog |> unwrap |> ignore
+        let stale = catalog.Replace(String.replicate 40 "a", String.replicate 40 "9")
+        let errors =
+            Handlers.validateImmutablePreparation input roadmap stale
+            |> function Error values -> values | Ok () -> failwith "stale catalog revision reached the acceptance seal"
+        Assert.Contains("immutable preparation authority: RoadmapIdentityMismatch \"catalog.roadmap.revision\"", errors)

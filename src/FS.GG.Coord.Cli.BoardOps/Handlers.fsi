@@ -74,6 +74,11 @@ module Handlers =
         Context ->
         Options.Options ->
             int
+    val internal validateImmutablePreparation:
+        input: FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput ->
+        roadmap: string ->
+        catalog: string ->
+            Result<unit, string list>
     /// Exercise the same parsing, qualification-binding, observation, and sealing route as production
     /// with authority observers supplied by a deterministic test host.
     val internal roadmapUnitAcceptWithObservers:

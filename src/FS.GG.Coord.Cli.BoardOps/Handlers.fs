@@ -2658,6 +2658,24 @@ module Handlers =
                             ExitGreen
             with error -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"; ExitError
 
+    let internal validateImmutablePreparation (input: RoadmapWorkUnit.AcceptanceInput) (roadmap: string) (catalog: string) =
+        match input.Plan.Registrations |> List.tryFind (fun registration -> registration.Kind = "unit") with
+        | None -> Error [ "preparation plan has no unit registration" ]
+        | Some registration ->
+            let request: RoadmapWorkUnit.PreparationRequest =
+                { Schema = RoadmapWorkUnit.PreparationInputSchema
+                  RoadmapRevision = input.Identities.ImplementationCandidate
+                  AuthorityIssue = input.Plan.Authority.Issue
+                  SddWorkId = input.Plan.SddWorkId
+                  RegistrationOwner = registration.Draft.Owner
+                  RegistrationRepository = registration.Draft.Repository
+                  RegistrationPaths = registration.Draft.Paths }
+            match RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request with
+            | Error findings -> Error(findings |> List.map (fun finding -> "immutable preparation authority: " + string finding))
+            | Ok observed when RoadmapWorkUnit.canonicalPlan observed <> RoadmapWorkUnit.canonicalPlan input.Plan ->
+                Error [ "preparation plan differs from the plan recompiled at the immutable implementation candidate" ]
+            | Ok _ -> Ok()
+
     let private roadmapUnitAcceptCore runQualification observerOverrides (ctx: Context) (opts: Options) : int =
         let fail reasons =
             reasons |> List.iter (fun reason -> eprint $"fsgg-coord-engine: roadmap unit accept: %s{reason}")
@@ -2936,27 +2954,13 @@ module Handlers =
             if implementationParts.Length <> 2 then errors.Add("implementation repository identity is malformed")
             elif acceptanceParts.Length <> 2 then errors.Add("acceptance repository identity is malformed")
             else
-              let unitRegistration = input.Plan.Registrations |> List.tryFind (fun registration -> registration.Kind = "unit")
-              match unitRegistration with
-              | None -> errors.Add("preparation plan has no unit registration")
-              | Some registration ->
-                let request: RoadmapWorkUnit.PreparationRequest =
-                    { Schema = input.Plan.Schema
-                      RoadmapRevision = input.Identities.ImplementationCandidate
-                      AuthorityIssue = input.Plan.Authority.Issue
-                      SddWorkId = input.Plan.SddWorkId
-                      RegistrationOwner = registration.Draft.Owner
-                      RegistrationRepository = registration.Draft.Repository
-                      RegistrationPaths = registration.Draft.Paths }
-                match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] "docs/github-substrate-v2-roadmap.md" input.Identities.ImplementationCandidate,
-                      Reads.fileAtRef ctx.Transport acceptanceParts[0] acceptanceParts[1] "eng/github-substrate-v2-units.json" input.Identities.AcceptanceCandidate with
-                | Error error, _ | _, Error error -> errors.Add(Errors.explain error)
-                | Ok roadmap, Ok catalog ->
-                    match RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request with
-                    | Error findings -> findings |> List.iter (fun finding -> errors.Add("immutable preparation authority: " + string finding))
-                    | Ok observed when RoadmapWorkUnit.canonicalPlan observed <> RoadmapWorkUnit.canonicalPlan input.Plan ->
-                        errors.Add("preparation plan differs from the plan recompiled at the immutable implementation candidate")
-                    | Ok _ -> ()
+              match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] "docs/github-substrate-v2-roadmap.md" input.Identities.ImplementationCandidate,
+                    Reads.fileAtRef ctx.Transport acceptanceParts[0] acceptanceParts[1] "eng/github-substrate-v2-units.json" input.Identities.AcceptanceCandidate with
+              | Error error, _ | _, Error error -> errors.Add(Errors.explain error)
+              | Ok roadmap, Ok catalog ->
+                  validateImmutablePreparation input roadmap catalog
+                  |> Result.mapError (List.iter errors.Add)
+                  |> ignore
               match Reads.authorityComments ctx.Transport implementationParts[0] implementationParts[1] input.Identities.ImplementationPullRequest with
               | Error error -> errors.Add(Errors.explain error)
               | Ok comments ->

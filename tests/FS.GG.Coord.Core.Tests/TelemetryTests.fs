@@ -129,6 +129,15 @@ module TelemetryTests =
         Assert.True(
             LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + paraphrasedLegacy)
             |> Result.isError)
+        let misleadingMissing =
+            LifecycleTelemetry.sealSuccessor "run" "unit" started
+                (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"
+                    "{\"status\":\"unavailable\",\"reason\":\"usage missing because the child response is still running\",\"source\":\"legacy child\"}"
+                    [ "legacy" ])
+            |> unwrap
+        Assert.True(
+            LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + misleadingMissing)
+            |> Result.isError)
         let genuineFailure =
             LifecycleTelemetry.sealSuccessor "run" "unit" started
                 (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1"

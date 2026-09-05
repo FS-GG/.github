@@ -586,11 +586,11 @@ module LifecycleTelemetry =
                     if stringAt "status" targetUsage <> "unavailable" then
                         findings.Add(InvalidEvent(line, "telemetry reconciliation may supersede only an unavailable terminal usage record"))
             let isGenuinePostCompletionFailure (reason: string) =
-                let containsAny (fragments: string list) =
-                    fragments
-                    |> List.exists (fun fragment -> reason.Contains(fragment, StringComparison.OrdinalIgnoreCase))
-                containsAny [ "failed"; "failure"; "error"; "unreadable"; "not found"; "denied"; "missing" ]
-                && containsAny [ "collector"; "lookup"; "schema"; "runtime"; "token"; "usage" ]
+                [ "post-completion runtime usage lookup failed:"
+                  "post-completion collector schema validation failed:" ]
+                |> List.exists (fun prefix ->
+                    reason.StartsWith(prefix, StringComparison.Ordinal)
+                    && not (String.IsNullOrWhiteSpace(reason.Substring(prefix.Length))))
             let requiresRecovery reason = not (isGenuinePostCompletionFailure reason)
             events
             |> List.indexed
