@@ -427,7 +427,8 @@ module Reads =
     type CommitComparison =
         { Status: string
           MergeBase: string
-          Files: string list }
+          AheadBy: int
+          Files: (string * string) list }
 
     /// Read the exact GitHub comparison used to prove that a reviewed implementation commit is an
     /// ancestor of the final evidence-bearing candidate and to inventory that final delta.

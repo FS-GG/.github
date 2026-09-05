@@ -809,7 +809,8 @@ module Reads =
     type CommitComparison =
         { Status: string
           MergeBase: string
-          Files: string list }
+          AheadBy: int
+          Files: (string * string) list }
 
     let compareCommits (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
         let subject = $"%s{owner}/%s{repo} comparison %s{ancestor}...%s{descendant}"
@@ -824,23 +825,26 @@ module Reads =
             | Ok document ->
                 use document = document
                 let root = document.RootElement
-                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "files" with
-                | Some status, (true, mergeBase), (true, files)
+                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "ahead_by", root.TryGetProperty "files" with
+                | Some status, (true, mergeBase), (true, aheadBy), (true, files)
                     when mergeBase.ValueKind = JsonValueKind.Object && files.ValueKind = JsonValueKind.Array ->
-                    match str mergeBase "sha" with
-                    | None -> Error(Malformed(subject, "comparison merge base has no sha"))
-                    | Some mergeBaseSha ->
+                    match str mergeBase "sha", aheadBy.TryGetInt32() with
+                    | None, _ -> Error(Malformed(subject, "comparison merge base has no sha"))
+                    | _, (false, _) -> Error(Malformed(subject, "comparison ahead_by is not an integer"))
+                    | Some mergeBaseSha, (true, aheadBy) ->
                         files.EnumerateArray()
-                        |> Seq.map (fun file -> str file "filename")
+                        |> Seq.map (fun file -> str file "filename", str file "status")
                         |> Seq.fold
                             (fun state next ->
                                 match state, next with
-                                | Ok values, Some value when not (String.IsNullOrWhiteSpace value) -> Ok(value :: values)
-                                | Ok _, _ -> Error(Malformed(subject, "comparison file has no filename"))
+                                | Ok values, (Some filename, Some status)
+                                    when not (String.IsNullOrWhiteSpace filename) && not (String.IsNullOrWhiteSpace status) ->
+                                    Ok((filename, status) :: values)
+                                | Ok _, _ -> Error(Malformed(subject, "comparison file has no filename or status"))
                                 | error, _ -> error)
                             (Ok [])
-                        |> Result.map (fun values -> { Status = status; MergeBase = mergeBaseSha; Files = List.rev values })
-                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, or files array"))
+                        |> Result.map (fun values -> { Status = status; MergeBase = mergeBaseSha; AheadBy = aheadBy; Files = List.rev values })
+                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
 
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"

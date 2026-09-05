@@ -263,11 +263,12 @@ module Handlers =
             | Ok comparison
                 when comparison.Status = "ahead"
                      && comparison.MergeBase = reviewed
-                     && comparison.Files = [ expectedArtifact ] -> ()
+                     && comparison.AheadBy = 1
+                     && comparison.Files = [ expectedArtifact, "modified" ] -> ()
             | Ok comparison ->
-                let comparedFiles = String.concat "," comparison.Files
+                let comparedFiles = comparison.Files |> List.map (fun (path, status) -> $"%s{status}:%s{path}") |> String.concat ","
                 errors.Add(
-                    $"work-cycle critique reviewed commit is not the exact ancestor of an artifact-only final candidate: status=%s{comparison.Status} mergeBase=%s{comparison.MergeBase} files=%s{comparedFiles}")
+                    $"work-cycle critique reviewed commit is not the exact one-commit ancestor of a modified-artifact-only final candidate: status=%s{comparison.Status} aheadBy=%d{comparison.AheadBy} mergeBase=%s{comparison.MergeBase} files=%s{comparedFiles}")
         List.ofSeq errors
 
     let private routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =

@@ -27,7 +27,7 @@ module RoadmapWorkUnitTransactionTests =
         let catalog =
             $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "previous" "[\"GS2-07.1\"]" "[]"},%s{unit "GS2-07.3" "compiler" "[\"GS2-07.2\"]" "[\"implementation\",\"acceptance\"]"}]}}"""
         roadmap, catalog
-    let private makePlan () =
+    let private makePlanFor registrationRepository =
         let roadmap, catalog = preparationSources ()
         let request: RoadmapWorkUnit.PreparationRequest =
             { Schema = RoadmapWorkUnit.PreparationInputSchema
@@ -35,9 +35,10 @@ module RoadmapWorkUnitTransactionTests =
               AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
               SddWorkId = "3210-roadmap-work-unit-compiler"
               RegistrationOwner = "FS-GG"
-              RegistrationRepository = ".github"
+              RegistrationRepository = registrationRepository
               RegistrationPaths = [ "src/FS.GG.Coord.Core" ] }
         RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request |> unwrap
+    let private makePlan () = makePlanFor ".github"
 
     [<Fact>]
     let ``#3210 compiler registrations are byte-stable inputs to the sole staged-intake transaction`` () =
@@ -96,14 +97,14 @@ module RoadmapWorkUnitTransactionTests =
         let findings = Handlers.validateCompleteSddWorkModel "500-roadmap-gs2-07-3" pending
         Assert.Contains(findings, fun finding -> finding.Contains("expected done", StringComparison.Ordinal))
 
-    let private fullLifecycle candidate number =
+    let private fullLifecycle repository candidate implementationMerge acceptanceMerge number =
         let draft order phase event at actual usage =
             let sourceRevision =
                 match phase with
-                | "merge" -> String.replicate 40 "b"
-                | "acceptance" -> String.replicate 40 "d"
+                | "merge" -> implementationMerge
+                | "acceptance" -> acceptanceMerge
                 | _ -> candidate
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":%d{number},"url":"https://github.com/FS-GG/.github/issues/%d{number}"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#%d{number}","claim_generation":"1"}}}}"""
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"%s{repository}","number":%d{number},"url":"https://github.com/%s{repository}/issues/%d{number}"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"%s{repository}","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"%s{repository}#%d{number}","claim_generation":"1"}}}}"""
         [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
           "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)
@@ -112,22 +113,33 @@ module RoadmapWorkUnitTransactionTests =
             let current = log + first
             current + (LifecycleTelemetry.sealSuccessor "roadmap-unit-gs2-07.3" "GS2-07.3" current (draft order phase "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"post-completion runtime usage lookup failed: test fixture has no source\",\"source\":\"test\"}") |> unwrap)) ""
 
-    let private authorityRouteFixture () =
-        let plan = makePlan ()
-        let candidate = String.replicate 40 "a"
+    let private authorityRouteFixtureFor
+        registrationRepository
+        issueNumber
+        implementationPr
+        candidate
+        implementationMerge
+        acceptancePr
+        acceptanceCandidate
+        acceptanceMerge
+        sddWorkId
+        critiqueCycle
+        reviewedCommit
+        =
+        let plan = makePlanFor registrationRepository
         let applied =
             plan.Registrations
             |> List.mapi (fun index registration ->
-                let number = 500 + index
+                let number = issueNumber + index
                 ({ Id = registration.Id; Kind = registration.Kind; DraftSha256 = IntakeReceipt.digest registration.Draft
-                   Issue = $"FS-GG/.github#%d{number}"; IssueUrl = $"https://github.com/FS-GG/.github/issues/%d{number}" }
+                   Issue = $"%s{registration.Draft.Owner}/%s{registration.Draft.Repository}#%d{number}"; IssueUrl = $"https://github.com/%s{registration.Draft.Owner}/%s{registration.Draft.Repository}/issues/%d{number}" }
                  : RoadmapWorkUnit.AppliedRegistration))
         let application = RoadmapWorkUnit.sealPreparationApplication plan applied |> unwrap
         let unit = application.Registrations |> List.find (fun value -> value.Kind = "unit")
         let number = Int32.Parse(unit.Issue.Split('#')[1])
         let observation stage status : RoadmapWorkUnit.SddObservation =
             { Stage = stage; SubjectRevision = candidate
-              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/500-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"500-roadmap-gs2-07-3"}}""" }
+              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/%s{sddWorkId}/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"%s{sddWorkId}"}}""" }
         let observations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
         let digest c = String.replicate 64 (string c)
         let tool = {| id = "dotnet"; version = "10.0"; sha256 = digest '1' |}
@@ -153,31 +165,55 @@ module RoadmapWorkUnitTransactionTests =
                    hostedObservations =
                      [ {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = candidate; state = "completed"; conclusion = "success" |} ] |}
                        {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = candidate; state = "completed"; conclusion = "success" |} ] |} ]
-                   obligations = {| headSha = candidate; declarations = [ {| id = (None: string option); kind = "none" |} ]; readbacks = [ {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "bot" |} ] |}
-                   semanticReview = {| subjectRevision = candidate; accepted = true; evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2" |} |}
+                   obligations = {| headSha = candidate; declarations = [ {| id = (None: string option); kind = "none" |} ]; readbacks = [ {| commentId = 1L; url = $"https://github.com/FS-GG/%s{registrationRepository}/pull/%d{implementationPr}#issuecomment-1"; author = "bot" |} ] |}
+                   semanticReview = {| subjectRevision = candidate; accepted = true; evidence = $"https://github.com/FS-GG/%s{registrationRepository}/pull/%d{implementationPr}#issuecomment-2" |} |}
         let qualificationInput = Qualification.parseInput (Encoding.UTF8.GetBytes qualificationJson) |> unwrap
         let qualification = Qualification.validate qualificationInput |> unwrap
         let identities: RoadmapWorkUnit.RevisionIdentities =
-            { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = String.replicate 40 "b"
-              AcceptancePullRequest = 2; AcceptanceCandidate = String.replicate 40 "c"; AcceptanceMerge = String.replicate 40 "d"; ProtectedMain = String.replicate 40 "d" }
-        let binding candidateHead merge tree = RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidateHead merge tree tree 0
-        let critique = $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
+            { ImplementationPullRequest = implementationPr; ImplementationCandidate = candidate; ImplementationMerge = implementationMerge
+              AcceptancePullRequest = acceptancePr; AcceptanceCandidate = acceptanceCandidate; AcceptanceMerge = acceptanceMerge; ProtectedMain = acceptanceMerge }
+        let binding candidateHead merge tree = RoadmapWorkUnit.sealRevisionBinding ($"FS-GG/%s{registrationRepository}") candidateHead merge tree tree 0
+        let critique = $"""{{"schema_version":3,"cycle_id":"%s{critiqueCycle}","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{reviewedCommit}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{reviewedCommit}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{reviewedCommit}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
         let input: RoadmapWorkUnit.AcceptanceInput =
             { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; PreparationApplication = application; Qualification = qualification
-              LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = fullLifecycle candidate number
+              LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = fullLifecycle ($"FS-GG/%s{registrationRepository}") candidate implementationMerge acceptanceMerge number
               RequiredLifecyclePhases = [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"; "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
               LifecycleUsageReceipts = []; LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
-              ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-3"; StructuredReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
-              ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique; SddWorkId = "500-roadmap-gs2-07-3"; SddObservations = observations
+              ReviewEvidence = $"https://github.com/FS-GG/%s{registrationRepository}/pull/%d{implementationPr}#issuecomment-3"; StructuredReviewEvidence = $"https://github.com/FS-GG/%s{registrationRepository}/pull/%d{implementationPr}#issuecomment-2"
+              ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique; SddWorkId = sddWorkId; SddObservations = observations
               Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (String.replicate 40 "e")
               AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (String.replicate 40 "f"); AcceptedAt = "2026-09-05T06:02:00Z" }
         input, qualificationJson
 
-    let private invokeAuthorityRouteUsingResponder productionAuthorities observeSdd observeAuthorities respond =
+    let private authorityRouteFixture () =
+        let candidate = String.replicate 40 "a"
+        authorityRouteFixtureFor
+            ".github" 500 1 candidate (String.replicate 40 "b") 2 (String.replicate 40 "c")
+            (String.replicate 40 "d") "500-roadmap-gs2-07-3" "GS2-07.3" candidate
+
+    let private immutableSinglePrAuthorityRouteFixture () =
+        authorityRouteFixtureFor
+            "FS.GG.Coordination" 304 305
+            "0e07d58820c5480efb0c20901f361cf0ddba5dc9"
+            "3e81b5df1ffc87c9dcad42e30733bb36073c3a57"
+            305
+            "0e07d58820c5480efb0c20901f361cf0ddba5dc9"
+            "3e81b5df1ffc87c9dcad42e30733bb36073c3a57"
+            "304-gs2-07-3-audit-repair"
+            "roadmap-github-substrate-v2-m7-gs2-07-3-audit-repair"
+            "46fb77ababbd0abc85f5d32d51578487523ec32d"
+
+    let private invokeAuthorityRouteFixtureUsingResponder
+        (fixture: unit -> RoadmapWorkUnit.AcceptanceInput * string)
+        productionAuthorities
+        observeSdd
+        observeAuthorities
+        respond
+        =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-3210-authority-route-" + Guid.NewGuid().ToString("n"))
         Directory.CreateDirectory directory |> ignore
         try
-            let input, qualificationJson = authorityRouteFixture ()
+            let input, qualificationJson = fixture ()
             let inputPath = Path.Combine(directory, "acceptance.json")
             let qualificationPath = Path.Combine(directory, "qualification.json")
             let executionPath = Path.Combine(directory, "execution.json")
@@ -205,6 +241,9 @@ module RoadmapWorkUnitTransactionTests =
             finally Console.SetOut previousOut; Console.SetError previousError
         finally Directory.Delete(directory, true)
 
+    let private invokeAuthorityRouteUsingResponder productionAuthorities observeSdd observeAuthorities respond =
+        invokeAuthorityRouteFixtureUsingResponder authorityRouteFixture productionAuthorities observeSdd observeAuthorities respond
+
     let private invokeAuthorityRouteUsing productionAuthorities observeSdd observeAuthorities =
         invokeAuthorityRouteUsingResponder
             productionAuthorities
@@ -215,6 +254,14 @@ module RoadmapWorkUnitTransactionTests =
 
     let private invokeAuthorityRoute observeSdd observeAuthorities =
         invokeAuthorityRouteUsing false observeSdd observeAuthorities
+
+    let private invokeImmutableSinglePrAuthorityRoute observeSdd observeAuthorities =
+        invokeAuthorityRouteFixtureUsingResponder
+            immutableSinglePrAuthorityRouteFixture
+            false
+            observeSdd
+            observeAuthorities
+            (fun _ -> Error(NotFound "injected observers must prevent live transport"))
 
     [<Fact>]
     let ``#3210 production acceptance route seals only after both live observer boundaries pass`` () =
@@ -233,6 +280,16 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Equal(ExitError, refused)
         Assert.Equal("", refusedOutput)
         Assert.Contains("inverted live authority", refusedError)
+
+    [<Fact>]
+    let ``#3251 complete seal route accepts immutable Coordination issue 304 and single PR 305`` () =
+        let code, output, error =
+            invokeImmutableSinglePrAuthorityRoute (fun _ -> Ok()) (fun _ -> Ok())
+        Assert.Equal(ExitGreen, code)
+        Assert.Equal("", error)
+        Assert.Contains("fsgg.roadmap-unit.acceptance-bundle/1", output)
+        Assert.Contains("0e07d58820c5480efb0c20901f361cf0ddba5dc9", output)
+        Assert.Contains("3e81b5df1ffc87c9dcad42e30733bb36073c3a57", output)
 
     [<Fact>]
     let ``#3210 production composition keeps the live authority observer active`` () =
@@ -340,7 +397,7 @@ module RoadmapWorkUnitTransactionTests =
                 if request.Path = comparisonPath then
                     Ok
                         { Status = 200
-                          Body = $"""{{"status":"ahead","merge_base_commit":{{"sha":"%s{reviewed}"}},"files":[{{"filename":"reviews/roadmap/%s{cycle}.json"}}]}}"""
+                          Body = $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{reviewed}"}},"files":[{{"filename":"reviews/roadmap/%s{cycle}.json","status":"modified"}}]}}"""
                           ETag = None
                           NextLink = None
                           Headers = Map.empty }
@@ -365,7 +422,8 @@ module RoadmapWorkUnitTransactionTests =
             Ok
                 ({ Status = "diverged"
                    MergeBase = String.replicate 40 "9"
-                   Files = [ "src/unreviewed-change.fs" ] }
+                   AheadBy = 2
+                   Files = [ "src/unreviewed-change.fs", "added" ] }
                  : Reads.CommitComparison)
         let refused =
             Handlers.validateCritiqueCommitRelation
@@ -380,5 +438,5 @@ module RoadmapWorkUnitTransactionTests =
             refused,
             fun error ->
                 error.Contains(
-                    "not the exact ancestor of an artifact-only final candidate",
+                    "not the exact one-commit ancestor of a modified-artifact-only final candidate",
                     StringComparison.Ordinal))
