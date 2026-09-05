@@ -32,6 +32,7 @@ on:
       # kit: source is matched here, on both triggers — a gate on the gate.
       - "scripts/fsgg-coord"
       - "scripts/fsgg-coord-report"
+      - "scripts/check-orchestrator-room"
       - ".claude/skills/**"
       - ".agents/skills/**"
       # the kit's `kind: config` source — the engine manifest (#1077). A plain file, so it is named
@@ -70,6 +71,7 @@ on:
       - ".github/workflows/repos-registry-selftest.yml"
       - "scripts/fsgg-coord"
       - "scripts/fsgg-coord-report"
+      - "scripts/check-orchestrator-room"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "dist/dotnet/.config/dotnet-tools.json"   # the kit's engine-manifest config source (#1077)
