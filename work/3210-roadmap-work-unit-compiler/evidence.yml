@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3210-roadmap-work-unit-compiler/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3210-roadmap-work-unit-compiler/analysis.json
-    digest: 751b2b363d65fedcade809997f2b2f3595359aeb187e67578d20081b411f514d
+    digest: fd5c7582fb324cce468ef239c665a18963e1cbb8c3e72fba5602cf82f831f92a
     schemaVersion: 1
   - label: checklist
     path: work/3210-roadmap-work-unit-compiler/checklist.md

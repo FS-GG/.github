@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/3210-roadmap-work-unit-compiler/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "da853b9ffe29ce6b021e2d4ffa79ad50ad207230b7efbb76eb3f8201e30031d1"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/3210-roadmap-work-unit-compiler/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -906,7 +916,7 @@
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
