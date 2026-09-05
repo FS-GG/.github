@@ -204,6 +204,38 @@ module Handlers =
                 let records = decoded |> List.choose Result.toOption
                 StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
 
+    let validateAcceptanceSddRoute (subject: string) (expectedWorkId: string) (comments: string list) =
+        match structuredRouteLedger subject comments with
+        | Error errors -> errors |> List.map (fun error -> "acceptance SDD route authority: " + error)
+        | Ok None -> [ "acceptance SDD route authority is missing" ]
+        | Ok(Some(_, latest)) ->
+            match latest.Route, latest.SddWorkId with
+            | Some DeliveryRoute.SddRequired, Some workId when workId = expectedWorkId -> []
+            | Some DeliveryRoute.SddRequired, Some workId ->
+                [ $"acceptance SDD work id %s{expectedWorkId} differs from current route work id %s{workId}" ]
+            | Some DeliveryRoute.SddRequired, None ->
+                [ "current sdd-required route has no SDD work id" ]
+            | _ -> [ "acceptance requires a current sdd-required delivery route" ]
+
+    let validateAcceptanceEvidenceComment
+        (input: RoadmapWorkUnit.AcceptanceInput)
+        (comment: Reads.AuthorityComment)
+        =
+        let canonical (text: string) =
+            CanonicalJson.canonicalize (Encoding.UTF8.GetBytes text)
+            |> Result.mapError (fun reason -> $"invalid canonical JSON authority: %s{reason}")
+        if comment.Url <> input.ReviewEvidence then
+            [ "review evidence comment URL differs from the acceptance-envelope identity" ]
+        elif comment.CreatedAt <> comment.UpdatedAt then
+            [ "review evidence comment was edited" ]
+        else
+            match canonical (Qualification.canonicalResult input.Qualification), canonical input.ReviewReceipt with
+            | Ok qualification, Ok critique ->
+                let expected = $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{qualification}\n```\n```json\n%s{critique}\n```"
+                if comment.Body.TrimEnd() = expected then []
+                else [ "review evidence is not the exact leading-marker qualification/critique envelope" ]
+            | Error reason, _ | _, Error reason -> [ reason ]
+
     let private routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =
         match structuredRouteLedger subject comments with
         | Error errors -> DeliveryRoute.Stale errors
@@ -2904,6 +2936,8 @@ module Handlers =
                 match Reads.authorityComments ctx.Transport owner repo number with
                 | Error error -> errors.Add(Errors.explain error)
                 | Ok comments ->
+                    validateAcceptanceSddRoute expectedSubject input.SddWorkId (comments |> List.map _.Body)
+                    |> List.iter errors.Add
                     let commentsJson =
                         comments
                         |> List.map (fun comment ->
@@ -2941,13 +2975,8 @@ module Handlers =
                 | Ok comments ->
                     match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.ReviewEvidence) with
                     | None -> errors.Add("review evidence comment is absent from the authoritative GitHub ledger")
-                    | Some comment when comment.CreatedAt <> comment.UpdatedAt -> errors.Add("review evidence comment was edited")
                     | Some comment ->
-                        match canonicalJson (Qualification.canonicalResult input.Qualification), canonicalJson input.ReviewReceipt with
-                        | Ok qualification, Ok critique ->
-                            let expected = $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{qualification}\n```\n```json\n%s{critique}\n```"
-                            if comment.Body.TrimEnd() <> expected then errors.Add("review evidence is not the exact leading-marker qualification/critique envelope")
-                        | Error reason, _ | _, Error reason -> errors.Add reason
+                        validateAcceptanceEvidenceComment input comment |> List.iter errors.Add
 
             let implementationParts = input.ImplementationBinding.Repository.Split('/')
             let acceptanceParts = input.AcceptanceBinding.Repository.Split('/')

@@ -122,7 +122,8 @@ module RoadmapWorkUnitTests =
         let observation stage status : RoadmapWorkUnit.SddObservation =
             { Stage = stage; SubjectRevision = candidate
               ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/400-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-roadmap-gs2-07-3"}}""" }
-        let review = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
+        let structuredReview = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
+        let acceptanceEnvelope = "https://github.com/FS-GG/.github/pull/1#issuecomment-3"
         let binding candidate merge tree =
             RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
         let identities: RoadmapWorkUnit.RevisionIdentities =
@@ -136,7 +137,7 @@ module RoadmapWorkUnitTests =
               "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
           LifecycleUsageReceipts = []
           LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
-          ReviewEvidence = review; StructuredReviewEvidence = review
+          ReviewEvidence = acceptanceEnvelope; StructuredReviewEvidence = structuredReview
           ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique candidate; SddWorkId = "400-roadmap-gs2-07-3"
           SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
           Identities = identities
@@ -265,6 +266,21 @@ module RoadmapWorkUnitTests =
             |> unwrap
         Assert.Equal("GS2-07.3", closed.Evidence.UnitId)
         Assert.Equal(RoadmapWorkUnit.acceptedDigest accepted, closed.Evidence.AcceptedReceiptDigest.Substring("sha256:".Length))
+
+    [<Fact>]
+    let ``#3247 semantic review binds structured authority independently of acceptance envelope`` () =
+        let input = acceptanceInput ()
+        Assert.False(input.ReviewEvidence = input.StructuredReviewEvidence)
+        RoadmapWorkUnit.inspectAcceptanceCandidate input |> unwrap |> ignore
+        let mismatched =
+            { input with
+                StructuredReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-4" }
+        let findings =
+            RoadmapWorkUnit.inspectAcceptanceCandidate mismatched
+            |> function Error values -> values | Ok _ -> failwith "mismatched structured review reached acceptance"
+        Assert.Contains(
+            RoadmapWorkUnit.QualificationMismatch "semantic review evidence locator differs from the structured review authority",
+            findings)
 
     [<Fact>]
     let ``#3210 manually flipped SDD state identity collapse and bundle tamper refuse`` () =

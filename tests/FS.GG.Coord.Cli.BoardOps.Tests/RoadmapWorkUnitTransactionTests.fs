@@ -13,6 +13,7 @@ open FS.GG.Coord.Cli.Kernel
 open FS.GG.Coord.Cli.Lifecycle
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
+open FS.GG.Coord.GitHub.Transport
 
 module RoadmapWorkUnitTransactionTests =
     let private unwrap = function Ok value -> value | Error values -> failwithf "%A" values
@@ -166,13 +167,13 @@ module RoadmapWorkUnitTransactionTests =
               LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = fullLifecycle candidate number
               RequiredLifecyclePhases = [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"; "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
               LifecycleUsageReceipts = []; LifecycleHistoryReport = "phase,tooling_fingerprint,actual_minutes,source\n"
-              ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"; StructuredReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
+              ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-3"; StructuredReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
               ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique; SddWorkId = "500-roadmap-gs2-07-3"; SddObservations = observations
               Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (String.replicate 40 "e")
               AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (String.replicate 40 "f"); AcceptedAt = "2026-09-05T06:02:00Z" }
         input, qualificationJson
 
-    let private invokeAuthorityRouteUsing productionAuthorities observeSdd observeAuthorities =
+    let private invokeAuthorityRouteUsingResponder productionAuthorities observeSdd observeAuthorities respond =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-3210-authority-route-" + Guid.NewGuid().ToString("n"))
         Directory.CreateDirectory directory |> ignore
         try
@@ -187,9 +188,7 @@ module RoadmapWorkUnitTransactionTests =
             let parsed =
                 { baseOptions with
                     Args = [ "seal"; "--input"; inputPath; "--qualification-input"; qualificationPath; "--qualification-execution"; executionPath ] }
-            let transport =
-                Fake.Recorder(fun _ ->
-                    Error(NotFound(if productionAuthorities then "production authority observer reached" else "injected observers must prevent live transport")))
+            let transport = Fake.Recorder respond
             let context: Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
             let previousOut, previousError = Console.Out, Console.Error
             use stdout = new StringWriter()
@@ -205,6 +204,14 @@ module RoadmapWorkUnitTransactionTests =
                 code, stdout.ToString(), stderr.ToString()
             finally Console.SetOut previousOut; Console.SetError previousError
         finally Directory.Delete(directory, true)
+
+    let private invokeAuthorityRouteUsing productionAuthorities observeSdd observeAuthorities =
+        invokeAuthorityRouteUsingResponder
+            productionAuthorities
+            observeSdd
+            observeAuthorities
+            (fun _ ->
+                Error(NotFound(if productionAuthorities then "production authority observer reached" else "injected observers must prevent live transport")))
 
     let private invokeAuthorityRoute observeSdd observeAuthorities =
         invokeAuthorityRouteUsing false observeSdd observeAuthorities
@@ -236,6 +243,23 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Contains("production authority observer reached", error)
 
     [<Fact>]
+    let ``#3247 production composition executes route and immutable envelope authority`` () =
+        let ok body =
+            Ok ({ Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }: Response)
+        let response (request: Request) =
+            match request.Path with
+            | "repos/FS-GG/.github/issues/500/comments" -> ok "[]"
+            | "repos/FS-GG/.github/issues/1/comments" ->
+                ok """[{"id":3,"html_url":"https://github.com/FS-GG/.github/pull/1#issuecomment-3","body":"envelope","created_at":"2026-09-05T06:02:00Z","updated_at":"2026-09-05T06:03:00Z"}]"""
+            | _ -> Error(NotFound "unrelated live authority fixture")
+        let code, output, error =
+            invokeAuthorityRouteUsingResponder true (fun _ -> Ok()) (fun _ -> failwith "production observer was replaced") response
+        Assert.Equal(ExitError, code)
+        Assert.Equal("", output)
+        Assert.Contains("acceptance SDD route authority is missing", error)
+        Assert.Contains("review evidence comment was edited", error)
+
+    [<Fact>]
     let ``#3242 live acceptance does not require ignored generated SDD files from the candidate`` () =
         let accepted, output, error =
             invokeAuthorityRoute (fun _ -> Ok()) (fun _ -> Ok())
@@ -250,6 +274,49 @@ module RoadmapWorkUnitTransactionTests =
         Assert.Equal(ExitError, refused)
         Assert.Equal("", refusedOutput)
         Assert.Contains("independent SDD observation refused", refusedError)
+
+    [<Fact>]
+    let ``#3247 immutable acceptance envelope has its own post-create identity`` () =
+        let input, _ = authorityRouteFixture ()
+        let canonical (text: string) =
+            CanonicalJson.canonicalize (Encoding.UTF8.GetBytes text) |> unwrap
+        let body =
+            $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{canonical (Qualification.canonicalResult input.Qualification)}\n```\n```json\n%s{canonical input.ReviewReceipt}\n```"
+        let comment: Reads.AuthorityComment =
+            { Id = 3L; Url = input.ReviewEvidence; Body = body
+              CreatedAt = "2026-09-05T06:02:00Z"; UpdatedAt = "2026-09-05T06:02:00Z" }
+        Assert.Empty(Handlers.validateAcceptanceEvidenceComment input comment)
+        Assert.Contains(
+            "review evidence comment was edited",
+            Handlers.validateAcceptanceEvidenceComment input { comment with UpdatedAt = "2026-09-05T06:03:00Z" })
+
+    [<Fact>]
+    let ``#3247 acceptance SDD identity comes from current structured route authority`` () =
+        let input, _ = authorityRouteFixture ()
+        let unit = input.PreparationApplication.Registrations |> List.find (fun value -> value.Kind = "unit")
+        let route: StructuredDecision.RouteRecord =
+            { Schema = StructuredDecision.RouteSchema; Subject = unit.Issue; Revision = 1; PreviousDigest = None
+              Scope = [ "roadmap acceptance" ]; Dependencies = [ "none" ]; TouchSet = [ "src" ]
+              PolicyVersion = StructuredDecision.PolicyVersion; Route = Some DeliveryRoute.SddRequired
+              Agent = "router"; Timestamp = "2026-09-05T06:00:00Z"; ReasonCodes = [ "public-contract" ]
+              Rationale = "acceptance uses SDD"; SddWorkId = Some input.SddWorkId
+              SpecHome = Some("work/" + input.SddWorkId + "/spec.md")
+              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]; Digest = "" }
+        let route = { route with Digest = StructuredDecision.routeDigest route }
+        let json =
+            JsonSerializer.Serialize
+                {| schema = route.Schema; subject = route.Subject; revision = route.Revision
+                   previousDigest = route.PreviousDigest; scope = route.Scope; dependencies = route.Dependencies
+                   touchSet = route.TouchSet; policyVersion = route.PolicyVersion; route = "sdd-required"
+                   agent = route.Agent; timestamp = route.Timestamp; reasonCodes = route.ReasonCodes
+                   rationale = route.Rationale; sddWorkId = route.SddWorkId; specHome = route.SpecHome
+                   requiredGates = route.RequiredGates; digest = route.Digest |}
+        let ledger = [ "<!-- fsgg:route-decision/v2 -->\n" + json ]
+        Assert.Empty(Handlers.validateAcceptanceSddRoute unit.Issue input.SddWorkId ledger)
+        Assert.Contains(
+            "acceptance SDD work id wrong-work differs from current route work id 500-roadmap-gs2-07-3",
+            Handlers.validateAcceptanceSddRoute unit.Issue "wrong-work" ledger)
+        Assert.Contains("acceptance SDD route authority is missing", Handlers.validateAcceptanceSddRoute unit.Issue input.SddWorkId [])
 
     [<Fact>]
     let ``#3210 production immutable preparation observer has a green route and refuses revision drift`` () =

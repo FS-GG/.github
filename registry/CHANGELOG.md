@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.83.3` source prepared** — [.github#3247](https://github.com/FS-GG/.github/issues/3247) advances the source frontier from 0.83.2 to 0.83.3. Roadmap acceptance now separates the immutable qualification/critique envelope from the preceding structured-review authority and binds independent SDD observation to the current structured delivery-route work ID. Published package frontier remains 0.83.2 until the exact accepted merge is promoted.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.2` published; registry reconciliation**
   (owner github; [.github#3242](https://github.com/FS-GG/.github/issues/3242),
   [source PR #3243](https://github.com/FS-GG/.github/pull/3243),
