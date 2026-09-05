@@ -806,6 +806,42 @@ module Reads =
                     match str tree "sha" with Some value when not (String.IsNullOrWhiteSpace value) -> Ok value | _ -> Error(Malformed(subject, "commit tree has no sha"))
                 | _ -> Error(Malformed(subject, "commit has no tree object"))
 
+    type CommitComparison =
+        { Status: string
+          MergeBase: string
+          Files: string list }
+
+    let compareCommits (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
+        let subject = $"%s{owner}/%s{repo} comparison %s{ancestor}...%s{descendant}"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
+              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                let root = document.RootElement
+                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "files" with
+                | Some status, (true, mergeBase), (true, files)
+                    when mergeBase.ValueKind = JsonValueKind.Object && files.ValueKind = JsonValueKind.Array ->
+                    match str mergeBase "sha" with
+                    | None -> Error(Malformed(subject, "comparison merge base has no sha"))
+                    | Some mergeBaseSha ->
+                        files.EnumerateArray()
+                        |> Seq.map (fun file -> str file "filename")
+                        |> Seq.fold
+                            (fun state next ->
+                                match state, next with
+                                | Ok values, Some value when not (String.IsNullOrWhiteSpace value) -> Ok(value :: values)
+                                | Ok _, _ -> Error(Malformed(subject, "comparison file has no filename"))
+                                | error, _ -> error)
+                            (Ok [])
+                        |> Result.map (fun values -> { Status = status; MergeBase = mergeBaseSha; Files = List.rev values })
+                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, or files array"))
+
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
 

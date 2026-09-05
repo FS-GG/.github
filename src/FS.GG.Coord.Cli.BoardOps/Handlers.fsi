@@ -87,6 +87,17 @@ module Handlers =
         input: FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput ->
         comment: FS.GG.Coord.GitHub.Reads.AuthorityComment ->
             string list
+    /// Validate the production relationship between a canonical work-cycle critique and its exact
+    /// final evidence-only candidate through a live repository comparison.
+    val internal validateCritiqueCommitRelation:
+        observeComparison: (string -> string -> Result<FS.GG.Coord.GitHub.Reads.CommitComparison, string>) ->
+        reviewCycleId: string ->
+        sddWorkId: string ->
+        implementationCandidate: string ->
+        cycle: string ->
+        reviewed: string ->
+        verdict: string ->
+            string list
     /// Exercise the same parsing, qualification-binding, observation, and sealing route as production
     /// with authority observers supplied by a deterministic test host.
     val internal roadmapUnitAcceptWithObservers:

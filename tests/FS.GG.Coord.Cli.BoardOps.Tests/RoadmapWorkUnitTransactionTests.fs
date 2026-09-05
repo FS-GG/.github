@@ -328,3 +328,57 @@ module RoadmapWorkUnitTransactionTests =
             Handlers.validateImmutablePreparation input roadmap stale
             |> function Error values -> values | Ok () -> failwith "stale catalog revision reached the acceptance seal"
         Assert.Contains("immutable preparation authority: RoadmapIdentityMismatch \"catalog.roadmap.revision\"", errors)
+
+    [<Fact>]
+    let ``#3251 production critique route proves the real single-PR artifact-only ancestry`` () =
+        let reviewed = "46fb77ababbd0abc85f5d32d51578487523ec32d"
+        let candidate = "0e07d58820c5480efb0c20901f361cf0ddba5dc9"
+        let cycle = "roadmap-github-substrate-v2-m7-gs2-07-3-audit-repair"
+        let comparisonPath = $"repos/FS-GG/FS.GG.Coordination/compare/%s{reviewed}...%s{candidate}"
+        let transport =
+            Fake.Recorder(fun request ->
+                if request.Path = comparisonPath then
+                    Ok
+                        { Status = 200
+                          Body = $"""{{"status":"ahead","merge_base_commit":{{"sha":"%s{reviewed}"}},"files":[{{"filename":"reviews/roadmap/%s{cycle}.json"}}]}}"""
+                          ETag = None
+                          NextLink = None
+                          Headers = Map.empty }
+                else Error(NotFound request.Path))
+        let compare ancestor descendant =
+            Reads.compareCommits transport "FS-GG" "FS.GG.Coordination" ancestor descendant
+            |> Result.mapError Errors.explain
+        let errors =
+            Handlers.validateCritiqueCommitRelation
+                compare
+                "GS2-07.3"
+                "304-gs2-07-3-audit-repair"
+                candidate
+                cycle
+                reviewed
+                "pass"
+        Assert.Empty errors
+        Assert.Equal(1, transport.RestCalls)
+        Assert.True(transport.Logged($"%s{reviewed}...%s{candidate}"))
+
+        let unrelated _ _ =
+            Ok
+                ({ Status = "diverged"
+                   MergeBase = String.replicate 40 "9"
+                   Files = [ "src/unreviewed-change.fs" ] }
+                 : Reads.CommitComparison)
+        let refused =
+            Handlers.validateCritiqueCommitRelation
+                unrelated
+                "GS2-07.3"
+                "304-gs2-07-3-audit-repair"
+                candidate
+                cycle
+                reviewed
+                "pass"
+        Assert.Contains(
+            refused,
+            fun error ->
+                error.Contains(
+                    "not the exact ancestor of an artifact-only final candidate",
+                    StringComparison.Ordinal))
