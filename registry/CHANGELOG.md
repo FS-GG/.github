@@ -19,6 +19,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-06** — **coordination coherent set `github:0.83.3` published; registry reconciliation**
+  ([.github#3249](https://github.com/FS-GG/.github/issues/3249), source
+  [.github#3247](https://github.com/FS-GG/.github/issues/3247),
+  [promotion 33997319723](https://github.com/FS-GG/.github/actions/runs/33997319723),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.83.3)):
+  advances the observed package frontier from 0.83.2 to 0.83.3. Exact-source recovery runs
+  33996943718/33996944951/33996946158 verified the stored manifest-bound artifacts and receiver
+  receipts after parallel tag/dispatch publishers raced; direct recovery 33997185487 triggered the
+  successful promotion observer. Both feeds serve the three 0.83.3 members with matching normalized
+  payload hashes. Source `5e4c23790c714b892b0c5efa25b515ae4eaf252e`; content
+  `sha256:aa95e6038bd0630eb163b0001c2f5628bc0daf71d0da8170f9e6fb6e44697ec2`;
+  manifest `sha256:0ac7479882941266c765d7db9b1005e8089dde99a8023eb4667231daa64d2091`;
+  stable channel `sha256:0c4a9653e55fb72553cdea243c3468114f27dbc74a8717650558f1e5736668d9`.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.3` source prepared** — [.github#3247](https://github.com/FS-GG/.github/issues/3247) advances the source frontier from 0.83.2 to 0.83.3. Roadmap acceptance now separates the immutable qualification/critique envelope from the preceding structured-review authority and binds independent SDD observation to the current structured delivery-route work ID. Published package frontier remains 0.83.2 until the exact accepted merge is promoted.
 
 - **2026-09-05** — **coordination coherent set `github:0.83.2` published; registry reconciliation**
