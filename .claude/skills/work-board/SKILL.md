@@ -7,6 +7,15 @@ description: Use when explicitly asked to burn down one coordination-wired produ
 
 Burn down one coordination-wired workspace's board. The local board is both plan and ledger.
 
+## Permanent orchestrator room
+
+At host entry, before every dispatch, recovery, or force-claim, and at every wait/yield/terminal
+transition, follow [the permanent orchestrator-room procedure](references/orchestrator-room.md).
+Room `FS-GG/.github#3227` is the append-only host-presence
+ledger shared with org-wide drivers. A latest `active` or `waiting` status for the target item from
+another orchestrator forbids a force-claim until that orchestrator posts `yielded` or explicitly hands
+off in the room. An unreadable, malformed, or contradictory room/claim state fails closed.
+
 1. Reconcile the workspace and consume the complete four-part `check-board` result.
 2. Run [backlog-triage](references/backlog-triage.md), classifying every relevant parked row without
    guessing human judgement and promoting only evidenced actionable work to `Ready`.
