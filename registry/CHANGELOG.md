@@ -19,6 +19,24 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.83.1` published; registry reconciliation**
+  (owner github; [.github#3233](https://github.com/FS-GG/.github/issues/3233),
+  [source PR #3235](https://github.com/FS-GG/.github/pull/3235),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.83.1)):
+  advances the observed package frontier from 0.83.0 to 0.83.1. Initial publisher runs
+  [33978442009](https://github.com/FS-GG/.github/actions/runs/33978442009),
+  [33978440871](https://github.com/FS-GG/.github/actions/runs/33978440871), and
+  [33978440353](https://github.com/FS-GG/.github/actions/runs/33978440353) pushed the prepared set but
+  exceeded the bounded nuget.org indexing wait; their exact-source attempt-2 recoveries verified both
+  feeds and dispatched receivers. Promotion run
+  [33978921809](https://github.com/FS-GG/.github/actions/runs/33978921809) sealed source
+  `2237ab8282433234e0d1af3f4716ef099422e282` as content
+  `sha256:43f9d6a386ce2988e1825d0439642e2965c937ee264bec3dca107dcd78ee2c1d`.
+  Both feeds expose the same normalized payloads: Coord.Cli
+  `sha256:6ef81f6c5e5c5651c29a486ddd57a18a26297b4f417edb80adab88d592befd92`, Drivers
+  `sha256:8f526310944a67d3d0d973fb26b99000615e4c38fa2bd0868933e505d42075c4`, and Kit
+  `sha256:50836b8c398aaa0bb75acc8fd50cc101fd7f7766ae43fa434edf844ed63f0ce3`.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.1` source prepared**
   (owner github; [.github#3233](https://github.com/FS-GG/.github/issues/3233)):
   advances the source frontier from 0.83.0 to 0.83.1 for a patch to roadmap work-unit preparation.
