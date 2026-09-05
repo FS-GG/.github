@@ -7,12 +7,6 @@ open FS.GG.Coord.GitHub
 
 module QualificationEvidenceTests =
     let private head = System.String('a', 40)
-    let private comment id body : QualificationEvidence.ObligationComment =
-        { CommentId = id
-          Url = $"https://github.com/FS-GG/.github/pull/1#issuecomment-%d{id}"
-          Author = "github-actions[bot]"
-          Body = body }
-
     [<Fact>]
     let ``#3209 run job and check observations retain exact subject and terminal state`` () =
         let observation =
@@ -29,40 +23,14 @@ module QualificationEvidenceTests =
         Assert.Equal(System.String('b', 40), observation.Checks[2].SubjectRevision)
 
     [<Fact>]
-    let ``#3209 typed no-obligations comment round trips at exact head`` () =
-        let body = QualificationEvidence.renderObligationComment head Qualification.NoObligations
-        let observed = QualificationEvidence.readObligationComments head [ comment 1L "ordinary prose"; comment 2L body ] |> Result.defaultWith (String.concat ";" >> failwith)
-        Assert.Equal(head, observed.HeadSha)
-        Assert.Equal<Qualification.ObligationDeclaration list>([ Qualification.NoObligations ], observed.Declarations)
-        Assert.Equal(Some 2L, observed.Readback |> Option.map _.CommentId)
-
-    [<Fact>]
-    let ``#3209 duplicate current-head declarations remain visible for fail-closed validation`` () =
-        let first = QualificationEvidence.renderObligationComment head (Qualification.Obligations [ "publish" ])
-        let second = QualificationEvidence.renderObligationComment head Qualification.NoObligations
-        let observed = QualificationEvidence.readObligationComments head [ comment 1L first; comment 2L second ] |> Result.defaultWith (String.concat ";" >> failwith)
-        Assert.Equal(2, observed.Declarations.Length)
-        Assert.True(observed.Readback.IsNone)
-
-    [<Fact>]
-    let ``#3209 stale malformed and unknown-field obligation comments do not pass as current`` () =
-        let stale = QualificationEvidence.renderObligationComment (System.String('b', 40)) Qualification.NoObligations
-        let observed = QualificationEvidence.readObligationComments head [ comment 1L stale ] |> Result.defaultWith (String.concat ";" >> failwith)
-        Assert.False(observed.HeadSha = head)
-        let malformed = stale.Replace("\"ids\":[]", "\"ids\":[],\"unknown\":true")
-        match QualificationEvidence.readObligationComments head [ comment 2L malformed ] with
-        | Error errors -> Assert.Contains("unknown fields", String.concat ";" errors)
-        | Ok _ -> failwith "expected malformed obligation refusal"
-
-    [<Fact>]
-    let ``#3209 obligation inspection distinguishes guarded create from verified readback`` () =
-        match QualificationEvidence.inspectObligationComments head Qualification.NoObligations [] with
-        | Ok(QualificationEvidence.GuardedCreateIntent body) -> Assert.Contains(head, body)
-        | other -> failwithf "expected guarded create intent, got %A" other
-        let body = QualificationEvidence.renderObligationComment head Qualification.NoObligations
-        match QualificationEvidence.inspectObligationComments head Qualification.NoObligations [ comment 7L body ] with
-        | Ok(QualificationEvidence.VerifiedReadback observed) -> Assert.Equal(Some 7L, observed.Readback |> Option.map _.CommentId)
-        | other -> failwithf "expected verified readback, got %A" other
+    let ``#3209 renders the existing delivery obligation grammar exactly`` () =
+        let none = QualificationEvidence.renderObligationComment head Qualification.NoObligations
+        Assert.Equal($"<!-- fsgg:delivery-obligations none head=%s{head} -->\n", none)
+        let some =
+            QualificationEvidence.renderObligationComment
+                head
+                (Qualification.Obligation { Id = "coord-0.82.0"; Kind = "package-release" })
+        Assert.Equal($"<!-- fsgg:delivery-obligation id=coord-0.82.0 kind=package-release head=%s{head} -->\n", some)
 
     [<Fact>]
     let ``#3209 wrong typed hosted snapshot returns typed error`` () =
@@ -83,3 +51,38 @@ module QualificationEvidenceTests =
         match QualificationEvidence.parseObligationReadback bytes with
         | Error errors -> Assert.Contains("exact GitHub PR issuecomment URL", String.concat ";" errors)
         | Ok _ -> failwith "expected comment identity mismatch refusal"
+
+    [<Fact>]
+    let ``#3209 authoritative readback preserves the existing delivery marker body`` () =
+        let body = QualificationEvidence.renderObligationComment head Qualification.NoObligations
+        let bytes =
+            JsonSerializer.SerializeToUtf8Bytes
+                {| schema = QualificationEvidence.ObligationReadbackSchema
+                   commentId = 7L
+                   url = "https://github.com/FS-GG/.github/pull/1#issuecomment-7"
+                   author = "github-actions[bot]"
+                   body = body |}
+        let observed = QualificationEvidence.parseObligationReadback bytes |> Result.defaultWith (String.concat ";" >> failwith)
+        Assert.Equal(body, observed.Body)
+
+    [<Fact>]
+    let ``#3209 obligation readback refuses an unknown schema`` () =
+        let bytes =
+            JsonSerializer.SerializeToUtf8Bytes
+                {| schema = "fsgg.qualification.obligation-readback/999"
+                   commentId = 7L
+                   url = "https://github.com/FS-GG/.github/pull/1#issuecomment-7"
+                   author = "github-actions[bot]"
+                   body = QualificationEvidence.renderObligationComment head Qualification.NoObligations |}
+        match QualificationEvidence.parseObligationReadback bytes with
+        | Error errors -> Assert.Contains("readback schema", String.concat ";" errors)
+        | Ok _ -> failwith "expected schema refusal"
+
+    [<Fact>]
+    let ``#3209 obligation readback wrong typed body returns a typed error`` () =
+        let bytes =
+            System.Text.Encoding.UTF8.GetBytes
+                "{\"schema\":\"fsgg.qualification.obligation-readback/1\",\"commentId\":7,\"url\":\"https://github.com/FS-GG/.github/pull/1#issuecomment-7\",\"author\":\"bot\",\"body\":1}"
+        match QualificationEvidence.parseObligationReadback bytes with
+        | Error errors -> Assert.Contains("invalid obligation readback JSON", String.concat ";" errors)
+        | Ok _ -> failwith "expected typed body refusal"

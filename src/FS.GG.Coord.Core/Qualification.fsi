@@ -59,7 +59,11 @@ module Qualification =
         { Complete: bool
           Checks: HostedCheck list }
 
-    type ObligationDeclaration = NoObligations | Obligations of ids: string list
+    type Obligation =
+        { Id: string
+          Kind: string }
+
+    type ObligationDeclaration = NoObligations | Obligation of Obligation
 
     type ObligationAuthority =
         { CommentId: int64
@@ -69,7 +73,7 @@ module Qualification =
     type ObligationObservation =
         { HeadSha: string
           Declarations: ObligationDeclaration list
-          Readback: ObligationAuthority option }
+          Readbacks: ObligationAuthority list }
 
     type SemanticReview =
         { SubjectRevision: string

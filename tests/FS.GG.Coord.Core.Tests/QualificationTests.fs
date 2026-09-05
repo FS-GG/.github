@@ -60,11 +60,11 @@ module QualificationTests =
           Obligations =
             { HeadSha = revision
               Declarations = [ NoObligations ]
-              Readback =
-                Some
+              Readbacks =
+                [
                     { CommentId = 1L
                       Url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"
-                      Author = "github-actions[bot]" } }
+                      Author = "github-actions[bot]" } ] }
           SemanticReview = { SubjectRevision = revision; Accepted = true; Evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" } }
 
     let private findings input =
@@ -166,7 +166,10 @@ module QualificationTests =
     [<Fact>]
     let ``#3209 obligation declaration is exact current-head singleton`` () =
         let input = acceptedInput ()
-        let stale = { input.Obligations with HeadSha = System.String('2', 40); Declarations = [ NoObligations; Obligations [ "publish"; "publish" ] ] }
+        let stale =
+            { input.Obligations with
+                HeadSha = System.String('2', 40)
+                Declarations = [ NoObligations; Obligation { Id = "publish"; Kind = "publication" } ] }
         let values = findings { input with Obligations = stale }
         contains (function ObligationHeadMismatch _ -> true | _ -> false) values
         contains (function ObligationDeclarationDuplicate 2 -> true | _ -> false) values
@@ -175,14 +178,17 @@ module QualificationTests =
     let ``#3209 duplicate obligation ids and absent declaration are refused`` () =
         let input = acceptedInput ()
         contains (function ObligationDeclarationMissing -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Declarations = [] } })
-        contains (function ObligationIdDuplicate "publish" -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Declarations = [ Obligations [ "publish"; "publish" ] ] } })
+        let duplicate =
+            [ Obligation { Id = "publish"; Kind = "publication" }
+              Obligation { Id = "publish"; Kind = "deployment" } ]
+        contains (function ObligationIdDuplicate "publish" -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Declarations = duplicate; Readbacks = [ input.Obligations.Readbacks.Head; input.Obligations.Readbacks.Head ] } })
 
     [<Fact>]
     let ``#3209 obligation acceptance requires authoritative readback identity`` () =
         let input = acceptedInput ()
-        contains (function ObligationReadbackMissing -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readback = None } })
+        contains (function ObligationReadbackMissing -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readbacks = [] } })
         let invalid = { CommentId = 0L; Url = "file:///tmp/asserted"; Author = "" }
-        contains (function ObligationReadbackInvalid -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readback = Some invalid } })
+        contains (function ObligationReadbackInvalid -> true | _ -> false) (findings { input with Obligations = { input.Obligations with Readbacks = [ invalid ] } })
 
     [<Fact>]
     let ``#3209 semantic review is mandatory and exact-subject`` () =

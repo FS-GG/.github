@@ -2,6 +2,7 @@ namespace FS.GG.Coord.GitHub
 
 open System
 open System.Text.Json
+open System.Text.RegularExpressions
 open FS.GG.Coord
 
 module QualificationEvidence =
@@ -9,23 +10,16 @@ module QualificationEvidence =
     let HostedSchema = "fsgg.qualification.hosted-observation/1"
 
     [<Literal>]
-    let ObligationSchema = "fsgg.qualification.obligations/1"
-
-    [<Literal>]
     let ObligationReadbackSchema = "fsgg.qualification.obligation-readback/1"
-
-    [<Literal>]
-    let private Marker = "<!-- fsgg:qualification-obligations/v1 -->"
 
     type HostedScope = WorkflowRun | Job | CheckRun
     type HostedState = Queued | InProgress | Completed of conclusion: string
     type HostedItem = { Scope: HostedScope; Id: string; HeadSha: string; State: HostedState }
     type HostedSnapshot = { Complete: bool; Items: HostedItem list }
     type ObligationComment = { CommentId: int64; Url: string; Author: string; Body: string }
-    type ObligationInspection =
-        | GuardedCreateIntent of body: string
-        | VerifiedReadback of Qualification.ObligationObservation
 
+    let private githubPullPathPattern =
+        Regex("^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let parseHostedSnapshot (bytes: byte array) =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
@@ -73,18 +67,11 @@ module QualificationEvidence =
                 { Qualification.HostedCheck.Scope = scope item.Scope; Id = item.Id
                   SubjectRevision = item.HeadSha; State = status; Conclusion = conclusion }) }
 
-    let private kindAndIds = function
-        | Qualification.NoObligations -> "none", []
-        | Qualification.Obligations ids -> "some", ids
-
     let renderObligationComment (headSha: string) declaration =
-        let kind, ids = kindAndIds declaration
-        let payload =
-            JsonSerializer.SerializeToUtf8Bytes
-                {| schema = ObligationSchema; headSha = headSha; kind = kind; ids = ids |}
-            |> CanonicalJson.canonicalize
-            |> Result.defaultWith invalidOp
-        $"%s{Marker}\n%s{payload}\n"
+        match declaration with
+        | Qualification.NoObligations -> $"<!-- fsgg:delivery-obligations none head=%s{headSha} -->\n"
+        | Qualification.Obligation obligation ->
+            $"<!-- fsgg:delivery-obligation id=%s{obligation.Id} kind=%s{obligation.Kind} head=%s{headSha} -->\n"
 
     let private strictObject expected (element: JsonElement) =
         if element.ValueKind <> JsonValueKind.Object then Error "obligation payload must be an object" else
@@ -112,7 +99,7 @@ module QualificationEvidence =
                     | true, uri ->
                         uri.Scheme = Uri.UriSchemeHttps
                         && uri.Host = "github.com"
-                        && uri.AbsolutePath.Contains("/pull/", StringComparison.Ordinal)
+                        && githubPullPathPattern.IsMatch(uri.AbsolutePath)
                         && uri.Fragment = $"#issuecomment-%d{commentId}"
                     | _ -> false
                 if schema <> ObligationReadbackSchema then Error($"obligation readback schema must be '%s{ObligationReadbackSchema}'")
@@ -123,61 +110,3 @@ module QualificationEvidence =
                 else Ok { CommentId = commentId; Url = url; Author = author; Body = body })
             |> Result.mapError List.singleton
         with error -> Error [ $"invalid obligation readback JSON: %s{error.Message}" ]
-
-    let private parse (body: string) =
-        try
-            let payload = body.Substring(Marker.Length).Trim()
-            use document = JsonDocument.Parse payload
-            let root = document.RootElement
-            strictObject [ "schema"; "headSha"; "kind"; "ids" ] root
-            |> Result.bind (fun () ->
-                let schema, head, kind = root.GetProperty("schema").GetString(), root.GetProperty("headSha").GetString(), root.GetProperty("kind").GetString()
-                let idsElement = root.GetProperty "ids"
-                if schema <> ObligationSchema then Error($"obligation schema must be '%s{ObligationSchema}'")
-                elif String.IsNullOrWhiteSpace head then Error "obligation headSha must be non-empty"
-                elif idsElement.ValueKind <> JsonValueKind.Array then Error "obligation ids must be an array"
-                else
-                    let ids = idsElement.EnumerateArray() |> Seq.map (fun value -> value.GetString()) |> List.ofSeq
-                    if ids |> List.exists String.IsNullOrWhiteSpace then Error "obligation ids must be non-empty strings"
-                    else
-                        match kind, ids with
-                        | "none", [] -> Ok(head, Qualification.NoObligations)
-                        | "some", _ :: _ -> Ok(head, Qualification.Obligations ids)
-                        | _ -> Error($"invalid obligation kind/ids combination '%s{kind}'"))
-        with error -> Error($"invalid obligation comment: %s{error.Message}")
-
-    let readObligationComments (expectedHead: string) (comments: ObligationComment list) : Result<Qualification.ObligationObservation, string list> =
-        let parsed =
-            comments
-            |> List.choose (fun comment ->
-                if comment.Body.TrimStart().StartsWith(Marker, StringComparison.Ordinal) then
-                    Some(comment, parse comment.Body)
-                else None)
-        let errors = parsed |> List.choose (fun (_, result) -> match result with Error value -> Some value | _ -> None)
-        if not errors.IsEmpty then Error errors else
-        let values = parsed |> List.choose (fun (comment, result) -> match result with Ok value -> Some(comment, value) | _ -> None)
-        let current = values |> List.filter (fun (_, (head, _)) -> head = expectedHead)
-        match current, values with
-        | [], [] -> Ok { HeadSha = expectedHead; Declarations = []; Readback = None }
-        | [], (comment, (head, declaration)) :: _ ->
-            Ok
-                { HeadSha = head; Declarations = [ declaration ]
-                  Readback = Some { CommentId = comment.CommentId; Url = comment.Url; Author = comment.Author } }
-        | matches, _ ->
-            Ok
-                { HeadSha = expectedHead
-                  Declarations = matches |> List.map (snd >> snd)
-                  Readback =
-                    matches
-                    |> List.tryExactlyOne
-                    |> Option.map (fun (comment, _) ->
-                        { CommentId = comment.CommentId; Url = comment.Url; Author = comment.Author }) }
-
-    let inspectObligationComments expectedHead expected comments =
-        readObligationComments expectedHead comments
-        |> Result.bind (fun observation ->
-            match observation.Declarations, observation.Readback with
-            | [ declaration ], Some _ when observation.HeadSha = expectedHead && declaration = expected ->
-                Ok(VerifiedReadback observation)
-            | [], None -> Ok(GuardedCreateIntent(renderObligationComment expectedHead expected))
-            | _ -> Error [ "obligation readback does not exactly match the expected current-head declaration" ])

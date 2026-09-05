@@ -26,10 +26,11 @@ module Qualification =
           FixtureExecutorId: string; FixtureExecutorRole: string }
     type HostedCheck = { Scope: string; Id: string; SubjectRevision: string; State: string; Conclusion: string }
     type HostedObservation = { Complete: bool; Checks: HostedCheck list }
-    type ObligationDeclaration = NoObligations | Obligations of ids: string list
+    type Obligation = { Id: string; Kind: string }
+    type ObligationDeclaration = NoObligations | Obligation of Obligation
     type ObligationAuthority = { CommentId: int64; Url: string; Author: string }
     type ObligationObservation =
-        { HeadSha: string; Declarations: ObligationDeclaration list; Readback: ObligationAuthority option }
+        { HeadSha: string; Declarations: ObligationDeclaration list; Readbacks: ObligationAuthority list }
     type SemanticReview = { SubjectRevision: string; Accepted: bool; Evidence: string }
     type Input =
         { Schema: string; Subject: string; SubjectRevision: string; CheckoutClean: bool
@@ -80,6 +81,9 @@ module Qualification =
     let private revisionPattern = Regex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
     let private subjectPattern = Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private tokenPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.CultureInvariant)
+    let private obligationIdPattern = Regex("^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)
+    let private obligationKindPattern = Regex("^[a-z0-9][a-z0-9_-]*$", RegexOptions.CultureInvariant)
+    let private githubPullPathPattern = Regex("^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$", RegexOptions.CultureInvariant)
 
     let private duplicates kind (values: string list) =
         values
@@ -222,28 +226,25 @@ module Qualification =
                               State = text checkLabel "state" check; Conclusion = text checkLabel "conclusion" check })
                     { Complete = boolean label "complete" observation; Checks = checks })
             let obligationElement = property "obligations" root
-            strictObject "obligations" [ "headSha"; "declarations"; "readback" ] obligationElement
+            strictObject "obligations" [ "headSha"; "declarations"; "readbacks" ] obligationElement
             let declarations =
                 array "obligations" "declarations" obligationElement
                 |> List.mapi (fun index declaration ->
                     let label = $"obligations.declarations[%d{index}]"
-                    strictObject label [ "kind"; "ids" ] declaration
-                    match text label "kind" declaration, strings label "ids" declaration with
-                    | "none", [] -> NoObligations
-                    | "some", ids when not ids.IsEmpty -> Obligations ids
-                    | kind, _ -> raise (FormatException($"%s{label} has invalid kind/ids combination '%s{kind}'")))
-            let readbackElement = property "readback" obligationElement
-            let readback =
-                match readbackElement.ValueKind with
-                | JsonValueKind.Null -> None
-                | JsonValueKind.Object ->
-                    strictObject "obligations.readback" [ "commentId"; "url"; "author" ] readbackElement
-                    let commentId = readbackElement.GetProperty("commentId").GetInt64()
-                    Some
-                        { CommentId = commentId
-                          Url = text "obligations.readback" "url" readbackElement
-                          Author = text "obligations.readback" "author" readbackElement }
-                | _ -> raise (FormatException("obligations.readback must be null or an object"))
+                    strictObject label [ "id"; "kind" ] declaration
+                    let idElement = property "id" declaration
+                    match text label "kind" declaration with
+                    | "none" when idElement.ValueKind = JsonValueKind.Null -> NoObligations
+                    | "none" -> raise (FormatException($"%s{label}.id must be null for kind 'none'"))
+                    | kind -> Obligation { Id = text label "id" declaration; Kind = kind })
+            let readbacks =
+                array "obligations" "readbacks" obligationElement
+                |> List.mapi (fun index readbackElement ->
+                    let label = $"obligations.readbacks[%d{index}]"
+                    strictObject label [ "commentId"; "url"; "author" ] readbackElement
+                    { CommentId = readbackElement.GetProperty("commentId").GetInt64()
+                      Url = text label "url" readbackElement
+                      Author = text label "author" readbackElement })
             let semantic = property "semanticReview" root
             strictObject "semanticReview" [ "subjectRevision"; "accepted"; "evidence" ] semantic
             Ok
@@ -260,7 +261,7 @@ module Qualification =
                   Obligations =
                     { HeadSha = text "obligations" "headSha" obligationElement
                       Declarations = declarations
-                      Readback = readback }
+                      Readbacks = readbacks }
                   SemanticReview =
                     { SubjectRevision = text "semanticReview" "subjectRevision" semantic
                       Accepted = boolean "semanticReview" "accepted" semantic
@@ -387,23 +388,25 @@ module Qualification =
         match input.Obligations.Declarations with
         | [] -> findings.Add ObligationDeclarationMissing
         | [ NoObligations ] -> ()
-        | [ Obligations ids ] ->
-            findings.AddRange(duplicates "obligation" ids)
-            for id, count in List.countBy id ids do if count > 1 then findings.Add(ObligationIdDuplicate id)
+        | declarations when declarations |> List.forall (function Obligation _ -> true | _ -> false) ->
+            let obligations = declarations |> List.choose (function Obligation value -> Some value | _ -> None)
+            findings.AddRange(duplicates "obligation" (obligations |> List.map _.Id))
+            for id, count in List.countBy id (obligations |> List.map _.Id) do if count > 1 then findings.Add(ObligationIdDuplicate id)
+            for obligation in obligations do
+                if not (obligationIdPattern.IsMatch obligation.Id) || not (obligationKindPattern.IsMatch obligation.Kind) then
+                    findings.Add(ObligationReadbackInvalid)
         | declarations -> findings.Add(ObligationDeclarationDuplicate declarations.Length)
-        match input.Obligations.Readback with
-        | None -> findings.Add ObligationReadbackMissing
-        | Some readback ->
+        if input.Obligations.Readbacks.Length <> input.Obligations.Declarations.Length then findings.Add ObligationReadbackMissing
+        for readback in input.Obligations.Readbacks do
             let validUrl =
                 match Uri.TryCreate(readback.Url, UriKind.Absolute) with
                 | true, uri ->
                     uri.Scheme = Uri.UriSchemeHttps
                     && uri.Host = "github.com"
-                    && uri.AbsolutePath.Contains("/pull/", StringComparison.Ordinal)
+                    && githubPullPathPattern.IsMatch(uri.AbsolutePath)
                     && uri.Fragment = $"#issuecomment-%d{readback.CommentId}"
                 | _ -> false
-            if readback.CommentId <= 0L || String.IsNullOrWhiteSpace readback.Author || not validUrl then
-                findings.Add ObligationReadbackInvalid
+            if readback.CommentId <= 0L || String.IsNullOrWhiteSpace readback.Author || not validUrl then findings.Add ObligationReadbackInvalid
 
         if not input.SemanticReview.Accepted || String.IsNullOrWhiteSpace input.SemanticReview.Evidence then findings.Add SemanticReviewMissing
         if input.SemanticReview.SubjectRevision <> input.SubjectRevision then findings.Add(SemanticReviewStale input.SemanticReview.SubjectRevision)
@@ -412,8 +415,7 @@ module Qualification =
         let obligationCount =
             match input.Obligations.Declarations with
             | [ NoObligations ] -> 0
-            | [ Obligations ids ] -> ids.Length
-            | _ -> 0
+            | declarations -> declarations |> List.sumBy (function Obligation _ -> 1 | NoObligations -> 0)
         let frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
         let addList values = string (List.length values) :: values
         let toolValues (tool: ToolIdentity) = [ tool.Id; tool.Version; tool.Sha256 ]
@@ -434,7 +436,7 @@ module Qualification =
             @ (observation.Checks |> List.collect (fun check -> [ check.Scope; check.Id; check.SubjectRevision; check.State; check.Conclusion ]))
         let obligationValues =
             input.Obligations.Declarations
-            |> List.collect (function NoObligations -> [ "none"; "0" ] | Obligations ids -> "some" :: addList ids)
+            |> List.collect (function NoObligations -> [ "none"; "" ] | Obligation value -> [ value.Kind; value.Id ])
         let evidenceValues =
             [ input.Schema; input.Subject; input.SubjectRevision; string input.CheckoutClean ]
             @ addList (input.ToolManifest |> List.collect toolValues)
@@ -444,9 +446,7 @@ module Qualification =
             @ addList (input.Mutations |> List.collect mutationValues)
             @ addList (input.HostedObservations |> List.collect hostedValues)
             @ [ input.Obligations.HeadSha ] @ addList obligationValues
-            @ (match input.Obligations.Readback with
-               | Some readback -> [ string readback.CommentId; readback.Url; readback.Author ]
-               | None -> [ ""; ""; "" ])
+            @ addList (input.Obligations.Readbacks |> List.collect (fun readback -> [ string readback.CommentId; readback.Url; readback.Author ]))
             @ [ input.SemanticReview.SubjectRevision; string input.SemanticReview.Accepted; input.SemanticReview.Evidence ]
         let evidenceDigest = evidenceValues |> List.map frame |> String.concat "|" |> Encoding.UTF8.GetBytes |> CanonicalJson.sha256
         let draft =

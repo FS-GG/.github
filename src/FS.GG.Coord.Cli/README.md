@@ -81,8 +81,9 @@ export-comments|seal-successor|validate` elects GitHub-comment order, seals the 
 immutable `--usage` and optional `--history-report` receipts before measured terminal evidence is accepted.
 `telemetry summarize`, `telemetry critique validate`, and `telemetry feedback validate` are read-only.
 `telemetry qualification validate|run` validates or executes the closed exact-checkout qualification
-contract. `telemetry qualification obligation render|verify` emits a guarded current-head declaration
-body or verifies a strict GitHub PR comment readback receipt whose URL and comment id agree.
+contract. `telemetry qualification obligation render|verify` emits the existing guarded, current-head
+`fsgg:delivery-obligation(s)` grammar or verifies a strict GitHub PR comment readback through the same
+delivery parser, with URL and comment id agreement; it introduces no second marker authority.
 
 `roadmap close inspect|render|verify` consumes an evidence manifest whose relative artifact paths bind an
 accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback

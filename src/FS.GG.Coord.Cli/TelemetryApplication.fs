@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 open FS.GG.Coord
 open FS.GG.Coord.GitHub
 
@@ -310,12 +311,29 @@ module TelemetryApplication =
         match required "--kind" args with
         | Error reason -> Error [ reason ]
         | Ok "none" when options "--id" args |> List.isEmpty -> Ok Qualification.NoObligations
-        | Ok "some" when options "--id" args |> List.isEmpty -> Error [ "--kind some requires at least one --id" ]
-        | Ok "some" when options "--id" args |> List.distinct |> List.length <> (options "--id" args |> List.length) ->
-            Error [ "--id values must be unique" ]
-        | Ok "some" -> Ok(Qualification.Obligations(options "--id" args))
         | Ok "none" -> Error [ "--kind none does not accept --id" ]
-        | Ok value -> Error [ $"--kind must be none or some, observed '%s{value}'" ]
+        | Ok kind ->
+            match options "--id" args with
+            | [ id ] when Regex.IsMatch(id, "^[a-z0-9][a-z0-9._-]*$") && Regex.IsMatch(kind, "^[a-z0-9][a-z0-9_-]*$") ->
+                Ok(Qualification.Obligation { Id = id; Kind = kind })
+            | [ _ ] -> Error [ "delivery obligation id or kind has invalid characters" ]
+            | _ -> Error [ "a delivery obligation kind requires exactly one --id" ]
+
+    let private inspectObligationComments head declaration (comments: QualificationEvidence.ObligationComment list) =
+        let reviewComments =
+            comments
+            |> List.map (fun comment ->
+                ({ Id = comment.CommentId; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+        DeliveryApplication.obligationsFromComments head reviewComments
+        |> Result.mapError List.singleton
+        |> Result.bind (fun observed ->
+            let expected =
+                match declaration with
+                | Qualification.NoObligations -> []
+                | Qualification.Obligation obligation -> [ obligation.Id, obligation.Kind ]
+            let actual = observed |> List.map (fun obligation -> obligation.Id, obligation.Kind)
+            if actual = expected && comments.Length = 1 then Ok comments.Head
+            else Error [ "obligation readback does not exactly match the expected current-head delivery declaration" ])
 
     let private qualificationObligation action args =
         try
@@ -334,16 +352,16 @@ module TelemetryApplication =
                 let errors = receipts |> List.collect (function Error values -> values | _ -> [])
                 if not errors.IsEmpty then fail "telemetry qualification obligation" errors else
                 let comments = receipts |> List.choose (function Ok value -> Some value | _ -> None)
-                match QualificationEvidence.inspectObligationComments head declaration comments with
-                | Error reasons -> fail "telemetry qualification obligation" reasons
-                | Ok(QualificationEvidence.GuardedCreateIntent _) ->
+                if comments.IsEmpty then
                     fail "telemetry qualification obligation" [ "no authoritative current-head readback exists; run obligation render and create it through the guarded comment boundary" ]
-                | Ok(QualificationEvidence.VerifiedReadback observation) ->
-                    let authority = observation.Readback |> Option.get
+                else
+                match inspectObligationComments head declaration comments with
+                | Error reasons -> fail "telemetry qualification obligation" reasons
+                | Ok authority ->
                     let value =
                         JsonSerializer.SerializeToUtf8Bytes
                             {| schema = "fsgg.qualification.obligation-verification/1"
-                               headSha = observation.HeadSha
+                               headSha = head
                                commentId = authority.CommentId
                                url = authority.Url
                                author = authority.Author |}

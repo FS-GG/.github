@@ -94,8 +94,8 @@ module TelemetryCliTests =
                    {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |} ]
                obligations =
                  {| headSha = revision
-                    declarations = [ {| kind = "none"; ids = List.empty<string> |} ]
-                    readback = Some {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "github-actions[bot]" |} |}
+                    declarations = [ {| id = (None: string option); kind = "none" |} ]
+                    readbacks = [ {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "github-actions[bot]" |} ] |}
                semanticReview = {| subjectRevision = revision; accepted = true; evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" |} |}
 
     let private qualificationRunFixture () =
@@ -142,8 +142,8 @@ module TelemetryCliTests =
                        {| complete = true; checks = [ {| scope = "check"; id = "1"; subjectRevision = revision; state = "completed"; conclusion = "success" |} ] |} ]
                    obligations =
                      {| headSha = revision
-                        declarations = [ {| kind = "none"; ids = List.empty<string> |} ]
-                        readback = Some {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "template" |} |}
+                        declarations = [ {| id = (None: string option); kind = "none" |} ]
+                        readbacks = [ {| commentId = 1L; url = "https://github.com/FS-GG/.github/pull/1#issuecomment-1"; author = "template" |} ] |}
                    semanticReview = {| subjectRevision = revision; accepted = true; evidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-1" |} |}
         let operation id artifact =
             {| id = id
@@ -320,7 +320,7 @@ module TelemetryCliTests =
         let renderCode, body, renderError = invoke renderArgs
         Assert.Equal(0, renderCode)
         Assert.Equal("", renderError)
-        Assert.Contains("fsgg:qualification-obligations/v1", body)
+        Assert.Contains("fsgg:delivery-obligations none", body)
         let receipt =
             JsonSerializer.Serialize
                 {| schema = QualificationEvidence.ObligationReadbackSchema
@@ -336,6 +336,52 @@ module TelemetryCliTests =
         Assert.Equal("", stderr)
         Assert.Contains("\"schema\":\"fsgg.qualification.obligation-verification/1\"", stdout)
         Assert.Contains("\"commentId\":77", stdout)
+
+        let someArgs =
+            [ "telemetry"; "qualification"; "obligation"; "render"; "--head"; head
+              "--kind"; "package-release"; "--id"; "coord-0.82.0" ]
+        let someCode, someBody, someError = invoke someArgs
+        Assert.Equal(0, someCode)
+        Assert.Equal("", someError)
+        Assert.Contains("fsgg:delivery-obligation id=coord-0.82.0 kind=package-release", someBody)
+        let someReceipt =
+            JsonSerializer.Serialize
+                {| schema = QualificationEvidence.ObligationReadbackSchema
+                   commentId = 78L
+                   url = "https://github.com/FS-GG/.github/pull/3221#issuecomment-78"
+                   author = "github-actions[bot]"
+                   body = someBody |}
+        let someDisposable, someReceiptPath = temporary someReceipt
+        use _some = someDisposable
+        let someVerifyCode, _, someVerifyError =
+            invoke
+                [ "telemetry"; "qualification"; "obligation"; "verify"; "--head"; head
+                  "--kind"; "package-release"; "--id"; "coord-0.82.0"; "--readback"; someReceiptPath ]
+        Assert.Equal(0, someVerifyCode)
+        Assert.Equal("", someVerifyError)
+
+        let secondGrammarReceipt =
+            JsonSerializer.Serialize
+                {| schema = QualificationEvidence.ObligationReadbackSchema
+                   commentId = 79L
+                   url = "https://github.com/FS-GG/.github/pull/3221#issuecomment-79"
+                   author = "github-actions[bot]"
+                   body = $"<!-- fsgg:qualification-obligations/v1 -->\n{{\"headSha\":\"%s{head}\",\"kind\":\"some\",\"ids\":[\"coord-0.82.0\"]}}\n" |}
+        let oldDisposable, oldReceiptPath = temporary secondGrammarReceipt
+        use _old = oldDisposable
+        let oldCode, _, oldError =
+            invoke
+                [ "telemetry"; "qualification"; "obligation"; "verify"; "--head"; head
+                  "--kind"; "package-release"; "--id"; "coord-0.82.0"; "--readback"; oldReceiptPath ]
+        Assert.NotEqual(0, oldCode)
+        Assert.Contains("delivery obligations are undeclared", oldError)
+
+        let invalidCode, _, invalidError =
+            invoke
+                [ "telemetry"; "qualification"; "obligation"; "render"; "--head"; head
+                  "--kind"; "package.release"; "--id"; "Uppercase" ]
+        Assert.NotEqual(0, invalidCode)
+        Assert.Contains("invalid characters", invalidError)
 
     [<Fact>]
     let ``#3209 qualification runner executes exact clean checkout and fixed point`` () =

@@ -310,7 +310,24 @@ module QualificationApplication =
                         match QualificationEvidence.parseObligationReadback (File.ReadAllBytes resolved) with
                         | Error reasons -> errors.AddRange reasons; None
                         | Ok comment -> Some comment)
-            let obligations = QualificationEvidence.readObligationComments input.SubjectRevision obligationComments
+            let reviewComments =
+                obligationComments
+                |> List.map (fun comment ->
+                    ({ Id = comment.CommentId; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+            let obligations =
+                DeliveryApplication.obligationsFromComments input.SubjectRevision reviewComments
+                |> Result.mapError List.singleton
+                |> Result.map (fun declarations ->
+                    ({ HeadSha = input.SubjectRevision;
+                      Declarations =
+                        (if declarations.IsEmpty then [ Qualification.NoObligations ]
+                         else declarations |> List.map (fun item -> Qualification.Obligation { Id = item.Id; Kind = item.Kind }));
+                      Readbacks =
+                        obligationComments
+                        |> List.map (fun (comment: QualificationEvidence.ObligationComment) ->
+                            ({ CommentId = comment.CommentId; Url = comment.Url; Author = comment.Author }
+                             : Qualification.ObligationAuthority)) }
+                     : Qualification.ObligationObservation))
             match obligations with Error reasons -> errors.AddRange reasons | Ok _ -> ()
             if errors.Count > 0 then Error(List.ofSeq errors) else
             let qualified =
