@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ca9a96e30056a6e18771a0d65d126b208979e0f2d1df1a53fa591550bac7517a"
+        "value": "3adbdf21f4ffde15bc7153210a4d7ee70c7c333b9853340fc4b3105dea6a4bf2"
       }
     },
     {
@@ -523,6 +523,8 @@
         "FR-004"
       ],
       "artifactRefs": [
+        "Directory.Build.props",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
         "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
       ],
       "result": "pass",
@@ -595,6 +597,9 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
+        "Directory.Build.props",
+        "registry/dependencies.yml",
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
         "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
       ],
       "result": "pass",
@@ -619,6 +624,9 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
+        "docs/architecture.md",
+        "docs/registry/compatibility.md",
+        "registry/driver-skill-manifest.json",
         "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
       ],
       "result": "pass",
@@ -688,7 +696,7 @@
           "path": "work/3233-roadmap-partial-catalog-order/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "ca9a96e30056a6e18771a0d65d126b208979e0f2d1df1a53fa591550bac7517a"
+            "value": "3adbdf21f4ffde15bc7153210a4d7ee70c7c333b9853340fc4b3105dea6a4bf2"
           },
           "schemaVersion": 1
         },
@@ -719,7 +727,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "d34b50607b5ff916a7eae2b377ad9594c5acf938c407b7c1e16b7c346d9c50fa"
+        "value": "b4d33748ad29e13097cdfa4d9c552c029b6b69d1bb4302d6a183e949e1383c9f"
       },
       "currency": "current"
     }

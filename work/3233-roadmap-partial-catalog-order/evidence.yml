@@ -127,10 +127,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    artifacts: [Directory.Build.props, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+      - kind: verification
+        path: scripts/check-engine-freshness.py
+      - kind: verification
+        path: scripts/check-engine-release-notes.py
     result: pass
     synthetic: false
     observedRun:
@@ -141,7 +145,7 @@ evidence:
       passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+    notes: ["Focused RoadmapWorkUnit suite passed 10/10; Protocol.fs is unchanged; engine freshness reports zero wire-surface commits; the release-notes gate binds 0.83.1 to the shared scalar and preserves the standing advisory contract."]
   - id: EV005
     kind: verification
     subject:
@@ -208,10 +212,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV007]
-    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    artifacts: [Directory.Build.props, registry/dependencies.yml, src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj, work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+      - kind: verification
+        path: scripts/check-coherent-set-version.py
+      - kind: verification
+        path: scripts/check-feed-coherence.py
     result: pass
     synthetic: false
     observedRun:
@@ -222,7 +230,7 @@ evidence:
       passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+    notes: ["Source frontier is 0.83.1 while package-version remains feed-coherent at 0.83.0; PR comments 5552929810, 5552929911, 5552930019, and 5552930122 declare the exact-head automatic-release verification, SDD adoption, pilot, and reconciliation obligations."]
   - id: EV008
     kind: verification
     subject:
@@ -235,10 +243,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV008]
-    artifacts: [work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
+    artifacts: [docs/architecture.md, docs/registry/compatibility.md, registry/driver-skill-manifest.json, work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+      - kind: verification
+        path: scripts/generate-projections
+      - kind: verification
+        path: scripts/generate-driver-manifest
     result: pass
     synthetic: false
     observedRun:
@@ -249,6 +261,6 @@ evidence:
       passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused RoadmapWorkUnit suite passed 10/10; exact production preparation selected GS2-07.3 with prerequisite GS2-07.2; CLI roadmap round-trip suite passed 4/4."]
+    notes: [Projection check and driver-manifest check both report current output after the 0.83.1 source-frontier change.]
 lifecycleNotes:
   - "Next lifecycle action: verify."

@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/ship.json",
-      "digest": "sha256:c86ab89781bd83c10c6631dea19b80f847deab109aafcd97f93237397d6084b5",
+      "digest": "sha256:774f79d05055bef3c38b4ed2e3dbf90ab49476a02c03cf12c7e9ae6e22000808",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/verify.json",
-      "digest": "sha256:9c7059b037c969504f4334ab9bc09cd242092f7a5b72b8e45e99ae9935c487c0",
+      "digest": "sha256:010044e960a70be80e865d15d5f64bcf0e3073c66e20c4f7e9d2be70ccd34adb",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/work-model.json",
-      "digest": "sha256:9336ca62d09d0e94f1baa1f7e00f4d3f71348bc9502076f03697ed277d7294de",
+      "digest": "sha256:46a0f4f7388b25b670c962bfab84db20e2a99347c0c63d8bc466804feb225641",
       "schemaVersion": 1
     }
   ],
