@@ -8,6 +8,12 @@ module RoadmapWorkUnit =
     val PreparationPlanSchema: string = "fsgg.roadmap-unit.preparation-plan/1"
 
     [<Literal>]
+    val PreparationApplicationSchema: string = "fsgg.roadmap-unit.preparation-application/1"
+
+    [<Literal>]
+    val RevisionBindingSchema: string = "fsgg.roadmap-unit.revision-binding/1"
+
+    [<Literal>]
     val AcceptanceInputSchema: string = "fsgg.roadmap-unit.acceptance-input/1"
 
     [<Literal>]
@@ -47,6 +53,7 @@ module RoadmapWorkUnit =
           Catalog: CatalogRow list
           RoadmapRow: RoadmapRow
           AuthorityIssue: string
+          SddWorkId: string
           RegistrationOwner: string
           RegistrationRepository: string
           RegistrationPaths: string list }
@@ -54,6 +61,7 @@ module RoadmapWorkUnit =
     type PreparationRequest =
         { Schema: string
           AuthorityIssue: string
+          SddWorkId: string
           RegistrationOwner: string
           RegistrationRepository: string
           RegistrationPaths: string list }
@@ -63,8 +71,23 @@ module RoadmapWorkUnit =
           Unit: CatalogRow
           AcceptedPrerequisite: string
           Authority: AuthorityPin
+          SddWorkId: string
           Registrations: Registration list
           EvidenceObligations: string list
+          Digest: string }
+
+    type AppliedRegistration =
+        { Id: string
+          Kind: string
+          DraftSha256: string
+          Issue: string
+          IssueUrl: string }
+
+    type PreparationApplication =
+        { Schema: string
+          UnitId: string
+          PlanDigest: string
+          Registrations: AppliedRegistration list
           Digest: string }
 
     type SddObservation =
@@ -80,16 +103,20 @@ module RoadmapWorkUnit =
           ProtectedMain: string }
 
     type RevisionBinding =
-        { Candidate: string
+        { Schema: string
+          Repository: string
+          Candidate: string
           Merge: string
           CandidateTree: string
           MergeTree: string
-          Observed: bool
-          ArtifactSha256: string }
+          CommandSha256: string
+          ExitCode: int
+          Digest: string }
 
     type AcceptanceInput =
         { Schema: string
           Plan: PreparationPlan
+          PreparationApplication: PreparationApplication
           Qualification: Qualification.Accepted
           LifecycleRunId: string
           LifecycleUnitId: string
@@ -143,6 +170,13 @@ module RoadmapWorkUnit =
     val compilePreparation: roadmapBytes: byte array -> catalogBytes: byte array -> PreparationRequest -> Result<PreparationPlan, Finding list>
     val canonicalPlan: PreparationPlan -> string
     val canonicalIntakeDraft: Registration -> string
+    val sealPreparationApplication: plan: PreparationPlan -> registrations: AppliedRegistration list -> Result<PreparationApplication, Finding list>
+    val canonicalPreparationApplication: PreparationApplication -> string
+    val parsePreparationApplication: bytes: byte array -> Result<PreparationApplication, string list>
+    val canonicalRevisionCommand: repository: string -> candidate: string -> merge: string -> string
+    val sealRevisionBinding: repository: string -> candidate: string -> merge: string -> candidateTree: string -> mergeTree: string -> exitCode: int -> RevisionBinding
+    val canonicalRevisionBinding: RevisionBinding -> string
+    val parseRevisionBinding: bytes: byte array -> Result<RevisionBinding, string list>
     val parsePreparationInput: bytes: byte array -> Result<PreparationInput, string list>
     val parsePlan: bytes: byte array -> Result<PreparationPlan, string list>
     val renderPreparation: source: byte array -> PreparationPlan -> Result<string, Finding list>

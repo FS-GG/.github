@@ -42,5 +42,8 @@ module Handlers =
     val bodyEditsCmd: Context -> Options.Options -> int
     val issues: Context -> Options.Options -> int
     val intakeCmd: Context -> Options.Options -> int
+    /// Compile authoritative roadmap/catalog bytes, then apply every generated draft through the
+    /// existing receipt-first intake transaction. A retry resumes from persisted per-draft receipts.
+    val roadmapUnitPrepareApply: Context -> Options.Options -> int
     val handlers: (Options.Command * HandlerRegistration.Handler) list
     val programHandlers: runWithContext: (Options.Options -> int) -> (Options.Command * (Options.Options -> int)) list

@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli
 
 open System
 open System.IO
+open System.Diagnostics
 open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
@@ -433,6 +434,35 @@ module TelemetryApplication =
                     | _ -> fail "roadmap unit accept" [ "action must be inspect, render, or verify" ]
         with ex -> fail "roadmap unit accept" [ ex.Message ]
 
+    let private revisionBinding args =
+        let runGit repository values =
+            let info = ProcessStartInfo("git")
+            info.WorkingDirectory <- repository
+            info.RedirectStandardOutput <- true
+            info.RedirectStandardError <- true
+            info.UseShellExecute <- false
+            values |> List.iter info.ArgumentList.Add
+            use gitProcess = Process.Start info
+            let output = gitProcess.StandardOutput.ReadToEnd().Trim()
+            let errorText = gitProcess.StandardError.ReadToEnd().Trim()
+            gitProcess.WaitForExit()
+            gitProcess.ExitCode, output, errorText
+        try
+            match required "--repository" args, required "--repository-id" args, required "--candidate" args, required "--merge" args with
+            | Ok repository, Ok repositoryId, Ok candidate, Ok merge ->
+                let candidateExit, candidateTree, candidateError = runGit repository [ "rev-parse"; candidate + "^{tree}" ]
+                let mergeExit, mergeTree, mergeError = runGit repository [ "rev-parse"; merge + "^{tree}" ]
+                let ancestryExit, _, ancestryError = runGit repository [ "merge-base"; "--is-ancestor"; candidate; merge ]
+                if candidateExit <> 0 || mergeExit <> 0 || ancestryExit <> 0 then
+                    fail "roadmap unit revision" [ candidateError; mergeError; ancestryError ]
+                else
+                    let binding = RoadmapWorkUnit.sealRevisionBinding repositoryId candidate merge candidateTree mergeTree 0
+                    writeOrPrint args (RoadmapWorkUnit.canonicalRevisionBinding binding)
+                    green
+            | Error reason, _, _, _ | _, Error reason, _, _ | _, _, Error reason, _ | _, _, _, Error reason ->
+                fail "roadmap unit revision" [ reason ]
+        with ex -> fail "roadmap unit revision" [ ex.Message ]
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
@@ -467,10 +497,13 @@ module TelemetryApplication =
                 | "verify" -> [ "--evidence"; "--roadmap"; "--source-digest"; "--source-roadmap" ]
                 | _ -> []
             Some(validated "roadmap close" valueOptions [] args (roadmap action))
+        | "roadmap" :: "unit" :: "prepare" :: "apply" :: _ -> None
         | "roadmap" :: "unit" :: "prepare" :: action :: args ->
             Some(validated "roadmap unit prepare" [ "--input"; "--roadmap"; "--catalog"; "--registry"; "--source-registry"; "--output" ] [] args (preparation action))
         | "roadmap" :: "unit" :: "accept" :: action :: args ->
             Some(validated "roadmap unit accept" [ "--input"; "--bundle"; "--output" ] [] args (acceptance action))
+        | "roadmap" :: "unit" :: "revision" :: "inspect" :: args ->
+            Some(validated "roadmap unit revision" [ "--repository"; "--repository-id"; "--candidate"; "--merge"; "--output" ] [] args revisionBinding)
         | "telemetry" :: "summarize" :: args ->
             Some(validated "telemetry summarize" [ "--usage" ] [] args summarize)
         | _ -> None

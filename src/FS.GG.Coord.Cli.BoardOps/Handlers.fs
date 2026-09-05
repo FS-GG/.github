@@ -2497,6 +2497,86 @@ module Handlers =
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
 
+    let roadmapUnitPrepareApply (ctx: Context) (opts: Options) : int =
+        let parseArguments values =
+            let rec loop remaining seen =
+                match remaining with
+                | [] -> Ok seen
+                | name :: value :: tail when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] ->
+                    if value.StartsWith("--", StringComparison.Ordinal) then Error($"%s{name} requires a value")
+                    elif Map.containsKey name seen then Error($"%s{name} may be supplied only once")
+                    else loop tail (Map.add name value seen)
+                | name :: _ when name.StartsWith("--", StringComparison.Ordinal) -> Error($"unknown argument: %s{name}")
+                | [ name ] when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] -> Error($"%s{name} requires a value")
+                | value :: _ -> Error($"unexpected positional argument: %s{value}")
+            loop values Map.empty
+            |> Result.bind (fun parsed ->
+                [ "--input"; "--roadmap"; "--catalog" ]
+                |> List.tryFind (fun name -> not (Map.containsKey name parsed))
+                |> function Some name -> Error($"%s{name} is required") | None -> Ok parsed)
+
+        let applyRegistration opts registration =
+            let path = Path.GetTempFileName()
+            try
+                File.WriteAllText(path, RoadmapWorkUnit.canonicalIntakeDraft registration, UTF8Encoding(false))
+                let exitCode = intakeCmd ctx { opts with Args = [ "apply"; path ] }
+                if exitCode <> ExitGreen then Error exitCode
+                else
+                    match Cache.getIntakeReceipt registration.Id with
+                    | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
+                    | Ok None -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: intake receipt is missing for %s{registration.Id}"; Error ExitError
+                    | Ok(Some receipt) ->
+                        match IntakeReceipt.validate registration.Draft receipt with
+                        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
+                        | Ok accepted ->
+                            let canonical = $"%s{accepted.Owner}/%s{accepted.Repository}#%d{accepted.IssueNumber}"
+                            Ok
+                                ({ Id = registration.Id; Kind = registration.Kind
+                                   DraftSha256 = IntakeReceipt.digest registration.Draft
+                                   Issue = canonical
+                                   IssueUrl = $"https://github.com/%s{accepted.Owner}/%s{accepted.Repository}/issues/%d{accepted.IssueNumber}" }
+                                 : RoadmapWorkUnit.AppliedRegistration)
+            finally
+                if File.Exists path then File.Delete path
+
+        match parseArguments opts.Args with
+        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+        | Ok args ->
+            try
+                let request =
+                    File.ReadAllBytes args["--input"]
+                    |> RoadmapWorkUnit.parsePreparationRequest
+                    |> Result.mapError (String.concat "; ")
+                let plan =
+                    request
+                    |> Result.bind (fun request ->
+                        RoadmapWorkUnit.compilePreparation (File.ReadAllBytes args["--roadmap"]) (File.ReadAllBytes args["--catalog"]) request
+                        |> Result.mapError (List.map string >> String.concat "; "))
+                match plan with
+                | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+                | Ok plan ->
+                    let rec apply remaining accepted =
+                        match remaining with
+                        | [] -> Ok(List.rev accepted)
+                        | registration :: tail ->
+                            match applyRegistration opts registration with
+                            | Error exitCode -> Error exitCode
+                            | Ok result -> apply tail (result :: accepted)
+                    match apply plan.Registrations [] with
+                    | Error exitCode -> exitCode
+                    | Ok registrations ->
+                        match RoadmapWorkUnit.sealPreparationApplication plan registrations with
+                        | Error findings ->
+                            findings |> List.iter (fun finding -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %O{finding}")
+                            ExitError
+                        | Ok receipt ->
+                            let rendered = RoadmapWorkUnit.canonicalPreparationApplication receipt
+                            match Map.tryFind "--output" args with
+                            | Some output -> File.WriteAllText(output, rendered, UTF8Encoding(false))
+                            | None -> printf "%s" rendered
+                            ExitGreen
+            with error -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"; ExitError
+
     // Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     // are the append-only receipt ledger: a failure in either direction is not a missing decision.
     // `show` renders only the current receipt (`kind = "current"`, never a history), but validates the

@@ -2,7 +2,9 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Text
 open System.Text.Json
+open System.Security.Cryptography
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.GitHub
@@ -830,3 +832,94 @@ module IntakeTransactionTests =
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
             | other -> failwithf "receipt was not durably persisted: %A" other
+
+    [<Fact>]
+    let ``#3210 roadmap preparation applies through staged intake and replay creates no duplicates`` () =
+        withCache <| fun cache ->
+            let shaText (value: string) =
+                SHA256.HashData(Encoding.UTF8.GetBytes value)
+                |> Convert.ToHexString
+                |> _.ToLowerInvariant()
+            let unit id title prerequisites qGates commands =
+                let unsigned = $"""{{"exitGate":"test","gateCommands":%s{commands},"id":"%s{id}","owner":"FS.GG.Coordination","permissionCeiling":["local"],"prerequisites":%s{prerequisites},"qGates":%s{qGates},"title":"%s{title}"}}"""
+                unsigned[..unsigned.Length - 2] + $",\"contractSha256\":\"%s{shaText unsigned}\"}}"
+            let roadmap = "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compile roadmap units.** next\n"
+            let catalog =
+                $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{String('a', 40)}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "Previous" "[\"GS2-07.1\"]" "[]" "[\"previous\"]"},%s{unit "GS2-07.3" "Compile roadmap units" "[\"GS2-07.2\"]" "[\"Q3\"]" "[\"acceptance\"]"}]}}"""
+            let request = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+            let requestPath = Path.Combine(cache, "request.json")
+            let roadmapPath = Path.Combine(cache, "roadmap.md")
+            let catalogPath = Path.Combine(cache, "catalog.json")
+            let outputPath = Path.Combine(cache, "application.json")
+            File.WriteAllText(requestPath, request, UTF8Encoding(false))
+            File.WriteAllText(roadmapPath, roadmap, UTF8Encoding(false))
+            File.WriteAllText(catalogPath, catalog, UTF8Encoding(false))
+
+            let mutable creates = 0
+            let mutable currentIssue = 0
+            let bodies = Collections.Generic.Dictionary<int, string>()
+            let boardItems = Collections.Generic.HashSet<int>()
+            let projected = Collections.Generic.HashSet<int>()
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "POST", "repos/FS-GG/.github/issues" ->
+                    creates <- creates + 1
+                    currentIssue <- 76 + creates
+                    match req.Body with
+                    | Json body ->
+                        use document = JsonDocument.Parse body
+                        bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
+                    | _ -> bodies[currentIssue] <- ""
+                    ok ($"{{\"number\":%d{currentIssue}}}")
+                | "GET", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) && not (path.EndsWith("/comments", StringComparison.Ordinal)) ->
+                    currentIssue <- Int32.Parse(path.Split('/')[4])
+                    let body = if bodies.ContainsKey currentIssue then bodies[currentIssue] else ""
+                    ok ($"{{\"number\":%d{currentIssue},\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                | "PATCH", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) ->
+                    currentIssue <- Int32.Parse(path.Split('/')[4])
+                    match req.Body with
+                    | Json body ->
+                        use document = JsonDocument.Parse body
+                        if document.RootElement.TryGetProperty("body") |> fst then
+                            bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
+                    | _ -> ()
+                    ok "{}"
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(doc, _) when doc.Contains "projectsV2" ->
+                        ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                    | Query(doc, _) when doc.Contains "fields(first" ->
+                        ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"P\",\"name\":\"Phase\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"P5\",\"name\":\"P5 Versioning\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                    | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                        let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
+                        let value =
+                            if not (projected.Contains currentIssue) then None
+                            else match field with Some "Status" -> Some "Backlog" | Some "Class" -> Some "hardening" | Some "Phase" -> Some "P5 Versioning" | Some "Severity" -> Some "High" | _ -> None
+                        let node = value |> Option.map (fun item -> $"{{\"name\":%s{JsonSerializer.Serialize item}}}") |> Option.defaultValue "null"
+                        ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}}}"
+                    | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                        let field = if projected.Contains currentIssue then "{\"name\":\"Backlog\"}" else "null"
+                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":[{\"project\":{\"number\":1},\"fieldValueByName\":" + field + "}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
+                    | Query(doc, _) when doc.Contains "projectItems(first" ->
+                        let nodes = if boardItems.Contains currentIssue then $"[{{\"id\":\"PI-%d{currentIssue}\",\"project\":{{\"number\":1}}}}]" else "[]"
+                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
+                    | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                    | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> boardItems.Add currentIssue |> ignore; ok ($"{{\"data\":{{\"addProjectV2ItemById\":{{\"item\":{{\"id\":\"PI-%d{currentIssue}\"}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}")
+                    | Query(doc, _) when doc.Contains "f0:" -> projected.Add currentIssue |> ignore; ok "{\"data\":{\"f0\":{\"clientMutationId\":null},\"f1\":{\"clientMutationId\":null},\"f2\":{\"clientMutationId\":null},\"f3\":{\"clientMutationId\":null}}}"
+                    | _ -> Error(NotFound "unrecognized roadmap preparation board request")
+                | _ -> Error(NotFound "unrecognized roadmap preparation request"))
+
+            let parsed = Options.parse [ "intake"; "apply"; "/dev/null" ] |> Result.defaultWith failwith
+            let opts = { parsed with Args = [ "--input"; requestPath; "--roadmap"; roadmapPath; "--catalog"; catalogPath; "--output"; outputPath ] }
+            let first = Handlers.roadmapUnitPrepareApply (context world) opts
+            if first <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            let firstBytes = File.ReadAllBytes outputPath
+            let application = RoadmapWorkUnit.parsePreparationApplication firstBytes |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal(3, application.Registrations.Length)
+            Assert.Equal(3, creates)
+
+            let second = Handlers.roadmapUnitPrepareApply (context world) opts
+            if second <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.True(firstBytes.AsSpan().SequenceEqual((File.ReadAllBytes outputPath).AsSpan()))
+            Assert.Equal(3, creates)

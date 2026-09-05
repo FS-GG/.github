@@ -13,6 +13,10 @@ module RoadmapWorkUnit =
     [<Literal>]
     let PreparationPlanSchema = "fsgg.roadmap-unit.preparation-plan/1"
     [<Literal>]
+    let PreparationApplicationSchema = "fsgg.roadmap-unit.preparation-application/1"
+    [<Literal>]
+    let RevisionBindingSchema = "fsgg.roadmap-unit.revision-binding/1"
+    [<Literal>]
     let AcceptanceInputSchema = "fsgg.roadmap-unit.acceptance-input/1"
     [<Literal>]
     let EvidenceIndexSchema = "fsgg.roadmap-unit.evidence-index/1"
@@ -26,24 +30,30 @@ module RoadmapWorkUnit =
     type Registration = { Id: string; Kind: string; Draft: Intake.Draft }
     type PreparationInput =
         { Schema: string; RoadmapSourceDigest: string; CatalogSourceDigest: string; Catalog: CatalogRow list; RoadmapRow: RoadmapRow
-          AuthorityIssue: string; RegistrationOwner: string; RegistrationRepository: string
+          AuthorityIssue: string; SddWorkId: string; RegistrationOwner: string; RegistrationRepository: string
           RegistrationPaths: string list }
     type PreparationRequest =
-        { Schema: string; AuthorityIssue: string; RegistrationOwner: string
+        { Schema: string; AuthorityIssue: string; SddWorkId: string; RegistrationOwner: string
           RegistrationRepository: string; RegistrationPaths: string list }
     type PreparationPlan =
         { Schema: string; Unit: CatalogRow; AcceptedPrerequisite: string; Authority: AuthorityPin
-          Registrations: Registration list; EvidenceObligations: string list; Digest: string }
+          SddWorkId: string; Registrations: Registration list; EvidenceObligations: string list; Digest: string }
+    type AppliedRegistration =
+        { Id: string; Kind: string; DraftSha256: string; Issue: string; IssueUrl: string }
+    type PreparationApplication =
+        { Schema: string; UnitId: string; PlanDigest: string
+          Registrations: AppliedRegistration list; Digest: string }
     type SddObservation =
         { Stage: string; SubjectRevision: string; ArtifactJson: string }
     type RevisionIdentities =
         { ImplementationCandidate: string; ImplementationMerge: string; AcceptanceCandidate: string
           AcceptanceMerge: string; ProtectedMain: string }
     type RevisionBinding =
-        { Candidate: string; Merge: string; CandidateTree: string; MergeTree: string
-          Observed: bool; ArtifactSha256: string }
+        { Schema: string; Repository: string; Candidate: string; Merge: string
+          CandidateTree: string; MergeTree: string; CommandSha256: string; ExitCode: int; Digest: string }
     type AcceptanceInput =
-        { Schema: string; Plan: PreparationPlan; Qualification: Qualification.Accepted
+        { Schema: string; Plan: PreparationPlan; PreparationApplication: PreparationApplication
+          Qualification: Qualification.Accepted
           LifecycleRunId: string; LifecycleUnitId: string; LifecycleLog: string
           RequiredLifecyclePhases: string list; ReviewEvidence: string; ReviewCycleId: string; ReviewReceipt: string; SddWorkId: string
           SddObservations: SddObservation list; Identities: RevisionIdentities
@@ -76,6 +86,7 @@ module RoadmapWorkUnit =
     let private revision = Regex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
     let private unitId = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.CultureInvariant)
     let private issue = Regex("^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*$", RegexOptions.CultureInvariant)
+    let private issueRef = Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$", RegexOptions.CultureInvariant)
     let private token = Regex("^[a-z0-9][a-z0-9._-]*$", RegexOptions.CultureInvariant)
     let private digest bytes = CanonicalJson.sha256 bytes
     let private utf8 (value: string) = Encoding.UTF8.GetBytes value
@@ -104,7 +115,7 @@ module RoadmapWorkUnit =
         JsonSerializer.SerializeToUtf8Bytes
             {| schema = plan.Schema; unit = rowDto plan.Unit; acceptedPrerequisite = plan.AcceptedPrerequisite
                authority = {| roadmapDigest = plan.Authority.RoadmapDigest; catalogDigest = plan.Authority.CatalogDigest; issue = plan.Authority.Issue |}
-               registrations = registrations; evidenceObligations = plan.EvidenceObligations
+               sddWorkId = plan.SddWorkId; registrations = registrations; evidenceObligations = plan.EvidenceObligations
                digest = if includeDigest then plan.Digest else "" |}
         |> canonical
 
@@ -138,6 +149,76 @@ module RoadmapWorkUnit =
     let private duplicateValues (values: string list) =
         values |> List.countBy id |> List.choose (fun (value, count) -> if count > 1 then Some value else None)
 
+    let private applicationPayload (application: PreparationApplication) includeDigest =
+        let registrations =
+            application.Registrations
+            |> List.map (fun value ->
+                {| id = value.Id; kind = value.Kind; draftSha256 = value.DraftSha256
+                   issue = value.Issue; issueUrl = value.IssueUrl |})
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = application.Schema; unitId = application.UnitId
+               planDigest = application.PlanDigest; registrations = registrations
+               digest = if includeDigest then application.Digest else "" |}
+        |> canonical
+
+    let canonicalPreparationApplication application = applicationPayload application true + "\n"
+
+    let sealPreparationApplication (plan: PreparationPlan) (registrations: AppliedRegistration list) =
+        let findings = ResizeArray<Finding>()
+        if registrations.Length <> plan.Registrations.Length then
+            findings.Add(RegistrationInvalid(plan.Unit.UnitId, "application registration count differs from the plan"))
+        for duplicate in registrations |> List.map _.Id |> duplicateValues do
+            findings.Add(RegistrationDuplicate duplicate)
+        for expected in plan.Registrations do
+            match registrations |> List.filter (fun observed -> observed.Id = expected.Id) with
+            | [ observed ] ->
+                if observed.Kind <> expected.Kind then
+                    findings.Add(RegistrationInvalid(expected.Id, "application kind differs from the plan"))
+                if observed.DraftSha256 <> IntakeReceipt.digest expected.Draft then
+                    findings.Add(RegistrationInvalid(expected.Id, "application draft digest differs from the plan"))
+                if not (issueRef.IsMatch observed.Issue) || not (issue.IsMatch observed.IssueUrl) then
+                    findings.Add(RegistrationInvalid(expected.Id, "application issue identity is malformed"))
+                else
+                    let marker = observed.Issue.LastIndexOf('#')
+                    let repository = observed.Issue.Substring(0, marker)
+                    let number = observed.Issue.Substring(marker + 1)
+                    if observed.IssueUrl <> $"https://github.com/%s{repository}/issues/%s{number}" then
+                        findings.Add(RegistrationInvalid(expected.Id, "application issue URL differs from its canonical issue"))
+            | [] -> findings.Add(RegistrationInvalid(expected.Id, "application registration is missing"))
+            | _ -> findings.Add(RegistrationDuplicate expected.Id)
+        if findings.Count > 0 then Error(List.ofSeq findings)
+        else
+            let unsigned =
+                { Schema = PreparationApplicationSchema; UnitId = plan.Unit.UnitId
+                  PlanDigest = plan.Digest; Registrations = registrations; Digest = "" }
+            Ok { unsigned with Digest = digest (utf8 (applicationPayload unsigned false)) }
+
+    let canonicalRevisionCommand repository candidate merge =
+        String.concat "\n"
+            [ $"git -C %s{repository} rev-parse %s{candidate}^{{tree}}"
+              $"git -C %s{repository} rev-parse %s{merge}^{{tree}}"
+              $"git -C %s{repository} merge-base --is-ancestor %s{candidate} %s{merge}" ]
+        + "\n"
+
+    let private revisionBindingPayload (binding: RevisionBinding) includeDigest =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = binding.Schema; repository = binding.Repository
+               candidate = binding.Candidate; merge = binding.Merge
+               candidateTree = binding.CandidateTree; mergeTree = binding.MergeTree
+               commandSha256 = binding.CommandSha256; exitCode = binding.ExitCode
+               digest = if includeDigest then binding.Digest else "" |}
+        |> canonical
+
+    let sealRevisionBinding repository candidate merge candidateTree mergeTree exitCode =
+        let commandSha256 = digest (utf8 (canonicalRevisionCommand repository candidate merge))
+        let unsigned =
+            { Schema = RevisionBindingSchema; Repository = repository; Candidate = candidate; Merge = merge
+              CandidateTree = candidateTree; MergeTree = mergeTree; CommandSha256 = commandSha256
+              ExitCode = exitCode; Digest = "" }
+        { unsigned with Digest = digest (utf8 (revisionBindingPayload unsigned false)) }
+
+    let canonicalRevisionBinding binding = revisionBindingPayload binding true + "\n"
+
     let private registrationDraft (owner: string) (repository: string) (paths: string list) (unit: CatalogRow) (kind: string) (id: string) (title: string) : Intake.Draft =
         { Schema = Intake.Schema
           Id = id
@@ -150,13 +231,13 @@ module RoadmapWorkUnit =
           Verification = "Inspect the compiler plan digest and authoritative intake receipt readback."
           Paths = paths
           Class = "hardening"
-          Status = "Ready"
+          Status = "Backlog"
           Disposition = Some Intake.Create
           Phase = Some "P5 Versioning"
           Severity = Some "High"
           BlockedBy = None
           BlockedOn = None
-          BacklogReason = None
+          BacklogReason = Some "not-yet-actionable"
           JudgementQuestion = None }
 
     let inspectPreparation (input: PreparationInput) =
@@ -165,6 +246,10 @@ module RoadmapWorkUnit =
         if not (Regex.IsMatch(input.RoadmapSourceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then findings.Add(InvalidDigest("roadmapSourceDigest", input.RoadmapSourceDigest))
         if not (Regex.IsMatch(input.CatalogSourceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then findings.Add(InvalidDigest("catalogSourceDigest", input.CatalogSourceDigest))
         if not (issue.IsMatch input.AuthorityIssue) then findings.Add(InvalidIdentity("authorityIssue", input.AuthorityIssue))
+        let authorityNumber = input.AuthorityIssue.Split('/') |> Array.tryLast |> Option.defaultValue ""
+        if not (Regex.IsMatch(input.SddWorkId, "^[1-9][0-9]*-[a-z0-9][a-z0-9-]*$", RegexOptions.CultureInvariant))
+           || not (input.SddWorkId.StartsWith(authorityNumber + "-", StringComparison.Ordinal)) then
+            findings.Add(InvalidIdentity("sddWorkId", input.SddWorkId))
         for duplicate in input.Catalog |> List.map _.UnitId |> duplicateValues do findings.Add(DuplicateCatalogUnit duplicate)
         let acceptedIds = input.Catalog |> List.choose (fun row -> if row.State = Accepted then Some row.UnitId else None) |> Set.ofList
         let eligible =
@@ -211,7 +296,7 @@ module RoadmapWorkUnit =
         let draft =
             { Schema = PreparationPlanSchema; Unit = selected; AcceptedPrerequisite = prerequisite
               Authority = { RoadmapDigest = input.RoadmapSourceDigest; CatalogDigest = input.CatalogSourceDigest; Issue = input.AuthorityIssue }
-              Registrations = registrations; EvidenceObligations = selected.EvidenceObligations; Digest = "" }
+              SddWorkId = input.SddWorkId; Registrations = registrations; EvidenceObligations = selected.EvidenceObligations; Digest = "" }
         let planDigest = canonicalPlanPayload draft false |> utf8 |> digest
         Ok { draft with Digest = planDigest }
 
@@ -284,15 +369,66 @@ module RoadmapWorkUnit =
         if item.ValueKind <> JsonValueKind.Array then raise (FormatException($"%s{name} must be an array"))
         item.EnumerateArray() |> List.ofSeq
 
+    let parsePreparationApplication (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            strict "preparationApplication" [ "schema"; "unitId"; "planDigest"; "registrations"; "digest" ] root
+            let registrations =
+                array "registrations" root
+                |> List.mapi (fun index item ->
+                    strict $"registrations[%d{index}]" [ "id"; "kind"; "draftSha256"; "issue"; "issueUrl" ] item
+                    { Id = text "registration" "id" item; Kind = text "registration" "kind" item
+                      DraftSha256 = text "registration" "draftSha256" item
+                      Issue = text "registration" "issue" item; IssueUrl = text "registration" "issueUrl" item })
+            let observed =
+                { Schema = text "preparationApplication" "schema" root
+                  UnitId = text "preparationApplication" "unitId" root
+                  PlanDigest = text "preparationApplication" "planDigest" root
+                  Registrations = registrations; Digest = text "preparationApplication" "digest" root }
+            let errors = ResizeArray<string>()
+            if observed.Schema <> PreparationApplicationSchema then errors.Add($"schema must be '%s{PreparationApplicationSchema}'")
+            if not (unitId.IsMatch observed.UnitId) then errors.Add("unitId is invalid")
+            if not (sha.IsMatch observed.PlanDigest) then errors.Add("planDigest is invalid")
+            if not (sha.IsMatch observed.Digest) then errors.Add("digest is invalid")
+            if digest (utf8 (applicationPayload observed false)) <> observed.Digest then errors.Add("digest does not match canonical application content")
+            for registration in registrations do
+                if not (sha.IsMatch registration.DraftSha256) then errors.Add($"registration %s{registration.Id} draftSha256 is invalid")
+            if errors.Count = 0 then Ok observed else Error(List.ofSeq errors)
+        with error -> Error [ $"invalid preparation application: %s{error.Message}" ]
+
+    let parseRevisionBinding (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            strict "revisionBinding" [ "schema"; "repository"; "candidate"; "merge"; "candidateTree"; "mergeTree"; "commandSha256"; "exitCode"; "digest" ] root
+            let binding =
+                { Schema = text "revisionBinding" "schema" root
+                  Repository = text "revisionBinding" "repository" root
+                  Candidate = text "revisionBinding" "candidate" root; Merge = text "revisionBinding" "merge" root
+                  CandidateTree = text "revisionBinding" "candidateTree" root; MergeTree = text "revisionBinding" "mergeTree" root
+                  CommandSha256 = text "revisionBinding" "commandSha256" root
+                  ExitCode = (prop "exitCode" root).GetInt32(); Digest = text "revisionBinding" "digest" root }
+            let errors = ResizeArray<string>()
+            if binding.Schema <> RevisionBindingSchema then errors.Add($"schema must be '%s{RevisionBindingSchema}'")
+            for name, value in [ "candidate", binding.Candidate; "merge", binding.Merge; "candidateTree", binding.CandidateTree; "mergeTree", binding.MergeTree ] do
+                if not (revision.IsMatch value) then errors.Add($"%s{name} must be an exact 40-hex commit SHA")
+            if String.IsNullOrWhiteSpace binding.Repository then errors.Add("repository must not be blank")
+            let expectedCommand = digest (utf8 (canonicalRevisionCommand binding.Repository binding.Candidate binding.Merge))
+            if binding.CommandSha256 <> expectedCommand then errors.Add("commandSha256 does not bind the canonical Git observation commands")
+            if not (sha.IsMatch binding.Digest) || digest (utf8 (revisionBindingPayload binding false)) <> binding.Digest then errors.Add("digest does not match canonical revision-binding content")
+            if errors.Count = 0 then Ok binding else Error(List.ofSeq errors)
+        with error -> Error [ $"invalid revision binding: %s{error.Message}" ]
+
     let parsePreparationInput (bytes: byte array) =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "preparationInput" [ "schema"; "roadmapSourceDigest"; "catalogSourceDigest"; "catalog"; "roadmapRow"; "authorityIssue"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
+            strict "preparationInput" [ "schema"; "roadmapSourceDigest"; "catalogSourceDigest"; "catalog"; "roadmapRow"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
             Ok { Schema = text "preparationInput" "schema" root; RoadmapSourceDigest = text "preparationInput" "roadmapSourceDigest" root; CatalogSourceDigest = text "preparationInput" "catalogSourceDigest" root
                  Catalog = array "catalog" root |> List.mapi (fun index row -> parseRow $"catalog[%d{index}]" row)
                  RoadmapRow = parseRoadmapRow "roadmapRow" (prop "roadmapRow" root)
-                 AuthorityIssue = text "preparationInput" "authorityIssue" root; RegistrationOwner = text "preparationInput" "registrationOwner" root
+                 AuthorityIssue = text "preparationInput" "authorityIssue" root; SddWorkId = text "preparationInput" "sddWorkId" root; RegistrationOwner = text "preparationInput" "registrationOwner" root
                  RegistrationRepository = text "preparationInput" "registrationRepository" root; RegistrationPaths = strings "preparationInput" "registrationPaths" root }
         with error -> Error [ $"invalid roadmap preparation input: %s{error.Message}" ]
 
@@ -300,9 +436,10 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "preparationRequest" [ "schema"; "authorityIssue"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
+            strict "preparationRequest" [ "schema"; "authorityIssue"; "sddWorkId"; "registrationOwner"; "registrationRepository"; "registrationPaths" ] root
             Ok { Schema = text "preparationRequest" "schema" root
                  AuthorityIssue = text "preparationRequest" "authorityIssue" root
+                 SddWorkId = text "preparationRequest" "sddWorkId" root
                  RegistrationOwner = text "preparationRequest" "registrationOwner" root
                  RegistrationRepository = text "preparationRequest" "registrationRepository" root
                  RegistrationPaths = strings "preparationRequest" "registrationPaths" root }
@@ -416,6 +553,7 @@ module RoadmapWorkUnit =
                           Catalog = rows |> List.take (index + 1)
                           RoadmapRow = { UnitId = selected.UnitId; Title = selected.Title; Prerequisite = selected.Prerequisite; Gates = selected.Gates }
                           AuthorityIssue = request.AuthorityIssue
+                          SddWorkId = request.SddWorkId
                           RegistrationOwner = request.RegistrationOwner
                           RegistrationRepository = request.RegistrationRepository
                           RegistrationPaths = request.RegistrationPaths }
@@ -434,14 +572,14 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "plan" [ "schema"; "unit"; "acceptedPrerequisite"; "authority"; "registrations"; "evidenceObligations"; "digest" ] root
+            strict "plan" [ "schema"; "unit"; "acceptedPrerequisite"; "authority"; "sddWorkId"; "registrations"; "evidenceObligations"; "digest" ] root
             let authority = prop "authority" root
             strict "authority" [ "roadmapDigest"; "catalogDigest"; "issue" ] authority
             let registrations = array "registrations" root |> List.mapi (fun index item -> strict $"registrations[%d{index}]" [ "id"; "kind"; "draft" ] item; { Id = text "registration" "id" item; Kind = text "registration" "kind" item; Draft = parseDraft "registration.draft" (prop "draft" item) })
             let plan =
                 { Schema = text "plan" "schema" root; Unit = parseRow "unit" (prop "unit" root); AcceptedPrerequisite = text "plan" "acceptedPrerequisite" root
                   Authority = { RoadmapDigest = text "authority" "roadmapDigest" authority; CatalogDigest = text "authority" "catalogDigest" authority; Issue = text "authority" "issue" authority }
-                  Registrations = registrations; EvidenceObligations = strings "plan" "evidenceObligations" root; Digest = text "plan" "digest" root }
+                  SddWorkId = text "plan" "sddWorkId" root; Registrations = registrations; EvidenceObligations = strings "plan" "evidenceObligations" root; Digest = text "plan" "digest" root }
             let actual = canonicalPlanPayload { plan with Digest = "" } false |> utf8 |> digest
             if plan.Schema <> PreparationPlanSchema then Error [ $"plan schema is not %s{PreparationPlanSchema}" ]
             elif not (sha.IsMatch plan.Digest) || actual <> plan.Digest then Error [ "plan digest does not bind canonical content" ]
@@ -450,12 +588,13 @@ module RoadmapWorkUnit =
 
     let private evidenceEntries (input: AcceptanceInput) =
         [ yield { Name = "preparation-plan"; Sha256 = input.Plan.Digest; Source = input.Plan.Authority.Issue }
+          yield { Name = "preparation-application"; Sha256 = input.PreparationApplication.Digest; Source = input.PreparationApplication.UnitId }
           yield { Name = "qualification"; Sha256 = input.Qualification.Digest; Source = input.Qualification.Subject }
           yield { Name = "qualification-evidence"; Sha256 = input.Qualification.EvidenceDigest; Source = input.Qualification.SemanticReviewEvidence }
           yield { Name = "lifecycle"; Sha256 = digest (utf8 input.LifecycleLog); Source = $"%s{input.LifecycleRunId}/%s{input.LifecycleUnitId}" }
           yield { Name = "review"; Sha256 = digest (utf8 input.ReviewReceipt); Source = input.ReviewEvidence }
-          yield { Name = "revision-binding-implementation"; Sha256 = input.ImplementationBinding.ArtifactSha256; Source = input.ImplementationBinding.Candidate + ".." + input.ImplementationBinding.Merge }
-          yield { Name = "revision-binding-acceptance"; Sha256 = input.AcceptanceBinding.ArtifactSha256; Source = input.AcceptanceBinding.Candidate + ".." + input.AcceptanceBinding.Merge }
+          yield { Name = "revision-binding-implementation"; Sha256 = input.ImplementationBinding.Digest; Source = input.ImplementationBinding.Repository + ":" + input.ImplementationBinding.Candidate + ".." + input.ImplementationBinding.Merge }
+          yield { Name = "revision-binding-acceptance"; Sha256 = input.AcceptanceBinding.Digest; Source = input.AcceptanceBinding.Repository + ":" + input.AcceptanceBinding.Candidate + ".." + input.AcceptanceBinding.Merge }
           for observation in input.SddObservations do yield { Name = "sdd-" + observation.Stage; Sha256 = digest (utf8 observation.ArtifactJson); Source = input.SddWorkId } ]
 
     let private selfDigest (node: JsonObject) =
@@ -535,10 +674,25 @@ module RoadmapWorkUnit =
         match parsePlan (utf8 (canonicalPlan input.Plan)) with
         | Error errors -> errors |> List.iter (fun reason -> findings.Add(InvalidDigest("plan", reason)))
         | Ok _ -> ()
+        match sealPreparationApplication input.Plan input.PreparationApplication.Registrations with
+        | Error errors -> errors |> List.iter findings.Add
+        | Ok expected when canonicalPreparationApplication expected <> canonicalPreparationApplication input.PreparationApplication ->
+            findings.Add(RegistrationInvalid(input.Plan.Unit.UnitId, "preparation application does not match the canonical plan-bound receipt"))
+        | Ok _ -> ()
         match Qualification.parseResult (utf8 (Qualification.canonicalResult input.Qualification)) with
         | Error errors -> errors |> List.iter (QualificationMismatch >> findings.Add)
         | Ok _ -> ()
+        match input.Plan.Registrations |> List.tryFind (fun value -> value.Kind = "unit") with
+        | None -> findings.Add(RegistrationInvalid(input.Plan.Unit.UnitId, "plan has no unit registration"))
+        | Some unitRegistration ->
+            match input.PreparationApplication.Registrations |> List.tryFind (fun value -> value.Id = unitRegistration.Id) with
+            | Some applied when applied.Issue = input.Qualification.Subject -> ()
+            | Some _ -> findings.Add(QualificationMismatch "subject is not the authoritative applied unit registration")
+            | None -> findings.Add(RegistrationInvalid(unitRegistration.Id, "applied unit registration is missing"))
         if input.Qualification.SubjectRevision <> input.Identities.ImplementationCandidate then findings.Add(QualificationMismatch "subject revision is not the implementation candidate")
+        if input.LifecycleUnitId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "lifecycle unit id is not the selected roadmap unit")
+        if input.ReviewCycleId <> input.Plan.Unit.UnitId then findings.Add(LifecycleInvalid "review cycle id is not the selected roadmap unit")
+        if input.SddWorkId <> input.Plan.SddWorkId then findings.Add(SddObservationInvalid("work", "SDD work id is not the preparation-plan work identity"))
         if String.IsNullOrWhiteSpace input.Qualification.SemanticReviewEvidence || String.IsNullOrWhiteSpace input.ReviewEvidence then findings.Add ReviewEvidenceMissing
         if input.Qualification.SemanticReviewEvidence <> input.ReviewEvidence then findings.Add(QualificationMismatch "semantic review evidence locator differs from the review authority")
         match CritiqueReceipt.validate input.ReviewCycleId (Some input.Identities.ImplementationCandidate) (utf8 input.ReviewReceipt) with
@@ -557,9 +711,32 @@ module RoadmapWorkUnit =
                     let observedStage = text "sddArtifact" "stage" root
                     let observedStatus = text "sddArtifact" "status" root
                     let observedWork = text "sddArtifact" "workId" root
+                    let schemaVersion = (prop "schemaVersion" root).GetInt32()
+                    let viewVersion = text "sddArtifact" "viewVersion" root
+                    let generator = text "sddArtifact" "generator" root
+                    let readinessNode = prop "readiness" root
+                    let readiness =
+                        match readinessNode.ValueKind with
+                        | JsonValueKind.String -> readinessNode.GetString()
+                        | JsonValueKind.Object -> text "sddReadiness" "status" readinessNode
+                        | _ -> raise (FormatException("sddArtifact.readiness must be a status string or object"))
+                    let sources = prop "sources" root
+                    let hasWorkModelSource =
+                        sources.ValueKind = JsonValueKind.Array
+                        && (sources.EnumerateArray()
+                            |> Seq.exists (fun source ->
+                                source.ValueKind = JsonValueKind.Object
+                                && text "sddSource" "path" source = $"readiness/%s{input.SddWorkId}/work-model.json"))
+                    let findingsNode = prop "findings" root
+                    let diagnostics = prop "diagnostics" root
                     match CanonicalJson.canonicalize (utf8 observation.ArtifactJson) with
                     | Error reason -> findings.Add(SddObservationInvalid(stage, reason))
-                    | Ok _ when observedStage = stage && observedStatus = status && observedWork = input.SddWorkId && observation.SubjectRevision = input.Identities.ImplementationCandidate -> ()
+                    | Ok _ when schemaVersion = 1 && not (String.IsNullOrWhiteSpace viewVersion)
+                                && Regex.IsMatch(generator, "^FS[.]GG[.]SDD[.]Artifacts/[0-9]+[.][0-9]+[.][0-9]+$", RegexOptions.CultureInvariant)
+                                && sources.ValueKind = JsonValueKind.Array && sources.GetArrayLength() > 0 && hasWorkModelSource
+                                && findingsNode.ValueKind = JsonValueKind.Array && diagnostics.ValueKind = JsonValueKind.Array
+                                && observedStage = stage && observedStatus = status && readiness = status
+                                && observedWork = input.SddWorkId && observation.SubjectRevision = input.Identities.ImplementationCandidate -> ()
                     | Ok _ -> findings.Add(SddObservationInvalid(stage, $"stage=%s{observedStage} status=%s{observedStatus} work=%s{observedWork} subject=%s{observation.SubjectRevision}"))
                 with error -> findings.Add(SddObservationInvalid(stage, error.Message))
             | [] -> findings.Add(SddObservationInvalid(stage, "missing"))
@@ -574,11 +751,19 @@ module RoadmapWorkUnit =
         let distinct = named |> List.take 4
         for i in 0 .. distinct.Length - 1 do for j in i + 1 .. distinct.Length - 1 do if snd distinct[i] = snd distinct[j] then findings.Add(RevisionIdentityCollapse(fst distinct[i], fst distinct[j]))
         if input.Identities.ProtectedMain <> input.Identities.AcceptanceMerge then findings.Add(RevisionRelationInvalid "protected main must equal the observed acceptance merge")
+        let expectedRepository =
+            input.Plan.Registrations
+            |> List.tryFind (fun value -> value.Kind = "unit")
+            |> Option.map (fun value -> value.Draft.Owner + "/" + value.Draft.Repository)
+            |> Option.defaultValue ""
         let verifyBinding label candidate merge (binding: RevisionBinding) =
             if binding.Candidate <> candidate || binding.Merge <> merge then findings.Add(RevisionRelationInvalid($"%s{label} binding does not match its named candidate and merge"))
+            if binding.Schema <> RevisionBindingSchema || binding.Repository <> expectedRepository then findings.Add(RevisionRelationInvalid($"%s{label} binding does not name the authoritative repository"))
             if not (revision.IsMatch binding.CandidateTree) || not (revision.IsMatch binding.MergeTree) then findings.Add(RevisionRelationInvalid($"%s{label} binding tree identity is invalid"))
             if binding.CandidateTree <> binding.MergeTree then findings.Add(RevisionRelationInvalid($"%s{label} merge does not preserve the candidate tree"))
-            if not binding.Observed || not (sha.IsMatch binding.ArtifactSha256) then findings.Add(RevisionRelationInvalid($"%s{label} binding lacks observed content-addressed evidence"))
+            let expectedCommand = digest (utf8 (canonicalRevisionCommand binding.Repository binding.Candidate binding.Merge))
+            if binding.CommandSha256 <> expectedCommand || binding.ExitCode <> 0 then findings.Add(RevisionRelationInvalid($"%s{label} binding lacks a successful canonical Git observation"))
+            if not (sha.IsMatch binding.Digest) || digest (utf8 (revisionBindingPayload binding false)) <> binding.Digest then findings.Add(RevisionRelationInvalid($"%s{label} binding digest is invalid"))
         verifyBinding "implementation" input.Identities.ImplementationCandidate input.Identities.ImplementationMerge input.ImplementationBinding
         verifyBinding "acceptance" input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge input.AcceptanceBinding
         match DateTimeOffset.TryParse input.AcceptedAt with true, _ -> () | _ -> findings.Add(InvalidIdentity("acceptedAt", input.AcceptedAt))
@@ -591,10 +776,10 @@ module RoadmapWorkUnit =
           ProtectedMain = text "identities" "protectedMain" value }
 
     let private parseBinding label (value: JsonElement) : RevisionBinding =
-        strict label [ "candidate"; "merge"; "candidateTree"; "mergeTree"; "observed"; "artifactSha256" ] value
-        { Candidate = text label "candidate" value; Merge = text label "merge" value
-          CandidateTree = text label "candidateTree" value; MergeTree = text label "mergeTree" value
-          Observed = (prop "observed" value).GetBoolean(); ArtifactSha256 = text label "artifactSha256" value }
+        parseRevisionBinding (utf8 (value.GetRawText()))
+        |> Result.defaultWith (fun errors ->
+            let reason = String.concat "; " errors
+            raise (FormatException($"%s{label}: %s{reason}")))
 
     let canonicalAcceptanceInput (input: AcceptanceInput) =
         let observations =
@@ -603,14 +788,15 @@ module RoadmapWorkUnit =
         JsonSerializer.SerializeToUtf8Bytes
             {| schema = input.Schema
                plan = JsonNode.Parse(canonicalPlan input.Plan)
+               preparationApplication = JsonNode.Parse(canonicalPreparationApplication input.PreparationApplication)
                qualification = JsonNode.Parse(Qualification.canonicalResult input.Qualification)
                lifecycleRunId = input.LifecycleRunId; lifecycleUnitId = input.LifecycleUnitId
                lifecycleLog = input.LifecycleLog; requiredLifecyclePhases = input.RequiredLifecyclePhases
                reviewEvidence = input.ReviewEvidence; reviewCycleId = input.ReviewCycleId
                reviewReceipt = input.ReviewReceipt; sddWorkId = input.SddWorkId; sddObservations = observations
                identities = {| implementationCandidate = input.Identities.ImplementationCandidate; implementationMerge = input.Identities.ImplementationMerge; acceptanceCandidate = input.Identities.AcceptanceCandidate; acceptanceMerge = input.Identities.AcceptanceMerge; protectedMain = input.Identities.ProtectedMain |}
-               implementationBinding = {| candidate = input.ImplementationBinding.Candidate; merge = input.ImplementationBinding.Merge; candidateTree = input.ImplementationBinding.CandidateTree; mergeTree = input.ImplementationBinding.MergeTree; observed = input.ImplementationBinding.Observed; artifactSha256 = input.ImplementationBinding.ArtifactSha256 |}
-               acceptanceBinding = {| candidate = input.AcceptanceBinding.Candidate; merge = input.AcceptanceBinding.Merge; candidateTree = input.AcceptanceBinding.CandidateTree; mergeTree = input.AcceptanceBinding.MergeTree; observed = input.AcceptanceBinding.Observed; artifactSha256 = input.AcceptanceBinding.ArtifactSha256 |}
+               implementationBinding = JsonNode.Parse(canonicalRevisionBinding input.ImplementationBinding)
+               acceptanceBinding = JsonNode.Parse(canonicalRevisionBinding input.AcceptanceBinding)
                acceptedAt = input.AcceptedAt |}
         |> canonical
         |> fun value -> value + "\n"
@@ -619,11 +805,12 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "acceptanceInput" [ "schema"; "plan"; "qualification"; "lifecycleRunId"; "lifecycleUnitId"; "lifecycleLog"; "requiredLifecyclePhases"; "reviewEvidence"; "reviewCycleId"; "reviewReceipt"; "sddWorkId"; "sddObservations"; "identities"; "implementationBinding"; "acceptanceBinding"; "acceptedAt" ] root
+            strict "acceptanceInput" [ "schema"; "plan"; "preparationApplication"; "qualification"; "lifecycleRunId"; "lifecycleUnitId"; "lifecycleLog"; "requiredLifecyclePhases"; "reviewEvidence"; "reviewCycleId"; "reviewReceipt"; "sddWorkId"; "sddObservations"; "identities"; "implementationBinding"; "acceptanceBinding"; "acceptedAt" ] root
             let plan = parsePlan (utf8 ((prop "plan" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
+            let preparationApplication = parsePreparationApplication (utf8 ((prop "preparationApplication" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
             let qualification = Qualification.parseResult (utf8 ((prop "qualification" root).GetRawText())) |> Result.defaultWith (String.concat "; " >> FormatException >> raise)
             let observations = array "sddObservations" root |> List.mapi (fun index item -> strict $"sddObservations[%d{index}]" [ "stage"; "subjectRevision"; "artifactJson" ] item; { Stage = text "sddObservation" "stage" item; SubjectRevision = text "sddObservation" "subjectRevision" item; ArtifactJson = text "sddObservation" "artifactJson" item })
-            Ok { Schema = text "acceptanceInput" "schema" root; Plan = plan; Qualification = qualification
+            Ok { Schema = text "acceptanceInput" "schema" root; Plan = plan; PreparationApplication = preparationApplication; Qualification = qualification
                  LifecycleRunId = text "acceptanceInput" "lifecycleRunId" root; LifecycleUnitId = text "acceptanceInput" "lifecycleUnitId" root
                  LifecycleLog = text "acceptanceInput" "lifecycleLog" root; RequiredLifecyclePhases = strings "acceptanceInput" "requiredLifecyclePhases" root
                  ReviewEvidence = text "acceptanceInput" "reviewEvidence" root

@@ -1,6 +1,7 @@
 namespace FS.GG.Coord.Cli.Tests
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Text
 open System.Security.Cryptography
@@ -23,10 +24,22 @@ module RoadmapWorkUnitCliTests =
         finally
             Console.SetOut previousOut; Console.SetError previousError
 
+    let private git repository args =
+        let info = ProcessStartInfo("git")
+        info.WorkingDirectory <- repository
+        info.RedirectStandardOutput <- true
+        info.UseShellExecute <- false
+        args |> List.iter info.ArgumentList.Add
+        use gitProcess = Process.Start info
+        let output = gitProcess.StandardOutput.ReadToEnd().Trim()
+        gitProcess.WaitForExit()
+        Assert.Equal(0, gitProcess.ExitCode)
+        output
+
     let private fixture () =
         let directory = Path.Combine(Path.GetTempPath(), "fsgg-3210-cli-" + Guid.NewGuid().ToString("n"))
         Directory.CreateDirectory directory |> ignore
-        let input = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+        let input = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
         let roadmap = "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compiler.** next\n"
         let roadmapDigest = SHA256.HashData(Encoding.UTF8.GetBytes roadmap) |> Convert.ToHexString |> _.ToLowerInvariant()
         let unit id title prerequisites qGates commands =
@@ -42,7 +55,7 @@ module RoadmapWorkUnitCliTests =
         File.WriteAllText(catalogPath, catalog, UTF8Encoding(false)); File.WriteAllText(sourcePath, registry, UTF8Encoding(false))
         { new IDisposable with member _.Dispose() = Directory.Delete(directory, true) }, inputPath, roadmapPath, catalogPath, sourcePath, candidatePath
 
-    let private qualification candidate =
+    let private qualification subject candidate =
         let tool: Qualification.ToolIdentity = { Id = "dotnet"; Version = "10.0"; Sha256 = sha '1' }
         let executor: Qualification.ExecutorIdentity = { Id = "implementer"; Role = "implementer"; ImplementationSha256 = sha '2' }
         let operation id kind : Qualification.OperationEvidence =
@@ -52,7 +65,7 @@ module RoadmapWorkUnitCliTests =
               ExitCode = if kind = Qualification.Mutation then 3 else 0
               Refusal = if kind = Qualification.Mutation then Some "REFUSED inverted" else None }
         let checks: Qualification.HostedCheck list = [ { Scope = "check"; Id = "1"; SubjectRevision = candidate; State = "completed"; Conclusion = "success" } ]
-        ({ Schema = Qualification.InputSchema; Subject = "FS-GG/.github#3210"; SubjectRevision = candidate; CheckoutClean = true
+        ({ Schema = Qualification.InputSchema; Subject = subject; SubjectRevision = candidate; CheckoutClean = true
            ToolManifest = [ tool ]; Executor = executor
            Operations = [ operation "analyze" Qualification.Analyze; operation "verify" Qualification.Verify; operation "ship" Qualification.Ship; operation "hosted" Qualification.Hosted; operation "fixed" Qualification.FixedPoint; operation "mutation" Qualification.Mutation ]
            Claims = [ { Id = "all"; SubjectRevision = candidate; RequiredKinds = [ Qualification.Analyze; Qualification.Verify; Qualification.Ship; Qualification.Hosted; Qualification.FixedPoint ]; EvidenceIds = [ "analyze"; "verify"; "ship"; "hosted"; "fixed" ] } ]
@@ -68,18 +81,27 @@ module RoadmapWorkUnitCliTests =
         let first = LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" "" (draft "started" "2026-09-05T06:00:00Z" "null" "{\"status\":\"pending\"}") |> unwrap
         first + (LifecycleTelemetry.sealSuccessor "pilot" "GS2-07.3" first (draft "completed" "2026-09-05T06:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"test fixture\",\"source\":\"test\"}") |> unwrap)
 
-    let private acceptanceInput plan =
+    let private acceptanceInput (plan: RoadmapWorkUnit.PreparationPlan) =
         let candidate = head 'a'
+        let applied =
+            plan.Registrations
+            |> List.mapi (fun index registration ->
+                let number = 500 + index
+                ({ Id = registration.Id; Kind = registration.Kind; DraftSha256 = IntakeReceipt.digest registration.Draft
+                   Issue = $"FS-GG/.github#%d{number}"; IssueUrl = $"https://github.com/FS-GG/.github/issues/%d{number}" }
+                 : RoadmapWorkUnit.AppliedRegistration))
+        let application = RoadmapWorkUnit.sealPreparationApplication plan applied |> unwrap
+        let unitIssue = application.Registrations |> List.find (fun value -> value.Kind = "unit") |> _.Issue
         let identities: RoadmapWorkUnit.RevisionIdentities = { ImplementationCandidate = candidate; ImplementationMerge = head 'b'; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
-        let binding candidate merge tree artifact : RoadmapWorkUnit.RevisionBinding = { Candidate = candidate; Merge = merge; CandidateTree = tree; MergeTree = tree; Observed = true; ArtifactSha256 = sha artifact }
-        let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"stage":"%s{stage}","status":"%s{status}","workId":"3210-roadmap-work-unit-compiler"}}""" }
-        let critique = $"""{{"schema_version":3,"cycle_id":"cycle-3210","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
-        { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; Qualification = qualification candidate
+        let binding candidate merge tree = RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
+        let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/3210-roadmap-work-unit-compiler/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"3210-roadmap-work-unit-compiler"}}""" }
+        let critique = $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
+        { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate
           LifecycleRunId = "pilot"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate; RequiredLifecyclePhases = [ "implementation" ]
-          ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"; ReviewCycleId = "cycle-3210"; ReviewReceipt = critique
+          ReviewEvidence = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"; ReviewCycleId = "GS2-07.3"; ReviewReceipt = critique
           SddWorkId = "3210-roadmap-work-unit-compiler"; SddObservations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
-          Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e') '7'
-          AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (head 'f') '8'; AcceptedAt = "2026-09-05T06:02:00Z" } : RoadmapWorkUnit.AcceptanceInput
+          Identities = identities; ImplementationBinding = binding identities.ImplementationCandidate identities.ImplementationMerge (head 'e')
+          AcceptanceBinding = binding identities.AcceptanceCandidate identities.AcceptanceMerge (head 'f'); AcceptedAt = "2026-09-05T06:02:00Z" } : RoadmapWorkUnit.AcceptanceInput
 
     [<Fact>]
     let ``#3210 prepare inspect render verify is a deterministic CLI round trip`` () =
@@ -117,3 +139,20 @@ module RoadmapWorkUnitCliTests =
         let code, stdout, stderr = invoke [ "roadmap"; "unit"; "prepare"; "inspect"; "--input"; "missing"; "--invented" ]
         Assert.NotEqual(ExitCode.toInt ExitCode.Green, code); Assert.Equal("", stdout)
         Assert.Contains("unrecognized argument '--invented'", stderr)
+
+    [<Fact>]
+    let ``#3210 revision inspect emits a sealed binding from observed Git identities`` () =
+        let repository = Directory.GetCurrentDirectory()
+        let merge = git repository [ "rev-parse"; "HEAD" ]
+        let candidate = git repository [ "rev-parse"; "HEAD^" ]
+        let code, stdout, stderr =
+            invoke
+                [ "roadmap"; "unit"; "revision"; "inspect"
+                  "--repository"; repository; "--repository-id"; "FS-GG/.github"
+                  "--candidate"; candidate; "--merge"; merge ]
+        Assert.Equal(ExitCode.toInt ExitCode.Green, code)
+        Assert.Equal("", stderr)
+        let binding = RoadmapWorkUnit.parseRevisionBinding (Encoding.UTF8.GetBytes stdout) |> unwrap
+        Assert.Equal(candidate, binding.Candidate)
+        Assert.Equal(merge, binding.Merge)
+        Assert.Equal(0, binding.ExitCode)

@@ -19,6 +19,7 @@ module RoadmapWorkUnitTransactionTests =
            Catalog = [ previous; selected ]
            RoadmapRow = { UnitId = selected.UnitId; Title = selected.Title; Prerequisite = selected.Prerequisite; Gates = selected.Gates }
            AuthorityIssue = "https://github.com/FS-GG/.github/issues/3210"
+           SddWorkId = "3210-roadmap-work-unit-compiler"
            RegistrationOwner = "FS-GG"
            RegistrationRepository = ".github"
            RegistrationPaths = [ "src/FS.GG.Coord.Core" ] } : RoadmapWorkUnit.PreparationInput)

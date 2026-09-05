@@ -623,21 +623,29 @@ let main argv =
 
     try
         try
-            match TelemetryApplication.tryRun (List.ofArray argv) with
-            | Some exitCode ->
-                invoked <- "telemetry"
-                exitCode
-            | None ->
-                match Options.parse (List.ofArray argv) with
-                | Error message ->
-                    eprint $"fsgg-coord-engine: %s{message}"
-                    eprint ""
-                    eprint Options.usage
-                    ExitError
+            let arguments = List.ofArray argv
+            match arguments with
+            | "roadmap" :: "unit" :: "prepare" :: "apply" :: args ->
+                invoked <- "roadmap-unit-prepare-apply"
+                match Options.parse [ "intake"; "apply"; "/dev/null" ] with
+                | Error message -> eprint $"fsgg-coord-engine: internal roadmap apply options: %s{message}"; ExitDefect
+                | Ok opts -> Client.executeWithContext Handlers.roadmapUnitPrepareApply { opts with Args = args }
+            | _ ->
+                match TelemetryApplication.tryRun arguments with
+                | Some exitCode ->
+                    invoked <- "telemetry"
+                    exitCode
+                | None ->
+                    match Options.parse arguments with
+                    | Error message ->
+                        eprint $"fsgg-coord-engine: %s{message}"
+                        eprint ""
+                        eprint Options.usage
+                        ExitError
 
-                | Ok opts ->
-                    invoked <- Options.commandName opts.Command
-                    commandHandlers[opts.Command] opts
+                    | Ok opts ->
+                        invoked <- Options.commandName opts.Command
+                        commandHandlers[opts.Command] opts
 
         with e ->
             // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
