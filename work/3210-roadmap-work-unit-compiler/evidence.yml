@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3210-roadmap-work-unit-compiler/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3210-roadmap-work-unit-compiler/analysis.json
-    digest: 1d9e1c59f4448546806abd9f9fdd24f8fc0d1d28a1898ce141061010f828805c
+    digest: 24a80aba208c5f1a92dca61660b75f1bed00f6b7a3a7b52ea70acbc9201a7aa4
     schemaVersion: 1
   - label: checklist
     path: work/3210-roadmap-work-unit-compiler/checklist.md
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -432,7 +432,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -459,7 +459,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -486,7 +486,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -513,7 +513,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -540,7 +540,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -567,7 +567,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -594,7 +594,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -621,7 +621,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -648,7 +648,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -675,7 +675,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -702,7 +702,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -729,7 +729,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -756,7 +756,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -783,7 +783,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -810,7 +810,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
@@ -837,7 +837,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
-      digest: "sha256:65fc714ab9a569bd8a69b9a56ebb8541476deb70d5bc81338701d2eec1c63599"
+      digest: "sha256:1b25bcf6e036150063bad15a6e4ff0d249dd4429941bcd2c1fc4e986c7a9747a"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 963
