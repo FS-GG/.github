@@ -336,9 +336,9 @@ module QualificationApplication =
                              Obligations = obligations |> Result.defaultValue input.Obligations }
             Qualification.validate qualified |> Result.mapError (List.map string)
 
-    /// Production acceptance uses this route so the caller-authored execution resolver cannot
-    /// substitute the repository identity. The ordinary `run` entry point remains useful for
-    /// isolated qualification authoring and tests; only this adapter seals roadmap acceptance.
+    // Production acceptance uses this route so the caller-authored execution resolver cannot
+    // substitute the repository identity. The ordinary `run` entry point remains useful for
+    // isolated qualification authoring and tests; only this adapter seals roadmap acceptance.
     let runBoundToTree expectedTree inputPath executionPath =
         match parseExecution executionPath with
         | Error errors -> Error errors
