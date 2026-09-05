@@ -11,7 +11,7 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 
 At host entry, before every dispatch, recovery, or force-claim, and at every wait/yield/terminal
 transition, follow [the permanent orchestrator-room procedure](references/orchestrator-room.md).
-Room [FS-GG/.github#3227](https://github.com/FS-GG/.github/issues/3227) is the append-only host-presence
+Room `FS-GG/.github#3227` is the append-only host-presence
 ledger shared with org-wide drivers. A latest `active` or `waiting` status for the target item from
 another orchestrator forbids a force-claim until that orchestrator posts `yielded` or explicitly hands
 off in the room. An unreadable, malformed, or contradictory room/claim state fails closed.

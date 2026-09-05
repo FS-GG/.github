@@ -1,6 +1,6 @@
 # Permanent orchestrator room procedure
 
-Use permanent room [FS-GG/.github#3227](https://github.com/FS-GG/.github/issues/3227) as the
+Use permanent room `FS-GG/.github#3227` as the
 append-only host-presence ledger shared by every `drive-board*` and `work-board*` orchestrator.
 
 Every valid status is exactly one line:
