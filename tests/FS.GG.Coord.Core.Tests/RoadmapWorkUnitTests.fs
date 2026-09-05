@@ -201,6 +201,17 @@ module RoadmapWorkUnitTests =
             findings)
 
     [<Fact>]
+    let ``#3233 ordered partial catalog admits omitted accepted roadmap history`` () =
+        let roadmap, catalog, request = sourcePreparation ()
+        let partialRoadmap =
+            "- [x] **GS2-00.0 — Historical roadmap preamble.** accepted\n"
+            + roadmap.Replace("- [ ] **GS2-07.3", "- [x] **GS2-03.10 — Accepted row outside the executable catalog.** accepted\n- [ ] **GS2-07.3")
+        let pinnedCatalog = catalog.Replace(shaText roadmap, shaText partialRoadmap)
+        let plan = RoadmapWorkUnit.compilePreparation (bytes partialRoadmap) (bytes pinnedCatalog) request |> unwrap
+        Assert.Equal("GS2-07.3", plan.Unit.UnitId)
+        Assert.Equal("GS2-07.2", plan.AcceptedPrerequisite)
+
+    [<Fact>]
     let ``#3210 selection refuses ambiguous authority prerequisite and catalog drift`` () =
         let input = preparationInput ()
         let extra = { input.Catalog[1] with UnitId = "GS2-07.4" }

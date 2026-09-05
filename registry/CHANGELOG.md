@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-05** — **coordination coherent set `github:0.83.1` source prepared**
+  (owner github; [.github#3233](https://github.com/FS-GG/.github/issues/3233)):
+  advances the source frontier from 0.83.0 to 0.83.1 for a patch to roadmap work-unit preparation.
+  Ordered partial catalogs may omit accepted historical roadmap rows while retaining canonical order,
+  first-unchecked selection, and immediate-prerequisite checks. The published frontier remains 0.83.0
+  until this exact accepted merge is single-packed and promoted through the release saga.
+
 - **2026-09-05** — **coordination coherent set `github:0.83.0` published and fully reconciled**
   (owner github; [.github#3210](https://github.com/FS-GG/.github/issues/3210),
   [source PR #3231](https://github.com/FS-GG/.github/pull/3231),

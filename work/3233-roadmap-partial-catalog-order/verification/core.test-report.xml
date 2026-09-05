@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="dca75b5f-5650-43a5-b2eb-45c2e4077024" name="@b0472e9cae0d 2026-09-05 17:56:17" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-05T17:56:17.5679456+02:00" queuing="2026-09-05T17:56:17.5679475+02:00" start="2026-09-05T17:56:16.0611753+02:00" finish="2026-09-05T17:56:17.6021453+02:00" />
+  <TestSettings name="default" id="297db771-0328-4435-bea3-81fea8990cd8">
+    <Deployment runDeploymentRoot="_b0472e9cae0d_2026-09-05_17_56_17" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="da4ec255-9cc0-4601-8cce-b06f6c01eccb" testId="3e2a0f3f-c35e-0790-244f-d9bd8c483cae" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3233 ordered partial catalog admits omitted accepted roadmap history" computerName="b0472e9cae0d" duration="00:00:00.0006933" startTime="2026-09-05T17:56:17.5159032+02:00" endTime="2026-09-05T17:56:17.5164409+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="da4ec255-9cc0-4601-8cce-b06f6c01eccb" />
+    <UnitTestResult executionId="2a7efb3a-4fa8-4217-8902-8bbe7cfa9e0e" testId="677ba74d-be2d-21b3-0132-919ef7b4e493" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 selection refuses ambiguous authority prerequisite and catalog drift" computerName="b0472e9cae0d" duration="00:00:00.0026854" startTime="2026-09-05T17:56:17.5138345+02:00" endTime="2026-09-05T17:56:17.5157133+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2a7efb3a-4fa8-4217-8902-8bbe7cfa9e0e" />
+    <UnitTestResult executionId="b85a654d-eed9-4ef1-a674-db010e9a8bee" testId="737bf074-2a19-19b5-66d0-a82b08d96457" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 acceptance consumes qualified lifecycle and observed SDD evidence atomically" computerName="b0472e9cae0d" duration="00:00:00.1010434" startTime="2026-09-05T17:56:17.4120311+02:00" endTime="2026-09-05T17:56:17.5129487+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b85a654d-eed9-4ef1-a674-db010e9a8bee" />
+    <UnitTestResult executionId="4605e9b7-9ca6-4e5a-bdd6-9dbc799c985c" testId="05bc5084-4322-1d6f-cfb4-c52e0949aa3a" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 preparation rendering is bounded deterministic and verifies replay" computerName="b0472e9cae0d" duration="00:00:00.0072186" startTime="2026-09-05T17:56:17.4045713+02:00" endTime="2026-09-05T17:56:17.4117852+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4605e9b7-9ca6-4e5a-bdd6-9dbc799c985c" />
+    <UnitTestResult executionId="ad7bb432-acc7-4d9d-9004-7a9f05f8d960" testId="51b7c9a6-2c03-cbfa-67bc-9c897749c6da" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 selects exactly next row and derives staged intake registrations" computerName="b0472e9cae0d" duration="00:00:00.0035296" startTime="2026-09-05T17:56:17.5247066+02:00" endTime="2026-09-05T17:56:17.5247436+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ad7bb432-acc7-4d9d-9004-7a9f05f8d960" />
+    <UnitTestResult executionId="be3e94af-4fad-493b-9051-8f3b7bcdbefd" testId="94be441e-1d37-a020-f516-1c44d5a89f81" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 catalog accepted prefix must preserve canonical roadmap order" computerName="b0472e9cae0d" duration="00:00:00.0737568" startTime="2026-09-05T17:56:16.7392493+02:00" endTime="2026-09-05T17:56:16.8192181+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="be3e94af-4fad-493b-9051-8f3b7bcdbefd" />
+    <UnitTestResult executionId="1925579d-b59f-4de8-95bc-74795302013b" testId="9e35a389-4b42-0f28-e0cd-27b1ae064161" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 manually flipped SDD state identity collapse and bundle tamper refuse" computerName="b0472e9cae0d" duration="00:00:00.2198987" startTime="2026-09-05T17:56:17.1839862+02:00" endTime="2026-09-05T17:56:17.4037906+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1925579d-b59f-4de8-95bc-74795302013b" />
+    <UnitTestResult executionId="40431a88-647c-4bda-8eb0-170a73538197" testId="07358344-8380-7e3d-c20e-1722a006f1c0" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 closed acceptance wire input parses and replays the same receipt bytes" computerName="b0472e9cae0d" duration="00:00:00.2913668" startTime="2026-09-05T17:56:16.8938726+02:00" endTime="2026-09-05T17:56:17.1837606+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="40431a88-647c-4bda-8eb0-170a73538197" />
+    <UnitTestResult executionId="d02c141b-4e6c-4995-bed0-63fedbb9287b" testId="855d3b27-e87a-4c1d-fb7a-95e4e51bc7f0" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 catalog cannot omit the canonical first unchecked roadmap row" computerName="b0472e9cae0d" duration="00:00:00.0005471" startTime="2026-09-05T17:56:17.4041156+02:00" endTime="2026-09-05T17:56:17.4043553+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d02c141b-4e6c-4995-bed0-63fedbb9287b" />
+    <UnitTestResult executionId="b85334d1-2640-4109-8b4d-3c1f5f35facd" testId="45548dea-cfd2-ef11-6e75-95cd28070d0a" testName="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 authoritative roadmap and catalog compile while stale drift and misordered frontier refuse" computerName="b0472e9cae0d" duration="00:00:00.0731883" startTime="2026-09-05T17:56:16.8359747+02:00" endTime="2026-09-05T17:56:16.8923654+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b85334d1-2640-4109-8b4d-3c1f5f35facd" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 manually flipped SDD state identity collapse and bundle tamper refuse" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="9e35a389-4b42-0f28-e0cd-27b1ae064161">
+      <Execution id="1925579d-b59f-4de8-95bc-74795302013b" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 manually flipped SDD state identity collapse and bundle tamper refuse" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 preparation rendering is bounded deterministic and verifies replay" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="05bc5084-4322-1d6f-cfb4-c52e0949aa3a">
+      <Execution id="4605e9b7-9ca6-4e5a-bdd6-9dbc799c985c" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 preparation rendering is bounded deterministic and verifies replay" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 selection refuses ambiguous authority prerequisite and catalog drift" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="677ba74d-be2d-21b3-0132-919ef7b4e493">
+      <Execution id="2a7efb3a-4fa8-4217-8902-8bbe7cfa9e0e" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 selection refuses ambiguous authority prerequisite and catalog drift" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 acceptance consumes qualified lifecycle and observed SDD evidence atomically" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="737bf074-2a19-19b5-66d0-a82b08d96457">
+      <Execution id="b85a654d-eed9-4ef1-a674-db010e9a8bee" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 acceptance consumes qualified lifecycle and observed SDD evidence atomically" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3233 ordered partial catalog admits omitted accepted roadmap history" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="3e2a0f3f-c35e-0790-244f-d9bd8c483cae">
+      <Execution id="da4ec255-9cc0-4601-8cce-b06f6c01eccb" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3233 ordered partial catalog admits omitted accepted roadmap history" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 catalog cannot omit the canonical first unchecked roadmap row" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="855d3b27-e87a-4c1d-fb7a-95e4e51bc7f0">
+      <Execution id="d02c141b-4e6c-4995-bed0-63fedbb9287b" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 catalog cannot omit the canonical first unchecked roadmap row" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 selects exactly next row and derives staged intake registrations" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="51b7c9a6-2c03-cbfa-67bc-9c897749c6da">
+      <Execution id="ad7bb432-acc7-4d9d-9004-7a9f05f8d960" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 selects exactly next row and derives staged intake registrations" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 closed acceptance wire input parses and replays the same receipt bytes" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="07358344-8380-7e3d-c20e-1722a006f1c0">
+      <Execution id="40431a88-647c-4bda-8eb0-170a73538197" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 closed acceptance wire input parses and replays the same receipt bytes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 catalog accepted prefix must preserve canonical roadmap order" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="94be441e-1d37-a020-f516-1c44d5a89f81">
+      <Execution id="be3e94af-4fad-493b-9051-8f3b7bcdbefd" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 catalog accepted prefix must preserve canonical roadmap order" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coord.Tests.RoadmapWorkUnitTests.#3210 authoritative roadmap and catalog compile while stale drift and misordered frontier refuse" storage="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/fs.gg.coord.core.tests/bin/release/net10.0/fs.gg.coord.core.tests.dll" id="45548dea-cfd2-ef11-6e75-95cd28070d0a">
+      <Execution id="b85334d1-2640-4109-8b4d-3c1f5f35facd" />
+      <TestMethod codeBase="/home/developer/projects/.github-worktrees/item-3233-partial-catalog-final/tests/FS.GG.Coord.Core.Tests/bin/Release/net10.0/FS.GG.Coord.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coord.Tests.RoadmapWorkUnitTests" name="#3210 authoritative roadmap and catalog compile while stale drift and misordered frontier refuse" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="3e2a0f3f-c35e-0790-244f-d9bd8c483cae" executionId="da4ec255-9cc0-4601-8cce-b06f6c01eccb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="677ba74d-be2d-21b3-0132-919ef7b4e493" executionId="2a7efb3a-4fa8-4217-8902-8bbe7cfa9e0e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="737bf074-2a19-19b5-66d0-a82b08d96457" executionId="b85a654d-eed9-4ef1-a674-db010e9a8bee" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="05bc5084-4322-1d6f-cfb4-c52e0949aa3a" executionId="4605e9b7-9ca6-4e5a-bdd6-9dbc799c985c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="51b7c9a6-2c03-cbfa-67bc-9c897749c6da" executionId="ad7bb432-acc7-4d9d-9004-7a9f05f8d960" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="94be441e-1d37-a020-f516-1c44d5a89f81" executionId="be3e94af-4fad-493b-9051-8f3b7bcdbefd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9e35a389-4b42-0f28-e0cd-27b1ae064161" executionId="1925579d-b59f-4de8-95bc-74795302013b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="07358344-8380-7e3d-c20e-1722a006f1c0" executionId="40431a88-647c-4bda-8eb0-170a73538197" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="855d3b27-e87a-4c1d-fb7a-95e4e51bc7f0" executionId="d02c141b-4e6c-4995-bed0-63fedbb9287b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="45548dea-cfd2-ef11-6e75-95cd28070d0a" executionId="b85334d1-2640-4109-8b4d-3c1f5f35facd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="10" executed="10" passed="10" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.11]   Discovering: FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:00.23]   Discovered:  FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:00.26]   Starting:    FS.GG.Coord.Core.Tests
+[xUnit.net 00:00:01.07]   Finished:    FS.GG.Coord.Core.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
