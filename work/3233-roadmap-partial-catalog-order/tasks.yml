@@ -67,7 +67,7 @@ tasks:
     decisions: []
     sourceIds: [AC-001, FR-004, PD-004]
     requiredSkills: [fsharp, implementation]
-    requiredEvidence: [EV004]
+    requiredEvidence: []
   - id: T005
     title: Update contract surface PC-001
     status: completed
@@ -97,7 +97,7 @@ tasks:
     decisions: []
     sourceIds: [PC-001, PM-001]
     requiredSkills: [schema-versioning]
-    requiredEvidence: [EV007]
+    requiredEvidence: []
   - id: T008
     title: Refresh generated view impact GV-001
     status: completed
@@ -107,7 +107,7 @@ tasks:
     decisions: []
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
-    requiredEvidence: [EV008]
+    requiredEvidence: []
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

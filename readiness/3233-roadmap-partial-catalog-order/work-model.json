@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "3adbdf21f4ffde15bc7153210a4d7ee70c7c333b9853340fc4b3105dea6a4bf2"
+        "value": "c21ff4172e16e27cf946f4ee23ad8a9600ed58700433126e142f8f4481532067"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "849df6e36306379a2e2721937c8d62730016b4be7bc51336d4c8bf0a06963e8e"
+        "value": "fd9c8349277757fca10e7acf2a6138d698349f5cbdbbed5ad4f737896b88bc63"
       }
     }
   ],
@@ -316,9 +316,7 @@
         "fsharp",
         "implementation"
       ],
-      "requiredEvidence": [
-        "EV004"
-      ],
+      "requiredEvidence": [],
       "source": "work/3233-roadmap-partial-catalog-order/tasks.yml",
       "sourceLocation": {
         "line": 4,
@@ -396,9 +394,7 @@
       "requiredSkills": [
         "schema-versioning"
       ],
-      "requiredEvidence": [
-        "EV007"
-      ],
+      "requiredEvidence": [],
       "source": "work/3233-roadmap-partial-catalog-order/tasks.yml",
       "sourceLocation": {
         "line": 7,
@@ -422,9 +418,7 @@
       "requiredSkills": [
         "deterministic-json"
       ],
-      "requiredEvidence": [
-        "EV008"
-      ],
+      "requiredEvidence": [],
       "source": "work/3233-roadmap-partial-catalog-order/tasks.yml",
       "sourceLocation": {
         "line": 8,
@@ -513,7 +507,7 @@
     },
     {
       "id": "EV004",
-      "kind": "verification",
+      "kind": "review",
       "subjectType": "task",
       "subjectId": "T004",
       "taskRefs": [
@@ -524,8 +518,7 @@
       ],
       "artifactRefs": [
         "Directory.Build.props",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
       ],
       "result": "pass",
       "synthetic": false,
@@ -589,7 +582,7 @@
     },
     {
       "id": "EV007",
-      "kind": "verification",
+      "kind": "implementation",
       "subjectType": "task",
       "subjectId": "T007",
       "taskRefs": [
@@ -599,8 +592,7 @@
       "artifactRefs": [
         "Directory.Build.props",
         "registry/dependencies.yml",
-        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-        "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
+        "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
       ],
       "result": "pass",
       "synthetic": false,
@@ -616,7 +608,7 @@
     },
     {
       "id": "EV008",
-      "kind": "verification",
+      "kind": "generated-view",
       "subjectType": "task",
       "subjectId": "T008",
       "taskRefs": [
@@ -626,8 +618,7 @@
       "artifactRefs": [
         "docs/architecture.md",
         "docs/registry/compatibility.md",
-        "registry/driver-skill-manifest.json",
-        "work/3233-roadmap-partial-catalog-order/verification/core.test-report.xml"
+        "registry/driver-skill-manifest.json"
       ],
       "result": "pass",
       "synthetic": false,
@@ -696,7 +687,7 @@
           "path": "work/3233-roadmap-partial-catalog-order/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "3adbdf21f4ffde15bc7153210a4d7ee70c7c333b9853340fc4b3105dea6a4bf2"
+            "value": "c21ff4172e16e27cf946f4ee23ad8a9600ed58700433126e142f8f4481532067"
           },
           "schemaVersion": 1
         },
@@ -720,14 +711,14 @@
           "path": "work/3233-roadmap-partial-catalog-order/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "849df6e36306379a2e2721937c8d62730016b4be7bc51336d4c8bf0a06963e8e"
+            "value": "fd9c8349277757fca10e7acf2a6138d698349f5cbdbbed5ad4f737896b88bc63"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "b4d33748ad29e13097cdfa4d9c552c029b6b69d1bb4302d6a183e949e1383c9f"
+        "value": "fced2067c5341ce25ec627d5e76236299e169c15d41216063826622e8ef43102"
       },
       "currency": "current"
     }

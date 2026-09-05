@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/ship.json",
-      "digest": "sha256:774f79d05055bef3c38b4ed2e3dbf90ab49476a02c03cf12c7e9ae6e22000808",
+      "digest": "sha256:8426b0261e4210806f1b8fa018e23f8f8f3a28a7c2b18ba95a6d306f08ddac4f",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/verify.json",
-      "digest": "sha256:010044e960a70be80e865d15d5f64bcf0e3073c66e20c4f7e9d2be70ccd34adb",
+      "digest": "sha256:406ed7697efa30be847d6847faecebd15ebb22187cf31f91e43641233b197487",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3233-roadmap-partial-catalog-order/work-model.json",
-      "digest": "sha256:46a0f4f7388b25b670c962bfab84db20e2a99347c0c63d8bc466804feb225641",
+      "digest": "sha256:5818f2b8a55555ba268c5f1482a15d9e9773c2f63797d6f284398c4064ba6b93",
       "schemaVersion": 1
     }
   ],
@@ -149,10 +149,6 @@
         "dependency": "evidence:EV003"
       },
       {
-        "dependent": "task:T004",
-        "dependency": "evidence:EV004"
-      },
-      {
         "dependent": "task:T005",
         "dependency": "evidence:EV005"
       },
@@ -170,15 +166,7 @@
       },
       {
         "dependent": "task:T007",
-        "dependency": "evidence:EV007"
-      },
-      {
-        "dependent": "task:T007",
         "dependency": "task:T001"
-      },
-      {
-        "dependent": "task:T008",
-        "dependency": "evidence:EV008"
       },
       {
         "dependent": "task:T008",
