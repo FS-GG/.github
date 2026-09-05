@@ -529,8 +529,12 @@
        typed roadmap work-unit preparation and acceptance commands. They compile authoritative
        roadmap/catalog bytes into deterministic staged intake drafts, validate qualification,
        lifecycle, critique, SDD, and revision evidence, and seal one atomic acceptance bundle. -->
+  <!-- 0.83.0 -> 0.83.1 (.github#3233): PATCH. Work-unit preparation now accepts an ordered partial
+       catalog that omits already-accepted historical roadmap rows while preserving canonical order,
+       first-unchecked selection, and immediate-prerequisite validation. No command, option, result,
+       or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.83.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

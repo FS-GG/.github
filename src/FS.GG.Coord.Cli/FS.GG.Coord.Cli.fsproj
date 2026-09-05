@@ -130,15 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.83.0 — deterministic roadmap work-unit compiler and acceptance transaction.
+    <PackageReleaseNotes>0.83.1 — accept ordered partial roadmap catalogs during work-unit preparation.
 
-Adds strict roadmap unit prepare/accept inspect, render, and verify commands plus a live acceptance seal. Preparation compiles
-authoritative Roadmap Markdown and the canonical roadmap catalog into byte-stable staged intake
-drafts. Pure acceptance validates only internal candidate coherence. The seal reruns qualification and
-independently observes unedited lifecycle/review authority, raw SDD outputs, merged PRs, remote commit
-trees, protected main, and acceptance time before sealing a self-digested two-member bundle.
-Stale or reordered authority, ambiguous frontiers, drifted contracts, malformed evidence, collapsed
-phase identities, and non-atomic receipt/index transactions fail closed.
+Repairs work-unit preparation for production catalogs that intentionally omit already-accepted
+historical roadmap rows. Catalog rows must still follow canonical roadmap order, the selected unit
+must still be the first unchecked row, and its immediate accepted prerequisite must still be present.
+No command, option, result, or exit-code vocabulary changes.
 
 $(FsggStandingAdvisories)
 
