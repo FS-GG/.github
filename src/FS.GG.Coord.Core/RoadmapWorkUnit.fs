@@ -556,7 +556,7 @@ module RoadmapWorkUnit =
                 Error [ RoadmapIdentityMismatch "catalog omits or reorders the canonical first unchecked roadmap row" ]
             | Some index when
                 (rows |> List.take (index + 1) |> List.map _.UnitId)
-                <> (roadmapRows |> List.take (index + 1) |> List.map fst) ->
+                <> (roadmapRows |> List.map fst |> List.filter (Set.ofList (rows |> List.take (index + 1) |> List.map _.UnitId)).Contains) ->
                 Error [ RoadmapIdentityMismatch "catalog prefix does not match canonical roadmap order through the first unchecked row" ]
             | Some index ->
                 let selected = rows[index]
