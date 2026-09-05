@@ -41,7 +41,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "f94a413d352f9586b52581e71fa36d50283459a20f38a5d2d8a76b3a927704f2"
+        "value": "1cab43cbc84e994c026d5e469fc0360a0d6e57892543854d8aa991704b40a458"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
+        "value": "1d782fd42eaf746723ed3cbd5b2582613eb8225b6188ada3eb507bcb855a3fde"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"

@@ -35,6 +35,64 @@ module Handlers =
         | Some earlier, Some current -> earlier.Revision <> current.Revision
         | _ -> false
 
+    type LifecycleAuthorityExpectation =
+        { Repository: string
+          Number: int
+          Url: string
+          Subject: string
+          CurrentClaimGeneration: string
+          ImplementationRepository: string
+          ImplementationCandidate: string }
+
+    let validateLifecycleAuthority expectation (lifecycleLog: string) =
+        let errors = ResizeArray<string>()
+        let lines = lifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        if lines.Length = 0 then errors.Add("lifecycle authority ledger is empty")
+        lines
+        |> Array.iteri (fun index line ->
+            try
+                use event = JsonDocument.Parse line
+                let root = event.RootElement
+                let item = root.GetProperty "item"
+                let source = root.GetProperty "source"
+                let authority = root.GetProperty "authority"
+                if item.GetProperty("repo").GetString() <> expectation.Repository
+                   || item.GetProperty("number").GetInt32() <> expectation.Number
+                   || item.GetProperty("url").GetString() <> expectation.Url then
+                    errors.Add($"lifecycle event %d{index + 1} is not bound to the applied unit issue")
+                if authority.GetProperty("subject").GetString() <> expectation.Subject then
+                    errors.Add($"lifecycle event %d{index + 1} authority subject differs from the applied unit issue")
+                let generation = authority.GetProperty("claim_generation").GetString()
+                match Int64.TryParse generation with
+                | true, value when value > 0L -> ()
+                | _ -> errors.Add($"lifecycle event %d{index + 1} claim generation is not a GitHub-issued comment id")
+                if index = lines.Length - 1 && generation <> expectation.CurrentClaimGeneration then
+                    errors.Add("terminal lifecycle event claim generation is not the live winning claim")
+                if source.GetProperty("repository").GetString() <> expectation.ImplementationRepository
+                   || source.GetProperty("revision").GetString() <> expectation.ImplementationCandidate then
+                    errors.Add($"lifecycle event %d{index + 1} source is not the immutable implementation candidate")
+            with error -> errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
+        List.ofSeq errors
+
+    let validateCompleteSddWorkModel expectedWorkId (workModelJson: string) =
+        let errors = ResizeArray<string>()
+        try
+            use document = JsonDocument.Parse workModelJson
+            let root = document.RootElement
+            if root.GetProperty("workId").GetString() <> expectedWorkId then
+                errors.Add("SDD work model does not name the applied unit work id")
+            let tasks = root.GetProperty "tasks"
+            if tasks.ValueKind <> JsonValueKind.Array || tasks.GetArrayLength() = 0 then
+                errors.Add("SDD work model declares no tasks")
+            else
+                tasks.EnumerateArray()
+                |> Seq.iter (fun task ->
+                    let id = task.GetProperty("id").GetString()
+                    let status = task.GetProperty("status").GetString()
+                    if status <> "done" then errors.Add($"SDD task %s{id} is %s{status}, expected done"))
+        with error -> errors.Add("invalid SDD work model: " + error.Message)
+        List.ofSeq errors
+
     [<Literal>]
     let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
 
@@ -2585,7 +2643,7 @@ module Handlers =
                             ExitGreen
             with error -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"; ExitError
 
-    let roadmapUnitAccept runQualification (ctx: Context) (opts: Options) : int =
+    let private roadmapUnitAcceptCore runQualification observerOverrides (ctx: Context) (opts: Options) : int =
         let fail reasons =
             reasons |> List.iter (fun reason -> eprint $"fsgg-coord-engine: roadmap unit accept: %s{reason}")
             ExitError
@@ -2696,7 +2754,13 @@ module Handlers =
                                                 | Ok observed, Ok supplied when observed = supplied -> None
                                                 | Ok _, Ok _ -> Some($"independent SDD %s{stage} artifact differs from the acceptance input")
                                                 | Error reason, _ | _, Error reason -> Some reason)
-                                    if errors.IsEmpty then Ok() else Error errors)
+                                    let workModelPath = Path.Combine(checkout, "readiness", input.SddWorkId, "work-model.json")
+                                    if not (File.Exists workModelPath) then
+                                        errors @ [ "independent SDD execution did not produce work-model.json" ] |> Error
+                                    else
+                                        let taskErrors = validateCompleteSddWorkModel input.SddWorkId (File.ReadAllText workModelPath)
+                                        let allErrors = errors @ taskErrors
+                                        if allErrors.IsEmpty then Ok() else Error allErrors)
                                 |> Result.bind (fun () ->
                                     run git checkout [ "rev-parse"; "HEAD" ] 30
                                     |> Result.mapError List.singleton
@@ -2818,28 +2882,19 @@ module Handlers =
                     | Ok(exported, rejected) when not rejected.IsEmpty -> errors.Add("lifecycle authority contains a rejected fork")
                     | Ok(exported, _) when exported <> input.LifecycleLog -> errors.Add("lifecycle input differs byte-for-byte from the canonical GitHub comment ledger")
                     | Ok _ -> ()
-                    input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    |> Array.iteri (fun index line ->
-                        try
-                            use event = JsonDocument.Parse line
-                            let root = event.RootElement
-                            let item = root.GetProperty "item"
-                            let source = root.GetProperty "source"
-                            let authority = root.GetProperty "authority"
-                            if item.GetProperty("repo").GetString() <> expectedItem
-                               || item.GetProperty("number").GetInt32() <> number
-                               || item.GetProperty("url").GetString() <> expectedUrl then
-                                errors.Add($"lifecycle event %d{index + 1} is not bound to the applied unit issue")
-                            if authority.GetProperty("subject").GetString() <> expectedSubject then
-                                errors.Add($"lifecycle event %d{index + 1} authority subject differs from the applied unit issue")
-                            match winningClaim with
-                            | Some claim when authority.GetProperty("claim_generation").GetString() <> claim ->
-                                errors.Add($"lifecycle event %d{index + 1} claim generation is not the live winning claim")
-                            | _ -> ()
-                            if source.GetProperty("repository").GetString() <> input.ImplementationBinding.Repository
-                               || source.GetProperty("revision").GetString() <> input.Identities.ImplementationCandidate then
-                                errors.Add($"lifecycle event %d{index + 1} source is not the immutable implementation candidate")
-                        with error -> errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
+                    match winningClaim with
+                    | None -> ()
+                    | Some claim ->
+                        validateLifecycleAuthority
+                            { Repository = expectedItem
+                              Number = number
+                              Url = expectedUrl
+                              Subject = expectedSubject
+                              CurrentClaimGeneration = claim
+                              ImplementationRepository = input.ImplementationBinding.Repository
+                              ImplementationCandidate = input.Identities.ImplementationCandidate }
+                            input.LifecycleLog
+                        |> List.iter errors.Add
 
             match parseCommentUrl input.ReviewEvidence with
             | Error reason -> errors.Add reason
@@ -2951,6 +3006,10 @@ module Handlers =
                             | Ok left, Ok right when left = right -> ()
                             | Ok _, Ok _ -> errors.Add($"SDD %s{stage} artifact differs from immutable candidate %s{input.Identities.ImplementationCandidate}")
                             | Error reason, _ | _, Error reason -> errors.Add reason
+                let workModelPath = $"readiness/%s{input.SddWorkId}/work-model.json"
+                match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] workModelPath input.Identities.ImplementationCandidate with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok workModel -> validateCompleteSddWorkModel input.SddWorkId workModel |> List.iter errors.Add
 
             if registrationRepository <> input.AcceptanceBinding.Repository then errors.Add("acceptance repository differs from the applied unit registration")
             if implementationParts.Length = 2 && acceptanceParts.Length = 2 then
@@ -3013,10 +3072,14 @@ module Handlers =
                             | Ok observedQualification when Qualification.canonicalResult observedQualification <> Qualification.canonicalResult input.Qualification ->
                                 fail [ "production qualification result differs from the acceptance input" ]
                             | Ok _ ->
-                                match independentlyObserveSdd input with
+                                let observeSdd, observeLiveAuthorities =
+                                    match observerOverrides with
+                                    | Some supplied -> supplied
+                                    | None -> independentlyObserveSdd, observeAuthorities
+                                match observeSdd input with
                                 | Error reasons -> fail reasons
                                 | Ok () ->
-                                    match observeAuthorities input with
+                                    match observeLiveAuthorities input with
                                     | Error reasons -> fail reasons
                                     | Ok () ->
                                         let observed = RoadmapWorkUnit.observeAcceptance candidate
@@ -3028,6 +3091,12 @@ module Handlers =
                                             ExitGreen
                                         | _ -> ExitError
             with error -> fail [ error.Message ]
+
+    let roadmapUnitAccept runQualification ctx opts =
+        roadmapUnitAcceptCore runQualification None ctx opts
+
+    let roadmapUnitAcceptWithObservers runQualification observeSdd observeAuthorities ctx opts =
+        roadmapUnitAcceptCore runQualification (Some(observeSdd, observeAuthorities)) ctx opts
 
     // Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     // are the append-only receipt ledger: a failure in either direction is not a missing decision.

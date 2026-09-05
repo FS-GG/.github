@@ -55,7 +55,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "81aac8e4aa0abf5e2442da4aa3c8dd40167b247eb2774932a2dd27788855119f",
-      "tree-sha256": "87ec164b059588be14c62741237890fc6088cef41550b6783868362006b09b02",
+      "tree-sha256": "b8b987562849f7557041c2c94538d6ff5ab66bba670040121490368077be9e56",
       "files": [
         {
           "path": "SKILL.md",
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/orchestrator-room.md",
-          "sha256": "c6c16a948710a06b79b9e3dd5836f6c8d254d7074d1f17bc35e62cad890c4e3b",
+          "sha256": "528fbb717a2fa79b9e41e6b3bfc6e6690df881b12715c77c37d54455c4c4897f",
           "executable": false
         },
         {
@@ -165,7 +165,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "638e8fd65bc20d1471b586c09d508d04be3b069cd3598d561dedbb016dfce771",
-      "tree-sha256": "16c569f00b69be24da752a5bc0c0ceb7fcc85e123a866ed42a7b2413b276fa1c",
+      "tree-sha256": "009ba073f046a37328e5db91f7c8676cf246c5368e119c8a14eecaa641291134",
       "files": [
         {
           "path": "SKILL.md",
@@ -194,7 +194,7 @@
         },
         {
           "path": "references/orchestrator-room.md",
-          "sha256": "a117d53a28442213d9c593ef75c31bd12e6c8fb9ad64ddf3a08bc9d6a3babe1e",
+          "sha256": "0264bf5ca001f6539eb053634a001d53fc4462ec3b632c474647319565766e11",
           "executable": false
         },
         {

@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/ship.json",
-      "digest": "sha256:9fb614227f2b3af2fb73d2e72b78cf38f1e4fc74900484fcafbd9e38bcc09094",
+      "digest": "sha256:efa176826a4a8af475e921494e5277773bb32caf545dbd2c966fba1ab8a9f413",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/verify.json",
-      "digest": "sha256:61a40b37c48045235d77bf4bb1436f61003600204c16249e992668c0fae95bb5",
+      "digest": "sha256:f6877ece6fbb6b7519787ab5d7e867e18735a04dbbf005e9ce97ea61f859aec2",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3210-roadmap-work-unit-compiler/work-model.json",
-      "digest": "sha256:f94a413d352f9586b52581e71fa36d50283459a20f38a5d2d8a76b3a927704f2",
+      "digest": "sha256:1cab43cbc84e994c026d5e469fc0360a0d6e57892543854d8aa991704b40a458",
       "schemaVersion": 1
     }
   ],
@@ -174,152 +174,152 @@
       },
       {
         "id": "task:T001",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T002",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T003",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T004",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T005",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T006",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T007",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T008",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T009",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T010",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T011",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T012",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T013",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T014",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T015",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T016",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T017",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T018",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T019",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T020",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T021",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T022",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T023",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T024",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T025",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T026",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T027",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T028",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T029",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       },
       {
         "id": "task:T030",
-        "state": "pending",
+        "state": "real",
         "rationale": null
       }
     ],

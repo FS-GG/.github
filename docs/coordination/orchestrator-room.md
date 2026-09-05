@@ -19,19 +19,24 @@ ORCHESTRATOR-STATUS worker=<worker> state=<active|waiting|yielded|done> item=<ow
 - `yielded`: the orchestrator has stopped and explicitly permits another host to take over.
 - `done`: the orchestrator has no remaining ownership intent for the item.
 
-The latest syntactically valid status per worker wins. Status is append-only; never edit or delete an
-older line. A missing or unreadable room ledger is unknown authority, not permission to take over.
+The status `worker=` must equal the surrounding `fsgg:msg from=` actor. The latest status attempt per
+worker must be valid; a malformed newer attempt invalidates that worker's state and never falls back to
+an older line. Status is append-only; never edit or delete an older line. A missing or unreadable room
+ledger is unknown authority, not permission to take over. GitHub comment `5551249226` is the immutable
+authenticated-protocol activation boundary; older raw status lines are legacy history, not authority.
 
 ## Required procedure
 
-1. At orchestrator startup, read the complete paginated room ledger over REST:
+1. At orchestrator startup, read and validate the complete paginated room ledger:
 
    ```sh
-   gh api repos/FS-GG/.github/issues/3227/comments --paginate
+   scripts/check-orchestrator-room --json
    ```
 
-   Resolve the latest valid line per worker. Post this host's `active` line before dispatching work.
-2. Before dispatch, recovery, or `claim --force`, read the room again and fresh-read the target claim.
+   Consume the checker's authenticated latest-attempt result. Post this host's `active` line before
+   dispatching work.
+2. Before dispatch, recovery, or `claim --force`, run `scripts/check-orchestrator-room --json` again
+   and fresh-read the target claim.
    If another worker's latest state is `active` or `waiting` on the target, do not force-claim. Address
    that worker in #3227 and wait for `yielded` or an explicit handoff. If room and claim disagree, fail
    closed and reconcile them in the room.

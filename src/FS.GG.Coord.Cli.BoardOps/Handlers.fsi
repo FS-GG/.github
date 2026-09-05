@@ -5,6 +5,24 @@ open FS.GG.Coord.Cli.Kernel
 
 module Handlers =
 
+    /// Immutable identities used to join every lifecycle event to its applied unit and source, while
+    /// requiring only the terminal event to carry the currently winning claim generation.
+    type LifecycleAuthorityExpectation =
+        { Repository: string
+          Number: int
+          Url: string
+          Subject: string
+          CurrentClaimGeneration: string
+          ImplementationRepository: string
+          ImplementationCandidate: string }
+
+    /// Validate lifecycle identity/source bindings without rewriting historical claim generations.
+    val validateLifecycleAuthority:
+        expectation: LifecycleAuthorityExpectation -> lifecycleLog: string -> string list
+
+    /// Refuse an SDD work model until it names the expected work item and every declared task is done.
+    val validateCompleteSddWorkModel: expectedWorkId: string -> workModelJson: string -> string list
+
     /// Decide Ready eligibility from ADR-0045's sole dependency-edge authority.
     val readyDependencyVerdict: blockedByColumn: string option -> string option
 
@@ -49,6 +67,15 @@ module Handlers =
     /// be sealed. Pure candidate inspection is intentionally insufficient at this boundary.
     val roadmapUnitAccept:
         runQualification: (string -> string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
+        Context ->
+        Options.Options ->
+            int
+    /// Exercise the same parsing, qualification-binding, observation, and sealing route as production
+    /// with authority observers supplied by a deterministic test host.
+    val roadmapUnitAcceptWithObservers:
+        runQualification: (string -> string -> string -> Result<FS.GG.Coord.Qualification.Accepted, string list>) ->
+        observeSdd: (FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput -> Result<unit, string list>) ->
+        observeAuthorities: (FS.GG.Coord.RoadmapWorkUnit.AcceptanceInput -> Result<unit, string list>) ->
         Context ->
         Options.Options ->
             int

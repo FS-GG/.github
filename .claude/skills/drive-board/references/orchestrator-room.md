@@ -9,14 +9,19 @@ Every valid status is exactly one line:
 ORCHESTRATOR-STATUS worker=<worker> state=<active|waiting|yielded|done> item=<owner/repo#number|none> claim=<comment-id|none> head=<40-hex|none> note=<one-path-safe-token>
 ```
 
-The latest valid line per worker wins. `active` means progressing and `waiting` means deliberately
+The status `worker=` must equal the surrounding `fsgg:msg from=` actor. The latest status attempt per
+worker must be valid; a malformed newer attempt invalidates that worker's state and never falls back to
+an older line. `active` means progressing and `waiting` means deliberately
 paused; both forbid takeover. `yielded` explicitly permits takeover. `done` ends ownership intent.
-Missing, unreadable, malformed, or contradictory room state is unknown authority and fails closed.
+GitHub comment `5551249226` is the authenticated-protocol activation boundary; older raw status lines
+are legacy history, not authority. Missing, unreadable, malformed, or contradictory room state is
+unknown authority and fails closed.
 
-1. At host startup, read every paginated room comment with
-   `gh api repos/FS-GG/.github/issues/3227/comments --paginate`, resolve the latest valid status per
+1. At host startup, read and validate every paginated room comment with
+   `scripts/check-orchestrator-room --json`, resolve the authenticated latest status per
    worker, and post this host's `active` status before dispatch.
-2. Immediately before every dispatch, recovery, or `claim --force`, read the complete room again and
+2. Immediately before every dispatch, recovery, or `claim --force`, run
+   `scripts/check-orchestrator-room --json` again and
    fresh-read the target claim. If another worker is `active` or `waiting` on the target, address that
    worker in #3227 and wait for `yielded` or an explicit room handoff. Reconcile disagreement in the
    room; an aged lease is not permission to proceed.

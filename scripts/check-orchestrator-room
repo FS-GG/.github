@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Resolve authenticated permanent-room status, refusing malformed status attempts."""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+HEADER = re.compile(r"^<!-- fsgg:msg from=([a-z0-9]+-[a-z0-9]+) to=\* -->$")
+STATUS = re.compile(
+    r"^ORCHESTRATOR-STATUS worker=([a-z0-9]+-[a-z0-9]+) "
+    r"state=(active|waiting|yielded|done) "
+    r"item=(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*|none) "
+    r"claim=(?:[1-9][0-9]*|none) head=(?:[0-9a-f]{40}|none) "
+    r"note=[A-Za-z0-9._/-]+$"
+)
+ACTIVATION_COMMENT_ID = 5551249226
+
+
+def load_comments(path: str | None) -> list[dict]:
+    if path:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    else:
+        result = subprocess.run(
+            ["gh", "api", "repos/FS-GG/.github/issues/3227/comments", "--paginate", "--slurp"],
+            check=True, text=True, capture_output=True,
+        )
+        value = json.loads(result.stdout)
+    if value and isinstance(value[0], list):
+        return [comment for page in value for comment in page]
+    return value
+
+
+def resolve(comments: list[dict]) -> dict[str, dict]:
+    resolved: dict[str, dict] = {}
+    errors: list[str] = []
+    activated = False
+    for comment in comments:
+        body = comment.get("body") or ""
+        comment_id = comment.get("id", "unknown")
+        if isinstance(comment_id, int) and comment_id < ACTIVATION_COMMENT_ID:
+            continue
+        status_lines = [line for line in body.splitlines() if "ORCHESTRATOR-STATUS" in line]
+        if not status_lines:
+            continue
+        if comment_id == ACTIVATION_COMMENT_ID:
+            activated = True
+        lines = body.splitlines()
+        header = HEADER.fullmatch(lines[0]) if lines else None
+        if header is None or len(status_lines) != 1:
+            errors.append(f"comment {comment_id}: malformed or unauthenticated status attempt")
+            continue
+        status = STATUS.fullmatch(status_lines[0])
+        if status is None:
+            errors.append(f"comment {comment_id}: malformed status line")
+            continue
+        actor, worker = header.group(1), status.group(1)
+        if actor != worker:
+            errors.append(f"comment {comment_id}: status worker {worker} differs from fsgg:msg actor {actor}")
+            continue
+        current = resolved.get(worker)
+        numeric_id = int(comment_id)
+        if current is None or numeric_id > current["commentId"]:
+            resolved[worker] = {
+                "commentId": numeric_id,
+                "worker": worker,
+                "state": status.group(2),
+                "line": status_lines[0],
+            }
+    if not activated:
+        errors.append(f"authenticated protocol activation comment {ACTIVATION_COMMENT_ID} is missing")
+    if errors:
+        raise ValueError("; ".join(errors))
+    return resolved
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    try:
+        result = resolve(load_comments(args.input))
+    except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as error:
+        print(f"orchestrator-room: UNKNOWN — {error}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    else:
+        for worker in sorted(result):
+            print(result[worker]["line"])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

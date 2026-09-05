@@ -528,7 +528,9 @@
   <!-- 0.82.0 -> 0.83.0 (.github#3210): MINOR on the stable 0.x line. The coordination engine adds
        typed roadmap work-unit preparation and acceptance commands. They compile authoritative
        roadmap/catalog bytes into deterministic staged intake drafts, validate qualification,
-       lifecycle, critique, SDD, and revision evidence, and seal one atomic acceptance bundle. -->
+       lifecycle, critique, SDD, and revision evidence, and seal one atomic acceptance bundle. The
+       coherent Kit member set also adds the authenticated permanent-room status reader required by
+       ADR-0082; receivers therefore execute the same fail-closed actor-binding rule as the host. -->
   <PropertyGroup>
     <FsggCoherentSetVersion>0.83.0</FsggCoherentSetVersion>
   </PropertyGroup>

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "afc82055d78ca0c83cd439ca1bba4688710f05cc67ea0f88874f0a0090e77dd0"
+        "value": "0303e1a70dbffa9c3d8e65901c36ab44108fabb91906f53d9e2927a4e74afc8f"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
+        "value": "1d782fd42eaf746723ed3cbd5b2582613eb8225b6188ada3eb507bcb855a3fde"
       }
     }
   ],
@@ -342,7 +342,7 @@
     {
       "id": "T001",
       "title": "Implement requirement FR-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -370,7 +370,7 @@
     {
       "id": "T002",
       "title": "Implement requirement FR-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -398,7 +398,7 @@
     {
       "id": "T003",
       "title": "Implement requirement FR-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -426,7 +426,7 @@
     {
       "id": "T004",
       "title": "Implement requirement FR-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -454,7 +454,7 @@
     {
       "id": "T005",
       "title": "Implement requirement FR-005",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -482,7 +482,7 @@
     {
       "id": "T006",
       "title": "Implement requirement FR-006",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -510,7 +510,7 @@
     {
       "id": "T007",
       "title": "Implement requirement FR-007",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -538,7 +538,7 @@
     {
       "id": "T008",
       "title": "Implement requirement FR-008",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -566,7 +566,7 @@
     {
       "id": "T009",
       "title": "Implement requirement FR-009",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -594,7 +594,7 @@
     {
       "id": "T010",
       "title": "Implement requirement FR-010",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -622,7 +622,7 @@
     {
       "id": "T011",
       "title": "Update contract surface PC-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -648,7 +648,7 @@
     {
       "id": "T012",
       "title": "Update contract surface PC-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -674,7 +674,7 @@
     {
       "id": "T013",
       "title": "Update contract surface PC-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -700,7 +700,7 @@
     {
       "id": "T014",
       "title": "Update contract surface PC-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -726,7 +726,7 @@
     {
       "id": "T015",
       "title": "Update contract surface PC-005",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -752,7 +752,7 @@
     {
       "id": "T016",
       "title": "Update contract surface PC-006",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -778,7 +778,7 @@
     {
       "id": "T017",
       "title": "Record verification evidence VO-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -806,7 +806,7 @@
     {
       "id": "T018",
       "title": "Record verification evidence VO-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -834,7 +834,7 @@
     {
       "id": "T019",
       "title": "Record verification evidence VO-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -862,7 +862,7 @@
     {
       "id": "T020",
       "title": "Record verification evidence VO-004",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -890,7 +890,7 @@
     {
       "id": "T021",
       "title": "Record verification evidence VO-005",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -918,7 +918,7 @@
     {
       "id": "T022",
       "title": "Record verification evidence VO-006",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -946,7 +946,7 @@
     {
       "id": "T023",
       "title": "Record verification evidence VO-007",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -974,7 +974,7 @@
     {
       "id": "T024",
       "title": "Record verification evidence VO-008",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1002,7 +1002,7 @@
     {
       "id": "T025",
       "title": "Record verification evidence VO-009",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1030,7 +1030,7 @@
     {
       "id": "T026",
       "title": "Record verification evidence VO-010",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1058,7 +1058,7 @@
     {
       "id": "T027",
       "title": "Handle migration posture PM-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1084,7 +1084,7 @@
     {
       "id": "T028",
       "title": "Handle migration posture PM-002",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1110,7 +1110,7 @@
     {
       "id": "T029",
       "title": "Handle migration posture PM-003",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1136,7 +1136,7 @@
     {
       "id": "T030",
       "title": "Refresh generated view impact GV-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -1956,7 +1956,7 @@
           "path": "work/3210-roadmap-work-unit-compiler/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "afc82055d78ca0c83cd439ca1bba4688710f05cc67ea0f88874f0a0090e77dd0"
+            "value": "0303e1a70dbffa9c3d8e65901c36ab44108fabb91906f53d9e2927a4e74afc8f"
           },
           "schemaVersion": 1
         },
@@ -1980,14 +1980,14 @@
           "path": "work/3210-roadmap-work-unit-compiler/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "5bd0d1d41a54bfe4125fa4116de504a7247a0450c14ab8e7a346735de2c919f8"
+            "value": "1d782fd42eaf746723ed3cbd5b2582613eb8225b6188ada3eb507bcb855a3fde"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "88cc7accb0313ff16a6a88656b77bc7a76ed8cb1eee438ecdfcb7d2df00a8cba"
+        "value": "473074229bee22755687b95a96e7a6a866679ab75353bb65cb511e8dd859192c"
       },
       "currency": "current"
     }
