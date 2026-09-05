@@ -1,0 +1,848 @@
+schemaVersion: 1
+workId: 3210-roadmap-work-unit-compiler
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3210-roadmap-work-unit-compiler/spec.md
+sourceClarifications: work/3210-roadmap-work-unit-compiler/clarifications.md
+sourceChecklist: work/3210-roadmap-work-unit-compiler/checklist.md
+sourcePlan: work/3210-roadmap-work-unit-compiler/plan.md
+sourceTasks: work/3210-roadmap-work-unit-compiler/tasks.yml
+sourceAnalysis: readiness/3210-roadmap-work-unit-compiler/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3210-roadmap-work-unit-compiler/analysis.json
+    digest: 751b2b363d65fedcade809997f2b2f3595359aeb187e67578d20081b411f514d
+    schemaVersion: 1
+  - label: checklist
+    path: work/3210-roadmap-work-unit-compiler/checklist.md
+    digest: 64b28b6193a1711ed8c59ee35cf6c24001c1f4cb7031ca91e1f3f0b7e175ab39
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3210-roadmap-work-unit-compiler/clarifications.md
+    digest: 29975389cf7929ec79699578b03ddadb0d771973c7ad4384fb32a0ca0650a5ff
+    schemaVersion: 1
+  - label: plan
+    path: work/3210-roadmap-work-unit-compiler/plan.md
+    digest: a372535b8f224b1cd0f3720463abfaad48026209caee8693bedb028118175afd
+    schemaVersion: 1
+  - label: spec
+    path: work/3210-roadmap-work-unit-compiler/spec.md
+    digest: 3512f8212ddfbdd8e48d12d6939b291a118bfd55ee0f53dd95c9fe5aecf50680
+    schemaVersion: 1
+  - label: tasks
+    path: work/3210-roadmap-work-unit-compiler/tasks.yml
+    digest: 69b7445272af4516786a8a9214e56a19ba79987efa03ed3555bd6d70ca289b95
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV010]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV013]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV014]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV015]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV016]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV018]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV019]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV021]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV022]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV023]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV026]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV029]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV030]
+    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      digest: "sha256:01582a49081db3469fb159fb5b096466f5400a2d66832dd1e26f3cf22cf27901"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 963
+      failed: 0
+      skipped: 0
+    notes: ["Release Core 963, CLI 429, BoardOps 261, GitHub 696, Lifecycle 140, and Kernel 182 tests passed; exact TRX receipts are retained under readiness/3210-roadmap-work-unit-compiler/test-results."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

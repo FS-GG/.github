@@ -66,6 +66,12 @@ module TelemetryApplication =
             shape [ "--head"; "--kind"; "--id"; "--output" ] [] args
         | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
             shape [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args
+        | "roadmap" :: "unit" :: "prepare" :: action :: args
+            when action = "inspect" || action = "render" || action = "verify" ->
+            shape [ "--input"; "--registry"; "--source-registry"; "--output" ] [] args
+        | "roadmap" :: "unit" :: "accept" :: action :: args
+            when action = "inspect" || action = "render" || action = "verify" ->
+            shape [ "--input"; "--bundle"; "--output" ] [] args
         | "telemetry" :: "summarize" :: args -> shape [ "--usage" ] [] args
         | "telemetry" :: _ -> Some(Error "unknown telemetry command shape")
         | _ -> None
@@ -372,6 +378,61 @@ module TelemetryApplication =
             | _, _ -> fail "telemetry qualification obligation" [ "action must be render or verify" ]
         with ex -> fail "telemetry qualification obligation" [ ex.Message ]
 
+    let private preparation action args =
+        try
+            match required "--input" args, required "--roadmap" args, required "--catalog" args with
+            | Ok inputPath, Ok roadmapPath, Ok catalogPath ->
+                let result =
+                    RoadmapWorkUnit.parsePreparationRequest (read inputPath)
+                    |> Result.mapError id
+                    |> Result.bind (RoadmapWorkUnit.compilePreparation (read roadmapPath) (read catalogPath) >> Result.mapError (List.map string))
+                match result with
+                | Error reasons -> fail "roadmap unit prepare" reasons
+                | Ok plan ->
+                    match action with
+                    | "inspect" -> writeOrPrint args (RoadmapWorkUnit.canonicalPlan plan); green
+                    | "render" ->
+                        match required "--registry" args with
+                        | Error reason -> fail "roadmap unit prepare" [ reason ]
+                        | Ok registry ->
+                            match RoadmapWorkUnit.renderPreparation (read registry) plan with
+                            | Error findings -> fail "roadmap unit prepare" (findings |> List.map string)
+                            | Ok rendered -> writeOrPrint args rendered; green
+                    | "verify" ->
+                        match required "--source-registry" args, required "--registry" args with
+                        | Ok source, Ok candidate ->
+                            match RoadmapWorkUnit.verifyPreparation (read source) (read candidate) plan with
+                            | Error findings -> fail "roadmap unit prepare" (findings |> List.map string)
+                            | Ok () -> printfn "FSGG-ROADMAP-UNIT-PREPARATION-VERIFIED %s" plan.Unit.UnitId; green
+                        | Error reason, _ | _, Error reason -> fail "roadmap unit prepare" [ reason ]
+                    | _ -> fail "roadmap unit prepare" [ "action must be inspect, render, or verify" ]
+            | Error reason, _, _ | _, Error reason, _ | _, _, Error reason -> fail "roadmap unit prepare" [ reason ]
+        with ex -> fail "roadmap unit prepare" [ ex.Message ]
+
+    let private acceptance action args =
+        try
+            match required "--input" args with
+            | Error reason -> fail "roadmap unit accept" [ reason ]
+            | Ok inputPath ->
+                match RoadmapWorkUnit.parseAcceptanceInput (read inputPath) with
+                | Error reasons -> fail "roadmap unit accept" reasons
+                | Ok input ->
+                    match action, RoadmapWorkUnit.inspectAcceptance input with
+                    | _, Error findings -> fail "roadmap unit accept" (findings |> List.map string)
+                    | "inspect", Ok accepted ->
+                        printfn "{\"schema\":\"fsgg.roadmap-unit.acceptance-verdict/1\",\"unitId\":%s,\"digest\":%s,\"verdict\":\"accepted\"}" (JsonSerializer.Serialize input.Plan.Unit.UnitId) (JsonSerializer.Serialize accepted.Digest)
+                        green
+                    | "render", Ok accepted -> writeOrPrint args accepted.BundleJson; green
+                    | "verify", Ok _ ->
+                        match required "--bundle" args with
+                        | Error reason -> fail "roadmap unit accept" [ reason ]
+                        | Ok bundle ->
+                            match RoadmapWorkUnit.verifyAcceptance input (read bundle) with
+                            | Error findings -> fail "roadmap unit accept" (findings |> List.map string)
+                            | Ok accepted -> printfn "FSGG-ROADMAP-UNIT-ACCEPTANCE-VERIFIED %s %s" input.Plan.Unit.UnitId accepted.Digest; green
+                    | _ -> fail "roadmap unit accept" [ "action must be inspect, render, or verify" ]
+        with ex -> fail "roadmap unit accept" [ ex.Message ]
+
     let tryRun argv =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
@@ -406,6 +467,10 @@ module TelemetryApplication =
                 | "verify" -> [ "--evidence"; "--roadmap"; "--source-digest"; "--source-roadmap" ]
                 | _ -> []
             Some(validated "roadmap close" valueOptions [] args (roadmap action))
+        | "roadmap" :: "unit" :: "prepare" :: action :: args ->
+            Some(validated "roadmap unit prepare" [ "--input"; "--roadmap"; "--catalog"; "--registry"; "--source-registry"; "--output" ] [] args (preparation action))
+        | "roadmap" :: "unit" :: "accept" :: action :: args ->
+            Some(validated "roadmap unit accept" [ "--input"; "--bundle"; "--output" ] [] args (acceptance action))
         | "telemetry" :: "summarize" :: args ->
             Some(validated "telemetry summarize" [ "--usage" ] [] args summarize)
         | _ -> None

@@ -85,6 +85,18 @@ contract. `telemetry qualification obligation render|verify` emits the existing 
 `fsgg:delivery-obligation(s)` grammar or verifies a strict GitHub PR comment readback through the same
 delivery parser, with URL and comment id agreement; it introduces no second marker authority.
 
+`roadmap unit prepare inspect|render|verify` requires the raw `--roadmap` Markdown and `--catalog`
+roadmap-index alongside a narrow `--input` registration request. It authenticates the catalog's source
+digest and per-unit contract hashes, then compiles the first unchecked row whose immediate predecessor is
+accepted into a content-addressed authority pin, unit/gate registrations, staged-intake drafts, and evidence obligations.
+The render/verify pair changes only the selected unit's explicit registration marker block; each draft is
+accepted by the existing `intake validate|apply` transaction, so this family performs no GitHub write.
+`roadmap unit accept inspect|render|verify` consumes the canonical qualification result, terminal lifecycle
+ledger, validated schema-v3 independent review receipt, observed SDD stage receipts, distinct revision identities,
+and content-addressed candidate/merge tree bindings. It emits an atomic self-digested bundle containing the
+cross-digested acceptance receipt and evidence index; the extracted exact receipt is
+receipt is accepted by `roadmap close` without schema translation.
+
 `roadmap close inspect|render|verify` consumes an evidence manifest whose relative artifact paths bind an
 accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback
 binding, cycle update, and one or more check receipts. Every machine receipt is canonical and self-digested;
