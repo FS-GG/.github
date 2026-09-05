@@ -46,14 +46,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -73,14 +73,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -100,14 +100,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -127,14 +127,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -154,14 +154,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -181,14 +181,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -208,14 +208,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV007]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -235,14 +235,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-008]
     obligationRefs: [EV008]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -262,14 +262,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-009]
     obligationRefs: [EV009]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -289,14 +289,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-010]
     obligationRefs: [EV010]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -316,14 +316,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV011]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -343,14 +343,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV012]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -370,14 +370,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV013]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -397,14 +397,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV014]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -424,14 +424,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-008]
     obligationRefs: [EV015]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -451,14 +451,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-010]
     obligationRefs: [EV016]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -478,14 +478,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV017]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -505,14 +505,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV018]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -532,14 +532,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV019]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -559,14 +559,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV020]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -586,14 +586,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV021]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -613,14 +613,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV022]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -640,14 +640,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV023]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -667,14 +667,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV024]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -694,14 +694,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-008]
     obligationRefs: [EV025]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -721,14 +721,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-010]
     obligationRefs: [EV026]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -748,14 +748,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV027]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -775,14 +775,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV028]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -802,14 +802,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV029]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -829,14 +829,14 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV030]
-    artifacts: [readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx]
+    artifacts: [work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/3210-roadmap-work-unit-compiler/test-results/core/core.trx
+      source: work/3210-roadmap-work-unit-compiler/verification/core.test-report.xml
       digest: "sha256:2ce5240608eefcecf23541795833abcc5328f823bd682d5f8a84f5e22b1afa45"
       digestContract: exact-bytes-v1
       outcome: passed
