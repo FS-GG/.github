@@ -132,5 +132,11 @@ scripts/fsgg-coord telemetry lifecycle validate \
 
 Use `--require-terminal --require-reconciled` before cycle completion and final roll-up. The host exports
 the issue-comment chain, joins it to the private usage report, and checks the command's exit status directly;
-never mask it through a pipeline. Validate implementation changes through the CLI test suite and the
+never mask it through a pipeline. If a legacy terminal `unavailable` says usage was pending because the
+child response had not finished, append a completed measured `telemetry-reconciliation-<original-phase>`
+phase whose evidence contains exactly
+`supersedes-lifecycle-digest:<64-hex-digest-of-the-original-terminal-event>`. The reconciliation validator
+requires that exact target to exist, match the original phase, be unavailable, and be superseded only once.
+Prose or a later receipt without the exact digest cannot clear it. Genuine post-completion lookup or strict
+collector failures remain unavailable only with the exact failure recorded. Validate implementation changes through the CLI test suite and the
 frozen black-box parity corpus.

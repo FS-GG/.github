@@ -73,6 +73,7 @@ module RoadmapWorkUnit =
           Authority: AuthorityPin
           SddWorkId: string
           Registrations: Registration list
+          GateRegistrations: string list
           EvidenceObligations: string list
           Digest: string }
 

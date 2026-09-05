@@ -46,8 +46,8 @@ module RoadmapWorkUnitTransactionTests =
                 Assert.Equal(IntakeReceipt.digest registration.Draft, IntakeReceipt.digest decoded)
             finally File.Delete path
 
-    let private lifecycleLine claim phase event =
-        $"""{{"item":{{"repo":"FS-GG/.github","number":500,"url":"https://github.com/FS-GG/.github/issues/500"}},"phase":"%s{phase}","event":"%s{event}","source":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}"}},"authority":{{"subject":"FS-GG/.github#500","claim_generation":"%s{claim}"}}}}"""
+    let private lifecycleLine claim phase event revision =
+        $"""{{"item":{{"repo":"FS-GG/.github","number":500,"url":"https://github.com/FS-GG/.github/issues/500"}},"phase":"%s{phase}","event":"%s{event}","source":{{"repository":"FS-GG/.github","revision":"%s{revision}"}},"authority":{{"subject":"FS-GG/.github#500","claim_generation":"%s{claim}"}}}}"""
 
     [<Fact>]
     let ``#3210 lifecycle authority preserves historical claim generations and binds the terminal winner`` () =
@@ -55,11 +55,30 @@ module RoadmapWorkUnitTransactionTests =
             { Repository = "FS-GG/.github"; Number = 500
               Url = "https://github.com/FS-GG/.github/issues/500"; Subject = "FS-GG/.github#500"
               CurrentClaimGeneration = "200"; ImplementationRepository = "FS-GG/.github"
-              ImplementationCandidate = String.replicate 40 "a" }
-        let turnover = lifecycleLine "100" "implementation" "completed" + "\n" + lifecycleLine "200" "acceptance" "completed" + "\n"
+              ImplementationCandidate = String.replicate 40 "a"
+              ImplementationMerge = String.replicate 40 "b"
+              AcceptanceCandidate = String.replicate 40 "c"
+              AcceptanceMerge = String.replicate 40 "d"
+              ProtectedMain = String.replicate 40 "d" }
+        let turnover =
+            lifecycleLine "100" "implementation" "completed" expectation.ImplementationCandidate
+            + "\n"
+            + lifecycleLine "200" "merge" "completed" expectation.ImplementationMerge
+            + "\n"
+            + lifecycleLine "200" "telemetry-reconciliation-merge" "completed" expectation.ImplementationMerge
+            + "\n"
+            + lifecycleLine "200" "acceptance" "completed" expectation.AcceptanceMerge
+            + "\n"
         Assert.Empty(Handlers.validateLifecycleAuthority expectation turnover)
         let staleTerminal = turnover.Replace("\"claim_generation\":\"200\"", "\"claim_generation\":\"100\"")
         Assert.Contains("terminal lifecycle event claim generation is not the live winning claim", Handlers.validateLifecycleAuthority expectation staleTerminal)
+        let staleMerge = turnover.Replace(expectation.ImplementationMerge, expectation.ImplementationCandidate)
+        Assert.Contains(Handlers.validateLifecycleAuthority expectation staleMerge, fun error -> error.Contains("source revision is invalid for phase merge", StringComparison.Ordinal))
+        let staleReconciliation =
+            turnover.Replace(
+                lifecycleLine "200" "telemetry-reconciliation-merge" "completed" expectation.ImplementationMerge,
+                lifecycleLine "200" "telemetry-reconciliation-merge" "completed" expectation.ImplementationCandidate)
+        Assert.Contains(Handlers.validateLifecycleAuthority expectation staleReconciliation, fun error -> error.Contains("source revision is invalid for phase telemetry-reconciliation-merge", StringComparison.Ordinal))
 
     [<Fact>]
     let ``#3210 SDD work model refuses any pending task`` () =
@@ -71,7 +90,12 @@ module RoadmapWorkUnitTransactionTests =
 
     let private fullLifecycle candidate number =
         let draft order phase event at actual usage =
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":%d{number},"url":"https://github.com/FS-GG/.github/issues/%d{number}"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{candidate}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#%d{number}","claim_generation":"1"}}}}"""
+            let sourceRevision =
+                match phase with
+                | "merge" -> String.replicate 40 "b"
+                | "acceptance" -> String.replicate 40 "d"
+                | _ -> candidate
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":%d{number},"url":"https://github.com/FS-GG/.github/issues/%d{number}"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#%d{number}","claim_generation":"1"}}}}"""
         [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
           "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)

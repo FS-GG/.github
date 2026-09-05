@@ -70,6 +70,7 @@ module LifecycleTelemetry =
     val sealSuccessorWithEvidence: runId: string -> unitId: string -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
     val validate: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> jsonLines: string -> Result<Validation, Finding list>
     val validateWithEvidence: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
+    val validateReconciledWithEvidence: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
     val parseHistoryCsv: string -> Result<HistoryRow list, string list>
     val exportComments: runId: string -> unitId: string -> commentsJson: string -> Result<string * Finding list, Finding list>
 

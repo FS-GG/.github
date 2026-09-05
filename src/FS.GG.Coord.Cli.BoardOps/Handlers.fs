@@ -42,10 +42,22 @@ module Handlers =
           Subject: string
           CurrentClaimGeneration: string
           ImplementationRepository: string
-          ImplementationCandidate: string }
+          ImplementationCandidate: string
+          ImplementationMerge: string
+          AcceptanceCandidate: string
+          AcceptanceMerge: string
+          ProtectedMain: string }
 
     let validateLifecycleAuthority expectation (lifecycleLog: string) =
         let errors = ResizeArray<string>()
+        let rec expectedRevision phase =
+            match phase with
+            | "merge" | "post-merge-obligations" -> expectation.ImplementationMerge
+            | "acceptance-candidate" -> expectation.AcceptanceCandidate
+            | "acceptance" | "protected-main-verification" | "receipt-projection" | "cleanup" -> expectation.AcceptanceMerge
+            | value when value.StartsWith("telemetry-reconciliation-", StringComparison.Ordinal) ->
+                expectedRevision (value.Substring("telemetry-reconciliation-".Length))
+            | _ -> expectation.ImplementationCandidate
         let lines = lifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
         if lines.Length = 0 then errors.Add("lifecycle authority ledger is empty")
         lines
@@ -68,9 +80,12 @@ module Handlers =
                 | _ -> errors.Add($"lifecycle event %d{index + 1} claim generation is not a GitHub-issued comment id")
                 if index = lines.Length - 1 && generation <> expectation.CurrentClaimGeneration then
                     errors.Add("terminal lifecycle event claim generation is not the live winning claim")
+                let phase = root.GetProperty("phase").GetString()
+                let revision = source.GetProperty("revision").GetString()
+                let expectedRevision = expectedRevision phase
                 if source.GetProperty("repository").GetString() <> expectation.ImplementationRepository
-                   || source.GetProperty("revision").GetString() <> expectation.ImplementationCandidate then
-                    errors.Add($"lifecycle event %d{index + 1} source is not the immutable implementation candidate")
+                   || revision <> expectedRevision then
+                    errors.Add($"lifecycle event %d{index + 1} source revision is invalid for phase %s{phase}")
             with error -> errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
         List.ofSeq errors
 
@@ -2892,7 +2907,11 @@ module Handlers =
                               Subject = expectedSubject
                               CurrentClaimGeneration = claim
                               ImplementationRepository = input.ImplementationBinding.Repository
-                              ImplementationCandidate = input.Identities.ImplementationCandidate }
+                              ImplementationCandidate = input.Identities.ImplementationCandidate
+                              ImplementationMerge = input.Identities.ImplementationMerge
+                              AcceptanceCandidate = input.Identities.AcceptanceCandidate
+                              AcceptanceMerge = input.Identities.AcceptanceMerge
+                              ProtectedMain = input.Identities.ProtectedMain }
                             input.LifecycleLog
                         |> List.iter errors.Add
 

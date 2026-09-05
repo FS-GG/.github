@@ -177,7 +177,10 @@ module TelemetryApplication =
                         match usageErrors @ historyErrors with
                         | errors when not errors.IsEmpty -> fail "telemetry lifecycle" errors
                         | _ ->
-                            match LifecycleTelemetry.validateWithEvidence runId unitId (has "--require-terminal" args) (options "--required-phase" args) reports (history |> Result.defaultValue []) (File.ReadAllText path) with
+                            let validator =
+                                if has "--require-reconciled" args then LifecycleTelemetry.validateReconciledWithEvidence
+                                else LifecycleTelemetry.validateWithEvidence
+                            match validator runId unitId (has "--require-terminal" args) (options "--required-phase" args) reports (history |> Result.defaultValue []) (File.ReadAllText path) with
                             | Error values -> fail "telemetry lifecycle" (findings values)
                             | Ok result -> printfn "{\"schema\":\"fsgg.telemetry.lifecycle-validation/1\",\"events\":%d,\"completedPhases\":%s,\"activePhases\":%s,\"blockedPhases\":%s}" result.EventCount (JsonSerializer.Serialize result.CompletedPhases) (JsonSerializer.Serialize result.ActivePhases) (JsonSerializer.Serialize result.BlockedPhases); green
                 | "seal-successor" ->

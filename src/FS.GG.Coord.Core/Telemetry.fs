@@ -534,6 +534,73 @@ module LifecycleTelemetry =
                 | _ -> ())
             if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
 
+    let validateReconciledWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
+        match validateWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines with
+        | Error errors -> Error errors
+        | Ok validation ->
+            let events = objects jsonLines |> List.choose Result.toOption
+            let findings = ResizeArray<Finding>()
+            let supersessionPrefix = "supersedes-lifecycle-digest:"
+            let recoveryPrefix = "telemetry-reconciliation-"
+            let eventDigest (item: JsonObject) = stringAt "digest" item
+            let evidenceValues (item: JsonObject) =
+                (item["evidence"] :?> JsonArray)
+                |> Seq.map _.GetValue<string>()
+                |> List.ofSeq
+            let recoveryTargets =
+                events
+                |> List.indexed
+                |> List.choose (fun (index, item) ->
+                    let phase = stringAt "phase" item
+                    if not (phase.StartsWith(recoveryPrefix, StringComparison.Ordinal)) then None
+                    elif stringAt "event" item = "started" || stringAt "event" item = "resumed" then None
+                    else
+                        let targets =
+                            evidenceValues item
+                            |> List.choose (fun value ->
+                                if value.StartsWith(supersessionPrefix, StringComparison.Ordinal) then
+                                    Some(value.Substring(supersessionPrefix.Length))
+                                else None)
+                        let usage = item["token_usage"] :?> JsonObject
+                        if stringAt "event" item <> "completed" then
+                            findings.Add(InvalidEvent(index + 1, "telemetry reconciliation must be completed"))
+                        if stringAt "status" usage <> "measured" then
+                            findings.Add(InvalidEvent(index + 1, "telemetry reconciliation must carry measured token usage"))
+                        match targets with
+                        | [ target ] when Regex.IsMatch(target, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant) ->
+                            Some(target, phase.Substring(recoveryPrefix.Length), index + 1)
+                        | _ ->
+                            findings.Add(InvalidEvent(index + 1, "telemetry reconciliation must name exactly one supersedes-lifecycle-digest:<64-hex> target"))
+                            None)
+            for duplicate, entries in recoveryTargets |> List.groupBy (fun (digest, _, _) -> digest) do
+                if entries.Length > 1 then
+                    findings.Add(InvalidEvent(entries.Head |> fun (_, _, line) -> line, $"lifecycle digest %s{duplicate} is superseded more than once"))
+            let byDigest = events |> List.map (fun item -> eventDigest item, item) |> Map.ofList
+            for target, phase, line in recoveryTargets do
+                match Map.tryFind target byDigest with
+                | None -> findings.Add(InvalidEvent(line, "telemetry reconciliation target digest is not present in the lifecycle ledger"))
+                | Some targetEvent ->
+                    let targetPhase = stringAt "phase" targetEvent
+                    let targetUsage = targetEvent["token_usage"] :?> JsonObject
+                    if phase <> targetPhase then
+                        findings.Add(InvalidEvent(line, $"telemetry reconciliation phase must be telemetry-reconciliation-%s{targetPhase}"))
+                    if stringAt "status" targetUsage <> "unavailable" then
+                        findings.Add(InvalidEvent(line, "telemetry reconciliation may supersede only an unavailable terminal usage record"))
+            let requiresRecovery (reason: string) =
+                [ "after this response"; "pending final usage"; "response had not finished"; "final usage is written after" ]
+                |> List.exists (fun fragment -> reason.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            events
+            |> List.indexed
+            |> List.iter (fun (index, item) ->
+                match item["token_usage"] with
+                | :? JsonObject as usage when stringAt "status" usage = "unavailable" && requiresRecovery (stringAt "reason" usage) ->
+                    let digest = eventDigest item
+                    let phase = stringAt "phase" item
+                    if recoveryTargets |> List.exists (fun (target, _, _) -> target = digest) |> not then
+                        findings.Add(InvalidEvent(index + 1, $"unavailable timing placeholder must be superseded by telemetry-reconciliation-%s{phase} with exact digest %s{digest}"))
+                | _ -> ())
+            if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
+
     let sealSuccessorWithEvidence (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
         match objects existingJsonLines, objects draftJson with
         | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->

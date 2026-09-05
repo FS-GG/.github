@@ -37,7 +37,8 @@ module RoadmapWorkUnit =
           RegistrationRepository: string; RegistrationPaths: string list }
     type PreparationPlan =
         { Schema: string; Unit: CatalogRow; AcceptedPrerequisite: string; Authority: AuthorityPin
-          SddWorkId: string; Registrations: Registration list; EvidenceObligations: string list; Digest: string }
+          SddWorkId: string; Registrations: Registration list; GateRegistrations: string list
+          EvidenceObligations: string list; Digest: string }
     type AppliedRegistration =
         { Id: string; Kind: string; DraftSha256: string; Issue: string; IssueUrl: string }
     type PreparationApplication =
@@ -121,7 +122,8 @@ module RoadmapWorkUnit =
         JsonSerializer.SerializeToUtf8Bytes
             {| schema = plan.Schema; unit = rowDto plan.Unit; acceptedPrerequisite = plan.AcceptedPrerequisite
                authority = {| roadmapDigest = plan.Authority.RoadmapDigest; catalogDigest = plan.Authority.CatalogDigest; issue = plan.Authority.Issue |}
-               sddWorkId = plan.SddWorkId; registrations = registrations; evidenceObligations = plan.EvidenceObligations
+               sddWorkId = plan.SddWorkId; registrations = registrations; gateRegistrations = plan.GateRegistrations
+               evidenceObligations = plan.EvidenceObligations
                digest = if includeDigest then plan.Digest else "" |}
         |> canonical
 
@@ -287,12 +289,13 @@ module RoadmapWorkUnit =
         for obligation in required do if not (List.contains obligation selected.EvidenceObligations) then findings.Add(EvidenceObligationMissing obligation)
         if findings.Count > 0 then Error(List.ofSeq findings) else
         let slug (value: string) = Regex.Replace(value.ToLowerInvariant(), "[^a-z0-9._-]+", "-").Trim('-')
+        let registrationId = $"roadmap-unit-%s{slug selected.UnitId}"
         let registrations =
-            [ let id = $"roadmap-unit-%s{slug selected.UnitId}"
-              yield { Id = id; Kind = "unit"; Draft = registrationDraft input.RegistrationOwner input.RegistrationRepository input.RegistrationPaths selected "unit" id $"[roadmap] %s{selected.UnitId} — %s{selected.Title}" }
-              for gate in selected.Gates do
-                  let id = $"roadmap-gate-%s{slug selected.UnitId}-%s{slug gate}"
-                  yield { Id = id; Kind = "gate"; Draft = registrationDraft input.RegistrationOwner input.RegistrationRepository input.RegistrationPaths selected "gate" id $"[roadmap:%s{selected.UnitId}] %s{gate}" } ]
+            [ { Id = registrationId; Kind = "unit"
+                Draft = registrationDraft input.RegistrationOwner input.RegistrationRepository input.RegistrationPaths selected "unit" registrationId $"[roadmap] %s{selected.UnitId} — %s{selected.Title}" } ]
+        let gateRegistrations =
+            selected.Gates
+            |> List.map (fun gate -> $"roadmap-gate-%s{slug selected.UnitId}-%s{slug gate}")
         for duplicate in registrations |> List.map _.Id |> duplicateValues do findings.Add(RegistrationDuplicate duplicate)
         for registration in registrations do
             match Intake.validate registration.Draft with
@@ -302,7 +305,8 @@ module RoadmapWorkUnit =
         let draft =
             { Schema = PreparationPlanSchema; Unit = selected; AcceptedPrerequisite = prerequisite
               Authority = { RoadmapDigest = input.RoadmapSourceDigest; CatalogDigest = input.CatalogSourceDigest; Issue = input.AuthorityIssue }
-              SddWorkId = input.SddWorkId; Registrations = registrations; EvidenceObligations = selected.EvidenceObligations; Digest = "" }
+              SddWorkId = input.SddWorkId; Registrations = registrations; GateRegistrations = gateRegistrations
+              EvidenceObligations = selected.EvidenceObligations; Digest = "" }
         let planDigest = canonicalPlanPayload draft false |> utf8 |> digest
         Ok { draft with Digest = planDigest }
 
@@ -317,7 +321,8 @@ module RoadmapWorkUnit =
 
     let private renderBlock (plan: PreparationPlan) =
         let registrationLines = plan.Registrations |> List.map (fun value -> $"- `%s{value.Kind}` `%s{value.Id}` — staged intake `%s{value.Draft.Id}`")
-        String.concat "\n" ([ marker plan.Unit.UnitId; $"Authority: `%s{plan.Authority.RoadmapDigest}` via %s{plan.Authority.Issue}"; $"Unit: `%s{plan.Unit.UnitId}` — %s{plan.Unit.Title}"; $"Prerequisite: `%s{plan.AcceptedPrerequisite}`"; "Registrations:" ] @ registrationLines @ [ "Evidence obligations: " + String.concat ", " plan.EvidenceObligations; $"Plan digest: `%s{plan.Digest}`"; endMarker plan.Unit.UnitId ])
+        let gateLines = plan.GateRegistrations |> List.map (fun value -> $"- `gate` `%s{value}` — owned by `%s{plan.Registrations.Head.Id}`")
+        String.concat "\n" ([ marker plan.Unit.UnitId; $"Authority: `%s{plan.Authority.RoadmapDigest}` via %s{plan.Authority.Issue}"; $"Unit: `%s{plan.Unit.UnitId}` — %s{plan.Unit.Title}"; $"Prerequisite: `%s{plan.AcceptedPrerequisite}`"; "Owning registration:" ] @ registrationLines @ [ "Gate registrations:" ] @ gateLines @ [ "Evidence obligations: " + String.concat ", " plan.EvidenceObligations; $"Plan digest: `%s{plan.Digest}`"; endMarker plan.Unit.UnitId ])
 
     let renderPreparation (source: byte array) (plan: PreparationPlan) =
         let text = Encoding.UTF8.GetString source
@@ -534,6 +539,7 @@ module RoadmapWorkUnit =
                           ContractSha256 = contractDigest }
         with error -> findings.Add(RoadmapIdentityMismatch($"catalog parse: %s{error.Message}"))
         let rows = List.ofSeq catalogRows
+        let firstUncheckedRoadmap = roadmapRows |> List.tryFind (fun (_, (accepted, _)) -> not accepted) |> Option.map fst
         let firstUnchecked = rows |> List.tryFindIndex (fun row -> row.State = Unchecked)
         match firstUnchecked with
         | Some index when rows |> List.skip (index + 1) |> List.exists (fun row -> row.State = Accepted) ->
@@ -543,6 +549,8 @@ module RoadmapWorkUnit =
         else
             match firstUnchecked with
             | None -> Error [ NextUnitMissing ]
+            | Some index when firstUncheckedRoadmap <> Some rows[index].UnitId ->
+                Error [ RoadmapIdentityMismatch "catalog omits or reorders the canonical first unchecked roadmap row" ]
             | Some index ->
                 let selected = rows[index]
                 let accepted = rows |> List.take index |> List.map _.UnitId |> Set.ofList
@@ -578,14 +586,16 @@ module RoadmapWorkUnit =
         try
             use document = JsonDocument.Parse(ReadOnlyMemory bytes)
             let root = document.RootElement
-            strict "plan" [ "schema"; "unit"; "acceptedPrerequisite"; "authority"; "sddWorkId"; "registrations"; "evidenceObligations"; "digest" ] root
+            strict "plan" [ "schema"; "unit"; "acceptedPrerequisite"; "authority"; "sddWorkId"; "registrations"; "gateRegistrations"; "evidenceObligations"; "digest" ] root
             let authority = prop "authority" root
             strict "authority" [ "roadmapDigest"; "catalogDigest"; "issue" ] authority
             let registrations = array "registrations" root |> List.mapi (fun index item -> strict $"registrations[%d{index}]" [ "id"; "kind"; "draft" ] item; { Id = text "registration" "id" item; Kind = text "registration" "kind" item; Draft = parseDraft "registration.draft" (prop "draft" item) })
             let plan =
                 { Schema = text "plan" "schema" root; Unit = parseRow "unit" (prop "unit" root); AcceptedPrerequisite = text "plan" "acceptedPrerequisite" root
                   Authority = { RoadmapDigest = text "authority" "roadmapDigest" authority; CatalogDigest = text "authority" "catalogDigest" authority; Issue = text "authority" "issue" authority }
-                  SddWorkId = text "plan" "sddWorkId" root; Registrations = registrations; EvidenceObligations = strings "plan" "evidenceObligations" root; Digest = text "plan" "digest" root }
+                  SddWorkId = text "plan" "sddWorkId" root; Registrations = registrations
+                  GateRegistrations = strings "plan" "gateRegistrations" root
+                  EvidenceObligations = strings "plan" "evidenceObligations" root; Digest = text "plan" "digest" root }
             let actual = canonicalPlanPayload { plan with Digest = "" } false |> utf8 |> digest
             if plan.Schema <> PreparationPlanSchema then Error [ $"plan schema is not %s{PreparationPlanSchema}" ]
             elif not (sha.IsMatch plan.Digest) || actual <> plan.Digest then Error [ "plan digest does not bind canonical content" ]
@@ -743,12 +753,20 @@ module RoadmapWorkUnit =
         match LifecycleTelemetry.parseHistoryCsv input.LifecycleHistoryReport with
         | Error errors -> errors |> List.iter (LifecycleInvalid >> findings.Add)
         | Ok history ->
-            match LifecycleTelemetry.validateWithEvidence input.LifecycleRunId input.LifecycleUnitId true acceptanceLifecyclePhases usageReports history input.LifecycleLog with
+            match LifecycleTelemetry.validateReconciledWithEvidence input.LifecycleRunId input.LifecycleUnitId true acceptanceLifecyclePhases usageReports history input.LifecycleLog with
             | Error errors -> errors |> List.iter (fun error -> findings.Add(LifecycleInvalid(string error)))
             | Ok _ -> ()
         match appliedUnit with
         | None -> ()
         | Some applied ->
+            let rec expectedLifecycleRevision phase =
+                match phase with
+                | "merge" | "post-merge-obligations" -> input.Identities.ImplementationMerge
+                | "acceptance-candidate" -> input.Identities.AcceptanceCandidate
+                | "acceptance" | "protected-main-verification" | "receipt-projection" | "cleanup" -> input.Identities.AcceptanceMerge
+                | value when value.StartsWith("telemetry-reconciliation-", StringComparison.Ordinal) ->
+                    expectedLifecycleRevision (value.Substring("telemetry-reconciliation-".Length))
+                | _ -> input.Identities.ImplementationCandidate
             let issueMatch = Regex.Match(applied.Issue, "^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
             if not issueMatch.Success then findings.Add(LifecycleInvalid "applied unit issue identity is malformed")
             else
@@ -768,9 +786,11 @@ module RoadmapWorkUnit =
                            || item.GetProperty("url").GetString() <> expectedUrl
                            || authority.GetProperty("subject").GetString() <> applied.Issue then
                             findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} is not bound to the applied unit issue"))
+                        let phase = root.GetProperty("phase").GetString()
+                        let expectedRevision = expectedLifecycleRevision phase
                         if source.GetProperty("repository").GetString() <> input.ImplementationBinding.Repository
-                           || source.GetProperty("revision").GetString() <> input.Identities.ImplementationCandidate then
-                            findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} is not bound to the implementation candidate"))
+                           || source.GetProperty("revision").GetString() <> expectedRevision then
+                            findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} source revision is invalid for phase %s{phase}"))
                     with error -> findings.Add(LifecycleInvalid($"lifecycle event %d{index + 1} binding: %s{error.Message}")))
         let requiredStages = [ "analyze", "implementationReady"; "verify", "verificationReady"; "ship", "shipReady" ]
         for stage, status in requiredStages do

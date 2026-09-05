@@ -87,7 +87,12 @@ module RoadmapWorkUnitTests =
 
     let private lifecycle () =
         let common order phase event at actual tokens =
-            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":400,"url":"https://github.com/FS-GG/.github/issues/400"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{head 'a'}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#400","claim_generation":"1"}}}}"""
+            let sourceRevision =
+                match phase with
+                | "merge" -> head 'b'
+                | "acceptance" -> head 'd'
+                | _ -> head 'a'
+            $"""{{"schema_version":1,"run_id":"roadmap-unit-gs2-07.3","unit_id":"GS2-07.3","item":{{"repo":"FS-GG/.github","number":400,"url":"https://github.com/FS-GG/.github/issues/400"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":{{"status":"recorded","provider":"OpenAI","name":"gpt","effort":"medium","source":"test"}},"source":{{"repository":"FS-GG/.github","revision":"%s{sourceRevision}"}},"evidence":["test:evidence"],"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{tokens},"tooling":{{"ledger_schema":1,"runtime":{{"status":"recorded","name":"codex","version":"1","source":"test"}},"coordination":{{"status":"recorded","name":"coord","version":"1","source":"test"}},"sdd":{{"status":"recorded","name":"sdd","version":"1","source":"test"}},"contracts":{{"status":"recorded","name":"contracts","version":"1","source":"test"}}}},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#400","claim_generation":"1"}}}}"""
         [ "intake"; "claim"; "sdd-analyze"; "implementation"; "sdd-verify"; "sdd-ship"
           "qualification"; "review"; "host-acceptance"; "merge"; "acceptance" ]
         |> List.mapi (fun index phase -> index + 1, phase)
@@ -143,7 +148,8 @@ module RoadmapWorkUnitTests =
         let plan = preparationInput () |> RoadmapWorkUnit.inspectPreparation |> unwrap
         Assert.Equal("GS2-07.3", plan.Unit.UnitId)
         Assert.Equal("GS2-07.2", plan.AcceptedPrerequisite)
-        Assert.Equal(3, plan.Registrations.Length)
+        Assert.Single(plan.Registrations) |> ignore
+        Assert.Equal(2, plan.GateRegistrations.Length)
         plan.Registrations |> List.iter (fun registration -> Assert.True(Intake.validate registration.Draft |> Result.isOk))
         let replay = preparationInput () |> RoadmapWorkUnit.inspectPreparation |> unwrap
         Assert.Equal(RoadmapWorkUnit.canonicalPlan plan, RoadmapWorkUnit.canonicalPlan replay)
@@ -158,6 +164,19 @@ module RoadmapWorkUnitTests =
         Assert.True(RoadmapWorkUnit.compilePreparation (bytes roadmap) (bytes (catalog.Replace(plan.Unit.ContractSha256, sha '0'))) request |> Result.isError)
         let misordered = roadmap.Replace("- [ ] **GS2-07.3", "- [x] **GS2-07.3")
         Assert.True(RoadmapWorkUnit.compilePreparation (bytes misordered) (bytes catalog) request |> Result.isError)
+
+    [<Fact>]
+    let ``#3210 catalog cannot omit the canonical first unchecked roadmap row`` () =
+        let roadmap, catalog, request = sourcePreparation ()
+        let omittedRoadmap =
+            roadmap.Replace(
+                "- [ ] **GS2-07.3 — Compile roadmap units.** next",
+                "- [ ] **GS2-07.4 — Omitted canonical frontier.** next\n- [ ] **GS2-07.3 — Compile roadmap units.** later")
+        let pinned = catalog.Replace(shaText roadmap, shaText omittedRoadmap)
+        let findings =
+            RoadmapWorkUnit.compilePreparation (bytes omittedRoadmap) (bytes pinned) request
+            |> function Error values -> values | Ok value -> failwithf "unsafe later unit selected: %s" value.Unit.UnitId
+        Assert.Contains(RoadmapWorkUnit.RoadmapIdentityMismatch "catalog omits or reorders the canonical first unchecked roadmap row", findings)
 
     [<Fact>]
     let ``#3210 selection refuses ambiguous authority prerequisite and catalog drift`` () =

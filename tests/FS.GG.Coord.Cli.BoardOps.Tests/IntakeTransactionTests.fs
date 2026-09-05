@@ -834,10 +834,11 @@ module IntakeTransactionTests =
             | other -> failwithf "receipt was not durably persisted: %A" other
 
     [<Theory>]
-    [<InlineData(1)>]
-    [<InlineData(2)>]
-    [<InlineData(3)>]
-    let ``#3210 roadmap preparation resumes after every nested intake durable boundary without duplicates`` failureOrdinal =
+    [<InlineData("issue-create")>]
+    [<InlineData("durable-receipt")>]
+    [<InlineData("board-add")>]
+    [<InlineData("post-projection")>]
+    let ``#3210 roadmap preparation replays after every durable intake boundary without duplicate issues`` failureBoundary =
         withCache <| fun cache ->
             let shaText (value: string) =
                 SHA256.HashData(Encoding.UTF8.GetBytes value)
@@ -859,27 +860,42 @@ module IntakeTransactionTests =
             File.WriteAllText(catalogPath, catalog, UTF8Encoding(false))
 
             let mutable creates = 0
-            let mutable currentIssue = 0
+            let mutable currentIssue = 77
             let bodies = Collections.Generic.Dictionary<int, string>()
+            let titles = Collections.Generic.Dictionary<int, string>()
             let boardItems = Collections.Generic.HashSet<int>()
             let projected = Collections.Generic.HashSet<int>()
             let mutable injectedFailure = false
+            let receiptPath = Path.Combine(cache, "intake-roadmap-unit-gs2-07.3.json")
+            if failureBoundary = "issue-create" then Directory.CreateDirectory receiptPath |> ignore
             let world = Fake.Recorder(fun req ->
                 match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/issues" ->
+                    let rows =
+                        bodies
+                        |> Seq.map (fun pair ->
+                            let title = if titles.ContainsKey pair.Key then titles[pair.Key] else ""
+                            $"{{\"number\":%d{pair.Key},\"state\":\"open\",\"title\":%s{JsonSerializer.Serialize title},\"body\":%s{JsonSerializer.Serialize pair.Value}}}")
+                        |> String.concat ","
+                    ok ($"[%s{rows}]")
                 | "POST", "repos/FS-GG/.github/issues" ->
                     creates <- creates + 1
-                    currentIssue <- 76 + creates
+                    currentIssue <- 77
                     match req.Body with
                     | Json body ->
                         use document = JsonDocument.Parse body
                         bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
+                        titles[currentIssue] <- document.RootElement.GetProperty("title").GetString()
                     | _ -> bodies[currentIssue] <- ""
                     ok ($"{{\"number\":%d{currentIssue}}}")
                 | "GET", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) && not (path.EndsWith("/comments", StringComparison.Ordinal)) ->
                     currentIssue <- Int32.Parse(path.Split('/')[4])
-                    let body = if bodies.ContainsKey currentIssue then bodies[currentIssue] else ""
-                    ok ($"{{\"number\":%d{currentIssue},\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                    if failureBoundary = "durable-receipt" && creates = 1 && not injectedFailure then
+                        injectedFailure <- true
+                        Error(NotFound "injected after durable receipt")
+                    else
+                        let body = if bodies.ContainsKey currentIssue then bodies[currentIssue] else ""
+                        ok ($"{{\"number\":%d{currentIssue},\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
                 | "PATCH", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) ->
                     currentIssue <- Int32.Parse(path.Split('/')[4])
                     match req.Body with
@@ -896,12 +912,16 @@ module IntakeTransactionTests =
                     | Query(doc, _) when doc.Contains "fields(first" ->
                         ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"P\",\"name\":\"Phase\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"P5\",\"name\":\"P5 Versioning\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
                     | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
-                        let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
-                        let value =
-                            if not (projected.Contains currentIssue) then None
-                            else match field with Some "Status" -> Some "Backlog" | Some "Class" -> Some "hardening" | Some "Phase" -> Some "P5 Versioning" | Some "Severity" -> Some "High" | _ -> None
-                        let node = value |> Option.map (fun item -> $"{{\"name\":%s{JsonSerializer.Serialize item}}}") |> Option.defaultValue "null"
-                        ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}}}"
+                        if failureBoundary = "post-projection" && projected.Contains currentIssue && not injectedFailure then
+                            injectedFailure <- true
+                            Error(NotFound "injected after post-projection mutation")
+                        else
+                            let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
+                            let value =
+                                if not (projected.Contains currentIssue) then None
+                                else match field with Some "Status" -> Some "Backlog" | Some "Class" -> Some "hardening" | Some "Phase" -> Some "P5 Versioning" | Some "Severity" -> Some "High" | _ -> None
+                            let node = value |> Option.map (fun item -> $"{{\"name\":%s{JsonSerializer.Serialize item}}}") |> Option.defaultValue "null"
+                            ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}}}"
                     | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
                         let field = if projected.Contains currentIssue then "{\"name\":\"Backlog\"}" else "null"
                         ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":[{\"project\":{\"number\":1},\"fieldValueByName\":" + field + "}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
@@ -910,9 +930,9 @@ module IntakeTransactionTests =
                         ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
                     | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
                     | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> boardItems.Add currentIssue |> ignore; ok ($"{{\"data\":{{\"addProjectV2ItemById\":{{\"item\":{{\"id\":\"PI-%d{currentIssue}\"}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}")
-                    | Query(doc, _) when doc.Contains "f0:" && currentIssue = 76 + failureOrdinal && not injectedFailure ->
+                    | Query(doc, _) when doc.Contains "f0:" && failureBoundary = "board-add" && not injectedFailure ->
                         injectedFailure <- true
-                        Error(NotFound "injected nested intake projection boundary failure")
+                        Error(NotFound "injected after board add")
                     | Query(doc, _) when doc.Contains "f0:" -> projected.Add currentIssue |> ignore; ok "{\"data\":{\"f0\":{\"clientMutationId\":null},\"f1\":{\"clientMutationId\":null},\"f2\":{\"clientMutationId\":null},\"f3\":{\"clientMutationId\":null}}}"
                     | _ -> Error(NotFound "unrecognized roadmap preparation board request")
                 | _ -> Error(NotFound "unrecognized roadmap preparation request"))
@@ -929,26 +949,29 @@ module IntakeTransactionTests =
                     Console.SetOut priorOutput
             let interrupted, _ = invokeApply opts
             Assert.NotEqual(Kernel.ExitGreen, interrupted)
+            if failureBoundary = "issue-create" then
+                Directory.Delete receiptPath
+                injectedFailure <- true
             Assert.True(injectedFailure)
-            Assert.Equal(failureOrdinal, creates)
+            Assert.Equal(1, creates)
 
             let first, firstOutput = invokeApply opts
             if first <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal("", firstOutput)
             let firstBytes = File.ReadAllBytes outputPath
             let application = RoadmapWorkUnit.parsePreparationApplication firstBytes |> Result.defaultWith (String.concat "; " >> failwith)
-            Assert.Equal(3, application.Registrations.Length)
-            Assert.Equal(3, creates)
+            Assert.Single(application.Registrations) |> ignore
+            Assert.Equal(1, creates)
 
             let second, secondOutput = invokeApply opts
             if second <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             Assert.Equal("", secondOutput)
             Assert.True(firstBytes.AsSpan().SequenceEqual((File.ReadAllBytes outputPath).AsSpan()))
-            Assert.Equal(3, creates)
+            Assert.Equal(1, creates)
 
             let stdoutOptions = { opts with Args = opts.Args |> List.take (opts.Args.Length - 2) }
             let third, receiptOutput = invokeApply stdoutOptions
             if third <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
             let stdoutReceipt = RoadmapWorkUnit.parsePreparationApplication (Encoding.UTF8.GetBytes receiptOutput) |> Result.defaultWith (String.concat "; " >> failwith)
             Assert.Equal(application.Digest, stdoutReceipt.Digest)
-            Assert.Equal(3, creates)
+            Assert.Equal(1, creates)

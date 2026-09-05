@@ -14,7 +14,11 @@ module Handlers =
           Subject: string
           CurrentClaimGeneration: string
           ImplementationRepository: string
-          ImplementationCandidate: string }
+          ImplementationCandidate: string
+          ImplementationMerge: string
+          AcceptanceCandidate: string
+          AcceptanceMerge: string
+          ProtectedMain: string }
 
     /// Validate lifecycle identity/source bindings without rewriting historical claim generations.
     val validateLifecycleAuthority:
