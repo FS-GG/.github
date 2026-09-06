@@ -771,9 +771,43 @@ module Delivery =
                 |> Result.map (fun () -> Some receipt)
             with error -> Error [ error.Message ]
 
+    // A single-owning-item two-phase receipt cannot put `Closes #N` on its implementation PR: doing so
+    // would close the issue before the post-merge receipt PR exists.  The exception is deliberately
+    // derived from the ordinary parsed obligation facts rather than a new caller-authored switch.  Every
+    // declaration must be current, complete, unique and still outstanding, and exactly one must name the
+    // closed acceptance-receipt kind.  The live adapter separately proves the claim, authorization,
+    // review, head, base, checks and paths before GuardedLand, so this predicate relaxes only linkage.
+    let private twoPhaseReceiptLanding (snapshot: Snapshot) =
+        let obligations = snapshot.Obligations
+        let ids = obligations |> List.map _.Id
+        let structurallyCurrent (obligation: Obligation) =
+            not (String.IsNullOrWhiteSpace obligation.Id)
+            && not (String.IsNullOrWhiteSpace obligation.Kind)
+            && obligation.HeadSha = snapshot.Freshness.HeadSha
+            && not obligation.Verified
+            && Option.isNone obligation.Evidence
+
+        snapshot.ObligationsDeclared
+        && snapshot.Freshness.PullRequest.IsSome
+        && snapshot.Freshness.BoardState = "In progress"
+        && not snapshot.IssueClosed
+        && not snapshot.BoardDone
+        && not snapshot.ClaimReleased
+        && not (List.isEmpty obligations)
+        && List.length ids = List.length (List.distinct ids)
+        && List.forall structurallyCurrent obligations
+        && (obligations |> List.filter (fun obligation -> obligation.Kind = "acceptance-receipt") |> List.length = 1)
+
+    // Canonical closing linkage is the ordinary authority. The sole exception is the exact live
+    // single-item two-phase receipt shape; callers at a write boundary must invoke this over freshly
+    // re-read linkage, obligation, claim, issue, and board facts rather than an inspected snapshot.
+    let landingLinkageAuthorized snapshot =
+        snapshot.ClosingLinkageCanonical || twoPhaseReceiptLanding snapshot
+
     let private handoffProblem snapshot =
         if not snapshot.ItemBranchCanonical then Some "item branch is not canonical"
-        elif not snapshot.ClosingLinkageCanonical then Some "canonical closing linkage is missing"
+        elif not (landingLinkageAuthorized snapshot) then
+            Some "canonical closing linkage is missing"
         elif not snapshot.PathsVerified then Some "declared paths are not verified"
         else None
 
@@ -866,6 +900,9 @@ module Delivery =
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (VerifyObligation name)
                 | CompletionDecision.AwaitPostMergeVerification reason ->
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (AwaitPostMergeVerification reason)
+                | (CompletionDecision.ProjectCompletion | CompletionDecision.CleanupCompletedDelivery)
+                    when not snapshot.ClosingLinkageCanonical ->
+                    NoVerdict "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
                 | CompletionDecision.ProjectCompletion ->
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
                 | CompletionDecision.CleanupCompletedDelivery ->

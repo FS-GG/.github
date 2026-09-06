@@ -604,11 +604,55 @@ module LiveHandlers =
                                 | _, _, Error error, _
                                 | _, _, _, Error error -> fail error
                                 | Ok generation, Ok currentHead, Ok currentBase, Ok repositoryPolicy ->
-                                    match facts.Review |> Option.bind _.BaseSha with
-                                    | None ->
+                                    // Markerless two-phase landing derives authority from mutable issue,
+                                    // board, linkage, and obligation facts. Re-read all of them at the
+                                    // merge fence; the inspected snapshot cannot spend stale authority
+                                    // after a declaration edit/deletion, receipt verification, closure,
+                                    // status move, or claim release.
+                                    let currentAuthority =
+                                        match
+                                            scanAndDecide ctx { opts with Repo = Some target.Repo; Limit = None } Cache.Scheduling,
+                                            Reads.prClosingRef ctx.Transport target.Owner target.Repo pr.Value,
+                                            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr.Value
+                                        with
+                                        | Error error, _, _
+                                        | _, Error error, _
+                                        | _, _, Error error -> Error error
+                                        | Ok(_, currentDocument, _), Ok currentClosing, Ok currentComments ->
+                                            Snapshot.parse currentDocument
+                                            |> Result.mapError (fun errors ->
+                                                Errors.Malformed(
+                                                    target.Short,
+                                                    errors
+                                                    |> List.map (fun error -> $"%s{error.Path}: %s{error.Message}")
+                                                    |> String.concat "; "))
+                                            |> Result.bind (fun currentSnapshot ->
+                                                match currentSnapshot.Candidates |> List.tryFind (fun item -> item.Item.Ref = target) with
+                                                | None -> Error(Errors.Malformed(target.Short, "item disappeared from the fresh board scan before guarded landing"))
+                                                | Some currentCandidate ->
+                                                    let reviewComments =
+                                                        currentComments
+                                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                                    let currentObligations = DeliveryApplication.obligationsFromComments currentHead reviewComments
+                                                    Ok
+                                                        { facts with
+                                                            Freshness =
+                                                                { facts.Freshness with
+                                                                    HeadSha = currentHead
+                                                                    BoardState = statusWireName currentCandidate.Item.Status }
+                                                            ClosingLinkageCanonical = currentClosing |> Option.exists ((=) target)
+                                                            IssueClosed = currentCandidate.Item.State = Closed
+                                                            BoardDone = currentCandidate.Item.Status = Done
+                                                            ClaimReleased = generation.IsNone
+                                                            ObligationsDeclared = Result.isOk currentObligations
+                                                            Obligations = currentObligations |> Result.defaultValue [] })
+
+                                    match currentAuthority, facts.Review |> Option.bind _.BaseSha with
+                                    | Error error, _ -> fail error
+                                    | _, None ->
                                         eprint "fsgg-coord-engine: delivery --apply is refused: delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
                                         ExitNoVerdict
-                                    | Some acceptedBase ->
+                                    | Ok currentAuthority, Some acceptedBase ->
                                         match authorizeBaseAdvance ctx target.Repo pr.Value acceptedBase currentHead currentBase with
                                         | Error reason ->
                                             eprint
@@ -620,6 +664,7 @@ module LiveHandlers =
                                                     transition.FreshnessToken
                                                     transition.ActionKey
                                                     facts
+                                                    currentAuthority
                                                     generation
                                                     (Some currentHead)
                                                     (Some currentBase)

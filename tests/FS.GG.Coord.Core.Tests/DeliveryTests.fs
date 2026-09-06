@@ -147,6 +147,80 @@ module DeliveryTests =
         let invalid = { snapshot "head-a" with ClosingLinkageCanonical = false; InReview = false; Review = None }
         transition Delivery.ReviewReady (Delivery.RepairReviewHandoff "canonical closing linkage is missing") (Delivery.inspect invalid)
 
+    let acceptanceReceipt head : Delivery.Obligation =
+        { Id = "roadmap-acceptance"
+          Kind = "acceptance-receipt"
+          Evidence = None
+          HeadSha = head
+          Verified = false }
+
+    [<Fact>]
+    let ``#3286 markerless implementation with exact two-phase receipt obligation reaches guarded land`` () =
+        let twoPhase =
+            { snapshot "head-a" with
+                ClosingLinkageCanonical = false
+                Obligations = [ acceptanceReceipt "head-a" ] }
+
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect twoPhase)
+
+    [<Fact>]
+    let ``#3286 markerless landing exception fails closed for mutated two-phase authority`` () =
+        let baseline =
+            { snapshot "head-a" with
+                ClosingLinkageCanonical = false
+                Obligations = [ acceptanceReceipt "head-a" ] }
+        let mutations =
+            [ { baseline with ObligationsDeclared = false }
+              { baseline with Obligations = [] }
+              { baseline with Obligations = [ { acceptanceReceipt "head-a" with Kind = "publication" } ] }
+              { baseline with Obligations = [ acceptanceReceipt "old-head" ] }
+              { baseline with Obligations = [ { acceptanceReceipt "head-a" with Evidence = Some "https://receipt"; Verified = true } ] }
+              { baseline with Obligations = [ acceptanceReceipt "head-a"; acceptanceReceipt "head-a" ] }
+              { baseline with Freshness = { baseline.Freshness with BoardState = "Ready" } }
+              { baseline with IssueClosed = true }
+              { baseline with BoardDone = true }
+              { baseline with ClaimReleased = true } ]
+
+        for mutated in mutations do
+            transition
+                Delivery.ReviewReady
+                (Delivery.RepairReviewHandoff "canonical closing linkage is missing")
+                (Delivery.inspect mutated)
+
+    [<Fact>]
+    let ``#3286 merged markerless implementation cannot complete even after obligation evidence appears`` () =
+        let markerlessMerged =
+            { snapshot "head-a" with
+                ClosingLinkageCanonical = false
+                Merged = true
+                MergeReachable = true
+                Obligations =
+                    [ { acceptanceReceipt "head-a" with
+                          Evidence = Some "https://github.example/receipt-pr"
+                          Verified = true } ] }
+
+        match Delivery.inspectWithPostMergeVerification (verified "merge-sha") markerlessMerged with
+        | Delivery.NoVerdict reason -> Assert.Contains("terminal completion requires canonical closing linkage", reason)
+        | decision -> failwithf "expected markerless terminal refusal, got %A" decision
+
+        transition
+            Delivery.MergedAwaitingObligations
+            Delivery.Complete
+            (Delivery.inspectWithPostMergeVerification
+                (verified "merge-sha")
+                { markerlessMerged with ClosingLinkageCanonical = true })
+
+        let externallyTerminal =
+            { markerlessMerged with
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                CleanupEligible = true }
+
+        match Delivery.inspectWithPostMergeVerification (verified "merge-sha") externallyTerminal with
+        | Delivery.NoVerdict reason -> Assert.Contains("terminal completion requires canonical closing linkage", reason)
+        | decision -> failwithf "expected markerless cleanup refusal, got %A" decision
+
     [<Fact>]
     let ``#2131 landing requires an explicit machine obligation declaration`` () =
         let undeclared = { snapshot "head-a" with ObligationsDeclared = false }

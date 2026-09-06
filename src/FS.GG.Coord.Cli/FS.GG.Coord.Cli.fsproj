@@ -130,13 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.85.1 — preserve exact-head acceptance across unrelated base advances.
+    <PackageReleaseNotes>0.85.2 — admit the fenced markerless implementation phase of two-phase receipt work.
 
-`landable` no longer serializes every accepted pull request behind an exact live-base SHA. It preserves
-the existing exact-head acceptance only when complete GitHub comparisons prove the base moved forward
-without touching any reviewed candidate path. Changed heads, rewritten/diverged bases, overlapping or
-renamed paths, conflicts, comparison truncation, stale claim/review authority, and unreadable evidence
-remain fail-closed.
+`delivery` may guard-land an implementation PR without canonical closing linkage only when the same open,
+claimed item carries an exact current-head outstanding `acceptance-receipt` obligation. The ordinary
+authorization, review, base, check, and path gates remain mandatory. A markerless merged implementation
+can never authorize terminal completion; only the later canonically closing receipt PR can complete it.
 
 $(FsggStandingAdvisories)
 
