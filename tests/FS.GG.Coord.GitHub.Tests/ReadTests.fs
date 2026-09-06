@@ -3128,3 +3128,44 @@ let ``#3210 remote commit tree observation is independent of local Git`` () =
     match Reads.commitTreeSha transport "FS-GG" ".github" (String.replicate 40 "b") with
     | Ok observed -> Assert.Equal(tree, observed)
     | result -> failwithf "expected remote tree identity: %A" result
+
+[<Fact>]
+let ``#3274 comparison paths include both rename names and report complete below the cap`` () =
+    let ancestor = String.replicate 40 "a"
+    let descendant = String.replicate 40 "b"
+    let body =
+        $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[{{"filename":"src/New.fs","previous_filename":"src/Old.fs","status":"renamed"}},{{"filename":"docs/note.md","status":"modified"}}]}}"""
+
+    match Reads.compareCommitPaths (serving body) "FS-GG" ".github" ancestor descendant with
+    | Ok comparison ->
+        Assert.True(comparison.Complete)
+        Assert.Equal<string list>([ "docs/note.md"; "src/New.fs"; "src/Old.fs" ], comparison.Paths)
+    | result -> failwithf "expected complete rename-aware path evidence: %A" result
+
+[<Fact>]
+let ``#3274 exactly 300 comparison files is explicitly incomplete`` () =
+    let ancestor = String.replicate 40 "a"
+    let descendant = String.replicate 40 "b"
+    let files =
+        [ 1..300 ]
+        |> List.map (fun index -> $"""{{"filename":"src/File%d{index}.fs","status":"modified"}}""")
+        |> String.concat ","
+    let body =
+        $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[%s{files}]}}"""
+
+    match Reads.compareCommitPaths (serving body) "FS-GG" ".github" ancestor descendant with
+    | Ok comparison ->
+        Assert.False(comparison.Complete)
+        Assert.Equal(300, comparison.Paths.Length)
+    | result -> failwithf "expected an explicit capped comparison: %A" result
+
+[<Fact>]
+let ``#3274 renamed comparison row without its previous name fails closed`` () =
+    let ancestor = String.replicate 40 "a"
+    let descendant = String.replicate 40 "b"
+    let body =
+        $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[{{"filename":"src/New.fs","status":"renamed"}}]}}"""
+
+    match Reads.compareCommitPaths (serving body) "FS-GG" ".github" ancestor descendant with
+    | Error(Malformed(_, reason)) -> Assert.Contains("previous_filename", reason)
+    | result -> failwithf "a rename missing its old path must be unreadable: %A" result

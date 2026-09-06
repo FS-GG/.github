@@ -1526,9 +1526,45 @@ module LiveHandlers =
                     | Ok liveBase when chain.BaseSha = Some liveBase -> ()
                     | Ok liveBase ->
                         let expectedBase = chain.BaseSha |> Option.defaultValue "absent"
-                        problems.Add(
-                            Reads.Asserted
-                                $"PR #%d{pr}'s host review-acceptance receipt is STALE: expected effective base `%s{expectedBase}`, actual `%s{liveBase}`; rebase or revalidate the merged tree")
+                        let stale reason =
+                            problems.Add(
+                                Reads.Asserted
+                                    $"PR #%d{pr}'s host review-acceptance receipt cannot survive base movement from `%s{expectedBase}` to `%s{liveBase}`: %s{reason}; rebase or revalidate the merged tree")
+
+                        match chain.BaseSha with
+                        | None -> stale "the acceptance carries no effective base SHA"
+                        | Some acceptedBase ->
+                            match Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveBase,
+                                  Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveHead with
+                            | Error error, _
+                            | _, Error error ->
+                                stale $"the semantic-delta equivalence proof is unreadable (%s{Errors.explain error})"
+                            | Ok baseAdvance, Ok candidate ->
+                                let forwardOnly =
+                                    baseAdvance.Complete
+                                    && baseAdvance.Status = "ahead"
+                                    && baseAdvance.MergeBase = acceptedBase
+                                    && baseAdvance.AheadBy > 0
+                                let candidateBound =
+                                    candidate.Complete
+                                    && (candidate.Status = "ahead" || candidate.Status = "identical")
+                                    && candidate.MergeBase = acceptedBase
+                                let overlap = Set.intersect (Set.ofList baseAdvance.Paths) (Set.ofList candidate.Paths) |> Set.toList
+
+                                if not baseAdvance.Complete || not candidate.Complete then
+                                    stale "GitHub's comparison reached its 300-file cap, so path-disjointness is unverifiable"
+                                elif not forwardOnly then
+                                    stale
+                                        $"the live base is not a forward-only descendant of the accepted base (status=%s{baseAdvance.Status}, mergeBase=%s{baseAdvance.MergeBase}, aheadBy=%d{baseAdvance.AheadBy})"
+                                elif not candidateBound then
+                                    stale
+                                        $"the accepted head's candidate delta is not bound to the accepted base (status=%s{candidate.Status}, mergeBase=%s{candidate.MergeBase})"
+                                elif not (List.isEmpty overlap) then
+                                    let overlapText = String.concat ", " overlap
+                                    stale $"the base advance touches reviewed candidate path(s): %s{overlapText}"
+                                else
+                                    eprint
+                                        $"fsgg-coord-engine: landable: PR #%d{pr}'s base advanced from `%s{acceptedBase}` to `%s{liveBase}`, but complete GitHub comparisons prove a forward-only path-disjoint advance; exact-head review acceptance remains current."
 
                     List.ofSeq problems
 

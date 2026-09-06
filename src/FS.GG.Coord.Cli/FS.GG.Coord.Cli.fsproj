@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.85.0 — add human-authorized synthetic lifecycle checkpoints.
+    <PackageReleaseNotes>0.85.1 — preserve exact-head acceptance across unrelated base advances.
 
-The first-class `fsgg.telemetry.synthetic-checkpoint/v1` API and repeatable `--synthetic-checkpoint`
-CLI input let an explicitly authorized extraordinary immutable history establish one new trusted anchor.
-Proofs bind exact item/run/unit/frontier, an immutable human issue-comment decision, explicit
-no-provenance/no-reconstruction flags, and passed functional checks. Wrong scope/frontier, reuse,
-ambiguity, tampering, and failed verification refuse; strict ordinary validation resumes after the anchor.
+`landable` no longer serializes every accepted pull request behind an exact live-base SHA. It preserves
+the existing exact-head acceptance only when complete GitHub comparisons prove the base moved forward
+without touching any reviewed candidate path. Changed heads, rewritten/diverged bases, overlapping or
+renamed paths, conflicts, comparison truncation, stale claim/review authority, and unreadable evidence
+remain fail-closed.
 
 $(FsggStandingAdvisories)
 
