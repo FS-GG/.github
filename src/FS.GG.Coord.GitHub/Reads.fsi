@@ -424,6 +424,22 @@ module Reads =
     /// Immutable tree identity from GitHub's commit object, independent of the caller's local object DB.
     val commitTreeSha: transport: IGitHubTransport -> owner: string -> repo: string -> sha: string -> IoResult<string>
 
+    type CommitComparison =
+        { Status: string
+          MergeBase: string
+          AheadBy: int
+          Files: (string * string) list }
+
+    /// Read the exact GitHub comparison used to prove that a reviewed implementation commit is an
+    /// ancestor of the final evidence-bearing candidate and to inventory that final delta.
+    val compareCommits:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        ancestor: string ->
+        descendant: string ->
+            IoResult<CommitComparison>
+
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 

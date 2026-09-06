@@ -236,6 +236,41 @@ module Handlers =
                 else [ "review evidence is not the exact leading-marker qualification/critique envelope" ]
             | Error reason, _ | _, Error reason -> [ reason ]
 
+    let validateCritiqueCommitRelation
+        (observeComparison: string -> string -> Result<Reads.CommitComparison, string>)
+        (reviewCycleId: string)
+        (sddWorkId: string)
+        (implementationCandidate: string)
+        (cycle: string)
+        (reviewed: string)
+        (verdict: string)
+        =
+        let errors = ResizeArray<string>()
+        let work = Regex.Match(sddWorkId, "^[1-9][0-9]*-(.+)$", RegexOptions.CultureInvariant)
+        let workCycle =
+            work.Success
+            && not (String.IsNullOrWhiteSpace cycle)
+            && cycle.EndsWith("-" + work.Groups[1].Value, StringComparison.OrdinalIgnoreCase)
+        if cycle <> reviewCycleId && not workCycle then
+            errors.Add("critique cycle differs from the selected unit and its route-authorized work identity")
+        if verdict <> "pass" then errors.Add("critique confirmation does not pass")
+        if cycle = reviewCycleId && reviewed <> implementationCandidate then
+            errors.Add("unit-cycle critique confirmation does not pass the implementation candidate")
+        elif workCycle then
+            let expectedArtifact = $"reviews/roadmap/%s{cycle}.json"
+            match observeComparison reviewed implementationCandidate with
+            | Error error -> errors.Add error
+            | Ok comparison
+                when comparison.Status = "ahead"
+                     && comparison.MergeBase = reviewed
+                     && comparison.AheadBy = 1
+                     && comparison.Files = [ expectedArtifact, "modified" ] -> ()
+            | Ok comparison ->
+                let comparedFiles = comparison.Files |> List.map (fun (path, status) -> $"%s{status}:%s{path}") |> String.concat ","
+                errors.Add(
+                    $"work-cycle critique reviewed commit is not the exact one-commit ancestor of a modified-artifact-only final candidate: status=%s{comparison.Status} aheadBy=%d{comparison.AheadBy} mergeBase=%s{comparison.MergeBase} files=%s{comparedFiles}")
+        List.ofSeq errors
+
     let private routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =
         match structuredRouteLedger subject comments with
         | Error errors -> DeliveryRoute.Stale errors
@@ -3041,8 +3076,17 @@ module Handlers =
                             |> Set.ofArray
                         if chain.CriticIdentity <> Some critic then errors.Add("critique critic differs from the live structured review critic")
                         if Set.contains critic implementationActors then errors.Add("structured review critic is not independent from the implementation actor")
-                        if cycle <> input.ReviewCycleId then errors.Add("critique cycle differs from the acceptance review cycle")
-                        if reviewed <> input.Identities.ImplementationCandidate || verdict <> "pass" then errors.Add("critique confirmation does not pass the implementation candidate")
+                        validateCritiqueCommitRelation
+                            (fun ancestor descendant ->
+                                Reads.compareCommits ctx.Transport implementationParts[0] implementationParts[1] ancestor descendant
+                                |> Result.mapError Errors.explain)
+                            input.ReviewCycleId
+                            input.SddWorkId
+                            input.Identities.ImplementationCandidate
+                            cycle
+                            reviewed
+                            verdict
+                        |> List.iter errors.Add
                     with error -> errors.Add("critique/live review binding: " + error.Message)
 
             if registrationRepository <> input.AcceptanceBinding.Repository then errors.Add("acceptance repository differs from the applied unit registration")
