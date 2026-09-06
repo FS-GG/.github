@@ -2,6 +2,7 @@ namespace FS.GG.Coord
 
 open System
 open System.Globalization
+open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -292,6 +293,174 @@ module RuntimeUsage =
                 if List.distinct identities <> identities then Error [ "usage report response identity is duplicated" ]
                 else Ok("runtime-usage-csv:sha256:" + TelemetryJson.sha256 bytes, rows)
 
+module UsageReceiptStore =
+    type ArchivedReceipt = { Source: string; Path: string }
+
+    let private prefix = "runtime-usage-csv:sha256:"
+    let private normalized (path: string) =
+        let full = Path.GetFullPath path
+        let volumeRoot = Path.GetPathRoot full
+        if String.Equals(full, volumeRoot, StringComparison.Ordinal) then full
+        else full.TrimEnd(Path.DirectorySeparatorChar)
+    let private within parent child =
+        let parent = normalized parent + string Path.DirectorySeparatorChar
+        (normalized child + string Path.DirectorySeparatorChar).StartsWith(parent, StringComparison.Ordinal)
+
+    let defaultRoot () =
+        match Environment.GetEnvironmentVariable "FSGG_USAGE_RECEIPT_STORE" with
+        | value when not (String.IsNullOrWhiteSpace value) -> normalized value
+        | _ ->
+            let state = Environment.GetEnvironmentVariable "XDG_STATE_HOME"
+            let basis =
+                if not (String.IsNullOrWhiteSpace state) then state
+                else Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData
+            Path.Combine(basis, "fsgg", "telemetry", "usage") |> normalized
+
+    let private validateRoot root =
+        let root = normalized root
+        let temporary = normalized (Path.GetTempPath())
+        let working = normalized Environment.CurrentDirectory
+        let volumeRoot = normalized (Path.GetPathRoot root)
+        let rec insideRepository path =
+            if Directory.Exists(Path.Combine(path, ".git")) || File.Exists(Path.Combine(path, ".git")) then true
+            else
+                match Directory.GetParent path with
+                | null -> false
+                | parent -> insideRepository parent.FullName
+        let rec hasSymbolicLink path =
+            let parent = Directory.GetParent path
+            let ancestorHasLink = if isNull parent then false else hasSymbolicLink parent.FullName
+            ancestorHasLink
+            || ((Directory.Exists path || File.Exists path)
+                && File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint)
+        if root = volumeRoot then Error [ "usage receipt store must not be a filesystem root" ]
+        elif hasSymbolicLink root then Error [ "usage receipt store path must not contain a symbolic link" ]
+        elif within temporary root || root = temporary then Error [ "usage receipt store must not be inside the system temporary directory" ]
+        elif within working root || root = working || insideRepository root then Error [ "usage receipt store must not be inside a repository worktree" ]
+        else Ok root
+
+    let private target (root: string) (digest: string) = Path.Combine(root, "sha256", digest.Substring(0, 2), digest + ".csv")
+    let private privateDirectory (path: string) =
+        Directory.CreateDirectory path |> ignore
+        if File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint then
+            raise (IOException($"usage receipt store path must not contain a symbolic link: %s{path}"))
+        if not (OperatingSystem.IsWindows()) then
+            File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+    let private verify digest (path: string) =
+        try
+            if File.GetAttributes(path).HasFlag FileAttributes.ReparsePoint then
+                Error [ "canonical usage receipt must not be a symbolic link" ]
+            elif not (OperatingSystem.IsWindows()) && (File.GetUnixFileMode(path) &&& (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) <> enum 0 then
+                Error [ "canonical usage receipt permissions are not owner-only" ]
+            else
+            let bytes = File.ReadAllBytes path
+            if TelemetryJson.sha256 bytes <> digest then Error [ $"canonical usage receipt is corrupted or collides with digest %s{digest}" ]
+            else Ok bytes
+        with error -> Error [ $"canonical usage receipt cannot be read: %s{error.Message}" ]
+
+    let archive root bytes =
+        match RuntimeUsage.parseCsvReceipt bytes with
+        | Error errors -> Error errors
+        | Ok(source, _) ->
+            let digest = source.Substring(prefix.Length)
+            match validateRoot (root |> Option.defaultWith defaultRoot) with
+            | Error errors -> Error errors
+            | Ok store ->
+                try
+                    privateDirectory store
+                    let path = target store digest
+                    privateDirectory (Path.GetDirectoryName path)
+                    if File.Exists path then
+                        verify digest path |> Result.map (fun _ -> { Source = source; Path = path })
+                    else
+                        let temporary = path + ".new-" + Guid.NewGuid().ToString("n")
+                        try
+                            do
+                                use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)
+                                stream.Write bytes
+                                stream.Flush true
+                            if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                            try File.Move(temporary, path, false)
+                            with :? IOException when File.Exists path -> ()
+                            verify digest path |> Result.map (fun _ -> { Source = source; Path = path })
+                        finally
+                            if File.Exists temporary then File.Delete temporary
+                with error -> Error [ $"usage receipt archive failed: %s{error.Message}" ]
+
+    let private sourceDigest (source: string) =
+        if Regex.IsMatch(source, "^runtime-usage-csv:sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant) then
+            Ok(source.Substring(prefix.Length))
+        else Error [ "usage receipt source must be runtime-usage-csv:sha256:<64-lowercase-hex>" ]
+
+    let tryResolve root source =
+        match sourceDigest source, validateRoot (root |> Option.defaultWith defaultRoot) with
+        | Error errors, _ | _, Error errors -> Error errors
+        | Ok digest, Ok store ->
+            let path = target store digest
+            if not (File.Exists path) then Ok None else verify digest path |> Result.map Some
+
+    let resolve root source =
+        match tryResolve root source with
+        | Ok(Some bytes) -> Ok bytes
+        | Ok None -> Error [ $"canonical usage receipt is missing: %s{source}" ]
+        | Error errors -> Error errors
+
+module LegacyReceiptProof =
+    [<Literal>]
+    let Schema = "fsgg.telemetry.legacy-receipt-proof/v1"
+    type Proof =
+        { OriginalEventDigest: string; MissingReceiptSource: string; AuthoritySubject: string
+          AuthorityCommentId: int64; LookupEvidence: string list; Author: string; Reviewer: string
+          ReviewEvidence: string list; Decision: string; Digest: string }
+
+    let private jsonArray (values: string list) = JsonArray(values |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> Array.ofList)
+    let private node (proof: Proof) includeDigest =
+        let authority = JsonObject()
+        authority["subject"] <- JsonValue.Create proof.AuthoritySubject
+        authority["comment_id"] <- JsonValue.Create proof.AuthorityCommentId
+        let value = JsonObject()
+        value["schema"] <- JsonValue.Create Schema
+        value["original_event_digest"] <- JsonValue.Create proof.OriginalEventDigest
+        value["missing_receipt_source"] <- JsonValue.Create proof.MissingReceiptSource
+        value["authority"] <- authority
+        value["lookup_evidence"] <- jsonArray proof.LookupEvidence
+        value["author"] <- JsonValue.Create proof.Author
+        value["reviewer"] <- JsonValue.Create proof.Reviewer
+        value["review_evidence"] <- jsonArray proof.ReviewEvidence
+        value["decision"] <- JsonValue.Create proof.Decision
+        if includeDigest then value["digest"] <- JsonValue.Create proof.Digest
+        value
+
+    let canonicalize proof = TelemetryJson.canonical (node proof true) + "\n"
+    let parse (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            let expected = Set.ofList [ "schema"; "original_event_digest"; "missing_receipt_source"; "authority"; "lookup_evidence"; "author"; "reviewer"; "review_evidence"; "decision"; "digest" ]
+            let fields = root.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+            let text (name: string) = root.GetProperty(name).GetString()
+            let strings (name: string) = root.GetProperty(name).EnumerateArray() |> Seq.map _.GetString() |> List.ofSeq
+            let authority = root.GetProperty "authority"
+            let proof =
+                { OriginalEventDigest = text "original_event_digest"; MissingReceiptSource = text "missing_receipt_source"
+                  AuthoritySubject = authority.GetProperty("subject").GetString(); AuthorityCommentId = authority.GetProperty("comment_id").GetInt64()
+                  LookupEvidence = strings "lookup_evidence"; Author = text "author"; Reviewer = text "reviewer"
+                  ReviewEvidence = strings "review_evidence"; Decision = text "decision"; Digest = text "digest" }
+            let calculated = node proof false |> TelemetryJson.canonical |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256
+            let errors =
+                [ if root.ValueKind <> JsonValueKind.Object || fields <> expected then yield "legacy receipt proof has missing or unexpected fields"
+                  if root.GetProperty("schema").GetString() <> Schema then yield $"legacy receipt proof schema must be %s{Schema}"
+                  if not (Regex.IsMatch(proof.OriginalEventDigest, "^[0-9a-f]{64}$")) then yield "original_event_digest must be 64 lowercase hexadecimal characters"
+                  if not (Regex.IsMatch(proof.MissingReceiptSource, "^runtime-usage-csv:sha256:[0-9a-f]{64}$")) then yield "missing_receipt_source is invalid"
+                  if proof.AuthorityCommentId <= 0L || not (Regex.IsMatch(proof.AuthoritySubject, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$")) then yield "authority must bind a canonical issue subject and positive comment id"
+                  if proof.LookupEvidence.IsEmpty || proof.LookupEvidence |> List.exists String.IsNullOrWhiteSpace then yield "lookup_evidence must be non-empty"
+                  if not (Regex.IsMatch(proof.Author, "^[a-z][a-z0-9-]*-[0-9a-f]{4}$")) || not (Regex.IsMatch(proof.Reviewer, "^[a-z][a-z0-9-]*-[0-9a-f]{4}$")) || proof.Author = proof.Reviewer then yield "legacy proof author and reviewer must be distinct minted worker identities"
+                  if proof.ReviewEvidence.IsEmpty || proof.ReviewEvidence |> List.exists (fun value -> not (Regex.IsMatch(value, "^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[1-9][0-9]*#issuecomment-[1-9][0-9]*$"))) then yield "review_evidence must contain immutable GitHub review-comment URLs"
+                  if proof.Decision <> "irrecoverable-exclude-usage" then yield "legacy proof decision must be irrecoverable-exclude-usage"
+                  if proof.Digest <> calculated then yield "legacy receipt proof digest does not bind its canonical content" ]
+            if errors.IsEmpty then Ok proof else Error errors
+        with error -> Error [ $"invalid legacy receipt proof: %s{error.Message}" ]
+
 module LifecycleTelemetry =
     type Transition = Started | Completed | Blocked | Resumed
     type Finding =
@@ -299,7 +468,7 @@ module LifecycleTelemetry =
         | InvalidTransition of phase: string * reason: string
         | EditedAuthorityComment of commentId: int64
         | RejectedFork of winningCommentId: int64 * rejectedCommentId: int64
-    type Validation = { EventCount: int; CompletedPhases: string list; ActivePhases: string list; BlockedPhases: string list }
+    type Validation = { EventCount: int; CompletedPhases: string list; ActivePhases: string list; BlockedPhases: string list; ExcludedUsageSources: string list }
 
     let private digest (value: JsonObject) =
         let clone = value.DeepClone().AsObject()
@@ -463,7 +632,7 @@ module LifecycleTelemetry =
         let byState value = states |> Seq.choose (fun pair -> let status, _, _, _, _, _ = pair.Value in if status = value then Some pair.Key else None) |> Seq.sort |> List.ofSeq
         let completed, active, blocked = byState "completed", byState "active", byState "blocked"
         if requireTerminal && (not active.IsEmpty || not blocked.IsEmpty || states.Count <> completed.Length) then findings.Add(InvalidEvent(events.Length, "terminal log has active, blocked, or incomplete phases"))
-        if findings.Count = 0 then Ok { EventCount = events.Length; CompletedPhases = completed; ActivePhases = active; BlockedPhases = blocked } else Error(List.ofSeq findings)
+        if findings.Count = 0 then Ok { EventCount = events.Length; CompletedPhases = completed; ActivePhases = active; BlockedPhases = blocked; ExcludedUsageSources = [] } else Error(List.ofSeq findings)
 
     type HistoryRow = { Phase: string; ToolingFingerprint: string; ActualMinutes: int; Source: string }
 
@@ -482,13 +651,41 @@ module LifecycleTelemetry =
         elif rows |> List.map _.Source |> List.distinct |> List.length <> rows.Length then Error [ "history report sources must be unique" ]
         else Ok rows
 
-    let validateWithEvidence runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
+    let requiredUsageSources jsonLines =
+        objects jsonLines
+        |> List.choose Result.toOption
+        |> List.choose (fun item ->
+            match item["token_usage"] with
+            | :? JsonObject as usage when stringAt "status" usage = "measured" -> Some(stringAt "source" usage)
+            | _ -> None)
+        |> List.filter (fun source -> Regex.IsMatch(source, "^runtime-usage-csv:sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant))
+        |> List.distinct
+
+    let private validateWithEvidenceInternal (legacyProofs: LegacyReceiptProof.Proof list) runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
         match validate runId unitId requireTerminal requiredPhases jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let reports = Map.ofList usageReports
             let findings = ResizeArray<Finding>()
             let events = objects jsonLines |> List.choose (function Ok value -> Some value | _ -> None)
+            let usedProofDigests = Collections.Generic.HashSet<string>()
+            let proofGroups = legacyProofs |> List.groupBy (fun proof -> proof.MissingReceiptSource, proof.OriginalEventDigest)
+            proofGroups |> List.iter (fun (_, proofs) -> if proofs.Length <> 1 then findings.Add(InvalidEvent(0, "legacy receipt proof is duplicated")))
+            let evidenceValues (item: JsonObject) =
+                (item["evidence"] :?> JsonArray) |> Seq.map _.GetValue<string>() |> Set.ofSeq
+            let legacyProofFor index (item: JsonObject) source =
+                let eventDigest = stringAt "digest" item
+                let authority = item["authority"] :?> JsonObject
+                legacyProofs
+                |> List.tryFind (fun proof ->
+                    proof.MissingReceiptSource = source
+                    && proof.OriginalEventDigest = eventDigest
+                    && proof.AuthoritySubject = stringAt "subject" authority
+                    && (events
+                        |> List.skip (index + 1)
+                        |> List.exists (fun later ->
+                            stringAt "phase" later = "legacy-receipt-recovery-" + stringAt "phase" item
+                            && evidenceValues later |> Set.contains ("legacy-receipt-proof:sha256:" + proof.Digest))))
             events |> List.iteri (fun index item ->
                 let line = index + 1
                 let phase = stringAt "phase" item
@@ -500,7 +697,10 @@ module LifecycleTelemetry =
                 | :? JsonObject as usage when stringAt "status" usage = "measured" ->
                     let source = stringAt "source" usage
                     match reports.TryFind source with
-                    | None -> findings.Add(InvalidEvent(line, "measured token usage has no matching immutable usage receipt digest"))
+                    | None ->
+                        match legacyProofFor index item source with
+                        | Some proof -> usedProofDigests.Add proof.Digest |> ignore
+                        | None -> findings.Add(InvalidEvent(line, "measured token usage has no matching immutable usage receipt digest or reviewed exclusion proof"))
                     | Some rows ->
                         let ids (name: string) = (usage[name] :?> JsonArray) |> Seq.map _.GetValue<string>() |> Set.ofSeq
                         let sessions, turns = ids "session_ids", ids "turn_ids"
@@ -532,10 +732,19 @@ module LifecycleTelemetry =
                             | :? JsonObject as tool when stringAt "status" tool = "recorded" -> selected |> List.iter (fun row -> if stringAt "version" tool <> observed row then findings.Add(InvalidEvent(line, $"tooling.%s{name}.version does not match usage report")))
                             | _ -> ()
                 | _ -> ())
-            if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
+            legacyProofs
+            |> List.iter (fun proof ->
+                if not (usedProofDigests.Contains proof.Digest) then
+                    findings.Add(InvalidEvent(0, "legacy receipt proof is unconsumed or its canonical receipt is still available")))
+            if findings.Count = 0 then
+                Ok { validation with ExcludedUsageSources = legacyProofs |> List.map _.MissingReceiptSource |> List.distinct |> List.sort }
+            else Error(List.ofSeq findings)
 
-    let validateReconciledWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        match validateWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines with
+    let validateWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
+        validateWithEvidenceInternal [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+
+    let private validateReconciledInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines =
+        match validateWithEvidenceInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let events = objects jsonLines |> List.choose Result.toOption
@@ -604,7 +813,35 @@ module LifecycleTelemetry =
                 | _ -> ())
             if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
 
+    let validateReconciledWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
+        validateReconciledInternal [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+
+    let validateWithEvidenceAndLegacy runId unitId requireTerminal requireReconciled requiredPhases usageReports legacyProofs history jsonLines =
+        if requireReconciled then validateReconciledInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        else validateWithEvidenceInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
+
     let sealSuccessorWithEvidence (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
+        let seal legacyProofs =
+            match objects existingJsonLines, objects draftJson with
+            | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
+                let suppliedChainFields = [ "sequence"; "revision"; "previous_digest"; "digest" ] |> List.filter draft.ContainsKey
+                if not suppliedChainFields.IsEmpty then
+                    let fieldNames = String.concat ", " suppliedChainFields
+                    Error [ InvalidEvent(1, $"successor draft must omit chain-owned fields: %s{fieldNames}") ]
+                else
+                    let current = existing |> List.choose (function Ok value -> Some value | _ -> None)
+                    let revision = current.Length + 1
+                    draft["sequence"] <- JsonValue.Create revision
+                    draft["revision"] <- JsonValue.Create revision
+                    draft["previous_digest"] <- match current |> List.tryLast with Some item -> JsonValue.Create(stringAt "digest" item) | None -> null
+                    draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
+                    draft["digest"] <- JsonValue.Create(digest draft)
+                    let rendered = TelemetryJson.canonical draft
+                    match validateWithEvidenceInternal legacyProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+            | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
+        seal []
+
+    let sealSuccessorWithEvidenceAndLegacy (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (legacyProofs: LegacyReceiptProof.Proof list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
         match objects existingJsonLines, objects draftJson with
         | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
             let suppliedChainFields = [ "sequence"; "revision"; "previous_digest"; "digest" ] |> List.filter draft.ContainsKey
@@ -620,7 +857,7 @@ module LifecycleTelemetry =
                 draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
                 draft["digest"] <- JsonValue.Create(digest draft)
                 let rendered = TelemetryJson.canonical draft
-                match validateWithEvidence runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+                match validateWithEvidenceInternal legacyProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
         | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
 
     let sealSuccessor runId unitId existingJsonLines draftJson =

@@ -19,7 +19,11 @@ the exact provider/model/variant and effort, authoritative token usage, and the 
 SDD CLI/contracts, and ledger-schema versions that make comparisons meaningful. Token accounting is a
 post-response operation: reconcile the completed runtime turn from its local session record or stable
 provider response before closing the corresponding phase; never estimate from visible text or a context
-window. Freeze one private usage receipt per phase when cited; never append later phases to it. Each critic and recovery worker records its own runtime identity and usage rather than assigning
+window. Freeze one private usage receipt per phase when cited and archive it in the canonical per-user
+content-addressed private store; never leave the only copy in `/tmp` or a worker checkout and never append
+later phases to it. Sealing and validation resolve by digest. An already-missing historical receipt needs
+the separately reviewed non-counting proof defined in the lifecycle reference; never reconstruct it from
+the public event. Each critic and recovery worker records its own runtime identity and usage rather than assigning
 it to the implementer.
 
 **The supervising parent owns the post-child boundary.** A worker, critic, confirmation, recovery, or

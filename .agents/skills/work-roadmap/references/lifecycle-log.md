@@ -22,6 +22,19 @@ gates the PR that carries it. Raw request-level usage and machine-local paths re
 Each phase freezes its own immutable usage receipt when cited; later phases use new receipts, so new
 telemetry never changes an earlier event's provenance digest.
 
+Immutability includes durable private retention. Every completed collector report is archived outside
+git, the repository, and system temporary storage at the canonical per-user host-state root
+(`$FSGG_USAGE_RECEIPT_STORE`, else `$XDG_STATE_HOME/fsgg/telemetry/usage`, else platform local
+application data), addressed as `sha256/<first-two-hex>/<64-hex>.csv`. Owner-only modes, atomic
+no-overwrite writes, byte-identical collision checks, and digest verification on every resolution are
+mandatory. Lifecycle seal, validation, and final roll-up locate omitted explicit receipts here.
+
+An already-missing historical receipt is never rebuilt from public aggregate counts. It requires a
+distinct reviewer's accepted `fsgg.telemetry.legacy-receipt-proof/v1`, bound to the original event and
+receipt digests, canonical issue/comment, exhaustive lookup, and immutable review evidence, plus a later
+lifecycle event citing `legacy-receipt-proof:sha256:<proof-digest>`. The sole decision
+`irrecoverable-exclude-usage` excludes those counts from roll-up; it is not a measured receipt or waiver.
+
 ## Event contract
 
 Every line is one JSON object with these fields:

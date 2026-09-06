@@ -68,6 +68,9 @@ the response finishes from the runtime session record or stable provider respons
 not turn a temporarily unavailable in-turn counter into permanent `unavailable`. When a runtime truly
 provides no authoritative record, retain the concrete host/source reason; never infer or estimate. Freeze
 one immutable private usage receipt per phase when cited so later appends cannot invalidate prior events.
+Collection archives frozen receipts in the canonical per-user content-addressed private store; `/tmp` and
+repository-only copies are not retention. Seal, validation, and roll-up resolve by digest. An already-missing
+receipt needs a separately reviewed non-counting legacy proof and is excluded, never reconstructed.
 Durations and historical averages are derived from recorded UTC timestamps and comparable prior duration
 evidence with the same tooling fingerprint, using only whole discrete minutes. Read [lifecycle-log](references/lifecycle-log.md) for the canonical path,
 schema, transition rules, token accounting, and exact validation command.

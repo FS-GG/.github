@@ -130,14 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.83.5 — accept native SDD stages in an isolated candidate clone.
+    <PackageReleaseNotes>0.84.0 — durably retain private content-addressed telemetry receipts.
 
-Compiled roadmap acceptance now validates the distinct SDD 1.5.0 analyze, verify, and ship artifact
-contracts, permits non-blocking readiness warnings, and refuses blocking or unknown severities.
-Production qualification rejects hidden index state and executes in a disposable exact-candidate
-clone, so generated projections cannot mutate the authenticated caller checkout. Candidate and merge
-trees, exact artifact binding, live authorities, mutation controls, and canonical observations remain
-strict. No command, option, result, or exit-code vocabulary changes.
+Runtime usage collection now archives every frozen CSV in canonical per-user host state with owner-only
+permissions, atomic no-overwrite publication, digest verification, and automatic lifecycle resolution.
+New `telemetry usage archive|resolve` commands expose that boundary. Historical missing receipts can
+advance only through a typed separately reviewed irrecoverability proof; their public-event counts are
+excluded rather than reconstructed or trusted. Existing explicit `--usage` inputs remain supported.
 
 $(FsggStandingAdvisories)
 

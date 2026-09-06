@@ -1,0 +1,443 @@
+schemaVersion: 1
+workId: 3259-durable-private-telemetry-receipts
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3259-durable-private-telemetry-receipts/spec.md
+sourceClarifications: work/3259-durable-private-telemetry-receipts/clarifications.md
+sourceChecklist: work/3259-durable-private-telemetry-receipts/checklist.md
+sourcePlan: work/3259-durable-private-telemetry-receipts/plan.md
+sourceTasks: work/3259-durable-private-telemetry-receipts/tasks.yml
+sourceAnalysis: readiness/3259-durable-private-telemetry-receipts/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3259-durable-private-telemetry-receipts/analysis.json
+    digest: d42676f2da6f0c3d176a5c7e5e93298351291767f2b8739ef88560d39103c517
+    schemaVersion: 1
+  - label: checklist
+    path: work/3259-durable-private-telemetry-receipts/checklist.md
+    digest: 570c7f1a013a63bfd780886a92d35659cb93627f66013ac0a4aa074dd55b1aaf
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3259-durable-private-telemetry-receipts/clarifications.md
+    digest: f6dc4ec7b183378016575194e7e94b948496d4d1252582443ce9250b2fbc06e9
+    schemaVersion: 1
+  - label: plan
+    path: work/3259-durable-private-telemetry-receipts/plan.md
+    digest: ea3b5583745307aa5fc22e3ac8eddb7e4ccafd73dfd95f9525134e1c833444a9
+    schemaVersion: 1
+  - label: spec
+    path: work/3259-durable-private-telemetry-receipts/spec.md
+    digest: 7aeded40e242b959581357183bb8240ee0788ce2e861277afa67869ad9d01fa8
+    schemaVersion: 1
+  - label: tasks
+    path: work/3259-durable-private-telemetry-receipts/tasks.yml
+    digest: 9d8d62174bb704ec23c3ec17c369141a700ebc9493918ad22c95d41b1ca167cf
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV008]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV014]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: [work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/telemetry-parity/run.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3259-durable-private-telemetry-receipts/verification/core.test-report.xml
+      digest: "sha256:959cd27d14514a36d3d5a1de6bc445273c2cc795d938175ab84b911b2f4ab341"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 972
+      failed: 0
+      skipped: 0
+    notes: [Observed Release core suite and telemetry parity prove this obligation.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
