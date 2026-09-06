@@ -120,8 +120,14 @@ module RoadmapWorkUnitTests =
         let application = RoadmapWorkUnit.sealPreparationApplication plan applied |> unwrap
         let unitIssue = application.Registrations |> List.find (fun value -> value.Kind = "unit") |> _.Issue
         let observation stage status : RoadmapWorkUnit.SddObservation =
+            let stageFields =
+                match stage with
+                | "ship" ->
+                    $""""sourcesDigest":{{"algorithm":"sha256","value":"%s{sha '7'}"}},"verificationReadiness":{{"status":"verificationReady"}},"disposition":{{"state":"shipReady","blockingFindingIds":[]}},"""
+                | _ ->
+                    $""""sources":[{{"path":"readiness/400-gs2-07-3-audit-repair/work-model.json"}}],"findings":[],"diagnostics":[],"""
             { Stage = stage; SubjectRevision = candidate
-              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/400-gs2-07-3-audit-repair/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-gs2-07-3-audit-repair"}}""" }
+              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0",%s{stageFields}"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"400-gs2-07-3-audit-repair"}}""" }
         let structuredReview = "https://github.com/FS-GG/.github/pull/1#issuecomment-2"
         let acceptanceEnvelope = "https://github.com/FS-GG/.github/pull/1#issuecomment-3"
         let binding candidate merge tree =
@@ -311,6 +317,48 @@ module RoadmapWorkUnitTests =
         Assert.Contains(
             RoadmapWorkUnit.LifecycleInvalid "review receipt cycle does not bind the selected roadmap unit work identity",
             findings)
+
+    [<Fact>]
+    let ``#3255 native SDD warning and ship shapes pass while blockers refuse`` () =
+        let input = acceptanceInput ()
+        let verify = input.SddObservations |> List.find (fun value -> value.Stage = "verify")
+        let warning =
+            { verify with
+                ArtifactJson =
+                    verify.ArtifactJson
+                        .Replace("\"findings\":[]", "\"findings\":[{\"id\":\"VF001\",\"severity\":\"warning\"}]")
+                        .Replace("\"diagnostics\":[]", "\"diagnostics\":[{\"id\":\"evidence.staleEvidenceSource\",\"severity\":\"warning\"}]") }
+        let withWarning =
+            { input with
+                SddObservations = input.SddObservations |> List.map (fun value -> if value.Stage = "verify" then warning else value) }
+        RoadmapWorkUnit.inspectAcceptanceCandidate withWarning |> unwrap |> ignore
+
+        let wrongView =
+            { verify with ArtifactJson = verify.ArtifactJson.Replace("\"viewVersion\":\"1.0\"", "\"viewVersion\":\"1.1\"") }
+        let withWrongView =
+            { input with
+                SddObservations = input.SddObservations |> List.map (fun value -> if value.Stage = "verify" then wrongView else value) }
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate withWrongView |> Result.isError)
+
+        let wrongGenerator =
+            { verify with ArtifactJson = verify.ArtifactJson.Replace("FS.GG.SDD.Artifacts/1.5.0", "FS.GG.SDD.Artifacts/1.6.0") }
+        let withWrongGenerator =
+            { input with
+                SddObservations = input.SddObservations |> List.map (fun value -> if value.Stage = "verify" then wrongGenerator else value) }
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate withWrongGenerator |> Result.isError)
+
+        let blocking = { warning with ArtifactJson = warning.ArtifactJson.Replace("\"severity\":\"warning\"", "\"severity\":\"error\"") }
+        let withBlocking =
+            { input with
+                SddObservations = input.SddObservations |> List.map (fun value -> if value.Stage = "verify" then blocking else value) }
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate withBlocking |> Result.isError)
+
+        let ship = input.SddObservations |> List.find (fun value -> value.Stage = "ship")
+        let blockedShip = { ship with ArtifactJson = ship.ArtifactJson.Replace("\"blockingFindingIds\":[]", "\"blockingFindingIds\":[\"VF999\"]") }
+        let withBlockedShip =
+            { input with
+                SddObservations = input.SddObservations |> List.map (fun value -> if value.Stage = "ship" then blockedShip else value) }
+        Assert.True(RoadmapWorkUnit.inspectAcceptanceCandidate withBlockedShip |> Result.isError)
 
     [<Fact>]
     let ``#3210 manually flipped SDD state identity collapse and bundle tamper refuse`` () =

@@ -6,6 +6,7 @@ open System.IO
 open System.Reflection
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open FS.GG.Coord
 open FS.GG.Coord.GitHub
 
@@ -340,11 +341,17 @@ module QualificationApplication =
     // substitute the repository identity. The ordinary `run` entry point remains useful for
     // isolated qualification authoring and tests; only this adapter seals roadmap acceptance.
     let runBoundToTree expectedTree inputPath executionPath =
-        match parseExecution executionPath with
-        | Error errors -> Error errors
-        | Ok execution ->
+        match Qualification.parseInput (File.ReadAllBytes inputPath), parseExecution executionPath with
+        | Error errors, _ | _, Error errors -> Error errors
+        | Ok input, Ok execution ->
             let errors = ResizeArray<string>()
             let checkout = fullPath execution.Checkout
+            let trustedEnvironment =
+                [ "PATH", "/usr/bin:/bin"
+                  "HOME", checkout
+                  "GIT_CONFIG_NOSYSTEM", "1"
+                  "GIT_CONFIG_GLOBAL", "/dev/null"
+                  "GIT_NO_REPLACE_OBJECTS", "1" ]
             if execution.Environment |> List.exists (fun (name, _) -> name.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)) then
                 errors.Add "production qualification environment may not override GIT_* authority"
             for tool in execution.Tools do
@@ -363,17 +370,69 @@ module QualificationApplication =
                     errors.Add($"production qualification fixture '%s{fixture.MutationId}' escapes the candidate checkout")
             if not (File.Exists "/usr/bin/git") then errors.Add "pinned system git /usr/bin/git is unavailable"
             elif Directory.Exists checkout then
-                let trustedEnvironment =
-                    [ "PATH", "/usr/bin:/bin"
-                      "HOME", checkout
-                      "GIT_CONFIG_NOSYSTEM", "1"
-                      "GIT_CONFIG_GLOBAL", "/dev/null"
-                      "GIT_NO_REPLACE_OBJECTS", "1" ]
                 match runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "rev-parse"; "HEAD^{tree}" ],
-                      runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "status"; "--porcelain"; "--untracked-files=all" ] with
-                | Ok tree, Ok status when tree.ExitCode = 0 && status.ExitCode = 0 ->
+                      runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "status"; "--porcelain"; "--untracked-files=all" ],
+                      runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "ls-files"; "-v" ] with
+                | Ok tree, Ok status, Ok index when tree.ExitCode = 0 && status.ExitCode = 0 && index.ExitCode = 0 ->
                     if tree.Stdout.Trim() <> expectedTree then errors.Add($"trusted checkout tree '%s{tree.Stdout.Trim()}' does not match expected candidate tree '%s{expectedTree}'")
                     if not (String.IsNullOrEmpty status.Stdout) then errors.Add "trusted candidate checkout is not clean"
+                    let hidden =
+                        index.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        |> Array.filter (fun line -> line.Length > 1 && (line[0] = 'S' || Char.IsLower line[0]))
+                    if hidden.Length > 0 then errors.Add "trusted candidate checkout contains skip-worktree or assume-unchanged index entries"
                 | values -> errors.Add($"trusted git could not establish production checkout identity: %A{values}")
             else errors.Add($"checkout does not exist: %s{checkout}")
-            if errors.Count > 0 then Error(List.ofSeq errors) else run inputPath executionPath
+            if errors.Count > 0 then Error(List.ofSeq errors) else
+            let isolated = Path.Combine(Path.GetTempPath(), "fsgg-qualification-" + Guid.NewGuid().ToString("n"))
+            try
+                let clone = runProcess execution.TimeoutSeconds (Path.GetTempPath()) trustedEnvironment "/usr/bin/git" [ "clone"; "--quiet"; "--no-hardlinks"; "--no-checkout"; checkout; isolated ]
+                match clone with
+                | Error reason -> Error [ $"could not create isolated qualification checkout: %s{reason}" ]
+                | Ok result when result.ExitCode <> 0 -> Error [ $"could not create isolated qualification checkout: %s{result.Stderr.Trim()}" ]
+                | Ok _ ->
+                    let isolatedEnvironment =
+                        trustedEnvironment |> List.map (fun (name, value) -> if name = "HOME" then name, isolated else name, value)
+                    match runProcess execution.TimeoutSeconds isolated isolatedEnvironment "/usr/bin/git" [ "checkout"; "--quiet"; "--detach"; input.SubjectRevision ] with
+                    | Error reason -> Error [ $"could not materialize isolated qualification candidate: %s{reason}" ]
+                    | Ok result when result.ExitCode <> 0 -> Error [ $"could not materialize isolated qualification candidate: %s{result.Stderr.Trim()}" ]
+                    | Ok _ ->
+                        let preparationErrors = ResizeArray<string>()
+                        for artifact in execution.Operations |> List.collect _.Artifacts |> List.distinct do
+                            match under isolated artifact with
+                            | Error reason -> preparationErrors.Add reason
+                            | Ok path ->
+                                let parent = Path.GetDirectoryName path
+                                if not (String.IsNullOrWhiteSpace parent) then Directory.CreateDirectory parent |> ignore
+                                match runProcess execution.TimeoutSeconds isolated isolatedEnvironment "/usr/bin/git" [ "ls-files"; "--error-unmatch"; "--"; artifact ] with
+                                | Ok tracked when tracked.ExitCode = 0 ->
+                                    match runProcess execution.TimeoutSeconds isolated isolatedEnvironment "/usr/bin/git" [ "update-index"; "--skip-worktree"; "--"; artifact ] with
+                                    | Ok marked when marked.ExitCode = 0 -> if File.Exists path then File.Delete path
+                                    | value -> preparationErrors.Add($"could not isolate tracked qualification artifact '%s{artifact}': %A{value}")
+                                | _ -> if File.Exists path then preparationErrors.Add($"untracked qualification artifact exists in fresh isolated checkout: %s{artifact}")
+                        if preparationErrors.Count > 0 then Error(List.ofSeq preparationErrors) else
+                        let executionNode = JsonNode.Parse(File.ReadAllText executionPath).AsObject()
+                        executionNode["checkout"] <- JsonValue.Create isolated
+                        for environment in executionNode["environment"].AsArray() do
+                            let entry = environment.AsObject()
+                            if entry["name"].GetValue<string>() = "HOME" then entry["value"] <- JsonValue.Create isolated
+                        let remapPath (container: JsonNode) =
+                            let entry = container.AsObject()
+                            let path = entry["path"].GetValue<string>()
+                            if Path.IsPathFullyQualified path && under checkout path |> Result.isOk then
+                                entry["path"] <- JsonValue.Create(Path.Combine(isolated, Path.GetRelativePath(checkout, path)))
+                        for tool in executionNode["tools"].AsArray() do remapPath tool
+                        for fixture in executionNode["fixtures"].AsArray() do remapPath fixture
+                        let isolatedExecution = Path.Combine(Path.GetTempPath(), "fsgg-qualification-execution-" + Guid.NewGuid().ToString("n") + ".json")
+                        try
+                            File.WriteAllText(isolatedExecution, executionNode.ToJsonString(), UTF8Encoding(false))
+                            let outcome = run inputPath isolatedExecution
+                            let unchanged =
+                                match runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "rev-parse"; "HEAD^{tree}" ],
+                                      runProcess execution.TimeoutSeconds checkout trustedEnvironment "/usr/bin/git" [ "status"; "--porcelain"; "--untracked-files=all" ] with
+                                | Ok tree, Ok status when tree.ExitCode = 0 && status.ExitCode = 0 && tree.Stdout.Trim() = expectedTree && String.IsNullOrEmpty status.Stdout -> true
+                                | _ -> false
+                            if unchanged then outcome else Error [ "trusted candidate checkout changed during isolated production qualification" ]
+                        finally
+                            if File.Exists isolatedExecution then File.Delete isolatedExecution
+            finally
+                if Directory.Exists isolated then Directory.Delete(isolated, true)

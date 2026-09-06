@@ -2731,7 +2731,7 @@ module Handlers =
         | Some registration ->
             let request: RoadmapWorkUnit.PreparationRequest =
                 { Schema = RoadmapWorkUnit.PreparationInputSchema
-                  RoadmapRevision = input.Identities.ImplementationCandidate
+                  RoadmapRevision = input.Plan.Authority.RoadmapRevision
                   AuthorityIssue = input.Plan.Authority.Issue
                   SddWorkId = input.Plan.SddWorkId
                   RegistrationOwner = registration.Draft.Owner
@@ -2771,7 +2771,11 @@ module Handlers =
             | _ -> Error("action must be seal")
 
         let parseIssueRef (value: string) =
-            let matched = Regex.Match(value, "^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([1-9][0-9]*)$", RegexOptions.CultureInvariant)
+            let matched =
+                Regex.Match(
+                    value,
+                    "^(?:https://github[.]com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:#|/issues/)([1-9][0-9]*)$",
+                    RegexOptions.CultureInvariant)
             if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
             else Error($"invalid issue identity: %s{value}")
 
@@ -2868,11 +2872,27 @@ module Handlers =
                                         if revision.Trim() = input.Identities.ImplementationCandidate then Ok()
                                         else Error [ "independent checkout moved away from the implementation candidate" ]))
                                 |> Result.bind (fun () ->
-                                    run git checkout [ "status"; "--porcelain" ] 30
+                                    run git checkout [ "rev-parse"; "HEAD^{tree}" ] 30
+                                    |> Result.mapError List.singleton
+                                    |> Result.bind (fun tree ->
+                                        if tree.Trim() = input.ImplementationBinding.CandidateTree then Ok()
+                                        else Error [ "independent checkout tree differs from the implementation candidate tree" ]))
+                                |> Result.bind (fun () ->
+                                    run git checkout [ "status"; "--porcelain=v1"; "-z"; "--untracked-files=all" ] 30
                                     |> Result.mapError List.singleton
                                     |> Result.bind (fun status ->
-                                        if String.IsNullOrWhiteSpace status then Ok()
-                                        else Error [ "independent SDD execution changed the immutable candidate checkout" ]))
+                                        let generated =
+                                            [ "analysis.json"; "verify.json"; "ship-verdict.json"; "work-model.json" ]
+                                            |> List.map (fun name -> $"readiness/%s{input.SddWorkId}/%s{name}")
+                                            |> Set.ofList
+                                        let unexpected =
+                                            status.Split('\000', StringSplitOptions.RemoveEmptyEntries)
+                                            |> Array.filter (fun entry ->
+                                                entry.Length < 4
+                                                || (entry.Substring(0, 2) <> " M" && entry.Substring(0, 2) <> "??")
+                                                || not (Set.contains (entry.Substring 3) generated))
+                                        if unexpected.Length = 0 then Ok()
+                                        else Error [ "independent SDD execution changed paths outside its exact generated readiness outputs" ]))
                         result
                     with error -> Error [ "independent SDD observation: " + error.Message ]
                 finally
@@ -2929,9 +2949,18 @@ module Handlers =
                                 let last = body.LastIndexOf(marker, StringComparison.Ordinal)
                                 if first <> 0 || last <> first then
                                     errors.Add($"%s{applied.Issue} does not carry one exact leading intake receipt for %s{registration.Id}")
+                            let progression =
+                                [ "Backlog", 0; "Ready", 1; "In progress", 2; "In review", 3; "Done", 4 ]
+                                |> Map.ofList
+                            match Board.itemFieldValue ctx.Transport board owner repo number "Status" with
+                            | Error error -> errors.Add(Errors.explain error)
+                            | Ok(Some actual) ->
+                                match Map.tryFind registration.Draft.Status progression, Map.tryFind actual progression with
+                                | Some expectedRank, Some actualRank when actualRank >= expectedRank -> ()
+                                | _ -> errors.Add($"%s{applied.Issue} live Status is Some \"%s{actual}\", which is not a valid progression from %s{registration.Draft.Status}")
+                            | Ok None -> errors.Add($"%s{applied.Issue} live Status is missing")
                             let projected =
-                                [ "Status", Some registration.Draft.Status
-                                  "Class", Some registration.Draft.Class
+                                [ "Class", Some registration.Draft.Class
                                   "Phase", registration.Draft.Phase
                                   "Severity", registration.Draft.Severity
                                   "Blocked by", registration.Draft.BlockedBy ]
@@ -3015,10 +3044,13 @@ module Handlers =
 
             let implementationParts = input.ImplementationBinding.Repository.Split('/')
             let acceptanceParts = input.AcceptanceBinding.Repository.Split('/')
+            let roadmapAuthority = parseIssueRef input.Plan.Authority.Issue
             if implementationParts.Length <> 2 then errors.Add("implementation repository identity is malformed")
             elif acceptanceParts.Length <> 2 then errors.Add("acceptance repository identity is malformed")
+            elif roadmapAuthority |> Result.isError then errors.Add("roadmap authority issue identity is malformed")
             else
-              match Reads.fileAtRef ctx.Transport implementationParts[0] implementationParts[1] "docs/github-substrate-v2-roadmap.md" input.Identities.ImplementationCandidate,
+              let roadmapOwner, roadmapRepo, _ = roadmapAuthority |> Result.defaultWith (fun _ -> failwith "validated roadmap authority")
+              match Reads.fileAtRef ctx.Transport roadmapOwner roadmapRepo "docs/github-substrate-v2-roadmap.md" input.Plan.Authority.RoadmapRevision,
                     Reads.fileAtRef ctx.Transport acceptanceParts[0] acceptanceParts[1] "eng/github-substrate-v2-units.json" input.Identities.AcceptanceCandidate with
               | Error error, _ | _, Error error -> errors.Add(Errors.explain error)
               | Ok roadmap, Ok catalog ->
