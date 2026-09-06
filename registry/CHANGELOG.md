@@ -19,6 +19,22 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-06** — **coordination coherent set `github:0.85.1` published; registry reconciliation**
+  ([.github#3280](https://github.com/FS-GG/.github/issues/3280), source
+  [.github#3274](https://github.com/FS-GG/.github/issues/3274), release execution
+  [.github#3278](https://github.com/FS-GG/.github/issues/3278),
+  [promotion 34031610079](https://github.com/FS-GG/.github/actions/runs/34031610079),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.85.1)):
+  advances the observed package frontier from 0.85.0 to 0.85.1. Parallel tag and recovery
+  publishers raced after the same accepted uploads; exact-source recoveries
+  34031083986/34031085059/34031086162 verified both feeds, and the informed attempt-2
+  push-event recovery 34030564264 restored the promotion observer edge. Promotion 34031610079
+  sealed the set. Both feeds serve all three members with matching normalized payload hashes.
+  Source `503a07d24a6087c549bc47b5322d6f05cce2a6c5`; content
+  `sha256:f0f3706c755c767c9f761c993bb01f7a9c52c08cd74d504c1de7322aadaf471c`;
+  manifest `sha256:5f497165d0467fc1be6b92e5d73757e8b19e7324e4af872253d76133cefec5c2`;
+  stable channel `sha256:edbdd3b03fbbeb450e5f86aee140e6c4ccb36ec76f321178289f7f0ab9bc810f`.
+
 - **2026-09-06** — **coordination coherent set `github:0.85.0` published; registry reconciliation**
   ([.github#3266](https://github.com/FS-GG/.github/issues/3266), source
   [.github#3263](https://github.com/FS-GG/.github/issues/3263),
