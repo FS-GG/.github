@@ -19,7 +19,19 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-09-06** — **coordination coherent set `github:0.85.0` source declared, publication pending** ([.github#3263](https://github.com/FS-GG/.github/issues/3263) source-unpublished): adds the first-class human-authorized synthetic lifecycle checkpoint, exact scope/frontier proof binding, mandatory functional verification, and strict post-anchor resumption. The published package frontier remains 0.84.0 until the accepted merge is promoted and registry reconciliation records immutable release evidence.
+- **2026-09-06** — **coordination coherent set `github:0.85.0` published; registry reconciliation**
+  ([.github#3266](https://github.com/FS-GG/.github/issues/3266), source
+  [.github#3263](https://github.com/FS-GG/.github/issues/3263),
+  [promotion 34020496196](https://github.com/FS-GG/.github/actions/runs/34020496196),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.85.0)):
+  advances the observed package frontier from 0.84.0 to 0.85.0. The initial publishers
+  34020149395/34020149738/34020149796 pushed accepted bytes but exceeded bounded nuget.org
+  indexing; attempt-2 push-event reruns preserved the promotion observer edge and verified both
+  feeds, and promotion 34020496196 sealed the set. Both feeds serve all three members with
+  matching normalized payload hashes. Source `9307b85458b326019415f8bcf6a1d13d0139eb6a`;
+  content `sha256:95892fd5d1765ec3020168f71b103a1849ae645e00de77f8fcb549ddbd510081`;
+  manifest `sha256:1521098b25a805d0f11f9b13e7e175ad4955da2d482a6132d022b16fbe0647ef`;
+  stable channel `sha256:b62ae6ee9ef42093bdeb046925be3618bd83d17d4bf148a9c6d83cc104a3d76a`.
 
 - **2026-09-06** — **coordination coherent set `github:0.84.0` published; registry reconciliation**
   ([.github#3261](https://github.com/FS-GG/.github/issues/3261), source
