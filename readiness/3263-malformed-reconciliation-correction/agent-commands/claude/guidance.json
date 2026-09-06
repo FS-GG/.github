@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "3263-malformed-reconciliation-correction",
+  "targetId": "claude",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/3263-malformed-reconciliation-correction/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "1c31081ed6853e6ac42b1196663e0a71344f8ba2c7613930a8653a9cd527ad03"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "ba0802f874574ce2dd661652e27e1ae63cf67d2d7b2589ce4cff06140677c784"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, PD-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-001, FR-002, PD-002.",
+      "relatedIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering AC-001, FR-003, PD-003.",
+      "relatedIds": [
+        "AC-001",
+        "FR-003",
+        "PD-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering AC-001, AC-002, FR-004, PD-004.",
+      "relatedIds": [
+        "AC-001",
+        "AC-002",
+        "FR-004",
+        "PD-004"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (done) covering AC-001, AC-002, FR-005, PD-005.",
+      "relatedIds": [
+        "AC-001",
+        "AC-002",
+        "FR-005",
+        "PD-005"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Update contract surface PC-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T006 (done) covering PC-001, PD-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Record verification evidence VO-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T007 (done) covering PC-001, PD-001, VO-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "Handle migration posture PM-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T008 (done) covering PC-001, PM-001.",
+      "relatedIds": [
+        "PC-001",
+        "PM-001"
+      ]
+    },
+    {
+      "id": "T009",
+      "title": "Refresh generated view impact GV-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T009 (done) covering GV-001, PD-001.",
+      "relatedIds": [
+        "GV-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "Implement requirement FR-006",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T010 (done) covering AC-003, FR-006, PD-006.",
+      "relatedIds": [
+        "AC-003",
+        "FR-006",
+        "PD-006"
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "Implement requirement FR-007",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T011 (done) covering AC-004, FR-007, PD-007.",
+      "relatedIds": [
+        "AC-004",
+        "FR-007",
+        "PD-007"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "automated-tests",
+      "title": "automated-tests",
+      "capability": "Required by tasks: T007.",
+      "relatedIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "deterministic-json",
+      "title": "deterministic-json",
+      "capability": "Required by tasks: T009.",
+      "relatedIds": [
+        "T009"
+      ]
+    },
+    {
+      "id": "fsharp",
+      "title": "fsharp",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T006, T010, T011.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T010",
+        "T011"
+      ]
+    },
+    {
+      "id": "implementation",
+      "title": "implementation",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005, T010, T011.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T010",
+        "T011"
+      ]
+    },
+    {
+      "id": "readiness-evidence",
+      "title": "readiness-evidence",
+      "capability": "Required by tasks: T007.",
+      "relatedIds": [
+        "T007"
+      ]
+    },
+    {
+      "id": "schema-versioning",
+      "title": "schema-versioning",
+      "capability": "Required by tasks: T008.",
+      "relatedIds": [
+        "T008"
+      ]
+    }
+  ],
+  "renderedFiles": [
+    {
+      "path": "readiness/3263-malformed-reconciliation-correction/agent-commands/claude/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/3263-malformed-reconciliation-correction/agent-commands/claude/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": []
+}

@@ -38,6 +38,15 @@ that no unique terminal record exists or that strict schema validation failed; ‚
 finished‚Äù is never a terminal reason. If an older worker already posted that reason, append a distinct
 telemetry-reconciliation recovery phase before continuing; never edit the immutable event.
 
+An extraordinary immutable history that cannot satisfy either the creating or current tool contract may
+advance only through the toolkit's human-authorized synthetic checkpoint. This is not an automatic worker
+waiver: obtain one immutable human issue-comment authorization, author the closed scope/frontier-bound
+`fsgg.telemetry.synthetic-checkpoint/v1` proof with explicit no-provenance/no-reconstruction flags and passed
+functional checks, then append exactly one adjacent `synthetic-evidence-checkpoint` phase using
+`--synthetic-checkpoint`. Its completion is the new trusted anchor; every later event returns to the ordinary
+strict contract. Missing authority, scope/frontier drift, reuse, ambiguity, tampering, or a failed/absent
+functional check is terminal red.
+
 Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,
 projection, and cleanup facts do not exist until after that candidate head was reviewed, so appending them
 to the candidate creates an unsatisfiable exact-head loop. Repository `logs/` files are immutable exported

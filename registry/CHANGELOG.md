@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-06** — **coordination coherent set `github:0.85.0` source declared, publication pending** ([.github#3263](https://github.com/FS-GG/.github/issues/3263) source-unpublished): adds the first-class human-authorized synthetic lifecycle checkpoint, exact scope/frontier proof binding, mandatory functional verification, and strict post-anchor resumption. The published package frontier remains 0.84.0 until the accepted merge is promoted and registry reconciliation records immutable release evidence.
+
 - **2026-09-06** — **coordination coherent set `github:0.84.0` published; registry reconciliation**
   ([.github#3261](https://github.com/FS-GG/.github/issues/3261), source
   [.github#3259](https://github.com/FS-GG/.github/issues/3259),

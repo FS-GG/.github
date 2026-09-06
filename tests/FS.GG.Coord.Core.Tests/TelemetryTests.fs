@@ -212,6 +212,65 @@ module TelemetryTests =
         LifecycleTelemetry.validateReconciledWithEvidence "run" "unit" true [] [] [] (started + genuineFailure) |> unwrap |> ignore
 
     [<Fact>]
+    let ``#3263 human-authorized synthetic checkpoint establishes one strict new anchor`` () =
+        let tooling = """{"ledger_schema":1,"runtime":{"status":"recorded","name":"codex","version":"1.2.3","source":"session"},"coordination":{"status":"recorded","name":"fsgg-coord","version":"4.5.6","source":"cli"},"sdd":{"status":"recorded","name":"fsgg-sdd","version":"7.8.9","source":"cli"},"contracts":{"status":"recorded","name":"fsgg-contracts","version":"10.0.0","source":"registry"}}"""
+        let model = """{"status":"recorded","provider":"OpenAI","name":"gpt-test","effort":"high","source":"runtime receipt"}"""
+        let draft order phase event at actual usage evidence =
+            $"""{{"schema_version":1,"run_id":"run","unit_id":"unit","item":{{"repo":"FS-GG/.github","number":42,"url":"https://github.com/FS-GG/.github/issues/42"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":%s{model},"source":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}"}},"evidence":%s{JsonSerializer.Serialize evidence},"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":%s{tooling},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#42","claim_generation":"1"}}}}"""
+        let initial = LifecycleTelemetry.sealSuccessor "run" "unit" "" (draft 1 "claim" "started" "2026-09-04T08:00:00Z" "null" "{\"status\":\"pending\"}" [ "claim" ]) |> unwrap
+        let legacy = LifecycleTelemetry.sealSuccessor "run" "unit" initial (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1" "{\"status\":\"unavailable\",\"reason\":\"final usage is written after this response\",\"source\":\"legacy child\"}" [ "legacy" ]) |> unwrap
+        let malformedStart = LifecycleTelemetry.sealSuccessor "run" "unit" (initial + legacy) (draft 2 "telemetry-reconciliation-claim" "started" "2026-09-04T08:02:00Z" "null" "{\"status\":\"pending\"}" [ "recovery" ]) |> unwrap
+        let malformedReceipt = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/telemetry-reconciliation-claim" ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
+        let malformedSource, _ = malformedReceipt
+        let malformedMeasured = $"""{{"status":"measured","input":10,"cached_input":4,"cache_write_input":0,"output":5,"reasoning":2,"total":15,"source":"%s{malformedSource}","session_ids":["session-1"],"turn_ids":["turn-1"]}}"""
+        let malformedComplete = LifecycleTelemetry.sealSuccessorWithEvidence "run" "unit" [ malformedReceipt ] [] (initial + legacy + malformedStart) (draft 2 "telemetry-reconciliation-claim" "completed" "2026-09-04T08:03:00Z" "1" malformedMeasured [ "supersedes unavailable lifecycle event digest in prose" ]) |> unwrap
+        let before = initial + legacy + malformedStart + malformedComplete
+        use frontierJson = JsonDocument.Parse malformedComplete
+        let frontierDigest = frontierJson.RootElement.GetProperty("digest").GetString()
+        let proofJson repository issue runId unitId revision digest status =
+            let without =
+                $"""{{"schema":"%s{SyntheticCheckpointProof.Schema}","scope":{{"repository":"%s{repository}","issue":%d{issue},"run_id":"%s{runId}","unit_id":"%s{unitId}"}},"frontier":{{"revision":%d{revision},"digest":"%s{digest}"}},"reason":"tool-version-incompatibility","authorization":{{"decision":"authorize-synthetic-checkpoint","by":"human/accountable-owner","url":"https://github.com/FS-GG/.github/issues/42#issuecomment-123"}},"missing_provenance_required":false,"reconstruct_missing_data":false,"functional_verification":[{{"name":"functional-route","status":"%s{status}","evidence":["sha256:%s{String.replicate 64 "b"}"]}}]}}"""
+            let digest = CanonicalJson.canonicalize (bytes without) |> unwrap |> bytes |> sha
+            without[..without.Length - 2] + $",\"digest\":\"%s{digest}\"}}"
+        let proof = SyntheticCheckpointProof.parse (bytes (proofJson "FS-GG/.github" 42 "run" "unit" 4 frontierDigest "passed")) |> unwrap
+        let checkpointStart =
+            LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [] [] [ proof ] [] before
+                (draft 3 "synthetic-evidence-checkpoint" "started" "2026-09-04T08:04:00Z" "null" "{\"status\":\"pending\"}" [ "synthetic-checkpoint:sha256:" + proof.Digest ])
+            |> unwrap
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" false true [] [] [] [ proof ] [] (before + checkpointStart) |> Result.isError)
+        Assert.True(
+            LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [] [] [ proof ] [] (before + checkpointStart)
+                (draft 4 "ordinary-after-unfinished-checkpoint" "started" "2026-09-04T08:04:30Z" "null" "{\"status\":\"pending\"}" [ "must-refuse" ])
+            |> Result.isError)
+        let receipt = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/synthetic-evidence-checkpoint" ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
+        let source, _ = receipt
+        let measured = $"""{{"status":"measured","input":10,"cached_input":4,"cache_write_input":0,"output":5,"reasoning":2,"total":15,"source":"%s{source}","session_ids":["session-1"],"turn_ids":["turn-1"]}}"""
+        let checkpointComplete =
+            LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [ receipt ] [] [ proof ] [] (before + checkpointStart)
+                (draft 3 "synthetic-evidence-checkpoint" "completed" "2026-09-04T08:05:00Z" "1" measured [ "checkpoint-complete" ])
+            |> unwrap
+        let checkpointed = before + checkpointStart + checkpointComplete
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [] [] checkpointed |> Result.isError)
+        let accepted = LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [ proof ] [] checkpointed |> unwrap
+        Assert.True(accepted.SyntheticCheckpoint.IsSome)
+        let wrongScope = SyntheticCheckpointProof.parse (bytes (proofJson "FS-GG/other" 42 "run" "unit" 4 frontierDigest "passed")) |> unwrap
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [ wrongScope ] [] checkpointed |> Result.isError)
+        let wrongFrontier = SyntheticCheckpointProof.parse (bytes (proofJson "FS-GG/.github" 42 "run" "unit" 1 (String.replicate 64 "c") "passed")) |> unwrap
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [ wrongFrontier ] [] checkpointed |> Result.isError)
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [ proof; proof ] [] checkpointed |> Result.isError)
+        Assert.True(SyntheticCheckpointProof.parse (bytes (proofJson "FS-GG/.github" 42 "run" "unit" 2 frontierDigest "failed")) |> Result.isError)
+        let tampered = SyntheticCheckpointProof.canonicalize proof |> fun value -> value.Replace("tool-version-incompatibility", "extraordinary-other")
+        Assert.True(SyntheticCheckpointProof.parse (bytes tampered) |> Result.isError)
+        let laterStart = LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [ receipt ] [] [ proof ] [] checkpointed (draft 4 "normal" "started" "2026-09-04T08:06:00Z" "null" "{\"status\":\"pending\"}" [ "normal" ]) |> unwrap
+        let laterReceipt = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/normal" ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
+        let laterSource, _ = laterReceipt
+        let laterMeasured = measured.Replace(source, laterSource)
+        let laterComplete = LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [ receipt; laterReceipt ] [] [ proof ] [] (checkpointed + laterStart) (draft 4 "normal" "completed" "2026-09-04T08:07:00Z" "1" laterMeasured [ "normal-complete" ]) |> unwrap
+        let resumed = checkpointed + laterStart + laterComplete
+        LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt; laterReceipt ] [] [ proof ] [] resumed |> unwrap |> ignore
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" true true [] [ receipt ] [] [ proof ] [] resumed |> Result.isError)
+
+    [<Fact>]
     let ``critique and feedback receipts bind current evidence`` () =
         let head = String.replicate 40 "a"
         let critique = $"""{{"schema_version":3,"cycle_id":"cycle-1","milestone":"GS2-01.1","critic":"critic-1","initial_reviewed_commit":"%s{head}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{head}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{head}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""

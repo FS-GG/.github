@@ -85,6 +85,13 @@ child lacks post-response reconciliation. A genuine unavailable result requires 
 post-completion uniqueness lookup or strict-schema failure. Repair an already-posted legacy timing reason
 with a distinct telemetry-reconciliation phase rather than editing the immutable event.
 
+For an extraordinary immutable history that neither its creating nor current toolkit can repair, the
+accountable human may authorize the first-class synthetic checkpoint described by the lifecycle reference.
+The driver binds the proof to the exact item/run/unit and frontier, declares missing provenance is not
+required and no data is reconstructed, carries passing functional verification, and appends exactly one
+checkpoint phase. Its completion is the new trusted anchor; ordinary strict processing resumes immediately.
+Never infer this authority from broad decision latitude or use it without the immutable human authorization.
+
 ## Status position line
 
 Every intermediate roadmap-driver, worker, or critic-handoff status reply must start with:

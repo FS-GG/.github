@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.84.0 — durably retain private content-addressed telemetry receipts.
+    <PackageReleaseNotes>0.85.0 — add human-authorized synthetic lifecycle checkpoints.
 
-Runtime usage collection now archives every frozen CSV in canonical per-user host state with owner-only
-permissions, atomic no-overwrite publication, digest verification, and automatic lifecycle resolution.
-New `telemetry usage archive|resolve` commands expose that boundary. Historical missing receipts can
-advance only through a typed separately reviewed irrecoverability proof; their public-event counts are
-excluded rather than reconstructed or trusted. Existing explicit `--usage` inputs remain supported.
+The first-class `fsgg.telemetry.synthetic-checkpoint/v1` API and repeatable `--synthetic-checkpoint`
+CLI input let an explicitly authorized extraordinary immutable history establish one new trusted anchor.
+Proofs bind exact item/run/unit/frontier, an immutable human issue-comment decision, explicit
+no-provenance/no-reconstruction flags, and passed functional checks. Wrong scope/frontier, reuse,
+ambiguity, tampering, and failed verification refuse; strict ordinary validation resumes after the anchor.
 
 $(FsggStandingAdvisories)
 

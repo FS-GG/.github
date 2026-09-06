@@ -220,7 +220,7 @@ def lifecycle_parity(directory: Path, session: Path, receipt_store: Path) -> tup
     shared = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--log", str(log), "--usage", str(usage),
               "--required-phase", "claim", "--required-phase", "implement", "--require-terminal"]
     expect_verdict("lifecycle validate", engine("telemetry", "lifecycle", "validate", *shared), True)
-    positive = 1
+    positive, rejected = 1, 0
     auto_shared = [value for value in shared if value not in ("--usage", str(usage))]
     auto_shared.extend(["--receipt-store", str(receipt_store)])
     auto = engine("telemetry", "lifecycle", "validate", *auto_shared)
@@ -228,6 +228,72 @@ def lifecycle_parity(directory: Path, session: Path, receipt_store: Path) -> tup
     if json.loads(auto.stdout).get("excludedUsageSources") != []:
         raise SystemExit("ordinary lifecycle validation unexpectedly excluded usage")
     positive += 1
+
+    # A first-class black-box recovery: the frontier's measured receipt is intentionally
+    # unavailable, the checkpoint replaces only that pre-frontier evidence obligation, and
+    # the ordinary phase after the new anchor remains strict.
+    extraordinary = copy.deepcopy(base)
+    extraordinary[3]["token_usage"]["source"] = "runtime-usage-csv:sha256:" + "c" * 64
+    seal(extraordinary)
+    frontier = extraordinary[-1]
+
+    def checkpoint_proof(repository: str = "FS-GG/.github", revision: int = 4,
+                         digest: str = frontier["digest"], status: str = "passed") -> dict:
+        proof = {
+            "schema": "fsgg.telemetry.synthetic-checkpoint/v1",
+            "scope": {"repository": repository, "issue": 42, "run_id": "roadmap-v2", "unit_id": "GS2-01.1"},
+            "frontier": {"revision": revision, "digest": digest},
+            "reason": "tool-version-incompatibility",
+            "authorization": {"decision": "authorize-synthetic-checkpoint", "by": "human/accountable-owner",
+                              "url": "https://github.com/FS-GG/.github/issues/42#issuecomment-123"},
+            "missing_provenance_required": False,
+            "reconstruct_missing_data": False,
+            "functional_verification": [{"name": "functional-route", "status": status,
+                                         "evidence": ["sha256:" + "b" * 64]}],
+        }
+        proof["digest"] = hashlib.sha256(json.dumps(proof, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return proof
+
+    proof = checkpoint_proof()
+    checkpoint_start = copy.deepcopy(base[2])
+    checkpoint_start.update({"phase_order": 3, "phase": "synthetic-evidence-checkpoint", "event": "started",
+                             "at": "2026-09-04T08:05:00Z", "evidence": ["synthetic-checkpoint:sha256:" + proof["digest"]],
+                             "actual_minutes": None, "token_usage": {"status": "pending"}})
+    checkpoint_complete = copy.deepcopy(base[3])
+    checkpoint_complete.update({"phase_order": 3, "phase": "synthetic-evidence-checkpoint", "event": "completed",
+                                "at": "2026-09-04T08:06:00Z", "evidence": ["checkpoint-complete"],
+                                "actual_minutes": 1, "token_usage": {"status": "unavailable", "reason": "post-completion collector schema validation failed: total field missing", "source": "collector"}})
+    normal_start = copy.deepcopy(checkpoint_start)
+    normal_start.update({"phase_order": 4, "phase": "normal", "at": "2026-09-04T08:06:00Z", "evidence": ["normal"]})
+    normal_complete = copy.deepcopy(checkpoint_complete)
+    normal_complete.update({"phase_order": 4, "phase": "normal", "at": "2026-09-04T08:07:00Z", "evidence": ["normal-complete"]})
+    extraordinary.extend([checkpoint_start, checkpoint_complete, normal_start, normal_complete])
+    seal(extraordinary)
+    extraordinary_log = directory / "lifecycle-synthetic-checkpoint.jsonl"
+    extraordinary_log.write_text("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for row in extraordinary) + "\n", encoding="utf-8")
+    proof_path = directory / "synthetic-checkpoint.json"
+    proof_path.write_text(json.dumps(proof, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    checkpoint_args = ["--run", "roadmap-v2", "--unit", "GS2-01.1", "--log", str(extraordinary_log),
+                       "--synthetic-checkpoint", str(proof_path), "--required-phase", "normal",
+                       "--require-terminal", "--require-reconciled"]
+    recovered = engine("telemetry", "lifecycle", "validate", *checkpoint_args)
+    expect_verdict("synthetic checkpoint resumes strict lifecycle", recovered, True)
+    if json.loads(recovered.stdout).get("syntheticCheckpoint") != extraordinary[5]["digest"]:
+        raise SystemExit("synthetic checkpoint did not expose its new trusted anchor")
+    positive += 1
+    expect_verdict("synthetic checkpoint requires authorization proof",
+                   engine("telemetry", "lifecycle", "validate", *[arg for arg in checkpoint_args if arg not in ("--synthetic-checkpoint", str(proof_path))]), False)
+    rejected += 1
+    expect_verdict("synthetic checkpoint proof is one-time and non-ambiguous",
+                   engine("telemetry", "lifecycle", "validate", *checkpoint_args, "--synthetic-checkpoint", str(proof_path)), False)
+    rejected += 1
+
+    wrong_scope = checkpoint_proof(repository="FS-GG/other")
+    wrong_scope_path = directory / "synthetic-checkpoint-wrong-scope.json"
+    wrong_scope_path.write_text(json.dumps(wrong_scope, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    expect_verdict("synthetic checkpoint scope is exact",
+                   engine("telemetry", "lifecycle", "validate", *[wrong_scope_path.as_posix() if arg == proof_path.as_posix() else arg for arg in checkpoint_args]), False)
+    rejected += 1
 
     chain_fields = {"sequence", "revision", "previous_digest", "digest"}
     existing = directory / "existing.jsonl"
@@ -280,7 +346,6 @@ def lifecycle_parity(directory: Path, session: Path, receipt_store: Path) -> tup
         "active terminal": lambda rows: rows.pop(),
         "missing required phase": lambda rows: None,
     }
-    rejected = 0
     for name, mutate in mutations.items():
         rows = copy.deepcopy(base)
         mutate(rows)

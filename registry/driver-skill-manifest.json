@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "bb55644fbfc518dc58703ce5ce0c513ff5b30234718e730d3503df93a722230d",
-      "tree-sha256": "1e2ceed49afc058d7a3224da0dc9afac267dd4f258c777208aedf48a2b856868",
+      "sha256": "2dcddf80d3cdbbf5248d0b3e21b42fb8e5994078ea3edb3e09ae1fdeac829b83",
+      "tree-sha256": "518a2b1b26736e9d003ca0c97128c16173b3c111d05b31e068843dfd44b4be19",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "bb55644fbfc518dc58703ce5ce0c513ff5b30234718e730d3503df93a722230d",
+          "sha256": "2dcddf80d3cdbbf5248d0b3e21b42fb8e5994078ea3edb3e09ae1fdeac829b83",
           "executable": false
         },
         {
@@ -39,7 +39,7 @@
         },
         {
           "path": "references/lifecycle-log.md",
-          "sha256": "f08224d49ea0b3741d4562733bc326275af4aae500eff8df6ffa47f4e24d6ee6",
+          "sha256": "86452edc1985dd73b77ce06c1623306100ddc7fd415127d7b2394f7d32103700",
           "executable": false
         },
         {
@@ -329,12 +329,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "828d0923bfd5b0f73042176967d7be8d16951d0a6dbd54b5de2bc68e9dbd3589",
-      "tree-sha256": "42949d388901a335e09a28bc3bf914ccf6c76a2ccbc950462bd39da47eeda47c",
+      "sha256": "0dee567b561459605b988952caea38dbca893dac684931761fde3a004fd2593a",
+      "tree-sha256": "73e2b1989db9aa19070ac8174f36cce269e0c172c365fc9c86f79c29e0e0a3da",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "828d0923bfd5b0f73042176967d7be8d16951d0a6dbd54b5de2bc68e9dbd3589",
+          "sha256": "0dee567b561459605b988952caea38dbca893dac684931761fde3a004fd2593a",
           "executable": false
         },
         {

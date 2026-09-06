@@ -85,7 +85,14 @@ GitHub-comment order, seals the SHA-256 chain, and resolves immutable receipts f
 inputs first and then the canonical store. A repeatable `--legacy-proof` accepts only the closed,
 separately-reviewed irrecoverability schema and excludes the missing event from accounting; it never
 reconstructs a CSV or trusts counts copied from public lifecycle JSON. Optional `--history-report` receipts
-remain supported.
+remain supported. Extraordinary histories that cannot be repaired under the creating or current tool
+version use the first-class repeatable `--synthetic-checkpoint <proof.json>` input. The closed
+`fsgg.telemetry.synthetic-checkpoint/v1` proof binds the canonical repository/issue/run/unit and exact
+frontier revision/digest to an immutable human issue-comment authorization, explicitly sets
+`missing_provenance_required:false` and `reconstruct_missing_data:false`, and carries only passed functional
+checks with immutable evidence. Exactly one adjacent `synthetic-evidence-checkpoint` phase consumes the
+proof digest and establishes a new trusted anchor; validation remains strict after that anchor and rejects
+missing, wrong-scope, stale-frontier, reused, ambiguous, tampered, or functionally failing checkpoints.
 `telemetry summarize`, `telemetry critique validate`, and `telemetry feedback validate` are read-only.
 `telemetry qualification validate|run` validates or executes the closed exact-checkout qualification
 contract. `telemetry qualification obligation render|verify` emits the existing guarded, current-head

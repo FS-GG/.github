@@ -55,7 +55,7 @@ module TelemetryApplication =
         | "telemetry" :: "lifecycle" :: action :: args
             when action = "export-comments" || action = "seal-successor" || action = "validate" ->
             shape
-                [ "--run"; "--unit"; "--comments"; "--draft"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--existing"; "--log"; "--output"; "--required-phase" ]
+                [ "--run"; "--unit"; "--comments"; "--draft"; "--usage"; "--legacy-proof"; "--synthetic-checkpoint"; "--receipt-store"; "--history-report"; "--existing"; "--log"; "--output"; "--required-phase" ]
                 [ "--require-terminal"; "--require-reconciled" ] args
         | "telemetry" :: "critique" :: "validate" :: args ->
             shape [ "--cycle"; "--artifact"; "--head" ] [] args
@@ -206,6 +206,7 @@ module TelemetryApplication =
 
     let private findings values = values |> List.map string
     let private legacyProofs args = options "--legacy-proof" args |> List.map (read >> LegacyReceiptProof.parse)
+    let private syntheticProofs args = options "--synthetic-checkpoint" args |> List.map (read >> SyntheticCheckpointProof.parse)
     let private usageReports args lifecycleText =
         let explicit = options "--usage" args |> List.map (fun path -> RuntimeUsage.parseCsvReceipt (read path))
         let explicitReports = explicit |> List.choose Result.toOption
@@ -235,8 +236,12 @@ module TelemetryApplication =
                         let lifecycleText = File.ReadAllText path
                         let usageErrors, reports = usageReports args lifecycleText
                         let proofs = legacyProofs args
-                        let proofErrors = proofs |> List.collect (function Error errors -> errors | _ -> [])
+                        let checkpoints = syntheticProofs args
+                        let proofErrors =
+                            (proofs |> List.collect (function Error errors -> errors | _ -> []))
+                            @ (checkpoints |> List.collect (function Error errors -> errors | _ -> []))
                         let acceptedProofs = proofs |> List.choose Result.toOption
+                        let acceptedCheckpoints = checkpoints |> List.choose Result.toOption
                         let history =
                             match option "--history-report" args with
                             | None -> Ok []
@@ -245,9 +250,9 @@ module TelemetryApplication =
                         match usageErrors @ proofErrors @ historyErrors with
                         | errors when not errors.IsEmpty -> fail "telemetry lifecycle" errors
                         | _ ->
-                            match LifecycleTelemetry.validateWithEvidenceAndLegacy runId unitId (has "--require-terminal" args) (has "--require-reconciled" args) (options "--required-phase" args) reports acceptedProofs (history |> Result.defaultValue []) lifecycleText with
+                            match LifecycleTelemetry.validateWithEvidenceAndCheckpoints runId unitId (has "--require-terminal" args) (has "--require-reconciled" args) (options "--required-phase" args) reports acceptedProofs acceptedCheckpoints (history |> Result.defaultValue []) lifecycleText with
                             | Error values -> fail "telemetry lifecycle" (findings values)
-                            | Ok result -> printfn "{\"schema\":\"fsgg.telemetry.lifecycle-validation/1\",\"events\":%d,\"completedPhases\":%s,\"activePhases\":%s,\"blockedPhases\":%s,\"excludedUsageSources\":%s}" result.EventCount (JsonSerializer.Serialize result.CompletedPhases) (JsonSerializer.Serialize result.ActivePhases) (JsonSerializer.Serialize result.BlockedPhases) (JsonSerializer.Serialize result.ExcludedUsageSources); green
+                            | Ok result -> printfn "{\"schema\":\"fsgg.telemetry.lifecycle-validation/1\",\"events\":%d,\"completedPhases\":%s,\"activePhases\":%s,\"blockedPhases\":%s,\"excludedUsageSources\":%s,\"syntheticCheckpoint\":%s}" result.EventCount (JsonSerializer.Serialize result.CompletedPhases) (JsonSerializer.Serialize result.ActivePhases) (JsonSerializer.Serialize result.BlockedPhases) (JsonSerializer.Serialize result.ExcludedUsageSources) (JsonSerializer.Serialize result.SyntheticCheckpoint); green
                 | "seal-successor" ->
                     match required "--draft" args with
                     | Error reason -> fail "telemetry lifecycle" [ reason ]
@@ -256,12 +261,16 @@ module TelemetryApplication =
                         let draftText = File.ReadAllText draft
                         let usageErrors, reports = usageReports args (existing + "\n" + draftText)
                         let proofs = legacyProofs args
-                        let proofErrors = proofs |> List.collect (function Error errors -> errors | _ -> [])
+                        let checkpoints = syntheticProofs args
+                        let proofErrors =
+                            (proofs |> List.collect (function Error errors -> errors | _ -> []))
+                            @ (checkpoints |> List.collect (function Error errors -> errors | _ -> []))
                         let acceptedProofs = proofs |> List.choose Result.toOption
+                        let acceptedCheckpoints = checkpoints |> List.choose Result.toOption
                         let history = option "--history-report" args |> Option.map (File.ReadAllText >> LifecycleTelemetry.parseHistoryCsv) |> Option.defaultValue (Ok [])
                         let historyErrors = match history with Error errors -> errors | _ -> []
                         if not (usageErrors @ proofErrors @ historyErrors).IsEmpty then fail "telemetry lifecycle" (usageErrors @ proofErrors @ historyErrors) else
-                        match LifecycleTelemetry.sealSuccessorWithEvidenceAndLegacy runId unitId reports acceptedProofs (history |> Result.defaultValue []) existing draftText with Error values -> fail "telemetry lifecycle" (findings values) | Ok value -> writeOrPrint args value; green
+                        match LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints runId unitId reports acceptedProofs acceptedCheckpoints (history |> Result.defaultValue []) existing draftText with Error values -> fail "telemetry lifecycle" (findings values) | Ok value -> writeOrPrint args value; green
                 | "export-comments" ->
                     match required "--comments" args with
                     | Error reason -> fail "telemetry lifecycle" [ reason ]
@@ -552,8 +561,8 @@ module TelemetryApplication =
         | "telemetry" :: "lifecycle" :: action :: args ->
             let valueOptions, switches =
                 match action with
-                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--required-phase" ], [ "--require-terminal"; "--require-reconciled" ]
-                | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--output" ], []
+                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--legacy-proof"; "--synthetic-checkpoint"; "--receipt-store"; "--history-report"; "--required-phase" ], [ "--require-terminal"; "--require-reconciled" ]
+                | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--legacy-proof"; "--synthetic-checkpoint"; "--receipt-store"; "--history-report"; "--output" ], []
                 | "export-comments" -> [ "--run"; "--unit"; "--comments"; "--output" ], []
                 | _ -> [], []
             Some(validated "telemetry lifecycle" valueOptions switches args (lifecycle action))
