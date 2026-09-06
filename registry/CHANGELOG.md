@@ -19,6 +19,22 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-07** — **coordination coherent set `github:0.85.2` published; registry reconciliation**
+  ([.github#3289](https://github.com/FS-GG/.github/issues/3289), source
+  [.github#3286](https://github.com/FS-GG/.github/issues/3286), release execution
+  [.github#3288](https://github.com/FS-GG/.github/issues/3288),
+  [promotion 34065585229](https://github.com/FS-GG/.github/actions/runs/34065585229),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.85.2)):
+  advances the observed package frontier from 0.85.1 to 0.85.2. Canonical saga 34064224378
+  and exact-source component runs 34064356907/34064357949/34064358969 published and
+  verified both feeds. After the nested-dispatch observer defect tracked by #3279, exact-source
+  tag-push recovery 34064045804 attempt 2 emitted the canonical observer; promotion 34065585229
+  sealed the set. Both feeds serve all three members with matching normalized payload hashes.
+  Source `e94f7da34e2c3792a2c532a4969123fd26fd601b`; content
+  `sha256:3fb04e68d9b90dff5d37f3ad9d0533346cf753444effdb6de5721191557d58fa`;
+  manifest `sha256:1f1150c77e87e513ec0e236f477b735d8c8fdbf2eb857f48c6aa7ee1bdc4cd7d`;
+  stable channel `sha256:a45a58c54101d184e85095069734ea391f511cb3b392468043ad3b0e46c85edb`.
+
 - **2026-09-06** — **coordination coherent set `github:0.85.1` published; registry reconciliation**
   ([.github#3280](https://github.com/FS-GG/.github/issues/3280), source
   [.github#3274](https://github.com/FS-GG/.github/issues/3274), release execution
