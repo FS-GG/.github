@@ -798,9 +798,9 @@ module Delivery =
         && List.forall structurallyCurrent obligations
         && (obligations |> List.filter (fun obligation -> obligation.Kind = "acceptance-receipt") |> List.length = 1)
 
-    /// Canonical closing linkage is the ordinary authority. The sole exception is the exact live
-    /// single-item two-phase receipt shape; callers at a write boundary must invoke this over freshly
-    /// re-read linkage, obligation, claim, issue, and board facts rather than an inspected snapshot.
+    // Canonical closing linkage is the ordinary authority. The sole exception is the exact live
+    // single-item two-phase receipt shape; callers at a write boundary must invoke this over freshly
+    // re-read linkage, obligation, claim, issue, and board facts rather than an inspected snapshot.
     let landingLinkageAuthorized snapshot =
         snapshot.ClosingLinkageCanonical || twoPhaseReceiptLanding snapshot
 
