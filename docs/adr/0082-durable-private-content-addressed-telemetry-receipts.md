@@ -1,9 +1,10 @@
 # ADR-0082: Durable private content-addressed telemetry receipts
 
-Status: Accepted  
-Date: 2026-09-06  
-Decision owners: FS-GG/.github#3259  
-Supersedes no prior ADR; completes the retention boundary left open by FS-GG/.github#3199.
+- **Status:** Accepted
+- **Date:** 2026-09-06
+- **Decision owners:** FS-GG/.github#3259
+- **Amends:** No prior ADR; completes the retention boundary left open by FS-GG/.github#3199.
+- **Affects:** lifecycle telemetry collection, sealing, validation, and recovery
 
 ## Context
 
