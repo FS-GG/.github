@@ -1265,7 +1265,8 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   Exact-head [independent confirmation](https://github.com/FS-GG/FS.GG.Coordination/pull/307#issuecomment-5558086307)
   and [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/307#issuecomment-5558107267)
   preceded protected merge `4ad66d094092cb1ee858b6cb76f60d6d39e17079`; exact-main Bootstrap run
-  `34022719859` and CodeQL run `34022720160` succeeded, and #304 read back closed/Done.
+  `34022719859` and CodeQL run `34022720160` succeeded, and #304 read back closed/Done. The docs-only
+  acceptance projection is owned by [`.github#3269`](https://github.com/FS-GG/.github/issues/3269).
 - [ ] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
   payload/API disagreement, and least privilege; events schedule reconciliation but never directly mutate
   derived state.
