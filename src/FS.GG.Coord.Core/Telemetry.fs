@@ -461,6 +461,118 @@ module LegacyReceiptProof =
             if errors.IsEmpty then Ok proof else Error errors
         with error -> Error [ $"invalid legacy receipt proof: %s{error.Message}" ]
 
+module SyntheticCheckpointProof =
+    [<Literal>]
+    let Schema = "fsgg.telemetry.synthetic-checkpoint/v1"
+
+    type FunctionalCheck =
+        { Name: string
+          Evidence: string list }
+
+    type Proof =
+        { Repository: string
+          Issue: int
+          RunId: string
+          UnitId: string
+          FrontierRevision: int
+          FrontierDigest: string
+          Reason: string
+          AuthorizedBy: string
+          AuthorizationUrl: string
+          FunctionalVerification: FunctionalCheck list
+          Digest: string }
+
+    let private strings (values: string list) =
+        JsonArray(values |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> Array.ofList)
+
+    let private node (proof: Proof) includeDigest =
+        let scope = JsonObject()
+        scope["repository"] <- JsonValue.Create proof.Repository
+        scope["issue"] <- JsonValue.Create proof.Issue
+        scope["run_id"] <- JsonValue.Create proof.RunId
+        scope["unit_id"] <- JsonValue.Create proof.UnitId
+        let frontier = JsonObject()
+        frontier["revision"] <- JsonValue.Create proof.FrontierRevision
+        frontier["digest"] <- JsonValue.Create proof.FrontierDigest
+        let authorization = JsonObject()
+        authorization["decision"] <- JsonValue.Create "authorize-synthetic-checkpoint"
+        authorization["by"] <- JsonValue.Create proof.AuthorizedBy
+        authorization["url"] <- JsonValue.Create proof.AuthorizationUrl
+        let checks =
+            proof.FunctionalVerification
+            |> List.map (fun check ->
+                let value = JsonObject()
+                value["name"] <- JsonValue.Create check.Name
+                value["status"] <- JsonValue.Create "passed"
+                value["evidence"] <- strings check.Evidence
+                value :> JsonNode)
+            |> Array.ofList
+            |> JsonArray
+        let value = JsonObject()
+        value["schema"] <- JsonValue.Create Schema
+        value["scope"] <- scope
+        value["frontier"] <- frontier
+        value["reason"] <- JsonValue.Create proof.Reason
+        value["authorization"] <- authorization
+        value["missing_provenance_required"] <- JsonValue.Create false
+        value["reconstruct_missing_data"] <- JsonValue.Create false
+        value["functional_verification"] <- checks
+        if includeDigest then value["digest"] <- JsonValue.Create proof.Digest
+        value
+
+    let canonicalize proof = TelemetryJson.canonical (node proof true) + "\n"
+
+    let parse (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory bytes)
+            let root = document.RootElement
+            let exact expected (value: JsonElement) = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq = Set.ofList expected
+            let scope, frontier, authorization = root.GetProperty "scope", root.GetProperty "frontier", root.GetProperty "authorization"
+            let checks =
+                root.GetProperty("functional_verification").EnumerateArray()
+                |> Seq.map (fun value ->
+                    { Name = value.GetProperty("name").GetString()
+                      Evidence = value.GetProperty("evidence").EnumerateArray() |> Seq.map _.GetString() |> List.ofSeq }, value)
+                |> List.ofSeq
+            let proof =
+                { Repository = scope.GetProperty("repository").GetString()
+                  Issue = scope.GetProperty("issue").GetInt32()
+                  RunId = scope.GetProperty("run_id").GetString()
+                  UnitId = scope.GetProperty("unit_id").GetString()
+                  FrontierRevision = frontier.GetProperty("revision").GetInt32()
+                  FrontierDigest = frontier.GetProperty("digest").GetString()
+                  Reason = root.GetProperty("reason").GetString()
+                  AuthorizedBy = authorization.GetProperty("by").GetString()
+                  AuthorizationUrl = authorization.GetProperty("url").GetString()
+                  FunctionalVerification = checks |> List.map fst
+                  Digest = root.GetProperty("digest").GetString() }
+            let calculated = node proof false |> TelemetryJson.canonical |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256
+            let immutable (value: string) =
+                Regex.IsMatch(value, "^https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*$", RegexOptions.CultureInvariant)
+            let evidence (value: string) =
+                immutable value || Regex.IsMatch(value, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+            let errors =
+                [ if root.ValueKind <> JsonValueKind.Object || not (exact [ "schema"; "scope"; "frontier"; "reason"; "authorization"; "missing_provenance_required"; "reconstruct_missing_data"; "functional_verification"; "digest" ] root) then
+                      yield "synthetic checkpoint proof has missing or unexpected fields"
+                  if root.GetProperty("schema").GetString() <> Schema then yield $"synthetic checkpoint proof schema must be %s{Schema}"
+                  if not (exact [ "repository"; "issue"; "run_id"; "unit_id" ] scope) || not (Regex.IsMatch(proof.Repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) || proof.Issue <= 0 || not (Regex.IsMatch(proof.RunId, "^[a-z0-9][a-z0-9._-]*$")) || not (Regex.IsMatch(proof.UnitId, "^[A-Za-z0-9][A-Za-z0-9._-]*$")) then
+                      yield "synthetic checkpoint scope is invalid"
+                  if not (exact [ "revision"; "digest" ] frontier) || proof.FrontierRevision <= 0 || not (Regex.IsMatch(proof.FrontierDigest, "^[0-9a-f]{64}$")) then
+                      yield "synthetic checkpoint frontier is invalid"
+                  if not (Set.contains proof.Reason (Set.ofList [ "missing-private-evidence"; "malformed-reconciliation"; "tool-version-incompatibility"; "extraordinary-other" ])) then
+                      yield "synthetic checkpoint reason is invalid"
+                  if not (exact [ "decision"; "by"; "url" ] authorization) || authorization.GetProperty("decision").GetString() <> "authorize-synthetic-checkpoint" || String.IsNullOrWhiteSpace proof.AuthorizedBy || not (immutable proof.AuthorizationUrl) then
+                      yield "synthetic checkpoint requires immutable human authorization"
+                  if root.GetProperty("missing_provenance_required").ValueKind <> JsonValueKind.False || root.GetProperty("reconstruct_missing_data").ValueKind <> JsonValueKind.False then
+                      yield "synthetic checkpoint must explicitly decline missing provenance and reconstruction"
+                  if checks.IsEmpty then yield "synthetic checkpoint requires functional verification"
+                  for check, raw in checks do
+                      if not (exact [ "name"; "status"; "evidence" ] raw) || String.IsNullOrWhiteSpace check.Name || raw.GetProperty("status").GetString() <> "passed" || check.Evidence.IsEmpty || check.Evidence |> List.exists (evidence >> not) then
+                          yield "synthetic checkpoint functional verification must be passed with immutable evidence"
+                  if proof.Digest <> calculated then yield "synthetic checkpoint proof digest does not bind its canonical content" ]
+            if errors.IsEmpty then Ok proof else Error errors
+        with error -> Error [ $"invalid synthetic checkpoint proof: %s{error.Message}" ]
+
 module LifecycleTelemetry =
     type Transition = Started | Completed | Blocked | Resumed
     type Finding =
@@ -468,7 +580,13 @@ module LifecycleTelemetry =
         | InvalidTransition of phase: string * reason: string
         | EditedAuthorityComment of commentId: int64
         | RejectedFork of winningCommentId: int64 * rejectedCommentId: int64
-    type Validation = { EventCount: int; CompletedPhases: string list; ActivePhases: string list; BlockedPhases: string list; ExcludedUsageSources: string list }
+    type Validation =
+        { EventCount: int
+          CompletedPhases: string list
+          ActivePhases: string list
+          BlockedPhases: string list
+          ExcludedUsageSources: string list
+          SyntheticCheckpoint: string option }
 
     let private digest (value: JsonObject) =
         let clone = value.DeepClone().AsObject()
@@ -632,7 +750,15 @@ module LifecycleTelemetry =
         let byState value = states |> Seq.choose (fun pair -> let status, _, _, _, _, _ = pair.Value in if status = value then Some pair.Key else None) |> Seq.sort |> List.ofSeq
         let completed, active, blocked = byState "completed", byState "active", byState "blocked"
         if requireTerminal && (not active.IsEmpty || not blocked.IsEmpty || states.Count <> completed.Length) then findings.Add(InvalidEvent(events.Length, "terminal log has active, blocked, or incomplete phases"))
-        if findings.Count = 0 then Ok { EventCount = events.Length; CompletedPhases = completed; ActivePhases = active; BlockedPhases = blocked; ExcludedUsageSources = [] } else Error(List.ofSeq findings)
+        if findings.Count = 0 then
+            Ok
+                { EventCount = events.Length
+                  CompletedPhases = completed
+                  ActivePhases = active
+                  BlockedPhases = blocked
+                  ExcludedUsageSources = []
+                  SyntheticCheckpoint = None }
+        else Error(List.ofSeq findings)
 
     type HistoryRow = { Phase: string; ToolingFingerprint: string; ActualMinutes: int; Source: string }
 
@@ -661,22 +787,66 @@ module LifecycleTelemetry =
         |> List.filter (fun source -> Regex.IsMatch(source, "^runtime-usage-csv:sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant))
         |> List.distinct
 
-    let private validateWithEvidenceInternal (legacyProofs: LegacyReceiptProof.Proof list) runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
+    let private syntheticCheckpointContext runId unitId (proofs: SyntheticCheckpointProof.Proof list) (events: JsonObject list) =
+        let checkpointPhase = "synthetic-evidence-checkpoint"
+        let checkpointEvents =
+            events
+            |> List.indexed
+            |> List.filter (fun (_, item) -> stringAt "phase" item = checkpointPhase)
+        match proofs, checkpointEvents with
+        | [], [] -> Ok None
+        | [], _ -> Error [ InvalidEvent(0, "synthetic checkpoint event has no human authorization proof") ]
+        | _ :: _ :: _, _ -> Error [ InvalidEvent(0, "multiple synthetic checkpoint proofs are ambiguous") ]
+        | [ _ ], [] -> Error [ InvalidEvent(0, "synthetic checkpoint proof is unconsumed") ]
+        | [ proof ], ((startedIndex, started) :: tail) ->
+            let line = startedIndex + 1
+            let evidence =
+                (started["evidence"] :?> JsonArray) |> Seq.map _.GetValue<string>() |> List.ofSeq
+            let identity = started["item"] :?> JsonObject
+            let expectedUrlPrefix = $"https://github.com/%s{proof.Repository}/issues/%d{proof.Issue}#issuecomment-"
+            let errors =
+                [ if stringAt "event" started <> "started" then
+                      yield InvalidEvent(line, "synthetic checkpoint must begin with a started event")
+                  if line <> proof.FrontierRevision + 1 || stringAt "previous_digest" started <> proof.FrontierDigest then
+                      yield InvalidEvent(line, "synthetic checkpoint does not immediately extend its authorized frontier")
+                  if evidence <> [ "synthetic-checkpoint:sha256:" + proof.Digest ] then
+                      yield InvalidEvent(line, "synthetic checkpoint must consume exactly one authorization proof digest")
+                  if proof.RunId <> runId || proof.UnitId <> unitId || stringAt "repo" identity <> proof.Repository || intAt "number" identity <> proof.Issue then
+                      yield InvalidEvent(line, "synthetic checkpoint authorization scope does not match the lifecycle")
+                  if not (proof.AuthorizationUrl.StartsWith(expectedUrlPrefix, StringComparison.Ordinal)) then
+                      yield InvalidEvent(line, "synthetic checkpoint authorization URL does not belong to the scoped issue") ]
+            if not errors.IsEmpty then Error errors else
+            match tail with
+            | [] -> Ok(Some(proof, proof.FrontierRevision, line, None))
+            | [ (completedIndex, completed) ] when stringAt "event" completed = "completed" && completedIndex + 1 = line + 1 ->
+                Ok(Some(proof, proof.FrontierRevision, completedIndex + 1, Some(stringAt "digest" completed)))
+            | _ -> Error [ InvalidEvent(line, "synthetic checkpoint is reused or has an ambiguous event set") ]
+
+    let private validateWithEvidenceInternal (legacyProofs: LegacyReceiptProof.Proof list) (syntheticProofs: SyntheticCheckpointProof.Proof list) runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
         match validate runId unitId requireTerminal requiredPhases jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let reports = Map.ofList usageReports
             let findings = ResizeArray<Finding>()
             let events = objects jsonLines |> List.choose (function Ok value -> Some value | _ -> None)
+            let checkpoint = syntheticCheckpointContext runId unitId syntheticProofs events
+            match checkpoint with Error errors -> errors |> List.iter findings.Add | Ok _ -> ()
+            let frontier = checkpoint |> Result.toOption |> Option.flatten |> Option.map (fun (_, revision, _, _) -> revision) |> Option.defaultValue 0
             let usedProofDigests = Collections.Generic.HashSet<string>()
-            let proofGroups = legacyProofs |> List.groupBy (fun proof -> proof.MissingReceiptSource, proof.OriginalEventDigest)
+            let applicableLegacyProofs =
+                legacyProofs
+                |> List.filter (fun proof ->
+                    events
+                    |> List.tryFindIndex (fun item -> stringAt "digest" item = proof.OriginalEventDigest)
+                    |> Option.exists (fun index -> index + 1 > frontier))
+            let proofGroups = applicableLegacyProofs |> List.groupBy (fun proof -> proof.MissingReceiptSource, proof.OriginalEventDigest)
             proofGroups |> List.iter (fun (_, proofs) -> if proofs.Length <> 1 then findings.Add(InvalidEvent(0, "legacy receipt proof is duplicated")))
             let evidenceValues (item: JsonObject) =
                 (item["evidence"] :?> JsonArray) |> Seq.map _.GetValue<string>() |> Set.ofSeq
             let legacyProofFor index (item: JsonObject) source =
                 let eventDigest = stringAt "digest" item
                 let authority = item["authority"] :?> JsonObject
-                legacyProofs
+                applicableLegacyProofs
                 |> List.tryFind (fun proof ->
                     proof.MissingReceiptSource = source
                     && proof.OriginalEventDigest = eventDigest
@@ -686,7 +856,10 @@ module LifecycleTelemetry =
                         |> List.exists (fun later ->
                             stringAt "phase" later = "legacy-receipt-recovery-" + stringAt "phase" item
                             && evidenceValues later |> Set.contains ("legacy-receipt-proof:sha256:" + proof.Digest))))
-            events |> List.iteri (fun index item ->
+            events
+            |> List.indexed
+            |> List.filter (fun (index, _) -> index + 1 > frontier)
+            |> List.iter (fun (index, item) ->
                 let line = index + 1
                 let phase = stringAt "phase" item
                 let toolingFingerprint = TelemetryJson.canonical item["tooling"] |> Encoding.UTF8.GetBytes |> TelemetryJson.sha256
@@ -732,23 +905,33 @@ module LifecycleTelemetry =
                             | :? JsonObject as tool when stringAt "status" tool = "recorded" -> selected |> List.iter (fun row -> if stringAt "version" tool <> observed row then findings.Add(InvalidEvent(line, $"tooling.%s{name}.version does not match usage report")))
                             | _ -> ()
                 | _ -> ())
-            legacyProofs
+            applicableLegacyProofs
             |> List.iter (fun proof ->
                 if not (usedProofDigests.Contains proof.Digest) then
                     findings.Add(InvalidEvent(0, "legacy receipt proof is unconsumed or its canonical receipt is still available")))
             if findings.Count = 0 then
-                Ok { validation with ExcludedUsageSources = legacyProofs |> List.map _.MissingReceiptSource |> List.distinct |> List.sort }
+                let anchor = checkpoint |> Result.toOption |> Option.flatten |> Option.bind (fun (_, _, _, digest) -> digest)
+                Ok
+                    { validation with
+                        ExcludedUsageSources = applicableLegacyProofs |> List.map _.MissingReceiptSource |> List.distinct |> List.sort
+                        SyntheticCheckpoint = anchor }
             else Error(List.ofSeq findings)
 
     let validateWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        validateWithEvidenceInternal [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        validateWithEvidenceInternal [] [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
-    let private validateReconciledInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        match validateWithEvidenceInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines with
+    let private validateReconciledInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines =
+        match validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let events = objects jsonLines |> List.choose Result.toOption
             let findings = ResizeArray<Finding>()
+            let checkpointLine =
+                syntheticCheckpointContext runId unitId syntheticProofs events
+                |> Result.toOption
+                |> Option.flatten
+                |> Option.map (fun (_, _, line, _) -> line)
+                |> Option.defaultValue 0
             let supersessionPrefix = "supersedes-lifecycle-digest:"
             let recoveryPrefix = "telemetry-reconciliation-"
             let eventDigest (item: JsonObject) = stringAt "digest" item
@@ -760,6 +943,7 @@ module LifecycleTelemetry =
                 events
                 |> List.indexed
                 |> List.choose (fun (index, item) ->
+                    if index + 1 <= checkpointLine then None else
                     let phase = stringAt "phase" item
                     if not (phase.StartsWith(recoveryPrefix, StringComparison.Ordinal)) then None
                     elif stringAt "event" item = "started" || stringAt "event" item = "resumed" then None
@@ -803,6 +987,7 @@ module LifecycleTelemetry =
             let requiresRecovery reason = not (isGenuinePostCompletionFailure reason)
             events
             |> List.indexed
+            |> List.filter (fun (index, _) -> index + 1 > checkpointLine)
             |> List.iter (fun (index, item) ->
                 match item["token_usage"] with
                 | :? JsonObject as usage when stringAt "status" usage = "unavailable" && requiresRecovery (stringAt "reason" usage) ->
@@ -814,34 +999,17 @@ module LifecycleTelemetry =
             if findings.Count = 0 then Ok validation else Error(List.ofSeq findings)
 
     let validateReconciledWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        validateReconciledInternal [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        validateReconciledInternal [] [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
     let validateWithEvidenceAndLegacy runId unitId requireTerminal requireReconciled requiredPhases usageReports legacyProofs history jsonLines =
-        if requireReconciled then validateReconciledInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
-        else validateWithEvidenceInternal legacyProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        if requireReconciled then validateReconciledInternal legacyProofs [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        else validateWithEvidenceInternal legacyProofs [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
-    let sealSuccessorWithEvidence (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
-        let seal legacyProofs =
-            match objects existingJsonLines, objects draftJson with
-            | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
-                let suppliedChainFields = [ "sequence"; "revision"; "previous_digest"; "digest" ] |> List.filter draft.ContainsKey
-                if not suppliedChainFields.IsEmpty then
-                    let fieldNames = String.concat ", " suppliedChainFields
-                    Error [ InvalidEvent(1, $"successor draft must omit chain-owned fields: %s{fieldNames}") ]
-                else
-                    let current = existing |> List.choose (function Ok value -> Some value | _ -> None)
-                    let revision = current.Length + 1
-                    draft["sequence"] <- JsonValue.Create revision
-                    draft["revision"] <- JsonValue.Create revision
-                    draft["previous_digest"] <- match current |> List.tryLast with Some item -> JsonValue.Create(stringAt "digest" item) | None -> null
-                    draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
-                    draft["digest"] <- JsonValue.Create(digest draft)
-                    let rendered = TelemetryJson.canonical draft
-                    match validateWithEvidenceInternal legacyProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
-            | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
-        seal []
+    let validateWithEvidenceAndCheckpoints runId unitId requireTerminal requireReconciled requiredPhases usageReports legacyProofs syntheticProofs history jsonLines =
+        if requireReconciled then validateReconciledInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        else validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
-    let sealSuccessorWithEvidenceAndLegacy (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (legacyProofs: LegacyReceiptProof.Proof list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
+    let private sealSuccessorInternal (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (legacyProofs: LegacyReceiptProof.Proof list) (syntheticProofs: SyntheticCheckpointProof.Proof list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
         match objects existingJsonLines, objects draftJson with
         | existing, [ Ok draft ] when existing |> List.forall Result.isOk ->
             let suppliedChainFields = [ "sequence"; "revision"; "previous_digest"; "digest" ] |> List.filter draft.ContainsKey
@@ -857,8 +1025,17 @@ module LifecycleTelemetry =
                 draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
                 draft["digest"] <- JsonValue.Create(digest draft)
                 let rendered = TelemetryJson.canonical draft
-                match validateWithEvidenceInternal legacyProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+                match validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
         | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
+
+    let sealSuccessorWithEvidence runId unitId usageReports history existingJsonLines draftJson =
+        sealSuccessorInternal runId unitId usageReports [] [] history existingJsonLines draftJson
+
+    let sealSuccessorWithEvidenceAndLegacy runId unitId usageReports legacyProofs history existingJsonLines draftJson =
+        sealSuccessorInternal runId unitId usageReports legacyProofs [] history existingJsonLines draftJson
+
+    let sealSuccessorWithEvidenceAndCheckpoints runId unitId usageReports legacyProofs syntheticProofs history existingJsonLines draftJson =
+        sealSuccessorInternal runId unitId usageReports legacyProofs syntheticProofs history existingJsonLines draftJson
 
     let sealSuccessor runId unitId existingJsonLines draftJson =
         sealSuccessorWithEvidence runId unitId [] [] existingJsonLines draftJson

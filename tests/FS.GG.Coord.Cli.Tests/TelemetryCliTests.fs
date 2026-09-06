@@ -292,6 +292,17 @@ module TelemetryCliTests =
         Assert.Contains("superseded by telemetry-reconciliation-claim with exact digest", error)
 
     [<Fact>]
+    let ``#3263 synthetic checkpoint is a first-class lifecycle CLI input`` () =
+        let accepted =
+            TelemetryApplication.validateInvocation
+                [ "telemetry"; "lifecycle"; "validate"; "--run"; "run"; "--unit"; "unit"; "--log"; "ledger.jsonl"; "--synthetic-checkpoint"; "checkpoint.json" ]
+        Assert.Equal(Some(Ok()), accepted)
+        let missing =
+            TelemetryApplication.validateInvocation
+                [ "telemetry"; "lifecycle"; "validate"; "--run"; "run"; "--unit"; "unit"; "--log"; "ledger.jsonl"; "--synthetic-checkpoint" ]
+        Assert.True(missing |> Option.exists Result.isError)
+
+    [<Fact>]
     let ``#3208 roadmap render is bounded deterministic and does not mutate its input`` () =
         let roadmap = "before\n<!-- fsgg:roadmap-unit/GS2-01.1 -->\nold\n<!-- /fsgg:roadmap-unit/GS2-01.1 -->\nafter\n"
         let digest = "sha256:" + (SHA256.HashData(Encoding.UTF8.GetBytes roadmap) |> Convert.ToHexString |> _.ToLowerInvariant())

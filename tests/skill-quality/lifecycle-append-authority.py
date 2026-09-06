@@ -15,6 +15,8 @@ SUPERVISION_CONTRACTS = {
         "while any completed child lacks this reconciliation",
         "canonical per-user",
         "separately reviewed non-counting proof",
+        "human-authorized synthetic checkpoint",
+        "functional check is terminal red",
     ],
     ROOT / ".agents/skills/pnext-item/references/lifecycle-ledger.md": [
         "Supervising a completed child",
@@ -23,6 +25,8 @@ SUPERVISION_CONTRACTS = {
         "`unavailable` reason",
         "`$FSGG_USAGE_RECEIPT_STORE`",
         "`irrecoverable-exclude-usage`",
+        "Human-authorized synthetic checkpoint",
+        "`reconstruct_missing_data:false`",
     ],
     ROOT / ".agents/skills/work-roadmap/SKILL.md": [
         "roadmap driver is the supervising parent",
@@ -31,6 +35,8 @@ SUPERVISION_CONTRACTS = {
         "post-completion uniqueness lookup",
         "repository-only copies are not retention",
         "excluded, never reconstructed",
+        "first-class synthetic checkpoint",
+        "immutable human authorization",
     ],
     ROOT / ".agents/skills/work-roadmap/references/lifecycle-log.md": [
         "supervising parent, owns every post-child seal",
@@ -39,6 +45,8 @@ SUPERVISION_CONTRACTS = {
         "telemetry-reconciliation-<phase>",
         "no-overwrite writes",
         "legacy-receipt-proof:sha256",
+        "`fsgg.telemetry.synthetic-checkpoint/v1`",
+        "new trusted anchor",
     ],
 }
 PAGINATION_WITNESSES = [

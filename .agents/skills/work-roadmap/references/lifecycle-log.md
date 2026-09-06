@@ -153,3 +153,13 @@ requires that exact target to exist, match the original phase, be unavailable, a
 Prose or a later receipt without the exact digest cannot clear it. Genuine post-completion lookup or strict
 collector failures remain unavailable only with the exact failure recorded. Validate implementation changes through the CLI test suite and the
 frozen black-box parity corpus.
+
+An extraordinary immutable history that cannot be repaired under its creating or current toolkit requires
+an explicit human-authorized `fsgg.telemetry.synthetic-checkpoint/v1` proof. Bind the exact roadmap
+item/run/unit and frontier revision/digest, immutable human issue-comment URL, closed reason, literal
+`missing_provenance_required:false` and `reconstruct_missing_data:false`, and non-empty all-passed
+functional verification. Supply it through `--synthetic-checkpoint` while sealing and validating one
+adjacent `synthetic-evidence-checkpoint` phase whose started event immediately extends the frontier and
+solely cites the proof digest. Its completion is the new trusted anchor and strict normal lifecycle rules
+resume after it. Absent authority, wrong scope/frontier, reuse, ambiguity, tampering, or failing
+verification refuses.

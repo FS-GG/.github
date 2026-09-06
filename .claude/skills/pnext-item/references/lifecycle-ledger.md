@@ -201,3 +201,19 @@ superseded only once; prose, a phase name alone, or a later usage receipt withou
 reconcile it. Genuine post-completion lookup or collector-schema failures may remain `unavailable` when
 their exact lookup/validation failure is recorded in the reason and evidence. Validate implementation changes through
 the CLI test suite and the frozen black-box parity corpus.
+
+### Human-authorized synthetic checkpoint
+
+When an immutable history is extraordinary and cannot be repaired under either its creating or current
+tool version, the accountable human may explicitly authorize one synthetic evidence/receipt checkpoint.
+Author a closed `fsgg.telemetry.synthetic-checkpoint/v1` proof binding the canonical repository, issue,
+run id, unit id, exact frontier revision/digest, a closed extraordinary reason, and an immutable human
+issue-comment URL. It must literally set `missing_provenance_required:false` and
+`reconstruct_missing_data:false`, and carry at least one functional check, all `passed`, with immutable
+GitHub-comment or `sha256:<64-hex>` evidence.
+
+Pass that proof to sealing and validation with `--synthetic-checkpoint <proof.json>`. The frontier's
+immediate successor is the started event of one adjacent `synthetic-evidence-checkpoint` phase whose sole
+evidence is `synthetic-checkpoint:sha256:<proof-digest>`; the completed event is the new trusted anchor.
+Ordinary strict validation resumes after it. Missing authority, wrong scope/frontier, reuse, multiple
+proofs/checkpoints, tampering, or absent/failing functional verification refuses.
