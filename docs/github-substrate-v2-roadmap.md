@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.3 accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.4 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1267,9 +1267,25 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   preceded protected merge `4ad66d094092cb1ee858b6cb76f60d6d39e17079`; exact-main Bootstrap run
   `34022719859` and CodeQL run `34022720160` succeeded, and #304 read back closed/Done. The docs-only
   acceptance projection is owned by [`.github#3269`](https://github.com/FS-GG/.github/issues/3269).
-- [ ] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
+- [x] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
   payload/API disagreement, and least privilege; events schedule reconciliation but never directly mutate
   derived state.
+
+  Coordination [issue 310](https://github.com/FS-GG/FS.GG.Coordination/issues/310) and implementation
+  [PR 311](https://github.com/FS-GG/FS.GG.Coordination/pull/311) accepted signature verification,
+  installation/repository scope, replay bounds, payload/API disagreement, least privilege, and the
+  schedule-only event boundary at candidate `dc59dd0238d7b0e5af5cbd5b9fd90c2f36bd45b8`, protected-merged as
+  `f290382850c8698125b296e9dbeb00aa59d392da`. Acceptance
+  [PR 312](https://github.com/FS-GG/FS.GG.Coordination/pull/312) merged the indexed
+  [receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/c460923ccef2f6ef30d9457967e717bec0e084ed/evidence/github-substrate-v2/accepted/GS2-07.4.json)
+  as `c460923ccef2f6ef30d9457967e717bec0e084ed`, with canonical digest
+  `d2cf3b943fc153047652d73de77bfdcb35fe6a087f414a494eec35542edd2a50`.
+
+  The validated [schema-v3 critique](https://github.com/FS-GG/FS.GG.Coordination/blob/c460923ccef2f6ef30d9457967e717bec0e084ed/reviews/roadmap/roadmap-github-substrate-v2-m7-gs2-07-4-event-security.json)
+  has digest `2dc2a920548beda7e05cf387cef3a616d5211362fcf23495256c3680c2db5060`.
+  The strict terminal/reconciled lifecycle completed at revision 30 with digest
+  `ff409f5421578f9a0ed87202bf298ab24bb9c2cdcdfa57ce469149b78b925970`; exact-main Bootstrap run
+  `34043739110` and CodeQL run `34043738634` succeeded, and #310 read back closed/Done.
 - [ ] **GS2-07.5 — Merge-group support.** Ensure every aggregate required check runs on merge groups and
   re-evaluates temporal claim, review, head, dependency, and release obligations.
 - [ ] **GS2-07.6 — Queue sandbox/pilot.** Exercise queue admission, base movement, check growth, expiry,
