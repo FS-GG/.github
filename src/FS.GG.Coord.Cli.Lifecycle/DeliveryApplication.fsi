@@ -23,6 +23,12 @@ module DeliveryApplication =
           BaseSha: string
           Result: 'result }
 
+    /// A live equivalence proof bound to the accepted base, current base, and inspected head.
+    type BaseAdvanceEvidence =
+        { AcceptedBaseSha: string
+          CurrentBaseSha: string
+          HeadSha: string }
+
     /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter. Actions
     /// carrying a problem preserve it in JSON and text rather than reducing it to the action token.
     val render: Options.Options -> FS.GG.Coord.Delivery.Snapshot -> int
@@ -76,6 +82,7 @@ module DeliveryApplication =
             LandingAuthorization
 
     /// Invoke the supplied merge adapter only after a receipt and re-read claim generation authorize it.
+    /// A moved base additionally requires a fail-closed equivalence proof from the live IO boundary.
     val guardedLanding:
         freshnessToken: string ->
         actionKey: string ->
@@ -83,6 +90,7 @@ module DeliveryApplication =
         currentClaimGeneration: string option ->
         currentHead: string option ->
         currentBase: string option ->
+        baseAdvanceEvidence: BaseAdvanceEvidence option ->
         merge: (unit -> 'result) ->
             Result<LandingReceipt<'result>, string>
 
@@ -95,6 +103,7 @@ module DeliveryApplication =
         currentClaimGeneration: string option ->
         currentHead: string option ->
         currentBase: string option ->
+        baseAdvanceEvidence: BaseAdvanceEvidence option ->
         repositoryPolicy: FS.GG.Coord.GitHub.OperationalGraphQl.RepositoryPolicy ->
         merge: (FS.GG.Coord.GitHub.OperationalGraphQl.MergeMethod -> 'result) ->
             Result<LandingReceipt<'result>, string>

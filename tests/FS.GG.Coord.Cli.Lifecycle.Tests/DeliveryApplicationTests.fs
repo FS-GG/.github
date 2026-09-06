@@ -79,15 +79,18 @@ module DeliveryApplicationTests =
         Assert.DoesNotContain("fsgg:done-receipt v=1", doneWriter)
 
     [<Fact>]
-    let ``#3091 live guarded landing selects repository policy before the merge callback`` () =
+    let ``#3274 live guarded landing proves base equivalence and selects policy before the merge callback`` () =
         let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
         let guardedBranch = writer.IndexOf("transition.Action = Delivery.GuardedLand", StringComparison.Ordinal)
         let policyRead = writer.IndexOf("OperationalGraphQl.repositoryPolicy", guardedBranch, StringComparison.Ordinal)
+        let equivalenceProof = writer.IndexOf("authorizeBaseAdvance", policyRead, StringComparison.Ordinal)
         let guardedLanding = writer.IndexOf("DeliveryApplication.guardedLandingWithMergePolicy", policyRead, StringComparison.Ordinal)
         let mergeWrite = writer.IndexOf("Writes.mergeAtHead", guardedLanding, StringComparison.Ordinal)
 
         Assert.True(guardedBranch >= 0, "guarded delivery branch is missing")
         Assert.True(policyRead > guardedBranch, "repository merge policy is not observed inside guarded delivery")
+        Assert.True(equivalenceProof > policyRead, "guarded delivery does not prove a moved base at the live boundary")
+        Assert.True(guardedLanding > equivalenceProof, "guarded delivery can select merge before base equivalence is proved")
         Assert.True(guardedLanding > policyRead, "observed policy is not passed to the guarded selector")
         Assert.True(mergeWrite > guardedLanding, "the guarded callback does not receive the typed merge write")
 
@@ -669,7 +672,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let mutable mergeCalls = 0
         let attemptMerge () = mergeCalls <- mergeCalls + 1; "merge endpoint was called"
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-b") (Some facts.Freshness.HeadSha) (Some(String.replicate 40 "b")) attemptMerge with
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-b") (Some facts.Freshness.HeadSha) (Some(String.replicate 40 "b")) None attemptMerge with
         | Ok result -> failwith result.Result
         | Error reason -> Assert.Contains("generation changed", reason)
 
@@ -684,11 +687,118 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let movedBase = String.replicate 40 "c"
         let attemptMerge () = mergeCalls <- mergeCalls + 1
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some movedBase) attemptMerge with
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some movedBase) None attemptMerge with
         | Ok _ -> failwith "a moved base authorized a merge"
         | Error reason ->
             Assert.Contains(acceptedBase, reason)
             Assert.Contains(movedBase, reason)
+
+        Assert.Equal(0, mergeCalls)
+
+    [<Fact>]
+    let ``#3274 guarded landing accepts a separately proven base advance and receipts the live base`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let movedBase = String.replicate 40 "c"
+        let evidence: DeliveryApplication.BaseAdvanceEvidence =
+            { AcceptedBaseSha = String.replicate 40 "b"
+              CurrentBaseSha = movedBase
+              HeadSha = facts.Freshness.HeadSha }
+        let mutable mergeCalls = 0
+
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                (Some "claim-generation-a")
+                (Some facts.Freshness.HeadSha)
+                (Some movedBase)
+                (Some evidence)
+                (fun () -> mergeCalls <- mergeCalls + 1; "merged")
+        with
+        | Error reason -> failwith reason
+        | Ok receipt ->
+            Assert.Equal(facts.Freshness.HeadSha, receipt.HeadSha)
+            Assert.Equal(movedBase, receipt.BaseSha)
+            Assert.Equal("merged", receipt.Result)
+
+        Assert.Equal(1, mergeCalls)
+
+    [<Fact>]
+    let ``#3274 base equivalence cannot replay stale claim or head authority`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let movedBase = String.replicate 40 "c"
+        let evidence: DeliveryApplication.BaseAdvanceEvidence =
+            { AcceptedBaseSha = String.replicate 40 "b"
+              CurrentBaseSha = movedBase
+              HeadSha = facts.Freshness.HeadSha }
+        let mutable mergeCalls = 0
+        let attemptMerge () = mergeCalls <- mergeCalls + 1
+
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                (Some "claim-generation-b")
+                (Some facts.Freshness.HeadSha)
+                (Some movedBase)
+                (Some evidence)
+                attemptMerge
+        with
+        | Ok _ -> failwith "equivalence bypassed stale claim authority"
+        | Error reason -> Assert.Contains("generation changed", reason)
+
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                (Some "claim-generation-a")
+                (Some(String.replicate 40 "d"))
+                (Some movedBase)
+                (Some evidence)
+                attemptMerge
+        with
+        | Ok _ -> failwith "equivalence bypassed stale head authority"
+        | Error reason -> Assert.Contains("head changed", reason)
+
+        Assert.Equal(0, mergeCalls)
+
+    [<Fact>]
+    let ``#3274 guarded landing rejects base evidence with any stale binding`` () =
+        let facts = guardedLandingFacts "claim-generation-a"
+        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+        let acceptedBase = String.replicate 40 "b"
+        let movedBase = String.replicate 40 "c"
+        let mutable mergeCalls = 0
+        let staleEvidence: DeliveryApplication.BaseAdvanceEvidence list =
+            [ { AcceptedBaseSha = String.replicate 40 "a"
+                CurrentBaseSha = movedBase
+                HeadSha = facts.Freshness.HeadSha }
+              { AcceptedBaseSha = acceptedBase
+                CurrentBaseSha = String.replicate 40 "d"
+                HeadSha = facts.Freshness.HeadSha }
+              { AcceptedBaseSha = acceptedBase
+                CurrentBaseSha = movedBase
+                HeadSha = String.replicate 40 "e" } ]
+
+        for evidence in staleEvidence do
+            match
+                DeliveryApplication.guardedLanding
+                    transition.FreshnessToken
+                    transition.ActionKey
+                    facts
+                    (Some "claim-generation-a")
+                    (Some facts.Freshness.HeadSha)
+                    (Some movedBase)
+                    (Some evidence)
+                    (fun () -> mergeCalls <- mergeCalls + 1)
+            with
+            | Ok _ -> failwith "stale base-advance evidence authorized a merge"
+            | Error reason -> Assert.Contains("does not bind", reason)
 
         Assert.Equal(0, mergeCalls)
 
@@ -698,7 +808,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
         let acceptedBase = String.replicate 40 "b"
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some acceptedBase) (fun () -> "merged") with
+        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some acceptedBase) None (fun () -> "merged") with
         | Error reason -> failwith reason
         | Ok receipt ->
             Assert.Equal(facts.Freshness.HeadSha, receipt.HeadSha)
@@ -725,6 +835,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Some "claim-generation-a")
                 (Some facts.Freshness.HeadSha)
                 (Some(String.replicate 40 "b"))
+                None
                 policy
                 (fun _ -> mergeCalls <- mergeCalls + 1)
         with
@@ -753,6 +864,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Some "claim-generation-a")
                 (Some facts.Freshness.HeadSha)
                 (Some(String.replicate 40 "b"))
+                None
                 policy
                 (fun method -> observed.Add method; "merged")
         with

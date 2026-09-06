@@ -340,6 +340,64 @@ module LiveHandlers =
                         ctx.Transport.Send request |> Result.map ignore))
         | _ -> Ok()
 
+    // Prove that moving from an accepted base to the current base preserves the reviewed candidate
+    // delta. Both `landable` and the final guarded merge call this same function, so the merge boundary
+    // cannot retain the exact-base rule after the public verdict has admitted a safe advance.
+    let private authorizeBaseAdvance
+        (ctx: Context)
+        (repoName: string)
+        (pr: int)
+        (acceptedBase: string)
+        (liveHead: string)
+        (liveBase: string)
+        =
+        if acceptedBase = liveBase then
+            Ok None
+        else
+            match Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveBase,
+                  Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveHead with
+            | Error error, _
+            | _, Error error ->
+                Error $"the semantic-delta equivalence proof is unreadable (%s{Errors.explain error})"
+            | Ok baseAdvance, Ok candidate ->
+                let forwardOnly =
+                    baseAdvance.Complete
+                    && baseAdvance.Status = "ahead"
+                    && baseAdvance.MergeBase = acceptedBase
+                    && baseAdvance.AheadBy > 0
+                let candidateBound =
+                    candidate.Complete
+                    && (candidate.Status = "ahead" || candidate.Status = "identical")
+                    && candidate.MergeBase = acceptedBase
+                let overlap = Set.intersect (Set.ofList baseAdvance.Paths) (Set.ofList candidate.Paths) |> Set.toList
+
+                if not baseAdvance.Complete || not candidate.Complete then
+                    Error "GitHub's comparison reached its 300-file cap, so path-disjointness is unverifiable"
+                elif not forwardOnly then
+                    Error
+                        $"the live base is not a forward-only descendant of the accepted base (status=%s{baseAdvance.Status}, mergeBase=%s{baseAdvance.MergeBase}, aheadBy=%d{baseAdvance.AheadBy})"
+                elif not candidateBound then
+                    Error
+                        $"the accepted head's candidate delta is not bound to the accepted base (status=%s{candidate.Status}, mergeBase=%s{candidate.MergeBase})"
+                elif not (List.isEmpty overlap) then
+                    let overlapText = String.concat ", " overlap
+                    Error $"the base advance touches reviewed candidate path(s): %s{overlapText}"
+                else
+                    // Do not spend a proof about B after the branch has already moved to C. GitHub's
+                    // merge API has an expected-head guard but no expected-base argument, so this
+                    // second live-tip read is the narrow fail-closed fence available before merge.
+                    match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
+                    | Error error ->
+                        Error $"the effective base could not be re-read after equivalence proof (%s{Errors.explain error})"
+                    | Ok confirmedBase when confirmedBase <> liveBase ->
+                        Error $"the effective base moved again to `%s{confirmedBase}` while equivalence was being proved"
+                    | Ok _ ->
+                        let evidence: DeliveryApplication.BaseAdvanceEvidence =
+                            { AcceptedBaseSha = acceptedBase
+                              CurrentBaseSha = liveBase
+                              HeadSha = liveHead }
+                        Ok(Some evidence)
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -546,34 +604,46 @@ module LiveHandlers =
                                 | _, _, Error error, _
                                 | _, _, _, Error error -> fail error
                                 | Ok generation, Ok currentHead, Ok currentBase, Ok repositoryPolicy ->
-                                    match
-                                        DeliveryApplication.guardedLandingWithMergePolicy
-                                            transition.FreshnessToken
-                                            transition.ActionKey
-                                            facts
-                                            generation
-                                            (Some currentHead)
-                                            (Some currentBase)
-                                            repositoryPolicy
-                                            (fun mergeMethod ->
-                                                Writes.mergeAtHead ctx.Transport target pr.Value head mergeMethod)
-                                    with
-                                    | Error reason ->
-                                        eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
+                                    match facts.Review |> Option.bind _.BaseSha with
+                                    | None ->
+                                        eprint "fsgg-coord-engine: delivery --apply is refused: delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
                                         ExitNoVerdict
-                                    | Ok receipt ->
-                                        eprint $"fsgg-coord-engine: guarded landing receipt: head=%s{receipt.HeadSha} base=%s{receipt.BaseSha}"
-                                        match receipt.Result with
-                                        | Error error -> fail error
-                                        | Ok false ->
-                                            eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+                                    | Some acceptedBase ->
+                                        match authorizeBaseAdvance ctx target.Repo pr.Value acceptedBase currentHead currentBase with
+                                        | Error reason ->
+                                            eprint
+                                                $"fsgg-coord-engine: delivery --apply is refused: delivery effective base changed after acceptance: %s{reason}; GitHub merge was not attempted"
                                             ExitNoVerdict
-                                        | Ok true ->
-                                            match opts.Render with
-                                            | Json ->
-                                                printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
-                                            | Text -> printfn "merged %s at the inspected head" target.Short
-                                            ExitGreen
+                                        | Ok baseAdvanceEvidence ->
+                                            match
+                                                DeliveryApplication.guardedLandingWithMergePolicy
+                                                    transition.FreshnessToken
+                                                    transition.ActionKey
+                                                    facts
+                                                    generation
+                                                    (Some currentHead)
+                                                    (Some currentBase)
+                                                    baseAdvanceEvidence
+                                                    repositoryPolicy
+                                                    (fun mergeMethod ->
+                                                        Writes.mergeAtHead ctx.Transport target pr.Value head mergeMethod)
+                                            with
+                                            | Error reason ->
+                                                eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
+                                                ExitNoVerdict
+                                            | Ok receipt ->
+                                                eprint $"fsgg-coord-engine: guarded landing receipt: head=%s{receipt.HeadSha} base=%s{receipt.BaseSha}"
+                                                match receipt.Result with
+                                                | Error error -> fail error
+                                                | Ok false ->
+                                                    eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+                                                    ExitNoVerdict
+                                                | Ok true ->
+                                                    match opts.Render with
+                                                    | Json ->
+                                                        printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
+                                                    | Text -> printfn "merged %s at the inspected head" target.Short
+                                                    ExitGreen
                             | Delivery.Next transition, Delivery.CompletionDecision.ProjectCompletion, true
                                 when transition.Action = Delivery.Complete ->
                                 // Delegate the coupled close / board-Done / own-claim-release sequence to
@@ -1534,47 +1604,11 @@ module LiveHandlers =
                         match chain.BaseSha with
                         | None -> stale "the acceptance carries no effective base SHA"
                         | Some acceptedBase ->
-                            match Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveBase,
-                                  Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveHead with
-                            | Error error, _
-                            | _, Error error ->
-                                stale $"the semantic-delta equivalence proof is unreadable (%s{Errors.explain error})"
-                            | Ok baseAdvance, Ok candidate ->
-                                let forwardOnly =
-                                    baseAdvance.Complete
-                                    && baseAdvance.Status = "ahead"
-                                    && baseAdvance.MergeBase = acceptedBase
-                                    && baseAdvance.AheadBy > 0
-                                let candidateBound =
-                                    candidate.Complete
-                                    && (candidate.Status = "ahead" || candidate.Status = "identical")
-                                    && candidate.MergeBase = acceptedBase
-                                let overlap = Set.intersect (Set.ofList baseAdvance.Paths) (Set.ofList candidate.Paths) |> Set.toList
-
-                                if not baseAdvance.Complete || not candidate.Complete then
-                                    stale "GitHub's comparison reached its 300-file cap, so path-disjointness is unverifiable"
-                                elif not forwardOnly then
-                                    stale
-                                        $"the live base is not a forward-only descendant of the accepted base (status=%s{baseAdvance.Status}, mergeBase=%s{baseAdvance.MergeBase}, aheadBy=%d{baseAdvance.AheadBy})"
-                                elif not candidateBound then
-                                    stale
-                                        $"the accepted head's candidate delta is not bound to the accepted base (status=%s{candidate.Status}, mergeBase=%s{candidate.MergeBase})"
-                                elif not (List.isEmpty overlap) then
-                                    let overlapText = String.concat ", " overlap
-                                    stale $"the base advance touches reviewed candidate path(s): %s{overlapText}"
-                                else
-                                    // Do not spend a proof about B after the branch has already moved to C.
-                                    // GitHub's merge API has an expected-head guard but no expected-base
-                                    // argument, so this second live-tip read is the narrow fail-closed
-                                    // fence available before `delivery` makes that guarded merge call.
-                                    match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
-                                    | Error error ->
-                                        stale $"the effective base could not be re-read after equivalence proof (%s{Errors.explain error})"
-                                    | Ok confirmedBase when confirmedBase <> liveBase ->
-                                        stale $"the effective base moved again to `%s{confirmedBase}` while equivalence was being proved"
-                                    | Ok _ ->
-                                        eprint
-                                            $"fsgg-coord-engine: landable: PR #%d{pr}'s base advanced from `%s{acceptedBase}` to `%s{liveBase}`, but complete GitHub comparisons prove a forward-only path-disjoint advance and the base remained stable through confirmation; exact-head review acceptance remains current."
+                            match authorizeBaseAdvance ctx repoName pr acceptedBase liveHead liveBase with
+                            | Error reason -> stale reason
+                            | Ok _ ->
+                                eprint
+                                    $"fsgg-coord-engine: landable: PR #%d{pr}'s base advanced from `%s{acceptedBase}` to `%s{liveBase}`, but complete GitHub comparisons prove a forward-only path-disjoint advance and the base remained stable through confirmation; exact-head review acceptance remains current."
 
                     List.ofSeq problems
 
