@@ -21,7 +21,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
+    <PackageVersion Include="FsCheck.Xunit" Version="3.4.0" />
   </ItemGroup>
 
   <!-- api-breaking-change-gate (.github#20, #609). The root Directory.Build.props imports the org-shared
