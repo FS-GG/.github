@@ -19,6 +19,21 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-06** — **coordination coherent set `github:0.83.4` published; registry reconciliation**
+  ([.github#3253](https://github.com/FS-GG/.github/issues/3253), source
+  [.github#3251](https://github.com/FS-GG/.github/issues/3251),
+  [promotion 34002136973](https://github.com/FS-GG/.github/actions/runs/34002136973),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.83.4)):
+  advances the observed package frontier from 0.83.3 to 0.83.4. The initial publishers
+  34001473521/34001473576/34001473596 pushed the accepted bytes but exceeded bounded
+  nuget.org indexing; exact-source saga recovery 34001706846 and recovery publishers
+  34001840285/34001837680/34001838964 verified both feeds, with attempt-2 publisher runs
+  triggering promotion 34002136973. Both feeds serve all three members with matching normalized
+  payload hashes. Source `a3641ca0827187fa4ff693f627f5024dab4093b0`; content
+  `sha256:aea555a3e8a6acf9d319b42cf714b605067be23ce2c8b39647780db4a96930bf`;
+  manifest `sha256:4a5ddf6c69874354c456d24e9f09987461be6e39b67263f055e752452f90b487`;
+  stable channel `sha256:4abf73b18d415e9bbf2b29ff3a6f2652242064e63bd74c99605532312fa683ce`.
+
 - **2026-09-06** — **coordination coherent set `github:0.83.3` published; registry reconciliation**
   ([.github#3249](https://github.com/FS-GG/.github/issues/3249), source
   [.github#3247](https://github.com/FS-GG/.github/issues/3247),
