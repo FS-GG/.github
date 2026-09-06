@@ -210,6 +210,17 @@ module DeliveryTests =
                 (verified "merge-sha")
                 { markerlessMerged with ClosingLinkageCanonical = true })
 
+        let externallyTerminal =
+            { markerlessMerged with
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                CleanupEligible = true }
+
+        match Delivery.inspectWithPostMergeVerification (verified "merge-sha") externallyTerminal with
+        | Delivery.NoVerdict reason -> Assert.Contains("terminal completion requires canonical closing linkage", reason)
+        | decision -> failwithf "expected markerless cleanup refusal, got %A" decision
+
     [<Fact>]
     let ``#2131 landing requires an explicit machine obligation declaration`` () =
         let undeclared = { snapshot "head-a" with ObligationsDeclared = false }

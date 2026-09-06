@@ -78,6 +78,7 @@ module DeliveryApplication =
         freshnessToken: string ->
         actionKey: string ->
         facts: FS.GG.Coord.Delivery.Snapshot ->
+        currentAuthority: FS.GG.Coord.Delivery.Snapshot ->
         currentClaimGeneration: string option ->
             LandingAuthorization
 
@@ -87,6 +88,7 @@ module DeliveryApplication =
         freshnessToken: string ->
         actionKey: string ->
         facts: FS.GG.Coord.Delivery.Snapshot ->
+        currentAuthority: FS.GG.Coord.Delivery.Snapshot ->
         currentClaimGeneration: string option ->
         currentHead: string option ->
         currentBase: string option ->
@@ -100,6 +102,7 @@ module DeliveryApplication =
         freshnessToken: string ->
         actionKey: string ->
         facts: FS.GG.Coord.Delivery.Snapshot ->
+        currentAuthority: FS.GG.Coord.Delivery.Snapshot ->
         currentClaimGeneration: string option ->
         currentHead: string option ->
         currentBase: string option ->

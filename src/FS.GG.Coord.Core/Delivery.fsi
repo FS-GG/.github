@@ -123,6 +123,10 @@ module Delivery =
           Obligations: Obligation list
           ParkedReason: string option }
 
+    /// Whether freshly read linkage/item/obligation authority permits guarded landing. Canonical
+    /// linkage passes ordinarily; markerless delivery passes only for the exact live two-phase shape.
+    val landingLinkageAuthorized: Snapshot -> bool
+
     /// One completed Actions execution observed on the repository default branch at the exact merge SHA.
     type PostMergeRun =
         { Id: int64

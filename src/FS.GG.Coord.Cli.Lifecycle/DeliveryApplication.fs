@@ -505,19 +505,21 @@ module DeliveryApplication =
           CurrentBaseSha: string
           HeadSha: string }
 
-    let authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration =
+    let authorizeGuardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration =
         match Delivery.advance freshnessToken actionKey facts with
         | Delivery.NoVerdict reason -> MergeRefused reason
         | Delivery.Next transition when transition.Action <> Delivery.GuardedLand ->
             MergeRefused "delivery receipt does not authorize guarded landing"
         | Delivery.Next _ when Some facts.Freshness.ClaimGeneration <> currentClaimGeneration ->
             MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
+        | Delivery.Next _ when not (Delivery.landingLinkageAuthorized currentAuthority) ->
+            MergeRefused "delivery closing linkage or two-phase receipt authority changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ -> MergeAuthorized
 
     /// Invoke the merge adapter only after claim and head still match and the effective base either
     // matches acceptance or the live IO boundary has proved a complete, path-disjoint forward advance.
-    let guardedLanding freshnessToken actionKey facts currentClaimGeneration currentHead currentBase baseAdvanceEvidence merge =
-        match authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration with
+    let guardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration currentHead currentBase baseAdvanceEvidence merge =
+        match authorizeGuardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration with
         | MergeRefused reason -> Error reason
         | MergeAuthorized when currentHead <> Some facts.Freshness.HeadSha ->
             Error "delivery PR head changed after inspection; GitHub merge was not attempted"
@@ -544,6 +546,7 @@ module DeliveryApplication =
         freshnessToken
         actionKey
         facts
+        currentAuthority
         currentClaimGeneration
         currentHead
         currentBase
@@ -559,6 +562,7 @@ module DeliveryApplication =
                 freshnessToken
                 actionKey
                 facts
+                currentAuthority
                 currentClaimGeneration
                 currentHead
                 currentBase

@@ -798,9 +798,15 @@ module Delivery =
         && List.forall structurallyCurrent obligations
         && (obligations |> List.filter (fun obligation -> obligation.Kind = "acceptance-receipt") |> List.length = 1)
 
+    /// Canonical closing linkage is the ordinary authority. The sole exception is the exact live
+    /// single-item two-phase receipt shape; callers at a write boundary must invoke this over freshly
+    /// re-read linkage, obligation, claim, issue, and board facts rather than an inspected snapshot.
+    let landingLinkageAuthorized snapshot =
+        snapshot.ClosingLinkageCanonical || twoPhaseReceiptLanding snapshot
+
     let private handoffProblem snapshot =
         if not snapshot.ItemBranchCanonical then Some "item branch is not canonical"
-        elif not snapshot.ClosingLinkageCanonical && not (twoPhaseReceiptLanding snapshot) then
+        elif not (landingLinkageAuthorized snapshot) then
             Some "canonical closing linkage is missing"
         elif not snapshot.PathsVerified then Some "declared paths are not verified"
         else None
@@ -894,7 +900,8 @@ module Delivery =
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (VerifyObligation name)
                 | CompletionDecision.AwaitPostMergeVerification reason ->
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (AwaitPostMergeVerification reason)
-                | CompletionDecision.ProjectCompletion when not snapshot.ClosingLinkageCanonical ->
+                | (CompletionDecision.ProjectCompletion | CompletionDecision.CleanupCompletedDelivery)
+                    when not snapshot.ClosingLinkageCanonical ->
                     NoVerdict "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
                 | CompletionDecision.ProjectCompletion ->
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
