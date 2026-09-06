@@ -3,7 +3,7 @@ title: "Design and roadmap: Performance-bounded, Quint-governed development flow
 category: Design
 categoryindex: 4
 index: 36
-description: "A configurable development controller in which safety, progress, latency, resource efficiency, and bounded coordination overhead are coequal hard requirements."
+description: "A research-grounded configurable development controller in which safety, progress, latency, resource efficiency, and bounded coordination overhead are coequal hard requirements."
 ---
 
 # Design and roadmap: Performance-bounded, Quint-governed development flow
@@ -21,6 +21,7 @@ batching with failure isolation, bounded review/repair, capability-based agent r
 |---|---|
 | Status | Proposed design and implementation roadmap; no runtime or lifecycle authority changes yet |
 | Authored | 2026-09-06 |
+| Prior-art review | 2026-09-06; primary research papers and official project/practitioner documentation available on that date |
 | Primary risk | Correctness bureaucracy grows without bound until useful work stops |
 | Governing direction | Quint-first semantic authority, pure policy, durable execution, generated projections |
 | Builds on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), [ADR-0080](../adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md), [ADR-0081](../adr/0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md), and the [operations-research orchestration design](2026-08-31-operations-research-first-agent-orchestration-design.md) |
@@ -82,6 +83,58 @@ The first delivery does not:
 - replace GitHub/Git or the typed coordination engine as external mutation authority; or
 - make a visualization, prediction, or agent confidence score authoritative.
 
+### 2.1 Prior-art research method and limits
+
+The design was checked against primary research papers, official tool documentation, and first-party
+industrial experience across formal workflow analysis, continuous delivery, build and test optimization,
+code review, durable execution, developer productivity, and LLM-based software engineering. The review
+looked for three things: the mechanism that produced a benefit, the failure or adoption problem reported,
+and the condition under which the result should transfer to this system.
+
+The sources are heterogeneous. Controlled trials support stronger causal claims than surveys; industrial
+case studies show scale but may not generalize; benchmark results measure their benchmark and not this
+repository; vendor engineering reports are useful implementation evidence but not neutral comparisons.
+No percentage below is adopted as a universal target. Each is a hypothesis to replay, shadow, or canary
+against an observed local baseline.
+
+### 2.2 What prior systems teach us
+
+| Prior-art family | What worked | Problems encountered | Consequence for this design |
+|---|---|---|---|
+| Workflow nets and formal state machines | Workflow-net soundness separates ability to complete, proper completion, and absence of dead transitions. Model checking exposes counterexample paths before runtime. | Soundness variants are not interchangeable; liveness needs environment/fairness assumptions; richer models face state explosion. | Check terminal stability, dead actions, anti-vacuity witnesses, and bounded rank separately. Keep finite qualification profiles and state assumptions explicitly. |
+| Industrial formal methods | AWS reports that lightweight, high-level specifications and model checking found subtle design errors in systems where testing and conventional reasoning were insufficient. | A model is an abstraction, not implementation proof; learning and maintaining the right abstraction costs engineering time. | Use Quint on the small decision kernel, replay traces through the real reducer, mutation-test the properties, and refuse speculative detail that does not change a decision. |
+| Continuous integration and small batches | Frequent mainline integration, fast automated feedback, and small independently testable changes reduce the search space and cost of resolving conflicts. | Slow builds and pre-integration review queues destroy the feedback advantage; calling branch builds “CI” does not remove delayed integration. AI makes oversized changes easier to create. | Make work-item size and time-to-first-evidence visible, prefer independently deliverable slices, and do not let the controller accumulate a large hidden batch before downstream validation. |
+| Test selection, batching, and failure isolation | Meta reported catching more than 99.9% of regressions while running about one third of transitively dependent tests with learned selection. A 276-million-result batching study found dynamic and test-case batching could hold feedback time with substantially fewer machines. | Selection can miss defects, historical data drifts, flaky failures corrupt learning, and a failed batch obscures the culprit. Parallelism has nonlinear diminishing returns. | The initial system may rank but not silently skip soundly selected obligations. Optimistically batch high-pass compatible checks, calibrate continuously, and bisect only attribution-ambiguous members within a fixed isolation budget. |
+| Incremental and cached builds | Microsoft CloudBuild reported 1.3x–10x speedups using content-based caching and distributed execution; Bazel makes actions and outputs addressable by declared inputs. | Under-declared inputs, nondeterministic tools, host leakage, and concurrent input mutation can produce unsafe or useless cache entries. | Cache keys include all declared semantic and execution inputs; qualify reproducibility, record miss reasons, sample cache hits with sentinels, and quarantine a suspect cache rather than trusting “green.” |
+| Gated and speculative integration | GitHub merge queues test the merge group against current target state. Zuul parallelizes a dependency-ordered gate by assuming predecessors pass, then invalidates and reruns affected successors after a failure. | Speculation can discard large amounts of work; missing required check events can stall a queue; broad dependency chains amplify invalidation. | Bind every result to exact candidate and predecessor identities, cap speculative depth/waste, cancel superseded work, reserve recovery capacity, and always expose a non-speculative fallback. |
+| Modern code review | Google’s nine-million-change study describes a genuinely lightweight practice; Microsoft found review creates knowledge transfer and alternative solutions as well as defects. Small changes and fast responses aid understanding. | Understanding the change is the dominant challenge. Review latency interrupts flow, large changes reduce useful feedback, and polish can turn into unbounded back-and-forth. | Present compact intent, semantic diff, tests, and unresolved risk together; make nits non-blocking; re-review affected deltas and sibling risk rather than the whole change; bound review rounds and wait time. |
+| Durable workflow engines | Durable execution persists progress and replays after process or infrastructure failure; activities isolate fallible effects and can retry. | Replay requires deterministic workflow code, effects need idempotency or observation, version changes need compatibility, and histories/resource use can grow without bounds. | Persist intent before effects, use idempotency keys and observe-before-retry, version policy/workflow identities, compact only at modeled boundaries, and impose history/storage budgets. Durability does not define correctness. |
+| Developer productivity research | SPACE shows productivity is multidimensional. DevEx identifies feedback loops, cognitive load, and flow state. DORA links small batches and robust testing to delivery performance and treats AI as an amplifier of the surrounding system. | Activity or output counts are gameable. Faster code generation can shift work into verification, destabilize delivery, or increase reviewer cognitive load. Self-reported speed can diverge from measured completion time. | Optimize a vector of delivery, quality, human-attention, and resource measures. Measure author and reviewer toil, wait, rework, and interruption; never qualify on tokens, commits, lines, or subjective speed alone. |
+| Simple LLM workflows and coding agents | SWE-agent shows tool/interface design materially affects repository-task performance. Agentless achieved competitive SWE-bench Lite results with fixed localization/repair/validation stages and low reported cost. Simple composable workflows are repeatedly reported as easier to debug. | Repository context and task descriptions are incomplete; benchmark contamination and weak tests can misstate success; autonomy increases latency, cost, and debugging surface. METR’s early-2025 randomized trial found experienced maintainers took 19% longer with AI despite expecting a speedup. | Start at deterministic automation, then one bounded model call, then a fixed workflow, and use an autonomous agent only when evidence justifies it. Validate with exact repository tests and measured end-to-end time, not model confidence or benchmark rank. |
+| Model routing and cascades | RouteLLM and FrugalGPT show that calibrated routing/cascades can improve cost-quality tradeoffs on evaluated tasks. | Router data can be out of domain or stale; cheapest-first escalation adds latency when the first choice predictably fails; benchmark quality is not delivery quality. | Route on qualified capabilities and local outcome distributions. Charge escalation latency and rework to the original route, keep a direct-strong route for known-hard classes, and expire bindings when models or workloads drift. |
+| Multi-agent coordination | Independent parallel search can increase coverage, and specialized workers can be complementary. Recent multi-agent experiments show coordination can sometimes sustain long-running search. | Dependent software work produced conflicts, abandoned PRs, low merge fractions, conformity failures, and resource floods; adding role prompts or hierarchy alone did not fix product quality. | Parallel agents are opt-in only for disjoint touch sets or independent evidence. Enforce unique identities, leases, WIP limits, bounded messaging/polling, one accountable integrator, and compare against a single-agent baseline. |
+
+### 2.3 Primary evidence register
+
+The following sources are the evidence base for the table and the changes below:
+
+- W.M.P. van der Aalst et al., [Soundness of workflow nets: classification, decidability, and analysis](https://link.springer.com/article/10.1007/s00165-010-0161-4) (Formal Aspects of Computing, 2011).
+- Quint, [Checking properties](https://github.com/quint-co/quint/blob/main/docs/content/docs/checking-properties.mdx) and [What does Quint do?](https://quint.sh/docs/what-does-quint-do), including the current limits of temporal-property tooling.
+- C. Newcombe et al., [How Amazon Web Services uses formal methods](https://www.amazon.science/publications/how-amazon-web-services-uses-formal-methods) (CACM, 2015).
+- Martin Fowler, [Continuous Integration](https://martinfowler.com/articles/continuousIntegration.html) (updated 2024).
+- DORA, [Working in small batches](https://dora.dev/capabilities/working-in-small-batches/), [2025 State of AI-assisted Software Development](https://dora.dev/research/2025/dora-report/), and the 2026 analysis [Balancing AI tensions](https://dora.dev/insights/balancing-ai-tensions/).
+- M.-A. Storey et al., [The SPACE of Developer Productivity](https://www.microsoft.com/en-us/research/publication/the-space-of-developer-productivity-theres-more-to-it-than-you-think/) (ACM Queue, 2021), and A. Noda et al., [DevEx: What Actually Drives Productivity?](https://doi.org/10.1145/3610285) (CACM, 2023).
+- C. Sadowski et al., [Modern Code Review: A Case Study at Google](https://research.google/pubs/modern-code-review-a-case-study-at-google/) (ICSE SEIP, 2018), and A. Bacchelli and C. Bird, [Expectations, Outcomes, and Challenges of Modern Code Review](https://repository.tudelft.nl/record/uuid%3Ad629803b-bbec-4593-a7f2-6f4b2266ff5a) (ICSE, 2013).
+- Meta Engineering, [Predictive test selection](https://engineering.fb.com/2018/11/21/developer-tools/predictive-test-selection/) (2018), and E. Fallahzadeh et al., [Accelerating Continuous Integration with Parallel Batch Testing](https://arxiv.org/abs/2308.13129) (2023).
+- C. Ziftci and D. Cavalcanti, [De-Flake Your Tests](https://research.google/pubs/de-flake-your-tests-automatically-locating-root-causes-of-flaky-tests-in-code-at-google/) (ICSME, 2020).
+- H. Esfahani et al., [CloudBuild: Microsoft's Distributed and Caching Build Service](https://www.microsoft.com/en-us/research/publication/cloudbuild-microsofts-distributed-and-caching-build-service/) (ICSE SEIP, 2016), and Bazel, [Remote caching](https://bazel.build/remote/caching).
+- GitHub, [Managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue), and Zuul, [Pipeline managers and speculative gating](https://zuul-ci.org/docs/zuul/latest/config/pipeline.html).
+- Temporal, [Platform documentation](https://docs.temporal.io/) for durable execution and replay semantics.
+- J. Yang et al., [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/abs/2405.15793), and C.S. Xia et al., [Agentless: Demystifying LLM-based Software Engineering Agents](https://arxiv.org/abs/2407.01489).
+- S. Kapoor et al., [AI Agents That Matter](https://arxiv.org/abs/2407.01502) (TMLR, 2025), and METR, [Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity](https://metr.org/Early_2025_AI_Experienced_OS_Devs_Study-paper.pdf) (2025).
+- Anthropic, [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) (2024) and [Patterns and problems in multiagent systems](https://www.anthropic.com/research/multiagent-systems) (2026).
+- I. Ong et al., [RouteLLM](https://arxiv.org/abs/2406.18665) (ICLR, 2025), and L. Chen et al., [FrugalGPT](https://arxiv.org/abs/2305.05176) (TMLR, 2024).
+
 ## 3. Requirements
 
 ### 3.1 Functional requirements
@@ -97,6 +150,9 @@ The first delivery does not:
 | FLOW-007 | Findings have stable identities, severity, semantic subjects, disposition, and recurrence linkage. Duplicate prose cannot create duplicate repair obligations. |
 | FLOW-008 | Scoped child qualification and comprehensive parent/release closure remain distinct execution profiles. |
 | FLOW-009 | Static and live visualizations are generated from compiled/runtime projections with source, policy, and freshness fingerprints. |
+| FLOW-010 | Each work class defines a complexity ladder: deterministic tool, single model call, fixed model workflow, single autonomous agent, then bounded multi-agent execution. The planner selects the least complex qualified level and records why escalation is needed. |
+| FLOW-011 | Parallel workers require disjoint declared touch sets or independent evidence duties, unique identities, leases, bounded communication, and one accountable integration authority. |
+| FLOW-012 | Exact-candidate invalidation covers code, target-branch predecessors, toolchain, environment, policy, and review epoch; a stale green result cannot authorize a newer composition. |
 
 ### 3.2 Nonnegotiable performance and efficiency requirements
 
@@ -116,6 +172,10 @@ The first delivery does not:
 | PERF-012 | A candidate policy must beat or remain within the accepted baseline envelope in replay, simulation, shadow, and canary evidence. A faster policy that weakens a hard property is infeasible; a safer policy that breaches the accepted performance envelope is also infeasible. |
 | PERF-013 | Telemetry and visualization are asynchronous projections. Their failure may degrade observability but cannot block an otherwise authorized development transition unless the missing receipt is itself a declared acceptance obligation. |
 | PERF-014 | Every new mandatory artifact or gate names its consumer, decision changed, expected unique-defect yield, execution cost, expiry/review date, and deletion condition. Missing metadata refuses promotion. |
+| PERF-015 | Admission and parallelism are WIP-limited by bottleneck capacity and recovery reserve. More ready work does not authorize a worker, PR, check, or polling storm. |
+| PERF-016 | Qualification includes developer/reviewer active time, wait time, interruptions, context reconstruction, and perceived ease alongside delivery and compute measures. No single activity or output metric can qualify a policy. |
+| PERF-017 | Escalation cost includes all failed lower-tier calls, verification, rework, and latency. A router cannot appear efficient by charging only the final successful model. |
+| PERF-018 | Cache and selected-test savings are accepted only with reproducibility checks, complete-key validation, miss/flake classification, and a configured sentinel/full-closure cadence. |
 
 ### 3.3 Starter performance envelope
 
@@ -306,6 +366,26 @@ environment bound, the workflow eventually reaches a terminal outcome. Quint/Apa
 the declared finite instances and bounds; it does not prove provider availability or arbitrary unbounded
 workloads.
 
+This claim is deliberately split into independently checkable obligations because current Quint guidance
+notes that invariants are the mature path while temporal-property support is partial and liveness commonly
+depends on fairness assumptions:
+
+1. **Finite-domain safety:** no negative counter, illegal delivery, orphan effect, unstable terminal state,
+   or dead nonterminal state in each declared finite profile.
+2. **Rank preservation:** every internal rework transition decreases the lexicographic rank; transitions
+   that admit new scope are forbidden after admission and are modeled as a new work item.
+3. **Bounded waiting:** each external wait has an explicit deadline transition to a classified terminal
+   state; availability is not assumed merely to make a liveness formula pass.
+4. **Conditional liveness:** where temporal checking is supported, named weak/strong fairness assumptions
+   are applied only to the environmental actions that justify them and are tested with witness scenarios.
+5. **Runtime correspondence:** compiled identities and ITF traces are replayed through the production
+   reducer, so a proof about the model is not presented as proof about unrelated executor code.
+
+The primary termination evidence is therefore the finite scope, decreasing rank, deadline exits, deadlock
+checks, and runtime correspondence. A temporal formula is corroborating evidence, not a ceremonial green
+badge. The verification job records state count, bounds, checker/tool version, elapsed time, and whether it
+was exhaustive or sampled; a simulation is never labeled a proof.
+
 ## 6. Optimistic batching and adaptive failure isolation
 
 ### 6.1 Preserve obligations; optimize execution shape
@@ -338,6 +418,13 @@ The batch is selected only when it is feasible, `BatchValue(B)` exceeds the conf
 across credible estimate ranges, and the deterministic isolation plan fits the remaining budget. Sparse or
 uncalibrated history produces a conservative prior; it does not become an invented high pass probability.
 
+Batch size is dynamic rather than a global constant. The controller considers queue age, arrival rate,
+shared setup cost, observed failure correlation, available isolation capacity, and the nonlinear point at
+which more parallel machines stop improving feedback. It may wait only up to a small configured coalescing
+window; an old or high-priority item dispatches without waiting for an “efficient” batch. Learned test
+selection may order members or choose early-result sentinels, but the initial implementation cannot remove a
+required member unless a separately accepted sound closure rule proves it irrelevant.
+
 ### 6.3 Failure path
 
 On failure:
@@ -369,6 +456,12 @@ and recovery reserve. It cancels work only when cancellation is safe; otherwise 
 retained as non-authorizing evidence. Speculative waste is measured explicitly rather than hidden inside
 overall runner use.
 
+Speculation across candidate changes follows merge-queue semantics: a downstream candidate is tested against
+the exact ordered predecessor set it assumes. If a predecessor fails or changes, only evidence whose subject
+includes that predecessor set is invalidated. The maximum speculative chain depth and fan-out are policy
+bounds, and superseded work is cancelled before new speculative work is admitted. This captures the
+common-case parallelism without accepting unbounded invalidation cascades.
+
 ## 7. Review, repair, and agent routing
 
 ### 7.1 Review as bounded information acquisition
@@ -382,6 +475,14 @@ Any candidate change invalidates the affected review epoch. A confirmation check
 sibling risk; it does not mechanically repeat unrelated lenses. After the second related late-stage defect,
 the workflow enters the ADR-0079 deep-dive route. At the total round bound it terminates safely rather than
 asking for another reviewer.
+
+The review package is optimized for understanding rather than comment count: intent and non-goals,
+semantic/touch-set diff, risk and invariant delta, selected and omitted checks with reasons, current-head
+evidence, and unresolved questions. Formatting and policy checks run before human review. Findings are
+classified as blocking correctness/security/contract issues, bounded follow-up, or non-blocking nits; nits
+cannot keep the state machine in `Repairing`. Review wait and active review time are separate measurements,
+and an unanswered review reaches its configured reassignment, synchronous-review, or terminal route instead
+of remaining open forever.
 
 ### 7.2 Capability-based model profiles
 
@@ -403,6 +504,37 @@ Provider bindings include exact model/reasoning identity, context limit, tools, 
 price, observed duration and failure distributions, and expiry. A model update enters shadow/canary
 qualification before becoming the default binding. The workflow remains valid when no provider is eligible:
 it waits within budget, routes to a deterministic/human alternative, or terminates classified.
+
+Routing follows an explicit complexity ladder:
+
+1. use a deterministic parser, formatter, compiler, search, or test when it can decide the obligation;
+2. use one bounded model call for classification, extraction, or a proposed patch with a deterministic
+   verifier;
+3. use a fixed localization → implementation → validation workflow for a well-shaped repository task;
+4. use one autonomous agent when the route genuinely depends on observations discovered during work; and
+5. use multiple agents only when disjoint search or implementation lanes have measured value over the
+   single-agent baseline.
+
+The router uses local, time-decayed outcome distributions by work class—not a provider leaderboard or a
+model's self-assessment. It compares direct-strong routing with cheap-then-escalate routing on total latency,
+cost, accepted-result rate, verification burden, and downstream defects. A failed cheap attempt is charged
+to the cascade. Exploration receives a small explicit budget and cannot silently turn production work into
+router training.
+
+### 7.3 Bounded multi-agent composition
+
+Multi-agent execution is an optimization mode, not the default architecture. It is legal only when workers
+have disjoint declared touch sets or independent evidence duties, immutable task inputs, unique branch/job
+identities, leases, and a deterministic join. One accountable integrator owns final conflict resolution and
+delivery; a peer vote cannot authorize a merge.
+
+The controller caps worker count, shared-message bytes, polling frequency, open PRs, merge attempts, and
+integration retries. It stops spawning when the integration queue or review capacity is the bottleneck.
+Independent critiques may use deliberately different prompts or eligible model families to reduce
+correlated blind spots, but disagreement is preserved as evidence rather than averaged away. Dependent work
+stays sequential unless the speculative predecessor identity and invalidation cost are explicit. These rules
+directly address observed conflict abandonment, conformity, hidden-information, and resource-flood failure
+modes in agent swarms.
 
 ## 8. Pure controller and durable executor
 
@@ -440,6 +572,13 @@ Planner output is untrusted until an independently implemented verifier proves:
 - the objective and performance-envelope totals recompute from canonical bytes; and
 - terminal and next-replan conditions exist.
 
+The executor borrows durable-execution mechanics without delegating policy to them. Workflow code and policy
+are versioned for deterministic replay; each effect carries a stable idempotency identity; an ambiguous
+timeout is observed before retry; and execution history has byte/event ceilings plus an explicit modeled
+continuation or archival boundary. Retry defaults distinguish application findings from transient
+infrastructure failure. A durable engine may resume an action forever, so its retry feature is always capped
+by the controller's semantic and resource budgets.
+
 ## 9. Performance evidence and anti-bureaucracy controls
 
 ### 9.1 Required measurements
@@ -454,12 +593,27 @@ Every attempt records, with appropriate privacy and retention controls:
 - cache lookup, hit/miss reason, reused receipt identity, and avoided work;
 - speculative work completed, reused, cancelled, or wasted;
 - unique actionable defects by check/review lens and the later closure check that would have caught them;
+- author active time, reviewer active time, wait time, handoffs, interruptions, and context-reconstruction
+  events, sampled with privacy-preserving aggregation;
+- perceived ease, cognitive load, and flow from a small stable survey, kept beside rather than substituted
+  for observed delivery outcomes;
+- work-item/change size, WIP at each bottleneck, merge/integration queue age, abandoned outputs, conflict
+  rate, and time spent verifying model-generated work;
+- route level, all attempted model/tool costs, escalation reason, accepted-result rate, downstream rework,
+  and time-decayed calibration error;
+- cache sentinel results, flaky-test rate, cache-key completeness failures, and comprehensive-closure misses;
 - administrative action count and classified purpose; and
 - terminal outcome, deadline/budget exhaustion, and recovery path.
 
 Provider self-reports are not success authority. Measurements join verified process, runner, GitHub, and
 receipt facts. Cancelled and timed-out work remains censored data; it is not rewritten as a successful short
 duration or omitted from cost.
+
+The primary scorecard is a vector, not a weighted vanity number: delivery lead time and throughput; change
+failure/recovery and escaped defects; author/reviewer attention and flow; and compute/token/money/storage.
+Policy comparisons report the full vector and uncertainty intervals. Lines changed, commits, agent turns,
+comments, tokens consumed, and utilization are diagnostic quantities only. A policy cannot qualify by
+raising visible activity while shifting cost to review, integration, recovery, or a later closure boundary.
 
 ### 9.2 Bureaucracy ledger
 
@@ -559,6 +713,10 @@ itself a substitute for those requests.
   terminal outcome, and control-plane share.
 - Measure current time-to-first-evidence, p50/p95/p99 latency, review/repair rounds, runner setup duplication,
   check pass/failure correlation, cache reuse, agent attempts, token use, and administrative action count.
+- Measure author/reviewer active and waiting time, interruptions, work/change size, WIP, integration conflicts,
+  verification effort, flaky outcomes, and perceived ease/flow using stable privacy-preserving instruments.
+- Establish deterministic, single-call, fixed-workflow, single-agent, and multi-agent baselines for the work
+  classes where those modes are applicable; do not compare a candidate only with a deliberately weak agent.
 - Publish the initial hard envelope and bureaucracy-ledger schema as candidate contracts.
 
 **Acceptance**
@@ -566,6 +724,8 @@ itself a substitute for those requests.
 - Empty, partial, cancelled, timed-out, and unavailable observations are distinguishable.
 - At least five historical failure classes replay from immutable inputs.
 - Baselines show denominators and censored observations.
+- The scorecard preserves delivery, quality, attention, and resource dimensions without collapsing them into
+  one activity score.
 - No workflow authority changes.
 
 ### PB1 — Quint workflow authority and compiled contract (`FS.GG.SDD`)
@@ -578,6 +738,10 @@ itself a substitute for those requests.
 - Provide deterministic tangle, typecheck, simulation, bounded verification, ITF export, semantic diff, and
   trace-validation commands.
 - Add anti-vacuity witnesses and required named mutations.
+- Separate invariant/rank/deadlock evidence from conditional temporal claims; record every fairness and
+  environment assumption and whether each run was exhaustive or sampled.
+- Define small finite profiles and symmetry/independence abstractions so verification cost cannot grow with
+  provider inventory, telemetry cardinality, or arbitrary backlog size.
 
 **Acceptance**
 
@@ -586,6 +750,7 @@ itself a substitute for those requests.
 - Removing any performance budget, required batch member, exact-head guard, or terminal exit makes a named
   control red.
 - Generated contract and diagram facts are reproducible from pinned source/tool identities.
+- No result is labeled a termination proof solely because a bounded simulation found no counterexample.
 - Runtime-neutral package/tooling is published before consumers pin it.
 
 ### PB2 — Pure reducer, policy schema, and independent verifier (`FS.GG.Coordination`)
@@ -597,6 +762,8 @@ itself a substitute for those requests.
 - Implement canonical workflow state/events and deterministic evolution.
 - Implement versioned safety/performance policy parsing with complete-budget validation.
 - Implement baseline legal-action selection and an independent feasibility verifier.
+- Implement WIP admission, complexity-ladder selection, coalescing deadlines, and wait/terminal routes before
+  adding learned scheduling or routing.
 - Replay PB1 ITF traces through the reducer and compare observable states/actions.
 - Emit content-addressed decision and performance receipts.
 
@@ -617,6 +784,8 @@ itself a substitute for those requests.
 - Implement optimistic batches with per-member results and content-addressed evidence.
 - Implement binary isolation baseline, parallel partition execution, infra/finding/indeterminate
   classification, and isolation-budget exhaustion.
+- Implement dynamic batch sizing, exact predecessor-set identities, supersession cancellation, flaky-result
+  classification, cache sentinels, and bounded speculative depth/fan-out.
 - Add side-effect-free speculation and cancellation accounting behind a disabled-by-default policy flag.
 
 **Acceptance**
@@ -625,6 +794,7 @@ itself a substitute for those requests.
 - One planted failure is attributed without rerunning already proven independent members.
 - Multiple correlated failures terminate within the isolation budget.
 - Missing member output, truncated result, stale cache key, or wrong candidate refuses success.
+- Queue bursts and predecessor failures cannot cause unbounded coalescing waits or invalidation reruns.
 - Replay/simulation shows improved p95 feedback or runner cost without obligation loss.
 
 ### PB4 — Bounded review/repair and capability routing (`FS.GG.Coordination`)
@@ -637,7 +807,10 @@ itself a substitute for those requests.
 - Implement fresh review epochs, current-head invalidation, bounded confirmation, deep-dive entry, and
   terminal exhaustion.
 - Implement capability-profile registry and provider binding qualification.
-- Route cheap deterministic work before agents and select the least-cost eligible model profile.
+- Route through deterministic, single-call, fixed-workflow, single-agent, and multi-agent levels and select
+  the least-complex qualified route, accounting for whole-cascade cost.
+- Implement multi-agent identity, touch-set/independent-evidence admission, leases, WIP/message/poll bounds,
+  deterministic join, and one accountable integrator behind a disabled-by-default policy flag.
 
 **Acceptance**
 
@@ -646,6 +819,8 @@ itself a substitute for those requests.
 - The second related late defect enters deep-dive; total exhaustion terminates.
 - No eligible model produces a classified wait/fallback/terminal route rather than a routing loop.
 - Stronger models are used only when required capabilities or measured risk justify them.
+- Multi-agent mode must outperform the single-agent/fixed-workflow baseline on an applicable local cohort
+  without increasing conflict abandonment, review queue age, or total verification burden.
 
 PB3 and PB4 may develop in parallel after PB2 because their primary touch sets and contracts differ. Their
 integration candidate must replay combined check-failure → repair → requalification traces before either is
@@ -676,10 +851,13 @@ considered complete at the parent boundary.
 **Deliverables**
 
 - Build discrete-event scenarios for arrival bursts, correlated failures, flaky checks, provider slowdown,
-  runner scarcity, GitHub degradation, review recurrence, and cache corruption.
+  runner scarcity, GitHub degradation, review recurrence, cache corruption, stale router data, dependent-agent
+  conflicts, reviewer saturation, and speculative invalidation cascades.
 - Replay accepted historical incidents against baseline and candidate policies.
 - Run live shadow planning and record disagreements without mutation.
 - Calibrate batching thresholds, isolation strategy, speculation limits, and capability routing.
+- Run paired or randomized canary cohorts where practical; compare measured end-to-end time with perceived
+  speed so a fluent tool cannot qualify on sentiment alone.
 
 **Acceptance**
 
@@ -687,6 +865,7 @@ considered complete at the parent boundary.
   without a material regression in another, or is explicitly rejected.
 - Tail latency, queue age, cancellation waste, and recovery reserve stay within envelope.
 - Prediction calibration and sparse-data cases are visible.
+- Whole-cascade routing cost and human verification/review cost are attributed to the originating decision.
 - Shadow disagreement is explained from canonical constraint/objective facts.
 
 ### PB7 — Bounded canary and routine-flow adoption (`FS.GG.Coordination`, then `.github`)
@@ -703,6 +882,8 @@ considered complete at the parent boundary.
 **Acceptance**
 
 - Canary completes enough successes and planted/real failures to exercise both batch and isolation paths.
+- Canary includes at least one superseded predecessor, flaky signal, cache-sentinel miss, route escalation,
+  and multi-agent conflict or refusal fixture before those optimizations may be enabled.
 - No safety, obligation-coverage, or exact-head regression occurs.
 - Starter performance envelope holds at p95/p99 with complete denominators.
 - Rollback restores the prior route without rewriting receipts.
@@ -776,9 +957,14 @@ ordered change. No roadmap checkbox substitutes for a published artifact or veri
 | Cached green evidence hides drift | Semantic subject plus candidate/toolchain/environment/policy key, expiry, digest revalidation, and comprehensive closure. |
 | The optimizer games easy metrics | Constraint-first feasibility, tail measures, fixed denominators, censored outcomes, named mutations, and independent verifier. |
 | Formal termination is overstated | Frozen-scope and fairness assumptions are explicit; waiting and external availability are not counted as internal progress. |
+| Model checking itself becomes a slow gate | Small finite profiles, abstraction, pinned bounds, state-count/time receipts, fast invariant batches, and deeper exhaustive runs only at semantic or closure boundaries. |
 | Review findings expand scope without bound | Stable identities, deduplication, active-scope freeze, cross-scope backlog routing, bounded rounds, and terminal quarantine. |
+| Fast generation overloads reviewers | Small deliverable slices, author-side deterministic checks, WIP tied to review capacity, compact review packages, non-blocking nits, and separate review-wait/active-time budgets. |
 | Strong models are used everywhere | Least-cost eligible capability routing and measured escalation triggers. |
 | Cheap models cause rework | Outcome/rework distributions feed eligibility; repeated defects escalate and can disqualify a binding. |
+| Cheap-first routing makes known-hard work slower | Compare direct-strong and cascade routes by work class; charge every failed tier and verification step to the original route. |
+| Multi-agent activity overwhelms integration | Opt-in disjoint/independent lanes, one integrator, WIP/message/poll/PR caps, unique identities, leases, and a single-agent baseline. |
+| Agent agreement hides a correlated mistake | Preserve dissent, diversify independent critique where justified, require deterministic/external evidence, and never authorize by vote alone. |
 | A visualization becomes a second workflow editor | One-way generated projection, fingerprint binding, read-only default, and typed commands outside the renderer. |
 
 ## 16. Alternatives considered
@@ -823,6 +1009,32 @@ Rejected as the complete solution. Temporal, Durable Functions, or an actor runt
 retry effects, but durability alone does not establish obligation closure, bounded rework, exact-head review,
 or bureaucracy termination. A durable executor remains useful beneath the Quint/policy boundary.
 
+### Use an autonomous agent for every task
+
+Rejected. Tool-interface design matters, but repository benchmarks and industrial evidence do not show that
+maximum autonomy is the most efficient universal route. A fixed localization/repair/validation workflow can
+be cheaper and more interpretable, while deterministic tools are better for already-formalized decisions.
+The complexity ladder escalates only when a simpler route is unqualified or has worse local outcomes.
+
+### Use multiple agents by default
+
+Rejected. Parallel independent search can improve coverage, but dependent software changes create conflict,
+integration, conformity, messaging, and resource-amplification costs. Multi-agent mode is a bounded execution
+policy for demonstrably separable work, not a synonym for throughput.
+
+### Optimize one productivity score
+
+Rejected. Any scalar weighting invites the controller to exchange quality, human attention, or tail risk for
+visible output. The feasibility envelope and multidimensional scorecard retain hard bounds and expose the
+trade rather than hiding it in a coefficient.
+
+### Treat Quint model checking as unconditional termination proof
+
+Rejected. The formal result applies to the stated abstraction and finite bounds; liveness may depend on
+fairness and external availability, and current Quint temporal support is partial. The accepted claim joins
+rank/deadlock checks, explicit deadlines and assumptions, supported temporal evidence, and reducer trace
+correspondence.
+
 ## 17. Definition of done
 
 This program is complete only when one real routine change and one planted-failure change both traverse the
@@ -833,10 +1045,15 @@ new flow and produce:
 - optimistic batched qualification on the common path;
 - adaptive isolation that does not replay proven work on the failure path;
 - bounded review/repair with fresh exact-head evidence;
-- capability-based model selection and complete usage receipts;
+- least-complex qualified routing, capability-based model selection, and complete cascade usage receipts;
+- WIP-bounded human and agent coordination with measured author/reviewer attention and verification cost;
 - exact-head delivery or an honest terminal refusal;
 - a generated static diagram and live execution projection; and
 - replay, simulation, shadow, canary, rollback, and comprehensive closure evidence showing that throughput
-  improved without buying speed by deleting obligations or hiding failures.
+improved without buying speed by deleting obligations or hiding failures.
+
+The comparison must include a deterministic/fixed-workflow baseline and, where applicable, single-agent and
+multi-agent variants. A subjective impression of speed, a higher agent solve rate without cost, or a green
+bounded simulation without the stated proof assumptions is insufficient.
 
 Until then, the design is preparation and evidence—not production authority.
