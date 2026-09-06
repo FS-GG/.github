@@ -1,0 +1,282 @@
+schemaVersion: 1
+workId: 3255-accept-real-sdd-stage-schemas
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3255-accept-real-sdd-stage-schemas/spec.md
+sourceClarifications: work/3255-accept-real-sdd-stage-schemas/clarifications.md
+sourceChecklist: work/3255-accept-real-sdd-stage-schemas/checklist.md
+sourcePlan: work/3255-accept-real-sdd-stage-schemas/plan.md
+sourceTasks: work/3255-accept-real-sdd-stage-schemas/tasks.yml
+sourceAnalysis: readiness/3255-accept-real-sdd-stage-schemas/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3255-accept-real-sdd-stage-schemas/analysis.json
+    digest: 3c8715f60dc36383e1a62ca17904202338c5d15203de0eab6bd1df8e91b205e4
+    schemaVersion: 1
+  - label: checklist
+    path: work/3255-accept-real-sdd-stage-schemas/checklist.md
+    digest: 533b5b84fb25dbab296897e0faa6bd2615ba85b51981477751ea7e2790b7b055
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3255-accept-real-sdd-stage-schemas/clarifications.md
+    digest: 1d52fe2642564cad43731bfb950e020aaa253582a9bdccf9398685007de39e18
+    schemaVersion: 1
+  - label: plan
+    path: work/3255-accept-real-sdd-stage-schemas/plan.md
+    digest: 1a928e16c6f368d0639de187577132684b78312bf761f94790b21f25f1a64257
+    schemaVersion: 1
+  - label: spec
+    path: work/3255-accept-real-sdd-stage-schemas/spec.md
+    digest: c1bac88feb003a4574353bbaf9996b78530d7a8aa9c1ab35a2a0b92d2f5ee528
+    schemaVersion: 1
+  - label: tasks
+    path: work/3255-accept-real-sdd-stage-schemas/tasks.yml
+    digest: 8ee54b2ed1dbd8f99e7443be6473fb453d74dede4a0b9ab9634c1a36f89d5430
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml
+      digest: "sha256:0085c0f1e7c1c17be33ce820052d2f93f3d3d903c7be42578b6ca33ad3d0d5b9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 970
+      failed: 0
+      skipped: 0
+    notes: [Release Core suite passed 970 of 970 and proves exact SDD 1.5.0 artifact identities, including negative view and generator mutations.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml
+      digest: "sha256:0085c0f1e7c1c17be33ce820052d2f93f3d3d903c7be42578b6ca33ad3d0d5b9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 970
+      failed: 0
+      skipped: 0
+    notes: [Release Core suite passed 970 of 970 and proves the native ship contract and blocking-finding refusal.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/cli.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli/QualificationApplication.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RoadmapWorkUnitCliTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/cli.test-report.xml
+      digest: "sha256:111d864d16df620883eef00b51c3b011fb305326c2776308cf07141bfca74475"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 433
+      failed: 0
+      skipped: 0
+    notes: [Release CLI suite passed 433 of 433 and proves qualification runs in an exact-revision disposable clone without mutating caller state.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/cli.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli/QualificationApplication.fs
+      - kind: implementation
+        path: src/FS.GG.Coord.Cli.BoardOps/Handlers.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/RoadmapWorkUnitCliTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/RoadmapWorkUnitTransactionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml
+      digest: "sha256:94267697c6b76d7f4ef538804b61ca773027ec10cf9f5d8d2734f67663f29628"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 276
+      failed: 0
+      skipped: 0
+    notes: [All three source-bound suites prove canonical bindings, mutation controls, and live acceptance authority checks.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml
+      digest: "sha256:0085c0f1e7c1c17be33ce820052d2f93f3d3d903c7be42578b6ca33ad3d0d5b9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 970
+      failed: 0
+      skipped: 0
+    notes: [Release Core suite passed 970 of 970 against the corrected public acceptance contract.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV006]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/cli.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml
+      digest: "sha256:94267697c6b76d7f4ef538804b61ca773027ec10cf9f5d8d2734f67663f29628"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 276
+      failed: 0
+      skipped: 0
+    notes: [Source-bound reports record Core 970 of 970, CLI 433 of 433, and BoardOps 276 of 276 passing with no failures or skips.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml]
+    sourceRefs:
+      - kind: implementation
+        path: src/FS.GG.Coord.Core/RoadmapWorkUnit.fs
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/RoadmapWorkUnitTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml
+      digest: "sha256:0085c0f1e7c1c17be33ce820052d2f93f3d3d903c7be42578b6ca33ad3d0d5b9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 970
+      failed: 0
+      skipped: 0
+    notes: [The patch preserves schemaVersion 1 while enforcing the exact SDD 1.5.0 view and generator identities.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [work/3255-accept-real-sdd-stage-schemas/verification/core.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/cli.test-report.xml, work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3255-accept-real-sdd-stage-schemas/verification/boardops.test-report.xml
+      digest: "sha256:94267697c6b76d7f4ef538804b61ca773027ec10cf9f5d8d2734f67663f29628"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 276
+      failed: 0
+      skipped: 0
+    notes: [Generated readiness views are refreshed from three source-bound green suite reports.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

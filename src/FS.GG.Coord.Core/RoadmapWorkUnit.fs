@@ -828,22 +828,53 @@ module RoadmapWorkUnit =
                         | JsonValueKind.String -> readinessNode.GetString()
                         | JsonValueKind.Object -> text "sddReadiness" "status" readinessNode
                         | _ -> raise (FormatException("sddArtifact.readiness must be a status string or object"))
-                    let sources = prop "sources" root
-                    let hasWorkModelSource =
+                    let nonBlockingArray name =
+                        let values = prop name root
+                        values.ValueKind = JsonValueKind.Array
+                        && (values.EnumerateArray()
+                            |> Seq.forall (fun value ->
+                                value.ValueKind = JsonValueKind.Object
+                                && match value.TryGetProperty "severity" with
+                                   | true, severity when severity.ValueKind = JsonValueKind.String ->
+                                       List.contains (severity.GetString()) [ "warning"; "info" ]
+                                   | _ -> false))
+                    let sourceBackedStage () =
+                        let sources = prop "sources" root
+                        let hasWorkModelSource =
+                            sources.ValueKind = JsonValueKind.Array
+                            && (sources.EnumerateArray()
+                                |> Seq.exists (fun source ->
+                                    source.ValueKind = JsonValueKind.Object
+                                    && text "sddSource" "path" source = $"readiness/%s{input.SddWorkId}/work-model.json"))
                         sources.ValueKind = JsonValueKind.Array
-                        && (sources.EnumerateArray()
-                            |> Seq.exists (fun source ->
-                                source.ValueKind = JsonValueKind.Object
-                                && text "sddSource" "path" source = $"readiness/%s{input.SddWorkId}/work-model.json"))
-                    let findingsNode = prop "findings" root
-                    let diagnostics = prop "diagnostics" root
+                        && sources.GetArrayLength() > 0
+                        && hasWorkModelSource
+                        && nonBlockingArray "findings"
+                        && nonBlockingArray "diagnostics"
+                    let shipStage () =
+                        let sourcesDigest = prop "sourcesDigest" root
+                        let verificationReadiness = prop "verificationReadiness" root
+                        let disposition = prop "disposition" root
+                        let blockingFindingIds = prop "blockingFindingIds" disposition
+                        sourcesDigest.ValueKind = JsonValueKind.Object
+                        && text "sddSourcesDigest" "algorithm" sourcesDigest = "sha256"
+                        && sha.IsMatch(text "sddSourcesDigest" "value" sourcesDigest)
+                        && verificationReadiness.ValueKind = JsonValueKind.Object
+                        && text "sddVerificationReadiness" "status" verificationReadiness = "verificationReady"
+                        && disposition.ValueKind = JsonValueKind.Object
+                        && text "sddDisposition" "state" disposition = "shipReady"
+                        && blockingFindingIds.ValueKind = JsonValueKind.Array
+                        && blockingFindingIds.GetArrayLength() = 0
+                    let nativeStageValid =
+                        match stage with
+                        | "analyze" | "verify" -> sourceBackedStage ()
+                        | "ship" -> shipStage ()
+                        | _ -> false
                     match CanonicalJson.canonicalize (utf8 observation.ArtifactJson) with
                     | Error reason -> findings.Add(SddObservationInvalid(stage, reason))
-                    | Ok _ when schemaVersion = 1 && not (String.IsNullOrWhiteSpace viewVersion)
-                                && Regex.IsMatch(generator, "^FS[.]GG[.]SDD[.]Artifacts/[0-9]+[.][0-9]+[.][0-9]+$", RegexOptions.CultureInvariant)
-                                && sources.ValueKind = JsonValueKind.Array && sources.GetArrayLength() > 0 && hasWorkModelSource
-                                && findingsNode.ValueKind = JsonValueKind.Array && findingsNode.GetArrayLength() = 0
-                                && diagnostics.ValueKind = JsonValueKind.Array && diagnostics.GetArrayLength() = 0
+                    | Ok _ when schemaVersion = 1 && viewVersion = "1.0"
+                                && generator = "FS.GG.SDD.Artifacts/1.5.0"
+                                && nativeStageValid
                                 && observedStage = stage && observedStatus = status && readiness = status
                                 && observedWork = input.SddWorkId && observation.SubjectRevision = input.Identities.ImplementationCandidate -> ()
                     | Ok _ -> findings.Add(SddObservationInvalid(stage, $"stage=%s{observedStage} status=%s{observedStatus} work=%s{observedWork} subject=%s{observation.SubjectRevision}"))

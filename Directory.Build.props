@@ -545,8 +545,12 @@
        unit PR fulfilling implementation and acceptance, derives its repository from the applied unit
        registration, and accepts the unit's canonical work-cycle critique before the final evidence
        commit. No command, option, result, or exit-code vocabulary changes. -->
+  <!-- 0.83.4 -> 0.83.5 (.github#3255): PATCH. Roadmap acceptance validates the native SDD 1.5.0
+       analyze, verify, and ship artifact shapes, permits only non-blocking readiness warnings, rejects
+       hidden index state, and runs production qualification in a disposable exact-candidate clone.
+       No command, option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.4</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.83.5</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

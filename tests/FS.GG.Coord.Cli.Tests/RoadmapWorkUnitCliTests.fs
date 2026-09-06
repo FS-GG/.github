@@ -106,7 +106,11 @@ module RoadmapWorkUnitCliTests =
             { ImplementationPullRequest = 1; ImplementationCandidate = candidate; ImplementationMerge = head 'b'
               AcceptancePullRequest = 2; AcceptanceCandidate = head 'c'; AcceptanceMerge = head 'd'; ProtectedMain = head 'd' }
         let binding candidate merge tree = RoadmapWorkUnit.sealRevisionBinding "FS-GG/.github" candidate merge tree tree 0
-        let observation stage status : RoadmapWorkUnit.SddObservation = { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/500-roadmap-gs2-07-3/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"500-roadmap-gs2-07-3"}}""" }
+        let observation stage status : RoadmapWorkUnit.SddObservation =
+            let stageFields =
+                if stage = "ship" then $""""sourcesDigest":{{"algorithm":"sha256","value":"%s{sha '7'}"}},"verificationReadiness":{{"status":"verificationReady"}},"disposition":{{"state":"shipReady","blockingFindingIds":[]}},"""
+                else """"sources":[{"path":"readiness/500-roadmap-gs2-07-3/work-model.json"}],"findings":[],"diagnostics":[],"""
+            { Stage = stage; SubjectRevision = candidate; ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0",%s{stageFields}"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"500-roadmap-gs2-07-3"}}""" }
         let critique = $"""{{"schema_version":3,"cycle_id":"GS2-07.3","milestone":"GS2-07.3","critic":"critic-1","initial_reviewed_commit":"%s{candidate}","scope":["requirements","diff","tests","architecture","roadmap-evidence"],"initial_verdict":"pass","game_functionality":false,"entry_point_not_test_ownable":false,"entry_point_not_test_ownable_reason":null,"player_journeys":[],"uncovered_functionality":[],"repair_rounds":0,"reviewed_commits":["%s{candidate}"],"findings":[],"confirmation":{{"reviewed_commit":"%s{candidate}","verdict":"pass","unresolved_blocker_major":[]}},"human_escalation":null}}"""
         { Schema = RoadmapWorkUnit.AcceptanceInputSchema; Plan = plan; PreparationApplication = application; Qualification = qualification unitIssue candidate
           LifecycleRunId = "roadmap-unit-gs2-07.3"; LifecycleUnitId = "GS2-07.3"; LifecycleLog = lifecycle candidate

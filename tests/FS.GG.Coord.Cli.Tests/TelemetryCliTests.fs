@@ -112,8 +112,9 @@ module TelemetryCliTests =
         let fixturePath = Path.Combine(directory, "mutation-fixture.sh")
         File.WriteAllText(fixturePath, "#!/bin/sh\nprintf 'REFUSED wrong subject\\n' >&2\nexit 7\n", UTF8Encoding(false))
         File.SetUnixFileMode(fixturePath, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        File.WriteAllText(Path.Combine(directory, "tracked-verdict.txt"), "committed\n", UTF8Encoding(false))
         command directory "/usr/bin/git" [ "init"; "--quiet" ] |> ignore
-        command directory "/usr/bin/git" [ "add"; ".gitignore"; "qualification-tool.sh"; "mutation-fixture.sh" ] |> ignore
+        command directory "/usr/bin/git" [ "add"; ".gitignore"; "qualification-tool.sh"; "mutation-fixture.sh"; "tracked-verdict.txt" ] |> ignore
         command directory "/usr/bin/git" [ "-c"; "user.name=Fixture"; "-c"; "user.email=fixture@example.invalid"; "commit"; "--quiet"; "-m"; "fixture" ] |> ignore
         let revision = command directory "/usr/bin/git" [ "rev-parse"; "HEAD" ]
         let digest c = String.replicate 64 (string c)
@@ -428,6 +429,16 @@ module TelemetryCliTests =
         Assert.True(QualificationApplication.runBoundToTree (String.replicate 40 "0") inputPath executionPath |> Result.isError)
 
         let execution = File.ReadAllText executionPath
+        File.WriteAllText(executionPath, execution.Replace("evidence/analyze.txt", "tracked-verdict.txt"))
+        Assert.True(QualificationApplication.runBoundToTree tree inputPath executionPath |> Result.isOk)
+        Assert.Equal("committed\n", File.ReadAllText(Path.Combine(checkout, "tracked-verdict.txt")))
+        Assert.Equal("", command checkout "/usr/bin/git" [ "status"; "--porcelain"; "--untracked-files=all" ])
+
+        command checkout "/usr/bin/git" [ "update-index"; "--skip-worktree"; "tracked-verdict.txt" ] |> ignore
+        let hidden = QualificationApplication.runBoundToTree tree inputPath executionPath
+        Assert.Contains("skip-worktree or assume-unchanged", match hidden with Error errors -> String.concat "\n" errors | Ok _ -> "")
+        command checkout "/usr/bin/git" [ "update-index"; "--no-skip-worktree"; "tracked-verdict.txt" ] |> ignore
+
         let fakeGitPath = JsonSerializer.Serialize(Path.Combine(checkout, "qualification-tool.sh"))
         File.WriteAllText(executionPath, execution.Replace("\"id\":\"git\",\"path\":\"/usr/bin/git\"", $"\"id\":\"git\",\"path\":%s{fakeGitPath}"))
         let fakeGit = QualificationApplication.runBoundToTree tree inputPath executionPath

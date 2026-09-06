@@ -138,8 +138,11 @@ module RoadmapWorkUnitTransactionTests =
         let unit = application.Registrations |> List.find (fun value -> value.Kind = "unit")
         let number = Int32.Parse(unit.Issue.Split('#')[1])
         let observation stage status : RoadmapWorkUnit.SddObservation =
+            let stageFields =
+                if stage = "ship" then $""""sourcesDigest":{{"algorithm":"sha256","value":"%s{String.replicate 64 "7"}"}},"verificationReadiness":{{"status":"verificationReady"}},"disposition":{{"state":"shipReady","blockingFindingIds":[]}},"""
+                else $""""sources":[{{"path":"readiness/%s{sddWorkId}/work-model.json"}}],"findings":[],"diagnostics":[],"""
             { Stage = stage; SubjectRevision = candidate
-              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0","sources":[{{"path":"readiness/%s{sddWorkId}/work-model.json"}}],"findings":[],"diagnostics":[],"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"%s{sddWorkId}"}}""" }
+              ArtifactJson = $"""{{"schemaVersion":1,"viewVersion":"1.0","generator":"FS.GG.SDD.Artifacts/1.5.0",%s{stageFields}"stage":"%s{stage}","status":"%s{status}","readiness":"%s{status}","workId":"%s{sddWorkId}"}}""" }
         let observations = [ observation "analyze" "implementationReady"; observation "verify" "verificationReady"; observation "ship" "shipReady" ]
         let digest c = String.replicate 64 (string c)
         let tool = {| id = "dotnet"; version = "10.0"; sha256 = digest '1' |}
