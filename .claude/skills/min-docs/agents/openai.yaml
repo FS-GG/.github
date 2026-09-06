@@ -1,0 +1,6 @@
+interface:
+  display_name: "Minimal Documentation"
+  short_description: "Land non-functional prose with narrow validation"
+  default_prompt: "Use $min-docs to write and land this prose-only documentation change with minimal process."
+policy:
+  allow_implicit_invocation: true

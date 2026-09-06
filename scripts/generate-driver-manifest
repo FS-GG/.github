@@ -123,10 +123,10 @@ DESCRIPTION_MAX = 220
 # so folding its trigger into a board skill would make discovery depend on the setup it must create.
 # Keep headroom small but real: this remains a prompt-budget guard, not a frozen historical count.
 DESCRIPTION_CEILING = 3650
-# 4350 -> 4600 for the bootstrap initializer. It must be discoverable before coordination is configured,
-# so it cannot hide behind an existing board skill. The increase buys one discriminating description,
-# not padding for existing rows; keep the remaining margin bounded.
-ROOT_CATALOG_CEILING = 4600
+# 4350 -> 4600 admitted the bootstrap initializer; 4600 -> 4750 admits `min-docs`, whose narrow trigger
+# prevents prose-only work from inheriting the implementation lifecycle. Each increase buys one
+# discriminating route, not padding for existing rows; keep the remaining margin bounded.
+ROOT_CATALOG_CEILING = 4750
 # DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
 # actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
 # now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
@@ -262,6 +262,7 @@ ROUTED_VARIANTS = {
 # Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
 # appear in DRIVERS or in the coordination-kit manifest.
 REPO_NATIVE_EXEMPTIONS = {
+    "min-docs": "repo-native lightweight prose landing route; it has no producer manifest",
     "spectre-console": "repo-native co-tenant; it has no producer manifest",
 }
 
