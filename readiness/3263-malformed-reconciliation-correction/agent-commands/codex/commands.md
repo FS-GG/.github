@@ -57,4 +57,3 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 - Stage: specify
 - Purpose: Carry out lifecycle task T011 (done) covering AC-004, FR-007, PD-007.
 - Related: AC-004, FR-007, PD-007
-

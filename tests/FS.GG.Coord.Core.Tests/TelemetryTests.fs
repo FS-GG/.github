@@ -237,6 +237,11 @@ module TelemetryTests =
             LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [] [] [ proof ] [] before
                 (draft 3 "synthetic-evidence-checkpoint" "started" "2026-09-04T08:04:00Z" "null" "{\"status\":\"pending\"}" [ "synthetic-checkpoint:sha256:" + proof.Digest ])
             |> unwrap
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndCheckpoints "run" "unit" false true [] [] [] [ proof ] [] (before + checkpointStart) |> Result.isError)
+        Assert.True(
+            LifecycleTelemetry.sealSuccessorWithEvidenceAndCheckpoints "run" "unit" [] [] [ proof ] [] (before + checkpointStart)
+                (draft 4 "ordinary-after-unfinished-checkpoint" "started" "2026-09-04T08:04:30Z" "null" "{\"status\":\"pending\"}" [ "must-refuse" ])
+            |> Result.isError)
         let receipt = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/synthetic-evidence-checkpoint" ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
         let source, _ = receipt
         let measured = $"""{{"status":"measured","input":10,"cached_input":4,"cache_write_input":0,"output":5,"reasoning":2,"total":15,"source":"%s{source}","session_ids":["session-1"],"turn_ids":["turn-1"]}}"""

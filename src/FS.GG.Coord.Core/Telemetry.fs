@@ -787,7 +787,7 @@ module LifecycleTelemetry =
         |> List.filter (fun source -> Regex.IsMatch(source, "^runtime-usage-csv:sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant))
         |> List.distinct
 
-    let private syntheticCheckpointContext runId unitId (proofs: SyntheticCheckpointProof.Proof list) (events: JsonObject list) =
+    let private syntheticCheckpointContext allowIncomplete runId unitId (proofs: SyntheticCheckpointProof.Proof list) (events: JsonObject list) =
         let checkpointPhase = "synthetic-evidence-checkpoint"
         let checkpointEvents =
             events
@@ -817,19 +817,22 @@ module LifecycleTelemetry =
                       yield InvalidEvent(line, "synthetic checkpoint authorization URL does not belong to the scoped issue") ]
             if not errors.IsEmpty then Error errors else
             match tail with
-            | [] -> Ok(Some(proof, proof.FrontierRevision, line, None))
+            | [] when startedIndex <> events.Length - 1 ->
+                Error [ InvalidEvent(line, "no lifecycle event may follow an unfinished synthetic checkpoint") ]
+            | [] when allowIncomplete -> Ok(Some(proof, proof.FrontierRevision, line, None))
+            | [] -> Error [ InvalidEvent(line, "synthetic checkpoint has not established a completed trusted anchor") ]
             | [ (completedIndex, completed) ] when stringAt "event" completed = "completed" && completedIndex + 1 = line + 1 ->
                 Ok(Some(proof, proof.FrontierRevision, completedIndex + 1, Some(stringAt "digest" completed)))
             | _ -> Error [ InvalidEvent(line, "synthetic checkpoint is reused or has an ambiguous event set") ]
 
-    let private validateWithEvidenceInternal (legacyProofs: LegacyReceiptProof.Proof list) (syntheticProofs: SyntheticCheckpointProof.Proof list) runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
+    let private validateWithEvidenceInternal allowIncompleteCheckpoint (legacyProofs: LegacyReceiptProof.Proof list) (syntheticProofs: SyntheticCheckpointProof.Proof list) runId unitId requireTerminal requiredPhases (usageReports: (string * RuntimeUsage.UsageRow list) list) (history: HistoryRow list) jsonLines =
         match validate runId unitId requireTerminal requiredPhases jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let reports = Map.ofList usageReports
             let findings = ResizeArray<Finding>()
             let events = objects jsonLines |> List.choose (function Ok value -> Some value | _ -> None)
-            let checkpoint = syntheticCheckpointContext runId unitId syntheticProofs events
+            let checkpoint = syntheticCheckpointContext allowIncompleteCheckpoint runId unitId syntheticProofs events
             match checkpoint with Error errors -> errors |> List.iter findings.Add | Ok _ -> ()
             let frontier = checkpoint |> Result.toOption |> Option.flatten |> Option.map (fun (_, revision, _, _) -> revision) |> Option.defaultValue 0
             let usedProofDigests = Collections.Generic.HashSet<string>()
@@ -918,16 +921,16 @@ module LifecycleTelemetry =
             else Error(List.ofSeq findings)
 
     let validateWithEvidence runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        validateWithEvidenceInternal [] [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        validateWithEvidenceInternal false [] [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
     let private validateReconciledInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines =
-        match validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines with
+        match validateWithEvidenceInternal false legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines with
         | Error errors -> Error errors
         | Ok validation ->
             let events = objects jsonLines |> List.choose Result.toOption
             let findings = ResizeArray<Finding>()
             let checkpointLine =
-                syntheticCheckpointContext runId unitId syntheticProofs events
+                syntheticCheckpointContext false runId unitId syntheticProofs events
                 |> Result.toOption
                 |> Option.flatten
                 |> Option.map (fun (_, _, line, _) -> line)
@@ -1003,11 +1006,11 @@ module LifecycleTelemetry =
 
     let validateWithEvidenceAndLegacy runId unitId requireTerminal requireReconciled requiredPhases usageReports legacyProofs history jsonLines =
         if requireReconciled then validateReconciledInternal legacyProofs [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
-        else validateWithEvidenceInternal legacyProofs [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        else validateWithEvidenceInternal false legacyProofs [] runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
     let validateWithEvidenceAndCheckpoints runId unitId requireTerminal requireReconciled requiredPhases usageReports legacyProofs syntheticProofs history jsonLines =
         if requireReconciled then validateReconciledInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
-        else validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
+        else validateWithEvidenceInternal false legacyProofs syntheticProofs runId unitId requireTerminal requiredPhases usageReports history jsonLines
 
     let private sealSuccessorInternal (runId: string) (unitId: string) (usageReports: (string * RuntimeUsage.UsageRow list) list) (legacyProofs: LegacyReceiptProof.Proof list) (syntheticProofs: SyntheticCheckpointProof.Proof list) (history: HistoryRow list) (existingJsonLines: string) (draftJson: string) =
         match objects existingJsonLines, objects draftJson with
@@ -1025,7 +1028,7 @@ module LifecycleTelemetry =
                 draft["digest"] <- JsonValue.Create(String.replicate 64 "0")
                 draft["digest"] <- JsonValue.Create(digest draft)
                 let rendered = TelemetryJson.canonical draft
-                match validateWithEvidenceInternal legacyProofs syntheticProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
+                match validateWithEvidenceInternal true legacyProofs syntheticProofs runId unitId false [] usageReports history (String.concat "\n" ([ yield! current |> List.map TelemetryJson.canonical; rendered ])) with Ok _ -> Ok(rendered + "\n") | Error e -> Error e
         | _, _ -> Error [ InvalidEvent(1, "successor draft must contain exactly one JSON object") ]
 
     let sealSuccessorWithEvidence runId unitId usageReports history existingJsonLines draftJson =

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "45a87431cd1083bc3ff177b25a458e40fc946e62705ee3358e7f9b6dfac3775a"
+        "value": "40dcd3d5e37c9530b49ecf86a5cc8b0526f671e3cbb10743b667dee4a40a7bd1"
       }
     },
     {
@@ -893,7 +893,7 @@
           "path": "work/3263-malformed-reconciliation-correction/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "45a87431cd1083bc3ff177b25a458e40fc946e62705ee3358e7f9b6dfac3775a"
+            "value": "40dcd3d5e37c9530b49ecf86a5cc8b0526f671e3cbb10743b667dee4a40a7bd1"
           },
           "schemaVersion": 1
         },
@@ -924,7 +924,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "2a7337bbbf3a6f8a51316a680965e01fafef901f61a3a43b115e1cdad42c15ab"
+        "value": "b76722f74350e66e3a3b9f342a9d53a668ce5a14809e5d5c8661d6e432c32818"
       },
       "currency": "current"
     }
