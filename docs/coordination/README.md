@@ -48,6 +48,13 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 > [execution roadmap](../github-substrate-v2-roadmap.md) decomposes that design into agent-sized units,
 > independent qualification gates, protected cutover operations, and explicit v1 deletion proofs.
 
+> **Performance-bounded development flow.** The
+> [performance-bounded, Quint-governed design and roadmap](2026-09-06-performance-bounded-development-flow-design-and-roadmap.md)
+> makes latency, resource efficiency, and bounded coordination overhead coequal acceptance properties with
+> safety. It specifies optimistic check batching with adaptive failure isolation, bounded review/repair,
+> capability-based model routing, generated workflow views, and the ordered `.github` → SDD → Coordination
+> delivery sequence.
+
 ## Requests and responses → cross-repo issues
 
 A "mailbox message" is a **GitHub issue in the target repo**.
