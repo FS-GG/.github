@@ -910,6 +910,69 @@ PB0 also fixes an engineering time/resource budget for the prototype and its sto
 baseline shows no material batching opportunity, or the minimum executor cannot meet the proposed envelope,
 retain the incumbent and record the failed hypothesis instead of building the remaining optimization stack.
 
+### Roadmap at a glance
+
+The roadmap is evidence-gated rather than date-driven. PB0 establishes the local cost and flow baseline needed
+to estimate later work honestly. Each stage ends with a decision to proceed, revise the candidate, or stop and
+retain the incumbent. Passing a component milestone does not authorize production mutation; PB7 has a separate
+operating-authority gate, and PB8 has a separate default-adoption decision.
+
+| Stage | Milestones | Primary owner | Deliverable outcome | Exit decision |
+|---|---|---|---|---|
+| 0. Establish the case | PB0 | `.github` | Reproducible baseline, complete candidate envelope, comparison protocol, and bounded prototype budget | Proceed only if the baseline exposes a material opportunity and the prototype has a falsifiable success threshold |
+| 1. Define the kernel | PB1 → PB2 | Coordination; SDD only for missing generic tooling | Checked workflow model, compiled identities, corresponding pure reducer, policy parser, and independent verifier | Proceed only when traces correspond, every loop is bounded, and concurrent reservations cannot overspend |
+| 2. Prove one vertical slice | PB3 core + PB4 core; PB5 in parallel | Coordination | One fixed route from admission through batching, isolation, critique, repair, delivery, and durable recovery | Proceed only when the integrated failure/recovery corpus passes and unsupported optimization modes fail closed |
+| 3. Establish operational evidence | PB6 → PB7 | Coordination, then `.github` operating authority | Historical replay, simulation, live shadow comparison, and one reversible routine-work canary | Promote only with sufficient cohort evidence, no hard-property regression, and verified rollback |
+| 4. Decide the default and expand | PB8 | `.github` policy; Coordination implementation | Accepted default decision, adaptive control review, and separately qualified work classes or optimization modes | Expand one class or mode at a time; retain or remove each control from measured cost, yield, and delayed-defect evidence |
+
+The delivery increments are intentionally useful at different boundaries:
+
+| Increment | Included milestones | What it establishes | What it does not establish |
+|---|---|---|---|
+| Baseline package | PB0 | Whether the proposal is worth prototyping and how success will be measured | Runtime correctness or a delivery improvement |
+| Executable kernel | PB1–PB2 | Model/reducer correspondence and deterministic feasibility decisions | Safe external effects or end-to-end delivery |
+| Core prototype | Core PB3–PB4 | A complete replayable vertical slice with bounded repair, accounting, and recovery | Production authority or comparative performance |
+| Observable prototype | PB5 | Inspectable static and live projections over canonical identities | Additional workflow authority |
+| Canary candidate | PB6 | A calibrated policy that is credible enough to seek bounded operating authority | Causal evidence of real delivery improvement |
+| Qualified routine flow | PB7 | Reversible real-work evidence against the incumbent | Fleet default or eligibility for other work classes |
+| Default-eligible flow | PB8 | Comprehensive closure and a separately accepted default decision | Automatic enablement of unqualified optimizations or work classes |
+
+### Execution lanes and joins
+
+The critical path is PB0 → PB1 → PB2 → core PB3/PB4 integration → PB6 → PB7 → PB8. Parallel work is
+limited to boundaries with independently reviewable outputs:
+
+- PB3 execution/recovery and PB4 review/routing can proceed in parallel after PB2. They join on the first
+  check-failure → repair → requalification → delivery/recovery trace.
+- PB5 can begin after PB1 supplies graph identities and PB2 supplies receipts. Its canonical table export is
+  enough for PB6, so interface polish cannot hold the evidence path open.
+- An SDD lane exists only when PB1 demonstrates a missing generic profile, compiler, or replay capability.
+  Coordination work that consumes that capability waits for its published immutable artifact; unrelated
+  domain modeling continues.
+- Adaptive batching, speculation, learned routing, multi-agent execution, and automatic cadence advice begin
+  as separate extension lanes only after the core route is measurable. Each rejoins at its own comparison and
+  comprehensive-qualification gate.
+
+At every join, the receiving milestone verifies the exact predecessor artifact rather than accepting a
+roadmap status. If a predecessor contract changes, only its affected descendants replay. PB7 and PB8 always
+take the comprehensive path regardless of earlier scoped evidence.
+
+### Roadmap control points
+
+| Gate | Evidence reviewed | Decision |
+|---|---|---|
+| G0 — Prototype | PB0 baseline and prototype budget | Fund the bounded kernel prototype, revise the hypothesis, or stop |
+| G1 — Kernel | PB1/PB2 model checks, mutations, trace correspondence, and reservation tests | Admit the core executor work or return to the model/policy boundary |
+| G2 — Vertical slice | Integrated PB3/PB4 success, failure, crash, deadline, and recovery traces | Admit simulation and shadow operation or repair the core design |
+| G3 — Canary authority | PB6 replay/simulation/shadow receipt and cold qualification of the enabling candidate | Grant a scoped, expiring PB7 operating authority or retain shadow-only operation |
+| G4 — Performance | PB7 cohort, delayed-defect follow-up, rollback, and complete denominators | Continue bounded observation, reject the candidate, or qualify the routine class |
+| G5 — Default | PB8 comprehensive exact-head closure and proposed policy/ADR | Accept or refuse default eligibility; separately decide every later class or optional mode |
+
+Roadmap status is tracked in implementation issues only after work begins. This document remains the proposed
+sequence and acceptance design; it must not acquire mutable checkboxes that compete with repository and board
+state. A gate that lacks evidence stays pending. `Insufficient-data` extends only the predeclared bounded
+observation window or retains the incumbent; it never counts as acceptance.
+
 ### PB0 — Baseline, glossary, and candidate performance envelope (`.github`)
 
 **Deliverables**
