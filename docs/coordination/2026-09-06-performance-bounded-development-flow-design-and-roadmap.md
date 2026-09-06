@@ -25,7 +25,22 @@ batching with failure isolation, bounded review/repair, capability-based agent r
 | Primary risk | Correctness bureaucracy grows without bound until useful work stops |
 | Governing direction | Quint-first semantic authority, pure policy, durable execution, generated projections |
 | Builds on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), [ADR-0080](../adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md), [ADR-0081](../adr/0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md), and the [operations-research orchestration design](2026-08-31-operations-research-first-agent-orchestration-design.md) |
-| Initial owners | FS-GG/.github: policy and registry; FS.GG.SDD: Quint profile/compiler/replay; FS.GG.Coordination: controller, executor, receipts, and projections |
+| Initial owners | FS-GG/.github: policy and registry; FS.GG.SDD: generic Quint profile/compiler/replay tooling; FS.GG.Coordination: canonical workflow model, controller, executor, domain replay, receipts, and projections |
+
+### Review disposition — 2026-09-06
+
+Proceed with a bounded prototype; production feasibility remains unproven. The review found the following
+implementation-blocking gaps and incorporates their proposed resolution below. These are design changes,
+not amendments to accepted policy or evidence that an implementation already satisfies the requirements.
+
+| Finding | Resolution | Qualification boundary |
+|---|---|---|
+| Repair invalidates evidence and can increase the proposed lexicographic rank. | Use a non-renewable transition budget; bound scope, operation creation, and waits separately. | PB1/PB2: repair and repeated-observation traces |
+| Receipts arrive after spending; concurrent dispatch can overcommit the same remaining balance. | Reserve enforceable upper bounds atomically before dispatch, including settlement headroom. | PB2/PB3: concurrent reservations and delayed receipts |
+| An immutable terminal state can strand an effect that succeeds after timeout. | Separate the item outcome from durable effect settlement; retain fencing and recovery ownership. | PB3: crash, cancellation, late success, and takeover |
+| Per-item hard limits and cohort percentiles are conflated; a tiny canary cannot establish p99. | Separate runtime caps from promotion SLOs, with fixed denominators and an insufficient-data verdict. | PB0/PB6/PB7: predeclared comparison protocol |
+| Mandatory exact-candidate reuse conflicts with scoped reuse and mandatory cold closure. | Reuse gate artifacts by semantic subject; bind acceptance to the current candidate; cold boundaries take precedence. | PB3: unchanged subject and cold-closure fixtures |
+| The roadmap omits durable delivery/recovery ownership and puts optional optimizations on the first path. | Assign domain semantics to Coordination, add executor acceptance, and separate the core canary from optional features. | PB1–PB7 |
 
 ## 1. Decision
 
@@ -34,7 +49,8 @@ development controller must satisfy five classes of hard requirement before a po
 
 1. **Safety:** no action bypasses an authority, evidence, security, exact-head, or recovery predicate.
 2. **Progress:** admitted finite-scope work reaches a classified terminal outcome under its declared
-   environment assumptions.
+   environment assumptions, and qualification preserves a minimum useful-delivery rate. Refusing every
+   item satisfies neither useful progress nor policy promotion.
 3. **Latency:** useful work and actionable evidence begin within configured bounds; a controller may not
    remain in planning or ceremony while executable work and capacity exist.
 4. **Efficiency:** orchestration, model, CI, review, storage, API, and runner consumption stay inside explicit
@@ -129,7 +145,7 @@ The following sources are the evidence base for the table and the changes below:
 - C. Ziftci and D. Cavalcanti, [De-Flake Your Tests](https://research.google/pubs/de-flake-your-tests-automatically-locating-root-causes-of-flaky-tests-in-code-at-google/) (ICSME, 2020).
 - H. Esfahani et al., [CloudBuild: Microsoft's Distributed and Caching Build Service](https://www.microsoft.com/en-us/research/publication/cloudbuild-microsofts-distributed-and-caching-build-service/) (ICSE SEIP, 2016), and Bazel, [Remote caching](https://bazel.build/remote/caching).
 - GitHub, [Managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue), and Zuul, [Pipeline managers and speculative gating](https://zuul-ci.org/docs/zuul/latest/config/pipeline.html).
-- Temporal, [Platform documentation](https://docs.temporal.io/) for durable execution and replay semantics.
+- Temporal, [Activity execution and cancellation](https://docs.temporal.io/activity-execution) for timeout, retry, and cancellation boundaries.
 - J. Yang et al., [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/abs/2405.15793), and C.S. Xia et al., [Agentless: Demystifying LLM-based Software Engineering Agents](https://arxiv.org/abs/2407.01489).
 - S. Kapoor et al., [AI Agents That Matter](https://arxiv.org/abs/2407.01502) (TMLR, 2025), and METR, [Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity](https://metr.org/Early_2025_AI_Experienced_OS_Devs_Study-paper.pdf) (2025).
 - Anthropic, [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) (2024) and [Patterns and problems in multiagent systems](https://www.anthropic.com/research/multiagent-systems) (2026).
@@ -143,7 +159,7 @@ The following sources are the evidence base for the table and the changes below:
 |---|---|
 | FLOW-001 | One canonical literate Quint source declares states, actions, guards, budgets, terminal outcomes, invariants, and environment assumptions. |
 | FLOW-002 | A pinned compiler emits a small versioned contract containing stable state/action/property identities, reads/writes, evidence obligations, and projection facts; generated artifacts are not coequal authority. |
-| FLOW-003 | A pure reducer and planner consume only canonical state, complete observations, a versioned policy, and recorded time/random inputs. |
+| FLOW-003 | A pure reducer and planner consume only canonical state, classified observations, a versioned policy, and recorded time/random inputs. Each action requires complete facts for its own guards; unknown unrelated facts do not block observation or recovery. |
 | FLOW-004 | Provider/model names are resolved through capability profiles outside the Quint topology. Changing a provider binding does not silently change workflow semantics. |
 | FLOW-005 | Every external effect persists intent before execution, revalidates its preconditions, and records a verified outcome or an explicit indeterminate state. |
 | FLOW-006 | Every candidate change invalidates older-head review and qualification evidence according to its semantic subject. |
@@ -165,7 +181,7 @@ The following sources are the evidence base for the table and the changes below:
 | PERF-005 | Compatible, high-pass-probability checks use optimistic batching when expected setup/queue savings exceed bounded failure-isolation cost. Sequential execution is a failure-localization fallback, not the default. |
 | PERF-006 | A failed batch is isolated adaptively. The executor reruns only failed, indeterminate, or attribution-ambiguous partitions; it does not automatically replay the complete batch one check at a time. |
 | PERF-007 | Side-effect-free downstream checks may start speculatively before all upstream checks finish when cancellation cost and capacity stay within policy. Their result cannot authorize delivery until prerequisites pass. |
-| PERF-008 | Content-addressed evidence reuse is mandatory when subject, candidate, toolchain, environment, policy, and expiry identities match. Repeating an equivalent expensive check without a recorded reason is a policy violation. |
+| PERF-008 | In scoped mode, reuse a validated artifact when gate contract, semantic subject, toolchain, environment, applicable policy, and expiry match. Bind it into a new current-candidate manifest with its original provenance. Mandatory cold boundaries, sentinels, and suspect-cache recovery override reuse. Other repeated equivalent checks require a recorded reason. |
 | PERF-009 | All internal rework cycles consume a monotonically decreasing budget and end in success, refusal, quarantine, cancellation, or budget exhaustion. |
 | PERF-010 | Capacity policy reserves explicit headroom for recovery and high-priority failure isolation. Nominal utilization may not consume that reserve. |
 | PERF-011 | Qualification records p50/p95/p99 latency, queue delay, setup duplication, cache/reuse, cancellation waste, retry amplification, and control-plane share. Averages alone cannot qualify a policy. |
@@ -179,26 +195,62 @@ The following sources are the evidence base for the table and the changes below:
 
 ### 3.3 Starter performance envelope
 
-Policy values must ultimately be calibrated from fleet telemetry. The first canary nevertheless needs a
-complete, falsifiable envelope. These are starter values, not universal constants:
+Policy values must ultimately be calibrated from fleet telemetry. The values below are proposed starting
+points, not a complete deployable envelope. PB0 must supply every missing absolute cap, unit, observation
+window, and sample sufficiency rule before admission is enabled.
 
 | Budget | Routine child change | High-risk or closure change |
 |---|---:|---:|
 | Pure planning/verifier p95 | 2 seconds | 5 seconds |
 | Time from complete admission to first useful dispatch p95 | 10 seconds | 30 seconds |
-| Time to first actionable check result p95, excluding provider outage | 5 minutes | 10 minutes |
-| Implementation attempts | 2 | 3 |
+| Time to first actionable check result p95, including queueing and outages | 5 minutes | 10 minutes |
+| Initial implementation attempts, before first accepted candidate | 2 | 3 |
 | Ordinary repair rounds | 2, then deep-dive | 2, then deep-dive |
-| Total repair/review rounds | 3 | 4 |
+| Total repair rounds, including any repair after deep-dive | 3 | 4 |
+| Critique/confirmation epochs, including initial critique | 4 | 5 |
 | Consecutive infrastructure retries per operation | 2, observe before each | 2, observe before each |
 | Recovery capacity reserve | at least 15% of relevant constrained capacity | at least 20% |
-| Control-plane compute share | at most 5% of item runner-seconds, excluding required evidence execution | at most 8% |
-| Speculative cancellation waste | at most 10% of item runner-seconds over rolling window | at most 5% |
+| Control-plane compute share over a fixed cohort window | at most 5% of total attributed runner-seconds | at most 8% |
+| Speculative cancellation waste over the same window | at most 10% of total attributed runner-seconds | at most 5% |
 
 A deployment may tighten these values. Loosening one is a versioned policy change with replay, simulation,
 shadow, and canary evidence. An item may bind a smaller resource budget; it may not omit the field. A
-deadline expiration produces a terminal classification and preserves resumable evidence rather than
-silently granting more time.
+deadline expiration stops new work and follows the settlement rules in §8.2; it never silently grants more
+time or asserts that an outstanding mutation did not happen.
+
+### 3.4 Enforcement and measurement semantics
+
+An initial implementation attempt, a repair dispatch, and a critique epoch debit distinct counters plus the
+shared transition/resource allocation. Deep-dive can occur at most once per item and grants no new repair
+rounds. The second related late-stage defect triggers it even if the ordinary repair threshold has not been
+reached. Every resulting candidate still needs its required current-head checks and confirmation; if their
+remaining budget cannot be reserved, stop rather than granting an extra round or omitting confirmation.
+
+**Runtime caps** are per-item absolute limits enforced before dispatch: planning and dispatch deadlines,
+controller transitions, observation polls, total effect attempts, isolation runs, review/repair rounds,
+tokens by provider-defined unit, money in a named currency, runner-seconds, API calls, retained bytes, and
+overall deadline. Each external call has a timeout and enforceable maximum charge. Fleet admission reserves
+capacity atomically, using integer slots; on a one-slot runner pool a fractional reserve requires scheduled
+headroom or separate recovery capacity. A reserve that rounds to zero is not available recovery capacity.
+
+**Promotion SLOs** are distributional acceptance criteria over a fixed eligible cohort. A p95 target is not
+an individual timeout and does not specify a p99 bound. PB0 pins separate absolute runtime caps, the required
+percentile targets, and the maximum tolerated exceedance rate. Cohorts with insufficient tail observations
+remain `insufficient-data`; they cannot receive a performance-qualified verdict from a handful of passes.
+
+Measure demand from the first eligible request as well as admission: admission delay, refusal rate, delivered
+fraction, and total cost per eligible request prevent a controller from winning by refusing difficult work
+or moving its queue before the admission timestamp. Freeze work-class definitions before comparison. Useful
+dispatch starts implementation or an obligation-relevant check; polling, a progress message, and context
+formatting do not reset that clock. Actionable evidence identifies a completed required check or a specific
+failure that can change the next decision. Report first result and first red separately.
+
+Charge orchestration compute, including off-runner compute converted under a pinned accounting rule, to the
+control numerator. Required check execution belongs in the total denominator and is also reported separately;
+labeling an action “required” cannot remove planning, receipt, or telemetry work from overhead. Report absolute
+costs beside ratios, including zero-denominator cases. Record total elapsed latency including outages; an
+outage-adjusted diagnostic may supplement it under a predeclared classification rule. Optional surveys and
+human-attention samples are cohort research, never synchronous delivery gates.
 
 ## 4. Authority and configuration layers
 
@@ -214,15 +266,22 @@ The system has four deliberately different kinds of configuration:
 This keeps rapidly changing provider names out of the formal state space while ensuring that switching a
 model cannot bypass a capability, cost, privacy, or recovery requirement.
 
-Illustrative policy shape:
+Illustrative policy fragment, not an executable configuration or complete schema. Units and remaining caps
+must be supplied by the PB0 contract; no consumer may accept this fragment as an admission policy:
 
 ```yaml
 schema: fsgg.development-policy/v1
 policyId: routine-code-change/1
 
-budgets:
+promotionTargets:
   planningP95Ms: 2000
   dispatchP95Ms: 10000
+
+budgets:
+  controllerTransitions: 500
+  observationPolls: 30
+  effectAttempts: 30
+  isolationRuns: 16
   implementationAttempts: 2
   repairRoundsBeforeDeepDive: 2
   totalRepairRounds: 3
@@ -247,8 +306,6 @@ routing:
   critique: strong-fresh-critic
   repair: balanced-coding
   deepDive: strongest-architecture
-
-terminalOnExhaustion: quarantined
 ```
 
 The schema validator rejects missing budgets, negative or internally inconsistent values, a batch policy
@@ -273,37 +330,49 @@ WorkflowState = {
   evidence: EvidenceId -> EvidenceState,
   findings: FindingId -> FindingState,
   batches: BatchId -> BatchState,
+  controllerStepsRemaining: int,
+  recoveryStepsRemaining: int,
+  observationPollsRemaining: int,
+  effectAttemptsRemaining: int,
+  isolationRunsRemaining: int,
   attemptsRemaining: int,
   repairRoundsRemaining: int,
   reviewRoundsRemaining: int,
   infrastructureRetriesRemaining: OperationId -> int,
   resourceBudget: ResourceBudget,
+  reservations: ReservationId -> ReservationState,
+  effects: EffectId -> EffectState,
+  ownerGeneration: int,
+  deadline: RecordedTime,
   terminal: Delivered | Refused | Quarantined | BudgetExhausted | Cancelled | None
 }
 ```
 
-Time is admitted only through explicit durable ticks or provider observations. Cost is admitted only through
-verified usage receipts. Neither the Quint model nor pure reducer reads a wall clock, provider dashboard, or
-mutable price table directly.
+Time is admitted only through explicit durable ticks or provider observations; accepted time cannot move
+backward. Upper-bound resource reservations are committed before dispatch and reconciled with verified usage
+receipts afterward (§8.1). Neither the Quint model nor pure reducer reads a wall clock, provider dashboard,
+or mutable price table directly. This is a conceptual state sketch; finite profile bounds also cap findings,
+candidate generations, operations, batches, evidence, and history entries.
 
 ### 5.2 Principal actions
 
 | Action | Guard | Main effect |
 |---|---|---|
-| `Observe` | required fact incomplete or effect indeterminate | admit a complete classified observation |
+| `Observe` | required fact incomplete or effect indeterminate; poll/step budget remains | record complete, partial, unavailable, or indeterminate facts; only sufficient facts authorize the dependent action |
 | `Plan` | observations sufficient and planning budget remains | select and independently verify a bounded next-action set |
 | `DispatchImplementation` | implementation legal, capacity available | consume attempt reservation and create immutable agent specification |
 | `AcceptCandidate` | agent output validates and touch set is respected | mint candidate revision and invalidate affected older evidence |
 | `StartCheckBatch` | selected obligations share a compatible execution class | persist exact membership and start one batch |
 | `RecordBatchPass` | complete successful result matches batch identity | satisfy each member obligation with individually addressable evidence |
-| `RecordBatchFailure` | complete failure or indeterminate result matches batch | classify failure and create bounded isolation partitions |
+| `RecordBatchFailure` | failure, partial, or indeterminate result matches batch | preserve proven results; classify findings and create bounded isolation partitions when needed |
 | `IsolateFailure` | attribution ambiguous and isolation budget remains | split/rerun only the ambiguous partition |
 | `StartReview` | required current-head checks satisfied | mint fresh critique epoch and consume review budget |
 | `AcceptFindings` | current-head critique completed | deduplicate/classify findings and choose repair, deep-dive, or acceptance |
 | `Repair` | accepted material finding and repair budget remains | dispatch bounded repair and consume a repair round |
 | `DeepDive` | second related late-stage defect | inspect architecture/invariants/sibling paths and update fault model |
-| `Deliver` | exact-head obligations and authority predicates satisfied | persist effect intent, reobserve, mutate, and verify |
-| `Terminate` | success, refusal, cancellation, deadline, or budget condition | enter one immutable terminal classification |
+| `Deliver` | exact-head obligations, owner authority, fencing, and settlement reserve satisfied | persist intent and reservation; dispatch through the typed engine; settle by external observation |
+| `ReconcileEffect` | pending/indeterminate effect; settlement budget remains | observe outcome without duplicating the mutation; retain unresolved effects under recovery ownership |
+| `Terminate` | terminal condition and effects settled or durably handed to recovery | freeze the item classification; prohibit new item work while preserving pending-effect ownership |
 
 ### 5.3 Formal properties
 
@@ -318,6 +387,10 @@ The qualification model must include at least these named properties:
 - `batchPassSatisfiesOnlyExactMembers`
 - `speculationNeverAuthorizes`
 - `resourceUseNeverExceedsBoundBudget`
+- `spentPlusReservedNeverExceedsAllocation`
+- `terminalItemNeverOrphansEffect`
+- `staleOwnerCannotDispatchEffect`
+- `duplicateReceiptCannotReleaseReservationTwice`
 - `hardObligationCannotBeOptimizedAway`
 
 **Bounded bureaucracy and termination**
@@ -344,27 +417,34 @@ The qualification model must include at least these named properties:
 
 ### 5.4 Honest termination claim
 
-For a frozen finite obligation set, bounded counters, and classified external outcomes, a lexicographic rank
-can show that internal rework cannot continue forever:
+An obligation-count-first rank is invalid here: accepting a repair can invalidate passing checks and increase
+the number of unsatisfied obligations. Dispatch can likewise increase unsettled effects. Use an explicit,
+non-renewable control-transition budget as the initial termination measure:
 
 ```text
-rank = (
-  unsatisfiedRequiredObligations,
-  unsettledEffects,
-  attemptsRemaining,
-  repairRoundsRemaining,
-  reviewRoundsRemaining,
-  isolationBudgetRemaining,
-  resourceBudgetRemaining
-)
+rank = controllerStepsRemaining + recoveryStepsRemaining + (if terminal then 0 else 1)
 ```
 
-Every internal cycle must strictly decrease an earlier component without increasing an earlier one. Waiting
-does not pretend to decrease the rank. Conditional liveness is stated explicitly: if admitted external
-operations eventually yield a classified result and required capacity becomes available within the declared
-environment bound, the workflow eventually reaches a terminal outcome. Quint/Apalache checking establishes
-the declared finite instances and bounds; it does not prove provider availability or arbitrary unbounded
-workloads.
+Every admitted transition before terminal consumes one step from its permitted allocation, including planning,
+new observations, candidate invalidation, and replanning after duplicate findings; terminal classification
+decreases the final indicator. When the ordinary allocation reaches zero, only settlement/handoff and terminal
+classification are legal, under the separately pre-reserved finite recovery allocation. Duplicate transport events
+are idempotent no-ops; ingress limits and accounting still bound their processing cost. Specific attempt,
+repair, review, isolation, and polling counters impose tighter limits without replenishing the global budget.
+Continuation, restart, provider rebinding, and a new operation ID cannot reset these counters.
+
+Freeze the requirement set and allowed semantic scope at admission. Findings may refine repairs within that
+scope under finite finding/round limits; new requirements require new admission. A resumed or replacement
+item retains its lineage and cumulative cost in the fleet comparison, so splitting or reopening work cannot
+launder exhaustion. Evidence invalidation is allowed to increase outstanding work because it cannot increase
+the remaining transition budget.
+
+Waiting does not decrease the rank by itself. Bounded wall-clock response additionally assumes that a durable
+scheduler or recovery watchdog eventually delivers deadline ticks within a declared service bound. An
+offline controller cannot enforce an elapsed-time promise; on restart it first processes the expired deadline.
+External availability is needed for delivery and final effect resolution, not for classifying the item as
+quarantined with durable unresolved-effect ownership. The claim is bounded controller work and conditional
+terminal classification, not unconditional external completion.
 
 This claim is deliberately split into independently checkable obligations because current Quint guidance
 notes that invariants are the mature path while temporal-property support is partial and liveness commonly
@@ -372,19 +452,23 @@ depends on fairness assumptions:
 
 1. **Finite-domain safety:** no negative counter, illegal delivery, orphan effect, unstable terminal state,
    or dead nonterminal state in each declared finite profile.
-2. **Rank preservation:** every internal rework transition decreases the lexicographic rank; transitions
-   that admit new scope are forbidden after admission and are modeled as a new work item.
-3. **Bounded waiting:** each external wait has an explicit deadline transition to a classified terminal
-   state; availability is not assumed merely to make a liveness formula pass.
+2. **Rank preservation:** every admitted state-changing transition decreases the remaining-step rank;
+   repair may invalidate evidence but cannot refill either allocation. Terminal classification decreases
+   the final indicator; journal updates after terminal belong to the separate recovery protocol.
+3. **Bounded waiting:** each wait has an explicit deadline and an assumed bounded tick/restart service;
+   unresolved effects are preserved under §8.2 rather than declared absent.
 4. **Conditional liveness:** where temporal checking is supported, named weak/strong fairness assumptions
    are applied only to the environmental actions that justify them and are tested with witness scenarios.
 5. **Runtime correspondence:** compiled identities and ITF traces are replayed through the production
    reducer, so a proof about the model is not presented as proof about unrelated executor code.
 
-The primary termination evidence is therefore the finite scope, decreasing rank, deadline exits, deadlock
-checks, and runtime correspondence. A temporal formula is corroborating evidence, not a ceremonial green
-badge. The verification job records state count, bounds, checker/tool version, elapsed time, and whether it
-was exhaustive or sampled; a simulation is never labeled a proof.
+The primary termination evidence is therefore finite scope, decreasing budgets, deadline exits, deadlock
+checks, and runtime correspondence. Record the pinned tool's actual supported checks, domain bounds, search
+depth, elapsed time, and explored-state count when available. Distinguish sampled simulation, bounded symbolic
+checking, complete finite-state exploration, and inductive proof. A bounded Apalache search without a
+counterexample does not establish all reachable states, even when variable domains are finite. This follows
+the distinctions in [Quint's checking guide](https://quint.sh/docs/checking-properties); moving documentation
+does not establish the capabilities of the repository's pinned toolchain.
 
 ## 6. Optimistic batching and adaptive failure isolation
 
@@ -401,7 +485,8 @@ not whether they are required. It groups checks only when they share all load-be
 - failure output sufficient to identify a failed member or drive deterministic isolation.
 
 A successful batch emits one envelope plus an addressable result for every member. A green process with a
-missing member result is incomplete, never successful.
+missing member result is incomplete, never successful. Compatibility also requires isolated mutable work
+directories or a qualified reset protocol: shared setup alone does not establish that checks are independent.
 
 ### 6.2 Selection rule
 
@@ -425,6 +510,12 @@ window; an old or high-priority item dispatches without waiting for an “effici
 selection may order members or choose early-result sentinels, but the initial implementation cannot remove a
 required member unless a separately accepted sound closure rule proves it irrelevant.
 
+For the first implementation a batch contains checks for one candidate, never changes from several items.
+The numerical test-batching research in §2 is supporting evidence for an experiment, not a measured gain for
+this executor. In that single-item case, do not wait for unrelated arrivals. Express `BatchValue` terms in a
+declared common unit or compare separate latency/cost estimates; raw seconds and currency cannot be added.
+Estimate joint failure probability with correlation rather than multiplying unqualified marginal pass rates.
+
 ### 6.3 Failure path
 
 On failure:
@@ -444,6 +535,12 @@ verified and it cannot merge across incompatible execution identities. Sequentia
 an indivisible partition, a check whose order is semantically required, or a resource-constrained final
 diagnostic—not used as the automatic response to any batch failure.
 
+If the parent batch fails but every isolated partition passes, retain an interaction/flake finding. Do not
+erase the parent failure or authorize by the last green rerun. A bounded reproduction of the original batch,
+an accepted diagnosis under the gate's explicit flake/interaction contract, or quarantine resolves it; a
+diagnosis cannot override a required red gate. Charge every repeated member execution and infrastructure
+retry to both the isolation allocation and the item resource budget. A new partition ID grants no new budget.
+
 ### 6.4 Speculation
 
 Speculation is permitted only for side-effect-free, reproducible work whose output is independently bound to
@@ -462,6 +559,25 @@ includes that predecessor set is invalidated. The maximum speculative chain dept
 bounds, and superseded work is cancelled before new speculative work is admitted. This captures the
 common-case parallelism without accepting unbounded invalidation cascades.
 
+### 6.5 Evidence reuse and precedence
+
+The current acceptance manifest always binds the exact candidate. A reusable gate artifact instead binds
+the gate contract and complete semantic input subject, plus toolchain, execution environment, relevant policy,
+and expiry. It retains its original source candidate. An unrelated candidate edit can therefore reuse an
+unchanged gate result through a newly validated manifest, as required by ADR-0080. Review acceptance still
+requires a current epoch; retained unaffected critique is input to that epoch, not old-head authorization.
+
+Apply these rules in order: mandatory comprehensive boundary → declared sentinel or suspect-cache recovery
+→ changed/unknown subject executes → validated unchanged subject reuses. Unknown dependency coverage selects
+the conservative full gate set. Comprehensive mode executes every declared gate cold, including any cache
+whose hit would substitute for execution; immutable tool downloads may be reused when the gate contract
+allows them. The closure fixture must observe actual execution, not merely a fresh wrapper receipt.
+
+Build caching and acceptance-evidence reuse are separate trust decisions. Neither a cache hit nor a sentinel
+proves that every semantic input was declared. Input-omission mutations, immutable snapshots, and provenance
+validation establish the declared boundary; sentinels detect drift. Bazel documents the related hazards of
+[undeclared tools and concurrent input changes](https://bazel.build/remote/caching).
+
 ## 7. Review, repair, and agent routing
 
 ### 7.1 Review as bounded information acquisition
@@ -479,8 +595,11 @@ asking for another reviewer.
 The review package is optimized for understanding rather than comment count: intent and non-goals,
 semantic/touch-set diff, risk and invariant delta, selected and omitted checks with reasons, current-head
 evidence, and unresolved questions. Formatting and policy checks run before human review. Findings are
-classified as blocking correctness/security/contract issues, bounded follow-up, or non-blocking nits; nits
-cannot keep the state machine in `Repairing`. Review wait and active review time are separate measurements,
+proposed as correctness/security/contract issues, bounded follow-up, or non-blocking nits. A finding blocks
+when the Accountable Delivery Owner accepts it as material; required technical gates remain independently
+binding. Fresh critique is a phase/evidence property and may be performed by that same owner under ADR-0079.
+An optional external reviewer cannot become an undeclared authorization dependency. Nits cannot keep the
+state machine in `Repairing`. Review wait and active review time are separate measurements,
 and an unanswered review reaches its configured reassignment, synchronous-review, or terminal route instead
 of remaining open forever.
 
@@ -579,6 +698,59 @@ continuation or archival boundary. Retry defaults distinguish application findin
 infrastructure failure. A durable engine may resume an action forever, so its retry feature is always capped
 by the controller's semantic and resource budgets.
 
+### 8.1 Reservation before execution
+
+For each resource dimension enforce `spent + outstanding reservations <= item allocation`, with the same
+atomic check against fleet capacity. Commit the decision, effect intent, and reservations together using an
+expected state version; only the winning committed intent may dispatch. A pure feasibility check alone does
+not prevent two controllers from spending the same balance.
+
+Each operation reserves its enforceable maximum usage, including provider retries, billing granularity,
+cancellation lag, result retention, and settlement work. Reconcile actual usage exactly once by stable receipt
+identity; release unused reservation only after verified completion/cancellation or a provider-enforced end
+bound. A timeout alone does not release capacity. Delayed usage remains reserved at its upper bound. An
+adapter without an enforceable bound is ineligible for a strict-budget route; estimated p95 cost is not a cap.
+
+Pin currency, rounding, token-unit definitions, and the applicable price schedule. A provider charge above
+its declared enforceable bound is a contract breach that stops further admission and is reported as a budget
+violation, never rewritten to fit the model. Reserve settlement compute/API/storage separately from ordinary
+work so exhaustion cannot prevent journaling or safe handoff. Charge all recovery to the originating lineage.
+
+### 8.2 Effect settlement, fencing, and terminal outcomes
+
+Use the existing typed coordination engine and external Git/GitHub fencing for mutations. Durable ownership
+has an expected generation; revalidate it and candidate/target preconditions immediately before dispatch.
+Use provider-side conditional writes where supported. Reobservation followed by an unconditional write is
+not atomic: a route lacking the required conditional mutation or qualified exclusion mechanism is refused.
+Transport retries keep the same logical effect identity. A delivery effect is not a single atomic reducer
+transition: intent, dispatch, unknown outcome, observed post-state, and settlement are separate modeled events.
+
+At deadline or cancellation, stop new implementation/check/mutation dispatch. Settle known effects within
+the reserved recovery allowance. If resolution is unavailable, record `Quarantined` with the proposed reason
+(`deadline`, `budget`, `cancelled`, or `indeterminate-effect`) and atomically retain its pending effects in the
+existing durable recovery journal, with a named owner, fence, reservation, and blocked subject. Clean
+`Refused`, `BudgetExhausted`, or `Cancelled` outcomes assert that no unresolved mutation remains. `Delivered`
+requires verified protected post-state and all declared post-merge obligations.
+
+The item outcome is immutable; the separate append-only effect journal can record a late success without
+reopening the item or claiming that cancellation undid a merge. The summary exposes both facts. Recovery has
+bounded automatic attempts, then an explicit unresolved handoff; affected mutation subjects remain fenced
+until settlement. No successor item or rollback route may write that subject merely because its prior item
+is terminal. Reserve retained-journal capacity before admission so repeated quarantines cannot grow storage
+without bound. Settlement liveness remains conditional on the external service and recovery owner becoming
+available.
+
+Crash qualification covers before intent commit, after commit/before dispatch, after external success/before
+receipt, duplicate or reordered receipts, lost cancellation acknowledgment, stale-owner takeover, and late
+success after quarantine. Cancellation is a request whose external effect needs verification; for example,
+[Temporal activities may accept or ignore cancellation](https://docs.temporal.io/activity-execution).
+
+Restart replays the item's pinned model, policy, reducer, adapter, and budget identities. History compaction
+preserves counters, outstanding effects, reservations, deduplication identities, and lineage. A workflow
+upgrade needs a qualified migration or drains old items on their retained runtime. Rollback fences the
+candidate owner and reobserves pending effects before assigning an incumbent owner; it does not merely
+change a routing flag or silently translate old state.
+
 ## 9. Performance evidence and anti-bureaucracy controls
 
 ### 9.1 Required measurements
@@ -634,6 +806,10 @@ DeletionCondition
 ReplacementControl
 ```
 
+This metadata extends the existing control registry and is projected from its authoritative entries; it
+must not create a parallel registry or a per-item authoring task. Safety controls may justify retention by
+obligation and blast radius despite zero observed findings. Missing telemetry means unknown yield.
+
 The controller refuses an unregistered mandatory element. A scheduled review identifies controls with high
 cost, low unique yield, duplicate coverage, or expired rationale. It recommends consolidation, outward
 cadence movement, or deletion; it does not weaken policy automatically. Comprehensive closure calibrates
@@ -642,18 +818,35 @@ whether the faster child path missed defects.
 ### 9.3 Performance regression gate
 
 A candidate controller/policy is compared with the accepted baseline over identical replay snapshots,
-deterministic simulation seeds, and canary cohort definitions. Promotion fails when:
+deterministic simulation seeds, and fixed cohort definitions. Before observing candidate results, PB0 pins
+eligibility, baseline version, observation and delayed-defect follow-up windows, primary improvement measure,
+non-inferiority margins for the other dimensions, confidence method, sample sufficiency, and stopping rules.
+Repeatedly inspecting a small canary cannot silently change those rules. Promotion fails when:
 
 - any hard invariant or required witness regresses;
-- p95 or p99 latency exceeds its envelope without an accepted risk-class explanation;
+- a sufficiently measured required latency percentile exceeds its predeclared envelope;
 - control-plane share, rerun amplification, speculative waste, or queue age exceeds its bound;
 - the policy increases `Unknown`/`Indeterminate` outcomes by hiding missing observations;
 - apparent savings result from fewer selected obligations without valid semantic closure; or
 - measurement coverage, denominator, or retained evidence is incomplete.
 
+Promotion has three verdicts: `qualified`, `rejected`, and `insufficient-data`. Separate time to terminal
+classification from time to delivery. Record every eligible request and its outcome; unfinished deliveries
+are censored, and refusal/cancellation are competing outcomes, not fast successful deliveries. Compare
+delivered fraction, refusal rate, age of unfinished work, and total attributed cost alongside latency. A
+two-item smoke test exercises behavior but cannot qualify p95/p99 or rare escaped-defect rates. Continue a
+bounded canary or retain the incumbent when evidence is insufficient; never infer zero risk from zero defects.
+
+Historical replay validates decisions on recorded facts; it cannot observe results for checks or model calls
+the incumbent never ran. Simulation explores explicit assumptions. Shadow validates feasibility and measures
+its own overhead, but cannot establish causal end-to-end savings for effects it did not execute. PB7 supplies
+the online comparison using randomized cohorts or a documented matched/switchback design that accounts for
+shared runner queues and human learning. Attribute delayed closure failures back to their original cohort.
+
 There is no mutable label or per-run input that bypasses this gate. An emergency exception is a signed,
 expiring, versioned policy record with scope, owner, rollback, and compensating evidence; it cannot authorize
-a correctness violation.
+a correctness violation or exceed compiled hard limits. A different performance envelope requires its own
+accepted version and comparison; an explanation after a failed run cannot turn that run into a pass.
 
 ## 10. Visualization
 
@@ -675,7 +868,9 @@ members, and exhausted budgets remain visible.
 
 ## 11. Qualification strategy
 
-The complete acceptance stack is:
+Each qualification profile declares its enabled actions and required witnesses. Disabled optional modes
+must be rejected at the runtime boundary; their positive witnesses are required when that extension is
+qualified. The complete acceptance stack for the enabled profile is:
 
 1. schema and pure-function unit tests;
 2. Quint typecheck and executable simulations after each model increment;
@@ -704,7 +899,18 @@ immutable accepted predecessor contracts. Cross-repo issues are created when imp
 owning repository, narrow paths, acceptance criteria, and real `blockedBy` edges; this design document is not
 itself a substitute for those requests.
 
-### PB0 — Baseline, glossary, and performance constitution (`.github`)
+**First evidence path:** PB0 → PB1 → PB2 → core PB3/PB4 → PB6 → PB7. Use one admitted routine item,
+one fixed qualified implementation route, one fresh critique phase, shared-setup batching with binary
+isolation, scoped reuse with a cold-closure override, and durable delivery/recovery. PB5 runs alongside this
+path; a canonical receipt/table export supplies initial inspection. Adaptive batching, speculative chains,
+learned routing, multi-agent execution, and automatic cadence recommendations are optional extensions after
+the core canary. Disabled features do not require their runtime implementation to qualify that canary.
+
+PB0 also fixes an engineering time/resource budget for the prototype and its stop decision. If the bounded
+baseline shows no material batching opportunity, or the minimum executor cannot meet the proposed envelope,
+retain the incumbent and record the failed hypothesis instead of building the remaining optimization stack.
+
+### PB0 — Baseline, glossary, and candidate performance envelope (`.github`)
 
 **Deliverables**
 
@@ -715,9 +921,12 @@ itself a substitute for those requests.
   check pass/failure correlation, cache reuse, agent attempts, token use, and administrative action count.
 - Measure author/reviewer active and waiting time, interruptions, work/change size, WIP, integration conflicts,
   verification effort, flaky outcomes, and perceived ease/flow using stable privacy-preserving instruments.
-- Establish deterministic, single-call, fixed-workflow, single-agent, and multi-agent baselines for the work
-  classes where those modes are applicable; do not compare a candidate only with a deliberately weak agent.
+- Establish the incumbent and applicable deterministic/fixed-workflow baselines for the core route. Add
+  single-call, single-agent, or multi-agent comparisons when proposing those extensions; do not compare a
+  candidate only with a deliberately weak agent.
 - Publish the initial hard envelope and bureaucracy-ledger schema as candidate contracts.
+- Pin the §3.4 accounting rules and §9.3 comparison protocol, including useful-delivery floors and explicit
+  `insufficient-data` handling. Resolve every missing cap before enabling admission.
 
 **Acceptance**
 
@@ -728,15 +937,21 @@ itself a substitute for those requests.
   one activity score.
 - No workflow authority changes.
 
-### PB1 — Quint workflow authority and compiled contract (`FS.GG.SDD`)
+### PB1 — Canonical workflow model and generic tooling boundary (`FS.GG.Coordination`; SDD if needed)
+
+**Dependencies:** PB0 definitions and the published tooling accepted under ADR-0077 and its
+[Q1 qualification amendment](2026-08-26-adr-0077-q1-qualification-amendment.md). Inspect current producer
+artifacts before requesting an extension; do not assume that new compilation or a profile revision is needed.
 
 **Deliverables**
 
-- Author the routine-code-change literate Quint model using the state/actions/properties in §5.
-- Define the constrained workflow profile and compiled identities for budgets, batches, findings, evidence,
-  performance obligations, and visual transitions.
-- Provide deterministic tangle, typecheck, simulation, bounded verification, ITF export, semantic diff, and
-  trace-validation commands.
+- Coordination owns the routine-code-change literate Quint model and domain catalogue, using §5 with the
+  existing accepted source layout. Domain guards and reducer semantics are not SDD tooling responsibilities.
+- Reuse SDD's pinned extraction, typecheck, simulation, verification, ITF validation, and semantic diff.
+  Request an SDD producer child only for a demonstrated missing generic profile/compiler/replay capability;
+  qualify and publish that extension before the Coordination consumer pins it.
+- Declare compiled identities for budgets, batches, findings, evidence, performance obligations, and visual
+  transitions without copying Quint expressions into a second behavioral language.
 - Add anti-vacuity witnesses and required named mutations.
 - Separate invariant/rank/deadlock evidence from conditional temporal claims; record every fairness and
   environment assumption and whether each run was exhaustive or sampled.
@@ -751,11 +966,13 @@ itself a substitute for those requests.
   control red.
 - Generated contract and diagram facts are reproducible from pinned source/tool identities.
 - No result is labeled a termination proof solely because a bounded simulation found no counterexample.
-- Runtime-neutral package/tooling is published before consumers pin it.
+- Repair invalidation, no-progress observations, restart, and new operation IDs cannot renew item budgets.
+- Generic tooling changes, if required, are published before consumers pin them; the consumer owns domain
+  source, action adapters, state projection, and runtime correspondence under ADR-0077.
 
 ### PB2 — Pure reducer, policy schema, and independent verifier (`FS.GG.Coordination`)
 
-**Dependencies:** PB1 published artifacts.
+**Dependencies:** PB1 accepted domain contract and published producer artifacts.
 
 **Deliverables**
 
@@ -766,6 +983,8 @@ itself a substitute for those requests.
   adding learned scheduling or routing.
 - Replay PB1 ITF traces through the reducer and compare observable states/actions.
 - Emit content-addressed decision and performance receipts.
+- Model atomic expected-version commitment of intents/reservations, settlement allocation, owner generation,
+  and terminal handoff; implement runtime-cap enforcement separately from cohort SLO evaluation.
 
 **Acceptance**
 
@@ -773,20 +992,24 @@ itself a substitute for those requests.
 - Incomplete observations never create permission.
 - Planner timeout with a candidate is distinguished from optimality and still verified.
 - Performance-envelope violations produce infeasible/refused decisions, not warnings.
+- Concurrent dispatch, duplicate receipts, and late usage cannot double-spend or release reservations twice.
 
-### PB3 — Optimistic batch executor, evidence reuse, and isolation (`FS.GG.Coordination`)
+### PB3 — Durable executor, delivery/recovery, batching, and reuse (`FS.GG.Coordination`)
 
 **Dependencies:** PB2.
 
 **Deliverables**
 
 - Implement sound obligation closure and execution-equivalence grouping.
+- Implement intent/outbox commit, existing-engine dispatch, conditional mutation/fencing, deadlines,
+  reservation reconciliation, protected post-state verification, and durable recovery handoff from §8.
 - Implement optimistic batches with per-member results and content-addressed evidence.
 - Implement binary isolation baseline, parallel partition execution, infra/finding/indeterminate
   classification, and isolation-budget exhaustion.
-- Implement dynamic batch sizing, exact predecessor-set identities, supersession cancellation, flaky-result
-  classification, cache sentinels, and bounded speculative depth/fan-out.
-- Add side-effect-free speculation and cancellation accounting behind a disabled-by-default policy flag.
+- Implement fixed bounded batch sizing, immutable candidate/target identity, supersession, flaky/interaction
+  classification, scoped reuse, cold closure, and cache sentinels. Required pending effects survive restart.
+- Defer adaptive sizing and side-effect-free speculation to an independently qualified extension with
+  cancellation accounting and bounded depth/fan-out. The core contract refuses unsupported modes.
 
 **Acceptance**
 
@@ -796,6 +1019,10 @@ itself a substitute for those requests.
 - Missing member output, truncated result, stale cache key, or wrong candidate refuses success.
 - Queue bursts and predecessor failures cannot cause unbounded coalescing waits or invalidation reruns.
 - Replay/simulation shows improved p95 feedback or runner cost without obligation loss.
+- Crash and stale-owner fixtures from §8.2 preserve effect ownership and enforce observe-before-retry.
+- A failed parent batch followed by passing partitions retains the unresolved interaction finding.
+- Unchanged semantic subjects reuse across unrelated candidate edits; comprehensive closure executes cold.
+- Deadline during merge followed by late success cannot produce a false clean cancellation or a second merge.
 
 ### PB4 — Bounded review/repair and capability routing (`FS.GG.Coordination`)
 
@@ -807,20 +1034,20 @@ itself a substitute for those requests.
 - Implement fresh review epochs, current-head invalidation, bounded confirmation, deep-dive entry, and
   terminal exhaustion.
 - Implement capability-profile registry and provider binding qualification.
-- Route through deterministic, single-call, fixed-workflow, single-agent, and multi-agent levels and select
-  the least-complex qualified route, accounting for whole-cascade cost.
-- Implement multi-agent identity, touch-set/independent-evidence admission, leases, WIP/message/poll bounds,
-  deterministic join, and one accountable integrator behind a disabled-by-default policy flag.
+- Implement one fixed qualified route plus a bounded escalation/fallback, accounting for whole-cascade cost.
+- Defer adaptive routing and multi-agent composition to separate extensions. Before enabling multi-agent
+  mode, implement §7.3 identity, lease, touch-set, WIP, communication, and deterministic-join controls.
 
 **Acceptance**
 
 - Duplicate wording cannot multiply repair obligations.
 - A moved head cannot reuse accepted review improperly.
 - The second related late defect enters deep-dive; total exhaustion terminates.
-- No eligible model produces a classified wait/fallback/terminal route rather than a routing loop.
+- When no model is eligible, the controller chooses a classified wait/fallback/terminal route without a loop.
 - Stronger models are used only when required capabilities or measured risk justify them.
-- Multi-agent mode must outperform the single-agent/fixed-workflow baseline on an applicable local cohort
-  without increasing conflict abandonment, review queue age, or total verification burden.
+- Enabling the optional multi-agent extension requires it to outperform the single-agent/fixed-workflow
+  baseline on an applicable local cohort without increasing conflict abandonment, review queue age, or total
+  verification burden.
 
 PB3 and PB4 may develop in parallel after PB2 because their primary touch sets and contracts differ. Their
 integration candidate must replay combined check-failure → repair → requalification traces before either is
@@ -846,7 +1073,7 @@ considered complete at the parent boundary.
 
 ### PB6 — Simulation, shadow operation, and policy calibration (`FS.GG.Coordination`)
 
-**Dependencies:** PB3–PB5.
+**Dependencies:** core PB3/PB4 and PB0 comparison protocol. PB5 is not a prerequisite; use canonical exports.
 
 **Deliverables**
 
@@ -855,14 +1082,15 @@ considered complete at the parent boundary.
   conflicts, reviewer saturation, and speculative invalidation cascades.
 - Replay accepted historical incidents against baseline and candidate policies.
 - Run live shadow planning and record disagreements without mutation.
-- Calibrate batching thresholds, isolation strategy, speculation limits, and capability routing.
-- Run paired or randomized canary cohorts where practical; compare measured end-to-end time with perceived
-  speed so a fluent tool cannot qualify on sentiment alone.
+- Calibrate batching thresholds, isolation strategy, and the enabled routing choices. Speculation and
+  multi-agent scenarios join this suite when their extensions are proposed.
+- Finalize the paired/randomized canary protocol and sample plan for PB7. PB6 performs no candidate mutation
+  and does not claim measured end-to-end savings from simulated or shadow decisions.
 
 **Acceptance**
 
-- Candidate preserves every hard property and improves at least one primary p95 latency/resource measure
-  without a material regression in another, or is explicitly rejected.
+- Candidate preserves every hard property; simulation predicts the predeclared primary improvement within
+  the non-inferiority margins. Report assumptions and uncertainty; online confirmation belongs to PB7.
 - Tail latency, queue age, cancellation waste, and recovery reserve stay within envelope.
 - Prediction calibration and sparse-data cases are visible.
 - Whole-cascade routing cost and human verification/review cost are attributed to the originating decision.
@@ -870,7 +1098,9 @@ considered complete at the parent boundary.
 
 ### PB7 — Bounded canary and routine-flow adoption (`FS.GG.Coordination`, then `.github`)
 
-**Dependencies:** PB6 accepted policy receipt.
+**Dependencies:** PB6 feasibility receipt, a separately accepted bounded operating authority, comprehensive
+qualification of the canary-enabling candidate, and the existing external mutation epoch/fencing predicates.
+A shadow receipt alone never authorizes the first production mutation.
 
 **Deliverables**
 
@@ -878,14 +1108,19 @@ considered complete at the parent boundary.
 - Keep the existing path as rollback and emergency operation.
 - Promote exact model bindings and policy version for the canary cohort.
 - Verify delivery, post-merge state, telemetry retention, and rollback.
+- Run the PB0/PB6 comparison protocol, including delayed-defect follow-up, admission/refusal denominators,
+  shared-capacity interference, and whole-lineage cost. Use a bounded extension or retain the incumbent when
+  sample sufficiency remains unmet.
 
 **Acceptance**
 
 - Canary completes enough successes and planted/real failures to exercise both batch and isolation paths.
-- Canary includes at least one superseded predecessor, flaky signal, cache-sentinel miss, route escalation,
-  and multi-agent conflict or refusal fixture before those optimizations may be enabled.
+- Core qualification covers supersession, flakiness, sentinel mismatch, escalation, and indeterminate effects.
+  Optional speculation and multi-agent modes require their additional failure fixtures before enablement;
+  planted faults run in isolated fixtures, not by corrupting a production candidate.
 - No safety, obligation-coverage, or exact-head regression occurs.
-- Starter performance envelope holds at p95/p99 with complete denominators.
+- The predeclared statistical acceptance criteria pass with complete denominators and sufficient samples.
+  Behavioral smoke success may justify continued bounded observation, never general performance qualification.
 - Rollback restores the prior route without rewriting receipts.
 
 ### PB8 — Adaptive cadence and default eligibility (`.github` policy + Coordination implementation)
@@ -898,6 +1133,7 @@ considered complete at the parent boundary.
   closure equivalence.
 - Add the bureaucracy-ledger review and deletion workflow.
 - Expand to additional work classes one at a time.
+- Qualify optional optimization modes separately against the core baseline; retain only measured improvements.
 - Decide default eligibility through a separate accepted policy/ADR change.
 
 **Acceptance**
@@ -910,25 +1146,26 @@ considered complete at the parent boundary.
 ## 13. Cross-repository sequence
 
 ```text
-.github PB0 policy/design authority
-          │
-          ▼
-FS.GG.SDD PB1 profile + compiler + published tooling
-          │ publish before consume
-          ▼
-FS.GG.Coordination PB2 reducer/verifier
-          ├────────► PB3 batching/isolation
-          ├────────► PB4 review/model routing
-          └────────► PB5 live projection
-                         │
-                         ▼
-                    PB6 shadow
-                         │
-                         ▼
-                    PB7 canary
-                         │
-                         ▼
-.github PB8 policy/default decision
+.github PB0 baseline + candidate envelope
+    │
+    ▼
+Coordination PB1 domain model ◄── published SDD tooling
+    │                            (extend only if needed; publish before consume)
+    ▼
+Coordination PB2 reducer/verifier + reservation contract
+    ├──► PB3 durable executor + delivery/recovery + batching/reuse ──┐
+    ├──► PB4 fixed routing + bounded review/repair ─────────────────┤
+    └──► PB5 visual projection (parallel; canonical export first)   │
+                                                                  ▼
+                                                             PB6 shadow
+                                                                  │
+                                  accepted canary authority + cold qualification
+                                                                  │
+                                                                  ▼
+                                                             PB7 canary
+                                                                  │
+                                                                  ▼
+.github PB8 default decision ◄── sufficient evidence + comprehensive closure
 ```
 
 Any new cross-repo schema follows publish-before-flip: the producer first publishes a validator/compiler that
@@ -940,6 +1177,7 @@ ordered change. No roadmap checkbox substitutes for a published artifact or veri
 - Begin with offline replay and simulation; then shadow; then one bounded reversible canary.
 - Keep old and candidate decision outputs side by side during shadow, but only the incumbent may mutate.
 - During canary, exactly one policy version owns a subject; dual writers are forbidden.
+- Ownership transfer and rollback use §8.2 fencing and recovery; unresolved effects block conflicting work.
 - A safety or authority failure stops the canary immediately.
 - A performance-envelope failure stops admission of new canary work, allows already-safe effects to settle,
   and rolls routing back after current external facts are reobserved.
@@ -1037,8 +1275,8 @@ correspondence.
 
 ## 17. Definition of done
 
-This program is complete only when one real routine change and one planted-failure change both traverse the
-new flow and produce:
+The core behavioral smoke test requires one real routine delivery and an isolated planted-failure change
+that exercises bounded isolation/repair or an honest terminal refusal. Both produce:
 
 - checked Quint and compiled-contract identities;
 - a verified policy decision with explicit safety and performance feasibility;
@@ -1046,14 +1284,19 @@ new flow and produce:
 - adaptive isolation that does not replay proven work on the failure path;
 - bounded review/repair with fresh exact-head evidence;
 - least-complex qualified routing, capability-based model selection, and complete cascade usage receipts;
-- WIP-bounded human and agent coordination with measured author/reviewer attention and verification cost;
+- WIP-bounded coordination with attributed verification cost and cohort-level attention measurements;
 - exact-head delivery or an honest terminal refusal;
-- a generated static diagram and live execution projection; and
-- replay, simulation, shadow, canary, rollback, and comprehensive closure evidence showing that throughput
-improved without buying speed by deleting obligations or hiding failures.
+- reconciled resource reservations and settled effects or a durable, fenced recovery handoff; and
+- canonical receipt/table exports that allow the full path to be inspected.
 
-The comparison must include a deterministic/fixed-workflow baseline and, where applicable, single-agent and
-multi-agent variants. A subjective impression of speed, a higher agent solve rate without cost, or a green
-bounded simulation without the stated proof assumptions is insufficient.
+Performance qualification additionally requires the PB7 cohort to meet the predeclared improvement,
+non-inferiority, delivery-rate, sample, and follow-up criteria in §9.3. The two smoke items are insufficient
+for that claim. Default eligibility requires PB8's accepted decision and comprehensive exact-head closure;
+program completion also includes PB5's static/live projections. Optional optimization modes remain disabled
+unless separately qualified and are not prerequisites for the core canary or default eligibility.
+
+The comparison must include the incumbent and a qualified deterministic/fixed-workflow baseline; a multi-agent
+extension additionally compares against a single-agent route. A subjective impression of speed, a higher
+agent solve rate without cost, or a green bounded simulation without the stated proof assumptions is insufficient.
 
 Until then, the design is preparation and evidence—not production authority.
