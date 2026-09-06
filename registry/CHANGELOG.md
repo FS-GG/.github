@@ -19,7 +19,21 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
-- **2026-09-06** — **coordination coherent set `github:0.84.0` source declared, publication pending** ([.github#3259](https://github.com/FS-GG/.github/issues/3259) source-unpublished): advances the coord-engine source contract to 0.84.0 for durable content-addressed private telemetry receipts, automatic digest resolution, and separately reviewed non-counting legacy recovery. The published package frontier remains 0.83.5 until the exact accepted merge is promoted through the release saga; registry reconciliation after promotion will update package-version and immutable release evidence.
+- **2026-09-06** — **coordination coherent set `github:0.84.0` published; registry reconciliation**
+  ([.github#3261](https://github.com/FS-GG/.github/issues/3261), source
+  [.github#3259](https://github.com/FS-GG/.github/issues/3259),
+  [promotion 34013956067](https://github.com/FS-GG/.github/actions/runs/34013956067),
+  [immutable release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.84.0)):
+  advances the observed package frontier from 0.83.5 to 0.84.0. The initial publishers
+  34013206570/34013206657/34013206774 pushed the accepted bytes but exceeded bounded
+  nuget.org indexing. Exact-source recovery publishers 34013563082/34013563927/34013564762
+  resumed the stored journals and verified both feeds; attempt-2 push-event runs restored the
+  promotion observer edge, and promotions 34013950063/34013956067 sealed the set. Both feeds
+  serve all three members with matching normalized payload hashes. Source
+  `17f400d70db2cdd28efd8d7ce14327f1495411d2`; content
+  `sha256:ec226689bf12f9ede6aebab4f1f045cc1bcb24e0c8208a9fcae031387cf776d5`;
+  manifest `sha256:c4ed21c2a0efd2d36c49d7760bb989586b0f008b89374cbf4b10477ed1dec2fa`;
+  stable channel `sha256:752c4ded691b2e768afa11e7e5a3f0908cf40ea8133d3f399c8074c1dd21d053`.
 
 - **2026-09-06** — **coordination coherent set `github:0.83.5` published; registry reconciliation**
   ([.github#3257](https://github.com/FS-GG/.github/issues/3257), source
