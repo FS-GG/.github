@@ -812,6 +812,13 @@ module Reads =
           AheadBy: int
           Files: (string * string) list }
 
+    type CommitPathComparison =
+        { Status: string
+          MergeBase: string
+          AheadBy: int
+          Paths: string list
+          Complete: bool }
+
     let compareCommits (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
         let subject = $"%s{owner}/%s{repo} comparison %s{ancestor}...%s{descendant}"
         let request =
@@ -844,6 +851,60 @@ module Reads =
                                 | error, _ -> error)
                             (Ok [])
                         |> Result.map (fun values -> { Status = status; MergeBase = mergeBaseSha; AheadBy = aheadBy; Files = List.rev values })
+                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
+
+    // GitHub's compare endpoint returns at most 300 changed files for the whole comparison.  The
+    // ordinary comparison above predates a consumer that needs to prove ABSENCE from that set, so it
+    // deliberately keeps its historical shape.  This reader makes completeness explicit and includes
+    // both sides of a rename: either omission would let a base-side rename hide an overlap with the
+    // reviewed candidate.  Exactly 300 is refused by the caller because it is indistinguishable from a
+    // truncated response; fewer than 300 is the API's complete-file-set guarantee.
+    let compareCommitPaths (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
+        let subject = $"%s{owner}/%s{repo} path comparison %s{ancestor}...%s{descendant}"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
+              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                let root = document.RootElement
+                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "ahead_by", root.TryGetProperty "files" with
+                | Some status, (true, mergeBase), (true, aheadBy), (true, files)
+                    when mergeBase.ValueKind = JsonValueKind.Object && files.ValueKind = JsonValueKind.Array ->
+                    match str mergeBase "sha", aheadBy.TryGetInt32() with
+                    | None, _ -> Error(Malformed(subject, "comparison merge base has no sha"))
+                    | _, (false, _) -> Error(Malformed(subject, "comparison ahead_by is not an integer"))
+                    | Some mergeBaseSha, (true, aheadBy) ->
+                        let rows = files.EnumerateArray() |> Seq.toList
+                        rows
+                        |> List.map (fun file ->
+                            match str file "filename", str file "status" with
+                            | Some filename, Some fileStatus
+                                when not (String.IsNullOrWhiteSpace filename) && not (String.IsNullOrWhiteSpace fileStatus) ->
+                                let previous =
+                                    if fileStatus = "renamed" then
+                                        match str file "previous_filename" with
+                                        | Some value when not (String.IsNullOrWhiteSpace value) -> Ok [ filename; value ]
+                                        | _ -> Error(Malformed(subject, $"renamed comparison file `%s{filename}` has no previous_filename"))
+                                    else Ok [ filename ]
+                                previous
+                            | _ -> Error(Malformed(subject, "comparison file has no filename or status")))
+                        |> List.fold
+                            (fun state next ->
+                                match state, next with
+                                | Ok values, Ok paths -> Ok(paths @ values)
+                                | Error error, _ | _, Error error -> Error error)
+                            (Ok [])
+                        |> Result.map (fun paths ->
+                            { Status = status
+                              MergeBase = mergeBaseSha
+                              AheadBy = aheadBy
+                              Paths = paths |> List.distinct |> List.sort
+                              Complete = rows.Length < 300 })
                 | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
 
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =

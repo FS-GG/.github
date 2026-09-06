@@ -498,6 +498,13 @@ module DeliveryApplication =
           BaseSha: string
           Result: 'result }
 
+    // Evidence minted only after the live GitHub boundary proves a complete, forward-only,
+    // path-disjoint base advance. Guarded landing validates every binding before consuming it.
+    type BaseAdvanceEvidence =
+        { AcceptedBaseSha: string
+          CurrentBaseSha: string
+          HeadSha: string }
+
     let authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration =
         match Delivery.advance freshnessToken actionKey facts with
         | Delivery.NoVerdict reason -> MergeRefused reason
@@ -507,8 +514,9 @@ module DeliveryApplication =
             MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ -> MergeAuthorized
 
-    /// Invoke the merge adapter only after claim, head, and effective base are re-read and still match.
-    let guardedLanding freshnessToken actionKey facts currentClaimGeneration currentHead currentBase merge =
+    /// Invoke the merge adapter only after claim and head still match and the effective base either
+    // matches acceptance or the live IO boundary has proved a complete, path-disjoint forward advance.
+    let guardedLanding freshnessToken actionKey facts currentClaimGeneration currentHead currentBase baseAdvanceEvidence merge =
         match authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration with
         | MergeRefused reason -> Error reason
         | MergeAuthorized when currentHead <> Some facts.Freshness.HeadSha ->
@@ -519,7 +527,16 @@ module DeliveryApplication =
             | Some expected, Some actual when expected = actual ->
                 Ok { HeadSha = facts.Freshness.HeadSha; BaseSha = actual; Result = merge () }
             | Some expected, Some actual ->
-                Error $"delivery effective base changed after acceptance: expected %s{expected}, actual %s{actual}; GitHub merge was not attempted"
+                match baseAdvanceEvidence with
+                | Some evidence
+                    when evidence.AcceptedBaseSha = expected
+                         && evidence.CurrentBaseSha = actual
+                         && evidence.HeadSha = facts.Freshness.HeadSha ->
+                    Ok { HeadSha = facts.Freshness.HeadSha; BaseSha = actual; Result = merge () }
+                | Some _ ->
+                    Error "delivery base-advance evidence does not bind the accepted base, current base, and inspected head; GitHub merge was not attempted"
+                | None ->
+                    Error $"delivery effective base changed after acceptance: expected %s{expected}, actual %s{actual}; GitHub merge was not attempted"
             | None, _ -> Error "delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
             | _, None -> Error "delivery effective base could not be re-read; GitHub merge was not attempted"
 
@@ -530,6 +547,7 @@ module DeliveryApplication =
         currentClaimGeneration
         currentHead
         currentBase
+        baseAdvanceEvidence
         repositoryPolicy
         merge
         =
@@ -544,6 +562,7 @@ module DeliveryApplication =
                 currentClaimGeneration
                 currentHead
                 currentBase
+                baseAdvanceEvidence
                 (fun () -> merge method)
 
     let private snapshot (raw: string) : Result<Delivery.Snapshot * Delivery.PostMergeVerification, string> =

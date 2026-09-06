@@ -1,0 +1,72 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-toolkit-base-sha-race",
+  "milestone": "Toolkit defect — base-SHA landability race",
+  "critic": "base_sha_race_critic",
+  "initial_reviewed_commit": "bbed022c65cec7070c99ff1688d8cf293614bd1e",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 2,
+  "reviewed_commits": [
+    "bbed022c65cec7070c99ff1688d8cf293614bd1e",
+    "45774150d2f467da292e8d3344da6b7b37f9be4c",
+    "6523db9d9fd7460183743697293a7ae19b39312c"
+  ],
+  "findings": [
+    {
+      "id": "BASE-RACE-001",
+      "severity": "major",
+      "summary": "The initial equivalence proof could authorize a base tip that moved again while the two GitHub comparisons were being read.",
+      "evidence": [
+        "Verification: `git show bbed022c65cec7070c99ff1688d8cf293614bd1e:src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs` shows one `prBaseTipSha` observation followed by two comparisons and an immediate success result, with no post-comparison base-tip confirmation.",
+        "Verification: the exact initial test tree at bbed022c had no test containing `moved again`; `git grep -n 'moved again' bbed022c65cec7070c99ff1688d8cf293614bd1e -- tests` returns no match."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs:386-399` at 6523db9d9fd7460183743697293a7ae19b39312c re-reads the live base after the comparisons, rejects unreadable or changed confirmation, and only then mints bound evidence.",
+        "Verification: `tests/FS.GG.Coord.Cli.Lifecycle.Tests/LandableNotOpenTests.fs:421-437` at 6523db9d9fd7460183743697293a7ae19b39312c drives a different second base-tip response and asserts the pending refusal; exact-head Lifecycle tests passed 147/147 via `dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --no-restore --nologo`."
+      ]
+    },
+    {
+      "id": "BASE-RACE-002",
+      "severity": "blocker",
+      "summary": "The first repair made landable green across a safe base advance, but the canonical guarded-delivery merge still enforced exact base equality and therefore could not land that PR.",
+      "evidence": [
+        "Verification: `src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs:518-524` at 45774150d2f467da292e8d3344da6b7b37f9be4c rejects every `currentBase` unequal to the accepted review base with `delivery effective base changed after acceptance`.",
+        "Verification: `src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs:542-568` at 45774150d2f467da292e8d3344da6b7b37f9be4c sends the canonical `delivery --apply` path through that exact-base guard after `landable` has admitted the moved base."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs:343-399,585-635` at 6523db9d9fd7460183743697293a7ae19b39312c uses the same complete forward-only/path-disjoint comparison proof at both landable and immediately before guarded merge, while re-reading claim, head, base, and repository merge policy.",
+        "Verification: `src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs:501-566` at 6523db9d9fd7460183743697293a7ae19b39312c binds BaseAdvanceEvidence to accepted base, current base, and exact head; missing or mismatched evidence refuses before invoking the merge callback.",
+        "Verification: `tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs:682-816` at 6523db9d9fd7460183743697293a7ae19b39312c covers missing evidence, successful bound evidence and live-base receipt, stale claim/head, and wrong accepted/current/head evidence; exact-head Lifecycle tests passed 147/147."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: issue https://github.com/FS-GG/.github/issues/3274 requires preservation only for an unchanged head with a forward-only, complete, path-disjoint base advance and explicitly retains changed-head, rewrite/divergence, overlap/conflict, incomplete comparison, and stale-authority refusals.",
+    "Verification: `src/FS.GG.Coord.GitHub/Reads.fs:856-907` at 6523db9d9fd7460183743697293a7ae19b39312c parses status, merge base, and ahead count, includes both paths for renames, and marks an exactly-300-file response incomplete; GitHub's official compare-commits REST description states that changed files appear on the first page and include up to 300 files for the entire comparison (https://docs.github.com/en/rest/commits/commits#compare-two-commits).",
+    "Verification: `src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs:354-399` at 6523db9d9fd7460183743697293a7ae19b39312c performs zero comparison reads when the base is unchanged, and otherwise rejects unreadable/capped evidence, non-forward topology, an unbound candidate delta, path overlap, and mid-proof base movement.",
+    "Verification: `tests/FS.GG.Coord.Cli.Lifecycle.Tests/LandableNotOpenTests.fs:332-451`, `tests/FS.GG.Coord.Cli.Lifecycle.Tests/DeliveryApplicationTests.fs:682-816`, and `tests/FS.GG.Coord.GitHub.Tests/ReadTests.fs:3131-3171` cover unchanged-base success, moved-base success, overlap, divergence, unreadable evidence, mid-proof movement, guarded-merge evidence binding, rename paths, the 300-file cap, and malformed rename evidence.",
+    "Verification: independent exact-head commands passed Lifecycle 147/147 and GitHub 701/701: `dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --no-restore --nologo` and `dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore --nologo`.",
+    "Verification: `Directory.Build.props:552-557` and `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj:133-142` at 6523db9d9fd7460183743697293a7ae19b39312c advance the coherent set and package release notes to PATCH 0.85.1; live `gh release view coherent-set/v0.85.1 --repo FS-GG/.github` and tag-ref API reads both returned not found before publication, so the version was unused at review time.",
+    "Verification: the candidate changes the coordination toolkit and its mirrored operator measurement discipline, not game functionality; no player journey applies. The source GitHub Substrate v2 roadmap remains correctly stopped after accepted GS2-07.3 while this prerequisite toolkit defect is repaired before GS2-07.4."
+  ],
+  "confirmation": {
+    "reviewed_commit": "6523db9d9fd7460183743697293a7ae19b39312c",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

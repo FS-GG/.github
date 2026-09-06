@@ -127,7 +127,7 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "7e6a97ca520b126c1a2d63dd51f90c73578061bf8d8e76ad040b23fd40c8aa53",
+      "tree-sha256": "af7559c58a4fd08ec4aca19d30bf1d78dfcd90e47e4b5e8604000ed22f2553f2",
       "files": [
         {
           "path": "SKILL.md",
@@ -171,7 +171,7 @@
         },
         {
           "path": "references/measurement-discipline.md",
-          "sha256": "af7105588c099794872378bc8ec07cc48a54e71d63c16815c62e0b02659eb092",
+          "sha256": "2f1f3f1d669ceb623de85e05e3139008d8d1940f3edb2ee131e07903a14d5598",
           "executable": false
         },
         {

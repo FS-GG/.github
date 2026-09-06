@@ -430,6 +430,15 @@ module Reads =
           AheadBy: int
           Files: (string * string) list }
 
+    /// Complete changed-path evidence for a commit comparison. `Paths` includes both names of every
+    /// rename; `Complete` is false at GitHub's 300-file comparison cap.
+    type CommitPathComparison =
+        { Status: string
+          MergeBase: string
+          AheadBy: int
+          Paths: string list
+          Complete: bool }
+
     /// Read the exact GitHub comparison used to prove that a reviewed implementation commit is an
     /// ancestor of the final evidence-bearing candidate and to inventory that final delta.
     val compareCommits:
@@ -439,6 +448,15 @@ module Reads =
         ancestor: string ->
         descendant: string ->
             IoResult<CommitComparison>
+
+    /// Read the comparison's complete path footprint for absence-sensitive overlap checks.
+    val compareCommitPaths:
+        transport: Transport.IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        ancestor: string ->
+        descendant: string ->
+            IoResult<CommitPathComparison>
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>

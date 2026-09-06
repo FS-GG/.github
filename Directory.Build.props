@@ -549,8 +549,12 @@
        analyze, verify, and ship artifact shapes, permits only non-blocking readiness warnings, rejects
        hidden index state, and runs production qualification in a disposable exact-candidate clone.
        No command, option, result, or exit-code vocabulary changes. -->
+  <!-- 0.85.0 -> 0.85.1 (.github#3274): PATCH. Exact-head review acceptance now survives a live base
+       advance only when complete GitHub comparisons prove it is forward-only and path-disjoint from
+       the reviewed candidate. Rewrites, overlap, conflicts, truncation, stale authority, and unreadable
+       evidence still fail closed. No command, option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.85.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.85.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
