@@ -216,6 +216,16 @@ module TelemetryCliTests =
         Assert.Equal(0, resolveCode)
         Assert.Equal("", resolveError)
         Assert.Equal(csv, resolved)
+        let outputDisposable, outputPath = temporary ""
+        use _output = outputDisposable
+        let materializeCode, materializeOutput, materializeError =
+            invoke [ "telemetry"; "usage"; "resolve"; "--source"; source; "--receipt-store"; store; "--output"; outputPath ]
+        Assert.Equal(0, materializeCode)
+        Assert.Equal("", materializeOutput)
+        Assert.Equal("", materializeError)
+        Assert.Equal(csv, File.ReadAllText outputPath)
+        if not (OperatingSystem.IsWindows()) then
+            Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode outputPath)
         let csvDisposable, csvPath = temporary csv
         use _csv = csvDisposable
         let unsafeCode, unsafeOutput, unsafeError = invoke [ "telemetry"; "usage"; "archive"; "--input"; csvPath; "--receipt-store"; Path.GetTempPath() ]

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5bdffc4493847772bb6d9ac72855e3c0e9bb8229f5efd34d90d72064c5994bf1"
+        "value": "f11593bb6c27fbb0a548983dc4c7ea11c9381caf825e869390525adf0b1a0e12"
       }
     },
     {
@@ -1049,7 +1049,7 @@
           "path": "work/3259-durable-private-telemetry-receipts/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "5bdffc4493847772bb6d9ac72855e3c0e9bb8229f5efd34d90d72064c5994bf1"
+            "value": "f11593bb6c27fbb0a548983dc4c7ea11c9381caf825e869390525adf0b1a0e12"
           },
           "schemaVersion": 1
         },
@@ -1080,7 +1080,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "44651ac1fdeccc8237c5068b430c567309c04929468c17ced75e52feb6e7d84a"
+        "value": "66a10bf3ababfff12c803f6b671eabc65f2d4d4940d5e559bda81ebb8200132f"
       },
       "currency": "current"
     }

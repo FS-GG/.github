@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3259-durable-private-telemetry-receipts/ship.json",
-      "digest": "sha256:b2cb2ae42511732619af2694f559472ae11fa522cec68ec2a78fde0dcab36a9f",
+      "digest": "sha256:24dae1e6f56420a45f20ca46076fe0e74945a5a03550b742906577eaffece49a",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3259-durable-private-telemetry-receipts/verify.json",
-      "digest": "sha256:894136a313a13c371ffab7190f1f56dd242d6a4164fbbc91a49d0f2c709589de",
+      "digest": "sha256:99e244f9b6657de2fef005948d2ca5b111fecb17db5bda91c5ba37fbeb9c5b5c",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3259-durable-private-telemetry-receipts/work-model.json",
-      "digest": "sha256:f2b0a974fe00de5886d526f1dd3f6c876893636fcae97517bf266e50f164d39c",
+      "digest": "sha256:570f86398a4b8a6d4eb450fc7c95df59ac1e1e579d8ef1d526b9b85800668597",
       "schemaVersion": 1
     }
   ],

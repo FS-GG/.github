@@ -140,7 +140,7 @@ module TelemetryApplication =
                     match archiveUsage args (read path) with
                     | Error reasons -> fail "telemetry usage" reasons
                     | Ok receipt ->
-                        printfn "{\"schema\":\"fsgg.telemetry.usage-archive/1\",\"source\":%s,\"path\":%s}" (JsonSerializer.Serialize receipt.Source) (JsonSerializer.Serialize receipt.Path)
+                        printfn "{\"schema\":\"fsgg.telemetry.usage-archive/1\",\"source\":%s}" (JsonSerializer.Serialize receipt.Source)
                         green
             | "resolve" ->
                 match required "--source" args with
@@ -150,7 +150,10 @@ module TelemetryApplication =
                     | Error reasons -> fail "telemetry usage" reasons
                     | Ok bytes ->
                         match option "--output" args with
-                        | Some path -> File.WriteAllBytes(path, bytes)
+                        | Some path ->
+                            File.WriteAllBytes(path, bytes)
+                            if not (OperatingSystem.IsWindows()) then
+                                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
                         | None -> Console.Out.Write(Encoding.UTF8.GetString bytes)
                         green
             | _ -> fail "telemetry usage" [ "action must be archive or resolve" ]
