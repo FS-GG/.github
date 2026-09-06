@@ -6,6 +6,10 @@
 - **Amends:** No prior ADR; completes the retention boundary left open by FS-GG/.github#3199.
 - **Affects:** lifecycle telemetry collection, sealing, validation, and recovery
 
+**Amended by ADR-0083:** extraordinary immutable histories that cannot satisfy these ordinary
+retention or reviewed legacy-proof mechanisms may use one explicitly human-authorized synthetic
+checkpoint; ADR-0083 does not weaken this ADR's normal path or reconstruct missing evidence.
+
 ## Context
 
 Lifecycle events publish aggregate token counts and a SHA-256 reference to a private runtime-usage CSV.
