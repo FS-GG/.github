@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.2 accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.3 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1247,8 +1247,25 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   and [schema-v2 feedback report](../feedback/2026-09-04-roadmap-github-substrate-v2-m7-gs2-07-2-narrow-reconciliation.md)
   bind normalized SDD unit key `gs2-07-2` to typed cycle `cycle-c02683c1aead6745`; its source-bound guarded
   update digest is `sha256:ea9c59e68dd5e15b9ea6e4d82c1974454431c0cfeb604974e63e97371091ea43`.
-- [ ] **GS2-07.3 — Audit repair.** Retain a complete scheduled audit as authority for dropped deliveries,
+- [x] **GS2-07.3 — Audit repair.** Retain a complete scheduled audit as authority for dropped deliveries,
   preview gaps, external repositories, and schema drift; prove event/audit convergence under replay.
+
+  Coordination [issue 304](https://github.com/FS-GG/FS.GG.Coordination/issues/304) and
+  [PR 307](https://github.com/FS-GG/FS.GG.Coordination/pull/307) accepted audit-authoritative repair for
+  dropped deliveries, preview gaps, external repositories, and schema drift, including replay convergence.
+  The canonical accepted receipt has digest `4c6a18a3c8cca8ebd59ce040f63f0192c07f9468ad155e7941f676b0b611719c`
+  and tracked-file SHA-256 `27195572e11d21b4438b0dbf94ec8ec341f4fb99e65574e92203bf37d1ceefd2`.
+
+  Recovery used the explicitly authorized, non-reconstructing
+  [synthetic checkpoint](https://github.com/FS-GG/FS.GG.Coordination/blob/4ad66d094092cb1ee858b6cb76f60d6d39e17079/evidence/github-substrate-v2/synthetic-checkpoints/GS2-07.3.json)
+  with digest `832bf1e5b02f9ef5c44bbe79aa7ba65618cc85a60bc063dfbe444e0467515ad0`;
+  its revision-28 anchor is `e0db53dd84b48a598a20bf8f6d888be1b23be0089656c1526e677d8f3be39346`,
+  after which ordinary strict lifecycle processing completed at revision 42 with digest
+  `6be3c3164d4b72178d52871f69e2bfe8a143768c6ea5608135520159122bd274`.
+  Exact-head [independent confirmation](https://github.com/FS-GG/FS.GG.Coordination/pull/307#issuecomment-5558086307)
+  and [host acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/307#issuecomment-5558107267)
+  preceded protected merge `4ad66d094092cb1ee858b6cb76f60d6d39e17079`; exact-main Bootstrap run
+  `34022719859` and CodeQL run `34022720160` succeeded, and #304 read back closed/Done.
 - [ ] **GS2-07.4 — Event security.** Verify signatures, installation/repository scope, replay bounds,
   payload/API disagreement, and least privilege; events schedule reconciliation but never directly mutate
   derived state.
