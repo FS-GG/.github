@@ -553,8 +553,13 @@
        advance only when complete GitHub comparisons prove it is forward-only and path-disjoint from
        the reviewed candidate. Rewrites, overlap, conflicts, truncation, stale authority, and unreadable
        evidence still fail closed. No command, option, result, or exit-code vocabulary changes. -->
+  <!-- 0.85.1 -> 0.85.2 (.github#3286): PATCH. Guarded delivery recognizes the existing typed
+       acceptance-receipt obligation as the narrowly fenced markerless implementation phase of a
+       single-owning-item two-phase flow. All other authority remains mandatory, and terminal completion
+       still requires canonical closing linkage from the later receipt PR. No command, option, result,
+       or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.85.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.85.2</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
