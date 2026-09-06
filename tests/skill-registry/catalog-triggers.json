@@ -69,6 +69,13 @@
     "negative": "Claim the next schedulable issue and implement it.",
     "boundary": "Diagnose path overlap and propose changes, but do not edit issue declarations."
   },
+  "min-docs": {
+    "positive": "Write this timestamped design note, add one index link, and land the prose-only pull request with narrow validation.",
+    "indirect": "This is only an analysis report; do not turn it into a full implementation lifecycle.",
+    "incomplete": "Land this non-functional prose change quickly.",
+    "negative": "Update the public API tutorial and executable CLI examples for the new command behavior.",
+    "boundary": "Write the proposal as prose, but do not change an ADR, schema, operator recipe, generated projection, or runtime."
+  },
   "p-add": {
     "positive": "$p-add the ball should be blue when rendered",
     "indirect": "Reconcile and triage the org backlog, then turn this short request into one routed board issue.",
