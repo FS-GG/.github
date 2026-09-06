@@ -202,6 +202,38 @@ module TelemetryCliTests =
         Assert.DoesNotContain(path, stdout)
 
     [<Fact>]
+    let ``#3259 collector durably archives and resolver returns the exact receipt`` () =
+        let sessionDisposable, sessionPath = temporary (codex 15)
+        let store = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "fsgg-3259-cli-tests", Guid.NewGuid().ToString("n"))
+        use _session = sessionDisposable
+        use _store = { new IDisposable with member _.Dispose() = if Directory.Exists store then Directory.Delete(store, true) }
+        let code, csv, stderr =
+            invoke [ "telemetry"; "usage"; "collect"; "codex"; "--session-file"; sessionPath; "--task"; "repo#1/claim"; "--coord-version"; "4.5.6"; "--sdd-version"; "7.8.9"; "--contracts-version"; "10.0.0"; "--receipt-store"; store ]
+        Assert.Equal(0, code)
+        Assert.Equal("", stderr)
+        let source = "runtime-usage-csv:sha256:" + shaText csv
+        let resolveCode, resolved, resolveError = invoke [ "telemetry"; "usage"; "resolve"; "--source"; source; "--receipt-store"; store ]
+        Assert.Equal(0, resolveCode)
+        Assert.Equal("", resolveError)
+        Assert.Equal(csv, resolved)
+        let outputDisposable, outputPath = temporary ""
+        use _output = outputDisposable
+        let materializeCode, materializeOutput, materializeError =
+            invoke [ "telemetry"; "usage"; "resolve"; "--source"; source; "--receipt-store"; store; "--output"; outputPath ]
+        Assert.Equal(0, materializeCode)
+        Assert.Equal("", materializeOutput)
+        Assert.Equal("", materializeError)
+        Assert.Equal(csv, File.ReadAllText outputPath)
+        if not (OperatingSystem.IsWindows()) then
+            Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode outputPath)
+        let csvDisposable, csvPath = temporary csv
+        use _csv = csvDisposable
+        let unsafeCode, unsafeOutput, unsafeError = invoke [ "telemetry"; "usage"; "archive"; "--input"; csvPath; "--receipt-store"; Path.GetTempPath() ]
+        Assert.NotEqual(0, unsafeCode)
+        Assert.Equal("", unsafeOutput)
+        Assert.Contains("must not be inside the system temporary directory", unsafeError)
+
+    [<Fact>]
     let ``#3208 malformed runtime arithmetic is a typed non-green refusal`` () =
         let disposable, path = temporary (codex 99)
         use _ = disposable

@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-06** — **coordination coherent set `github:0.84.0` source declared, publication pending** ([.github#3259](https://github.com/FS-GG/.github/issues/3259) source-unpublished): advances the coord-engine source contract to 0.84.0 for durable content-addressed private telemetry receipts, automatic digest resolution, and separately reviewed non-counting legacy recovery. The published package frontier remains 0.83.5 until the exact accepted merge is promoted through the release saga; registry reconciliation after promotion will update package-version and immutable release evidence.
+
 - **2026-09-06** — **coordination coherent set `github:0.83.5` published; registry reconciliation**
   ([.github#3257](https://github.com/FS-GG/.github/issues/3257), source
   [.github#3255](https://github.com/FS-GG/.github/issues/3255),

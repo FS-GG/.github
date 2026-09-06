@@ -550,7 +550,7 @@
        hidden index state, and runs production qualification in a disposable exact-candidate clone.
        No command, option, result, or exit-code vocabulary changes. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.83.5</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.84.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

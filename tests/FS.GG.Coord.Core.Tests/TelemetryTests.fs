@@ -1,6 +1,7 @@
 namespace FS.GG.Coord.Tests
 
 open System
+open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -14,6 +15,70 @@ module TelemetryTests =
     let private sealedReceipt (payload: string) =
         let digest = sha (bytes payload)
         bytes (payload[..payload.Length - 2] + $",\"digest\":\"%s{digest}\"}}")
+
+    let private usageRow task : RuntimeUsage.UsageRow =
+        let counts: RuntimeUsage.TokenCounts =
+            { Input = 10L; CachedInput = 4L; CacheWriteInput = 0L; Output = 5L; Reasoning = Some 2L; Total = 15L }
+        { Timestamp = "2026-09-04T08:01:00Z"; Task = task; SessionId = "session-1"; ThreadId = "thread-1"
+          TurnId = "turn-1"; ResponseId = "response-1"; Provider = "OpenAI"; Model = "gpt-test"; Effort = "high"
+          RuntimeVersion = "1.2.3"; CoordinationVersion = "4.5.6"; SddVersion = "7.8.9"; ContractsVersion = "10.0.0"
+          LedgerSchema = 1; Response = counts; Turn = counts; Thread = Some counts
+          Source = "codex-session-jsonl:sha256:" + String.replicate 64 "f" }
+
+    [<Fact>]
+    let ``#3259 usage receipts archive idempotently and corrupted canonical bytes fail closed`` () =
+        let store = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "fsgg-3259-tests", Guid.NewGuid().ToString("n"))
+        use _cleanup = { new IDisposable with member _.Dispose() = if Directory.Exists store then Directory.Delete(store, true) }
+        let receiptBytes = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/claim" ] |> bytes
+        let first = UsageReceiptStore.archive (Some store) receiptBytes |> unwrap
+        let second = UsageReceiptStore.archive (Some store) receiptBytes |> unwrap
+        Assert.Equal(first, second)
+        Assert.True(receiptBytes.AsSpan().SequenceEqual((UsageReceiptStore.resolve (Some store) first.Source |> unwrap).AsSpan()))
+        if not (OperatingSystem.IsWindows()) then
+            Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode first.Path)
+        File.WriteAllText(first.Path, "tampered", UTF8Encoding(false))
+        let corrupted = UsageReceiptStore.resolve (Some store) first.Source
+        Assert.True(Result.isError corrupted)
+        Assert.Contains("corrupted or collides", sprintf "%A" corrupted)
+        File.WriteAllBytes(first.Path, receiptBytes)
+        if not (OperatingSystem.IsWindows()) then
+            File.SetUnixFileMode(first.Path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.GroupRead)
+            Assert.Contains("permissions are not owner-only", sprintf "%A" (UsageReceiptStore.resolve (Some store) first.Source))
+        Assert.True(UsageReceiptStore.archive (Some(Path.GetTempPath())) receiptBytes |> Result.isError)
+        Assert.True(UsageReceiptStore.archive (Some(Path.GetPathRoot store)) receiptBytes |> Result.isError)
+        if not (OperatingSystem.IsWindows()) then
+            let linkTarget, link = store + "-target", store + "-link"
+            Directory.CreateDirectory linkTarget |> ignore
+            Directory.CreateSymbolicLink(link, linkTarget) |> ignore
+            Assert.Contains("symbolic link", sprintf "%A" (UsageReceiptStore.archive (Some(Path.Combine(link, "nested"))) receiptBytes))
+            Directory.Delete link
+            Directory.Delete(linkTarget, true)
+
+    [<Fact>]
+    let ``#3259 reviewed legacy proof excludes a missing measured receipt without reconstructing counts`` () =
+        let tooling = """{"ledger_schema":1,"runtime":{"status":"recorded","name":"codex","version":"1.2.3","source":"session"},"coordination":{"status":"recorded","name":"fsgg-coord","version":"4.5.6","source":"cli"},"sdd":{"status":"recorded","name":"fsgg-sdd","version":"7.8.9","source":"cli"},"contracts":{"status":"recorded","name":"fsgg-contracts","version":"10.0.0","source":"registry"}}"""
+        let model = """{"status":"recorded","provider":"OpenAI","name":"gpt-test","effort":"high","source":"runtime receipt"}"""
+        let draft order phase event at actual usage evidence =
+            $"""{{"schema_version":1,"run_id":"run","unit_id":"unit","item":{{"repo":"FS-GG/.github","number":42,"url":"https://github.com/FS-GG/.github/issues/42"}},"phase_order":%d{order},"phase":"%s{phase}","event":"%s{event}","at":"%s{at}","actor":"worker-1","model":%s{model},"source":{{"repository":"FS-GG/.github","revision":"%s{String.replicate 40 "a"}"}},"evidence":%s{JsonSerializer.Serialize evidence},"actual_minutes":%s{actual},"historical_durations_minutes":[],"historical_average_minutes":null,"token_usage":%s{usage},"tooling":%s{tooling},"authority":{{"kind":"github_issue_comment","subject":"FS-GG/.github#42","claim_generation":"1"}}}}"""
+        let receipt = RuntimeUsage.renderCsv [ usageRow "FS-GG/.github#42/claim" ] |> bytes |> RuntimeUsage.parseCsvReceipt |> unwrap
+        let source, _ = receipt
+        let started = LifecycleTelemetry.sealSuccessor "run" "unit" "" (draft 1 "claim" "started" "2026-09-04T08:00:00Z" "null" "{\"status\":\"pending\"}" [ "claim" ]) |> unwrap
+        let measured = $"""{{"status":"measured","input":10,"cached_input":4,"cache_write_input":0,"output":5,"reasoning":2,"total":15,"source":"%s{source}","session_ids":["session-1"],"turn_ids":["turn-1"]}}"""
+        let completed = LifecycleTelemetry.sealSuccessorWithEvidence "run" "unit" [ receipt ] [] started (draft 1 "claim" "completed" "2026-09-04T08:01:00Z" "1" measured [ "usage" ]) |> unwrap
+        use completedJson = JsonDocument.Parse completed
+        let eventDigest = completedJson.RootElement.GetProperty("digest").GetString()
+        let proofWithoutDigest = $"""{{"schema":"%s{LegacyReceiptProof.Schema}","original_event_digest":"%s{eventDigest}","missing_receipt_source":"%s{source}","authority":{{"subject":"FS-GG/.github#42","comment_id":123}},"lookup_evidence":["canonical-store:absent","source-session:absent"],"author":"recovery-1a2b","reviewer":"critic-2c3d","review_evidence":["https://github.com/FS-GG/.github/issues/42#issuecomment-124"],"decision":"irrecoverable-exclude-usage"}}"""
+        let proofDigest = CanonicalJson.canonicalize (bytes proofWithoutDigest) |> unwrap |> bytes |> sha
+        let proofJson = proofWithoutDigest[..proofWithoutDigest.Length - 2] + $",\"digest\":\"%s{proofDigest}\"}}"
+        let proof = LegacyReceiptProof.parse (bytes proofJson) |> unwrap
+        let existing = started + completed
+        Assert.True(LifecycleTelemetry.validateWithEvidenceAndLegacy "run" "unit" false false [] [] [] [] existing |> Result.isError)
+        let recovery =
+            LifecycleTelemetry.sealSuccessorWithEvidenceAndLegacy "run" "unit" [] [ proof ] [] existing
+                (draft 2 "legacy-receipt-recovery-claim" "started" "2026-09-04T08:02:00Z" "null" "{\"status\":\"pending\"}" [ "legacy-receipt-proof:sha256:" + proofDigest ])
+            |> unwrap
+        LifecycleTelemetry.validateWithEvidenceAndLegacy "run" "unit" false false [] [] [ proof ] [] (existing + recovery) |> unwrap |> ignore
+        Assert.True(LegacyReceiptProof.parse (bytes (proofJson.Replace("\"critic-2c3d\"", "\"recovery-1a2b\""))) |> Result.isError)
 
     [<Fact>]
     let ``Codex collection preserves stable schema and exact counter arithmetic`` () =

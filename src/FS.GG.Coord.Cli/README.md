@@ -76,9 +76,16 @@ An unreachable answer is not a negative one. That rule is the whole point.
 
 The engine owns the deterministic telemetry boundary. `telemetry usage collect codex|claude` emits the
 stable runtime-usage CSV (or canonical JSONL), including exact model and coherent tool versions; `--append`
-retains one CSV header and ignores an already-recorded response identity. `telemetry lifecycle
-export-comments|seal-successor|validate` elects GitHub-comment order, seals the SHA-256 chain, and requires
-immutable `--usage` and optional `--history-report` receipts before measured terminal evidence is accepted.
+retains one CSV header and ignores an already-recorded response identity. Every completed collection also
+archives the frozen CSV under the canonical owner-private content-addressed receipt store. `telemetry usage
+archive|resolve` exposes idempotent archive and digest-verified retrieval; `--receipt-store` overrides the
+default `$FSGG_USAGE_RECEIPT_STORE` / `$XDG_STATE_HOME/fsgg/telemetry/usage` host-state root, while temporary
+and repository roots are refused. `telemetry lifecycle export-comments|seal-successor|validate` elects
+GitHub-comment order, seals the SHA-256 chain, and resolves immutable receipts from explicit `--usage`
+inputs first and then the canonical store. A repeatable `--legacy-proof` accepts only the closed,
+separately-reviewed irrecoverability schema and excludes the missing event from accounting; it never
+reconstructs a CSV or trusts counts copied from public lifecycle JSON. Optional `--history-report` receipts
+remain supported.
 `telemetry summarize`, `telemetry critique validate`, and `telemetry feedback validate` are read-only.
 `telemetry qualification validate|run` validates or executes the closed exact-checkout qualification
 contract. `telemetry qualification obligation render|verify` emits the existing guarded, current-head

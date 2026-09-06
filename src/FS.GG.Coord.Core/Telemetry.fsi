@@ -46,6 +46,35 @@ module RuntimeUsage =
     val parseJsonLines: string -> Result<UsageRow list, string list>
     val parseCsvReceipt: byte array -> Result<string * UsageRow list, string list>
 
+module UsageReceiptStore =
+    type ArchivedReceipt =
+        { Source: string
+          Path: string }
+
+    val defaultRoot: unit -> string
+    val archive: root: string option -> bytes: byte array -> Result<ArchivedReceipt, string list>
+    val resolve: root: string option -> source: string -> Result<byte array, string list>
+    val tryResolve: root: string option -> source: string -> Result<byte array option, string list>
+
+module LegacyReceiptProof =
+    [<Literal>]
+    val Schema: string = "fsgg.telemetry.legacy-receipt-proof/v1"
+
+    type Proof =
+        { OriginalEventDigest: string
+          MissingReceiptSource: string
+          AuthoritySubject: string
+          AuthorityCommentId: int64
+          LookupEvidence: string list
+          Author: string
+          Reviewer: string
+          ReviewEvidence: string list
+          Decision: string
+          Digest: string }
+
+    val parse: bytes: byte array -> Result<Proof, string list>
+    val canonicalize: proof: Proof -> string
+
 module LifecycleTelemetry =
     type Transition = Started | Completed | Blocked | Resumed
     type Finding =
@@ -58,7 +87,8 @@ module LifecycleTelemetry =
         { EventCount: int
           CompletedPhases: string list
           ActivePhases: string list
-          BlockedPhases: string list }
+          BlockedPhases: string list
+          ExcludedUsageSources: string list }
 
     type HistoryRow =
         { Phase: string
@@ -68,9 +98,12 @@ module LifecycleTelemetry =
 
     val sealSuccessor: runId: string -> unitId: string -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
     val sealSuccessorWithEvidence: runId: string -> unitId: string -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
+    val sealSuccessorWithEvidenceAndLegacy: runId: string -> unitId: string -> usageReports: (string * RuntimeUsage.UsageRow list) list -> legacyProofs: LegacyReceiptProof.Proof list -> history: HistoryRow list -> existingJsonLines: string -> draftJson: string -> Result<string, Finding list>
     val validate: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> jsonLines: string -> Result<Validation, Finding list>
     val validateWithEvidence: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
     val validateReconciledWithEvidence: runId: string -> unitId: string -> requireTerminal: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
+    val validateWithEvidenceAndLegacy: runId: string -> unitId: string -> requireTerminal: bool -> requireReconciled: bool -> requiredPhases: string list -> usageReports: (string * RuntimeUsage.UsageRow list) list -> legacyProofs: LegacyReceiptProof.Proof list -> history: HistoryRow list -> jsonLines: string -> Result<Validation, Finding list>
+    val requiredUsageSources: jsonLines: string -> string list
     val parseHistoryCsv: string -> Result<HistoryRow list, string list>
     val exportComments: runId: string -> unitId: string -> commentsJson: string -> Result<string * Finding list, Finding list>
 

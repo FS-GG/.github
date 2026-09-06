@@ -105,7 +105,7 @@ def seal(events: list[dict]) -> None:
         previous = event["digest"]
 
 
-def collector_parity(directory: Path) -> tuple[int, int, Path]:
+def collector_parity(directory: Path) -> tuple[int, int, Path, Path]:
     session = directory / "session.jsonl"
     codex_session(session)
     snapshot = directory / "claude.json"
@@ -116,7 +116,8 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
             "input_tokens": 7, "cache_read_input_tokens": 2,
             "cache_creation_input_tokens": 1, "output_tokens": 3}},
     }, separators=(",", ":")), encoding="utf-8")
-    common = ["--task", "repo#1/claim", "--coord-version", "4.5.6", "--sdd-version", "7.8.9", "--contracts-version", "10.0.0"]
+    receipt_store = directory / "durable-state" / "usage"
+    common = ["--task", "repo#1/claim", "--coord-version", "4.5.6", "--sdd-version", "7.8.9", "--contracts-version", "10.0.0", "--receipt-store", str(receipt_store)]
     runtimes = [("codex", "--session-file", session), ("claude", "--snapshot", snapshot)]
     positive = 0
     frozen = {
@@ -182,14 +183,30 @@ def collector_parity(directory: Path) -> tuple[int, int, Path]:
 
     args = ["codex", "--session-file", str(session), *common, "--unknown-flag"]
     expect_verdict("collector unknown option", engine("telemetry", "usage", "collect", *args), False)
-    return positive, 3, session
+    receipts = sorted(receipt_store.rglob("*.csv"))
+    if len(receipts) != 2:
+        raise SystemExit(f"collector did not archive one canonical receipt per runtime: {receipts}")
+    for receipt in receipts:
+        source = "runtime-usage-csv:sha256:" + receipt.stem
+        resolved = engine("telemetry", "usage", "resolve", "--source", source, "--receipt-store", str(receipt_store))
+        if resolved.returncode or resolved.stdout.encode() != receipt.read_bytes():
+            raise SystemExit("usage resolver did not return exact canonical bytes")
+        positive += 1
+    tampered = receipts[0]
+    original = tampered.read_bytes()
+    tampered.write_text("tampered", encoding="utf-8")
+    source = "runtime-usage-csv:sha256:" + tampered.stem
+    expect_verdict("usage resolver rejects canonical tampering", engine("telemetry", "usage", "resolve", "--source", source, "--receipt-store", str(receipt_store)), False)
+    tampered.write_bytes(original)
+    expect_verdict("usage archive rejects temporary retention", engine("telemetry", "usage", "archive", "--input", str(tampered), "--receipt-store", tempfile.gettempdir()), False)
+    return positive, 5, session, receipt_store
 
 
-def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
+def lifecycle_parity(directory: Path, session: Path, receipt_store: Path) -> tuple[int, int]:
     usage = directory / "usage.csv"
     collected = engine("telemetry", "usage", "collect", "codex", "--session-file", str(session),
                        "--task", "FS-GG/.github#42/claim", "--coord-version", "4.5.6",
-                       "--sdd-version", "7.8.9", "--contracts-version", "10.0.0")
+                       "--sdd-version", "7.8.9", "--contracts-version", "10.0.0", "--receipt-store", str(receipt_store))
     if collected.returncode:
         raise SystemExit(collected.stderr)
     usage.write_text(collected.stdout, encoding="utf-8")
@@ -204,6 +221,13 @@ def lifecycle_parity(directory: Path, session: Path) -> tuple[int, int]:
               "--required-phase", "claim", "--required-phase", "implement", "--require-terminal"]
     expect_verdict("lifecycle validate", engine("telemetry", "lifecycle", "validate", *shared), True)
     positive = 1
+    auto_shared = [value for value in shared if value not in ("--usage", str(usage))]
+    auto_shared.extend(["--receipt-store", str(receipt_store)])
+    auto = engine("telemetry", "lifecycle", "validate", *auto_shared)
+    expect_verdict("lifecycle resolves canonical receipt by digest", auto, True)
+    if json.loads(auto.stdout).get("excludedUsageSources") != []:
+        raise SystemExit("ordinary lifecycle validation unexpectedly excluded usage")
+    positive += 1
 
     chain_fields = {"sequence", "revision", "previous_digest", "digest"}
     existing = directory / "existing.jsonl"
@@ -413,10 +437,12 @@ def feedback_parity(directory: Path) -> tuple[int, int]:
 def main() -> int:
     helper_absence()
     positive = rejected = 0
-    with tempfile.TemporaryDirectory(prefix="fsgg-3208-parity-") as path:
+    test_state = Path.home() / ".local" / "state" / "fsgg" / "test-runs"
+    test_state.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="fsgg-3208-parity-", dir=test_state) as path:
         directory = Path(path)
-        p, r, session = collector_parity(directory); positive += p; rejected += r
-        p, r = lifecycle_parity(directory, session); positive += p; rejected += r
+        p, r, session, receipt_store = collector_parity(directory); positive += p; rejected += r
+        p, r = lifecycle_parity(directory, session, receipt_store); positive += p; rejected += r
         p, r = critique_parity(directory / "critique"); positive += p; rejected += r
         p, r = feedback_parity(directory / "feedback-root"); positive += p; rejected += r
     print(f"telemetry-parity: pass ({positive} positive and {rejected} rejection cases across the full frozen helper corpus)")

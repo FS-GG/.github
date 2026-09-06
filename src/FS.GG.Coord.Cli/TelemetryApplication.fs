@@ -48,12 +48,14 @@ module TelemetryApplication =
         | [ "telemetry"; "usage"; "collect" ] -> Some(Ok())
         | "telemetry" :: "usage" :: "collect" :: runtime :: args when runtime = "codex" || runtime = "claude" ->
             shape
-                [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version" ]
+                [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version"; "--receipt-store" ]
                 [ "--all-responses" ] args
+        | "telemetry" :: "usage" :: action :: args when action = "archive" || action = "resolve" ->
+            shape [ "--input"; "--source"; "--receipt-store"; "--output" ] [] args
         | "telemetry" :: "lifecycle" :: action :: args
             when action = "export-comments" || action = "seal-successor" || action = "validate" ->
             shape
-                [ "--run"; "--unit"; "--comments"; "--draft"; "--usage"; "--history-report"; "--existing"; "--log"; "--output"; "--required-phase" ]
+                [ "--run"; "--unit"; "--comments"; "--draft"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--existing"; "--log"; "--output"; "--required-phase" ]
                 [ "--require-terminal"; "--require-reconciled" ] args
         | "telemetry" :: "critique" :: "validate" :: args ->
             shape [ "--cycle"; "--artifact"; "--head" ] [] args
@@ -126,6 +128,37 @@ module TelemetryApplication =
             Console.Out.Write(if format = "json" then RuntimeUsage.renderJsonLines rows else RuntimeUsage.renderCsv rows)
             Ok ()
 
+    let private archiveUsage args bytes = UsageReceiptStore.archive (option "--receipt-store" args) bytes
+
+    let private usageStore action args =
+        try
+            match action with
+            | "archive" ->
+                match required "--input" args with
+                | Error reason -> fail "telemetry usage" [ reason ]
+                | Ok path ->
+                    match archiveUsage args (read path) with
+                    | Error reasons -> fail "telemetry usage" reasons
+                    | Ok receipt ->
+                        printfn "{\"schema\":\"fsgg.telemetry.usage-archive/1\",\"source\":%s}" (JsonSerializer.Serialize receipt.Source)
+                        green
+            | "resolve" ->
+                match required "--source" args with
+                | Error reason -> fail "telemetry usage" [ reason ]
+                | Ok source ->
+                    match UsageReceiptStore.resolve (option "--receipt-store" args) source with
+                    | Error reasons -> fail "telemetry usage" reasons
+                    | Ok bytes ->
+                        match option "--output" args with
+                        | Some path ->
+                            File.WriteAllBytes(path, bytes)
+                            if not (OperatingSystem.IsWindows()) then
+                                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                        | None -> Console.Out.Write(Encoding.UTF8.GetString bytes)
+                        green
+            | _ -> fail "telemetry usage" [ "action must be archive or resolve" ]
+        with ex -> fail "telemetry usage" [ ex.Message ]
+
     let private usage runtime args =
         try
             match required "--task" args, required "--coord-version" args, required "--sdd-version" args, required "--contracts-version" args with
@@ -146,7 +179,24 @@ module TelemetryApplication =
                 | Ok collection ->
                     let format = option "--format" args |> Option.defaultValue "csv"
                     if format <> "csv" && format <> "json" then fail "telemetry usage" [ "--format must be csv or json" ] else
-                    match emitUsage args format collection.Rows with Ok () -> green | Error reasons -> fail "telemetry usage" reasons
+                    let frozen = RuntimeUsage.renderCsv collection.Rows |> Encoding.UTF8.GetBytes
+                    match option "--append" args with
+                    | None ->
+                        match archiveUsage args frozen with
+                        | Error reasons -> fail "telemetry usage" reasons
+                        | Ok _ -> match emitUsage args format collection.Rows with Ok () -> green | Error reasons -> fail "telemetry usage" reasons
+                    | Some appendPath ->
+                        match emitUsage args format collection.Rows with
+                        | Error reasons -> fail "telemetry usage" reasons
+                        | Ok () ->
+                            let receipt =
+                                if format = "csv" then Ok(read appendPath)
+                                else
+                                    RuntimeUsage.parseJsonLines(File.ReadAllText appendPath)
+                                    |> Result.map (RuntimeUsage.renderCsv >> Encoding.UTF8.GetBytes)
+                            match receipt with
+                            | Error reasons -> fail "telemetry usage" reasons
+                            | Ok bytes -> match archiveUsage args bytes with Ok _ -> green | Error reasons -> fail "telemetry usage" reasons
             | values ->
                 [ match values with Error e, _, _, _ -> yield e | _ -> ()
                   match values with _, Error e, _, _ -> yield e | _ -> ()
@@ -155,6 +205,24 @@ module TelemetryApplication =
         with ex -> fail "telemetry usage" [ ex.Message ]
 
     let private findings values = values |> List.map string
+    let private legacyProofs args = options "--legacy-proof" args |> List.map (read >> LegacyReceiptProof.parse)
+    let private usageReports args lifecycleText =
+        let explicit = options "--usage" args |> List.map (fun path -> RuntimeUsage.parseCsvReceipt (read path))
+        let explicitReports = explicit |> List.choose Result.toOption
+        let explicitSources = explicitReports |> List.map fst |> Set.ofList
+        let resolved =
+            LifecycleTelemetry.requiredUsageSources lifecycleText
+            |> List.filter (fun source -> not (explicitSources.Contains source))
+            |> List.map (fun source ->
+                match UsageReceiptStore.tryResolve (option "--receipt-store" args) source with
+                | Ok None -> Ok None
+                | Ok(Some bytes) -> RuntimeUsage.parseCsvReceipt bytes |> Result.map Some
+                | Error errors -> Error errors)
+        let errors =
+            (explicit |> List.collect (function Error values -> values | _ -> []))
+            @ (resolved |> List.collect (function Error values -> values | _ -> []))
+        let reports = explicitReports @ (resolved |> List.choose (function Ok(Some value) -> Some value | _ -> None))
+        errors, reports
     let private lifecycle action args =
         try
             match required "--run" args, required "--unit" args with
@@ -164,37 +232,36 @@ module TelemetryApplication =
                     match required "--log" args with
                     | Error reason -> fail "telemetry lifecycle" [ reason ]
                     | Ok path ->
-                        let usage =
-                            options "--usage" args
-                            |> List.map (fun usagePath -> RuntimeUsage.parseCsvReceipt (read usagePath))
-                        let usageErrors = usage |> List.collect (function Error errors -> errors | _ -> [])
-                        let reports = usage |> List.choose (function Ok report -> Some report | _ -> None)
+                        let lifecycleText = File.ReadAllText path
+                        let usageErrors, reports = usageReports args lifecycleText
+                        let proofs = legacyProofs args
+                        let proofErrors = proofs |> List.collect (function Error errors -> errors | _ -> [])
+                        let acceptedProofs = proofs |> List.choose Result.toOption
                         let history =
                             match option "--history-report" args with
                             | None -> Ok []
                             | Some historyPath -> LifecycleTelemetry.parseHistoryCsv (File.ReadAllText historyPath)
                         let historyErrors = match history with Error errors -> errors | _ -> []
-                        match usageErrors @ historyErrors with
+                        match usageErrors @ proofErrors @ historyErrors with
                         | errors when not errors.IsEmpty -> fail "telemetry lifecycle" errors
                         | _ ->
-                            let validator =
-                                if has "--require-reconciled" args then LifecycleTelemetry.validateReconciledWithEvidence
-                                else LifecycleTelemetry.validateWithEvidence
-                            match validator runId unitId (has "--require-terminal" args) (options "--required-phase" args) reports (history |> Result.defaultValue []) (File.ReadAllText path) with
+                            match LifecycleTelemetry.validateWithEvidenceAndLegacy runId unitId (has "--require-terminal" args) (has "--require-reconciled" args) (options "--required-phase" args) reports acceptedProofs (history |> Result.defaultValue []) lifecycleText with
                             | Error values -> fail "telemetry lifecycle" (findings values)
-                            | Ok result -> printfn "{\"schema\":\"fsgg.telemetry.lifecycle-validation/1\",\"events\":%d,\"completedPhases\":%s,\"activePhases\":%s,\"blockedPhases\":%s}" result.EventCount (JsonSerializer.Serialize result.CompletedPhases) (JsonSerializer.Serialize result.ActivePhases) (JsonSerializer.Serialize result.BlockedPhases); green
+                            | Ok result -> printfn "{\"schema\":\"fsgg.telemetry.lifecycle-validation/1\",\"events\":%d,\"completedPhases\":%s,\"activePhases\":%s,\"blockedPhases\":%s,\"excludedUsageSources\":%s}" result.EventCount (JsonSerializer.Serialize result.CompletedPhases) (JsonSerializer.Serialize result.ActivePhases) (JsonSerializer.Serialize result.BlockedPhases) (JsonSerializer.Serialize result.ExcludedUsageSources); green
                 | "seal-successor" ->
                     match required "--draft" args with
                     | Error reason -> fail "telemetry lifecycle" [ reason ]
                     | Ok draft ->
                         let existing = option "--existing" args |> Option.map File.ReadAllText |> Option.defaultValue ""
-                        let usage = options "--usage" args |> List.map (fun path -> RuntimeUsage.parseCsvReceipt (read path))
-                        let usageErrors = usage |> List.collect (function Error errors -> errors | _ -> [])
-                        let reports = usage |> List.choose (function Ok report -> Some report | _ -> None)
+                        let draftText = File.ReadAllText draft
+                        let usageErrors, reports = usageReports args (existing + "\n" + draftText)
+                        let proofs = legacyProofs args
+                        let proofErrors = proofs |> List.collect (function Error errors -> errors | _ -> [])
+                        let acceptedProofs = proofs |> List.choose Result.toOption
                         let history = option "--history-report" args |> Option.map (File.ReadAllText >> LifecycleTelemetry.parseHistoryCsv) |> Option.defaultValue (Ok [])
                         let historyErrors = match history with Error errors -> errors | _ -> []
-                        if not (usageErrors @ historyErrors).IsEmpty then fail "telemetry lifecycle" (usageErrors @ historyErrors) else
-                        match LifecycleTelemetry.sealSuccessorWithEvidence runId unitId reports (history |> Result.defaultValue []) existing (File.ReadAllText draft) with Error values -> fail "telemetry lifecycle" (findings values) | Ok value -> writeOrPrint args value; green
+                        if not (usageErrors @ proofErrors @ historyErrors).IsEmpty then fail "telemetry lifecycle" (usageErrors @ proofErrors @ historyErrors) else
+                        match LifecycleTelemetry.sealSuccessorWithEvidenceAndLegacy runId unitId reports acceptedProofs (history |> Result.defaultValue []) existing draftText with Error values -> fail "telemetry lifecycle" (findings values) | Ok value -> writeOrPrint args value; green
                 | "export-comments" ->
                     match required "--comments" args with
                     | Error reason -> fail "telemetry lifecycle" [ reason ]
@@ -478,13 +545,15 @@ module TelemetryApplication =
         match argv with
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
             Some(validated "telemetry usage"
-                    [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version" ]
+                    [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version"; "--receipt-store" ]
                     [ "--all-responses" ] args (usage runtime))
+        | "telemetry" :: "usage" :: action :: args when action = "archive" || action = "resolve" ->
+            Some(validated "telemetry usage" [ "--input"; "--source"; "--receipt-store"; "--output" ] [] args (usageStore action))
         | "telemetry" :: "lifecycle" :: action :: args ->
             let valueOptions, switches =
                 match action with
-                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--history-report"; "--required-phase" ], [ "--require-terminal"; "--require-reconciled" ]
-                | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--history-report"; "--output" ], []
+                | "validate" -> [ "--run"; "--unit"; "--log"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--required-phase" ], [ "--require-terminal"; "--require-reconciled" ]
+                | "seal-successor" -> [ "--run"; "--unit"; "--draft"; "--existing"; "--usage"; "--legacy-proof"; "--receipt-store"; "--history-report"; "--output" ], []
                 | "export-comments" -> [ "--run"; "--unit"; "--comments"; "--output" ], []
                 | _ -> [], []
             Some(validated "telemetry lifecycle" valueOptions switches args (lifecycle action))

@@ -13,24 +13,32 @@ SUPERVISION_CONTRACTS = {
         "unposted terminal draft marked `pending final usage`",
         "timing condition to `unavailable`",
         "while any completed child lacks this reconciliation",
+        "canonical per-user",
+        "separately reviewed non-counting proof",
     ],
     ROOT / ".agents/skills/pnext-item/references/lifecycle-ledger.md": [
         "Supervising a completed child",
         "Post-response collection is a parent responsibility",
         "multiple matching sessions are an attribution failure",
         "`unavailable` reason",
+        "`$FSGG_USAGE_RECEIPT_STORE`",
+        "`irrecoverable-exclude-usage`",
     ],
     ROOT / ".agents/skills/work-roadmap/SKILL.md": [
         "roadmap driver is the supervising parent",
         "terminal draft with `pending final usage`",
         "roadmap Done all fail closed",
         "post-completion uniqueness lookup",
+        "repository-only copies are not retention",
+        "excluded, never reconstructed",
     ],
     ROOT / ".agents/skills/work-roadmap/references/lifecycle-log.md": [
         "supervising parent, owns every post-child seal",
         "It does not post its own terminal lifecycle event",
         "the response means pending, never unavailable",
         "telemetry-reconciliation-<phase>",
+        "no-overwrite writes",
+        "legacy-receipt-proof:sha256",
     ],
 }
 PAGINATION_WITNESSES = [
