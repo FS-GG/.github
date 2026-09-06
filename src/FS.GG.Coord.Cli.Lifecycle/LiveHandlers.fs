@@ -1563,8 +1563,18 @@ module LiveHandlers =
                                     let overlapText = String.concat ", " overlap
                                     stale $"the base advance touches reviewed candidate path(s): %s{overlapText}"
                                 else
-                                    eprint
-                                        $"fsgg-coord-engine: landable: PR #%d{pr}'s base advanced from `%s{acceptedBase}` to `%s{liveBase}`, but complete GitHub comparisons prove a forward-only path-disjoint advance; exact-head review acceptance remains current."
+                                    // Do not spend a proof about B after the branch has already moved to C.
+                                    // GitHub's merge API has an expected-head guard but no expected-base
+                                    // argument, so this second live-tip read is the narrow fail-closed
+                                    // fence available before `delivery` makes that guarded merge call.
+                                    match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
+                                    | Error error ->
+                                        stale $"the effective base could not be re-read after equivalence proof (%s{Errors.explain error})"
+                                    | Ok confirmedBase when confirmedBase <> liveBase ->
+                                        stale $"the effective base moved again to `%s{confirmedBase}` while equivalence was being proved"
+                                    | Ok _ ->
+                                        eprint
+                                            $"fsgg-coord-engine: landable: PR #%d{pr}'s base advanced from `%s{acceptedBase}` to `%s{liveBase}`, but complete GitHub comparisons prove a forward-only path-disjoint advance and the base remained stable through confirmation; exact-head review acceptance remains current."
 
                     List.ofSeq problems
 
