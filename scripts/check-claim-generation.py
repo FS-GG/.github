@@ -52,7 +52,21 @@ Both shapes below are accepted, and the first is what the production path writes
          opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha> -->
     <!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2342 gen=5250268950 head=<40-hex sha> -->
 
-APPLICABILITY: ONLY a pull request whose branch is `item/<n>-*` — `pnext-item` §2's own naming
+APPLICABILITY: an `item/<n>-*` pull request uses the strict claim-generation fence below. A
+`routine/<slug>` pull request instead uses the prospective routine-development policy at
+`.fsgg/routine-development.json`: it needs no issue or claim, but its PR body must bind the declared
+operation to the exact current head, and its changed paths must remain outside protected authority,
+release, dispatch, and registry surfaces. Every other branch remains outside this gate.
+
+The routine marker is:
+
+    <!-- fsgg:routine-development/v1 head=<40-hex-sha> operation=source-change -->
+
+This reuses an already-required status context rather than adding a hidden validator. A push makes
+the marker stale and red; editing the body to the new exact head re-runs this workflow. Protected
+operations stay on `item/<n>-*` and the strict route.
+
+STRICT APPLICABILITY: ONLY a pull request whose branch is `item/<n>-*` — `pnext-item` §2's own naming
 convention, the SAME test `Delivery.fs`'s `ItemBranchCanonical` already makes
 (`src/FS.GG.Coord.Cli/Client.fs`, the `branch.StartsWith($"item/%d{target.Number}-")` line in the
 `delivery` command) — is "a pull request claiming to deliver a board item" (the scope line `#2342`
@@ -212,7 +226,7 @@ is out of `Paths:` here, and is recorded as a known, accepted, MINIMAL-SURFACE-A
 silent one — the same disposition `#485`'s own instances are given elsewhere in this repository.
 
 EXIT CODES (the org's shared contract, `scripts/lib/gate.py`):
-  0  OK           — not an item-delivery branch (nothing to fence), or the authorization is current.
+  0  OK           — unrelated branch, an admitted exact-head routine PR, or current strict authorization.
   1  FINDING      — missing, stale, expired, or mismatched authorization. See the five diagnoses above.
   2  NO VERDICT, RETRYABLE — the live claim state could not be READ (rate limit, outage, timeout).
   3  NO VERDICT, PERMANENT — a permission failure, an unusable input, or a bug in this gate.
@@ -223,6 +237,8 @@ required context and must never red the default branch for a per-PR problem — 
 
 Usage:
   check-claim-generation.py --repo <owner/name> --head-ref <branch> --head-sha <40-hex sha>
+                             [--base-sha <40-hex sha>] [--routine-policy <path>]
+                             [--routine-policy-ref <40-hex base sha>]
                              [--body <file>]                 # PR body; default: stdin
                              [--lease-minutes <n>]            # default: marker `lease=`, else
                                                               # $FSGG_CLAIM_LEASE_MIN, else 120
@@ -262,12 +278,14 @@ GH_TIMEOUT = float(os.environ.get("FSGG_CLAIM_GEN_TIMEOUT", "30"))
 # A pull request's branch, `pnext-item` §2's naming: `item/<n>-<slug>`. The SAME shape
 # `src/FS.GG.Coord.Cli/Client.fs`'s `delivery` command tests via `branch.StartsWith`.
 ITEM_BRANCH_RE = re.compile(r"^item/(?P<n>[0-9]+)-")
+ROUTINE_BRANCH_RE = re.compile(r"^routine/[a-z0-9][a-z0-9._-]*$")
 
 # The PR authorization marker this gate reads. Anchored on the OPEN of the HTML comment so a body
 # that merely quotes the marker's text in prose without opening a real `<!--` comment cannot match —
 # the same discipline `src/FS.GG.Coord.GitHub/Reads.fs`'s `markerRe` applies to `fsgg:claim`. `DOTALL`
 # because the design doc's own marker spans multiple lines.
 AUTH_MARKER_RE = re.compile(r"<!--\s*fsgg:pr-authorization\s+(?P<fields>.*?)-->", re.DOTALL)
+ROUTINE_MARKER_RE = re.compile(r"<!--\s*fsgg:routine-development/v1\s+(?P<fields>.*?)-->", re.DOTALL)
 
 # One `key=value` token inside a marker. Values are non-whitespace by construction (a GitHub owner/
 # repo#n, a decimal id, a 40-hex sha) — none of this marker's fields ever legitimately contains a
@@ -277,6 +295,11 @@ FIELD_RE = re.compile(r"(?P<k>[A-Za-z]+)=(?P<v>\S+)")
 
 REQUIRED_FIELDS = ("v", "item", "gen", "head")
 SUPPORTED_VERSION = "1"
+ROUTINE_POLICY_SCHEMA = "fsgg.routine-development-policy/v1"
+ROUTINE_NOT_REQUIRED = {
+    "issue", "claim", "sdd-artifacts", "phase-lifecycle-ledger", "independent-critic",
+    "feedback-report", "receipt-cycle", "metadata-done",
+}
 
 GEN_RE = re.compile(r"^[0-9]+$")
 HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -532,6 +555,104 @@ def find_authorizations(body: str) -> list[dict[str, str]]:
             fields[fm.group("k")] = fm.group("v")
         out.append(fields)
     return out
+
+
+def marker_fields(pattern: re.Pattern[str], body: str) -> list[dict[str, str]]:
+    """Parse a bounded machine marker while preserving the existing permissive field grammar."""
+    markers = []
+    for match in pattern.finditer(body):
+        fields: dict[str, str] = {}
+        duplicates: list[str] = []
+        for field in FIELD_RE.finditer(match.group("fields")):
+            key = field.group("k")
+            if key in fields:
+                duplicates.append(key)
+            fields[key] = field.group("v")
+        if duplicates:
+            fields["__duplicates__"] = ",".join(sorted(set(duplicates)))
+        markers.append(fields)
+    return markers
+
+
+def load_routine_policy(path: str, revision: str | None) -> dict:
+    try:
+        if revision:
+            shown = subprocess.run(
+                ["git", "show", f"{revision}:{path}"], capture_output=True, text=True, check=False,
+            )
+            if shown.returncode != 0:
+                raise OSError(" ".join(shown.stderr.split()) or f"git show exited {shown.returncode}")
+            policy = json.loads(shown.stdout)
+        else:
+            with open(path, encoding="utf-8") as stream:
+                policy = json.load(stream)
+    except (OSError, json.JSONDecodeError) as error:
+        raise GateError(f"cannot read routine-development policy at {path}: {error}") from error
+    if not isinstance(policy, dict) or policy.get("schema") != ROUTINE_POLICY_SCHEMA:
+        raise GateError(f"routine-development policy must use schema {ROUTINE_POLICY_SCHEMA}")
+    if policy.get("status") != "pilot" or policy.get("prospective") is not True:
+        raise GateError("routine-development policy must be an explicit prospective pilot")
+    if set(policy.get("notRequired", [])) != ROUTINE_NOT_REQUIRED:
+        raise GateError("routine-development policy does not name the complete reduced routine contract")
+    for key in ("allowedOperations", "protectedOperations", "protectedPaths", "requiredChecks"):
+        values = policy.get(key)
+        if not isinstance(values, list) or not values or not all(isinstance(v, str) and v for v in values):
+            raise GateError(f"routine-development policy field {key} must be a non-empty string list")
+    return policy
+
+
+def routine_changed_paths(base_sha: str, head_sha: str) -> list[str]:
+    proc = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_sha}..{head_sha}", "--"],
+        capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        raise GateError(
+            "cannot compare the routine PR's exact base/head commits: "
+            + (" ".join(proc.stderr.split()) or f"git diff exited {proc.returncode}")
+        )
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def evaluate_routine(args: argparse.Namespace, body: str) -> tuple[str | None, str]:
+    """Return a routine finding kind/message, or `(None, success detail)`. No GitHub/board read occurs."""
+    if not args.base_sha or not HEAD_SHA_RE.match(args.base_sha.lower()):
+        raise GateError("--base-sha with a 40-hex commit SHA is required for a routine delivery branch")
+    policy = load_routine_policy(args.routine_policy, args.routine_policy_ref)
+    prefix = policy.get("branchPrefix")
+    if prefix != "routine/" or not args.head_ref.startswith(prefix):
+        raise GateError("routine-development policy branchPrefix must be `routine/`")
+    markers = marker_fields(ROUTINE_MARKER_RE, body)
+    if len(markers) != 1:
+        return "routine-missing", f"exactly one routine-development marker is required (found {len(markers)})"
+    marker = markers[0]
+    if marker.get("__duplicates__"):
+        return "routine-ambiguous", "routine-development marker repeats field(s): " + marker["__duplicates__"]
+    missing = [field for field in ("head", "operation") if not marker.get(field)]
+    if missing:
+        return "routine-missing", "routine-development marker is missing: " + ", ".join(missing)
+    if marker["head"].lower() != args.head_sha.lower():
+        return "routine-changed-head", (
+            f"routine marker head={marker['head']} does not equal current PR head {args.head_sha}; "
+            "a moved head must be reviewed and rebound before merge"
+        )
+    operation = marker["operation"]
+    if operation in policy["protectedOperations"] or operation not in policy["allowedOperations"]:
+        return "routine-protected-operation", f"operation {operation!r} is not eligible for routine delivery"
+    changed = routine_changed_paths(args.base_sha.lower(), args.head_sha.lower())
+    if not changed:
+        return "routine-empty", "the exact base/head comparison contains no changed paths"
+    protected = [
+        path for path in changed
+        if any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in policy["protectedPaths"])
+    ]
+    if protected:
+        return "routine-protected-path", "protected paths require strict delivery: " + ", ".join(protected)
+    return None, (
+        f"routine delivery admitted at exact head {args.head_sha}: operation={operation}, "
+        f"changedPaths={len(changed)}, requiredChecks={','.join(policy['requiredChecks'])}; "
+        "no issue, claim, SDD, phase ledger, critic, feedback/receipt cycle, or metadata-Done input was read"
+    )
 
 
 def read_claim_state(
@@ -1060,6 +1181,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", required=True, help="owner/name of this repository, e.g. FS-GG/.github")
     ap.add_argument("--head-ref", default=None, help="the pull request's head branch name")
     ap.add_argument("--head-sha", default=None, help="the pull request's current head commit SHA")
+    ap.add_argument("--base-sha", default=None, help="routine branch only: exact pull request base SHA")
+    ap.add_argument(
+        "--routine-policy", default=".fsgg/routine-development.json",
+        help="machine-readable prospective routine-development policy",
+    )
+    ap.add_argument(
+        "--routine-policy-ref", default=None,
+        help="read routine policy from this trusted git revision (the PR base in CI)",
+    )
     ap.add_argument("--body", default=None, help="file holding the PR body (default: read stdin)")
     ap.add_argument(
         "--lease-minutes", type=int, default=None,
@@ -1103,23 +1233,14 @@ def main(argv: list[str]) -> int:
         )
 
     if args.sweep:
-        if args.head_ref or args.head_sha or args.body:
-            raise GateError("--sweep reads every open PR itself; it takes no --head-ref/--head-sha/--body")
+        if args.head_ref or args.head_sha or args.base_sha or args.body:
+            raise GateError("--sweep reads every open PR itself; it takes no --head-ref/--head-sha/--base-sha/--body")
         return sweep_all(args)
 
     if not args.head_ref or not args.head_sha:
         raise GateError("--head-ref and --head-sha are required unless --sweep is given")
     if not HEAD_SHA_RE.match(args.head_sha.lower()):
         raise GateError(f"--head-sha {args.head_sha!r} is not a 40-hex commit SHA")
-
-    per = item_args(args, args.head_ref, args.head_sha)
-    if per is None:
-        print(
-            f"check-claim-generation: OK — {args.head_ref!r} is not an item-delivery branch (no "
-            "`item/<n>-` prefix); this PR never claimed to deliver a board item, so there is nothing "
-            "to fence."
-        )
-        return ExitCode.OK
 
     if args.body:
         try:
@@ -1131,6 +1252,23 @@ def main(argv: list[str]) -> int:
         if sys.stdin.isatty():
             raise GateError("no PR body supplied on stdin and no --body given")
         body = sys.stdin.read()
+
+    if ROUTINE_BRANCH_RE.match(args.head_ref):
+        kind, message = evaluate_routine(args, body)
+        if kind is None:
+            print(f"check-claim-generation: OK — {message}.")
+            return ExitCode.OK
+        print(f"::error::check-claim-generation [{kind}]: {message}", file=sys.stderr)
+        print(f"check-claim-generation: FINDING [{kind}] — {message}", file=sys.stderr)
+        return ExitCode.FINDING
+
+    per = item_args(args, args.head_ref, args.head_sha)
+    if per is None:
+        print(
+            f"check-claim-generation: OK — {args.head_ref!r} is neither a strict item-delivery branch "
+            "nor a routine delivery branch; there is nothing to fence."
+        )
+        return ExitCode.OK
 
     try:
         kind, message, state = evaluate(per, body)

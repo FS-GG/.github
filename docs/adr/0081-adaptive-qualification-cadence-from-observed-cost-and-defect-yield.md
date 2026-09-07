@@ -5,6 +5,12 @@
 - **Amends:** [ADR-0080](0080-scoped-child-qualification-comprehensive-milestone-closure.md)
 - **Affects:** qualification policy in every FS-GG roadmap-owning component
 
+**Narrowed prospectively on 2026-09-07:** routine pilot delivery does not wait for an economics
+recommendation, telemetry receipt, daily review, or closure feedback cycle. Cheap selected checks remain
+synchronous; cost/yield observation and cadence recommendations are asynchronous and may change later
+policy only through a separate reviewed update. Missing usage prevents an efficiency claim, not delivery.
+Protected operations keep the hard boundaries below.
+
 ## Context
 
 ADR-0080 separates scoped child qualification from comprehensive parent closure. That removes the
