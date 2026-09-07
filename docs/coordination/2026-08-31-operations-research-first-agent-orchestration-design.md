@@ -25,6 +25,7 @@ process, actor, timer, or database lease to authorize an external mutation by it
 | Authored | 2026-08-31 11:48 CEST (09:48 UTC) |
 | Revised | 2026-09-01 — recentered on an OR-first closed-loop controller; hardened authority, cutover sequencing, determinism, claim ordering, crash consistency, and runner boundaries; and added the SVG/dashboard visualization architecture |
 | Federation extension | 2026-09-07 — added proposed peer contribution, assignment-bound receipts, independent verification, bilateral isolation, and staged qualification in §8A; no production permission or existing contract is changed |
+| Review hardening | 2026-09-07 — narrowed the first slice, separated replay from optimization, clarified review and effect authority, and added observation, recovery, verification-security and outcome-measurement proposals; existing controls and accepted ADRs are unchanged |
 | Scope | Agent creation and communication, deterministic planning, GitHub mediation, persistence, authentication, supervision, liveness, availability, observability, and staged adoption |
 | Preserves | GitHub-native multi-host coordination, typed transition checks, Git-ref fencing, exact-head evidence, durable receipts, and scheduled reconciliation |
 | Builds on | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0053](../adr/0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md), [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0078](../adr/0078-github-substrate-v2-new-only-coordination-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), and the [remaining-v2 architecture review](2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md) |
@@ -271,6 +272,16 @@ prior or a declared unknown. Completed and failed attempts update versioned empi
 work class, repository, execution mode, agent profile, CI shape, and review path. Censored observations such
 as cancellation and timeout remain censored; they are not rewritten as successful durations.
 
+#### Observation coherence
+
+The canonical snapshot is an immutable observation bundle, not necessarily an atomic snapshot of GitHub.
+Its materializer would retain per-fact revision, observation time and provenance, then check cross-fact
+compatibility and a decision-class-specific maximum observation skew. Individually fresh facts can still
+describe a combination that never existed simultaneously. Safety-relevant facts need effect-time
+revalidation; an incompatible bundle cannot acquire authority merely by hashing it. The product/contract
+graph described in §4.1 must also be bound into the snapshot, directly or by an immutable graph reference;
+the illustrative record above is not yet a complete published schema.
+
 ### 4.3 Decision variables
 
 The controller may choose:
@@ -298,7 +309,8 @@ The feasible set is defined before any optimization. Hard constraints include:
 - complete-enough observations for the proposed decision class;
 - work and contract precedence;
 - independently verifiable vertical-slice and delivery routes;
-- reviewer independence, review-epoch freshness, and one accountable delivery owner;
+- fresh critique/evidence phases, review-epoch freshness, and one accountable delivery owner; organizational
+  separation only when an applicable external control explicitly requires it;
 - mandatory SDD, formal, CI, security, release, and post-merge obligations;
 - agent, runner, human, repository, API, mutation, disk, time, token, and money capacity;
 - sandbox, credential, data-residency, and provider restrictions;
@@ -322,6 +334,11 @@ Within the feasible set, objectives are lexicographic:
 
 Scalar weights are allowed only within one declared tier. The receipt preserves the Pareto alternatives and
 sensitivity ranges when materially different plans remain feasible.
+
+Where starvation is unacceptable, the proposed policy also needs explicit minimum-service or maximum-wait
+constraints over eligible work, with feasibility and outage assumptions disclosed. Aging in tier two helps,
+but fairness in tier five alone cannot guarantee service. Safety constraints remain non-negotiable when a
+service target becomes infeasible; the result is an explained escalation, not an unsafe dispatch.
 
 ### 4.5 Decomposed planner stack
 
@@ -378,6 +395,13 @@ For high-risk changes, named semantic mutations remove a dependency, capacity co
 claim generation, reviewer role, or recovery step and must make verification red. Feasibility verification
 is required even when a human chooses a non-optimal alternative.
 
+Independent code is not independent evidence if the planner and checker consume the same incomplete graph.
+The checker would reconstruct mandatory obligations from authoritative contract inputs independently of
+planner-selected edges, retain provenance for each obligation, and reject unsupported completeness claims.
+Qualification therefore includes deletions and corruptions in snapshot construction, not only mutations in
+solver constraints. The trusted checking core and its assumptions should remain small and explicit; a
+shared omission must not produce two agreeing green results.
+
 ### 4.8 Decision and execution receipts
 
 ```fsharp
@@ -430,10 +454,10 @@ and [assignment](https://developers.google.com/optimization/assignment/assignmen
 partitioning, transitive closure, min-cost flow, and small value-of-information enumerations remain dedicated
 pure algorithms rather than being forced into CP-SAT.
 
-Every production solve pins solver binary, parameters, worker count, seed, canonical input, time/deterministic
-budget, and objective hierarchy. Where deterministic reproduction across a solver upgrade cannot be proved,
-the accepted plan bytes and independent verifier are authoritative; upgrade qualification compares feasible
-sets and objective bounds before changing the solver identity. A simple baseline heuristic remains available
+Every production solve pins solver binary, parameters, worker count, seed, canonical input, stopping budget
+and objective hierarchy. Section 6.1 distinguishes deterministic reruns from recorded bounded search results;
+accepted plan bytes and independent verification remain the execution input in either case. Upgrade
+qualification compares feasible sets and objective bounds before changing the solver identity. A simple baseline heuristic remains available
 when the optimizer is unavailable, but it must satisfy the same hard constraints and disclose its degraded
 objective quality.
 
@@ -624,8 +648,20 @@ providers are naturally deterministic. Every policy evaluation binds:
 
 The decision receipt contains those identities and the selected plan digest. Stable ordering resolves equal
 solutions unless a recorded seed is an intentional policy input. Time passing changes a decision only after
-a durable tick or fresh observation is admitted. Replaying the same envelope must reproduce the same
-decision and explanation bytes; obtaining a different live observation correctly creates a new envelope.
+a durable tick or fresh observation is admitted. Three guarantees are distinct:
+
+- event replay reproduces recorded workflow state without rerunning the optimizer;
+- verification of recorded plan bytes reproduces the same semantic verdict and explanation; and
+- optimization reruns reproduce a selected plan only under an explicitly qualified deterministic search
+  profile. Otherwise the plan is a recorded search result whose feasibility and objective quality can be
+  checked, not a promise that another solve chooses identical bytes.
+
+Pinning seed and worker count alone does not establish deterministic parallel, wall-clock-limited search.
+[OR-Tools distinguishes deterministic and nondeterministic search paths](https://github.com/google/or-tools/blob/stable/ortools/sat/cp_model_solver.cc).
+Qualification would pin the actual execution profile, numeric environment and stopping semantics. A hard
+wall-clock cancellation can yield a different incumbent even when the search policy is repeatable; retain
+the selected candidate and its status. Elapsed-time telemetry is separate from byte-stable semantic records.
+Obtaining a different live observation correctly creates a new envelope.
 
 Deterministic replay proves reproducibility, not correctness or freshness. Invariants, independent oracles,
 and provider re-observation remain mandatory.
@@ -703,7 +739,14 @@ Admission control is bottleneck-specific:
 - cap merge-ready work by CI and mutation capacity;
 - reserve capacity for recovery, incidents, and critical unblockers;
 - admit new work from measured departure and aging behavior rather than utilization targets; and
-- stop dispatch when observation completeness or estimate calibration falls outside policy.
+- refuse dispatch when required authority observations are incomplete; apply the explicit cold-start and
+  calibration-degradation policy below to uncertain performance estimates.
+
+The proposed cold-start policy distinguishes legality from prediction quality. Missing authority refuses
+work; sparse duration evidence uses conservative priors, a deterministic baseline and lower WIP. A new mode
+can receive a bounded experiment when its safety obligations are satisfied. Demonstrably unsafe calibration
+disables that mode pending investigation. Insufficient samples alone must not create the circular condition
+of requiring calibrated execution data before any safe execution can collect it.
 
 Little's law provides the accountability identity between throughput, WIP, and cycle time. Heavy-traffic
 queueing supplies the warning that high utilization plus variable service time creates nonlinear waiting.
@@ -784,12 +827,13 @@ the affected policy scope.
 a bipartite assignment/min-cost-flow model with:
 
 - required architecture, security, operations, domain, migration, or delivery roles;
-- exact independence, authorization, and conflict constraints;
+- applicable authorization and conflict constraints, including organizational independence only when an
+  external control actually requires it;
 - expertise over the changed contracts and fault classes;
 - active workload, queue age, calendars, and service targets;
 - knowledge-concentration and succession risk;
 - review-epoch freshness and change invalidation; and
-- setup/context affinity without allowing self-review.
+- setup/context affinity while preserving a fresh critique phase and preventing stale evidence reuse.
 
 The objective balances time to qualified review, fault-domain coverage, workload concentration, and knowledge
 spread. [Large-scale reviewer-recommendation evidence](https://arxiv.org/abs/1806.07619) shows that no one
@@ -808,6 +852,12 @@ material outcomes beyond defect discovery ([Microsoft](https://doi.org/10.1109/I
 
 The OR controller never creates a second delivery authority. It schedules critique and review evidence around
 the single accountable delivery owner required by ADR-0079.
+
+Fresh phase identity, independent verification mechanism, optional independent reviewer and accountable
+owner are different concepts. Under ADR-0079 the owner may implement, critique, repair and deliver. A fresh
+critique can use the same owner without pretending it is independent organizational review; an unavailable
+second person or agent is not a routine blocker. Owner-controlled verification of remote work in §8A means
+independence from the contributor's assertions, not a second authorizer.
 
 ### 7.6 Agent allocation and context compilation
 
@@ -1347,6 +1397,15 @@ closure or host loss. The owner retains the complete acceptance-critical bundle 
 on a contributor's temporary path. Private raw telemetry is not automatically federated under ADR-0082.
 Missing evidence is classified as unavailable, never regenerated and relabeled as original measured evidence.
 
+Verifier isolation is an early qualification deliverable, not an assumption that a CI job is trusted by
+location. [GitHub warns that untrusted code can persistently compromise self-hosted runners](https://docs.github.com/en/actions/reference/security/secure-use).
+The proposed boundary includes disposable isolation appropriate to hostile code, denied host/metadata-service
+access, no signing or delivery credentials in the job, external result collection, and separately controlled
+artifact parsing and promotion. Qualification would attempt cache poisoning, credential theft and escape,
+not only forged report submission. A valid signature also does not entitle a peer to unlimited verification
+compute: per-peer/project quotas, bounded resubmissions, upload limits and cheap envelope/manifest checks
+precede expensive execution, while preserving the full required checks for an admitted candidate.
+
 Onward delegation is denied in the initial mode. A later permitted mode would bind downstream audience,
 scope, data rights, budget and depth to the parent assignment, with attenuation only and explicit lineage.
 The contributor remains accountable for its submission; delegation does not transfer project delivery
@@ -1426,6 +1485,13 @@ Initial success means a user can contribute through an outbound session, the own
 fabricated or substituted submission, and a valid contribution can pass independent checks and the ordinary
 delivery boundary after reconnect or restart. It does not mean anonymous internet-scale compute, verified
 model authorship, payment-grade usage accounting or zero-trust proof of arbitrary computation.
+
+An optional interoperability study would map offers, task status, messages and artifacts to an
+[A2A adapter](https://a2a-protocol.org/dev/specification/). A released protocol version and extension profile
+would be pinned before implementation; the development specification is research input, not a dependency.
+Discovery and task transport do not replace bilateral enrollment, assignment bindings, FS.GG claims or
+acceptance evidence. The adapter would terminate at the same typed ingress rather than exposing actor paths
+or downgrading unknown extension requirements. It is not a prerequisite for the first enrolled-peer slice.
 
 Open selections include peer identity bootstrap, credential issuer and rotation profile, DSSE/in-toto library
 and predicate versions, artifact transport/store, verification isolation platform, source disclosure policy,
@@ -1509,6 +1575,14 @@ and registered message types. Polymorphic deserialization and fallback serializa
 SignalR gateway remains the only client ingress.
 
 ## 10. Persistence and effect protocol
+
+The proposed application protocol remains responsible for durable acknowledgment, reconnect cursors and
+revocation independently of SignalR convenience features. SignalR's stateful reconnect temporarily buffers
+messages; it does not replace journal-backed recovery after host loss. Its authenticated principal is cached
+for a connection, so current permissions require explicit revalidation or connection closure. Qualification
+would test expired/revoked sessions across reconnect and restored hosts rather than treating a transport ACK
+as durable acceptance. See [SignalR configuration](https://learn.microsoft.com/en-us/aspnet/core/signalr/configuration?view=aspnetcore-10.0)
+and [authorization behavior](https://learn.microsoft.com/en-us/aspnet/core/signalr/authn-and-authz?view=aspnetcore-10.0).
 
 ### 10.1 Event sourcing
 
@@ -1625,7 +1699,33 @@ writer. External mutation authority remains bound to the protected FS.GG epoch a
 generation. Every effect validates those values at the provider boundary. Comments and Project fields are
 human projections; protected Git history supplies strong ordering where selected by GitHub Substrate v2.
 
-### 11.4 Emergency and multi-host operation
+### 11.4 Operation-specific atomicity and revocation qualification
+
+Reading the current generation immediately before a write is necessary but is not itself atomic fencing:
+a paused writer could resume after the generation changed. The existing journal expected-parent primitive
+orders journal transitions; it does not automatically create a transaction with a merge, publication or
+Project update. The implementation proposal therefore requires an operation-specific account of the
+authoritative commit point, expected revision, revocation ordering, enforcement mechanism and residual race.
+This records a qualification gap, not a claim that the current coordination implementation is defective.
+
+| Operation class | Proposed evidence needed before that class can be enabled |
+|---|---|
+| Protected journal transition | exact expected-parent atomic update, current epoch binding, conflict result and observed accepted commit |
+| PR merge/integration | expected candidate and integration-base semantics, protection predicates, and a demonstrated ordering between delivery authorization and claim revocation |
+| Package/release publication | exact artifact identity, accepted publication authority, duplicate handling and reconciliation of uncertain provider outcomes |
+| Comments and Project projections | explicitly classify stale-write prevention versus detection/repair; projections cannot serve as the atomic authority |
+
+[GitHub's merge API](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request) accepts an expected
+PR head SHA, not an arbitrary FS.GG claim generation. The qualification must explain how the chosen
+protected primitive or delivery protocol closes that distinction. Where atomic provider enforcement is
+unavailable, select and justify a restricted authority protocol or refuse to enable that effect class;
+pre/post reads alone cannot be relabeled prevention. Once an effect is irrevocably committed, later
+revocation cannot retroactively cancel it: the protocol must identify that boundary and reconcile the result.
+Fault tests pause execution between every generation read, authorization commit and provider call while a
+successor or emergency writer advances authority. The model must include those intermediate states rather
+than representing check-plus-write as one unrealistically atomic action.
+
+### 11.5 Emergency and multi-host operation
 
 The existing CLI remains available when the orchestrator is down. Emergency actions:
 
@@ -1715,9 +1815,26 @@ Release one runs one active orchestrator. Availability comes from:
 - post-restart GitHub reconciliation; and
 - an emergency CLI over the external authority.
 
-The target recovery point for accepted commands is zero after their durable acknowledgment. The recovery
-time target is measured from process loss to replay completion, readiness, and settlement of uncertain
-effects. These targets must be set and tested before the service becomes required.
+The proposed zero-loss target for durably acknowledged commands applies to qualified process/OS-crash
+scenarios with intact durable storage, not automatically to disk destruction or an older backup restore.
+The recovery-time target is measured from process loss to replay completion, readiness, and settlement of
+uncertain effects. The operating acceptance would name separate targets and evidence for each failure domain:
+
+| Failure domain | Recovery question |
+|---|---|
+| Process or OS crash | were acknowledged journal writes durably flushed, and do intent/receipt transitions recover? |
+| Journal disk or whole-host loss | what survives on independent storage, with what recovery point and restore time? |
+| Artifact-store loss | can acceptance-critical bytes be recovered independently of journal pointers? |
+| Credential compromise | which capabilities and signatures are invalidated, and which outcomes require requalification? |
+| Restore from an older backup | how are externally completed effects, superseded generations and revoked sessions rediscovered before readiness? |
+
+PostgreSQL's [WAL and synchronous-commit settings](https://www.postgresql.org/docs/current/runtime-config-wal.html)
+affect durability; asynchronous acknowledgment is not evidence of zero acknowledged-command loss. The selected
+storage and plugin configuration must be tested rather than inferred from the database name. A restored
+instance starts without mutation authority, invalidates or reauthorizes restored session capabilities against
+current identity/epoch facts, and reconciles operation outcomes before dispatch. Old journal state cannot
+resurrect a revoked peer or retry a settled external effect. This restore admission protocol and cross-store
+backup consistency would be specified and rehearsed before the service becomes required.
 
 ### 12.6 Multi-node availability
 
@@ -1761,6 +1878,24 @@ non-blocking backpressure is useful. Ordinary domain workflows remain actors wit
 large artifacts travel through content-addressed storage, not mailboxes.
 
 ## 14. Observability and audit
+
+### Delivery outcomes before activity counts
+
+The primary proposed success measures are accepted behavior delivered, escaped defects and post-acceptance
+rework, accountable-owner attention per accepted item, total execution/verification/integration cost, time
+from request to useful outcome, and recovery cost/unresolved uncertainty. Counts of agents, tokens, receipts
+or merged PRs are diagnostic measures, not a substitute for product quality. Each outcome needs a definition,
+measurement window, baseline, provenance and treatment of censored/missing data before policy promotion.
+
+This matters empirically: [Anthropic's multiagent experiments](https://www.anthropic.com/research/multiagent-systems)
+reported coordination and correlated-behavior failures, and poor game outcomes despite differences in merge
+throughput. Those experimental results motivate local qualification, not a universal forecast for FS.GG.
+[METR's February 2026 update](https://metr.org/blog/2026-02-24-uplift-update/) identifies selection effects
+and concurrent-agent time measurement as obstacles to estimating productivity. FS.GG would therefore compare
+like work classes under declared rollout conditions, include human attention and downstream rework, and avoid
+importing a universal speedup multiplier. Controlled canaries still need explicit confounders and limitations.
+
+### Correlation and operational measures
 
 Every command, decision, agent attempt, effect, and receipt shares stable correlation fields:
 
@@ -2199,12 +2334,20 @@ path, or graph/data disagreement is a correctness defect and can stop the canary
 - run every solver result and every human-selected alternative through the independent checker;
 - mutate dependency, capacity, touch, evidence, independence, budget, and authority constraints and require red;
 - prove CI obligation closure and work-slice evidence closure on generated graphs;
-- reproduce pinned solver and baseline results from exact envelopes or disclose an unsupported solver identity;
+- reproduce baseline and qualified deterministic solver results from exact envelopes; otherwise verify
+  retained plan bytes and compare feasibility/objective bounds without claiming identical search results;
 - replay every accepted historical event schema;
 - generate workflow action sequences and compare with the Quint model where correspondence exists;
 - retain historical coordination defects as regression cases;
 - mutation-test high-risk predicates with named non-vacuity controls; and
 - compare policy explanations and chosen actions against golden decision fixtures.
+
+Snapshot-construction mutations also remove or corrupt an authoritative obligation before planning; the
+independent completeness check must detect the omission. Formal receipts identify backend, model bounds,
+fairness assumptions and runtime correspondence coverage. A clean bounded run is not an unbounded proof;
+Quint's [model-checker documentation](https://github.com/quint-co/quint/blob/main/quint/docs/content/docs/model-checkers.mdx)
+distinguishes symbolic bounded checking from finite-state exploration. Cryptography, sandbox isolation and
+provider atomicity need their own evidence; abstracting them into trusted model actions does not verify them.
 
 ### 15.2 OR policy and simulation qualification
 
@@ -2298,6 +2441,13 @@ The optional cooperative-orchestrator track in §8A.12 attaches F0–F5 to these
 security and verification work is additional scope, not implicitly included in completion of H0–H8.
 Neither roadmap authorizes peer access or provider mutations by publication of this proposal.
 
+The first implementation target is one durable vertical slice: assignment, execution, quarantined submission,
+owner-controlled verification, acceptance and protected delivery. It begins with a deterministic baseline,
+one work class and a local execution mode; one enrolled remote mode exercises the same path through F0–F4.
+Production delivery remains gated by H6 eligibility. The first UI needs exact work/receipt rows and one
+accessible causal graph, not the entire visualization catalogue. OR-first means explicit decisions and
+constraints first, not advanced optimization everywhere before useful operation.
+
 ### H0 — OR domain, measurement, and authority specification
 
 - Accept or amend the OR-first architecture and name the policy, data, security, and operational owners.
@@ -2308,37 +2458,43 @@ Neither roadmap authorizes peer access or provider mutations by publication of t
 - Define planner/verifier contracts for work shape, SDD, portfolio, CI, review, agent allocation, and recovery.
 - Build the historical corpus inventory and document missing, selected, censored, and biased observations.
 - Define the incumbent heuristic and the replay, simulation, mutation, shadow, and canary comparison protocol.
+- Define operation-specific effect/revocation guarantees, coherent-observation rules, cold-start policy,
+  outcome measures and failure-domain recovery targets for the first slice.
+- Run the bounded runtime comparison in §20 before committing to candidate-specific persistence machinery.
 - Define the visualization schema, visual grammar, accessibility target, diagram asset manifest, view budgets,
   and exact Community/Enterprise feature and licence decision for AG Grid/AG Charts.
 
 **Exit:** an independently reviewable mathematical/domain specification and measurement contract exist;
 unknown data is explicit; no hosted runtime or provider mutation is required.
 
-### H1 — offline decision laboratory
+### H1 — baseline and first-slice decision laboratory
 
 - Implement the pure feasibility checker and incumbent baseline first.
-- Implement `WorkSizer`, `SddPlanner`, `CiPlanner`, `ReviewPlanner`, `AgentAllocator`, and the robust rolling
-  `PortfolioScheduler` behind stable interfaces.
-- Build the discrete-event simulator and scenario corpus for arrivals, durations, rework, outages, CI misses,
-  reviewer scarcity, agent failures, and estimate error.
-- Pin and qualify the candidate CP-SAT solver; add independent plan verification and degraded heuristics.
+- Provide explicit baseline implementations for the first slice behind the planner interfaces; optional
+  modes not implemented yet return a visible unsupported/refused result rather than an invented plan.
+- Build bounded simulation fixtures for its arrivals, duration uncertainty, rework, outages and recovery.
+- Retain the full planner catalogue as incremental scope. Qualify CP-SAT or another advanced planner only
+  when a measured bottleneck justifies it; solver deployment is not required to complete H1.
 - Replay historical board and incident snapshots and publish objective, sensitivity, calibration, and
   constraint-mutation evidence.
-- Generate deterministic SVGs for the six-graph model, critical path, schedules, plan alternatives, and named
-  incident traces from immutable fixtures; verify each visual aggregate against an independent query.
+- Generate a deterministic causal SVG and exact-value rows for the first slice and named incident traces;
+  verify each visual aggregate against an independent query.
 
-**Exit:** every planner is deterministic at its contract boundary, independently checked, explainable, and
-no worse than the incumbent on declared safety/fairness measures; it still cannot dispatch work.
+**Exit:** the first-slice baseline is deterministic, independently checked and explainable; its hard
+constraints and recovery cases are qualified and unsupported modes are explicit. The laboratory still
+cannot dispatch work. Completion of every advanced planner is not a prerequisite for H2.
 
 ### H2 — authenticated read-only host
 
-- Build ASP.NET Core + SignalR + Akka.Hosting.
+- Build ASP.NET Core + SignalR with the qualified runtime selection; Akka.Hosting remains preferred pending
+  the bounded comparison, and any alternative must preserve the same domain and authority boundaries.
 - Implement human and machine authentication, per-message authorization, session generations, and replay.
 - Add actor-system, journal, dependency, OR-decision, and workflow health endpoints.
 - Observe GitHub through the typed engine without mutation and materialize canonical planning snapshots.
 - Persist shadow decisions and compare them with actual operator/CLI choices and outcomes.
-- Deliver the read-only Overview and Audit routes with AG Grid, conventional AG Charts, accessible SVG pipeline
-  views, coherent snapshot/reconnect behavior, and reproducibility exports.
+- Deliver a bounded read-only Overview/Audit slice with exact-value rows, an accessible SVG pipeline,
+  coherent snapshot/reconnect behavior and reproducibility exports; add conventional charts where they
+  answer an observed operator question rather than making the full dashboard a hosting prerequisite.
 
 **Exit:** restart, reconnect, revocation, malformed-message, read-completeness, snapshot, and shadow-decision
 tests pass; the service cannot mutate GitHub or create a write-capable agent.
@@ -2356,17 +2512,20 @@ agent observations feed estimates but do not self-certify success.
 
 ### H4 — closed-loop OR shadow operation
 
-- Run work-shape, SDD, scheduling, CI, review, and agent-allocation decisions on complete live snapshots.
+- Run the first-slice baseline decisions on coherent live observation bundles; shadow candidate work-shape,
+  SDD, scheduling, CI, review or allocation optimizers individually as evidence justifies them.
 - Replan on real events without dispatching provider effects.
 - Adjudicate every divergence from actual operator choices and every infeasible or unstable plan.
 - Measure queueing, WIP, throughput, cycle/tail time, CI feedback, review delay, rework, cost, fairness,
   knowledge concentration, and forecast calibration.
 - Promote no learned estimate or parameter outside the accepted policy-update workflow.
-- Deliver Flow, Plan, Execution, and Policy Lab routes; exercise graph aggregation, coordinated selection,
-  incomplete/stale states, uncertainty encodings, accessibility, and performance budgets on live shadow data.
+- Expand Flow, Plan, Execution and Policy Lab views around measured bottlenecks; qualify aggregation,
+  coordinated selection, incomplete/stale states, uncertainty, accessibility and declared performance budgets
+  for enabled views. Unimplemented catalogue entries are not first-slice exit gates.
 
-**Exit:** the full loop is stable and explainable over the declared observation window, hard-constraint
-mutations are caught, and material shadow divergences have explicit dispositions.
+**Exit:** the enabled first-slice loop is stable and explainable over the declared observation window,
+hard-constraint mutations are caught, and material shadow divergences have explicit dispositions. Each later
+optimizer repeats the relevant qualification and promotion steps instead of inheriting baseline approval.
 
 ### H5 — sealed plans and shadow effects
 
@@ -2377,6 +2536,8 @@ mutations are caught, and material shadow divergences have explicit dispositions
 - Run shadow comparison against real typed-engine verdicts.
 - Qualify token minting, rate limits, circuit breakers, postcondition reads, principal separation, and kill switch.
 - Complete the runner/WebSocket/database/App/Git threat model, data classification, and disaster-recovery proof.
+- Qualify the hostile-code verifier, verification quotas, per-operation atomicity/revocation cases and
+  old-backup restore admission before increasing concurrency or enabling remote production contributions.
 - Deliver the Recovery route with causally ordered saga/effect SVGs and prove that the display cannot infer
   success, trigger a retry, or cross an authority boundary from journal/chart state alone.
 
@@ -2416,10 +2577,10 @@ or hard-constraint violations and with accepted objective/calibration bounds.
 
 The architecture is ready for normal-writer consideration only when:
 
-- every decision binds one complete canonical planning snapshot, accepted policy/estimate set, and exact
-  solver or baseline identity;
-- work shape, SDD depth, portfolio/WIP, CI topology, review assignment, agent allocation, and recovery each
-  have a bounded model, incumbent baseline, independent checker, and stable explanation;
+- every decision binds one canonical observation bundle with checked completeness and cross-fact compatibility,
+  an accepted policy/estimate set, and exact solver or baseline identity;
+- each enabled work-shape, SDD, portfolio/WIP, CI, review, allocation and recovery mode has a bounded model,
+  incumbent baseline, independent checker and stable explanation; unsupported modes remain explicit;
 - hard constraints remain separate from objectives and named constraint-removal mutations fail;
 - rolling plans commit only a bounded horizon, reserve recovery capacity, and avoid replanning churn without
   hiding material state changes;
@@ -2437,7 +2598,8 @@ The architecture is ready for normal-writer consideration only when:
   generation is lost;
 - deterministic policy explains feasible alternatives, rejected constraints, objective vector, sensitivity,
   commitment horizon, and next replan triggers;
-- the same complete determinism envelope reproduces byte-identical decision and explanation records;
+- event replay and verification of retained plans reproduce byte-identical semantic state/verdict records;
+  optimizer reruns claim identical selected plans only under their qualified deterministic profile;
 - persistent actors recover across supported event versions and snapshots;
 - no command is acknowledged before its event and effect intent are durable, and no external effect begins
   from a projection-only or separately committed intent;
@@ -2450,6 +2612,10 @@ The architecture is ready for normal-writer consideration only when:
 - stored prompts, artifacts, identities, audit records, telemetry, and backups have accepted classification,
   retention, export, and deletion rules;
 - emergency CLI use remains possible and is reconciled;
+- each enabled provider operation has demonstrated authority/revocation ordering rather than relying on a
+  pre-read as atomic fencing, and backup restoration cannot resurrect stale capabilities or effects;
+- first-slice delivery is assessed by useful accepted behavior, downstream quality, human attention and total
+  cost, not solely by agent activity or merged-PR counts;
 - every operational view names its dashboard/planning snapshot, observation fingerprint, completeness,
   freshness, policy, epoch, units, window, and denominator where applicable;
 - grid, chart, and SVG coordinated views resolve to the same stable subject and immutable evidence references;
@@ -2498,6 +2664,21 @@ The architecture is ready for normal-writer consideration only when:
   fixtures, and visual-regression infrastructure add cost and upgrade coupling.
 
 ## 20. Alternatives considered
+
+### Workflow-first runtime compared with Akka.NET
+
+Akka.NET remains the preferred candidate for actor-local state and supervision, but the runtime decision
+needs a bounded comparison with a workflow-first engine such as [Temporal's .NET SDK](https://github.com/temporalio/sdk-dotnet).
+Temporal provides durable workflow/activity abstractions; it would not replace the OR kernel, provider
+adapters, external fencing or owner acceptance. Its deployment and workflow-versioning trade-offs also need
+measurement rather than assuming that a workflow engine is simpler in this environment.
+
+The proposed comparison implements the same small failure-heavy lifecycle in each candidate: duplicate
+submission, process loss, lost provider response, cancellation, workflow/schema upgrade and recovery after
+extended downtime. Compare implementation effort, operational footprint, debugging, upgrade/replay behavior,
+F# integration and remaining custom recovery code. Neither candidate gets credit for guaranteeing an external
+effect it cannot atomically control. Select on this evidence before candidate-specific persistence work;
+do not implement two production runtimes or delay the domain baseline for an exhaustive platform survey.
 
 ### Start with the actor runtime and add optimization later
 
