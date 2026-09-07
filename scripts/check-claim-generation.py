@@ -52,19 +52,18 @@ Both shapes below are accepted, and the first is what the production path writes
          opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha> -->
     <!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2342 gen=5250268950 head=<40-hex sha> -->
 
-APPLICABILITY: an `item/<n>-*` pull request uses the strict claim-generation fence below. A
-`routine/<slug>` pull request instead uses the prospective routine-development policy at
-`.fsgg/routine-development.json`: it needs no issue or claim, but its PR body must bind the declared
-operation to the exact current head, and its changed paths must remain outside protected authority,
-release, dispatch, and registry surfaces. Every other branch remains outside this gate.
+APPLICABILITY: an `item/<n>-*` pull request uses the strict claim-generation fence below. Routine
+eligibility is evaluated only when the separate default-branch `pull_request_target` authority supplies
+`--routine-policy-ref`; the candidate-controlled coherence workflow never supplies it. Every other
+branch remains outside this strict gate.
 
 The routine marker is:
 
     <!-- fsgg:routine-development/v1 head=<40-hex-sha> operation=source-change -->
 
-This reuses an already-required status context rather than adding a hidden validator. A push makes
-the marker stale and red; editing the body to the new exact head re-runs this workflow. Protected
-operations stay on `item/<n>-*` and the strict route.
+The distinct `routine-eligibility` context runs a workflow definition from the default branch, extracts
+this validator and policy from the exact PR base, and treats candidate commits only as diff data. A push
+makes the marker stale and red. Protected operations stay on `item/<n>-*` and the strict route.
 
 STRICT APPLICABILITY: ONLY a pull request whose branch is `item/<n>-*` — `pnext-item` §2's own naming
 convention, the SAME test `Delivery.fs`'s `ItemBranchCanonical` already makes
@@ -1253,7 +1252,10 @@ def main(argv: list[str]) -> int:
             raise GateError("no PR body supplied on stdin and no --body given")
         body = sys.stdin.read()
 
-    if ROUTINE_BRANCH_RE.match(args.head_ref):
+    # Routine authority is explicit and base-trusted. The candidate-controlled
+    # `claim-generation` workflow omits --routine-policy-ref and therefore cannot
+    # grant or deny routine eligibility under this status context.
+    if ROUTINE_BRANCH_RE.match(args.head_ref) and args.routine_policy_ref:
         kind, message = evaluate_routine(args, body)
         if kind is None:
             print(f"check-claim-generation: OK — {message}.")
@@ -1265,8 +1267,8 @@ def main(argv: list[str]) -> int:
     per = item_args(args, args.head_ref, args.head_sha)
     if per is None:
         print(
-            f"check-claim-generation: OK — {args.head_ref!r} is neither a strict item-delivery branch "
-            "nor a routine delivery branch; there is nothing to fence."
+            f"check-claim-generation: OK — {args.head_ref!r} is not a strict item-delivery branch; "
+            "routine eligibility, when applicable, belongs to the separate trusted context."
         )
         return ExitCode.OK
 
