@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/3308-routine-development-route/ship.json",
-      "digest": "sha256:a74afe7265982a61512f2f1e4124b58313efd7c6788e9bf165a24533c8c8657c",
+      "digest": "sha256:b7a6d1647fbedead3440a7cba604fd5d39ffb813c801abb104887d82eaef6089",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3308-routine-development-route/verify.json",
-      "digest": "sha256:84c61386bffc49c593dd7c492cb493b50948dc66d00b9d5bd3a281494e7d9b17",
+      "digest": "sha256:7533df762a803383d6fc8e04350e5956c176821e27824b2282f736295e99693b",
       "schemaVersion": 1
     },
     {
       "path": "readiness/3308-routine-development-route/work-model.json",
-      "digest": "sha256:6dc8ad04648dbd54641c8db291a77de0143fb33be13a333ae2f9a61f9a411b78",
+      "digest": "sha256:5664908b08a99b81c29c9848e6739163c233f084a29005f70885c9df9e7534d0",
       "schemaVersion": 1
     }
   ],

@@ -35,6 +35,10 @@ For an eligible `routine` milestone:
    `claim-generation` remains only the strict item gate and treats routine branches as not applicable.
    Until branch protection is armed after observation, the pilot owner must still require the reported
    `routine-eligibility` success. A moved head refuses until the owner reviews the delta and rebinds the marker.
+   This is a trusted-repository-writer reliability boundary: it catches accidental mistakes and drift but
+   does not claim adversarial protection from a writer able to alter Actions workflows or spoof a name-based
+   check context. The accountable human explicitly accepted that smaller guarantee for routine work;
+   protected/high-assurance operations retain their stronger authority boundaries.
 4. Repair on the same PR, normally in no more than two material attempts. After required checks pass
    for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
    and merge commit. Report code delivery separately from any protected publication still pending.

@@ -215,6 +215,13 @@ R0's implementation evidence records the required per-removal receiver, evidence
 owner in `work/3308-routine-development-route/plan.md`. That map distinguishes observed current-driver facts
 from inferred receiver ownership and still-unmeasured economics; it does not claim R1–R5 adoption early.
 
+R0 uses the explicitly human-accepted trusted-repository-writer model recorded in
+`.fsgg/routine-eligibility-activation.json` and the R0 implementation plan. The routine gate prevents
+accidental protected-path changes, policy drift, and stale-head delivery by evaluating base-loaded bytes.
+It does not claim adversarial protection from repository writers able to alter Actions workflows or spoof
+a name-based check context. That smaller guarantee applies only to eligible routine development; protected
+and high-assurance operations retain their strict authority boundaries.
+
 The current `.github` CLI owns execution until a separately justified ownership migration. Do not move it into Coordination merely to implement this proposal. FS.GG.SDD needs changes only where a consumer cannot opt out of mandatory artifact generation through an existing supported boundary. Public cross-repo release contracts and any v2 accepted-unit validator must be changed before their consumers adopt the relaxed form. Until then, restrict the pilot to eligible changes that do not require those contracts. Do not claim the pilot has simplified GS2 acceptance while its old receipt validator still blocks.
 
 **Carryover is a delivery requirement, not an assumption about the new engine.** `.github` owns the routine policy and published driver guidance; Coordination owns the v2 execution and lifecycle semantics; SDD owns applicable authoring/default behavior; receiver owners verify what an actual installed user invokes. R0 records those bindings in the existing implementation plan. There should be one effective routine profile, resolved from published source through receiver configuration, rather than one permissive migration skill and a stricter future default. Use existing configuration/contract mechanisms where sufficient; do not create a new registry just to record this mapping.

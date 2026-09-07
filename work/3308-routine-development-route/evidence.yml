@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3308-routine-development-route/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3308-routine-development-route/analysis.json
-    digest: a2e4dd91bc22f53faa887ff28c53e751cc17be3f0091100089575f3a86f6f56f
+    digest: b18275c9d767679c9e11f0f7a1c844df6e96495ca6b6ea562e29a6f99304e644
     schemaVersion: 1
   - label: checklist
     path: work/3308-routine-development-route/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/3308-routine-development-route/plan.md
-    digest: a7c70a356e21c0d2bbbd58119fae025f121d3612145b5b3c9517db1745f6fef1
+    digest: 307d55b9360687fb163bd34be7f2a40167873bf1ec102207a08ef2d853ff12f6
     schemaVersion: 1
   - label: spec
     path: work/3308-routine-development-route/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/3308-routine-development-route/tasks.yml
-    digest: d9beabd4188cc6ec9cfe23b5af3a78ec6aeb2217e2690748622723ff0d778513
+    digest: daa141758bd375c0b8cfa4d1b520e338baf3102de45d73ca16c22d6cd5203806
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -56,13 +56,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: [Observed routine-gates report proves admission without board state and exact-head refusal.]
+    notes: ["Observed routine-gates report proves admission without board state and exact-head refusal under the explicitly human-accepted trusted-repository-writer model; it does not claim adversarial workflow-writer protection."]
   - id: EV002
     kind: verification
     subject:
@@ -85,7 +85,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -114,7 +114,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -143,7 +143,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -172,13 +172,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: [Observed routine-gates report proves prospective pilot status and retained strict legacy authority.]
+    notes: [Observed routine-gates report proves prospective pilot status, and retained strict legacy authority., the accepted trusted-writer scope]
   - id: EV006
     kind: verification
     subject:
