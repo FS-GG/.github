@@ -9,6 +9,8 @@ on:
   workflow_run:
     workflows: [release-coord-engine, release-kit, release-drivers]
     types: [completed]
+  repository_dispatch:
+    types: [release-saga-reconcile]
 
 permissions:
   actions: read
@@ -16,12 +18,12 @@ permissions:
   packages: read
 
 concurrency:
-  group: release-saga-promotion-${{ github.event.workflow_run.head_sha }}
+  group: release-saga-promotion-${{ github.event.workflow_run.head_sha || github.event.client_payload.source_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
   observe-and-promote:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'repository_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,8 +41,31 @@ jobs:
           set -euo pipefail
           version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          mkdir -p artifacts/packages
-          gh release download "coherent-set/v$version" --repo "$GITHUB_REPOSITORY" --dir artifacts/packages
+          # A recovery reconciliation event is sent immediately after the component dispatches.
+          # Wait here for the append-only journals instead of requiring an operator to redispatch
+          # promotion after the last publisher finishes.
+          journal_count=0
+          for _ in $(seq 1 40); do
+            rm -rf artifacts/packages
+            mkdir -p artifacts/packages
+            if gh release download "coherent-set/v$version" --repo "$GITHUB_REPOSITORY" \
+                 --dir artifacts/packages 2>/dev/null; then
+              journal_count="$(find artifacts/packages -maxdepth 1 -type f -name 'journal-*.json' | wc -l | tr -d '[:space:]')"
+              journals_ready=true
+              for journal in artifacts/packages/journal-*.json; do
+                [ -f "$journal" ] || { journals_ready=false; break; }
+                package="${journal##*/journal-}"; package="${package%.json}"
+                jq -e --arg package "$package" \
+                  '.state.feeds.github.packages[$package].state == "verified" and
+                   .state.feeds.nuget.packages[$package].state == "verified"' \
+                  "$journal" >/dev/null || { journals_ready=false; break; }
+              done
+              [ "$journal_count" -eq 3 ] && [ "$journals_ready" = true ] && break
+            fi
+            sleep 15
+          done
+          [ "$journal_count" -eq 3 ] && [ "${journals_ready:-false}" = true ] \
+            || { echo "::error::expected 3 feed-complete package journals after bounded wait; found $journal_count"; exit 1; }
           source_sha="$(jq -r '.descriptor.sourceSha' artifacts/packages/release-manifest.json)"
           case "$source_sha" in
             [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
@@ -73,17 +98,22 @@ jobs:
             package="${package_workflow%%=*}"
             workflow="${package_workflow#*=}"
             target="artifacts/receiver-receipts/$package"
-            mkdir -p "$target"
             downloaded=false
-            while IFS= read -r run_id; do
-              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
-                   --name "receiver-receipts-$package-$version" --dir "$target" 2>/dev/null; then
-                downloaded=true
-                break
-              fi
-            done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" \
-              --status success --limit 100 --json databaseId,createdAt \
-              --jq 'sort_by(.createdAt) | reverse | .[].databaseId')
+            for _ in $(seq 1 40); do
+              rm -rf "$target"
+              mkdir -p "$target"
+              while IFS= read -r run_id; do
+                if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                     --name "receiver-receipts-$package-$version" --dir "$target" 2>/dev/null; then
+                  downloaded=true
+                  break
+                fi
+              done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" \
+                --status success --limit 100 --json databaseId,createdAt \
+                --jq 'sort_by(.createdAt) | reverse | .[].databaseId')
+              [ "$downloaded" = true ] && break
+              sleep 15
+            done
             [ "$downloaded" = true ] || { echo "::error::no successful $workflow run published receiver receipts for $package $version"; exit 1; }
             for receipt in "$target"/*.json; do
               [ -f "$receipt" ] && receipt_args+=(--receipt "$receipt")
