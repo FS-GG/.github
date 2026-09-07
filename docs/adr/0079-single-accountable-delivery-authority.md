@@ -6,6 +6,18 @@
 - **Affects:** FS-GG delivery skills, coordination review records, repository protection, and GitHub Substrate v2
 - **Clarifies:** ADR-0078 review evidence and the historical `pnext-item` review procedure do not create additional authorizers
 
+**Narrowed prospectively on 2026-09-07:** for work explicitly admitted by
+`.fsgg/routine-development.json`, the accountable owner needs no structured review ledger or phase
+identities. Independent review is optional or sampled; native exact-head required checks remain the
+technical boundary. The structured review evidence described below remains applicable to the strict
+route and retains its historical meaning.
+
+The routine route also adopts a trusted-repository-writer threat model. Its base-loaded eligibility
+workflow prevents accidental protected-path changes, policy drift, and stale-head delivery; it does not
+claim adversarial protection from a repository writer able to change Actions workflows or spoof a
+name-based check context. The accountable human explicitly accepted that smaller guarantee on
+2026-09-07. Protected and high-assurance operations remain outside this trust relaxation.
+
 ## Context
 
 FS-GG already protects delivery with exact-head required checks, deterministic evidence, mutation controls,
@@ -46,8 +58,9 @@ test/fault model, and then resume. The deep dive improves the decision evidence;
 ## Consequences
 
 - Accountability is unambiguous and routine delivery has no reviewer-availability dependency.
-- Formal, automated, and adversarial checks retain their strength because their results remain required
-  evidence where declared.
+- Formal and automated checks retain their declared strength. Routine eligibility is a trusted-writer
+  reliability check, while adversarial authority boundaries remain required where the protected or
+  high-assurance route declares them.
 - Phase identities preserve deterministic review generations without pretending they are organizational
   separation of duties.
 - The owner carries the risk of a missed judgement. Exact-head evidence, deep-dive triggers, durable decision

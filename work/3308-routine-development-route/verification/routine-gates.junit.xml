@@ -1,0 +1,63 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[routine-eligibility: target/ref/SHA boundaries and base-loaded execution fail closed under the trusted-writer model
+PASS  non-item branch: OK, nothing to fence
+PASS  routine branch: candidate-controlled strict context is not routine authority
+PASS  routine: exact-head source change is admitted without a board read
+PASS  routine: a moved head is refused
+PASS  routine: duplicate marker fields are refused as ambiguous
+PASS  routine: protected operation is refused
+PASS  routine: protected policy path is refused
+PASS  routine: base policy refuses protected surface scripts/check-claim-generation.py mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/coherence.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/kit-auto-publish.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface scripts/kit-auto-publish.py mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/fsgg-dispatch-broker.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface src/FS.GG.Coord.Cli/Client.fs mislabeled source-change
+PASS  routine: base-revision executable refuses its candidate-side replacement
+PASS  missing: no marker at all
+PASS  missing: duplicate markers
+PASS  missing: marker without gen=
+PASS  missing: unsupported version
+PASS  mismatched: gen is not numeric
+PASS  mismatched: head does not match the PR's current head
+PASS  mismatched: item field is malformed
+PASS  mismatched: item field names a different item
+PASS  mismatched: item exists but nobody currently holds it (released)
+PASS  mismatched: the released diagnosis names eviction and points at [expired] for the other case
+PASS  mismatched: the named item does not exist at all (404)
+PASS  stale: claim moved on since this PR was authorized
+PASS  stale: lowest LIVE id wins, not the highest
+PASS  unreadable: forbidden (permanent, exit 3)
+PASS  unreadable: rate limit / outage (retryable, exit 2)
+PASS  pass: authorization names the current live generation
+PASS  pass: an earlier STALE marker does not steal the win from the live one
+PASS  pass: unknown extra fields (opkey=/grant=) are tolerated
+PASS  lease: 50-minute-old marker is LIVE under the 120-minute default
+PASS  lease: the SAME marker is EXPIRED under a tightened 30-minute lease
+PASS  lease: --lease-minutes outranks the marker's own lease= and is the one named in the diagnosis
+PASS  .github#2488: a freshly opened item PR with no marker reds, exactly as measured
+PASS  .github#2488: the SAME PR greens once the emission (ensureAuthorization) has written the marker
+PASS  marker lease: a 30-minute lease is EXPIRED at T+45 even though this gate's default is 120
+PASS  marker lease: a 240-minute lease is still LIVE at T+180 even though this gate's default is 120
+PASS  marker lease: a marker with no lease= falls back, and SAYS it fell back
+PASS  AC4: at T+60 the verdict is GREEN
+PASS  AC4: the green publishes its own deadline (T0 + the marker's 120-minute lease)
+PASS  AC4: at T+121 the SAME unchanged PR is RED — no push, no body edit, only time passing
+PASS  AC4: and the red names the holder, so expiry cannot be misread as a lost race
+PASS  sweep: a green whose lease has since lapsed is REVOKED
+PASS  sweep: a red whose claim is live again is NOT restored — the sweep never publishes a green
+PASS  sweep: only success -> failure is published, not every more-restrictive move
+PASS  sweep: an unchanged verdict publishes nothing
+PASS  sweep: a head with no standing check run is left entirely alone
+PASS  sweep: an unreadable claim state warns and publishes nothing
+PASS  sweep: a non-item branch is not re-evaluated at all
+PASS  sweep: --dry-run reports the revocation without publishing it
+PASS  sweep: refuses per-PR arguments rather than silently ignoring them
+PASS  F1: an unrepresentable lease= falls back and SAYS it fell back, instead of crashing
+PASS  F1: the fallen-back marker is still JUDGED — live at T+60 under the fallback lease
+PASS  F1: a pathological lease on one PR does not cost the NEXT PR its revocation
+PASS  F4: [expired] names the worker who lapsed MOST RECENTLY, not the youngest marker
+PASS  F4: and it reports that holder's own lease and lapse instant
+PASS  repair 1: an unusable --lease-minutes is refused up front, naming the flag
+
+claim-generation fixture: 59 passed, 0 failed
+]]></system-out></testcase></testsuite>

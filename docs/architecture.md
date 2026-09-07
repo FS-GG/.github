@@ -1140,6 +1140,28 @@ install is what keeps the composition honest. See the
 > protocol), then this page. See the
 > [coordination protocol](coordination/README.md#system-overview--the-architecture-map).
 
+## Prospective routine-development authority
+
+`FS-GG/.github` owns one prospective routine-development profile alongside the existing strict route.
+The machine contract is [`.fsgg/routine-development.json`](../.fsgg/routine-development.json), and the
+shared [`work-roadmap`](../.agents/skills/work-roadmap/SKILL.md) driver selects it only when a roadmap
+explicitly marks a new unit routine and neither its operation nor its changed paths are protected.
+Existing strict items and publication, deployment, credential, destructive, migration/cutover, and
+external-contract operations remain on the strict authority path.
+
+The default-branch [`routine-eligibility`](../.github/workflows/routine-eligibility.yml) workflow reads the
+pull request base and head as Git objects, executes policy and validator bytes extracted from the exact
+base SHA, and refuses a stale head or protected surface. It does not read an issue, claim, SDD family,
+phase ledger, critique, feedback cycle, receipt cycle, or metadata-Done state. Candidate-side
+`claim-generation` remains the strict item gate and is not routine authority.
+
+This is deliberately a trusted-repository-writer reliability boundary. It prevents accidental mistakes
+and drift, but it does not claim adversarial protection from a repository writer able to alter Actions
+workflows or spoof a name-based check context. The human owner accepted that smaller guarantee for
+eligible routine work; protected and high-assurance operations retain their stronger boundaries. The
+exact activation state, deferred stronger alternatives, and observed platform limitations are recorded in
+[`.fsgg/routine-eligibility-activation.json`](../.fsgg/routine-eligibility-activation.json).
+
 ## Compiled telemetry and bounded roadmap projection
 
 Runtime usage, lifecycle chains, critique/feedback structure, and roadmap acceptance projection are one

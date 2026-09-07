@@ -1,11 +1,57 @@
 ---
 name: work-roadmap
-description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Run each in a fresh worker through SDD and independent critique, merge it, update the roadmap, and finish with a report.
+description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Use the prospective routine route when the roadmap explicitly admits it; retain the strict SDD route for protected work.
 ---
 
 # work-roadmap
 
 Burn down a markdown roadmap milestone by milestone. The roadmap—not a project board—is the ledger.
+
+## Choose the route explicitly
+
+Read `.fsgg/routine-development.json`. A milestone may use the reduced route only when the roadmap
+explicitly marks it `routine` or `routine implementation; strict operation`, the policy is a prospective
+pilot, and the work does not perform a protected operation or touch a protected path. Never infer the
+route from size. Existing strict items remain strict. Publication, deployment, credential changes,
+destructive effects, migration/cutover, external-contract acceptance, and continuation of an existing
+strict item use the strict route below.
+
+For an eligible `routine` milestone:
+
+1. Keep one accountable owner in the current implementation session. Create one fresh
+   `routine/<milestone-slug>` branch from current default branch and one PR. The roadmap checkbox and
+   concise evidence land in that PR.
+2. Do **not** create or require an issue, claim, SDD artifact family, phase lifecycle ledger,
+   independent critic, feedback report, telemetry/receipt cycle, roadmap cycle envelope, receipt-only
+   or projection PR, or metadata-`Done` write. Independent review is optional or sampled and never a
+   second authority. Best-effort telemetry is asynchronous and cannot block valid delivery.
+3. Run the smallest relevant automated technical checks. Before opening the PR, run the routine
+   eligibility and protected-boundary fixtures. Put exactly one
+   `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
+   the PR body. The distinct `routine-eligibility` context is defined by a default-branch
+   `pull_request_target` workflow and loads its validator and policy from the exact PR base; it never
+   checks out or executes candidate bytes. It validates exact base/head, operation, and changed paths
+   without reading board, issue, claim, SDD, review, feedback, or Done state. Candidate-controlled
+   `claim-generation` remains only the strict item gate and treats routine branches as not applicable.
+   Until branch protection is armed after observation, the pilot owner must still require the reported
+   `routine-eligibility` success. A moved head refuses until the owner reviews the delta and rebinds the marker.
+   This is a trusted-repository-writer reliability boundary: it catches accidental mistakes and drift but
+   does not claim adversarial protection from a writer able to alter Actions workflows or spoof a name-based
+   check context. The accountable human explicitly accepted that smaller guarantee for routine work;
+   protected/high-assurance operations retain their stronger authority boundaries.
+4. Repair on the same PR, normally in no more than two material attempts. After required checks pass
+   for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
+   and merge commit. Report code delivery separately from any protected publication still pending.
+5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
+   model turn or PR merely to copy already-merged facts.
+
+For `routine implementation; strict operation`, source changes use the routine steps, but the protected
+operation itself remains pending until its established strict authority executes it. If any routine gate
+refuses eligibility, reclassify before implementation; never weaken or bypass the gate.
+
+## Strict route
+
+The following route remains mandatory for protected work and for this R0 bootstrap change itself.
 
 1. Read the complete roadmap and select the next unchecked, dependency-ready milestone.
 2. Spawn one fresh disposable worker from current default branch and give it only that milestone.

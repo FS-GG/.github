@@ -1,0 +1,212 @@
+schemaVersion: 1
+workId: 3308-routine-development-route
+stage: evidence
+status: evidenceReady
+sourceSpec: work/3308-routine-development-route/spec.md
+sourceClarifications: work/3308-routine-development-route/clarifications.md
+sourceChecklist: work/3308-routine-development-route/checklist.md
+sourcePlan: work/3308-routine-development-route/plan.md
+sourceTasks: work/3308-routine-development-route/tasks.yml
+sourceAnalysis: readiness/3308-routine-development-route/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/3308-routine-development-route/analysis.json
+    digest: b18275c9d767679c9e11f0f7a1c844df6e96495ca6b6ea562e29a6f99304e644
+    schemaVersion: 1
+  - label: checklist
+    path: work/3308-routine-development-route/checklist.md
+    digest: c58f0a0c1f673a12078cc48b3838cfe820dc1d0f7a7cb308302f0bc06a540cbd
+    schemaVersion: 1
+  - label: clarifications
+    path: work/3308-routine-development-route/clarifications.md
+    digest: 3510d1d8b3904a5f3f605029c97aadc92d0cbdee69de9fcfe1b35dcc6830a784
+    schemaVersion: 1
+  - label: plan
+    path: work/3308-routine-development-route/plan.md
+    digest: 307d55b9360687fb163bd34be7f2a40167873bf1ec102207a08ef2d853ff12f6
+    schemaVersion: 1
+  - label: spec
+    path: work/3308-routine-development-route/spec.md
+    digest: 97e2f8b236bcc2dd427fce6c72485b5843f286f5c772c194d15915403ee039fd
+    schemaVersion: 1
+  - label: tasks
+    path: work/3308-routine-development-route/tasks.yml
+    digest: daa141758bd375c0b8cfa4d1b520e338baf3102de45d73ca16c22d6cd5203806
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/3308-routine-development-route/verification/routine-gates.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: scripts/check-claim-generation.py
+      - kind: verification
+        path: tests/claim-generation/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/routine-gates.junit.xml
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Observed routine-gates report proves admission without board state and exact-head refusal under the explicitly human-accepted trusted-repository-writer model; it does not claim adversarial workflow-writer protection."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/3308-routine-development-route/verification/routine-gates.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: ".fsgg/routine-development.json"
+      - kind: verification
+        path: tests/claim-generation/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/routine-gates.junit.xml
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Observed routine-gates report proves protected operations and paths remain strict.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [work/3308-routine-development-route/verification/routine-gates.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: ".agents/skills/work-roadmap/SKILL.md"
+      - kind: verification
+        path: tests/skill-quality/routine-development-route.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/routine-gates.junit.xml
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Observed routine-gates report proves the public route contract and generated twin agree.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: [work/3308-routine-development-route/verification/routine-gates.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: ".github/workflows/coherence.yml"
+      - kind: verification
+        path: tests/claim-generation/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/routine-gates.junit.xml
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Observed routine-gates report exercises positive admission and negative changed-head and protected-operation predicates.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [work/3308-routine-development-route/verification/routine-gates.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: ".fsgg/routine-development.json"
+      - kind: verification
+        path: tests/skill-quality/routine-development-route.py
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/routine-gates.junit.xml
+      digest: "sha256:fd62bde7bc8f65e98b64da358756c5c7c18fd8406ed4e958358ef2f8889e2128"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Observed routine-gates report proves prospective pilot status, and retained strict legacy authority., the accepted trusted-writer scope]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [work/3308-routine-development-route/verification/skill-quality.junit.xml]
+    sourceRefs:
+      - kind: implementation
+        path: registry/driver-skill-manifest.json
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/3308-routine-development-route/verification/skill-quality.junit.xml
+      digest: "sha256:8dd0ee575e2c78444243064af4e22a6b64b77da9363b84bdac6ac53ba30ce730"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Observed skill-quality report proves generated registry and projection parity.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

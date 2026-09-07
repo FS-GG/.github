@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate",
+  "activationCondition": "merged to the default branch and routine-eligibility observed on an exact-head routine pull request",
+  "acceptedThreatModel": {
+    "repositoryWriters": "trusted",
+    "guarantee": "The routine route detects accidental protected-path changes, policy drift, stale heads, and ineligible operations by evaluating trusted-base bytes.",
+    "nonGuarantee": "The routine route does not claim adversarial protection from a repository writer able to add or alter GitHub Actions workflows or spoof a name-based check context.",
+    "acceptedBy": "human-user",
+    "acceptanceSource": "explicit interactive instruction",
+    "acceptedAt": null,
+    "recordedAt": "2026-09-07T10:38:42Z"
+  },
+  "repository": {
+    "name": "FS-GG/.github",
+    "id": 1269292704,
+    "visibility": "public",
+    "defaultBranch": "main",
+    "observedAt": "2026-09-07T10:10:49Z"
+  },
+  "organization": {
+    "name": "FS-GG",
+    "plan": "free",
+    "observedAt": "2026-09-07T10:19:57Z"
+  },
+  "rejectedRepositoryPushRule": {
+    "intent": {
+      "repository": "FS-GG/.github",
+      "refInclude": [
+        "refs/heads/routine/**"
+      ],
+      "restrictedPaths": [
+        ".github/workflows/**"
+      ],
+      "bypassActors": []
+    },
+    "status": "unsupported",
+    "reason": "GitHub models file_path_restriction only on target=push, while ref_name selection is available on branch/tag rulesets; push rulesets cannot be narrowed to routine refs and are unavailable for this public repository.",
+    "evidence": {
+      "repositoryRules": "GET /repos/FS-GG/.github/rulesets observed only active tag ruleset 19899954 (release-tags-are-immutable)",
+      "documentation": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets",
+      "mutationProbe": "not-run: the create endpoint has no dry-run mode and an invalid or active mutation is not acceptable evidence"
+    }
+  },
+  "requiredWorkflowAlternative": {
+    "status": "optional-hardening-blocked",
+    "hardeningPreconditions": [
+      "FS-GG has a GitHub plan that supports organization required-workflow rulesets",
+      "the trusted workflow exists on refs/heads/main",
+      "an organization owner reviews and applies the exact organization ruleset",
+      "a fresh read-back proves the active rule and its aggregate effect",
+      "a routine canary proves the required workflow executes from the trusted source"
+    ],
+    "request": {
+      "name": "routine-eligibility-trust-anchor",
+      "target": "branch",
+      "enforcement": "active",
+      "bypass_actors": [],
+      "conditions": {
+        "repository_id_and_ref_name": {
+          "repository_id": {
+            "repository_ids": [
+              1269292704
+            ]
+          },
+          "ref_name": {
+            "include": [
+              "refs/heads/main"
+            ],
+            "exclude": []
+          }
+        }
+      },
+      "rules": [
+        {
+          "type": "workflows",
+          "parameters": {
+            "do_not_enforce_on_create": false,
+            "workflows": [
+              {
+                "path": ".github/workflows/routine-eligibility.yml",
+                "ref": "refs/heads/main",
+                "repository_id": 1269292704
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "authorizationEvidence": {
+      "observedAt": "2026-09-07T10:10:16Z",
+      "tokenScopes": [
+        "gist",
+        "project",
+        "read:org",
+        "read:packages",
+        "repo",
+        "workflow"
+      ],
+      "missingScope": "admin:org",
+      "readCommand": "gh api -i orgs/FS-GG/rulesets --method GET",
+      "readOutcome": "HTTP 404; X-Accepted-OAuth-Scopes: admin:org; endpoint reports that admin:org is required",
+      "entitlementOutcome": "GET /orgs/FS-GG reports plan.name=free; organization required-workflow rulesets are not available on the observed plan",
+      "applyCommand": "not-run: current credential is unauthorized and activation is intentionally deferred"
+    },
+    "documentation": "https://docs.github.com/en/rest/orgs/rules",
+    "availabilityDocumentation": "https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets"
+  },
+  "existingAppAlternative": {
+    "appSlug": "fs-gg-cross-repo-dispatch",
+    "appId": 4166418,
+    "installationId": 143110413,
+    "status": "optional-hardening-not-currently-capable",
+    "reason": "The live App and its organization installation omit both checks and statuses permissions, so the App cannot publish an App-bound routine-eligibility check or status. This does not block the human-accepted trusted-writer route.",
+    "observedAt": "2026-09-07T10:27:37Z",
+    "observationCommand": "gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug==\"fs-gg-cross-repo-dispatch\") | {id,app_id,app_slug,target_type,repository_selection,permissions,events,suspended_at}'",
+    "installation": {
+      "targetType": "Organization",
+      "repositorySelection": "all",
+      "suspendedAt": null,
+      "events": [],
+      "permissions": {
+        "administration": "write",
+        "contents": "write",
+        "issues": "write",
+        "metadata": "read",
+        "organization_administration": "read",
+        "organization_projects": "write",
+        "packages": "read",
+        "pull_requests": "write"
+      },
+      "missingRequiredPermissions": [
+        "checks:write",
+        "statuses:write"
+      ]
+    },
+    "priorEvidence": "docs/reports/2026-08-04-github-native-executor-fencing-design.md:335-345"
+  }
+}

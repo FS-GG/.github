@@ -326,7 +326,6 @@ jobs:
             echo '— and why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS'
             echo 'the merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker'
             echo 'a PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
-            echo
             echo '`[expired]` is the one that is NOT a lost race (.github#2656): the claim marker is'
             echo 'still there and still names its holder, and the lease simply ran out. `heartbeat`'
             echo 'renews the SAME generation, and this check goes green again without re-authorizing.'
