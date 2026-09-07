@@ -28,4 +28,3 @@ For public-impact F# work, author or update the compiled `.fsi` signature before
 ## schema-versioning — schema-versioning
 - Capability: Required by tasks: T005.
 - Related: T005
-
