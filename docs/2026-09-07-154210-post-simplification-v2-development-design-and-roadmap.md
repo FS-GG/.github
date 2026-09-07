@@ -461,6 +461,55 @@ independently block a valid routine merge or add a numerical gate to OpenV2/Oper
 still apply. Functional or authority failure is different: an enabled profile cannot claim qualification
 while its required behavior is broken.
 
+### 7.4 Narrow bureaucracy budget: tests excluded
+
+The requested bureaucracy budget concerns administrative checks, waiting for checks/CI, and process churn.
+It is narrower than the predecessor's broad overhead measure, which also includes planning and semantic
+review. **Target 5% active bureaucratic overhead, with 10% as the normal ceiling.** Retain the broader
+10%/20% measure separately so this narrower definition does not hide the cost of review or planning.
+These are proposed engineering budgets to calibrate locally, not constants established by the external
+research and not additional currently accepted GS2 or per-PR gates.
+
+| Dimension | Proposed routine budget | Interpretation |
+|---|---|---|
+| Active owner effort spent administering the process | Target at most 5%; normal ceiling 10% | Measure separately from useful implementation, testing and substantive design/review; investigate sustained breaches |
+| Model usage spent administering the process | Target at most 5%; normal ceiling 10% | Divide administrative model usage by all attributed model usage under fixed classification; do not infer elapsed time from tokens |
+| Added critical-path delay from administrative execution, CI queueing, check dispatch/reporting and process repair | Median at most 2 minutes; p95 at most 5 minutes per routine item | Exclude actual useful test execution; retain all waiting, including provider outages, with cause attribution |
+| Required agent polling/status-restatement turns | Zero on the normal path | Events or bounded machine polling observe native facts; no model session exists solely to wait |
+| Receipt-only or status-only PRs | Zero | Native delivery and operation results remain the source; observers publish derived views asynchronously |
+| Administrative recovery | At most one automatic recovery attempt before a visible pending/failed diagnostic | Retry only when safe; this does not cap or abandon required settlement of a real external effect |
+
+For active effort, the numerator is effort on eligibility paperwork, state copying, check-status handling,
+delivery ceremony and repairing those mechanisms. The denominator is total attributed active effort,
+including useful implementation, test-related work and substantive review. Use the analogous definition
+for model usage, measured separately. Automated administrative compute is also reported in absolute
+runner-seconds and cost; moving model work into a runner does not make it free.
+
+Actual execution of useful product tests, security analysis or formal verification is **not bureaucracy**.
+A workflow's label does not determine its classification: a required test remains useful validation, while
+a required check that merely revalidates duplicated process records remains administrative. Attribute the
+administrative or avoidable part of setup and reruns explicitly; report necessary technical validation
+separately. An expensive duplicate rerun is a separate avoidable-CI cost even when its test body is excluded
+from the narrow bureaucracy numerator, so the definition cannot hide wasted testing.
+
+For elapsed delay, count only intervals on the item's actual delivery critical path. A CI queue wait
+overlapping productive implementation does not add its full duration to delivery time. Parallel waits
+are counted once, and actual useful test execution is removed from the administrative interval rather
+than counted as both testing and waiting. Show total latency and useful test duration alongside this
+decomposition. Missing timing attribution remains unknown; do not subtract guessed test time to obtain
+a passing bureaucracy budget.
+
+Use the absolute delay budget beside the percentage measures: fixed administration can dominate a tiny
+change's ratio, and a large implementation can conceal excessive waiting. Keep such outliers visible;
+do not enlarge tasks to improve the fraction. Insufficient samples cannot qualify p95. Missing the budget
+triggers removal or repair of the expensive process step, not another evidence cycle about the breach.
+
+Migration, release and cutover use separately declared absolute administrative/wait budgets derived from
+their rehearsals and operating requirements. A temporary protected-operation exception does not raise the
+routine allowance. Breaching a queue SLO is not permission to bypass a required technical predicate or
+abandon an indeterminate effect. The routine profile's eventual adoption should explicitly decide these
+narrow budgets; the predecessor's existing broad performance contract retains its meaning meanwhile.
+
 ## 8. One optional PB/OR extension path
 
 ### 8.1 Investment trigger and smallest experiment
