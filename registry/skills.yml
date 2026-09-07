@@ -344,11 +344,11 @@ skills:
   # work-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board-best,        scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-best/SKILL.md, sha256: ef98cefa1a66134677f144c5b13a3cc7c4180f1b9a4774d041ee2a98be46e115, materializes-when: always }
+  - { id: work-board-best,        scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-best/SKILL.md, sha256: e5d20b10589227151f1112268db21d52a6a444a670cc10abe2c676686d50704b, materializes-when: always }
   # work-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: a5037841c10e69cd9f6ef48776ae2e2af4a5ef6c311aa72ce06300de44e590dc, materializes-when: always }
+  - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: c5f87abd6802145c3fdb678c76a976e00c7dae6b2cebf77c6c247183199bade8, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -374,15 +374,15 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 8806adedb20cfcb5a7f9f2b3fa2fe9b72abe25fb893bc3fccdecd32c5c9f5c3b, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 6878e34ca10daafa75655d859187b228b6312b979e6b801b0227c6a4788a6333, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: drive-board-best,       scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-best/SKILL.md, sha256: 71be73b7abe27791ed86168a2b81dc75b1c2d0eecfefcbc019ca20a0ca365673, materializes-when: "false" }
+  - { id: drive-board-best,       scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-best/SKILL.md, sha256: 0b9a966fe85fa65222946cf01d1e462c8c4a108fe1ef30544a05245a17e4bbad, materializes-when: "false" }
   # drive-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: b5546ac7b0a1031495a78650d5c0267070f0f15bd5891b2272a4222f2f39a91f, materializes-when: "false" }
+  - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: 678ad3f56296a9e567baf602b721f075004f756895ba0a404fb25bca3bff373a, materializes-when: "false" }
   # board-analyst — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
