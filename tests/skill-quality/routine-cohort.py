@@ -46,6 +46,16 @@ result = module.evaluate(missing)
 assert result["status"] == "insufficient"
 assert "routine-usage-unbounded" in result["reasons"]
 assert "usage-coverage-unknown" in result["reasons"]
+assert result["arms"]["routine"]["costPerDeliveredUnit"] is None
+
+missing_baseline = copy.deepcopy(document)
+for unit_value in missing_baseline["units"]:
+    if unit_value["arm"] == "baseline":
+        unit_value["usage"] = {"status": "missing", "upperBoundTokens": None}
+result = module.evaluate(missing_baseline)
+assert result["status"] == "insufficient"
+assert "baseline-usage-unbounded" in result["reasons"]
+assert result["arms"]["baseline"]["costPerDeliveredUnit"] is None
 
 over_budget = copy.deepcopy(document)
 over_budget["units"][0]["usage"] = {"status": "measured", "productiveTokens": 70,

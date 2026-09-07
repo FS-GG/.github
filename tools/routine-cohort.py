@@ -89,7 +89,7 @@ def arm_result(arm: str, units: list[dict[str, Any]], target: int, as_of: dateti
     observed = sum(value[2] for _, value in measured)
     denominator = productive + overhead + bounded_missing
     conservative = None if denominator == 0 or unbounded_missing else (overhead + bounded_missing) / denominator
-    delivered_cost = None if not delivered else (observed + bounded_missing) / len(delivered)
+    delivered_cost = None if not delivered or unbounded_missing else (observed + bounded_missing) / len(delivered)
     return {
         "arm": arm,
         "target": target,
