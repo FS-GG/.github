@@ -94,6 +94,11 @@ During final review, [PR #3324](https://github.com/FS-GG/.github/pull/3324) merg
 explicitly reserves milestone closure for post-merge verification. This newer evidence reinforces the
 handoff approach: consume completed predecessor outcomes rather than schedule their implementation here.
 
+A subsequent observation at 16:11 UTC found [PR #3326](https://github.com/FS-GG/.github/pull/3326) merged,
+recording R3 post-merge evidence and starting the fixed R4 cohort. Its empty cohort explicitly reports
+insufficient evidence. Starting that comparison does not complete R4 or the successor's entry handoff.
+Section 7.5 records a separate live workflow/protection observation made while preparing this document.
+
 The inspected [Coordination CLI](https://github.com/FS-GG/FS.GG.Coordination/blob/e2be0cca5a9398cc80e341f68fbc17cd2b3962d6/src/FS.GG.Coordination.Cli/Program.fs)
 exposes preparation/qualification commands and explicitly reports no enabled production commands. Adapter
 qualification cannot stand in for an installed, ordinary end-to-end execution path.
@@ -426,12 +431,16 @@ coordination, delivery, failed attempts, observer/tooling maintenance and attrib
 The measured ratio is O/(P+O); the conservative ratio is (O+U)/(P+O+U). Unquantified missing usage prevents
 an efficiency qualification, even if the supplied records balance.
 
-Preserve the **10% objective and 20% ceiling**, at least ten candidate and ten comparable baseline code
-items for the first viability comparison, at least 95% independently assessed usage coverage, and the
+For the predecessor's broader comparison, preserve its **10% objective and 20% ceiling**, at least ten
+candidate and ten comparable baseline code items for the first viability comparison, at least 95%
+independently assessed usage coverage, and the
 conservative bound within the ceiling. The source also requires every successfully measured routine item
 to fit 20%; keep outliers visible and do not quietly relax that criterion for small changes. If fixed
 cost makes it unsuitable for a work class, propose a versioned absolute-budget alternative before using
 it for promotion. No denominator change, task enlargement or rerouting may manufacture a pass.
+This broader source-contract series is not an alternative to the successor's **10% bureaucracy ceiling**
+in section 7.4; report the two definitions separately. Any affected adopted promotion predicate requires
+its owning versioned amendment before implementation uses the successor definition.
 
 Report tokens by provider semantics, priced cost, runner time, API calls, human attention and wall time
 separately. Cached input counts once; avoid double-counting reasoning already included in output. Price
@@ -465,16 +474,20 @@ while its required behavior is broken.
 
 The requested bureaucracy budget concerns administrative checks, waiting for checks/CI, and process churn.
 It is narrower than the predecessor's broad overhead measure, which also includes planning and semantic
-review. **Target 5% active bureaucratic overhead, with 10% as the normal ceiling.** Retain the broader
+review. **Target 5% bureaucratic overhead, with a 10% ceiling.** Retain the broader
 10%/20% measure separately so this narrower definition does not hide the cost of review or planning.
-These are proposed engineering budgets to calibrate locally, not constants established by the external
-research and not additional currently accepted GS2 or per-PR gates.
+The intervention rule is **15 cumulative distinct items above 10%, or any one item above 25%**. An item
+above 10% breaches the ceiling immediately, but does not by itself launch a repair cycle or block delivery.
+These are the requested design thresholds, not constants established by external research or additional
+currently accepted GS2/per-PR gates. The 25% trigger is not a second permissible ceiling.
 
 | Dimension | Proposed routine budget | Interpretation |
 |---|---|---|
-| Active owner effort spent administering the process | Target at most 5%; normal ceiling 10% | Measure separately from useful implementation, testing and substantive design/review; investigate sustained breaches |
-| Model usage spent administering the process | Target at most 5%; normal ceiling 10% | Divide administrative model usage by all attributed model usage under fixed classification; do not infer elapsed time from tokens |
-| Added critical-path delay from administrative execution, CI queueing, check dispatch/reporting and process repair | Median at most 2 minutes; p95 at most 5 minutes per routine item | Exclude actual useful test execution; retain all waiting, including provider outages, with cause attribution |
+| Active owner effort spent administering the process | Target at most 5%; ceiling 10% | Administrative active effort divided by all attributed active effort |
+| Model usage spent administering the process | Target at most 5%; ceiling 10% | Administrative usage divided by all attributed usage under fixed provider/classification semantics |
+| Attributed CI runner time and cost spent on administrative work | Report absolute amounts and their share of CI | Diagnostic breakdown, not a separate trigger: a tiny docs-only CI run can be entirely administrative while adding little overall item cost |
+| Added critical-path delay from administrative execution, CI queueing, check dispatch/reporting and process repair | Target at most 5%; ceiling 10% of end-to-end item lead time | Exclude actual useful test execution from this numerator; retain administrative waiting, including provider outages, with cause attribution |
+| Absolute administrative delay | Diagnostic aims: median at most 2 minutes; p95 at most 5 minutes | Show beside the fractions; these are not additional per-item intervention triggers |
 | Required agent polling/status-restatement turns | Zero on the normal path | Events or bounded machine polling observe native facts; no model session exists solely to wait |
 | Receipt-only or status-only PRs | Zero | Native delivery and operation results remain the source; observers publish derived views asynchronously |
 | Administrative recovery | At most one automatic recovery attempt before a visible pending/failed diagnostic | Retry only when safe; this does not cap or abandon required settlement of a real external effect |
@@ -499,16 +512,144 @@ than counted as both testing and waiting. Show total latency and useful test dur
 decomposition. Missing timing attribution remains unknown; do not subtract guessed test time to obtain
 a passing bureaucracy budget.
 
-Use the absolute delay budget beside the percentage measures: fixed administration can dominate a tiny
+Use the absolute delay aims beside the percentage measures: fixed administration can dominate a tiny
 change's ratio, and a large implementation can conceal excessive waiting. Keep such outliers visible;
-do not enlarge tasks to improve the fraction. Insufficient samples cannot qualify p95. Missing the budget
-triggers removal or repair of the expensive process step, not another evidence cycle about the breach.
+do not enlarge tasks to improve the fraction. Insufficient samples cannot qualify p95. Avoid treating a
+good cost ratio as evidence of acceptable waiting: the dimensions are measured independently. No weighted
+average lets a cheap model session cancel out a blocked CI queue.
+
+**Counter and trigger semantics.** For each usable percentage-budget dimension above, compute administrative amount divided by
+total attributed amount in the same units. Count a routine item once if any dimension exceeds 10%; trigger
+the severe condition if any exceeds 25%. Never add minutes to tokens or count the same item three times.
+No activity in a dimension is not applicable; missing activity or missing attribution is unknown, not zero.
+Provider usage that cannot be combined meaningfully stays separated, with priced cost reported alongside.
+
+The counter covers distinct original routine items since monitoring started or the last completed
+intervention. It is cumulative, not consecutive and not reset by a good item, a week boundary, another PR,
+a retry or a new worker. Evaluate complete item totals at delivery or a definite failed/stopped outcome,
+and revise them when attributable follow-up cost arrives. An initial administrative prefix before useful
+work is not a complete item with 100% overhead. Unfinished items, their provisional costs and their age
+remain visible; leaving them open must not remove them from population coverage or total cost reporting.
+
+At the fifteenth distinct breach above 10%, or the first item above 25%, enter one intervention state.
+Exact 10% does not count; exact 25% counts as a normal breach but does not alone trigger the severe path.
+The severe path acts on the first usable observation and does not wait for fifteen items. Replayed events,
+later samples and multiple breached dimensions update the existing item. Corrections remain auditable;
+they may correct a mistaken count but cannot erase real expense. Missing or bounded-but-inconclusive
+attribution cannot certify compliance or fabricate a confirmed breach. Surface one deduplicated observer
+health diagnostic for that gap, not a new report request on every item.
+
+While intervention is open, further breaches join it. Do not spawn another intervention for every new
+event or pause otherwise valid routine merges. The explicit tradeoff is that modest breaches can persist
+until fifteen distinct items accumulate, especially at low throughput. Their count, age and absolute cost
+stay visible without inventing a second automatic escalation rule.
+
+**Aggressive intervention, with a low administrative cost.** Prioritize removing the measured sources of
+overhead: delete duplicate checks and mirrored records, take derived projections off the merge path,
+combine refresh hints, eliminate agent polling, share setup and repair the existing recovery path. Start
+with the largest attributable costs. Prefer deletion or a small deterministic fix over another controller,
+reporting layer or universal review. Retained technical predicates and unsettled effects keep their meaning.
+
+One accountable owner uses the existing log to make the bounded implementation change and inspect its
+real before/after behavior. Target a return toward 5%, not oscillation just below 10%. A completed
+intervention means the fix is deployed to the affected route and ordinary-path evidence demonstrates the
+claimed reduction; changing a policy number, producing a report or scheduling future work is insufficient.
+Then begin a new counter epoch. Preserve the old epoch, every item's original lineage and all intervention
+cost. Do not reset on opening the intervention. If the fix fails, continue the same intervention; new
+post-fix breaches can trigger the next one once the previous intervention is actually complete. Historic
+breaches do not re-trigger merely because the observation job reruns.
+
+Charge diagnosis, implementation, verification and logger maintenance to shared process overhead under
+the existing fixed allocation rule, and show their absolute cost separately. This makes an intervention
+that costs more than it saves visible. Use ordinary implementation verification, not a new acceptance
+artifact family or an overhead check on every intervention step. Genuine incidents and authority failures
+still receive their existing immediate response; the fifteen-item rule batches overhead repair only.
+
+This separation between a service objective and an actionable response is consistent with
+[Google SRE's alerting analysis](https://sre.google/workbook/alerting-on-slos/), which evaluates precision,
+detection and reset behavior and shows how immediate threshold alerts can generate excessive noise.
+The particular 15-item and 25% choices are a local design decision, not a result established by that source.
+
+**Comprehensive automatic logging is required for the design to work.** Extend the existing observation
+path instead of creating a second ledger. Capture the complete population, including no-op, failed,
+cancelled and retried work, and retain enough machine evidence to reconstruct each reported ratio:
+
+| Evidence | Minimum useful content |
+|---|---|
+| Identity and lineage | Original item, attempt/run, repository, source/base where relevant, effective process/policy version, observation and intervention epoch |
+| Event and timing | Trigger event and activity when available, occurrence/ingestion, dispatch, queue admission, job start/end, native delivery or stopped outcome, with clock/provenance gaps |
+| Resource use | Provider-native usage counters and pricing identity, active effort when observable, runner duration/cost, API calls, shared-cost attribution, with collection coverage |
+| Attribution | Useful implementation/validation, useful test execution, administration, administrative waiting, duplicate work and unknown; overlap and critical-path accounting |
+| Churn and outcome | Retry/rerun cause, superseded head, reused evidence, process repair, actual merged/published/pending result, later regression/recovery links |
+| Intervention state | Distinct breach IDs and dimensions, trigger reason, one owner/change reference, deployed fix, measured effect, reset reason and full intervention cost |
+
+Record events and deltas automatically; do not require a model to narrate phases, restate check status,
+reconstruct unavailable human time or approve each observation. Reconcile against independent request,
+run/attempt and usage populations. Preserve raw source references and explicit collection gaps; corrected
+derived aggregates remain reproducible. Logging loss does not stop valid delivery, but an incomplete
+population cannot prove the overhead ceiling was met. Capture all work, not unrestricted content: avoid
+credentials and private conversation bodies, use the existing evidence access controls, and retain source
+evidence through the declared comparison and repair follow-up. Logger/observer failures and their repair
+cost are part of the accounting, rather than reasons to start one ceremony per affected item.
 
 Migration, release and cutover use separately declared absolute administrative/wait budgets derived from
 their rehearsals and operating requirements. A temporary protected-operation exception does not raise the
-routine allowance. Breaching a queue SLO is not permission to bypass a required technical predicate or
+routine allowance. Crossing an intervention threshold is not permission to bypass a required technical predicate or
 abandon an indeterminate effect. The routine profile's eventual adoption should explicitly decide these
 narrow budgets; the predecessor's existing broad performance contract retains its meaning meanwhile.
+
+### 7.5 Observed bottleneck: full-board projection on the merge path
+
+The current [board lifecycle workflow](https://github.com/FS-GG/.github/blob/86669a2ccb4a23e42609f55b4fe8f85e6a5104a3/.github/workflows/coord-board-reconcile.yml)
+admits a run for each of the following events, with no changed-path filter:
+
+| Trigger | Activity |
+|---|---|
+| Pull request | Opened, reopened, edited, synchronized by a push, or closed |
+| Pull request review | Submitted, edited or dismissed |
+| Schedule | Minute 17 of every hour, subject to provider scheduling delay |
+| Manual dispatch | Explicit workflow run request |
+
+Issue/comment events were already removed after earlier queue incidents. Each admitted run builds the
+engine and, when its API-budget preflight permits, invokes the full-board applying reconciler. All runs
+share one repository-wide concurrency group, with `cancel-in-progress: false` and `queue: max`.
+[GitHub documents](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
+that this permits one active run and up to 100 pending runs; a larger queue preserves work but does not
+increase service capacity. Filtering a job after workflow-level admission does not prevent it taking a
+queue slot.
+
+At approximately 16:10 UTC on September 7, the live API showed one active and 17 pending runs. Several
+pending pairs shared a PR head; the run metadata identifies `pull_request`, but does not distinguish the
+exact activity that produced each pair. One [completed run](https://github.com/FS-GG/.github/actions/runs/34140348581)
+was created at 15:50:35, started its job at 16:08:24, and completed that job at 16:10:09: **17m49s before
+job start versus 1m45s of execution**. This is a measured queue incident, not a p95 estimate. While the
+board job's bare `reconcile` context was required, it also blocked this prose PR after its other required
+checks passed.
+
+A fresh branch-protection read at 16:10:38 UTC showed `architecture-map reconcile` required instead of
+the bare board `reconcile`. That live configuration change removes this particular required-check wait;
+this document did not perform it. The architecture-map check verifies a different concern, and the
+observed replacement is not evidence that the two jobs are semantically equivalent. The full-board
+backlog and its runner/API cost remain even when they no longer block merge.
+
+The proposed simplification carryover is concrete:
+
+1. Keep derived board projection asynchronous. Give each retained merge-blocking check a specific
+   code, contract or authority predicate; do not use a global projection pass as a proxy for those
+   predicates. Qualify the actual protection configuration and installed delivery helpers together.
+2. Combine redundant state-refresh hints and reconcile affected items, while retaining a periodic full
+   audit for missed events. Keep authorization commands and unsettled external effects distinct from
+   disposable refresh hints; losing a hint must be recoverable from native facts.
+3. Preserve the existing writer's serialization until its non-idempotent writes have a qualified
+   replacement. Per-PR concurrency or cancellation of an applying run is not a safe shortcut. For this
+   current writer, reduce admission volume before increasing concurrency.
+4. Measure trigger counts, pending age, dispatch-to-job delay, scan scope, API cost and projection age
+   automatically. Exercise a realistic event burst, duplicate hints, missed events and budget deferral;
+   verify that an unrelated routine PR still completes within the proposed administrative delay budget.
+
+This is a predecessor simplification repair to consume at handoff, with v2 narrow reconciliation and
+missed-event behavior qualified in GS2-07.7. It does not justify waiting for an OR scheduler or building
+a second general executor. Reuse a verified fix if it has landed before this successor is activated.
 
 ## 8. One optional PB/OR extension path
 
@@ -910,7 +1051,11 @@ The recommended decisions are concrete and bounded:
 4. Include or defer the routine v2 profile before GS2-10; map missing callable wiring and new writer
    fencing into existing owner contracts before claiming candidate readiness.
 5. Establish the cutover's measured window, abort boundary and operational ownership through GS2-10.
-6. Fund E0 only for a measured residual need; choose one experiment and leave optional feature families
+6. Adopt the 10% bureaucracy ceiling, comprehensive automatic logging and one intervention after fifteen
+   cumulative distinct breaches above 10% or any item above 25%, targeting a return toward 5%. Bind the
+   definitions and counter/reset behavior in section 7.4 to the existing observer and routine policy;
+   preserve the separately named predecessor comparison where its current contract still applies.
+7. Fund E0 only for a measured residual need; choose one experiment and leave optional feature families
    disabled until their incremental value and applicable guarantees are qualified.
 
 These decisions belong to programme activation and changed boundaries, not every ordinary PR. This design
