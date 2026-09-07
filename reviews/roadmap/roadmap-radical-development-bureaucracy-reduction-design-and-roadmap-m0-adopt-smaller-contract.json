@@ -12,12 +12,13 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 3,
+  "repair_rounds": 4,
   "reviewed_commits": [
     "2960f09657b4694ded7f3fb5bc4b0021974672bb",
     "2fe3e653049310e9197f9b8a7b350ea0606a78c3",
     "fb144381f167559095a8211f3153eee46eba4038",
-    "414ba82534b92e8eb339a6b871288121e1afc229"
+    "414ba82534b92e8eb339a6b871288121e1afc229",
+    "0d4e2aefc21301bcddfd121ac712dfa628e6a26a"
   ],
   "findings": [
     {
@@ -118,6 +119,32 @@
         "Verification: `git diff --name-status fb144381f167559095a8211f3153eee46eba4038 414ba82534b92e8eb339a6b871288121e1afc229` contains exactly the round-2 critique artifact and the three requested refresh outputs: Claude guidance, Codex guidance, and the SDD summary; no implementation, test, roadmap, policy, or architecture file changed.",
         "Verification: independent `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at 414ba82534b92e8eb339a6b871288121e1afc229 proposes no update to any tracked generated view. Its only proposed creations are the pre-existing partial SDD skill materialization explicitly deferred to `.github#2366` by `work/3308-routine-development-route/plan.md`; `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` exits 0 with `outcome: noChange`, `coherent: true`, six observed evidence declarations, and zero blockers."
       ]
+    },
+    {
+      "id": "R0-CRIT-007",
+      "severity": "major",
+      "summary": "Four generated agent-command Markdown views leave added blank lines at EOF, so the final R0 range fails repository diff hygiene.",
+      "evidence": [
+        "Verification: at final-binding head 7a634eb7ad94c494ce65cae8deda3ae3d9b37435, `git diff --check origin/main...HEAD` exited 2 and identified `readiness/3308-routine-development-route/agent-commands/{claude,codex}/{commands,skills}.md` at lines 35/31 as `new blank line at EOF`."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: repair commit 0d4e2aefc21301bcddfd121ac712dfa628e6a26a has parent 7a634eb7ad94c494ce65cae8deda3ae3d9b37435 and changes exactly the four named generated Markdown views; `git diff --check origin/main...0d4e2aefc21301bcddfd121ac712dfa628e6a26a` exits 0 with no diagnostic.",
+        "Verification: independent `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at the repaired head proposes no tracked generated-view update, and observed SDD verification remains coherent."
+      ]
+    },
+    {
+      "id": "R0-CRIT-008",
+      "severity": "major",
+      "summary": "The strict-bootstrap lifecycle evidence stops after repair round 1 and omits the later isolated repair and confirmation phases.",
+      "evidence": [
+        "Verification: at final-binding head 7a634eb7ad94c494ce65cae8deda3ae3d9b37435, `gh api repos/FS-GG/.github/issues/3308/comments --paginate --slurp` contained only eight lifecycle events completing `sdd-planning-bootstrap`, `initial-critique`, `repair-round-1`, and `telemetry-reconciliation-repair-round-1`, while the critique artifact recorded three repair rounds and later trust-anchor/confirmation work."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: fresh live export at confirmation head 0d4e2aefc21301bcddfd121ac712dfa628e6a26a contains 29 canonically chained events: the first 28 form 14 completed phases with no active phase after `repair-round-4`, and event 29 starts this same critic's `confirmation-round-4` against the exact repaired head.",
+        "Verification: `jq -r '[.sequence,.phase,.event,.actor,.source.revision] | @tsv' /tmp/r0-round4-lifecycle.jsonl` enumerates completed `confirmation-round-1`, both trust-anchor repair/review sequences, `confirmation-round-2`, `repair-round-3`, `confirmation-round-3`, and `repair-round-4`, closing every isolated phase omitted by the earlier evidence. The currently active confirmation is necessarily sealed only after this review's artifact, final usage, and handoff exist."
+      ]
     }
   ],
   "verification_evidence": [
@@ -132,10 +159,14 @@
     "Verification: R0-CRIT-001 is resolved only by the explicitly accepted and durably documented trusted-writer risk boundary; the adversarial status-context path remains technically possible and is not represented as eliminated. R0-CRIT-002 through R0-CRIT-005 remain resolved. Confirmation remained changes-required at round 2 solely because R0-CRIT-006 reopened when the authored inputs made three tracked generated views stale.",
     "Verification: round-3 repair commit 414ba82534b92e8eb339a6b871288121e1afc229 has parent fb144381f167559095a8211f3153eee46eba4038 and changes only the existing round-2 critique artifact plus the three SDD refresh outputs named by R0-CRIT-006; `git diff --check` reports no new whitespace error for this repair.",
     "Verification: independent confirmation at 414ba82534b92e8eb339a6b871288121e1afc229 passed `tests/claim-generation/run.sh` 59/59, `bash tests/routine-eligibility/run.sh`, `python3 tests/skill-quality/routine-development-route.py`, feedback schema validation, and observed SDD verification. `gh pr view 3313 --json state,baseRefOid,headRefOid` reports the live PR open at the exact supplied base 467c21c63e48323a12393039b1314a1f304452fc and exact reviewed head 414ba82534b92e8eb339a6b871288121e1afc229.",
-    "Verification: all six blocker/major findings are resolved at the round-3 reviewed head, with R0-CRIT-001 explicitly resolved by accepted risk rather than a claim of adversarial elimination; no minor finding remains."
+    "Verification: all six blocker/major findings are resolved at the round-3 reviewed head, with R0-CRIT-001 explicitly resolved by accepted risk rather than a claim of adversarial elimination; no minor finding remains.",
+    "Verification: round-4 confirmation at 0d4e2aefc21301bcddfd121ac712dfa628e6a26a passed `git diff --check origin/main...HEAD`, `tests/claim-generation/run.sh` 59/59, `bash tests/routine-eligibility/run.sh`, `python3 tests/skill-quality/routine-development-route.py`, feedback validation, SDD refresh with no tracked updates, and SDD observed verification with `outcome: noChange`, `coherent: true`, six observed evidence declarations, and zero blockers.",
+    "Verification: `gh pr view 3313 --repo FS-GG/.github --json state,baseRefOid,headRefOid` reports the only live combined PR open at exact base 467c21c63e48323a12393039b1314a1f304452fc and exact reviewed head 0d4e2aefc21301bcddfd121ac712dfa628e6a26a; the round-4 repair is four generated Markdown EOF normalizations and introduces no implementation or policy change.",
+    "Verification: fresh issue-comment export contains 29 accepted lifecycle events: 28 events complete 14 phases through `repair-round-4`, and event 29 starts `confirmation-round-4` by `r0_critic` at exact reviewed head 0d4e2aefc21301bcddfd121ac712dfa628e6a26a. The terminal completion event follows this review so its truthful usage and artifact evidence can be sealed.",
+    "Verification: R0-CRIT-007 and R0-CRIT-008 are resolved, R0-CRIT-001 remains explicitly resolved by accepted risk rather than adversarial elimination, all earlier findings remain resolved, and no blocker, major, or minor finding remains."
   ],
   "confirmation": {
-    "reviewed_commit": "414ba82534b92e8eb339a6b871288121e1afc229",
+    "reviewed_commit": "0d4e2aefc21301bcddfd121ac712dfa628e6a26a",
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
