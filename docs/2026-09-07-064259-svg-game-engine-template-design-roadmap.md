@@ -4,6 +4,11 @@ Date: 2026-09-07. Saved: 2026-09-07 06:42:59 UTC. Status: proposal for review, n
 
 This document proposes evolving `fs-gg-fable-game` into a complete SVG-based 2D game development workspace by extracting reusable S.I.R. capabilities and implementing the missing engine systems. It changes no runtime, provider, registry, release pin, or existing architectural decision. Package names, interfaces, milestones, and performance targets below are proposed. Implementation requires the owning repositories' normal specification, contract, and release processes.
 
+Amended 2026-09-07 to separate product delivery from workspace/default activation, clarify proportional
+Quint change handling, refine capability dependencies, and add generated-workspace development journeys.
+The [revision analysis](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) records the rationale.
+These are revisions to a proposal; they adopt no routine-policy exception or change to accepted v2 gates.
+
 ## 1. Outcome and definition of completeness
 
 A generated workspace should let a developer create vector artwork, assemble a scene, define gameplay, play locally, connect multiple clients, inspect execution, save and replay sessions, and publish a browser game. The same workspace should support a game player and optional integrated authoring tools. A consumer should not need S.I.R. source or its tactical rules to do any of this.
@@ -11,6 +16,27 @@ A generated workspace should let a developer create vector artwork, assemble a s
 “Complete” means passing the capability matrix in section 4 and the end-to-end journeys in section 13. It does not mean matching every commercial engine plugin, unlimited SVG complexity, every browser, or general 3D rendering. SVG is the required primary scene renderer. Bitmap references are optional decorative assets; all core samples and gameplay remain usable with vector-only assets.
 
 The initial supported range covers tactical games, board games, puzzle games, and moderate-density action games. Release qualification must include both grid-based and continuous-coordinate gameplay so tactical assumptions do not become engine limitations. Physics and animation completeness is bounded explicitly below.
+
+### Separate readiness and activation claims
+
+| Claim | Required evidence | Boundary |
+|---|---|---|
+| Engine preview A/B/C | Named implemented capabilities, compatible package closure and real installed consumers | Does not claim the complete workspace or activate future lifecycle defaults |
+| Complete game/studio capabilities | Required C01–C20 behavior, S.I.R. parity, selected-bundle journeys, performance, accessibility and data compatibility | Product readiness alone does not authorize a workspace-default or coordination change |
+| Generated workspace integration | Published backend/profile and producer capabilities, installed skills/adapters and tested upgrade | Does not imply every historical lifecycle has migrated |
+| Approved routine-development carryover | Effective generated guidance and a real ordinary-change journey; sufficient cohort evidence for any efficiency claim | Does not create weaker semantic authority or replace required technical checks |
+| Lifecycle/default activation | Owning SDD/Templates decisions, receiver evidence and the applicable operating epoch | Cannot be inferred from an engine release or a successful Quint run |
+
+Release D retains the complete target-workspace claim, including its promised workspace compatibility and
+activation conditions. If engine capabilities finish before those conditions, report that partial readiness
+and publish only through an already-supported route; do not relabel it as D. A compatible template or
+example update and a workspace-lifecycle default flip are distinct operations with distinct prerequisites.
+
+The [routine-development proposal](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md)
+and [aligned flow designs](coordination/2026-09-07-112837-development-flow-proposal-alignment-analysis.md)
+provide the proposed development direction. Completion of an OR harness, PB controller, federation service
+or orchestration dashboard is not an engine dependency. These proposals do not authorize skipping current
+review, qualification, release or migration requirements.
 
 ### Product experience
 
@@ -68,6 +94,13 @@ Extract runtime and reusable tools into producer-owned packages. Templates compo
 | FS-GG/.github | Cross-repo decisions, registry, dependency ordering and wizard integration | Owns coordination rather than engine code |
 | S.I.R. | Donor characterization, tactical adapters, compatibility fixtures and consumer adoption | Retains combat, factions, disclosure policy, WASM controllers and rules corpus |
 
+For development-flow integration, `.github` publishes common policy and driver guidance, Coordination owns
+actual v2 execution semantics, SDD owns the applicable lifecycle/compiler/materializer boundaries, and
+Templates verifies the effective generated receiver behavior. Engine producers supply their domain guidance
+and technical evidence. Use these existing owners; the engine introduces no workflow service or separate
+coordination authority. Consume a lighter profile only after it is supported and adopted through its actual
+policy and contract sources.
+
 This is a proposed ownership allocation. Before package creation, M0 must check overlap with existing Scene, input, Audio and Game packages and obtain an accepted decision for any moved responsibility. In particular, do not extend the existing Skia-associated package closure by accident or create a second incompatible Scene API without documenting why an adapter cannot suffice.
 
 Candidate logical modules are `Scene`, `Svg`, `VectorAssets`, `Animation`, `Workspace`, `Authoring`, `Runtime`, `Replay`, and `Audio.Web`. They need not each become a NuGet package. Prefer a small number of independently useful artifacts, with Fable-compatible source and `.fsi` signatures, split only where dependency closure or release cadence requires it. Optional features use explicit imports and Vite chunks; package boundaries alone do not establish lazy loading.
@@ -100,7 +133,12 @@ No SVG measurement, browser clock, animation completion, or hidden entity refere
 
 ## 4. Capability and parity matrix
 
-Disposition: Extract = recognizable S.I.R. capability; Generalize = coupling must be removed; New = additional engine scope; Verify = partial implementation or evidence requires audit. Every row is required for the complete-workspace release unless explicitly marked optional.
+Disposition: Extract = recognizable S.I.R. capability; Generalize = coupling must be removed; New = additional engine scope; Verify = partial implementation or evidence requires audit.
+
+Every row is required as an available, qualified capability for the complete-workspace release. Optional
+installation, loading or player inclusion does not make programme delivery optional. In particular, the
+planner and C16 rule tools must be available in the appropriate studio bundle while remaining absent from
+products that omit them. Deferring a promised capability requires an explicit scope decision.
 
 | ID | Capability and source | Disposition | Completion criterion | Stage |
 |---|---|---|---|---|
@@ -119,7 +157,7 @@ Disposition: Extract = recognizable S.I.R. capability; Generalize = coupling mus
 | C13 | Persistence and content migration | Generalize | Save/load, IndexedDB recovery, version rejection/migration and asset integrity | M6 |
 | C14 | Replay, workers, inspection, deterministic exports | Generalize | Record/replay/seek, cancellation and divergence diagnosis across qualified runtimes | M7 |
 | C15 | Planning timeline, prediction and scenario experiments | Generalize | Authored/predicted/accepted/committed states remain separate; generic sample adapter | M7 |
-| C16 | Rule catalog, explanations, dependencies and formal evidence | Generalize | Optional tool module supports a non-SIR rule set with scoped evidence | M7 |
+| C16 | Rule catalog, explanations, dependencies and formal evidence | Generalize | Required available capability; optional product module supports a non-SIR rule set with scoped evidence | M7 |
 | C17 | Multiplayer and resync | Existing template + extraction | Two clients execute real gameplay; reconnect and stale input/snapshot controls pass | M8 |
 | C18 | Accessibility and responsive player/editor | Extract/extend | Keyboard alternatives, screen-reader routes, reduced motion, touch and 400% reflow | M2–M10 |
 | C19 | Culling, scheduling, batching, layer caching and profiling | Verify/new | Measured scene-cost invariants and declared browser workloads pass | M9 |
@@ -233,7 +271,7 @@ Character-only shortcuts must be disableable, remappable to include a non-charac
 
 M0 audits input sources and the Fable dependency closure. M1 defines gesture/context/command/effect signatures and adapters to existing keymaps. M4 adds 4.6 (modal resolver and sequence automaton), 4.7 (capture/conflicts/profile migration and live help), and 4.8 (native editing, composition, focus and keyboard-only qualification). M5.3 owns continuous actions and cross-device adapters. M7 separates recorded semantic intents from optional raw input diagnostics. M10 verifies the packaged mechanism and owner-sourced keyboard skill in every applicable bundle.
 
-Allow an additional 4–7 engineer-weeks beyond the original estimate for this expanded input scope, refined in M0; the revised programme allowance is 48–81 engineer-weeks.
+The expanded input scope contributes the 4–7 engineer-week addition in section 11's consolidated estimate. Refine overlap and scope in M0; this section does not maintain a second programme total.
 
 Required laws and journeys: deterministic traces with injected deadlines; equal-precedence ambiguity rejected; no double dispatch; release after mode/focus change; no stuck action after cancellation; no repeated destructive commit; prefix/timeout/cancel semantics; rebinding takes immediate effect; imported conflicts survive validation; declared alias/replacement behavior; help agrees with resolution; pointer and keyboard share availability; composed text emits no gameplay intent; logical/physical identity survives migration; and replay ignores current bindings. Compare the portable reducer on .NET/Fable where claimed. Browser coverage includes declared Ctrl/Meta platforms and layouts/IME scenarios. Synthetic keyboard events alone do not prove native IME or physical-layout correctness; record missing device/OS coverage explicitly.
 
@@ -282,6 +320,31 @@ F# remains the executable runtime implementation. Producer/consumer corresponden
 
 A workspace-wide model should compose bounded modules and their relationships rather than combine all SVG, networking, editor and gameplay state into one model-checking state space. A future ChangeProposal binds the accepted workspace-model fingerprint; discussion and issue filing do not alter authority. Templates consumes that SDD capability when published instead of inventing a temporary replacement contract. Agents can maintain Quint behind a prose-oriented user interface, while review shows a readable semantic diff.
 
+### Proportional change handling within the common authority
+
+The common Quint-backed workspace remains the target for framework and generated products. Authoring
+depth changes how a developer works with that model, not which source owns semantics. A new bounded
+behavior module and a patch implementing an already-declared behavior are different changes:
+
+| Change | Model treatment | Technical evidence |
+|---|---|---|
+| Implementation repair under existing semantics | Retain the accepted model where it already expresses the intended behavior | Fresh affected implementation/conformance checks; formal-result reuse only under accepted semantic-subject rules |
+| New rule, transition, precedence or compatibility meaning | Update the owning bounded model, bindings and assumptions | Readable semantic diff, applicable formal qualification and real runtime correspondence |
+| Art/layout/content within a declared schema and parameter envelope | Validate the accepted envelope; no new protocol model per instance | Applicable content, visual/accessibility and provenance checks; retain gameplay-bearing content identity |
+| Content outside that envelope or introducing behavior | Treat as a semantic change rather than decorative data | Updated specification/contract and qualified consumer behavior |
+| Prose or metadata with no behavioral change | Supported extraction/impact rules establish semantic equivalence and retain provenance | Relevant documentation/projection checks; historical evidence is not relabeled as fresh execution |
+| Unknown impact or authority/tool/evidence-policy changes | Use the strongest applicable accepted route until impact is resolved | No path-only claim of semantic equivalence or candidate-edited eligibility rule |
+
+Changed F# may violate an unchanged model, so formal-result reuse cannot substitute for current
+implementation evidence. Behavioral subject identity, implementation candidate identity and source
+provenance remain distinct. Do not introduce a new model, hand-authored no-change receipt or SDD artifact
+family solely because a routine patch exists.
+
+A PR may carry the future ChangeProposal's model binding and semantic delta through the published SDD
+mechanism if that producer supports the shape. Do not assume support, remove a required producer obligation,
+or invent a template-local replacement. Record an unsupported consumer seam with the existing SDD owner.
+The proposed routine profile is consumed only after the actual policy, tooling and validators agree.
+
 ### Initial model portfolio
 
 | Model | Scope and primary properties | Real correspondence subject |
@@ -302,7 +365,15 @@ SVG curve fidelity, paint latency, memory, font rendering, audio audibility and 
 
 Pin SDD packages, backend, profile, compiled-contract schema, extractor, Quint compiler/evaluator, optional checker, platform and guidance identities together. Use the producer's verified tool cache and installation process; no latest-version installation during qualification and no undeclared local checker substitution. A missing or unsupported tool/platform produces an explicit unavailable result and blocks the claim requiring it. Java/model-checker and authoring tools stay out of the published player bundle.
 
-Every formal evidence receipt binds source/fence/module hashes, typed/effect compilation, generated contract, implementation candidate, action mapping, observation schema, toolchain, bounds, seeds and verification strength. Re-extract and compile in isolated environments to establish reproducibility. Human-readable explanations retain source locations and stable IDs. Prose-only edits retain full provenance freshness while allowing semantic equivalence only when extracted behavior and catalog are unchanged.
+Formal evidence binds the applicable source/fence/module hashes, typed/effect compilation, generated
+contract, action mapping, observation schema, toolchain, bounds, seeds and verification strength. Current
+candidate evidence identifies the implementation revision and each current or reused formal artifact with
+its original provenance. An unchanged model does not make old implementation observations current.
+Re-extract and compile in isolated environments when establishing reproducibility or when relevant inputs
+change; use accepted subject-based reuse where permitted instead of requiring duplicate execution at every
+handoff. Human-readable explanations retain source locations and stable IDs. Prose-only edits retain
+provenance freshness while allowing semantic equivalence only when extracted behavior and catalog are
+unchanged. This proposal does not change an existing evidence schema or validator.
 
 Run structural/type checks first, named tests/witnesses next, bounded seeded simulation next, and impact-selected model checking/full corpus where warranted. Unknown impact selects the producer's strongest applicable verification rung. Report timeout, unsupported, unknown and incomplete coverage distinctly from pass. Port ITF traces through the real F# reducer on .NET and Fable/Node; add browser journeys for the effect edge. Mutation controls must demonstrate wrong precedence, stale-state acceptance and faulty mapping failures with first-divergence diagnostics. Producer trace validation alone is not consumer implementation proof.
 
@@ -325,18 +396,26 @@ Qualify an installed matrix containing a retained F# v1 workspace, a profile-1 Q
 
 Use versioned SDD/coordination adapters in generated build and evidence wiring. Do not copy v1 lifecycle paths, CLI output parsers, board fields or hand-written completion semantics into engine runtime packages. Provider capability detection uses published contracts, not guessed flags or version-string substring checks. Each temporary compatibility adapter has a named owner, retirement item and absence test.
 
-ADR-0078 retains v1 as sole normal writer until the protected ledger reaches OpenV2. Before that point, v2 preparation is inert or read-only; both normal writers must never run together. Pre-OpenV2 rollback follows the protected procedure. After OpenV2 recovery is forward-only; the engine plan's package rollback guidance does not authorize reverting coordination to v1. The later workspace-default flip is separately gated on OperatingV2 and its required consumer evidence. No engine milestone, successful Quint test or template publication substitutes for that acceptance.
+ADR-0078 retains v1 as sole normal writer until the protected ledger reaches OpenV2. Before that point, v2 preparation is inert or read-only; both normal writers must never run together. Pre-OpenV2 rollback follows the protected procedure. After OpenV2 recovery is forward-only; the engine plan's package rollback guidance does not authorize reverting coordination to v1. The later workspace-default flip is separately gated on OperatingV2 and its required consumer evidence.
+No engine milestone, successful Quint test or template publication substitutes for that acceptance.
+Compatible engine/template publication may use the supported route without claiming that this default flip
+has occurred. M11.6 identifies the owner, capability and epoch dependency of each activation operation;
+“applicable fleet epoch” is not an unexplained gate on all product development. Package/data rollback,
+workspace-backend migration and coordination-authority recovery retain their separate meanings.
 
-### Roadmap additions and release gates
+### Roadmap placement and preserved qualification
 
-- **M0.7:** inventory all five compatibility axes—lifecycle/backend, Quint profile/contract, engine API, product data/replay, and coordination epoch—and record installed producer capabilities and migration gaps.
-- **M1.5:** author bounded literate models for input and editor transactions; compile through the published profile and create stable operation/observation mappings before freezing APIs.
-- **M4–M8:** deliver each model alongside its actual reducer/session feature, with named witnesses, ITF replay and independently failing controls. New behavior does not wait until M10 for specification work.
-- **M7.5:** generalize S.I.R.'s rule explorer to generated Quint metadata and product implementations, removing any new F#-first specification-authority assumption.
-- **M10.6:** qualify the installed authority/migration matrix, exact tool provisioning, generated binding freshness, and producer-owned author/inspect/migrate skills. Adapt pinned Quint guidance without treating it as compiler authority.
-- **M11.6:** gate template activation and default changes on published producer/consumer evidence and the applicable fleet epoch; exercise pre-cutover migration rollback and post-cutover refusal of legacy coordination independently.
+Section 11 incorporates M0.7 (compatibility census), M1.5 (input/editor models), M7.5 (Quint rule metadata),
+M10.6 (installed authority and development behavior), and M11.6 (upgrade and activation boundaries).
+Deliver each M4–M8 model with its real reducer/session feature, named witnesses, ITF replay and relevant
+failing controls; do not defer behavioral specification work until final composition. Modeling and migration
+qualification contribute the 4–6 engineer-week addition in the single estimate below.
 
-Add a 4–6 engineer-week allowance for model authoring, correspondence and migration qualification beyond the input-expanded estimate, giving a provisional 52–87 engineer-week total. Refine during M0 and avoid double-counting tests already assigned to runtime features. External SDD or fleet-cutover delays are dependencies, not included engineering effort. Preview engine packages may ship through the currently accepted lifecycle without asserting that v2 defaults are active; the complete target workspace must pass these compatibility gates.
+This engine proposal does not relax GS2 child qualification, comprehensive milestone closure, canonical
+formal-input qualification, frozen-candidate rules or production-authority boundaries. Existing accepted
+[ADR-0080](adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md) and
+[ADR-0081](adr/0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md) obligations remain applicable. Cheap automatic journal records and evidence references are
+not receipt-only PRs or additional authorizers and may remain useful beneath the simplified experience.
 
 ## 9. Performance architecture and qualification
 
@@ -363,11 +442,48 @@ These numbers are proposal targets, not measured results. M0 pins reference mach
 
 Measure worker work/transfer, scene projection, Elmish/React reconciliation where separable, style/layout, paint, input-to-presentation, long tasks, DOM counts, path complexity and memory independently. Export unavailable dimensions with reasons. Keep expensive production matrices at feature/release boundaries; focused tests run on narrow changes. Every newly introduced regression gate needs a demonstrated failing fixture or controlled mutation.
 
+### Player startup and development-flow observations
+
+Maintain three separate scorecards: game runtime, installed product/startup, and development flow. Add
+player/studio dependency and chunk closure, delivered bytes, cold start and first playable interaction to
+the M0/M2 baseline. Set justified startup thresholds before final qualification using declared devices,
+hosting/cache conditions and included bundles; do not invent a numerical startup promise from source size.
+
+The shared routine-development objective of 10% overhead with a 20% ceiling, if adopted, concerns model
+usage across implementation, review, coordination, delivery and attributed recovery. It is distinct from
+this section's 20% culling-cost comparison and browser latency targets. Use shared observation machinery,
+including absolute cost per delivered unit, delivery fraction, unknown-usage treatment and delayed-repair
+follow-up. No engine-specific phase ledger or overhead receipt family is needed. Missing telemetry prevents
+an efficiency claim, not otherwise valid native delivery. A technical performance failure still blocks the
+product claim it tests. Historical migration-driver overhead does not predict engine-development savings.
+
 ## 10. Template and skills delivery
 
 Keep `fable-game` as the provider identity. The default becomes a small playable SVG game once the new coherent release is qualified. Offer optional composition bundles for the full studio, tactical example and arcade example. The parameter spelling and semantics require a provider/wizard decision: do not silently reuse today's rendering-only `--profile` behavior. No command in this proposal assumes that parameter already exists.
 
 Generated ownership is explicit: product domain, content, adapters and tests are editable; engine binaries/Fable source arrive through packages; generated documentation and manifests carry provenance. Emit one build entry, locked .NET/npm closure, isolated package restore, published static hosting, browser tests and evidence import. React/Feliz becomes an explicit browser dependency decision, with measured bootstrap impact and deferred studio chunks.
+
+### Effective generated development profile
+
+Consume the common published workspace authority and approved routine-development profile. Do not copy
+migration-specific phase identities, receipt-only PR procedures, mandatory artifact families or synchronous
+usage/board updates into generated game guidance. Where a current producer still requires those mechanisms,
+resolve the actual policy/consumer contract before claiming the lighter profile works. Removing paperwork
+does not make generated products model-free or weaken their declared technical obligations.
+
+M10.6 exercises a real ordinary change through a clean installed template; M11 repeats it after an upgrade.
+Observe the actual resolved tools, materialized owner guidance and effective policy, not merely source
+files or manifest equality. Cover each distinct shipped entry point, materializer/configuration family and
+supported migration with representative cases. Shared SDD/Coordination evidence may be reused only when
+its declared subject covers that receiver; avoid an unreasoned Cartesian product of unrelated browser,
+provider and agent variants.
+
+Use a routine implementation repair under an existing model and a separate semantic rule change to show
+the distinction between relevant conformance checks and model amendment. Test same-PR repair, chosen native
+base policy, delayed derived views and missing usage in an isolated setting. Preserve the properly protected
+route for authority/security/migration changes. Installed v2 callers never fall back to a fenced v1 writer.
+One successful journey proves integration behavior, not the overhead target: reuse the shared R4/R5 cohort,
+coverage rules and delayed-repair observation before claiming efficiency.
 
 ### Proposed skill set
 
@@ -389,38 +505,77 @@ Names are provisional and must be reconciled against existing skills to avoid du
 
 ## 11. Roadmap and work packages
 
-Dependencies below are delivery prerequisites. Repository assignments describe future work; this document creates no issues or board entries. Each work package should become a separately reviewable implementation item with exact paths determined during M0, bounded public surfaces, tests, upstream prerequisites and consumer obligations.
+Dependencies below name the capabilities needed for implementation or integrated closure. Repository
+assignments describe future work; this document creates no issues or board entries. Work packages are
+bounded implementation outcomes with exact paths determined during M0, public surfaces, focused tests,
+upstream prerequisites and consumer obligations. Where adopted policy permits, one accountable owner and
+one PR provide durable tracking and evidence for a useful change. A sub-number does not inherently require
+another intake issue, SDD artifact family, acceptance PR or projection task. Cross-repository contracts and
+release obligations remain explicit, and applicable milestone qualification is not removed.
 
 | Stage | Work packages | Lead/support | Dependencies | Exit evidence |
 |---|---|---|---|---|
-| M0 — Inventory and decisions | 0.1 donor/license and capability audit; 0.2 source/test characterization; 0.3 ownership/Scene/package ADR proposal; 0.4 SVG geometry/font spike; 0.5 browser/performance fixture specification; 0.6 candidate migration catalog | .github, S.I.R., Rendering, Game | None | Every C-row classified by source and tests; existing/planned separated; accepted ownership and supported SVG subset |
-| M1 — Portable contracts | 1.1 scene/value signatures; 1.2 asset/session/extension envelopes; 1.3 Fable dependency closure; 1.4 S.I.R. projection adapters | Rendering + Game | M0 | Packages compile from clean consumers; no SIR/native references; scene round trips and adapter parity |
+| M0 — Inventory and decisions | 0.1 donor/license and capability audit; 0.2 source/test characterization; 0.3 ownership/Scene/package ADR proposal; 0.4 SVG geometry/font spike; 0.5 browser/performance fixture specification; 0.6 candidate migration catalog; 0.7 installed lifecycle/backend, profile/contract, engine API, data/replay and coordination-epoch census | .github, S.I.R., Rendering, Game | None | Every C-row classified by source and tests; existing/planned separated; accepted ownership and supported SVG subset |
+| M1 — Portable contracts | 1.1 scene/value signatures; 1.2 asset/session/extension envelopes; 1.3 Fable dependency closure; 1.4 S.I.R. projection adapters; 1.5 bounded input/editor models and operation/observation mappings | Rendering + Game | M0 rights, ownership, API and Fable-closure decisions for the selected extraction; full M0 inventory remains its own outcome | Packages compile from clean consumers; no SIR/native references; scene round trips and adapter parity |
 | M2 — SVG runtime | 2.1 retained renderer; 2.2 transforms/camera/picking; 2.3 styling/text/clip/mask/symbol support; 2.4 accessibility bridge | Rendering | M1 | Conformance gallery and mode-transition tests; keyboard/pointer/transform tests |
 | M3 — Vector content studio | 3.1 asset registry/import policy; 3.2 primitive/path tools; 3.3 geometry operations; 3.4 symbols/prefabs/fonts; 3.5 export/migrations | Rendering | M2 | Create art from blank, save/export/reimport with semantic equivalence; hostile input fixtures |
 | M4 — Shared game workspace | 4.1 command/modal input extraction; 4.2 panels/focus/layout; 4.3 scene editor/history; 4.4 properties/validation; 4.5 S.I.R. mode adapters; 4.6 sequence resolver; 4.7 binding profiles/live help; 4.8 native editing and keyboard qualification | Rendering + S.I.R. | M2; M3 for asset integration | Four-mode parity, atomic undo, section 6A input laws, responsive qualification and S.I.R. canary adoption |
 | M5 — Game runtime | 5.1 local worker/server session contracts; 5.2 clocks and resource lifecycle; 5.3 action maps and devices; 5.4 collision/kinematic adapters; 5.5 arcade loop | Game + Templates | M1–M2 | Headless and browser game outcomes; pause/tab-resume/dispose; qualified collision semantics |
 | M6 — Presentation and saves | 6.1 animation/clips; 6.2 effects/reduced motion; 6.3 browser audio; 6.4 saves/autosave/migrations | Rendering + Audio + Game | M3, M5 | Seekable animation, cue lifecycle, storage failure recovery and player journey |
-| M7 — Replay and analysis | 7.1 recorder/checkpoints/workers; 7.2 timeline/inspector/export; 7.3 planner adapters; 7.4 generic rule explorer/coherence integration | Game + S.I.R. + SDD | M4–M5 | Exact replay where declared; deliberate divergence; generic rule and planning examples |
-| M8 — Networked game | 8.1 real game host/bootstrap; 8.2 input/snapshot/session policies; 8.3 reconnect/backpressure; 8.4 two-client saved replay | Templates + Game | M5, M7 | Two browsers play, disconnect, resync and review same accepted outcomes |
+| M7 — Replay and analysis | 7.1 recorder/checkpoints/workers; 7.2 timeline/inspector/export; 7.3 planner adapters; 7.4 generic rule explorer/coherence integration; 7.5 generated Quint metadata and real implementation binding | Game + S.I.R. + SDD | Replay core: required M5 session/input/snapshot contracts, plus M6 for durable-save integration; analysis UI: relevant M4 facilities | Exact replay where declared; deliberate divergence; generic rule and planning examples |
+| M8 — Networked game | 8.1 real game host/bootstrap; 8.2 input/snapshot/session policies; 8.3 reconnect/backpressure; 8.4 two-client saved replay | Templates + Game | 8.1–8.3 after required M5 session/transport contracts; 8.4 after M7.1 and applicable M6 persistence | Two browsers play, disconnect, resync and review same accepted outcomes |
 | M9 — SVG scalability | 9.1 baseline trace harness early; 9.2 dirty frame scheduling; 9.3 spatial working set; 9.4 layer caches; 9.5 batching/complexity limits; 9.6 integrated matrix | Rendering + S.I.R. | Harness after M2; final gate after M6–M8 | Declared workloads pass with raw traces and unavailable-stage disclosure |
-| M10 — Product composition | 10.1 sample bundles; 10.2 template/provider/wizard; 10.3 skills/catalog predicates; 10.4 docs/playground; 10.5 clean artifact and deployment tests | Templates + .github + SDD | M3–M9 | Every C-row has generated-consumer evidence; player excludes optional studio modules |
-| M11 — Publish and adopt | 11.1 producer coherent releases; 11.2 dual-feed verification; 11.3 template publication/activation; 11.4 S.I.R. migration; 11.5 upgrade/rollback qualification | All owners | M10 | Released package consumers reproduce samples; S.I.R. parity and no permanent copied engine |
+| M10 — Product composition | 10.1 sample bundles; 10.2 template/provider/wizard; 10.3 skills/catalog predicates; 10.4 docs/playground; 10.5 clean artifact and deployment tests; 10.6 installed authority/migration matrix, tool/skill provisioning and real routine-development journey | Templates + .github + SDD | Minimal composition starts with candidate M1/M2 packages; final included-bundle qualification after M3–M9 and required producer capabilities | Every C-row has generated-consumer evidence; player excludes optional studio modules; effective approved workflow demonstrated |
+| M11 — Publish and adopt | 11.1 producer coherent releases; 11.2 dual-feed verification; 11.3 template publication/activation; 11.4 S.I.R. migration; 11.5 upgrade/rollback qualification; 11.6 explicit activation dependencies, upgraded development journey and independent epoch/refusal qualification | All owners | Candidate publication follows each capability release; final activation after M10 and its named owner/capability/epoch conditions | Released package consumers reproduce samples; S.I.R. parity and no permanent copied engine; readiness and activation claims remain distinct |
 
 ### Scheduling and releases
 
-The critical path is M0 → M1 → M2 → M3/M4 → M7 → M8 → M9 final → M10 → M11. M5 can proceed after M1/M2; Audio can prototype against the agreed event contract while the editor develops. M9 measurement starts at M2 and accompanies all later work. This is dependency planning, not an instruction to start concurrent workers now.
+The proposed dependency spine starts M0 → M1/M2, then separates authoring (M3/M4), session/gameplay (M5),
+presentation/persistence (M6) and the relevant replay/network work (M7/M8) before integrated M9/M10 closure
+and final M11 activation. M8's host/order/reconnect work does not wait for the entire planner or rule UI.
+M7's integrated analysis still requires its real workspace facilities, and saved network replay still requires
+its actual recorder/persistence contracts. Audio can prototype against an agreed event contract. M9
+measurement and minimal generated-consumer plumbing begin with the first M2 slice.
+
+M0 verifies these proposed dependency refinements against actual source/API coupling before scheduling.
+It also supplies stage durations and owner/resource constraints before anyone calls one path the measured
+critical path. This is dependency planning, not an instruction to start concurrent workers now.
 
 Use four capability releases: A (scene/renderer preview, M1–M2), B (authoring/local-play preview, M3–M6), C (replay/multiplayer/scalability preview, M7–M9), and D (complete qualified template, M10–M11). Only D carries the complete-workspace claim. Preview consumers opt into exact immutable package sets. Do not assign SemVer numbers before API compatibility and existing package versions are reviewed.
 
-Effort planning allowance: M0 2–3 engineer-weeks; M1–M2 6–10; M3–M4 10–16; M5–M6 8–14; M7–M8 8–14; M9 5–9; M10–M11 5–8. Total 44–74 engineer-weeks, including focused tests/docs but excluding major upstream redesign or an advanced rigid-body solver. These are rough planning estimates, not a delivery commitment. M0 should replace them with dependency-aware estimates from actual module boundaries. A small multi-owner team should plan multiple months, with review, release and S.I.R. adoption capacity included.
+### Consolidated planning allowance
+
+| Component | Engineer-weeks |
+|---|---:|
+| Original engine scope: M0 2–3; M1–M2 6–10; M3–M4 10–16; M5–M6 8–14; M7–M8 8–14; M9 5–9; M10–M11 5–8 | 44–74 |
+| Expanded keyboard/input scope from §6A | +4–7 |
+| Model authoring, correspondence and migration qualification from §8A | +4–6 |
+| Current additive programme allowance | **52–87** |
+
+This consolidates existing allowances; it is not a fresh estimate or delivery commitment. M0 resolves overlap
+between feature tests, input work and correspondence adapters before changing the total. Focused tests/docs
+are included; major upstream redesign and an advanced rigid-body solver are excluded. External lifecycle
+or fleet-cutover waiting is a dependency delay, not hidden engineering effort. Account for review, release,
+shared-flow maintenance and S.I.R. adoption capacity; model work that directly establishes product behavior
+is not automatically bureaucracy. Calendar duration depends on the verified dependency graph and owner
+capacity, not division by agent count. No measured overhead reduction is assumed in these numbers.
 
 ## 12. Extraction, migration and release discipline
 
-Characterize each donor behavior before moving code. Extract a narrow primitive or module; parameterize domain policy; publish it; adopt it in both a generated neutral sample and S.I.R.; only then remove S.I.R.'s superseded implementation. Avoid copying its large App module and attempting generalization afterward. During transition, one explicit adapter selects the implementation per feature; no hidden dual state owner or permanent fallback copy remains.
+Characterize each donor behavior before moving code. Extract a narrow primitive or module; parameterize domain policy; publish a compatible candidate batch; adopt it in both a generated neutral sample and S.I.R.; only then remove S.I.R.'s superseded implementation. A work-package number is not a reason to publish another version when compatible changes can form one useful release. Avoid copying its large App module and attempting generalization afterward. During transition, one explicit adapter selects the implementation per feature; no hidden dual state owner or permanent fallback copy remains.
 
 Record a compatibility ledger for old and new IDs, documents, glyph references, replay identities, command bindings and layout preferences. Preserve S.I.R.'s public formats through adapters. Do not rename its existing map format into a generic engine format without a migration. New generic assets can coexist with S.I.R. documents while adapters convert at the boundary.
 
 Release dependencies before consumers. Verify package contents and isolated Fable/browser consumption, publish the coherent producer set, independently compare required feed payloads, then publish Templates and update registry/wizard pins. Validate the SDD CLI and skill-materializer versions actually used; do not assume a newest producer automatically updates embedded consumer assets. Game runtime and Game.Skills retain their separately declared release axes.
+
+Candidate publication, installed qualification and final activation are separate steps. Publish exact
+producer candidates through the authorized route before downstream consumption. Build the candidate
+template from those immutable inputs, then use an approved preview publication mechanism to qualify its
+actual installed artifact. Final promotion/publication/activation follows the owning release contract. If
+that operation changes identity or bytes, requalify the affected claim rather than assume preview evidence
+transfers unchanged. M10's installed journey therefore does not depend on an unexplained unpublished
+artifact, and M11 is not the first publication of every producer dependency. None of this authorizes a
+single-feed exception or omission of currently required payload verification.
 
 Existing generated projects upgrade through documented package and configuration migrations, not by rerunning a destructive scaffold. Preserve authored files, detect conflicts and retain backups/exported documents. Keep historical replay runners and previous compatible package sets until the supported migration window closes. Rollback restores package/configuration identities without reinterpreting newly written data; a format that cannot downgrade must say so before migration.
 
@@ -436,8 +591,20 @@ Existing generated projects upgrade through documented package and configuration
 8. **Performance and accessibility:** declared workloads pass on named browser/device configurations; camera extent scaling, resource lifecycle, keyboard/touch, screen-reader alternatives, reduced motion and responsive modes remain qualified.
 9. **Delivery proof:** a clean directory with no sibling checkouts installs the published template, restores locked dependencies, builds/tests/publishes, and serves the player and optional studio successfully. All owner-selected skills resolve and match their manifests.
 10. **Upgrade proof:** an older generated game and S.I.R. both adopt the release without losing authored content or misreading retained replay identities; rollback limits are documented and exercised. Section 8A's F#/Quint authority matrix, explicit profile/backend selection, real runtime correspondence, interrupted-migration recovery and coordination-epoch protections also pass. Successful Quint verification does not count as fleet-cutover acceptance.
+11. **Generated development proof:** clean and upgraded receivers resolve the approved common policy and
+    owner-sourced guidance. A real routine repair completes through the approved owner/PR/check path;
+    a semantic rule change exercises model amendment and conformance. Same-PR repair and the chosen native
+    base policy work without a hidden receipt cycle. Isolated usage loss or a delayed derived view does not
+    invalidate valid code delivery; missing observations cannot certify efficiency. Protected changes keep
+    their proper route, and v2 receivers refuse fenced v1 writers. Code merge, required server deployment
+    or package publication, and lifecycle activation remain separately observable outcomes.
 
-Every C-row has an owner, source/package identity, focused tests, one production journey and an evidence location. Documentation, sample code, skills and executable behavior agree. Missing or blocked rows prevent the complete release claim; they are not reclassified as complete because infrastructure was delivered.
+Every C-row has an owner, source/package identity, focused tests, a mapped production journey and an evidence
+location. One integrated journey may cover several rows when its assertions actually demonstrate each
+capability; no duplicate journey or receipt is required solely to repeat the same facts. Documentation,
+sample code, skills and executable behavior agree. Missing or blocked required capabilities prevent the
+complete release claim. Report product readiness, workspace compatibility and activation separately; a
+functional development journey is not itself a sufficient overhead cohort or fleet-cutover proof.
 
 ## 14. Principal risks and decision checkpoints
 
@@ -452,12 +619,28 @@ Every C-row has an owner, source/package identity, focused tests, one production
 | Accessibility disappears through batching/culling | Keyboard/screen-reader regressions | Semantic alternatives and independent focus/selection model |
 | Imported assets have incompatible rights | Distribution cannot proceed | M0 rights inventory; replace or obtain compatible grants before packaging |
 | Recorded evidence is mistaken for fresh proof | Unsupported completion claims | Exact candidate/fixture identity and fresh release journeys |
-| Scope expands without a finish line | Engine programme never lands | C01–C20 contract and staged previews; defer advanced physics/skeletal tools |
+| Scope expands without a finish line | Engine programme never lands | C01–C20 availability and bundle inclusion made explicit; staged previews; defer advanced physics/skeletal tools |
+| Generated guidance restores removed ceremony | A lightweight shared route becomes expensive in game consumers | Real clean/upgrade ordinary-change journeys through published policy and tools |
+| Lifecycle activation blocks unrelated engine capability | Useful packages wait for an unexplained global prerequisite | Separate preview, product readiness, workspace integration and default-activation claims |
+| Broad milestone dependencies hide independent work | Networking/runtime waits for unrelated studio analysis | Verify work-package capability dependencies in M0; preserve integrated closure |
+| Player bootstrap cost is hidden by good frame timing | A small scene performs well only after a heavy startup | Measure player/studio closure, cold start and first playable interaction separately |
 
 Decisions to settle in M0: package boundaries and Scene reuse; exact SVG/text/filter subset; geometry library versus owned implementation; browser/device support matrix; provider option vocabulary; migration support window; and named owner/maintainer capacity. The recommended defaults throughout this document allow preparation to begin, but these decisions must be recorded before publishing the affected contracts.
 
 ## 15. Immediate implementation handoff
 
-The first implementation item is the M0 capability and dependency audit, scoped to S.I.R.'s scene, workspace, editor, worker, rule and measurement modules plus Templates' browser scaffold. Its reviewable output is a source-to-capability map, a license inventory, a characterization fixture list, a proposed package graph and a refined milestone estimate. The next item is a minimal package-consumer spike rendering the same small semantic scene in S.I.R. and a fresh Fable template, with retained identity and no sibling dependency. This establishes the extraction mechanism before the larger editor and runtime migrations begin.
+The first implementation item is a bounded M0 audit sufficient to authorize the first extraction: donor
+rights, existing Scene/input ownership, Fable closure, characterization cases and the actual package-consumer
+boundary. Extend the audit across the remaining C-rows before their design/implementation decisions and
+retain complete inventory as the M0 outcome; the first useful spike need not wait for every later feature
+question to be answered.
+
+The next item is a minimal interactive scene consumed from published candidate packages by S.I.R. and a
+fresh Fable template, with retained identity and no sibling dependency. It establishes extraction, input,
+installation and early measurement before the full studio or cooperative arena is complete. It is evidence
+toward the promised samples, not a substitute for their audio, multiplayer, replay or accessibility journeys.
+Integrate a supported routine-development example early; record unsupported upstream policy/producer seams
+with their existing owners rather than adding a template-local workaround. Use the resulting source and
+consumer evidence to refine the package graph, true dependencies and consolidated estimate.
 
 No issue creation, implementation, package publication, or board mutation is performed by this planning document.
