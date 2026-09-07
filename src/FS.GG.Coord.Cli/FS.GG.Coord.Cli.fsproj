@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.85.2 — admit the fenced markerless implementation phase of two-phase receipt work.
+    <PackageReleaseNotes>0.86.0 — carry the reduced routine-development route in the coherent workflow packages.
 
-`delivery` may guard-land an implementation PR without canonical closing linkage only when the same open,
-claimed item carries an exact current-head outstanding `acceptance-receipt` obligation. The ordinary
-authorization, review, base, check, and path gates remain mandatory. A markerless merged implementation
-can never authorize terminal completion; only the later canonically closing receipt PR can complete it.
+FS.GG.Drivers and FS.GG.Kit let explicitly admitted routine, reversible source work use one accountable
+owner, one PR, exact-head eligibility, required automated checks, and native merge readback without a
+second claim, critic, receipt, or projection cycle. Protected operations and non-routine items retain the
+strict route. FS.GG.Coord.Cli advances with the coherent set; its command, option, result, and exit-code
+vocabulary is unchanged.
 
 $(FsggStandingAdvisories)
 

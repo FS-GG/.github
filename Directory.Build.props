@@ -558,8 +558,13 @@
        single-owning-item two-phase flow. All other authority remains mandatory, and terminal completion
        still requires canonical closing linkage from the later receipt PR. No command, option, result,
        or exit-code vocabulary changes. -->
+  <!-- 0.85.2 -> 0.86.0 (.github#3330): MINOR on the stable 0.x line. The packaged roadmap and board
+       drivers plus pnext-item add the reduced one-owner route for explicitly admitted routine,
+       reversible source work. Protected operations and non-routine items retain the strict
+       claim/review/completion route. The coordination engine's command, option, result, and exit-code
+       vocabulary is unchanged; all three packages advance together under the coherent-set rule. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.85.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.86.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
