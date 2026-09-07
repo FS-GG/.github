@@ -54,50 +54,29 @@ The rest of this skill is the strict protocol. Its concurrency authority is
 
 ## Lifecycle ledger
 
-Create the item's externally durable append-only lifecycle ledger on the canonical GitHub issue before
-the first claim transition and keep it through verified done. Record every phase boundary, its whole-minute duration and historical average,
-the exact provider/model/variant and effort, authoritative token usage, and the runtime, coordination,
-SDD CLI/contracts, and ledger-schema versions that make comparisons meaningful. Token accounting is a
-post-response operation: reconcile the completed runtime turn from its local session record or stable
-provider response before closing the corresponding phase; never estimate from visible text or a context
-window. Freeze one private usage receipt per phase when cited and archive it in the canonical per-user
-content-addressed private store; never leave the only copy in `/tmp` or a worker checkout and never append
-later phases to it. Sealing and validation resolve by digest. An already-missing historical receipt needs
-the separately reviewed non-counting proof defined in the lifecycle reference; never reconstruct it from
-the public event. Each critic and recovery worker records its own runtime identity and usage rather than assigning
-it to the implementer.
+Create the append-only ledger on the canonical issue before the first claim and keep it through verified
+done. Record each phase's duration, historical average, runtime/model/effort, authoritative usage, and
+contract versions. Reconcile usage after the response from the stable runtime record; never estimate it.
+Seal each cited receipt by digest in the canonical per-user content-addressed private store. A missing
+historical receipt needs the separately reviewed non-counting proof, never reconstruction. Every critic
+or recovery worker records its own identity and usage.
 
-**The supervising parent owns the post-child boundary.** A worker, critic, confirmation, recovery, or
-host child cannot read usage written after its own final response. It therefore returns the exact
-session/turn identity and an unposted terminal draft marked `pending final usage`; it must not convert
-that timing condition to `unavailable` or post the terminal lifecycle comment itself. After the child is
-terminal, the parent locates that completed Codex JSONL (or Claude `SubagentStop` transcript), runs the
-strict collector, seals and posts the child's terminal event, and only then accepts the handoff. Host
-acceptance, cycle completion, and Done refuse while any completed child lacks this reconciliation.
-Terminal `unavailable` is allowed only after the parent performed a post-completion lookup and records
-that no unique terminal record exists or that strict schema validation failed; “the response had not
-finished” is never a terminal reason. If an older worker already posted that reason, append a distinct
-telemetry-reconciliation recovery phase before continuing; never edit the immutable event.
+**The supervising parent owns the post-child boundary.** Each child returns its session/turn identity and
+an unposted terminal draft marked `pending final usage`; it must not convert that timing condition to `unavailable`
+or post its terminal event. After completion, the parent collects, seals, and posts it.
+Acceptance, cycle completion, and Done refuse while any completed child lacks this reconciliation.
+Terminal `unavailable` requires a post-completion lookup proving no unique valid record; an earlier false
+timing reason requires an immutable telemetry-reconciliation phase.
 
-An extraordinary immutable history that cannot satisfy either the creating or current tool contract may
-advance only through the toolkit's human-authorized synthetic checkpoint. This is not an automatic worker
-waiver: obtain one immutable human issue-comment authorization, author the closed scope/frontier-bound
-`fsgg.telemetry.synthetic-checkpoint/v1` proof with explicit no-provenance/no-reconstruction flags and passed
-functional checks, then append exactly one adjacent `synthetic-evidence-checkpoint` phase using
-`--synthetic-checkpoint`. Its completion is the new trusted anchor; every later event returns to the ordinary
-strict contract. Missing authority, scope/frontier drift, reuse, ambiguity, tampering, or a failed/absent
-functional check is terminal red.
+An irreparable history may advance only through the toolkit's human-authorized synthetic checkpoint,
+with immutable human authority, exact scope/frontier, no reconstruction, and passed functional checks.
+Anything missing, reused, ambiguous, or tampered is terminal red; a failed or absent functional check is terminal red.
+Later events return to the strict contract.
 
-Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,
-projection, and cleanup facts do not exist until after that candidate head was reviewed, so appending them
-to the candidate creates an unsatisfiable exact-head loop. Repository `logs/` files are immutable exported
-snapshots only and never gate the PR that carries them. Keep raw per-response usage reports private and
-untracked; only phase aggregates and stable receipt digests enter the public issue ledger.
-
-Read [lifecycle-ledger](references/lifecycle-ledger.md) for the canonical issue-comment authority, optional
-snapshot paths, Codex and Claude collection rules, schema, and validation commands. Validate at every handoff,
-before host acceptance, and again with `--require-terminal` before the done stamp. The ledger is part of
-the item evidence in every FS.GG repository; it is not limited to roadmap-driven work.
+The canonical issue is live authority; candidate-branch and repository-log copies are snapshots and do
+not gate their own PR. Keep raw usage private and publish only aggregates and stable receipt digests.
+Read [lifecycle-ledger](references/lifecycle-ledger.md) for the complete authority, collection, checkpoint,
+schema, and validation contract. Validate every handoff and again with `--require-terminal` before Done.
 
 ## 0. Establish identity
 
