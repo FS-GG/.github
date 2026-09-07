@@ -1,10 +1,16 @@
-<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  routine development route: policy, required gate, strict boundary, ADRs, roadmap, and twins agree
-PASS  non-item branch: OK, nothing to fence
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  non-item branch: OK, nothing to fence
 PASS  routine: exact-head source change is admitted without a board read
 PASS  routine: a moved head is refused
 PASS  routine: duplicate marker fields are refused as ambiguous
 PASS  routine: protected operation is refused
 PASS  routine: protected policy path is refused
+PASS  routine: base policy refuses protected surface scripts/check-claim-generation.py mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/coherence.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/kit-auto-publish.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface scripts/kit-auto-publish.py mislabeled source-change
+PASS  routine: base policy refuses protected surface .github/workflows/fsgg-dispatch-broker.yml mislabeled source-change
+PASS  routine: base policy refuses protected surface src/FS.GG.Coord.Cli/Client.fs mislabeled source-change
+PASS  routine: base-revision executable refuses its candidate-side replacement
 PASS  missing: no marker at all
 PASS  missing: duplicate markers
 PASS  missing: marker without gen=
@@ -51,8 +57,5 @@ PASS  F4: [expired] names the worker who lapsed MOST RECENTLY, not the youngest 
 PASS  F4: and it reports that holder's own lease and lapse instant
 PASS  repair 1: an unusable --lease-minutes is refused up front, naming the flag
 
-claim-generation fixture: 51 passed, 0 failed
-projections: current — the protocol is stated once, and every projection agrees with it.
-generate-driver-manifest: registry/driver-skill-manifest.json and registry/coordination-kit-skill-manifest.json are current.
-projections: current — the protocol is stated once, and every projection agrees with it.
+claim-generation fixture: 58 passed, 0 failed
 ]]></system-out></testcase></testsuite>

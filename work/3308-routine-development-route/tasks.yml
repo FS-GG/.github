@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/3308-routine-development-route/plan.md
-    digest: 446044fc146d654c41bb075a0f8510b3be1ed3b4af24f222fc65163799f6b1d5
+    digest: 6d26c0bc70418d1f88911b18dd48f4ac9f0b4770c2398a57e805d0063ee1e680
     schemaVersion: 1
 tasks:
   - id: T001
