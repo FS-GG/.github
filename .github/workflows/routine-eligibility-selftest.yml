@@ -1,0 +1,22 @@
+name: routine-eligibility-selftest
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/routine-eligibility.yml
+      - .github/workflows/routine-eligibility-selftest.yml
+      - scripts/check-routine-eligibility-envelope.py
+      - tests/routine-eligibility/**
+
+permissions:
+  contents: read
+
+jobs:
+  routine-eligibility-fixture:
+    name: routine-eligibility-fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise the unprivileged security fixture
+        run: bash tests/routine-eligibility/run.sh
