@@ -1,4 +1,11 @@
 {
+  "work-unified-roadmap": {
+    "positive": "Use $work-unified-roadmap to advance the FS-GG Unified Development Roadmap after simplification.",
+    "indirect": "Resume our current unified programme; plan only the next major feature with Astra high and have Sol medium execute its small roadmap.",
+    "incomplete": "Continue the FS-GG Unified Roadmap",
+    "negative": "Create a personal skill for an unrelated project without starting FS-GG development.",
+    "boundary": "Inspect the Unified Roadmap and its temporary coordinator, but do not start planning or implementation."
+  },
   "board-analyst": {
     "positive": "Decide which of these findings should become board rows and read the board for churn.",
     "indirect": "Rows are multiplying faster than they land; work out which ones are one cause and what would stop it.",

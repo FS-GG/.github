@@ -305,6 +305,29 @@ The difference between **OpenV2** and **OperatingV2** matters: the first opens n
 irreversibly fences v1; the latter follows the observation/contraction programme. Do not use the names as
 synonyms. No purported fallback may restore a fenced v1 writer.
 
+### 4.4 Just-in-time feature planning and execution
+
+Use the temporary repository-owned
+[`work-unified-roadmap` skill](../.agents/skills/work-unified-roadmap/SKILL.md) to advance this programme.
+It is committed in both declared agent skill roots, so a fresh checkout carries the instructions and
+supporting material. Creating or inspecting the skill does not start roadmap work.
+
+At each new major feature, a fresh **Astra high** (`gpt-6-astra`, `high`) subagent analyzes actual prior
+work, the relevant unified stages, original plans and targeted current primary sources. It produces one
+digestible feature subroadmap: a few ready milestones with acceptance examples and a later outcome
+outline. Do not detail the entire programme in advance. Resume valid active plans; expand the near-term
+window when needed, or replan when a material assumption, dependency or scope changes.
+
+A **Sol medium** (`gpt-5.6-sol`, `medium`) worker executes that bounded subroadmap through the installed
+`work-roadmap` skill and the owning repository's actual route. Reuse the worker for routine milestones
+and repairs where the route permits. Existing GS2 ledgers remain authoritative; window completion does
+not imply feature completion or publication. Apply section 7.4 through available automatic observation,
+report missing instrumentation as a gap, and avoid a new planning or reporting cycle for each item.
+
+Retire the temporary coordinator when the shared driver provides these behaviors or the programme ends,
+preserving active plans and evidence. Its presence does not amend protected contracts or enable stages
+whose prerequisites have not been met.
+
 ## 5. Governance, synchronization and evidence
 
 ### 5.1 Preserve selected guarantees explicitly
