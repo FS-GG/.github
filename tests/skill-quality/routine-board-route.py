@@ -56,6 +56,8 @@ for variant in ("work-board-normal", "work-board-best", "drive-board-normal", "d
     body = (AGENTS / variant / "SKILL.md").read_text(encoding="utf-8")
     require("routine route unchanged" in body, f"{variant} does not inherit its base routine route")
     require("does not authorize a critic" in body, f"{variant} makes routine review ambiguous")
+    require("strict item's three-round review chain" in body, f"{variant} does not scope repair dispatch to strict work")
+    require("ordinary three-round chain" not in body, f"{variant} can route routine work into strict repair ceremony")
 
 for driver in ("work-board", "drive-board"):
     triage = (AGENTS / driver / "references" / "backlog-triage.md").read_text(encoding="utf-8")

@@ -25,7 +25,7 @@ Never let a host default choose the model or effort. If the active runtime canno
 model and effort, report the unsupported route and stop before dispatching a worker; do not downgrade,
 fall back, or continue a partial wave.
 
-**Repair-phase route.** When an ordinary three-round chain exhausts, automatically enter the
+**Repair-phase route.** When a strict item's three-round review chain exhausts, automatically enter the
 [repair phase](../pnext-item/references/independent-review.md#repair-phase) and dispatch its fresh
 implementer and fresh critic at `drive-board-best`'s route instead
 of the table above:
