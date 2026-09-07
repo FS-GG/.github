@@ -16,6 +16,7 @@ require 'name: routine-eligibility'
 require 'git -C "$inspect" show "$BASE_SHA:scripts/check-claim-generation.py"'
 require 'git -C "$inspect" show "$BASE_SHA:scripts/lib/gate.py"'
 require 'refs/pull/${PR_NUMBER}/head:refs/remotes/origin/routine-head'
+require 'bash tests/routine-eligibility/run.sh'
 if grep -qF 'actions/checkout' "$WORKFLOW"; then
   echo "trusted workflow must not check out candidate code" >&2
   exit 1
