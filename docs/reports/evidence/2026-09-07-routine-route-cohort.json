@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/1",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-07T15:50:00Z",
+  "asOf": "2026-09-07T22:09:27Z",
   "targetPerArm": 10,
   "selection": {
     "routine": "The next ten eligible ordinary reversible code requests admitted by the shared routine policy after this declaration, excluding roadmap-bootstrap and protected-operation work.",
@@ -11,5 +11,42 @@
   "providerPopulation": {
     "status": "unknown"
   },
+  "selectionObservations": [
+    {
+      "observedAt": "2026-09-07T22:09:27Z",
+      "query": "org:FS-GG is:pr is:merged merged:>=2026-09-07T15:50:00Z",
+      "mergedPullRequests": 18,
+      "eligibleRoutineCodeItems": 0,
+      "excluded": {
+        "proseOnly": [
+          ".github#3325",
+          ".github#3327",
+          ".github#3328",
+          ".github#3329",
+          ".github#3333",
+          ".github#3335"
+        ],
+        "roadmapBootstrapOrProtectedOperation": [
+          ".github#3326",
+          ".github#3330",
+          ".github#3331",
+          ".github#3332",
+          "FS.GG.Coordination#322",
+          "FS.GG.Coordination#323",
+          "FS.GG.Coordination#324",
+          "FS.GG.Coordination#325"
+        ],
+        "qualificationFixture": [
+          "FS.GG.GitHub.Substrate.Sandbox#18",
+          "FS.GG.GitHub.Substrate.Sandbox#20"
+        ],
+        "protectedReceiverRollout": [
+          "FS.GG.Rendering#1276",
+          "FS.GG.SDD#956"
+        ]
+      },
+      "disposition": "No unit was selected; the predeclared next-ten rule remains in force."
+    }
+  ],
   "units": []
 }
