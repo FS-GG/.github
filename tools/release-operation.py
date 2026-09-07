@@ -82,6 +82,9 @@ def completion(
             feed_state = state["feeds"][feed].get("packages", {}).get(package_id, {})
             require(feed_state.get("state") == "verified" and feed_state.get("externalPayloadSha256") == artifact["payloadSha256"],
                     f"{feed} has not verified the manifest payload for {package_id}")
+        github_state = state["feeds"]["github"]["packages"][package_id]
+        require(github_state.get("externalSha256") == artifact["sha256"],
+                f"github has not verified the exact manifest archive for {package_id}")
         compact_packages.append({"id": package_id, "archiveSha256": artifact["sha256"], "payloadSha256": artifact["payloadSha256"]})
     return {
         "schema": SCHEMA,

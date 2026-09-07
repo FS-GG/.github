@@ -16,7 +16,12 @@ source = "a" * 40
 payload = "sha256:" + "b" * 64
 archive = "c" * 64
 package = {"id": "FS.GG.Kit", "version": "1.2.3", "artifact": {"sha256": archive, "payloadSha256": payload}}
-verified = {"FS.GG.Kit": {"state": "verified", "externalPayloadSha256": payload}}
+github_verified = {"FS.GG.Kit": {"state": "verified", "externalSha256": archive,
+                                  "externalPayloadSha256": payload}}
+# NuGet may add its server signature, so its archive hash is deliberately different while its
+# producer payload remains exact.
+nuget_verified = {"FS.GG.Kit": {"state": "verified", "externalSha256": "e" * 64,
+                                 "externalPayloadSha256": payload}}
 manifest = {
     "schema": "fsgg.release-saga/1",
     "contentId": "sha256:" + "d" * 64,
@@ -26,8 +31,8 @@ manifest = {
     },
     "state": {
         "phase": "promoted", "channelPromotion": {"state": "promoted"},
-        "feeds": {"github": {"state": "verified", "packages": verified},
-                  "nuget": {"state": "verified", "packages": verified}},
+        "feeds": {"github": {"state": "verified", "packages": github_verified},
+                  "nuget": {"state": "verified", "packages": nuget_verified}},
     },
 }
 channel = {"version": "1.2.3", "sourceSha": source, "contentId": manifest["contentId"]}
@@ -57,6 +62,7 @@ refused("mutable release", lambda r, m, c, s: (r.update(isImmutable=False), s)[1
 refused("wrong tag source", lambda r, m, c, s: "e" * 40)
 refused("unpromoted state", lambda r, m, c, s: (m["state"].update(phase="publishing"), s)[1])
 refused("mismatched stable channel", lambda r, m, c, s: (c.update(contentId="sha256:" + "f" * 64), s)[1])
+refused("mismatched GitHub archive", lambda r, m, c, s: (m["state"]["feeds"]["github"]["packages"]["FS.GG.Kit"].update(externalSha256="different"), s)[1])
 refused("mismatched feed bytes", lambda r, m, c, s: (m["state"]["feeds"]["nuget"]["packages"]["FS.GG.Kit"].update(externalPayloadSha256="different"), s)[1])
 
 print("release-operation: PR-less completion, identical replay, and mismatch refusal pass")
