@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-07-roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract.md",
+  "reportSha256": "914fe93e29bddf4ce9b62d595c8e96553ae466af53daa7b2d9e5d110289a407c",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

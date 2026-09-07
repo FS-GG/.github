@@ -305,8 +305,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "$PR_BODY" > pr-body.md
+          # Eligibility authority comes from the target commit, never from executable
+          # Python in the candidate being judged. Keep its one local dependency beside it.
+          trusted_gate="$RUNNER_TEMP/fsgg-claim-generation-base"
+          mkdir -p "$trusted_gate/lib"
+          git show "$BASE_SHA:scripts/check-claim-generation.py" > "$trusted_gate/check-claim-generation.py"
+          git show "$BASE_SHA:scripts/lib/gate.py" > "$trusted_gate/lib/gate.py"
           rc=0
-          out="$(python scripts/check-claim-generation.py \
+          out="$(python "$trusted_gate/check-claim-generation.py" \
                    --repo "${{ github.repository }}" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" \
                    --routine-policy-ref "$BASE_SHA" \
                    --body pr-body.md 2>&1)" || rc=$?

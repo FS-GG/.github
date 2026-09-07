@@ -18,10 +18,16 @@
   ],
   "protectedPaths": [
     ".fsgg/",
-    ".github/workflows/release-",
-    ".github/workflows/dispatch-",
-    ".github/workflows/fsgg-dispatch-",
-    "registry/"
+    ".github/",
+    ".agents/skills/work-roadmap/",
+    ".claude/skills/work-roadmap/",
+    "eng/",
+    "registry/",
+    "scripts/",
+    "src/FS.GG.Coord",
+    "Directory.Build",
+    "global.json",
+    "nuget.config"
   ],
   "requiredChecks": [
     "repository-required-status-checks",

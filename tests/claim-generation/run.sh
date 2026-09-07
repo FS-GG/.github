@@ -207,8 +207,10 @@ expect "non-item branch: OK, nothing to fence" \
 # R0. ROUTINE DEVELOPMENT — no GitHub/board/issue/claim read, exact-head + protected boundary.
 # =============================================================================================
 ROUTINE_REPO="$WORK/routine-repo"
-mkdir -p "$ROUTINE_REPO/.fsgg" "$ROUTINE_REPO/src"
+mkdir -p "$ROUTINE_REPO/.fsgg" "$ROUTINE_REPO/src" "$ROUTINE_REPO/scripts/lib"
 cp "$HERE/../../.fsgg/routine-development.json" "$ROUTINE_REPO/.fsgg/routine-development.json"
+cp "$HERE/../../scripts/check-claim-generation.py" "$ROUTINE_REPO/scripts/check-claim-generation.py"
+cp "$HERE/../../scripts/lib/gate.py" "$ROUTINE_REPO/scripts/lib/gate.py"
 git -C "$ROUTINE_REPO" init -q
 git -C "$ROUTINE_REPO" config user.email fixture@example.invalid
 git -C "$ROUTINE_REPO" config user.name fixture
@@ -257,6 +259,39 @@ git -C "$ROUTINE_REPO" commit -qm protected
 ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
 routine_expect "routine: protected policy path is refused" 1 "routine-protected-path" \
   "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
+
+for protected_path in \
+  scripts/check-claim-generation.py \
+  .github/workflows/coherence.yml \
+  .github/workflows/kit-auto-publish.yml \
+  scripts/kit-auto-publish.py \
+  .github/workflows/fsgg-dispatch-broker.yml \
+  src/FS.GG.Coord.Cli/Client.fs
+do
+  mkdir -p "$ROUTINE_REPO/$(dirname "$protected_path")"
+  printf 'candidate mutation\n' >> "$ROUTINE_REPO/$protected_path"
+  git -C "$ROUTINE_REPO" add "$protected_path"
+  git -C "$ROUTINE_REPO" commit -qm "protected $protected_path"
+  ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
+  routine_expect "routine: base policy refuses protected surface $protected_path mislabeled source-change" \
+    1 "routine-protected-path" \
+    "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
+done
+
+# Prove the executable used by the workflow can be obtained wholly from the trusted base.
+TRUSTED_GATE="$WORK/trusted-gate"
+mkdir -p "$TRUSTED_GATE/lib"
+git -C "$ROUTINE_REPO" show "$ROUTINE_BASE:scripts/check-claim-generation.py" > "$TRUSTED_GATE/check-claim-generation.py"
+git -C "$ROUTINE_REPO" show "$ROUTINE_BASE:scripts/lib/gate.py" > "$TRUSTED_GATE/lib/gate.py"
+printf '%s' "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->" > "$ROUTINE_REPO/body.md"
+trusted_out="$(cd "$ROUTINE_REPO" && python3 "$TRUSTED_GATE/check-claim-generation.py" \
+  --repo "$REPO" --head-ref routine/example --base-sha "$ROUTINE_BASE" --head-sha "$ROUTINE_HEAD" \
+  --routine-policy-ref "$ROUTINE_BASE" --body body.md 2>&1)" && trusted_rc=0 || trusted_rc=$?
+if [ "$trusted_rc" -eq 1 ] && grep -qF 'routine-protected-path' <<<"$trusted_out"; then
+  ok "routine: base-revision executable refuses its candidate-side replacement"
+else
+  bad "routine: base-revision executable did not retain authority (exit $trusted_rc)" "$trusted_out"
+fi
 
 # =============================================================================================
 # 1. MISSING
