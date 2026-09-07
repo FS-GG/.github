@@ -23,6 +23,9 @@ description: Index for the FS.GG split-repository direction and the documents th
 
 ## Ongoing renovations
 
+For the wider development portfolio, start at the [development master](development-master.md):
+it connects the current designs, their dependencies and open decisions, with a complete documentation inventory.
+
 FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
 independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
 the current v1 production machinery after verification. Follow the living
