@@ -11,6 +11,11 @@ spec-driven development lifecycle, optional governance, UI, game, audio, and
 networking components while keeping each component independently adoptable.
 
 > [!NOTE]
+> **Current development plan:** Start with the
+> **[development master](https://github.com/FS-GG/.github/blob/main/docs/development-master.md)**
+> for v2 migration, simplification, OR orchestration and performance-bounded flow.
+> The wider design inventory is kept separately there.
+>
 > **Ongoing renovations:** FS-GG is preparing a typed GitHub Substrate v2 and a
 > coordinated fleet cutover. Follow the
 > [implementation and retirement roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md)
