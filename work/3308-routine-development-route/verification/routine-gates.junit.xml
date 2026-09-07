@@ -1,4 +1,4 @@
-<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[routine-eligibility: default-branch workflow and base validator remain outside candidate authority
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[routine-eligibility: target/ref/SHA boundaries and base-loaded execution fail closed under the trusted-writer model
 PASS  non-item branch: OK, nothing to fence
 PASS  routine branch: candidate-controlled strict context is not routine authority
 PASS  routine: exact-head source change is admitted without a board read

@@ -43,13 +43,13 @@ import json
 import sys
 
 activation = json.load(open(sys.argv[1], encoding="utf-8"))
-assert activation["status"] == "inactive"
+assert activation["status"] == "candidate"
 rejected = activation["rejectedRepositoryPushRule"]
 assert rejected["status"] == "unsupported"
 assert rejected["intent"]["refInclude"] == ["refs/heads/routine/**"]
 assert rejected["intent"]["restrictedPaths"] == [".github/workflows/**"]
 alternative = activation["requiredWorkflowAlternative"]
-assert alternative["status"] == "planned-blocked"
+assert alternative["status"] == "optional-hardening-blocked"
 request = alternative["request"]
 assert request["bypass_actors"] == []
 assert request["conditions"]["repository_id_and_ref_name"]["repository_id"]["repository_ids"] == [1269292704]
@@ -60,8 +60,11 @@ assert workflow["ref"] == "refs/heads/main"
 assert workflow["repository_id"] == 1269292704
 assert alternative["authorizationEvidence"]["missingScope"] == "admin:org"
 assert activation["organization"]["plan"] == "free"
+threat = activation["acceptedThreatModel"]
+assert threat["repositoryWriters"] == "trusted"
+assert "does not claim adversarial protection" in threat["nonGuarantee"]
 app = activation["existingAppAlternative"]
-assert app["status"] == "not-currently-capable"
+assert app["status"] == "optional-hardening-not-currently-capable"
 assert app["appSlug"] == "fs-gg-cross-repo-dispatch"
 assert app["installation"]["missingRequiredPermissions"] == ["checks:write", "statuses:write"]
 assert "checks" not in app["installation"]["permissions"]
@@ -106,7 +109,7 @@ args=(
 
 result="$(python3 "$TMP/trusted/check-routine-eligibility-envelope.py" "${args[@]}")"
 test "$result" = BASE-TRUSTED || {
-  echo "candidate workflow/context/executable replacement influenced trusted result: $result" >&2
+  echo "candidate executable replacement influenced the base-loaded result: $result" >&2
   exit 1
 }
 
@@ -131,4 +134,4 @@ expect_failure head-binding 'fetched head does not equal' "${bad[@]}"
 bad=("${args[@]}"); bad[13]=feature/not-routine
 expect_failure head-ref 'head ref is not a routine branch' "${bad[@]}"
 
-echo "routine-eligibility: target/ref/SHA boundaries and candidate workflow/context spoof fail closed"
+echo "routine-eligibility: target/ref/SHA boundaries and base-loaded execution fail closed under the trusted-writer model"

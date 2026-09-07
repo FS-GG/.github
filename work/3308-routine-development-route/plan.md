@@ -31,10 +31,13 @@ Prose status: planned
 - PD-002 [AC-001] [FR-002] complete: Keep `strict` as the only route for publication, deployment, credentials, destructive effects, migrations or cutovers, externally enforced contracts, and all work already operating under strict authority; never infer routine eligibility from size.
 
 ## Contract Impact
-- PC-001 [PD-001] command report: Version the delivery-route policy and validator so callers can select `routine` prospectively while existing `lightweight` and `sdd-required` records retain strict legacy meaning. Emit `routine-eligibility` from a least-privilege `pull_request_target` definition loaded from the default branch; fetch base/head only as Git data, execute the validator and dependency from the exact base SHA, and leave candidate-controlled `claim-generation` as the strict item gate. Update shared skill sources and regenerate Claude/Codex twins from the same source.
+- PC-001 [PD-001] command report: Version the delivery-route policy and validator so callers can select `routine` prospectively while existing `lightweight` and `sdd-required` records retain strict legacy meaning. Emit `routine-eligibility` from a least-privilege `pull_request_target` definition loaded from the default branch; fetch base/head only as Git data, execute the validator and dependency from the exact base SHA, and leave candidate-controlled `claim-generation` as the strict item gate. Under the human-accepted trusted-repository-writer model this catches mistakes and drift but does not claim adversarial workflow-writer protection. Update shared skill sources and regenerate Claude/Codex twins from the same source.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Prove routine admission succeeds without issue, claim, SDD, lifecycle, critique, feedback/receipt-cycle, or metadata-Done inputs; invert every protected-operation and changed-head predicate; prove replacing or deleting candidate workflow/validator bytes cannot influence the trusted result; run focused unit/CLI and skill-projection parity suites.
+- VO-001 [PD-001] [PC-001] semanticTest: Prove routine admission succeeds without issue, claim, SDD, lifecycle, critique, feedback/receipt-cycle, or metadata-Done inputs; invert every protected-operation and changed-head predicate; prove candidate executable replacement cannot influence the base-loaded evaluation while explicitly excluding adversarial workflow/context spoofing from the guarantee; run focused unit/CLI and skill-projection parity suites.
+
+## Accepted Threat Model
+- On 2026-09-07 the human user explicitly accepted repository writers as trusted for the routine route. The route prevents mistakes and drift through base-loaded policy/validator bytes, protected-path refusal, and exact-head binding. It does not claim adversarial protection from a repository writer who can alter Actions workflows or spoof a name-based check context. Publication, credentials, destructive effects, migration/cutover, external contract acceptance, and existing strict items remain on the strict route.
 
 ## Performance Intent
 No performance intent is declared for this work item.

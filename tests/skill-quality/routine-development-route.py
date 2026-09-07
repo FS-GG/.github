@@ -24,6 +24,8 @@ require(policy.get("schema") == "fsgg.routine-development-policy/v1", "wrong pol
 require(policy.get("status") == "pilot" and policy.get("prospective") is True, "route is not prospective pilot")
 require(set(policy.get("notRequired", [])) == ABSENCES, "reduced requirements drifted")
 require(policy.get("legacyAuthority") == "strict", "legacy authority is not retained")
+require(policy.get("trustModel", {}).get("repositoryWriters") == "trusted", "trusted-writer model is not explicit")
+require("adversarial protection" in policy.get("trustModel", {}).get("excludedClaim", ""), "trust-model non-guarantee is absent")
 for operation in ("publish", "deploy", "credential-change", "destructive-effect", "migration-cutover", "external-contract-acceptance", "strict-item-continuation"):
     require(operation in policy.get("protectedOperations", []), f"protected operation missing: {operation}")
 
@@ -53,9 +55,12 @@ for name in (
 gate = (ROOT / "scripts/check-claim-generation.py").read_text()
 workflow = (ROOT / ".github/workflows/coherence.yml").read_text()
 routine_workflow = (ROOT / ".github/workflows/routine-eligibility.yml").read_text()
+selftest_workflow = (ROOT / ".github/workflows/routine-eligibility-selftest.yml").read_text()
 require("evaluate_routine" in gate and "ROUTINE_NOT_REQUIRED" in gate, "required check does not enforce routine policy")
 require('--routine-policy-ref' not in workflow, "candidate-controlled coherence workflow still decides routine eligibility")
-for phrase in ("pull_request_target:", "contents: read", 'show "$BASE_SHA:scripts/check-claim-generation.py"', "bash tests/routine-eligibility/run.sh"):
+for phrase in ("pull_request_target:", "contents: read", 'show "$BASE_SHA:scripts/check-claim-generation.py"', "Repository writers are trusted"):
     require(phrase in routine_workflow, f"trusted routine workflow omitted {phrase!r}")
 require("actions/checkout" not in routine_workflow and "GITHUB_TOKEN" not in routine_workflow, "trusted routine workflow can execute candidate bytes or exposes a token")
+require("pull_request:" in selftest_workflow and "routine-eligibility-fixture" in selftest_workflow, "ordinary fixture workflow is absent")
+require("bash tests/routine-eligibility/run.sh" in selftest_workflow, "ordinary fixture does not execute its test")
 print("PASS  routine development route: policy, required gate, strict boundary, ADRs, roadmap, and twins agree")

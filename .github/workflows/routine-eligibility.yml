@@ -1,8 +1,11 @@
 name: routine-eligibility
 
-# Security boundary: pull_request_target loads this workflow definition from the
+# Reliability boundary: pull_request_target loads this workflow definition from the
 # default branch. Candidate bytes are fetched only as Git objects for an exact
 # base..head diff; no candidate revision is checked out, sourced, imported, or run.
+# Repository writers are trusted: this prevents mistakes and drift, but does not
+# claim protection from a writer able to alter Actions workflows or spoof a
+# name-based check context.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]

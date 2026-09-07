@@ -2,6 +2,11 @@
   "schema": "fsgg.routine-development-policy/v1",
   "status": "pilot",
   "prospective": true,
+  "trustModel": {
+    "repositoryWriters": "trusted",
+    "purpose": "prevent accidental mistakes and drift",
+    "excludedClaim": "adversarial protection from repository writers able to alter Actions workflows"
+  },
   "branchPrefix": "routine/",
   "allowedOperations": [
     "source-change",

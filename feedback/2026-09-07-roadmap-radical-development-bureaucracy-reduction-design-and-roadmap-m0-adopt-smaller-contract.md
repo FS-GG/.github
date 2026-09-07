@@ -34,8 +34,11 @@ receiver-map, canary, lifecycle, and generated-guidance evidence. Those are prod
 the schema-v3 critique, not development-feedback checkpoint events.
 
 The first repair still executed routine eligibility inside candidate-controlled workflow bytes. Repair
-round 2 therefore split out a strict trust-anchor prerequisite, [PR #3311](https://github.com/FS-GG/.github/pull/3311),
+round 2 therefore prepared a trust-anchor prerequisite, [PR #3311](https://github.com/FS-GG/.github/pull/3311),
 whose `pull_request_target` definition is loaded from the default branch and never executes candidate bytes.
+The human subsequently accepted repository writers as trusted: this boundary prevents accidental mistakes
+and drift, but does not claim adversarial protection from a writer able to alter Actions workflows or spoof
+a name-based check context. The prerequisite commits were folded into the single R0 delivery branch.
 
 ## §4 Findings
 
@@ -75,7 +78,8 @@ deduplicated remedy.
 - Canonical item: FS-GG/.github#3308; claim generation 5567618143; worker `rook-fff7`.
 - Route receipt: issue comment 5567601524, digest `c419ebaa5cc11e8415b592853264fb456515b8278d2155824c40d7d4dfda5c1b`.
 - First candidate: `2960f09657b4694ded7f3fb5bc4b0021974672bb`.
-- Repair-round-2 trust anchor: PR #3311, head `8640d5f1579dc34534238436b1f2446ad90303ce`.
+- Repair-round-2 trust-anchor source: PR #3311, final folded head `c3c5b676a42c622ad8270c7ceacb796e91451a39`.
+- Accepted threat model: repository writers are trusted; mistake/drift detection is retained and adversarial workflow-writer protection is not claimed.
 - Critique cycle: `roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract`.
 
 ## §11 Falsifiable improvements
@@ -99,4 +103,4 @@ be refused if it modifies `.github`, `.fsgg`, driver skills, registry, scripts, 
 | performance | not-exercised | R2/R4 own measurement. |
 | documentation | exercised | Policy, twins, constitution, ADRs, roadmap, and receiver map changed. |
 | packaging-upgrade | not-exercised | Publication remains protected. |
-| worker-git-pr | partial | Strict trust-anchor PR #3311 is awaiting same-critic review; no prerequisite merge occurred. |
+| worker-git-pr | exercised | Trust-anchor work from #3311 is folded into the single final R0 delivery branch; the prerequisite is not a second delivery PR. |
