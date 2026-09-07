@@ -14,8 +14,9 @@ or retry work is not acceptable: it has failed its liveness contract. Quint owns
 finite budgets; versioned policy selects models, batching, qualification cadence, and scheduling within that
 legal envelope; a pure controller chooses among admissible actions; and a durable executor performs effects.
 Independent projections generate the static state diagram and live execution view from the same compiled
-identities. The first implementation is deliberately small: one routine code-change flow, optimistic check
-batching with failure isolation, bounded review/repair, capability-based agent routing, and exact-head delivery.
+identities. The controller research slice covers check batching with failure isolation, bounded review/repair,
+capability-based routing and exact-head delivery. It is optional and no longer the proposed prerequisite
+for simplifying routine development; §1.2 separates that work from the controller roadmap.
 
 | Field | Value |
 |---|---|
@@ -25,7 +26,8 @@ batching with failure isolation, bounded review/repair, capability-based agent r
 | Primary risk | Correctness bureaucracy grows without bound until useful work stops |
 | Governing direction | Quint-first semantic authority, pure policy, durable execution, generated projections |
 | Builds on | [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), [ADR-0080](../adr/0080-scoped-child-qualification-comprehensive-milestone-closure.md), [ADR-0081](../adr/0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md), and the [operations-research orchestration design](2026-08-31-operations-research-first-agent-orchestration-design.md) |
-| Initial owners | FS-GG/.github: policy and registry; FS.GG.SDD: generic Quint profile/compiler/replay tooling; FS.GG.Coordination: canonical workflow model, controller, executor, domain replay, receipts, and projections |
+| Routine-flow alignment | 2026-09-07 — R0–R5 is the proposed simplification path; PB0–PB8 is optional controller research. See §1.2 and the [alignment analysis](2026-09-07-112837-development-flow-proposal-alignment-analysis.md). |
+| Optional controller owners | FS-GG/.github: policy and registry; FS.GG.SDD: generic Quint profile/compiler/replay tooling; FS.GG.Coordination: canonical workflow model, controller, executor, domain replay, receipts, and projections |
 
 ### Review disposition — 2026-09-06
 
@@ -82,9 +84,57 @@ It is therefore not acceptable to:
 - improve average throughput by allowing tail latency, review queues, retry amplification, or recovery
   headroom to become unbounded.
 
+### 1.2 Two scopes: routine simplification and optional controller research — 2026-09-07
+
+The [bureaucracy-reduction proposal](../2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) challenges this design's original premise that existing
+obligations should all be preserved inside a new controller. The proposed near-term sequence is now its
+R0–R5: agree a smaller routine contract, deliver one PR through the existing supported execution owner,
+measure asynchronously, simplify applicable recovery/release work, and verify carryover through real v2
+receivers. PB0–PB8 remains a conditional research and qualification path for a controller with demonstrated
+additional value. Neither a new Quint workflow model, reservation ledger, independent plan verifier,
+optimizer, dashboard nor PB closure is a prerequisite for that simpler route.
+
+This revises proposed investment and scope only. It does not adopt the September 7 guarantee reductions,
+change accepted ADRs, modify executable policy or authorize a different writer. The
+[alignment analysis](2026-09-07-112837-development-flow-proposal-alignment-analysis.md) identifies which conflicts need an explicit later decision. Until then,
+current technical, review, receipt, publication and migration requirements remain binding. In particular,
+GS2 qualification and comprehensive parent closure are not ordinary product-work closure: ADR-0080/0081,
+formal-input drift, frozen-candidate rules and production-authority boundaries retain their full meaning.
+Removing mandatory paperwork does not remove canonical Quint semantics or implementation conformance.
+
+The requirements and state-machine details in §§3–8 below are the **controller candidate**, not a universal
+admission contract for all work. The proposed alternative is mapped here so the two are not combined into
+a permissive front end over a still-mandatory controller:
+
+| Controller clause | Proposed lightweight routine treatment after policy adoption | Controller/critical boundary retained |
+|---|---|---|
+| FLOW-001–004; §§5–6 | Use existing commands and deterministic checks; no new model or batch planner solely for routine admission | Model and qualify any new stateful controller before enabling it; retain existing protocol authority |
+| FLOW-011–012; §8 | One owner and isolated worktree; same-PR source repair; native base policy | Existing live grants, external CAS/fencing and accepted snapshot semantics cannot be bypassed |
+| PERF-001, PERF-010; §8.2 | Bound calls/rounds using existing runtime capabilities; token caps are observational if not enforceable | Atomic reservations remain necessary if a future concurrent controller promises hard aggregate caps |
+| PERF-004, PERF-008, PERF-018 | Simple affected-project/path selection is a proposed lower guarantee, requiring an explicit profile decision | Existing semantic-subject evidence reuse remains useful; canonical formal drift and comprehensive GS2 closure remain protected |
+| PERF-013; §9 | Missing usage or a delayed view never blocks valid routine delivery; missing data blocks an efficiency claim | Missing technical or effect-authority evidence still refuses the action it authorizes |
+| PERF-014; §9.2 | Explain retained controls in existing policy; no new bureaucracy registry or per-item evidence packet | Inventory controller obligations during design, without making inventory freshness a delivery prerequisite |
+| §3.3–3.4; §7.1 | One owner, at most one optional independent critique and two material repair attempts; no confirmation phase or automatic deep-dive loop | Existing protected review requirements remain until amended; unsafe or incomplete work stays undelivered |
+| §§9.3, 11–12 | Use the R4/R5 measured real-work comparison for routine simplification | Replay/simulation/shadow and comprehensive qualification still apply to a controller when that controller is introduced |
+
+These are proposed substitutions, not skip flags for an existing gate. R0 must reconcile actual sources,
+validators and required checks before any pilot uses them. The routine versus protected routing decision
+uses the adopted policy, cannot be changed by the candidate to qualify itself, and treats unknown/mixed
+scope conservatively. A native one-PR experience can retain cheap automatic journal and lifecycle records.
+An adapter without model calls is not evidence of an expensive agent workflow, and a source-head check is
+not a replacement for all mutable authority in an accepted snapshot.
+
+Current `.github` execution ownership remains until a separately justified migration. Coordination owns
+actual v2 runtime semantics; SDD changes are warranted only where existing consumer boundaries cannot
+supply the approved authoring choice. Published contracts precede receiver adoption. R5 verifies real code
+and applicable PR-less operation journeys, clean/upgrade installs, telemetry-loss independence, same-PR
+repair, and protected routing at the proper operating epoch. No PB milestone, source fixture or current-route
+canary substitutes for this v2 carryover. Rollback uses an authorized route in the current epoch, never a
+fenced v1 writer.
+
 ## 2. Scope and non-goals
 
-The first delivery covers the lifecycle of one finite, admitted work item from a complete observation through
+The first optional controller delivery covers the lifecycle of one finite, admitted work item from a complete observation through
 implementation, qualification, critique, bounded repair, and terminal delivery/refusal. It includes model
 selection, check planning, optimistic batching, evidence reuse, review/fix control, performance receipts, and
 visual projections.
@@ -194,6 +244,9 @@ The following sources are the evidence base for the table and the changes below:
 | PERF-018 | Cache and selected-test savings are accepted only with reproducibility checks, complete-key validation, miss/flake classification, and a configured sentinel/full-closure cadence. |
 
 ### 3.3 Starter performance envelope
+
+These are the original controller-candidate bounds, not the proposed R0 routine profile. Its critique,
+confirmation and deep-dive counters are deliberately not carried into the lightweight path (§1.2).
 
 Policy values must ultimately be calibrated from fleet telemetry. The values below are proposed starting
 points, not a complete deployable envelope. PB0 must supply every missing absolute cap, unit, observation
@@ -582,6 +635,10 @@ validation establish the declared boundary; sentinels detect drift. Bazel docume
 
 ### 7.1 Review as bounded information acquisition
 
+This subsection retains the controller candidate under its existing ADR-0079 obligations. The proposed
+lightweight owner-review path in §1.2 does not inherit this separate fresh-critique/confirmation lifecycle;
+changing the real current requirement still requires policy adoption.
+
 Review is not a ritual after every tool result. The planner selects a critique when its expected information
 can change acceptance, repair scope, fault model, or delivery risk. Routine current-head changes receive one
 consolidated fresh critique. High-risk changes may receive focused architecture, security, or formal lenses
@@ -755,6 +812,24 @@ change a routing flag or silently translate old state.
 
 ### 9.1 Required measurements
 
+For routine simplification, the September 7 proposal supplies the common accounting: model overhead
+includes planning, semantic review, coordination, delivery, telemetry maintenance and process repair; the
+objective is 10% and ceiling 20% of productive plus overhead model usage. Input plus output counts cached
+input once; priced cost, agent-active time, runner time and wall time remain separate. This is not the
+§3.3 controller runner-share metric (5%/8%), nor a conversion between tokens and compute seconds.
+
+Count intake through actual delivery, failed/cancelled attempts, shared tooling/observer maintenance and
+30-day attributed repairs. Missing usage remains explicit; quantified unknown usage uses the conservative
+bound and unquantified gaps prevent an efficiency claim. Collect automatically without per-phase agent
+turns. The R4/R5 initial comparison needs at least ten candidate and ten comparable baseline code items,
+at least 95% independently assessed usage coverage and a conservative score still within the ceiling;
+that sample is not evidence of tail percentiles or defect equivalence. Delivery fraction and total cost per
+delivered unit remain part of the result. Do not impose controller replay/receipt requirements on that
+comparison. Conversely, a routine canary does not qualify an optional controller's hard caps or p95/p99.
+
+The detailed instrumentation below applies to controller experiments where each feature is enabled.
+Observation gaps may prevent promotion; they do not invalidate an otherwise authorized native delivery.
+
 Every attempt records, with appropriate privacy and retention controls:
 
 - admission-to-plan, plan-to-dispatch, dispatch-to-first-output, and time-to-first-actionable-red;
@@ -788,6 +863,9 @@ comments, tokens consumed, and utilization are diagnostic quantities only. A pol
 raising visible activity while shifting cost to review, integration, recovery, or a later closure boundary.
 
 ### 9.2 Bureaucracy ledger
+
+The following is a controller-design inventory, not an additional routine registry. Its admission behavior
+applies only if that controller contract is separately adopted; it is not an R0–R5 implementation task.
 
 Every mandatory process element has a registry row:
 
@@ -899,7 +977,11 @@ immutable accepted predecessor contracts. Cross-repo issues are created when imp
 owning repository, narrow paths, acceptance criteria, and real `blockedBy` edges; this design document is not
 itself a substitute for those requests.
 
-**First evidence path:** PB0 → PB1 → PB2 → core PB3/PB4 → PB6 → PB7. Use one admitted routine item,
+**Routine simplification path:** follow the separately proposed R0–R5 sequence through current ownership,
+then verify real v2 carryover. It does not depend on PB1–PB8 or a hosted orchestrator.
+
+**Optional controller evidence path:** PB0 → PB1 → PB2 → core PB3/PB4 → PB6 → PB7. After PB0 establishes
+an unmet need and a bounded investment case, use one admitted controller-experiment item,
 one fixed qualified implementation route, one fresh critique phase, shared-setup batching with binary
 isolation, scoped reuse with a cold-closure override, and durable delivery/recovery. PB5 runs alongside this
 path; a canonical receipt/table export supplies initial inspection. Adaptive batching, speculative chains,
@@ -908,7 +990,10 @@ the core canary. Disabled features do not require their runtime implementation t
 
 PB0 also fixes an engineering time/resource budget for the prototype and its stop decision. If the bounded
 baseline shows no material batching opportunity, or the minimum executor cannot meet the proposed envelope,
-retain the incumbent and record the failed hypothesis instead of building the remaining optimization stack.
+retain the supported route and record the failed hypothesis instead of building the remaining optimization stack.
+The comparator includes the lightweight route once adopted; preserving the historical bureaucracy is not
+the fallback objective. No receipt-only PR, review-of-review, or synchronous usage collection is justified
+merely by placing a change in the controller research program.
 
 ### Roadmap at a glance
 
@@ -923,7 +1008,7 @@ operating-authority gate, and PB8 has a separate default-adoption decision.
 | 1. Define the kernel | PB1 → PB2 | Coordination; SDD only for missing generic tooling | Checked workflow model, compiled identities, corresponding pure reducer, policy parser, and independent verifier | Proceed only when traces correspond, every loop is bounded, and concurrent reservations cannot overspend |
 | 2. Prove one vertical slice | PB3 core + PB4 core; PB5 in parallel | Coordination | One fixed route from admission through batching, isolation, critique, repair, delivery, and durable recovery | Proceed only when the integrated failure/recovery corpus passes and unsupported optimization modes fail closed |
 | 3. Establish operational evidence | PB6 → PB7 | Coordination, then `.github` operating authority | Historical replay, simulation, live shadow comparison, and one reversible routine-work canary | Promote only with sufficient cohort evidence, no hard-property regression, and verified rollback |
-| 4. Decide the default and expand | PB8 | `.github` policy; Coordination implementation | Accepted default decision, adaptive control review, and separately qualified work classes or optimization modes | Expand one class or mode at a time; retain or remove each control from measured cost, yield, and delayed-defect evidence |
+| 4. Decide class-specific controller adoption and expand | PB8 | `.github` policy; Coordination implementation | Accepted default decision, adaptive control review, and separately qualified work classes or optimization modes | Expand one class or mode at a time; retain or remove each control from measured cost, yield, and delayed-defect evidence |
 
 The delivery increments are intentionally useful at different boundaries:
 
@@ -939,7 +1024,8 @@ The delivery increments are intentionally useful at different boundaries:
 
 ### Execution lanes and joins
 
-The critical path is PB0 → PB1 → PB2 → core PB3/PB4 integration → PB6 → PB7 → PB8. Parallel work is
+The optional controller critical path is PB0 → PB1 → PB2 → core PB3/PB4 integration → PB6 → PB7 → PB8;
+it is not a dependency of routine simplification or v2 cutover. Parallel work is
 limited to boundaries with independently reviewable outputs:
 
 - PB3 execution/recovery and PB4 review/routing can proceed in parallel after PB2. They join on the first
@@ -974,6 +1060,11 @@ state. A gate that lacks evidence stays pending. `Insufficient-data` extends onl
 observation window or retains the incumbent; it never counts as acceptance.
 
 ### PB0 — Baseline, glossary, and candidate performance envelope (`.github`)
+
+First compare the supported route and any adopted R0–R5 improvements. Separate migration-driver costs,
+ordinary current-route costs and observed ordinary v2 costs; unknown production performance remains unknown.
+Proceed to PB1 only for a named unmet need with a bounded prototype budget. Existing R2 observations may
+supply this evidence without another measurement service, phase ledger or baseline-document family.
 
 **Deliverables**
 
@@ -1168,7 +1259,8 @@ A shadow receipt alone never authorizes the first production mutation.
 **Deliverables**
 
 - Enable one low-blast-radius, reversible routine code-change class.
-- Keep the existing path as rollback and emergency operation.
+- Keep a supported path authorized in the current operating epoch for rollback and emergency operation;
+  after cutover, never restore a fenced v1 writer.
 - Promote exact model bindings and policy version for the canary cohort.
 - Verify delivery, post-merge state, telemetry retention, and rollback.
 - Run the PB0/PB6 comparison protocol, including delayed-defect follow-up, admission/refusal denominators,
@@ -1197,7 +1289,9 @@ A shadow receipt alone never authorizes the first production mutation.
 - Add the bureaucracy-ledger review and deletion workflow.
 - Expand to additional work classes one at a time.
 - Qualify optional optimization modes separately against the core baseline; retain only measured improvements.
-- Decide default eligibility through a separate accepted policy/ADR change.
+- Decide controller default eligibility only for named work classes through a separate accepted policy/ADR
+  change. Demonstrate additional value over the effective supported route and preserve R5 receiver behavior;
+  controller eligibility does not make it mandatory for all routine work.
 
 **Acceptance**
 
@@ -1337,6 +1431,10 @@ rank/deadlock checks, explicit deadlines and assumptions, supported temporal evi
 correspondence.
 
 ## 17. Definition of done
+
+This definition qualifies the optional controller and its enabled operation classes. It does not define
+completion of an ordinary PR or add prerequisites to R0–R5 or GS2. Routine simplification remains incomplete
+until its own actual v2 carryover and cohort evidence exist, even if all PB component tests pass.
 
 The core behavioral smoke test requires one real routine delivery and an isolated planted-failure change
 that exercises bounded isolation/repair or an honest terminal refusal. Both produce:
