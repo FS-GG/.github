@@ -39,21 +39,8 @@ GitHub is authoritative only for facts it can expose with sufficient identity, r
 relation, and audit semantics. Native issues/types/fields, hierarchy, dependencies, repository settings,
 rulesets, runs/checks, releases, packages, and attestations are used under that condition. FS-GG retains
 only the missing process, concurrency, evidence, and transaction semantics: claim/lease/touch-set streams,
-operation locks/elections, exact-head review and post-merge verification where the selected profile requires
-them, resumable mutation plans, epoch transitions, semantic contract compatibility, and two-feed release
-recovery.
-
-**Amended 2026-09-07 — routine development profile.** Ordinary reversible source work explicitly admitted
-by the versioned `.github` routine policy uses one accountable trusted repository writer, one continuous PR,
-base-loaded eligibility, selected automatic technical checks, exact-head binding, native merge/readback and
-asynchronous observation. It does not require a claim, independent review receipt, phase ledger, acceptance
-issue, feedback artifact, receipt-only PR or synchronous board/roadmap projection. Before `OpenV2` this is a
-v1 delivery profile only; after `OpenV2` the v2 runtime may execute it only from the exact policy/tool/receiver
-set qualified with the candidate. Missing usage prevents an efficiency claim but cannot revoke an otherwise
-valid delivery. Modeled protocol changes, GS2 unit qualification and closure, publication, deployment,
-credentials, destructive effects, migration/cutover, rollback and external contract acceptance retain their
-scoped strict controls. An unknown operation, path, policy version, required check or authority fails to the
-strict route rather than silently becoming routine.
+operation locks/elections, exact-head review and post-merge verification, resumable mutation plans, epoch
+transitions, semantic contract compatibility, and two-feed release recovery.
 
 V2 is a new-only writer. V1 remains the sole normal production authority until the protected ledger
 reaches `OpenV2`; preparation may add inert schema and read-only projections but may not enable a v2 normal
