@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work Unified Roadmap"
+  short_description: "Advance FS-GG one planned feature at a time"
+  default_prompt: "Use $work-unified-roadmap to resume or advance the FS-GG Unified Development Roadmap."
