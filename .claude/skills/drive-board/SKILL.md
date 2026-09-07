@@ -1,6 +1,6 @@
 ---
 name: drive-board
-description: Use when explicitly asked to burn down the org-wide FS-GG Coordination board. Reconcile and triage backlog first, fan out disposable repo workers through safe scheduler lanes, verify, and re-plan.
+description: Use when explicitly asked to burn down the org-wide FS-GG Coordination board. Use one-owner delivery for admitted routine items and isolated repo workers for strict items.
 ---
 
 # drive-board (FS-GG)
@@ -8,13 +8,36 @@ description: Use when explicitly asked to burn down the org-wide FS-GG Coordinat
 Burn down the org-wide Coordination board across repositories. The board is the ledger; this skill owns
 cross-repo allocation, not item implementation.
 
+## Choose each item's route before scheduling
+
+After reconciliation and triage, make an explicit route decision per candidate. Admit routine delivery
+only when the target repository has a prospective `.fsgg/routine-development.json`, the operation and
+proposed paths pass that policy, and no live claim or existing strict delivery state must be continued.
+Never infer the route from size, rank, labels, effort, or the absence of an SDD package.
+
+For an admitted routine item, assign exactly one accountable owner to run
+[pnext-item](../pnext-item/SKILL.md)'s routine route in the target repository. The owner uses one
+`routine/<item-slug>` branch and one PR; no critic or confirmation worker is dispatched. Do not require
+an issue, claim, identity, delivery-route receipt, SDD package, lifecycle ledger, feedback/cycle
+envelope, delivery receipt, metadata-`Done` write, or projection PR. Existing Coordination rows remain
+planning input only; reconciliation is asynchronous and cannot block a technically green native merge.
+Parallel routine assignments must have genuinely disjoint repository touch-sets, but do not acquire
+coordination claims solely to prove that fact.
+Before assigning the owner, search the target repository for the item's open PR. Continue one
+unambiguous routine PR; never create a second PR because Coordination projection lagged. Multiple or
+ambiguous open PRs refuse routine admission.
+
+The numbered claim/worker/critique/receipt protocol below applies only to strict items. A routine gate
+refusal, protected operation/path, or pre-existing strict state enters that protocol without weakening
+its safeguards.
+
 1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and consume its complete
    four-part result before making a scheduling decision.
 2. Run the [backlog-triage](references/backlog-triage.md) stage. Classify every relevant `Backlog`
-   row without guessing human judgement, and promote only evidenced actionable work to `Ready`. An
-   implementation row is actionable only with a current typed delivery-route receipt; inspect that
-   receipt and its SDD binding instead of inferring a route from effort, size, or prose.
-3. Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
+   row without guessing human judgement. Routine admissions enter the one-owner plan directly. Promote
+   strict actionable work to `Ready`; a strict implementation row is actionable only with a current
+   typed delivery-route receipt, whose SDD binding is inspected rather than inferred.
+3. **Strict route only.** Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
    available agent slots. **Dispatch breadth-first across repositories:** inspect each rostered repo's
    safe lanes and assign one disjoint, high-ranked lane per repo before assigning a second lane in any
    one repo. That prevents a `.github` chokepoint from consuming the whole worker pool while another
@@ -28,12 +51,12 @@ cross-repo allocation, not item implementation.
    evidence to review, not permission to merge: consolidate only rows that are genuinely one operation,
    whose resulting acceptance criteria are their explicit union. Keep merely adjacent work separate and
    record why; a shared chokepoint alone is not a shared story.
-4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
+4. **Strict route only.** Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
    [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo, one item only. Dispatch under
    [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and consolidation rule — do not
    restate or vary those numbers here; its two review slots are reserved for independent critics and an
    implementer may never fill one.
-5. Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
+5. **Strict route only.** Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
    explicit local session at driver entry. Every supplied lane snapshot must bind every lane to the
    exact Coordination project identity that produced it; pass the separate project-scoped driver
    receipt to the reporter as `--scope`, rather than trusting an identity embedded in that snapshot.
@@ -71,7 +94,7 @@ cross-repo allocation, not item implementation.
    transition names both its previous and new state (`<item>: <previous> -> <new> (<reason>)`), so a
    `Done` that passed through `review-repair:N` is visible in the line itself — read the `previous`
    state before describing a landing as an ordinary one; never paraphrase it away.
-6. Verify each worker's PR, independent-review marker and ordered round/URL/SHA chain, critic
+6. **Strict route only.** Verify each worker's PR, independent-review marker and ordered round/URL/SHA chain, critic
    independence, material finding dispositions, merge, publication/registry obligations, exact done
    stamp, released claim, and newly filed items against GitHub—not its narrative. Where the typed
    review/repair protocol surface (`scripts/fsgg-coord review --snapshot ...`) is available, its one
@@ -99,7 +122,9 @@ cross-repo allocation, not item implementation.
 9. Stop only when a fresh reconcile and backlog triage leave **no startable `Class: defect`**, and no
    live claim, unresolved repair, queued write, or actionable follow-up. `hardening` accumulates as
    ordinary backlog and is drained deliberately — it is not a reason to keep running. `decision` is
-   surfaced to a human and never dispatched. Surface deliberately parked and human-blocked backlog
+   surfaced to a human and never dispatched. A routine PR that has merged through a native closing link
+   may still await asynchronous board projection; report that lag without creating a projection-only
+   turn or blocking completion. Surface deliberately parked and human-blocked backlog
    instead of spinning or declaring it completed.
 10. **An unclassed row counts as a possible defect.** Read classes from `ready --json`'s `class` field
     *after* a `reconcile --apply` (it is the projection, current only as of the last reconcile), and
@@ -120,6 +145,6 @@ cross-repo allocation, not item implementation.
     value on an already-classed closed row is still not re-examined by this pass — that gap is unchanged
     from before #2254, and closing it would need a human or a fresh `Open` pass, not a bigger scan.
 
-Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
+For strict items, load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.
-Load [deep detail](references/deep-detail.md) only for recovery paths and extended rationale.
+For strict items, load [deep detail](references/deep-detail.md) only for recovery paths and extended rationale.

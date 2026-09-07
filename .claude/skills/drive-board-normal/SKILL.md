@@ -9,6 +9,10 @@ Run the complete canonical [drive-board](../drive-board/SKILL.md) host workflow.
 only the model routing of deployed workers; reconciliation, triage, lane selection, verification,
 engine-currency repair, and termination remain owned by `drive-board`.
 
+Inherit `drive-board`'s routine route unchanged. The table below selects the single routine owner only
+when a delegated owner is needed; it does not authorize a critic, confirmation worker, or any
+strict-route artifact.
+
 Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
 subagent spawn:
 

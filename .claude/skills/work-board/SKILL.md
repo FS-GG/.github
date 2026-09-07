@@ -1,17 +1,42 @@
 ---
 name: work-board
-description: Use when explicitly asked to burn down one coordination-wired product workspace's board. Reconcile and triage backlog first, fan out isolated item workers through disjoint lanes, verify, and re-plan.
+description: Use when explicitly asked to burn down one coordination-wired product workspace's board. Use one-owner delivery for admitted routine items and the isolated claim/review protocol for strict items.
 ---
 
 # work-board
 
 Burn down one coordination-wired workspace's board. The local board is both plan and ledger.
 
+## Choose each item's route before scheduling
+
+Reconcile and triage first, then make an explicit route decision for each candidate. Admit the routine
+route only when `.fsgg/routine-development.json` is present and prospective, the operation and proposed
+paths pass its boundary, and no live claim or existing strict delivery state must be continued. Do not
+infer routine eligibility from size, rank, labels, or effort, and do not create a receipt merely to
+authorize the reduced route.
+
+For an admitted routine item, use the installed `pnext-item` skill's routine route. One accountable
+owner completes one `routine/<item-slug>` branch and one PR. The host may remain that owner; use one
+delegated owner only when isolation or useful parallel capacity requires it. No issue creation, claim,
+worker identity, SDD package, lifecycle ledger, independent critic, feedback/cycle envelope, delivery
+receipt, metadata-`Done` write, or projection PR is part of routine delivery. Existing board rows remain
+useful planning input, but their projection is asynchronous and cannot block a technically green native
+merge. Default to one routine item at a time; parallel routine items still require actually disjoint
+touch-sets, but not claim or review ceremony.
+Before creating the branch, search for the item's open PR. Continue one unambiguous routine PR under the
+accountable owner; never create a second PR because board projection lagged. Multiple or ambiguous open
+PRs refuse routine admission.
+
+The numbered claim/worker/critique/receipt protocol below applies only to strict items. A routine gate
+refusal, protected operation/path, or pre-existing strict state enters that protocol without weakening
+its safeguards.
+
 1. Reconcile the workspace and consume the complete four-part `check-board` result.
 2. Run [backlog-triage](references/backlog-triage.md), classifying every relevant parked row without
-   guessing human judgement and promoting only evidenced actionable work to `Ready`.
-3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
-4. Spawn workers under [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and
+   guessing human judgement. Routine admissions enter the one-owner plan directly; promote strict
+   actionable work to `Ready` for the typed scheduler.
+3. **Strict route only.** Compute local disjoint lanes and bounded concurrency through the normal scheduler.
+4. **Strict route only.** Spawn workers under [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and
    consolidation rule — do not restate or vary those numbers here; its two review slots are reserved for
    independent critics and an implementer may never fill one. Give each worker a stable feedback cycle
    id. Each owns one item through claim, implementation, critique and up to three repair/review rounds,
@@ -31,7 +56,7 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    fresh-read and inspect again. Multiple ready units require an explicit operator
    parallel authorization and recorded disjoint touch-sets; otherwise schedule one. Missing receipts,
    evidence paths, or a stale source/head fail closed.
-5. Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
+5. **Strict route only.** Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
    explicit local session at driver entry. On every material transition — and on an unchanged
    heartbeat — pass its stable receipt as the trigger plus the already-cached lane snapshot; do not
    perform a compensating GitHub read merely to print. Emit the reporter's rich projection when the
@@ -63,7 +88,7 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    transition names both its previous and new state (`<item>: <previous> -> <new> (<reason>)`), so a
    `Done` that passed through `review-repair:N` is visible in the line itself — read the `previous`
    state before describing a landing as an ordinary one; never paraphrase it away.
-6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
+6. **Strict route only.** Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
    Where the typed review/repair protocol surface (`scripts/fsgg-coord review --snapshot ...`) is
    available, its one current state/action is a mechanical cross-check on the same chain — never a
@@ -78,13 +103,15 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
-   plan while each item worker consumes its current agent-authored delivery-route receipt. The fixed
+   plan while each strict item worker consumes its current agent-authored delivery-route receipt. The fixed
    checklist is evidence only: it never derives a simple/complex or lightweight/SDD route.
 8. Stop only when a fresh reconciliation and triage leave **no startable `Class: defect`**, no other
    actionable or untriaged work, no live claim, unresolved repair or queued write, and every completed
    cycle is covered by a validated workspace feedback roll-up. `hardening` accumulates as ordinary
    backlog and is drained deliberately — it is not a reason to keep running; `decision` is surfaced to a
-   human and never dispatched. **An unclassed row counts as a possible defect**, not a minor one: its
+   human and never dispatched. A routine PR that has merged through a native closing link may still be
+   waiting for asynchronous board projection; report that lag, but do not create a projection-only turn
+   or block completion on it. **An unclassed row counts as a possible defect**, not a minor one: its
    severity is unknown. Read classes from `scripts/fsgg-coord ready --repo <this-repo> --json`'s `class`
    field *after* a `reconcile --apply` (that column is a projection, current only as of the last
    reconcile), and `lint`'s `CLASS-UNSET` for the rows that column cannot speak for; the authority is the
@@ -107,8 +134,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    scan. This bound is engine behaviour, not a board-scope difference: it holds identically for a
    workspace board and the org board.
 
-Load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
+For strict items, load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
 [workspace-scope](references/workspace-scope.md) for the single-repository ledger rules.
-Load [feedback-contract](references/feedback-contract.md) for worker activation, exact validation
+For strict items, load [feedback-contract](references/feedback-contract.md) for worker activation, exact validation
 commands, zero-event representation, host acceptance, and board termination.
-Load [deep detail](references/deep-detail.md) only for recovery paths and extended rationale.
+For strict items, load [deep detail](references/deep-detail.md) only for recovery paths and extended rationale.

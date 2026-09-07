@@ -19,14 +19,19 @@ For every board-capable wave, in this order:
 2. Read the current inventory with
    `scripts/fsgg-coord ready --repo <this-repo> --status Backlog --json`. Read each relevant issue and
    its comments; discard any inventory captured before the preceding worker wave.
-3. Give every row exactly one classification below. Apply only evidence-supported board writes, then
-   verify them with another fresh workspace read.
-4. Only then size a maximal disjoint Ready wave with
+3. Give every row exactly one classification below and explicitly select routine or strict for each
+   actionable row under the base skill's policy boundary. Routine admissions enter the one-owner plan
+   without a board write. Apply only evidence-supported strict-route board writes, then verify them with
+   another fresh workspace read.
+4. Only then size a maximal disjoint Ready wave for strict items with
    `scripts/fsgg-coord batch --repo <this-repo> -n <cap> --json`. Each isolated worker mints its own
    identity and runs bare `scripts/fsgg-coord take --repo <this-repo> --json`. Never hand-pick Backlog
    items or use `--include-backlog` to bypass triage.
 
-## Feedback and audit content disposition
+## Strict-route feedback and audit content disposition
+
+This section applies only when the plan contains strict items. A routine-only pass does not create a
+planning receipt or content-disposition artifact; ordinary intake observations remain non-blocking.
 
 Before declaring triage fresh, record every feedback or audit intake in the authoritative content-intake
 inventory and record exactly one typed content-disposition for each entry.
@@ -45,13 +50,16 @@ fixture, include the negative/mutation case that proves the gate can fail.
 
 ### Promote to Ready
 
-Promote with `scripts/fsgg-coord set-field <ref> Status Ready` only when live evidence says the issue is
+An explicitly admitted routine item does not need promotion, `batch`, or `take`; its owner uses the
+existing issue's native PR closing link and lets reconciliation project the merge asynchronously.
+
+For strict work, promote with `scripts/fsgg-coord set-field <ref> Status Ready` only when live evidence says the issue is
 open, implementable now, has a valid declared touch-set, has no unresolved implementation dependency,
 has no active claim or PR, and requires no human choice. Re-read the row before counting it in a wave.
 
-Promotion changes eligibility, not assignment. The item enters the normal single-repo `batch`/`take`
+Promotion changes eligibility, not assignment. A strict item enters the normal single-repo `batch`/`take`
 collision boundary, which remains responsible for selecting a touch-set-disjoint set. Every promoted
-item still runs inside the existing pnext-item envelope: a current agent-authored delivery-route receipt
+strict item still runs inside the existing pnext-item envelope: a current agent-authored delivery-route receipt
 selects lightweight or SDD-required delivery, and the worker finalizes the schema-v2 development-feedback report
 before its PR.
 
@@ -124,9 +132,11 @@ does not answer. Carry the exact question and source evidence into the wave repo
 
 ## Fresh follow-ups and termination
 
-After workers finish, verify their PR, independent-review evidence and material-only filing, done stamp,
-claim release, pending writes, and schema-v2 feedback,
-then discard the old inventory. Run the complete workspace reconcile pass again and re-read Backlog
+After owners finish, discard the old inventory. For routine items, verify only the exact-head required
+checks, native PR merge/readback, and native issue-closing link; independent review, done stamp, claim
+release, and schema-v2 feedback are not routine gates. For strict workers, verify their PR,
+independent-review evidence and material-only filing, done stamp, claim release, pending writes, and
+schema-v2 feedback. Run the complete workspace reconcile pass again and re-read Backlog
 before sizing another wave. A follow-up filed by the preceding wave is classified immediately:
 actionable work is promoted and becomes eligible for the next disjoint `batch`/`take`; parked or
 ambiguous work is reported.

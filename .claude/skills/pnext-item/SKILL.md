@@ -1,15 +1,56 @@
 ---
 name: pnext-item
-description: Use when a worker should claim the next schedulable item in one FS-GG repository and carry it through implementation, review, green merge, post-merge obligations, and a verified done stamp.
+description: Use when an owner should complete one schedulable item in an FS-GG repository, using the reduced one-owner route for explicitly admitted routine work and the claim/review/done protocol for strict work.
 ---
 
 # pnext-item (FS-GG)
 
-Run exactly one item from claim through verified done. The protocol is
-[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md); this is the worker state machine.
+Run exactly one item through its explicitly selected delivery route. Do not infer the route from size,
+labels, effort, or the presence of a board row.
 
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
+
+## Choose the route before lifecycle work
+
+Use the routine route only when the accountable board host explicitly admits the item, the repository's
+`.fsgg/routine-development.json` is present and prospective, and the proposed operation and changed paths
+pass that policy's routine boundary. A live claim, an existing strict delivery state, a protected
+operation, a protected path, or a missing policy keeps the item on the strict route. Never edit an item
+or policy merely to make it routine.
+
+For an admitted routine item, the board is an asynchronous view rather than merge authority:
+
+1. Keep one accountable owner at a time and one continuous PR. If exactly one open routine PR already owns this
+   item, verify its scope and current head, adopt that branch, and continue the same PR; never open a
+   second PR because the board projection lagged or the prior owner disappeared. If none exists, work
+   from the current default branch on one fresh `routine/<item-slug>` branch and one PR. Multiple or
+   ambiguous candidate PRs refuse routine admission. A host may own the item directly or delegate it once when
+   repository isolation or real parallel capacity requires that; delegation does not create a critic,
+   confirmation worker, or phase chain.
+2. Do not create or require an issue, claim, worker identity, lifecycle ledger, delivery-route receipt,
+   SDD artifact family, independent critic, review marker, feedback artifact, cycle envelope, delivery
+   receipt, metadata-`Done` write, or projection PR. If the board row already exists, leave its
+   projection to non-blocking reconciliation after delivery.
+3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
+   the repository's routine eligibility and protected-boundary checks. Put exactly one
+   `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
+   the PR body. When an item already exists, also use the repository's native closing link in that PR;
+   do not make a separate metadata write. A moved head must be reviewed and rebound. A routine refusal reclassifies the work to
+   strict; it never authorizes weakening or bypassing the gate.
+4. Repair on the same PR, normally within two material attempts. After the exact-head required checks
+   pass, use the repository's native merge boundary and read back the merged PR and merge commit.
+   Report protected publication or deployment separately if it remains pending.
+5. Return the merged evidence to the host and stop. Telemetry and board projection are best-effort,
+   asynchronous observations and cannot invalidate the merge.
+
+The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
+or done-stamp sections below for that item.
+
+## Strict item state machine
+
+The rest of this skill is the strict protocol. Its concurrency authority is
+[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).
 
 ## Lifecycle ledger
 
