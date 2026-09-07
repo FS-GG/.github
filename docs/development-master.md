@@ -17,6 +17,11 @@ Start here to understand how the development programmes fit together. Use the
 owns the detailed snapshot and evidence qualifications; this document owns the synthesis. Neither is a
 second source of completion receipts or dispatch state.
 
+For the proposed continuation after simplification, read
+[After simplification: unified v2 development design and roadmap](2026-09-07-154210-post-simplification-v2-development-design-and-roadmap.md).
+It consolidates the remaining v2 work, process selection by work class and operating epoch, governance,
+receiver carryover and conditional PB/OR development. It changes no current execution contract or authority.
+
 ## 1. Current plan
 
 **The current plan is v2 migration and development simplification, with the OR orchestration and PB
