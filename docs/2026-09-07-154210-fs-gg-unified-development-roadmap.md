@@ -34,6 +34,9 @@ For the operating model, start with [process selection](#4-which-development-pro
 For sequencing, use the [unified roadmap](#9-unified-roadmap-from-the-current-v2-frontier) and
 [GS2 integration map](#10-exact-gs2-integration-and-contract-change-boundaries). Sections 1–2 establish
 the evidence; sections 14–15 account for every active source track and the wider proposal inventory.
+For the client orchestrator that connects to a project master and receives jobs, see
+[cooperative orchestrators](#85-cooperative-orchestrators-a-project-master-assigns-jobs-to-contributor-clients)
+and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
 ## 1. Starting point and the simplification handoff
 
@@ -734,9 +737,65 @@ actual operator question. Enabled charts, graphs and exports still require acces
 partial/stale states, secure content handling, canonical identities and bounded rendering cost; rendering
 state can never authorize a retry or effect.
 
+### 8.5 Cooperative orchestrators: a project master assigns jobs to contributor clients
+
+**Retain the cooperative feature:** a user's client orchestrator connects outward to a project master
+orchestrator, offers bounded capacity, accepts jobs, supervises local agents and returns contributions.
+The original OR design calls this
+[federated cooperative orchestrators](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md#8a-federated-cooperative-orchestrators--proposed-extension).
+It remains a later conditional capability in this unified design. Its user journey and development stages
+belong here; the source section retains the detailed protocol, threat model and qualification catalogue.
+
+“Master” means the orchestrator accountable for one project's assignments and delivery. Client and master
+are roles in a relationship: the same installation may own its projects and contribute to several other
+masters. A contributor initiates an outbound connection, so participating does not require exposing an
+inbound public service. Each side retains its own state, policy and local resource limits.
+
+| Component | Responsibility |
+|---|---|
+| Project master / project-owner orchestrator | Offers and selects jobs, retains external claims and current generations, chooses verification policy, accepts a candidate and performs protected delivery |
+| Client / contributor orchestrator | Enrolls approved masters, advertises capacity, admits jobs under local policy, reserves resources, supervises sandboxed agents and submits results |
+| Owner-controlled verification service | Independently checks the submitted candidate in suitable isolation; supplies evidence to the master without acquiring a second delivery-authority role |
+
+The normal user journey is:
+
+1. Enroll the identified master and agree project/data scope, availability, cost, model/tool permissions
+   and eligible job classes. Both sides approve the relationship. Local policy can preauthorize job
+   classes, so ordinary assignment admission does not need a fresh human prompt for each job.
+2. Connect and advertise available capacity. The master offers a job; the client accepts or declines
+   within its own limits. An offer alone does not authorize execution or project mutation.
+3. Receive and durably acknowledge a bounded assignment tied to the project, intended client, exact
+   baseline, allowed scope, current generation/epoch, budget and expiry. The master retains the external
+   claim; the client receives no ambient project GitHub or release credentials.
+4. Execute through the shared bounded component and local agents. Return the candidate, artifacts and
+   attributed observations with their assignment identity. Remote progress, submission, verification,
+   acceptance and actual delivery remain distinct visible states.
+5. The master quarantines the submission and obtains owner-controlled verification. It selects a valid
+   candidate and delivers through the ordinary protected path, then reports the observed outcome.
+
+Reconnects and lost acknowledgments resume by stable assignment/attempt identity. Duplicate submissions
+must not create duplicate delivery; late results from revoked or reassigned generations cannot authorize
+new effects. Disconnect, pause, cancel and revoke retain their separate recovery meanings. Neither side's
+timeout erases an unresolved external operation or renews a budget.
+
+Both sides treat incoming project code, instructions and artifacts as untrusted. Client-signed test
+reports are claims, not independent proof that tests ran or passed. The verifier protects its own policy,
+credentials and caches from submitted code. Enrollment does not grant access to unrelated local projects,
+host credentials or private telemetry. Onward delegation, anonymous contributors and payments stay outside
+the first enrolled-peer mode. A narrow versioned application protocol connects peers; they do not join
+one actor cluster or share a journal. The source proposes SignalR transport; F0 owns the final protocol
+and identity selections rather than silently fixing a second runtime in this consolidation.
+
+Use the same scheduling, bounded execution and observation components as E1. Account for transfer,
+administrative waiting, verification capacity, integration, recovery and maintenance when judging benefit.
+Useful test execution retains section 7.4's exclusion from bureaucracy. Client-reported usage remains
+explicitly classified and cannot certify the 10% ceiling merely because it is signed. Comprehensive logs
+join both sides by assignment while retaining disclosure boundaries; verification and recovery capacity
+must be reserved so more clients do not merely lengthen the master's queue.
+
 ## 9. Unified roadmap from the current v2 frontier
 
-The stages below consolidate outcomes and joins. They are not instructions to create nine new epics.
+The stages below consolidate outcomes and joins. They are not instructions to create new epics.
 Reuse existing GS2 and predecessor ownership; map an accepted OR/PB experiment into one owning work item
 when funded. No stage acquires mutable completion checkboxes in this document.
 
@@ -751,6 +810,7 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 | **V6 — Observe, complete carryover and contract v1** | GS2-14; R5 cohort and receiver retirement | Ordinary repair under v2, protected contraction and existing Q10 | 0/7/14/30-day readings, required operational gates, deletion/clean-install proof; R5 efficiency claimed separately only when its own evidence passes |
 | **E0 — Test one residual execution hypothesis** | Shared OR H0/H1 and PB0 investment decision | Bounded research/prototype | Measured unmet need, chosen experiment, comparison protocol, investment/stop limits; stop is an acceptable result |
 | **E1 — Qualify and optionally adopt one shared execution capability** | Shared PB kernel/executor and relevant OR hosting/scheduling scope | Modeled implementation, shadow, separately authorized canary and receiver qualification | One operation class satisfies safety, useful delivery, budget/recovery and comparative-value claims; default decision and unsupported modes explicit |
+| **F0–F5 — Cooperative clients receive jobs from a project master** | Retained OR §8A feature, using E1 foundations; see section 9.7 | Protocol modeling, enrolled read-only sessions, sandbox lab, independent verification shadow, separately authorized canary and measured adoption | An enrolled client can receive and execute a bounded job; the master can reject fabricated/stale submissions and independently verify and deliver a valid contribution through reconnect/restart |
 
 ### 9.1 Dependencies and parallelism
 
@@ -772,6 +832,12 @@ flowchart TD
     Operating --> Canary[Class-specific mutation canary]
     E1 --> Canary
     Canary --> Adopt[E1 Evidence-based adoption decision]
+    E0 -. optional cooperative research .-> F0[F0 Cooperative protocol and scope]
+    F0 --> FPrep[F1-F3 Sessions, contribution lab and verification shadow]
+    E1 -. qualified session and execution foundations .-> FPrep
+    FPrep --> FCanary[F4 Enrolled-peer contribution canary]
+    Operating --> FCanary
+    FCanary --> F5[F5 Measured cooperative adoption]
     V5 -. ordinary-v2 measurement .-> R5[R5 carryover evidence]
     V6 -. operational observations .-> R5
 ```
@@ -887,6 +953,37 @@ executor does not prequalify every plugin or model. Stronger model selection fol
 and observed work-class risk; escalation cost belongs to the original attempt. Parallel workers require
 independent bounded tasks, disjoint or correctly synchronized resources, an integrator and bounded joins.
 
+### 9.7 F0–F5: cooperative orchestrator development
+
+This track implements the client/master feature in section 8.5. It is retained future scope, conditional
+on the demonstrated need and qualified foundations; it is not a prerequisite for simplification or v2
+cutover. The original F0–F5 identifiers remain the traceability keys, with no competing milestone series.
+
+| Stage | Entry and development process | Deliverable and exit |
+|---|---|---|
+| **F0 — Define the cooperative protocol and scope** | Alongside E0 / OR H0–H1 when this is the selected need; bounded research and Quint protocol modeling before stateful implementation | Owner/client responsibilities, admission and disclosure rules, assignment/revocation model, identity and artifact-transport choices, verification isolation and full cost model |
+| **F1 — Connect enrolled clients to a master** | After the authenticated session foundations corresponding to H2 are qualified in E1; interface implementation and adversarial session tests | Bilateral enrollment, outbound connection, capacity offers, job offers, reconnect and tenant isolation; read-only sessions with no project execution or delivery |
+| **F2 — Execute jobs in a sandbox laboratory** | After bounded execution foundations corresponding to H3; modeled lifecycle implementation and runtime correspondence | Explicit bounded assignments, local agent supervision, synthetic/public fixtures, submissions and quarantine; a fabricated client report cannot self-certify success |
+| **F3 — Independently verify contributions in shadow** | Alongside qualified H4–H5 durability/verification foundations; replay, adversarial tests and observational comparison | Master-controlled checks, exact candidate bindings, retained evidence, restart/revocation/reassignment recovery and measured transfer/verification bottlenecks; no production delivery |
+| **F4 — Run one cooperative contribution canary** | No earlier than H6 eligibility and OperatingV2 under the existing default; separately authorized protected operation | One enrolled peer, project and work class; immediate revocation, owner-selected candidate, independently verified result and observed ordinary protected delivery |
+| **F5 — Adopt measured cooperative contribution** | After the bounded canary and a sufficient comparison; explicit class/default decision | Supported operation and recovery ownership, accepted data/cost/SLO bounds and logging; expand only proven work classes, with additional trust or delegation qualified separately |
+
+Read-only F0 research can precede v2 completion. F1–F3 depend on the specific E1 foundations named above,
+not completion of every optional optimizer, dashboard or hosting feature. The graph summarizes those
+joins; this table retains their distinct entry conditions. The F4 canary does not gain authorization from
+a green F3 shadow run or from a local E1 canary in a different work class.
+
+The first complete demonstration is recognizable to a user: connect the client, receive a job, run local
+agents, reconnect after interruption, submit a valid contribution and observe the master's independently
+verified delivery. Companion negative cases include a forged result, wrong project/candidate binding,
+duplicate submission, revoked assignment and exhausted verification quota. Their outcomes remain refusal,
+pending recovery or bounded retry as appropriate; none manufactures success from client claims.
+
+The owning implementation selects remaining protocol/library versions, key custody, artifact retention
+and isolation through F0 rather than treating this prose as a published schema. Detailed requirements
+remain in [OR §8A](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md#8a-federated-cooperative-orchestrators--proposed-extension).
+That source supplies protocol depth; this unified roadmap owns the feature's place in the overall sequence.
+
 ## 10. Exact GS2 integration and contract-change boundaries
 
 | Existing surface | Proposed integration | Required handling |
@@ -939,6 +1036,8 @@ a mandatory checklist repeated for every ordinary PR.
 | Clean and upgraded receivers invoke different guidance | Profile qualification fails until effective behavior agrees | V3/V6 and E1 adoption |
 | Old helper/client attempts a write after OpenV2 | Refuses before effect for independently observed fencing reason | V5/V6 |
 | Optional scheduler unavailable | Supported same-epoch routine path remains usable; unresolved effects stay with recovery owner | E1 canary |
+| Cooperative client reconnects after a lost acknowledgment | Resume the same bounded assignment; valid verified contribution can reach one observed delivery | F1–F4 |
+| Cooperative client submits forged evidence or a revoked generation | Client claim cannot satisfy independent verification or authorize delivery; preserve the refusal and original attempt cost | F2–F4 |
 | Duplicate release identity has different bytes | Refusal; no automatic new version to hide mismatch | Inherited release behavior, V4 applicable journey |
 
 ## 12. Risks, stop conditions and operating ownership
@@ -1004,7 +1103,7 @@ by this documentation merge.
 | OR H2–H5 | E1 only when host/durable behavior is justified; one authenticated host, shared executor, verified plans and effect recovery |
 | OR H6/H7 | Class-specific mutation canary and separately decided normal service use after OperatingV2 by default; preserve supported routine path |
 | OR H8 | Availability expansion only if measured single-node recovery is insufficient |
-| OR F0–F5 federation | Deferred; retain bilateral admission, generation-bound assignments, hostile-code verification, credential isolation, quotas, revocation and result provenance before enabling any stage |
+| OR F0–F5 federation / cooperative client and master orchestrators | Explicit retained feature in section 8.5 and staged track in section 9.7; later conditional implementation with bilateral admission, generation-bound assignments, hostile-code verification, credential isolation, quotas, revocation and result provenance |
 | OR visualization catalogue | Optional question-driven views; retain identity, accessibility, privacy, truthfulness and bounded rendering for every shipped view |
 | [PB0](coordination/2026-09-06-performance-bounded-development-flow-design-and-roadmap.md) | Share E0 baseline with the completed predecessor; no second measurement service |
 | PB1/PB2 | E1's small canonical workflow, reducer, independent verifier and atomic reservation contract, only if the experiment needs them |
