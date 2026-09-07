@@ -2665,6 +2665,40 @@ The architecture is ready for normal-writer consideration only when:
 
 ## 20. Alternatives considered
 
+### Akka.NET as an investment in system evolution
+
+The strongest argument for Akka.NET is the lifetime cost of an evolving execution system. A bespoke
+implementation may be smaller or more efficient for a fixed workload, while a common runtime model can
+reduce the cumulative implementation and reasoning cost of successive lifecycle changes. Akka.NET's
+[actor abstraction](https://getakka.net/articles/concepts/actors.html) combines private state, message
+handling, identity, lifecycle, children and supervision. This gives new capabilities a shared vocabulary
+for ownership and failure handling. It is a runtime building block; an LLM agent's context, tools,
+permissions and execution protocol remain application responsibilities.
+
+This argument has concrete support in the proposed topology: durable work items and sessions coexist with
+transient attempts, mutation lanes and resumable operations. Their lifecycle needs already interact.
+Persistence, reliable delivery and streams offer established extension mechanisms within the same ecosystem,
+potentially avoiding a growing collection of custom recovery and coordination conventions. Team familiarity
+can make extensions and reviews more predictable, and keeping pure policy outside actors preserves domain
+testability as runtime capabilities expand.
+
+The benefit is conditional. Local state ownership simplifies local reasoning, but interactions between
+actors still need protocols for races, cancellation and partial failure. Persistence needs event schemas,
+storage configuration, upgrade compatibility and recovery testing; reliable delivery and streams need
+explicit integration. Ordinary messages are at-most-once, and these extensions do not remove external
+fencing, idempotency, reconciliation or authorization obligations. Framework learning, operational ownership
+and coupling are upfront and continuing costs. A disciplined bespoke implementation may remain simpler when
+its workload and failure model stay narrow.
+
+“Dynamic” therefore matters in a specific sense: growth in independently stateful entities, lifecycle
+variants, concurrent interactions and failure policies strengthens the actor case. Adding mostly sequential
+durable business-workflow steps may favour a workflow engine; changing prompts or model providers alone
+does little to justify actors. Future capability breadth is an option whose value depends on likely use,
+not evidence that clustering or other deferred mechanisms should be adopted now. Akka.NET remains preferred
+because the proposed system already has interacting lifecycle needs and plausible extensions along those
+dimensions, subject to the bounded runtime comparison below. This rationale changes no accepted authority,
+production permission or required qualification evidence.
+
 ### Workflow-first runtime compared with Akka.NET
 
 Akka.NET remains the preferred candidate for actor-local state and supervision, but the runtime decision
@@ -2679,6 +2713,12 @@ extended downtime. Compare implementation effort, operational footprint, debuggi
 F# integration and remaining custom recovery code. Neither candidate gets credit for guaranteeing an external
 effect it cannot atomically control. Select on this evidence before candidate-specific persistence work;
 do not implement two production runtimes or delay the domain baseline for an exhaustive platform survey.
+
+To evaluate the evolution argument, a useful extension of that comparison would measure cost of change as
+well as cost of the first implementation. After the common baseline, add one credible requirement, such as
+concurrent child attempts with cancellation and recovery, and compare the additional code, concepts,
+operational burden and failure cases. This would test whether the shared abstraction makes an expected
+change cheaper to implement and reason about, rather than awarding value merely for a longer feature list.
 
 ### Start with the actor runtime and add optimization later
 
