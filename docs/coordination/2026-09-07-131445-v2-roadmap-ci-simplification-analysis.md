@@ -2,18 +2,18 @@
 title: "Analysis: Integrate radical CI simplification into the v2 migration roadmap"
 category: Design
 categoryindex: 4
-description: "A proposed integration of routine CI simplification, event coalescing, receiver carryover and measured outcomes, with accepted migration contracts and roadmap pins preserved."
+description: "Analysis for the accepted integration of routine CI simplification, event coalescing, receiver carryover and measured outcomes, with migration contracts and roadmap pins preserved."
 ---
 
 # Analysis: Integrate radical CI simplification into the v2 migration roadmap
 
-Authored: **2026-09-07 13:14:45 UTC**. Status: **analysis and prospective amendment**.
+Authored: **2026-09-07 13:14:45 UTC**. Status: **analysis; its disposition is accepted prospectively in the canonical roadmap**.
 
-The accompanying [roadmap section 12](../github-substrate-v2-roadmap.md#12-prospective-amendment-radical-ci-simplification-and-ordinary-v2-carryover)
-incorporates the concrete proposed integration. Existing executable GS2 headings, unit bodies, accepted
-histories, prerequisites and exit gates remain unchanged. This is neither adoption of a relaxed policy nor
-an assertion that the ordinary v2 path is available. It prepares the decisions and acceptance examples that
-must be reconciled with governing policy, producer contracts and receiver pins before execution changes.
+The accompanying [roadmap section 12](../github-substrate-v2-roadmap.md#12-accepted-amendment-routine-development-simplification-and-ordinary-v2-carryover)
+incorporates the accepted prospective integration. Existing executable GS2 headings, unit states, accepted
+histories, prerequisites and exit gates remain unchanged. Acceptance does not enable the ordinary v2 path or
+change the operating epoch. The named requirements must still be reconciled with owning producer contracts,
+candidate qualification and receiver pins before execution changes.
 
 ## 1. Findings and evidence boundary
 
