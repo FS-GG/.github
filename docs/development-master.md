@@ -18,7 +18,9 @@ owns the detailed snapshot and evidence qualifications; this document owns the s
 second source of completion receipts or dispatch state.
 
 For the proposed continuation after simplification, read
-[After simplification: unified v2 development design and roadmap](2026-09-07-154210-post-simplification-v2-development-design-and-roadmap.md).
+[FS-GG Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md)
+(short name: **Unified Roadmap**). Unqualified references to **“the roadmap”** in FS-GG development
+discussions mean this consolidated document unless another roadmap is explicitly named.
 It consolidates the remaining v2 work, process selection by work class and operating epoch, governance,
 receiver carryover and conditional PB/OR development. It changes no current execution contract or authority.
 
