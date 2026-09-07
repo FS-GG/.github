@@ -1,0 +1,31 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-5-projection",
+  "milestone": "GS2-07.5 — Merge-group support roadmap projection",
+  "critic": "Dalton (/root/gs2_07_5_projection_critic; thread 01a07971-554e-7700-bdae-8359579fdb5f)",
+  "initial_reviewed_commit": "c196f0665db6ff4fb98aad8bbeef539228fa0797",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "pass",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "c196f0665db6ff4fb98aad8bbeef539228fa0797"
+  ],
+  "findings": [],
+  "confirmation": {
+    "reviewed_commit": "c196f0665db6ff4fb98aad8bbeef539228fa0797",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
