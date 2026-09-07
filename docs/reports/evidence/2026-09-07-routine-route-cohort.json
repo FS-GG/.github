@@ -1,11 +1,13 @@
 {
   "schema": "fsgg.routine-cohort-observation/1",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-07T22:09:27Z",
+  "asOf": "2026-09-07T22:25:22Z",
   "targetPerArm": 10,
   "selection": {
     "routine": "The next ten eligible ordinary reversible code requests admitted by the shared routine policy after this declaration, excluding roadmap-bootstrap and protected-operation work.",
-    "baseline": "Ten pre-activation code items meeting the same path and operation exclusions, matched where practical and reported as observational when unmatched.",
+    "baseline": "The ten most recently merged pre-activation code items that meet the routine route's current path and operation exclusions. Qualification-only fixtures are excluded. This historical arm is observational and remains unmatched until the routine arm is selected.",
+    "baselineCutoff": "2026-09-07T14:09:16Z",
+    "baselineOrdering": "mergedAt descending, then repository and pull-request number ascending",
     "outcomesKnownAtRoutineSelection": false
   },
   "providerPopulation": {
@@ -46,7 +48,222 @@
         ]
       },
       "disposition": "No unit was selected; the predeclared next-ten rule remains in force."
+    },
+    {
+      "observedAt": "2026-09-07T22:25:22Z",
+      "query": "org:FS-GG is:pr is:merged merged:2026-08-11T16:03:32Z..2026-09-07T14:09:15Z",
+      "mergedPullRequests": 808,
+      "eligibleHistoricalBaselineItems": 10,
+      "method": "Enumerate the bounded organization-wide population, order by authoritative merge time, reject prose-only work, dependency adoption, qualification-only fixtures, current protected paths and work whose purpose was a protected operation, then retain the first ten code items.",
+      "operationExclusionsBeforeCutoff": {
+        "qualificationOnly": [
+          "FS.GG.SDD#925"
+        ],
+        "protectedReleaseOrRecovery": [
+          "FS.GG.Governance#421",
+          "FS.GG.Templates#437"
+        ],
+        "externalContractAdoption": [
+          "FS.GG.Audio#256",
+          "FS.GG.Game#600",
+          "FS.GG.SDD#867"
+        ]
+      },
+      "selected": [
+        "FS.GG.Templates#448",
+        "FS.GG.SDD#943",
+        "FS.GG.Templates#431",
+        "FS.GG.Templates#419",
+        "FS.GG.Templates#430",
+        "FS.GG.SDD#896",
+        "FS.GG.Rendering#1251",
+        "FS.GG.SDD#875",
+        "FS.GG.Rendering#1244",
+        "FS.GG.SDD#858"
+      ],
+      "disposition": "The historical arm is fixed at ten delivered units. Whole-unit usage was not retained for these legacy sessions, so every baseline usage value is explicitly unbounded and no efficiency claim is possible from this arm as recorded."
     }
   ],
-  "units": []
+  "units": [
+    {
+      "id": "FS.GG.Templates#448",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-09-02T10:57:06Z",
+      "mergeCommit": "fd6a97cb49cb19212f0f4e60e73ef37ecfed6539",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/448",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.SDD#943",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-30T07:41:07Z",
+      "mergeCommit": "88d2be0b2d83bed3398480edab1545a7b99fae88",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/943",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.Templates#431",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-25T06:26:07Z",
+      "mergeCommit": "79d70b8252fe99678d00314072cd40079b367c0e",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/431",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.Templates#419",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-24T02:21:02Z",
+      "mergeCommit": "c93573449fd85b732c19d0a3b147dce61158185c",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/419",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.Templates#430",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-23T16:26:21Z",
+      "mergeCommit": "aac493439c924d2162901ff7d78075fbf0d32f7e",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/430",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.SDD#896",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-23T02:11:13Z",
+      "mergeCommit": "a0dfc2ffbbb06bf817932401f8aa1ef86c5f4005",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/896",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.Rendering#1251",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-20T13:05:13Z",
+      "mergeCommit": "8a253eb8452e3184257235684a36edfd808431ab",
+      "url": "https://github.com/FS-GG/FS.GG.Rendering/pull/1251",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.SDD#875",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-16T11:48:35Z",
+      "mergeCommit": "2342ca3982d28085634b5cb7a067553f7f384b98",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/875",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.Rendering#1244",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-16T11:14:11Z",
+      "mergeCommit": "219b198dda7dfa9ad4ce234d57dff6e0299aeaec",
+      "url": "https://github.com/FS-GG/FS.GG.Rendering/pull/1244",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    },
+    {
+      "id": "FS.GG.SDD#858",
+      "arm": "baseline",
+      "kind": "code",
+      "eligible": true,
+      "delivery": "delivered",
+      "deliveredAt": "2026-08-11T16:03:32Z",
+      "mergeCommit": "9b2e86e0ce1433bbe607b55b8a10cabb2d970171",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/858",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-07T22:25:22Z"
+      }
+    }
+  ]
 }
