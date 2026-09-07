@@ -40,7 +40,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.4 accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.5 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1286,8 +1286,29 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   The strict terminal/reconciled lifecycle completed at revision 30 with digest
   `ff409f5421578f9a0ed87202bf298ab24bb9c2cdcdfa57ce469149b78b925970`; exact-main Bootstrap run
   `34043739110` and CodeQL run `34043738634` succeeded, and #310 read back closed/Done.
-- [ ] **GS2-07.5 — Merge-group support.** Ensure every aggregate required check runs on merge groups and
+- [x] **GS2-07.5 — Merge-group support.** Ensure every aggregate required check runs on merge groups and
   re-evaluates temporal claim, review, head, dependency, and release obligations.
+
+  Coordination [issue 315](https://github.com/FS-GG/FS.GG.Coordination/issues/315) and implementation
+  [PR 316](https://github.com/FS-GG/FS.GG.Coordination/pull/316) accepted merge-group execution for every
+  aggregate required check, with temporal claim, review, head, dependency, and release-obligation
+  re-evaluation at candidate `75373222ccfe50ab73313805f8496edde1dcf482`, protected-merged as
+  `9cf69344a84ca45b90a45775e486a0c1e6a2611f`. Acceptance
+  [PR 317](https://github.com/FS-GG/FS.GG.Coordination/pull/317) merged the indexed
+  [receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/4072c24f9abeb85d64349c7866ec6d4995aff53f/evidence/github-substrate-v2/accepted/GS2-07.5.json)
+  as `4072c24f9abeb85d64349c7866ec6d4995aff53f`, with canonical digest
+  `dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8`.
+
+  Recovery openly used the authorized, non-reconstructing
+  [synthetic checkpoint](https://github.com/FS-GG/FS.GG.Coordination/blob/4072c24f9abeb85d64349c7866ec6d4995aff53f/evidence/github-substrate-v2/synthetic-checkpoints/GS2-07.5.json)
+  with digest `4b49aacf93960dfd4bf865715e2318e35670548131540906747113e9d1c607c1` and trusted
+  lifecycle anchor `70dbae3361e2f765bf295ead17ba981ad268e57eefd2146eda135e794eaf66d6`;
+  missing provenance was declared unnecessary and no missing data was reconstructed. The validated
+  [schema-v3 critique](https://github.com/FS-GG/FS.GG.Coordination/blob/4072c24f9abeb85d64349c7866ec6d4995aff53f/reviews/roadmap/roadmap-github-substrate-v2-m7-gs2-07-5-merge-group-support.json)
+  has digest `1f932878662302036e70648dd24b9c1dadd23a74085d771991727fa92d69e829`.
+  The strict terminal/reconciled lifecycle completed at revision 34 with digest
+  `f3d391bef2793bcbd37ed8c8202166ba06b0c89f39ca584a8a8a44129a3622c8`; exact-main Bootstrap run
+  `34071019843` and CodeQL run `34071019547` succeeded, and #315 read back closed/Done.
 - [ ] **GS2-07.6 — Queue sandbox/pilot.** Exercise queue admission, base movement, check growth, expiry,
   failure recovery, and rollback in a low-volume isolated or representative repository before fleet enablement.
 - [ ] **GS2-07.7 — Measure event benefit.** Record latency, dropped-event repair, API cost, schedule count,
