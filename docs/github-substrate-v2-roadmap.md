@@ -38,6 +38,11 @@ and rationale.
 > the affected GS2-02 contracts; GS2-03.7 subsequently accepted the repaired candidate supply chain. The
 > architecture amendment is therefore enforced rather than an outstanding blocker.
 
+> **Prospective CI simplification integration — 2026-09-07:** [Section 12](#12-prospective-amendment-radical-ci-simplification-and-ordinary-v2-carryover)
+> records the proposed routine-profile, receiver, canary and measurement amendments, with the supporting
+> [analysis](coordination/2026-09-07-131445-v2-roadmap-ci-simplification-analysis.md). It changes no current
+> unit contract, accepted evidence, dispatch state or operating authority; adoption and pinning are explicit.
+
 | Field | Value |
 |---|---|
 | Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.5 accepted; GS2-01.9 not applicable |
@@ -1654,3 +1659,129 @@ evidence that either definition holds.
 - A newly discovered requirement is recorded even if the vocabulary is missing. It blocks the affected
   transition until the specification is extended; discovery itself is never suppressed.
 - The “Ongoing renovations” website notice remains until `GS2-14.5` and the 30-day Q10 gate are accepted.
+
+## 12. Prospective amendment: radical CI simplification and ordinary v2 carryover
+
+Status: **proposed integration design, not an accepted change to GS2 contracts or dispatch**.
+The [analysis and disposition](coordination/2026-09-07-131445-v2-roadmap-ci-simplification-analysis.md)
+compares the [radical development proposal](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md)
+with the current roadmap. This section incorporates the recommended changes for a future accepted
+amendment. Sections 1–11, all unit IDs/titles/states, accepted histories, prerequisites and exit gates retain
+their current meaning. No row below is an executable unit, acceptance receipt, policy exception or approval.
+
+### 12.1 Decide obligation scope before changing selection
+
+GS2-06.7 establishes sound selection over a declared obligation graph, stable aggregates and explicit
+NotApplicable outcomes. The radical proposal also removes obligations and permits simpler routine
+selection with a deliberately lower guarantee. Automation and guarantee reduction are different decisions.
+
+The recommended sequence is to remove proven duplicate or diagnostic obligations from the approved routine
+policy, preserve cheap automatic subject-based reuse, then measure the resulting path. Adopt a simpler
+path/project selector only if its remaining cost justifies that further policy change and its accepted
+coverage/recovery tradeoff is explicit. No mutable label, skip flag or candidate-edited classification can
+remove an obligation. Until a replacement is accepted, GS2-06.7's soundness, unknown-impact refusal and
+sentinel response remain authoritative; its accepted receipt is not rewritten to describe a new policy.
+
+A future amendment would distinguish ordinary development, modeled protocol changes and protected
+operations through the common published policy. It would not classify all GS2 work as routine or require a
+new policy registry. Formal-input changes, comprehensive GS2 parent closure, freeze, release, cutover,
+rollback authority and OpenV2 retain their accepted qualification. Removing an agent handoff does not remove
+Quint authority, current implementation correspondence, typed effect plans or external fencing.
+
+### 12.2 Proposed integration by existing unit
+
+The following is the concrete amendment scope to reconcile with the owning versioned unit contracts before
+it is used for execution. It proposes additions or scoped distinctions, not the silent deletion of existing
+acceptance cases. Already registered work needs explicit owner disposition; a new requirement is not
+retroactively attributed to its old receipt.
+
+| Existing surface | Proposed amendment | Evidence or disposition before claiming it |
+|---|---|---|
+| §1 execution/evidence and GS2-05.6 delivery semantics | Distinguish migration qualification from ordinary source delivery; retain automatic records where useful and remove only adopted caller ceremony | Map native merge, technical checks, journal authority and publication state; a merge alone does not qualify a GS2 unit |
+| GS2-06.7 CI policy | Record retained, removed and asynchronous obligations for the chosen routine profile, plus the explicit selection guarantee and fallback scope | Accepted policy/model change where necessary, corresponding aggregate/settings behavior and real receiver selection cases; preserve the original accepted record |
+| GS2-07.6 queue pilot | Add bursts of PR edits, superseded hints, unrelated routine PRs, source/base movement and required-check identity changes | Bound work and waiting attributable to the burst; no unsafe cancellation of in-flight effects, missing required context or stale-green authorization |
+| GS2-07.7 event benefit | Measure narrow reconciliation, coalescing, audit repair and queue isolation by subject | Lost hints eventually repair; distinct subjects and non-coalescible commands are preserved; full audits do not become universal routine merge dependencies |
+| GS2-10.1 candidate freeze | Bind the approved routine-policy version, selected obligation/aggregate set, driver/tool identities and intended receiver classes | Identify whether the profile is enabled in this candidate or explicitly deferred; an unimplemented proposal is not frozen as supported behavior |
+| GS2-10.5 receiver preparation | Prepare exact pins, required contexts, generated guidance and configuration for the selected profile | Installed clean/upgrade receiver cases show the effective policy; no hidden legacy validator or phase/receipt requirement contradicts the profile |
+| GS2-12.7 closed-fleet canaries | Add a routine-profile example beside the comprehensive protocol journey, in the isolated cutover environment | Same-PR repair, absent usage and delayed views preserve correct delivery facts; no ordinary production writes are opened early |
+| GS2-12.8 failure matrix | Cover self-edited eligibility, omitted or stale required checks, wrong policy pins, lost/duplicated hints and unavailable observers | Missing technical/authority evidence refuses its action; missing telemetry cannot certify efficiency and does not become a merge authorizer |
+| GS2-13.3 real journey | Exercise an actual low-risk ordinary change under the enabled profile as well as the required protocol capabilities | One owner/PR and selected checks where adopted; native code delivery distinct from publication pending; required protocol cases remain covered separately or in the same valid journey |
+| GS2-14.1/14.2 operational readings | Add whole-unit model overhead, absolute cost per delivered unit, delivered fraction, unknown coverage and attributed repairs | Common definitions across immediate and 7/14/30-day readings; ordinary v2 measured independently of migration-driver history |
+| GS2-14.5–14.9 deletion and documentation | Include obsolete routine caller instructions, required contexts and receipt/projection-only work in the adopted profile's retirement inventory | Inspect published clean/upgrade receiver behavior; retain forensic history and still-required automatic protocol evidence |
+| GS2-14.10 deferred programmes | Carry pending profile/default work with an explicit owner and target receiver population | Resume under the authorized current epoch; do not claim a pre-cutover pilot establishes post-adoption defaults |
+
+### 12.3 Make asynchronous reconciliation precise
+
+Native PR/check/merge state can establish source-delivery facts under the adopted policy. A delayed board,
+roadmap or usage projection must not independently revoke that fact. Missing required CI, an unknown merge
+outcome, unverified publication or absent mutation authority remains a technical/recovery condition, not an
+observer failure. Keep code-delivered, publication-pending and derived-status-stale distinguishable.
+
+A future event policy may coalesce hints for the same subject and re-observe fresh state before planning.
+It may not discard distinct-subject work, semantic journal events, approval changes or non-idempotent
+commands merely because a newer event arrived. Safe coalescing of pending hints is different from cancelling
+an effect already applying. Preserve the shared external write authority and scheduled full-audit recovery;
+do not split writing concurrency groups simply to shorten the queue. For ordinary merge, any retained
+required check should establish a named technical or authority predicate rather than wait for a full board
+scan. Changes to actual workflow triggers and required contexts belong to their owning policy implementation.
+
+Proposed qualification examples are a burst of edits on one PR followed by an unrelated routine PR; duplicate
+and dropped hints across two subjects; observer outage during valid delivery; source or policy drift during
+merge readiness; and a protected operation racing with coalesced observations. Declare event count, queue
+age, API/runner cost, detection/repair delay and delivery outcome. A fixed numerical bound comes from the
+candidate's measured workload and policy, not from the historical migration-token percentage.
+
+### 12.4 Carryover, performance and operating-epoch decisions
+
+R5 carryover needs actual ordinary v2 execution and the effective published receiver guidance. Source
+adapters, generated fixtures, a current-v1 pilot or one comprehensive migration journey cannot substitute.
+The example set includes an ordinary code PR, same-PR source repair, unrelated base advance under the chosen
+native policy, usage loss, delayed projections, an applicable supported PR-less operation, clean/upgrade
+receivers and protected-route refusal. Reuse existing generic evidence only when its subject covers the
+receiver. No engine or template must build an unsupported operation solely to produce an artificial example.
+
+Functional correctness of a profile claimed by the frozen candidate belongs in that candidate's receiver
+and canary qualification. The proposed 10% model-overhead objective/20% ceiling is a separately measured
+efficiency claim. Record productive work P, overhead O, O/(P+O), absolute costs, delivered fraction and
+cancelled attempts; include planning, review, coordination, delivery, shared-flow maintenance and 30-day
+attributed repairs. Input/output tokens, priced cost, runner time, active time and wall time remain separate.
+
+Missing quantified usage U uses the conservative bound (O+U)/(P+O+U); unquantified gaps mean insufficient
+measurement. The radical proposal's initial comparison uses at least ten candidate and ten comparable
+baseline code items, at least 95% independently assessed usage coverage and a conservative bound within the
+ceiling. This is not p95/p99 or rare-defect equivalence evidence. Keep every over-budget item visible; do not
+improve the score by routing expensive work out of the accounting population.
+
+Recommended gate disposition: absent efficiency evidence blocks a simplification-success claim, not
+OpenV2 or OperatingV2 solely by this proposal. Existing Q10 SLOs and gates still apply. Making the new
+numerical ceiling an additional migration gate requires an explicit accepted amendment with its cohort,
+minimum coverage, stop rule and owner. A profile that fails its required functional/safety claims is a
+different case and cannot be represented as qualified merely because its overhead is low.
+
+If a routine profile is adopted before GS2-10, qualify and freeze its actual published artifacts. If it is
+not ready, explicitly defer it or mint a new candidate through the existing full requalification route;
+never modify a frozen candidate in place. Workspace-default changes deferred until OperatingV2 remain so.
+A later default/profile adoption starts its own applicable receiver and repair observation; earlier Q10
+readings do not magically cover users who only receive it afterward. R4 current-route completion and R5
+ordinary-v2 completion remain separate, with pending work owned rather than counted as delivered.
+
+### 12.5 Adoption order and roadmap identity
+
+The recommended implementation order is: decide policy/guarantee scope; amend the governing design/ADR
+where needed; publish affected producer contracts and runtime behavior; update receiver guidance/settings;
+reconcile the named GS2 unit contracts/catalog and exact roadmap pin; qualify the candidate through its
+existing boundaries; and measure real enabled operation. Preserve accepted historical receipts and
+explicitly identify any superseded contract for future candidates. Optional OR/PB work is not a prerequisite.
+
+Classify proposed changes against §2's restricted v1-engine scope as well as the future v2 surface. Removing
+shared-driver instructions is not automatically a permissible v1-engine feature change. A helper that changes
+v1 protocol meaning needs the relevant governing decision; calling it native delivery does not evade that
+boundary. `.github` owns policy/current supported delivery, Coordination owns v2 semantics, SDD owns its
+producer boundaries, and receiver owners verify effective installed behavior.
+
+The current roadmap/index protocol pins an exact Git revision and full-file digest. Adding this prospective
+section changes those bytes even though executable headings, unit bodies and acceptance history are
+unchanged. Existing consumers continue to resolve their exact previously pinned revision. They must not
+pair that old catalog digest with current-main bytes. Future adoption requires the normal reviewed pin
+refresh; a unit-contract change additionally needs its own contract/evidence disposition. This prose landing
+does not update a receiver pin, force an active worker to restart or claim the proposed profile is executable.
