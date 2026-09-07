@@ -9,6 +9,11 @@ Run the complete canonical [work-board](../work-board/SKILL.md) host workflow. T
 only the model routing of deployed workers; workspace checks, triage, lane selection, feedback,
 verification, and termination remain owned by `work-board`.
 
+Inherit `work-board`'s routine route unchanged. A routine item may remain with the accountable host and
+never requires a dispatch; if isolation or useful parallel capacity calls for one delegated routine
+owner, the table below selects that owner's model. It does not authorize a critic, confirmation worker,
+or any strict-route artifact.
+
 Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
 subagent spawn:
 

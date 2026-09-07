@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-07** — **coordination coherent set `github:0.86.0` source prepared**
+  (owner github; [PR #3330](https://github.com/FS-GG/.github/pull/3330)):
+  advances the source frontier from 0.85.2 to 0.86.0 for the reduced routine-development route.
+  Packaged roadmap and board drivers plus `pnext-item` use one accountable owner and one PR for
+  explicitly admitted routine, reversible source work while protected operations and non-routine
+  items retain the strict route. The published frontier remains 0.85.2 until this exact accepted
+  merge is single-packed and promoted through the release saga.
+
 - **2026-09-07** — **coordination coherent set `github:0.85.2` published; registry reconciliation**
   ([.github#3289](https://github.com/FS-GG/.github/issues/3289), source
   [.github#3286](https://github.com/FS-GG/.github/issues/3286), release execution

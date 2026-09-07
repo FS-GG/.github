@@ -14,13 +14,18 @@ For every wave, in this order:
 2. Read the current Backlog inventory with
    `scripts/fsgg-coord ready --status Backlog --json`. Read each relevant issue and its comments; do not
    reuse the inventory captured before the preceding worker wave.
-3. Give every row exactly one classification below. Apply only evidence-supported board writes, then
-   verify them with a fresh read.
-4. Only now size Ready lanes with `scripts/fsgg-coord batch --repo <repo> -n <cap> --json`. Workers run
+3. Give every row exactly one classification below and explicitly select routine or strict for each
+   actionable row under the base skill's policy boundary. Routine admissions enter the one-owner plan
+   without a board write. Apply only evidence-supported strict-route board writes, then verify them with
+   a fresh read.
+4. Only now size strict Ready lanes with `scripts/fsgg-coord batch --repo <repo> -n <cap> --json`. Strict workers run
    bare `scripts/fsgg-coord take --repo <repo> --json`; never pass them item numbers and never use
    `--include-backlog` to skip this phase.
 
-## Feedback and audit content disposition
+## Strict-route feedback and audit content disposition
+
+This section applies only when the plan contains strict items. A routine-only pass does not create a
+planning receipt or content-disposition artifact; ordinary intake observations remain non-blocking.
 
 Before declaring triage fresh, record every feedback or audit intake in the authoritative content-intake
 inventory and record exactly one typed content-disposition for each entry.
@@ -39,10 +44,13 @@ fixture, include the negative/mutation case that proves the gate can fail.
 
 ### Promote to Ready
 
-Promote with `scripts/fsgg-coord set-field <ref> Status Ready` only when live evidence says the issue is
+An explicitly admitted routine item does not need promotion, `batch`, or `take`; its owner uses the
+existing issue's native PR closing link and lets reconciliation project the merge asynchronously.
+
+For strict work, promote with `scripts/fsgg-coord set-field <ref> Status Ready` only when live evidence says the issue is
 open, implementable now, has a valid declared touch-set, has no unresolved implementation dependency,
 has no active claim or PR, and requires no human choice. Re-read the row before counting it in a wave.
-Promotion exposes the item to normal repo-directed `batch`/`take`; it does not assign it to a worker.
+Strict promotion exposes the item to normal repo-directed `batch`/`take`; it does not assign it to a worker.
 
 ### Retain in Backlog
 
@@ -110,9 +118,11 @@ mechanical-versus-human boundary.
 
 ## Wave-to-wave behavior
 
-After workers finish, discard the old inventory. Verify their results and independent-review evidence,
-including that every new review-discovered row is material and no nonmaterial observation was filed.
-Run the complete reconcile pass
+After owners finish, discard the old inventory. For routine items, verify only the exact-head required
+checks, native PR merge/readback, and native issue-closing link; independent review, claim, done, and
+feedback evidence are not routine gates. For strict workers, verify results and independent-review
+evidence, including that every new review-discovered row is material and no nonmaterial observation was
+filed. Run the complete reconcile pass
 again, and re-read Backlog before sizing another wave. A follow-up filed by the preceding wave is
 therefore classified immediately: actionable work is promoted and becomes eligible for the next
 repo-directed `batch`/`take`; parked or ambiguous work is reported.
