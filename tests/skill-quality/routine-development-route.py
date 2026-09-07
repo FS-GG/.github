@@ -52,7 +52,10 @@ for name in (
 
 gate = (ROOT / "scripts/check-claim-generation.py").read_text()
 workflow = (ROOT / ".github/workflows/coherence.yml").read_text()
+routine_workflow = (ROOT / ".github/workflows/routine-eligibility.yml").read_text()
 require("evaluate_routine" in gate and "ROUTINE_NOT_REQUIRED" in gate, "required check does not enforce routine policy")
-require('--base-sha "$BASE_SHA"' in workflow, "required workflow does not bind routine base/head")
-require('git show "$BASE_SHA:scripts/check-claim-generation.py"' in workflow, "workflow does not execute the trusted-base gate")
+require('--routine-policy-ref' not in workflow, "candidate-controlled coherence workflow still decides routine eligibility")
+for phrase in ("pull_request_target:", "contents: read", 'show "$BASE_SHA:scripts/check-claim-generation.py"', "bash tests/routine-eligibility/run.sh"):
+    require(phrase in routine_workflow, f"trusted routine workflow omitted {phrase!r}")
+require("actions/checkout" not in routine_workflow and "GITHUB_TOKEN" not in routine_workflow, "trusted routine workflow can execute candidate bytes or exposes a token")
 print("PASS  routine development route: policy, required gate, strict boundary, ADRs, roadmap, and twins agree")

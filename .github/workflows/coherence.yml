@@ -285,8 +285,6 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/setup-policy-python
 
       - name: Run the claim-generation fixture (no network)
@@ -301,49 +299,38 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "$PR_BODY" > pr-body.md
-          # Eligibility authority comes from the target commit, never from executable
-          # Python in the candidate being judged. Keep its one local dependency beside it.
-          trusted_gate="$RUNNER_TEMP/fsgg-claim-generation-base"
-          mkdir -p "$trusted_gate/lib"
-          git show "$BASE_SHA:scripts/check-claim-generation.py" > "$trusted_gate/check-claim-generation.py"
-          git show "$BASE_SHA:scripts/lib/gate.py" > "$trusted_gate/lib/gate.py"
           rc=0
-          out="$(python "$trusted_gate/check-claim-generation.py" \
-                   --repo "${{ github.repository }}" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" \
-                   --routine-policy-ref "$BASE_SHA" \
+          out="$(python scripts/check-claim-generation.py \
+                   --repo "${{ github.repository }}" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
                    --body pr-body.md 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
       # One named step per exit code — "I could not check" must never be mistaken for "I checked, and
       # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
-      - name: 'OK: strict authorization is current, routine exact-head policy passes, or this PR uses neither route'
+      - name: 'OK: authorization is current, or this PR does not deliver a board item'
         if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
         run: |
           echo "claim-generation: OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 'FINDING: strict authorization or routine exact-head/protected-boundary requirement failed'
+      - name: 'FINDING: missing, stale, expired, or mismatched claim-generation authorization'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         run: |
           {
-            echo "### claim-generation: strict claim authorization or routine-delivery eligibility failed"
+            echo "### claim-generation: this PR's authorization does not name the current live claim"
             echo
             echo 'See the job log above for which of the four — missing, stale, expired, or mismatched'
             echo '— and why. This check is REQUIRED on `main` (.github#1858 armed it), so this red BLOCKS'
             echo 'the merge; see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker'
             echo 'a PR body needs to carry, and `pnext-item` §6 for the `delivery` call that writes it.'
-            echo 'For a `routine/*` branch, see `.fsgg/routine-development.json` and the exact-head'
-            echo '`fsgg:routine-development/v1` marker; routine work reads no issue or claim state.'
-            echo
             echo '`[expired]` is the one that is NOT a lost race (.github#2656): the claim marker is'
             echo 'still there and still names its holder, and the lease simply ran out. `heartbeat`'
             echo 'renews the SAME generation, and this check goes green again without re-authorizing.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=claim-generation: strict authorization or routine eligibility failed::See the job log for which, and why."
+          echo "::error title=claim-generation: authorization is missing, stale, expired, or mismatched::See the job log for which, and why."
           exit 1
 
       - name: 'NO VERDICT (retryable): the live claim state could not be read'

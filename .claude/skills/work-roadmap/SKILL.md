@@ -25,12 +25,16 @@ For an eligible `routine` milestone:
    independent critic, feedback report, telemetry/receipt cycle, roadmap cycle envelope, receipt-only
    or projection PR, or metadata-`Done` write. Independent review is optional or sampled and never a
    second authority. Best-effort telemetry is asynchronous and cannot block valid delivery.
-3. Run the smallest relevant automated technical checks. Before opening the PR, run the existing
-   `claim-generation` fixture; it now includes routine admission and negative controls. Put exactly one
+3. Run the smallest relevant automated technical checks. Before opening the PR, run the routine
+   eligibility and protected-boundary fixtures. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
-   the PR body. The already-required `claim-generation` check validates the policy, exact base/head,
-   operation, and changed paths without reading board, issue, claim, SDD, review, feedback, or Done
-   state. A moved head refuses until the owner reviews the delta and rebinds the marker.
+   the PR body. The distinct `routine-eligibility` context is defined by a default-branch
+   `pull_request_target` workflow and loads its validator and policy from the exact PR base; it never
+   checks out or executes candidate bytes. It validates exact base/head, operation, and changed paths
+   without reading board, issue, claim, SDD, review, feedback, or Done state. Candidate-controlled
+   `claim-generation` remains only the strict item gate and treats routine branches as not applicable.
+   Until branch protection is armed after observation, the pilot owner must still require the reported
+   `routine-eligibility` success. A moved head refuses until the owner reviews the delta and rebinds the marker.
 4. Repair on the same PR, normally in no more than two material attempts. After required checks pass
    for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
    and merge commit. Report code delivery separately from any protected publication still pending.

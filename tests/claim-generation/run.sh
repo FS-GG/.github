@@ -201,7 +201,10 @@ REF="item/2342-fence-merges"
 # =============================================================================================
 W0="$WORK/w0"
 expect "non-item branch: OK, nothing to fence" \
-  0 "neither a strict item-delivery branch nor a routine delivery branch" "$W0" "$REPO" "chore/bump-deps" "$HEAD_SHA" ""
+  0 "not a strict item-delivery branch" "$W0" "$REPO" "chore/bump-deps" "$HEAD_SHA" ""
+
+expect "routine branch: candidate-controlled strict context is not routine authority" \
+  0 "separate trusted context" "$W0" "$REPO" "routine/example" "$HEAD_SHA" ""
 
 # =============================================================================================
 # R0. ROUTINE DEVELOPMENT — no GitHub/board/issue/claim read, exact-head + protected boundary.
