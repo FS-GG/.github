@@ -202,8 +202,8 @@ Old high-assurance items with live grants or indeterminate destructive effects s
 
 Roadmap ledger:
 
-- [ ] R0 — Adopt the smaller contract.
-- [ ] R1 — Implement one-owner, one-PR delivery.
+- [x] R0 — Adopt the smaller contract. Delivered by [`.github` PR #3320](https://github.com/FS-GG/.github/pull/3320): the prospective trusted-writer policy, base-loaded exact-head eligibility gate, protected-operation boundary, shared driver route and generated guidance landed together.
+- [x] R1 — Implement one-owner, one-PR delivery. This routine PR adds the bounded native merge/readback path and exercises successful readback, ambiguous-write readback before one retry, changed-head refusal, and distinct code-delivered/publication-pending status without an issue, claim, phase ledger, critic, acceptance receipt or projection PR.
 - [ ] R2 — Fix economics reporting and make telemetry non-blocking.
 - [ ] R3 — Simplify release, registry and recovery paths.
 - [ ] R4 — Measure the current route and retire obsolete ceremony.
