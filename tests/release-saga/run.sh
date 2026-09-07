@@ -108,6 +108,77 @@ if python3 "$TOOL" assert-identity --manifest "$WORK/manifest.json" --release-id
   echo "expected source identity mismatch to fail closed" >&2; exit 1
 fi
 
+# Execute the protected entry point's inspection step against a promoted-release fixture. The
+# manifest's artifact paths are local filenames, exactly as release-saga-prepare writes them before
+# uploading the coherent-set assets. A replay must download those bytes and finish without starting
+# preparation or publishers; a wrong source or one changed package must still refuse.
+START_REPLAY="$WORK/start-replay"
+mkdir -p "$START_REPLAY/assets" "$START_REPLAY/bin"
+cp "$WORK/artifacts/"*.nupkg "$START_REPLAY/assets/"
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$START_REPLAY/assets" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --output "$START_REPLAY/assets/release-manifest.json" >/dev/null
+python3 - "$ROOT/.github/workflows/release-saga-start.yml" "$START_REPLAY/inspect.sh" <<'PY'
+import pathlib, sys, yaml
+workflow = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text())
+for step in workflow["jobs"]["inspect"]["steps"]:
+    if isinstance(step, dict) and step.get("id") == "state":
+        pathlib.Path(sys.argv[2]).write_text("#!/usr/bin/env bash\n" + step["run"])
+        break
+else:
+    raise SystemExit("release-saga-start inspect state step is missing")
+PY
+cat > "$START_REPLAY/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' 9.8.7
+SH
+cat > "$START_REPLAY/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  "release view") printf '%s\n' '{"isDraft":false}' ;;
+  "release download")
+    target=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --dir ]; then shift; target="$1"; break; fi
+      shift
+    done
+    test -n "$target"
+    mkdir -p "$target"
+    cp "$FAKE_RELEASE_ASSETS/release-manifest.json" "$FAKE_RELEASE_ASSETS/"*.nupkg "$target/"
+    ;;
+  *) echo "unexpected fake gh call: $*" >&2; exit 2 ;;
+esac
+SH
+chmod +x "$START_REPLAY/bin/dotnet" "$START_REPLAY/bin/gh" "$START_REPLAY/inspect.sh"
+: > "$START_REPLAY/output"
+PATH="$START_REPLAY/bin:$PATH" GITHUB_REPOSITORY=example/repo \
+  SOURCE_SHA=0123456789012345678901234567890123456789 GH_TOKEN=fixture \
+  GITHUB_OUTPUT="$START_REPLAY/output" FAKE_RELEASE_ASSETS="$START_REPLAY/assets" \
+  bash "$START_REPLAY/inspect.sh"
+grep -Fx 'action=complete' "$START_REPLAY/output" >/dev/null
+if PATH="$START_REPLAY/bin:$PATH" GITHUB_REPOSITORY=example/repo \
+  SOURCE_SHA=ffffffffffffffffffffffffffffffffffffffff GH_TOKEN=fixture \
+  GITHUB_OUTPUT="$START_REPLAY/wrong-source-output" FAKE_RELEASE_ASSETS="$START_REPLAY/assets" \
+  bash "$START_REPLAY/inspect.sh" >"$START_REPLAY/wrong-source.log" 2>&1; then
+  echo "expected promoted replay from the wrong source to fail closed" >&2; exit 1
+fi
+grep -F 'manifest identity mismatch' "$START_REPLAY/wrong-source.log" >/dev/null
+cp "$START_REPLAY/assets/FS.GG.Kit.9.8.7.nupkg" "$START_REPLAY/kit.good"
+printf 'drift' >> "$START_REPLAY/assets/FS.GG.Kit.9.8.7.nupkg"
+if PATH="$START_REPLAY/bin:$PATH" GITHUB_REPOSITORY=example/repo \
+  SOURCE_SHA=0123456789012345678901234567890123456789 GH_TOKEN=fixture \
+  GITHUB_OUTPUT="$START_REPLAY/byte-drift-output" FAKE_RELEASE_ASSETS="$START_REPLAY/assets" \
+  bash "$START_REPLAY/inspect.sh" >"$START_REPLAY/byte-drift.log" 2>&1; then
+  echo "expected promoted replay with changed package bytes to fail closed" >&2; exit 1
+fi
+grep -F 'byte drift for FS.GG.Kit' "$START_REPLAY/byte-drift.log" >/dev/null
+mv "$START_REPLAY/kit.good" "$START_REPLAY/assets/FS.GG.Kit.9.8.7.nupkg"
+echo "promoted saga replay: exact source completed; wrong source and byte drift refused"
+
 # GitHub accepts the first package, then the publisher dies.  The failure is durable, and a
 # restarted process uses the same manifest and exact package bytes rather than packing again.
 cp "$WORK/artifacts/FS.GG.Coord.Cli.9.8.7.nupkg" "$WORK/github/"
@@ -329,6 +400,14 @@ def start_topology_problems(doc):
             problems.append(f"publisher start predicate omits {clause}")
     if "release-saga.py assert-identity" not in start or "action=resume" not in start:
         problems.append("stored-draft recovery is not manifest-bound")
+    inspect_run = "\n".join(
+        str(step.get("run", "")) for step in inspect_job.get("steps", []) if isinstance(step, dict)
+    )
+    package_download = inspect_run.find('--pattern "*.nupkg"')
+    identity_assertion = inspect_run.find("release-saga.py assert-identity")
+    complete_action = inspect_run.find('echo "action=complete"')
+    if not (0 <= package_download < identity_assertion < complete_action):
+        problems.append("promoted replay does not verify downloaded manifest-bound package bytes before completion")
     if "dotnet pack" in start:
         problems.append("operator entry point re-packs during durable-state recovery")
     return problems
@@ -340,6 +419,14 @@ assert start_topology_problems(decoupled) == [
     "publisher start predicate omits action == 'resume'",
     "publisher start predicate omits needs.prepare.result == 'success'",
 ], "removing fresh-success and recovery clauses did not turn the topology proof red"
+manifest_only = copy.deepcopy(start_doc)
+manifest_only_inspect = manifest_only["jobs"]["inspect"]["steps"]
+for step in manifest_only_inspect:
+    if isinstance(step, dict) and "gh release download" in str(step.get("run", "")):
+        step["run"] = step["run"].replace('--pattern "*.nupkg" ', "")
+assert start_topology_problems(manifest_only) == [
+    "promoted replay does not verify downloaded manifest-bound package bytes before completion",
+], "manifest-only promoted replay did not turn the protected topology proof red"
 for token in (
     "git push --atomic origin",
     'gh workflow run "$workflow"',

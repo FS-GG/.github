@@ -51,8 +51,11 @@ jobs:
 
           work="$(mktemp -d)"
           trap 'rm -rf "$work"' EXIT
+          # Identity verification is deliberately also a byte-identity verification. The manifest's
+          # package paths are relative to its directory, so every manifest-bound package must be
+          # present even when the release is already promoted and this run will only return complete.
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
-            --pattern release-manifest.json --dir "$work"
+            --pattern release-manifest.json --pattern "*.nupkg" --dir "$work"
           python3 scripts/release-saga.py assert-identity \
             --manifest "$work/release-manifest.json" --release-id "github:$version" \
             --version "$version" --source-sha "$SOURCE_SHA" --policy-version release-saga/1
