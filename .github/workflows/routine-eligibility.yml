@@ -29,14 +29,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          case "$HEAD_REF" in
-            routine/*) ;;
-            *)
-              echo "routine-eligibility: not applicable to non-routine branch $HEAD_REF"
-              exit 0
-              ;;
-          esac
-
           case "$PR_NUMBER" in
             ''|*[!0-9]*) echo "routine-eligibility: invalid PR number" >&2; exit 1 ;;
           esac
@@ -60,6 +52,26 @@ jobs:
             echo "routine-eligibility: fetched head $observed_head differs from event head $HEAD_SHA" >&2
             exit 1
           }
+
+          # The fixture is also loaded from the exact base. This literal command
+          # keeps the repository's deterministic test selector wired without ever
+          # running a candidate-side test script or workflow definition.
+          selftest="$RUNNER_TEMP/routine-eligibility-selftest"
+          mkdir -p "$selftest/.github/workflows" "$selftest/tests/routine-eligibility"
+          git -C "$inspect" show "$BASE_SHA:.github/workflows/routine-eligibility.yml" > \
+            "$selftest/.github/workflows/routine-eligibility.yml"
+          git -C "$inspect" show "$BASE_SHA:tests/routine-eligibility/run.sh" > \
+            "$selftest/tests/routine-eligibility/run.sh"
+          cd "$selftest"
+          bash tests/routine-eligibility/run.sh
+
+          case "$HEAD_REF" in
+            routine/*) ;;
+            *)
+              echo "routine-eligibility: not applicable to non-routine branch $HEAD_REF"
+              exit 0
+              ;;
+          esac
 
           # Both executable files come from the exact PR base. The candidate can
           # replace or delete either path without influencing this invocation.
