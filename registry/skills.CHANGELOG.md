@@ -34,6 +34,11 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-07** — RECONCILE (`publishing-and-deployment`; .github#3289,
+  producer PR #3291): the 0.85.2 registry/runtime-pin reconciliation changed the producer skill body;
+  `fsgg-skill-registry-check --write` reconciled its canonical digest from the current `.github`
+  driver manifest (`b9c014e3…` → `89729aae…`). registry = manifest = bytes.
+
 - **2026-09-06** — RECONCILE (`work-roadmap`, `publishing-and-deployment`; .github#3280,
   PR #3283): the 0.85.1 source and registry reconciliation changed the two producer skill bodies;
   `fsgg-skill-registry-check --write` reconciled their canonical digests from the current `.github`
