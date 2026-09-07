@@ -24,6 +24,7 @@ process, actor, timer, or database lease to authorize an external mutation by it
 | Status | Proposed architecture; records direction and implementation preparation, not production authorization |
 | Authored | 2026-08-31 11:48 CEST (09:48 UTC) |
 | Revised | 2026-09-01 — recentered on an OR-first closed-loop controller; hardened authority, cutover sequencing, determinism, claim ordering, crash consistency, and runner boundaries; and added the SVG/dashboard visualization architecture |
+| Federation extension | 2026-09-07 — added proposed peer contribution, assignment-bound receipts, independent verification, bilateral isolation, and staged qualification in §8A; no production permission or existing contract is changed |
 | Scope | Agent creation and communication, deterministic planning, GitHub mediation, persistence, authentication, supervision, liveness, availability, observability, and staged adoption |
 | Preserves | GitHub-native multi-host coordination, typed transition checks, Git-ref fencing, exact-head evidence, durable receipts, and scheduled reconciliation |
 | Builds on | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0053](../adr/0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md), [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0078](../adr/0078-github-substrate-v2-new-only-coordination-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), and the [remaining-v2 architecture review](2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md) |
@@ -1116,6 +1117,322 @@ An agent's `CompletionCandidate` starts verification; it does not complete the w
 Fresh disposable agents remain the norm. Durable workflow state belongs to the harness, not to a long-lived
 LLM context.
 
+## 8A. Federated cooperative orchestrators — proposed extension
+
+### 8A.1 Purpose, status, and trust posture
+
+A user's orchestrator should be able to connect outward in client mode to a project-owner orchestrator,
+offer bounded capacity, accept a work item, supervise local agents, and return a verifiable contribution.
+The same installation may own its own projects while contributing to several others. Client and server
+are relationship roles, not permanent machine classes or levels of trust.
+
+This section records a design proposal and its future qualification criteria. It does not introduce a wire
+schema, amend an accepted ADR, enable peer access, change current required evidence, or authorize deployment.
+The starting posture is **federated contribution with project-owner-controlled verification and delivery**.
+Remote creativity is useful without treating the remote machine as a trusted test runner or delivery owner.
+
+The security claim is deliberately bounded: a checked digest and authenticated statement can detect
+substitution relative to the bytes and identities they bind. They cannot prove that the signer honestly ran
+the claimed process, that arbitrary code is correct, or that a particular model authored a patch. A malicious
+contributor can sign fabricated evidence. Acceptance therefore depends on independently observed checks,
+not on the impressive appearance of a receipt chain.
+
+### 8A.2 Reuse of existing mechanisms and remaining gaps
+
+| Existing foundation | Proposed reuse | What it does not establish |
+|---|---|---|
+| [ADR-0035 observed-run receipts](../adr/0035-observed-run-receipts.md) | parse reports, bind their exact bytes, distinguish observed artifacts from typed success | the ADR explicitly permits the possibility of fabricated TRX; report provenance is a separate trust decision |
+| [ADR-0082 durable private receipts](../adr/0082-durable-private-content-addressed-telemetry-receipts.md) | immutable digest-addressed evidence retention and revalidation | authenticity of remote metering, availability after unbacked host loss, or permission to disclose private evidence |
+| Typed claims, protected generations, exact-head checks and receipts | keep one externally fenced delivery subject and bind verification to its candidate | authority for an arbitrary remote peer to mutate project state |
+| §8 content-addressed agent specifications | derive local agent attempts from the accepted assignment | proof that an uncontrolled host executed that specification |
+| §9–§11 authenticated sessions, durable effects and reconciliation | bounded peer transport, deduplication, recovery and guarded owner-side effects | trust in peer-authored payloads or safe execution of submitted code |
+| [ADR-0079 accountable delivery owner](../adr/0079-single-accountable-delivery-authority.md) | retain one owner; verification services supply evidence | a second contributor, verifier or peer quorum becoming an additional authorizer |
+
+Hashes, signatures, authenticated transport, protected Git history and observed-run receipts are different
+mechanisms. Existing GitHub event-signature checks authenticate their event channel; they are not a portable
+attestation of agent execution. The federation envelope, enrollment policy, portable evidence packaging and
+trusted verification boundary remain new work, not capabilities inferred from existing receipt terminology.
+
+### 8A.3 Roles and ownership
+
+The **project-owner orchestrator** selects assignments, retains external claims, owns project acceptance
+policy, and uses the typed coordination engine for all protected mutations. The **contributor orchestrator**
+owns its local resource calendar, user consent, sandbox admission, agent supervision and outbound submissions.
+A **verification service** runs owner-selected checks in isolated infrastructure and emits evidence through
+a control plane unavailable to submitted code. It can initially be the owner's existing qualified CI.
+
+Each peer has its own durable actors and journal. Neither joins the other's Akka cluster, addresses remote
+actor paths, shares persistence, nor imports executable actor messages. SignalR carries a narrow versioned
+application protocol. Outbound connection initiation supports contributors behind NAT without requiring an
+inbound public service; transport topology grants no additional permission.
+
+For a remote attempt, the owner retains the external claim and delegates a bounded contribution under its
+generation. The contributor does not acquire a competing claim or receive project GitHub credentials. A
+change requiring direct peer provider access would need a separate authority decision. Multiple proposals
+may exist, but only the owner can select a candidate and attempt delivery through the current external fence.
+
+Conceptually the owner adds peer-session, assignment, submission-intake and verification-workflow actors;
+the contributor adds a remote-project session and local assignment supervisor. These realize pure protocol
+transitions. They do not introduce an alternative scheduler, claim service or trust-policy interpreter.
+
+### 8A.4 User experience and bilateral admission
+
+The user enrolls an explicitly identified project owner, sees its project scope and data terms, and chooses
+capacity, cost, model/tool permissions, availability, and which work classes may be accepted automatically.
+Initial enrollment should require explicit confirmation of the authenticated peer identity; receiving a
+URL, invitation or public issue is not consent to run it. Either side can pause new work without erasing
+in-flight state. Disconnect, revoke, cancel and permanently remove a peer have distinct consequences.
+
+The contributor advertises capabilities and bounded availability, not unrestricted access to its machine.
+The owner offers work; the contributor can decline with a typed reason or accept within its own policy.
+Accepted work appears locally with baseline, scope, budget, provenance status and cancellation controls.
+The owner sees offered, reserved, executing, submitted, verifying and delivered work separately. A remote
+agent's confident completion message never makes the owner's board green.
+
+Enrollment is bilateral: contributors allowlist project owners and owners allowlist contributors. Initial
+automatic admission is limited to explicitly enrolled peers; public anonymous workers, payments and a
+reputation marketplace are deferred. A contributor's reputation may influence scheduling but cannot waive
+verification, authorize new data access, or turn several identities controlled by one operator into
+independent evidence.
+
+### 8A.5 Assignment, submission and acceptance identities
+
+The following are conceptual records, not a published schema. Before implementation, one versioned encoding,
+identity normalization and signature profile would be selected and qualified.
+
+| Record | Proposed bound content |
+|---|---|
+| Work offer | owner/project identity, work subject, scope summary, classification, estimated resources, offer expiry; no execution authority |
+| Assignment | issuer and intended contributor, unique assignment and attempt IDs, external claim generation and fleet epoch, exact source baseline/tree manifest, specification and compiled-contract digests, verification-policy identity, allowed touch set and operations, input/dependency manifests, budgets, expiry, disclosure terms and delegation policy |
+| Contributor acknowledgment | assignment digest, contributor identity, accepted execution profile and reservation, explicit limitations; not a claim that execution occurred |
+| Submission | assignment digest and generation, immutable candidate tree/commit and complete artifact manifest, evidence digests, declared changes and dependency resolutions, claimed execution provenance, omitted/unsupported evidence and local attempt identity |
+| Verification receipt | submission and candidate digests, verifier identity, policy/toolchain/environment identities, independently observed obligations/results, evidence references and trust classification |
+| Acceptance and delivery receipts | selected submission, exact integration candidate, accepted verification set, owner decision and current fence; subsequent provider observation identifies whether protected delivery actually occurred |
+
+Protocol/schema version, payload type, issuer, audience and project namespace prevent a valid statement for
+one use being interpreted as another. Source identity includes canonical repository identity and immutable
+content, not a branch name alone. Manifests resolve submodules, large-file objects and required dependencies
+by content; missing or mutable inputs remain an explicit refusal/unsupported condition rather than an
+implicit fetch of whatever is current. A content manifest uses the selected modern digest independently of
+the repository's Git object-ID format.
+
+An assignment nonce prevents accidental cross-assignment reuse, but does not prove that computation happened
+after the nonce was issued. Retries retain logical operation identity; a new attempt has a new identity and
+explicit predecessor. Accepted results may reuse an artifact only when the owner's policy permits it and
+all applicable bindings and checks are satisfied. Useful reuse is not cheating; undisclosed substitution
+that defeats a requirement is the threat.
+
+### 8A.6 Cryptographic envelope and key lifecycle
+
+Candidate building blocks are [in-toto statements](https://github.com/in-toto/attestation/blob/main/spec/README.md)
+for subject-bound claims and [DSSE](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md) for
+typed signed payloads. Adoption would use reviewed implementations and an explicitly pinned profile, not
+custom signature algorithms. A statement would sign exact payload bytes; deterministic serialization and
+digest rules would be specified separately, with ambiguous encodings, duplicate keys and unsupported
+critical fields rejected. Signature validity alone does not select a trusted issuer or permitted predicate.
+
+Transport credentials, contributor submission keys, verifier attestation keys and owner acceptance keys
+have separate roles and scopes. Peer keys are enrolled through an authenticated trust decision, not trusted
+because a submission includes a public key. Short-lived audience-bound capabilities constrain uploads and
+session operations; portable signatures preserve attribution after a connection ends. Key custody belongs
+outside agent sandboxes. A contributor-controlled host key nevertheless remains contributor-controlled:
+moving it outside the agent process does not make the machine an independent verifier.
+
+Rotation, compromise and revocation need explicit effective-time and historical-verification semantics.
+Server-observed receipt time and a protected receipt index anchor ordering; a client timestamp is not trusted
+time. Existing accepted artifacts retain audit history after revocation but may require requalification
+under the owner's incident policy. New submissions or effects cannot rely on revoked capabilities. Unknown
+revocation state blocks authority-increasing transitions; disconnected local computation may continue only
+within the previously accepted local budget and disclosure policy.
+
+An append-only receipt index can expose inconsistent submissions and aid audit, but a hash chain alone
+cannot prevent its owner presenting different histories to different peers. A shared transparency service
+or cross-witnessing would need separate privacy, availability and trust decisions; it is not required for
+the initial owner-verifies-result model. No blockchain or proof-of-work mechanism is proposed.
+
+### 8A.7 Assignment lifecycle, recovery and cancellation
+
+The proposed happy path is:
+
+```text
+Offer → Local reservation → Owner-fenced assignment → Contributor acknowledgment
+      → Isolated execution → Quarantined submission → Owner-side verification
+      → Owner acceptance → Protected delivery → Observed delivery receipt
+```
+
+Offers and reservations are not permission to start write-capable project work. The owner observes a valid
+external claim before issuing the assignment; the contributor starts only after durable admission of that
+assignment. Allocation and claim acquisition form a recoverable saga, not a cross-peer transaction. A lost
+acknowledgment triggers lookup by assignment ID, not duplicate work creation. Expired unused reservations
+can be released without implying that an externally claimed assignment was abandoned.
+
+Both peers durably deduplicate incoming commands before acknowledgment, resume from scoped cursors, and
+reconcile assignment state after reconnect. Upload completion, submission recording, verification completion,
+acceptance and delivery are separate durable events. Interrupted uploads can resume under bounded storage
+leases; unreferenced blobs are collected only after retention and unsettled-operation checks.
+
+Cancellation records a request and its observed disposition. The owner can revoke acceptance authority
+immediately without claiming it remotely stopped a process. The contributor eventually stops or quarantines
+the local attempt when it learns of revocation. A disconnected or malicious machine cannot be forced to
+erase code already disclosed; the owner can prevent later privileged effects, not retract knowledge.
+Reassignment increments the appropriate generation and preserves late submissions as stale evidence only.
+
+Acceptance and revocation racing are resolved against authoritative revisions at the effect boundary.
+Accepted is not delivered: a later generation change or changed integration head can still block delivery.
+Uncertain provider effects are reconciled before retry. Timeout never means that an acceptance, merge or
+release did not occur. Neither peer rewrites the other's journal to manufacture agreement.
+
+### 8A.8 Independent verification and anti-substitution
+
+The initial acceptance path treats contributor reports as advisory. The owner retrieves the submitted bytes
+into quarantine, recomputes their digests, validates assignment scope, reconstructs the exact candidate, and
+selects checks from protected owner policy. Tests execute in disposable, resource-bounded environments without
+delivery credentials. Results are captured by the verification control plane rather than trusting a report
+file the submitted process can overwrite. Builds and tests still execute hostile code; process isolation,
+network limits, fresh workspaces and cache separation are part of the proposed verification boundary.
+
+Verification binds both the candidate and its integration base. A rebase, merge conflict resolution, squash
+with changed tree, dependency change or policy change creates a new verification subject where affected
+checks must be reevaluated. Immediately before delivery the owner rechecks the exact candidate, external
+generation and required provider facts. After delivery it observes the protected result and links it to the
+verified tree. A green check attached to a different commit is not transferable evidence.
+
+Changes to tests, build recipes, workflow files, fixtures, dependencies or specification sources receive
+explicit scrutiny. The candidate cannot choose a weaker acceptance policy. Owner-maintained checks, model
+correspondence tests, mutation controls and review complement contributor tests; none claims exhaustive
+correctness of arbitrary software. Running a build again is reproducibility evidence only when the input
+and environment envelope is sufficiently pinned; expected nondeterminism needs an explicit comparison
+policy, not a convenient normalization that discards security-relevant differences.
+
+An optional later mode could accept evidence from an enrolled independent builder rather than rerun every
+check. That mode would verify artifact subject, signer/builder trust and expected parameters, following the
+[SLSA verification model](https://slsa.dev/spec/v1.2/verifying-artifacts). Trust in a builder remains an
+assumption: valid provenance does not exclude compromise of the trusted build platform itself. Hardware
+attestation could narrow particular execution claims but would add hardware/vendor, measurement, freshness
+and workload-binding assumptions; it is neither required initially nor proof of semantic correctness.
+
+| Adversarial case | Proposed response | Residual limit |
+|---|---|---|
+| Files replaced after receipt creation | recompute manifest digests at intake, verification and delivery | trust still rests on verifier/key/digest implementation |
+| Another project's successful receipt reused | check audience, project, assignment, baseline, spec and candidate bindings | identical useful artifacts can legitimately recur under newly satisfied obligations |
+| Fabricated test report or claimed model execution | owner-controlled observed checks; classify client claims separately | tests do not establish authorship, time spent or all behavior |
+| Tests weakened to manufacture green | protected policy and independent obligations; explicit review of changed verification surfaces | incomplete specifications can miss malicious behavior |
+| Old worker submits after reassignment | current generation and revocation checks at acceptance and delivery | already disclosed source cannot be recalled |
+| Client signs two different submissions | immutable submission IDs and one fenced selected candidate; retain both claims | global equivocation needs shared witnesses to detect across owners |
+| Several colluding peers agree on a result | independent owner checks; do not equate identity count with independence | external verification infrastructure remains a trust root |
+| Valid artifact bundled with hostile metadata | bounded parsers, inert rendering and isolated extraction | parser and sandbox vulnerabilities require ongoing qualification |
+
+### 8A.9 Bilateral security, privacy and delegation
+
+The contributor treats assignments, repositories, skills, dependency scripts and model prompts as untrusted
+project content. Enrollment does not grant host-shell access, ambient credentials, personal repository access
+or the ability to modify local orchestration policy. User resource and network limits remain authoritative
+even if an assignment asks for more. Incoming project instructions cannot enroll another peer or expand scope.
+
+The owner similarly treats patches, archives, logs, SVG, reports and URLs as hostile input. Intake rejects
+path traversal, escaping symlinks, archive bombs, dangerous external references and oversized manifests;
+artifact retrieval uses scoped storage access rather than arbitrary contributor-supplied fetch URLs. Submitted
+SVG is not inserted into the privileged dashboard DOM. Verification caches are isolated from trusted release
+caches, and promotion occurs only through the accepted artifact path.
+
+Assignments minimize disclosure by classifying source, data, prompts and artifacts before transmission.
+Private source cannot be made confidential from an ordinary contributor host that must read it; encryption
+in transit and at rest does not change that. Work needing stronger confidentiality stays on owner-controlled
+compute unless a separately qualified confidential-computing arrangement is accepted. Receipt exports use
+opaque identities and access-controlled references where necessary; hashes of guessable private values can
+also disclose information and are not automatic anonymization.
+
+Each party records who retains which evidence, for how long, who can retrieve it, and what happens on account
+closure or host loss. The owner retains the complete acceptance-critical bundle it needs rather than relying
+on a contributor's temporary path. Private raw telemetry is not automatically federated under ADR-0082.
+Missing evidence is classified as unavailable, never regenerated and relabeled as original measured evidence.
+
+Onward delegation is denied in the initial mode. A later permitted mode would bind downstream audience,
+scope, data rights, budget and depth to the parent assignment, with attenuation only and explicit lineage.
+The contributor remains accountable for its submission; delegation does not transfer project delivery
+authority. Recursion limits, cycle detection and total budget accounting prevent delegation loops and
+oversubscription. Paid work and billing disputes require separate metering and commercial design; signed
+self-reported tokens or hours are not a basis for asserting verified expenditure.
+
+### 8A.10 OR integration, evidence quality and dashboard
+
+Remote contribution becomes an execution mode in the existing OR kernel, with local and remote compute,
+input transfer, queue time, verification, review, integration and recovery represented in the resource graph.
+The objective is accepted useful work per constrained resource, not number of connected agents. Mandatory
+owner-side verification is included in the cost model; optimizing it away would change the trust boundary.
+Remote capacity offers are observations with expiry, not globally locked resources. Local admission can
+refuse a stale offer, and the owner replans without treating that refusal as successful execution.
+
+Eligibility includes enrollment, data classification, tool capability, allowed jurisdictions where applicable,
+verification availability and accepted execution profile. Calibration distinguishes client-reported progress
+and usage from owner-observed outcomes; cancellation remains censored and stale/invalid submissions do not
+inflate successful throughput. Peer history may inform duration/rework estimates but cannot relax hard
+constraints. Reserve verification and recovery capacity so added contributors do not simply move the queue.
+
+The existing dashboard read model gains proposed peer and assignment projections, not another authority.
+Useful fields include owner/contributor, assignment and generation, trust/evidence class, source and candidate
+identity, disclosure scope, reservation, last contact versus actual progress, verification queue, refusal
+reason and receipt chain. SVG depicts the cross-peer trust boundary and causal handoff; grids expose exact
+values. Claimed, received, independently verified, accepted and delivered have distinct visual states.
+Private local projects and other tenants never appear in a remote owner's read model.
+
+### 8A.11 Quint specification and adversarial qualification proposal
+
+A future implementation would first model this protocol through the accepted Quint-first lifecycle, with
+generated compiled contracts and runtime correspondence tests rather than handwritten competing authorities.
+Model state includes peer enrollment/revocation, assignment generation, reservations, disclosure grants,
+submission subjects, verification obligations, selected acceptance, pending effects and delivery observations.
+Actions cover offer/admit/decline, issue/acknowledge, disconnect/resume, submit/retry, verify/refuse, revoke,
+reassign, accept, deliver and reconcile. Network messages may be dropped, duplicated, delayed or reordered.
+
+Candidate invariants are:
+
+- accepted evidence binds the same project, assignment, specification and exact candidate as acceptance;
+- client assertions alone never satisfy independently observed verification obligations;
+- no stale generation or revoked capability authorizes a new protected effect;
+- at most one candidate is selected for a delivery revision; duplicates do not create a second logical effect;
+- scope and budgets cannot grow through retries or delegation;
+- delivery requires the owner's current typed legal verdict and external fence, not either peer's actor state;
+- missing receipts, unknown verification and interrupted effects never become success by timeout; and
+- dashboards preserve evidence class and cannot upgrade a client claim into an observed fact.
+
+Liveness claims would state fairness and availability assumptions explicitly: permanent disconnection,
+malicious nonresponse or unavailable verification cannot guarantee successful completion. The attainable
+outcome is bounded refusal, cancellation or escalation without unsafe delivery. Quint explores the protocol
+model; it does not prove cryptographic primitives, sandbox isolation or an uncontrolled peer's honesty.
+
+Qualification would pair bounded model traces with real runtime tests: corrupt bytes, wrong audience/spec,
+expired key, revoked assignment, duplicate submission, equivocation, forged TRX, replaced build recipe,
+altered candidate after green, moving integration base, poisoned cache, malicious archive/SVG, exhausted
+quota and crashes at every durable acknowledgment/effect boundary. Key rotation, lost contributor storage,
+unavailable evidence, owner restart and late revocation need named recovery outcomes. Removing each critical
+binding or trust check should produce a failing adversarial test, not a vacuously green model run.
+
+### 8A.12 Staged adoption and decisions still open
+
+This is a subordinate extension of H0–H8, not a prerequisite for that roadmap or for GitHub Substrate v2.
+It inherits the `OperatingV2` mutation-canary boundary and separately accepted operational authorization.
+
+| Stage | Proposed scope and evidence before promotion |
+|---|---|
+| F0 — protocol and threat model, alongside H0–H1 | accept ownership and data boundaries; specify Quint model, conceptual records, cryptographic profile, replay/revocation semantics and baseline cost model; no peer runtime required |
+| F1 — bilateral read-only sessions, after H2 foundations | explicit enrollment, offers, capacity observations, reconnect, tenant isolation and hostile-message qualification; no project execution or mutation |
+| F2 — sandboxed contribution laboratory, after H3 foundations | synthetic/public fixtures, bounded local execution, signed submissions and quarantine; no production delivery; demonstrate malicious client cannot self-certify |
+| F3 — independent verification shadow, alongside H4–H5 | owner-controlled checks and receipt retention; compare remote proposals with incumbent outcomes; qualify exact-candidate bindings, crash recovery and verification bottlenecks |
+| F4 — bounded federation canary, no earlier than H6 eligibility | one enrolled peer/project/work class, explicit owner selection, immediate revocation, independently verified results and ordinary protected delivery; separate accepted canary scope |
+| F5 — measured normal contribution | promote only proven work classes with accepted ownership, privacy, SLO, cost and incident bounds; optional trusted builders or delegation require separate qualification |
+
+Initial success means a user can contribute through an outbound session, the owner can safely reject a
+fabricated or substituted submission, and a valid contribution can pass independent checks and the ordinary
+delivery boundary after reconnect or restart. It does not mean anonymous internet-scale compute, verified
+model authorship, payment-grade usage accounting or zero-trust proof of arbitrary computation.
+
+Open selections include peer identity bootstrap, credential issuer and rotation profile, DSSE/in-toto library
+and predicate versions, artifact transport/store, verification isolation platform, source disclosure policy,
+evidence retention duration and acceptable transfer/verification overhead. F0 would assign accountable owners
+and measurable acceptance criteria to each. Start with owner-side reruns and no onward delegation; introduce
+additional trust only where measured benefit justifies a separately reviewed boundary.
+
 ## 9. WebSocket authentication and authorization
 
 ### 9.1 Three identities
@@ -1976,6 +2293,10 @@ The kill switch reduces authority without deleting state. Revoking the GitHub Ap
 the fleet epoch must stop mutations even if the process remains alive.
 
 ## 17. Implementation roadmap
+
+The optional cooperative-orchestrator track in §8A.12 attaches F0–F5 to these foundations. Its protocol,
+security and verification work is additional scope, not implicitly included in completion of H0–H8.
+Neither roadmap authorizes peer access or provider mutations by publication of this proposal.
 
 ### H0 — OR domain, measurement, and authority specification
 
