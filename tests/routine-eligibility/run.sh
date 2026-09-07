@@ -60,6 +60,12 @@ assert workflow["ref"] == "refs/heads/main"
 assert workflow["repository_id"] == 1269292704
 assert alternative["authorizationEvidence"]["missingScope"] == "admin:org"
 assert activation["organization"]["plan"] == "free"
+app = activation["existingAppAlternative"]
+assert app["status"] == "not-currently-capable"
+assert app["appSlug"] == "fs-gg-cross-repo-dispatch"
+assert app["installation"]["missingRequiredPermissions"] == ["checks:write", "statuses:write"]
+assert "checks" not in app["installation"]["permissions"]
+assert "statuses" not in app["installation"]["permissions"]
 PY
 
 repo="$TMP/repository"
