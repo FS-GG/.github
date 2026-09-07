@@ -1,0 +1,15 @@
+{
+  "schema": "fsgg.routine-cohort-observation/1",
+  "cohort": "routine-route-first-ten-code-items",
+  "asOf": "2026-09-07T15:50:00Z",
+  "targetPerArm": 10,
+  "selection": {
+    "routine": "The next ten eligible ordinary reversible code requests admitted by the shared routine policy after this declaration, excluding roadmap-bootstrap and protected-operation work.",
+    "baseline": "Ten pre-activation code items meeting the same path and operation exclusions, matched where practical and reported as observational when unmatched.",
+    "outcomesKnownAtRoutineSelection": false
+  },
+  "providerPopulation": {
+    "status": "unknown"
+  },
+  "units": []
+}

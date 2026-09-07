@@ -205,7 +205,7 @@ Roadmap ledger:
 - [x] R0 — Adopt the smaller contract. Delivered by [`.github` PR #3320](https://github.com/FS-GG/.github/pull/3320): the prospective trusted-writer policy, base-loaded exact-head eligibility gate, protected-operation boundary, shared driver route and generated guidance landed together.
 - [x] R1 — Implement one-owner, one-PR delivery. This routine PR adds the bounded native merge/readback path and exercises successful readback, ambiguous-write readback before one retry, changed-head refusal, and distinct code-delivered/publication-pending status without an issue, claim, phase ledger, critic, acceptance receipt or projection PR.
 - [ ] R2 — Fix economics reporting and make telemetry non-blocking.
-- [ ] R3 — Simplify release, registry and recovery paths.
+- [x] R3 — Simplify release, registry and recovery paths. [`.github` PR #3324](https://github.com/FS-GG/.github/pull/3324) added native PR-less completion and repaired promoted replay. [Exact replay 34140115947](https://github.com/FS-GG/.github/actions/runs/34140115947) completed with prepare/publishers skipped; [wrong-source replay 34140167737](https://github.com/FS-GG/.github/actions/runs/34140167737) refused before either job. The existing 0.85.2 adoption/registry refresh remained the single batch in PR #3291.
 - [ ] R4 — Measure the current route and retire obsolete ceremony.
 - [ ] R5 — Carry improvements into ordinary v2 development and verify receiver adoption.
 
