@@ -201,7 +201,62 @@ REF="item/2342-fence-merges"
 # =============================================================================================
 W0="$WORK/w0"
 expect "non-item branch: OK, nothing to fence" \
-  0 "not an item-delivery branch" "$W0" "$REPO" "chore/bump-deps" "$HEAD_SHA" ""
+  0 "neither a strict item-delivery branch nor a routine delivery branch" "$W0" "$REPO" "chore/bump-deps" "$HEAD_SHA" ""
+
+# =============================================================================================
+# R0. ROUTINE DEVELOPMENT — no GitHub/board/issue/claim read, exact-head + protected boundary.
+# =============================================================================================
+ROUTINE_REPO="$WORK/routine-repo"
+mkdir -p "$ROUTINE_REPO/.fsgg" "$ROUTINE_REPO/src"
+cp "$HERE/../../.fsgg/routine-development.json" "$ROUTINE_REPO/.fsgg/routine-development.json"
+git -C "$ROUTINE_REPO" init -q
+git -C "$ROUTINE_REPO" config user.email fixture@example.invalid
+git -C "$ROUTINE_REPO" config user.name fixture
+printf 'before\n' > "$ROUTINE_REPO/src/thing.txt"
+git -C "$ROUTINE_REPO" add .
+git -C "$ROUTINE_REPO" commit -qm base
+ROUTINE_BASE="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
+printf 'after\n' > "$ROUTINE_REPO/src/thing.txt"
+git -C "$ROUTINE_REPO" add .
+git -C "$ROUTINE_REPO" commit -qm routine
+ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
+
+routine_run() {
+  local body="$1"; shift
+  printf '%s' "$body" > "$ROUTINE_REPO/body.md"
+  (cd "$ROUTINE_REPO" && python3 "$TOOL" --repo "$REPO" --head-ref routine/example \
+    --base-sha "$ROUTINE_BASE" --head-sha "$ROUTINE_HEAD" --routine-policy-ref "$ROUTINE_BASE" \
+    --body body.md "$@") 2>&1
+}
+
+routine_expect() {
+  local name="$1" want="$2" needle="$3" body="$4"; shift 4
+  local out rc=0
+  out="$(routine_run "$body" "$@")" || rc=$?
+  if [ "$rc" -ne "$want" ] || ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit $rc, want $want and '$needle')" "$out"
+  else
+    ok "$name"
+  fi
+}
+
+routine_marker="<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
+routine_expect "routine: exact-head source change is admitted without a board read" 0 \
+  "no issue, claim, SDD, phase ledger, critic, feedback/receipt cycle, or metadata-Done input was read" \
+  "$routine_marker"
+routine_expect "routine: a moved head is refused" 1 "routine-changed-head" \
+  "<!-- fsgg:routine-development/v1 head=$HEAD_SHA operation=source-change -->"
+routine_expect "routine: duplicate marker fields are refused as ambiguous" 1 "routine-ambiguous" \
+  "<!-- fsgg:routine-development/v1 head=$HEAD_SHA head=$ROUTINE_HEAD operation=source-change -->"
+routine_expect "routine: protected operation is refused" 1 "routine-protected-operation" \
+  "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=publish -->"
+
+printf '{}\n' > "$ROUTINE_REPO/.fsgg/new-authority.json"
+git -C "$ROUTINE_REPO" add .fsgg/new-authority.json
+git -C "$ROUTINE_REPO" commit -qm protected
+ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
+routine_expect "routine: protected policy path is refused" 1 "routine-protected-path" \
+  "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
 
 # =============================================================================================
 # 1. MISSING

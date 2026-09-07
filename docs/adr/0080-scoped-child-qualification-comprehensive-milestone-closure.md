@@ -5,6 +5,12 @@
 - **Amended by:** [ADR-0081](0081-adaptive-qualification-cadence-from-observed-cost-and-defect-yield.md)
 - **Affects:** `.github`, `FS.GG.Coordination`, and future roadmap-owning FS-GG components
 
+**Narrowed prospectively on 2026-09-07:** routine pilot work admitted by
+`.fsgg/routine-development.json` does not produce child receipts, milestone-closure manifests, or a
+separately validated closure cycle. It uses selected current-tree checks and exact-head native PR
+delivery. The comprehensive requirements below continue to govern protected production operations,
+external-contract acceptance, and existing strict roadmap work.
+
 ## Context
 
 GitHub Substrate v2 originally made the complete tracked candidate tree the reuse subject for every
