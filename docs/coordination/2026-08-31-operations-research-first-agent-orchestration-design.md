@@ -8,7 +8,7 @@ description: "An operations-research-first control architecture for shaping, sch
 
 # Design: operations-research-first agent orchestration
 
-This design adds a continuously running, authenticated agent harness above the existing FS.GG GitHub
+This design proposes an optional continuously running, authenticated agent harness above the existing FS.GG GitHub
 coordination substrate. A pure operations-research control kernel models the delivery system, shapes work,
 chooses information-gathering and execution modes, schedules constrained resources, and emits independently
 checkable plans. ASP.NET Core and SignalR form the public WebSocket boundary; Akka.NET supplies durable
@@ -26,6 +26,7 @@ process, actor, timer, or database lease to authorize an external mutation by it
 | Revised | 2026-09-01 — recentered on an OR-first closed-loop controller; hardened authority, cutover sequencing, determinism, claim ordering, crash consistency, and runner boundaries; and added the SVG/dashboard visualization architecture |
 | Federation extension | 2026-09-07 — added proposed peer contribution, assignment-bound receipts, independent verification, bilateral isolation, and staged qualification in §8A; no production permission or existing contract is changed |
 | Review hardening | 2026-09-07 — narrowed the first slice, separated replay from optimization, clarified review and effect authority, and added observation, recovery, verification-security and outcome-measurement proposals; existing controls and accepted ADRs are unchanged |
+| Routine-flow alignment | 2026-09-07 — optional harness scope and conditional adoption; see §1.2 and the [alignment analysis](2026-09-07-112837-development-flow-proposal-alignment-analysis.md). No accepted policy or v2 gate changes. |
 | Scope | Agent creation and communication, deterministic planning, GitHub mediation, persistence, authentication, supervision, liveness, availability, observability, and staged adoption |
 | Preserves | GitHub-native multi-host coordination, typed transition checks, Git-ref fencing, exact-head evidence, durable receipts, and scheduled reconciliation |
 | Builds on | [ADR-0034](../adr/0034-typed-coordination-engine.md), [ADR-0053](../adr/0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md), [ADR-0077](../adr/0077-quint-first-typed-specification-authority.md), [ADR-0078](../adr/0078-github-substrate-v2-new-only-coordination-authority.md), [ADR-0079](../adr/0079-single-accountable-delivery-authority.md), and the [remaining-v2 architecture review](2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md) |
@@ -47,15 +48,16 @@ retry effects, and decide what to do next. A terminated agent can leave durable 
 must recover context from GitHub and prose. Long waits consume interactive turns, and procedural guidance
 grows as each incident adds another instruction.
 
-FS.GG therefore adopts the following target direction:
+This optional harness therefore proposes the following target direction:
 
 1. **Keep the existing GitHub/Git substrate.** It remains the externally durable coordination and fencing
    authority, usable by independent machines and by the emergency CLI when the orchestrator is unavailable.
 2. **Make operations research the execution-decision center.** A versioned OR kernel models work,
    information, uncertainty, dependencies, resources, queues, and risk; it chooses the shape and timing of
    admissible SDD, agent, CI, review, delivery, and recovery actions.
-3. **Add one preferred normal executor.** A hosted orchestrator becomes the default path for agent
-   creation, scheduling, communication, GitHub access, retry, and recovery. It is not an authorization
+3. **Offer a hosted executor for separately justified classes.** A hosted orchestrator may become the
+   preferred path for an operation class only after comparison with the smallest supported native route.
+   Routine development does not depend on funding or completing this harness. It is not an authorization
    authority, the sole store of coordination truth, or proof that an external transition is legal.
 4. **Use actors for lifecycle, not policy authorship.** Akka.NET actors serialize work, persist events,
    supervise children, and schedule wakeups. Pure reducers and constraint solvers decide; actors do not
@@ -87,13 +89,56 @@ evidence:
 
 | Posture | Decisions |
 |---|---|
-| Direction fixed by this proposal | OR-first execution decisions; external GitHub/Git fencing; typed-engine legality; disposable agents; deterministic plan verification; durable intent before effects; one preferred normal executor; emergency CLI retained; AG Grid/AG Charts for grids and conventional charts; an accessible SVG graph surface for complex pipelines and topology |
+| Direction fixed by this proposal | OR-first execution decisions; external GitHub/Git fencing; typed-engine legality; disposable agents; deterministic plan verification; durable intent before effects; a preferred executor only for separately approved classes; emergency CLI retained; AG Grid/AG Charts for grids and conventional charts; an accessible SVG graph surface for complex pipelines and topology |
 | Candidate pending a vertical slice | Akka.Persistence plugin and serializer; PostgreSQL schema and outbox realization; SignalR replay implementation; identity provider; sandbox/runner technology; artifact store; optimizer and solver libraries; exact AG Grid/AG Charts edition and licence; ELK.js/D3 packaging and SVG export implementation |
 | Separately accepted before production | operational owner and SLO; data classification and retention; GitHub App principal split; mutation canary scope; disaster recovery; any required hosted-service dependency |
 | Deferred by design | Akka.Cluster, sharding, remote actor transport, learned scheduling policy, and a mandatory webhook runtime |
 
 A candidate selection becomes binding only when its named qualification evidence is accepted. Replacing a
 candidate must not change the authority split or the public domain contracts silently.
+
+### 1.2 Routine development and conditional harness adoption — 2026-09-07
+
+The [bureaucracy-reduction proposal](../2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) changes the proposed default investment: remove routine
+obligations before automating them. This document retains the harness as an optional architecture for
+measured multi-item scheduling, durable unattended execution, or shared-resource recovery needs. H0–H8,
+F0–F5 and the visualization catalogue are neither the routine-development roadmap nor prerequisites for
+that proposal's R0–R5 or the v2 cutover. The [alignment analysis](2026-09-07-112837-development-flow-proposal-alignment-analysis.md) records the comparison and
+remaining policy decisions. All changes here are proposal prose; current accepted controls still apply.
+
+A future approved routine profile would use one owner, one PR, selected technical checks and native delivery
+facts. The harness would consume that profile rather than recreate intake, mandatory SDD artifacts, fresh
+phase identities, receipt PRs, reviewer assignment or a second completion authority. A request or PR can
+identify routine work; an issue is not inherently necessary. Native code delivery and any required release
+completion remain distinct. Optional service failure must leave an independently authorized routine route
+usable, subject to the current epoch; the emergency path never revives a fenced v1 writer.
+
+The proposed division is explicit:
+
+| Existing section | Disposition for future routine support | Retained scope |
+|---|---|---|
+| §4 planning, verification and receipts | Use a deterministic baseline first; no solver or per-item decision packet merely to reproduce a native decision | Verify nontrivial scheduling/effect plans when that harness mode is enabled |
+| §7.3 SDD planning | Concise intent and a behavioral example; further authoring only for uncertainty or an applicable retained obligation | Canonical Quint authority and conformance for modeled protocols; applicable critical qualification |
+| §7.4 CI planning | Consume the approved check-selection profile; no optimizer may silently reduce its guarantees | Sound closure and comprehensive boundaries wherever accepted policy requires them |
+| §7.5 review | Owner review; no required fresh phase, confirmation or assignment solver in the proposed lightweight profile | Required independent review and snapshot freshness for protected work; verification of untrusted contributions |
+| §8 admission and agent lifecycle | One implementation session is a valid baseline; no universal extra claim/actor choreography | Existing grants and external exclusion remain binding until changed through the actual protocol |
+| §8A federation | Deferred, separately justified extension; absent from the initial local slice | Contributor isolation, owner-controlled verification and scoped credentials if enabled |
+| §14 visualization | Automatic compact observations suffice initially; no dashboard dependency for delivery | Truthfulness, security and accessibility requirements apply to each view actually shipped |
+
+A cheap automatic journal record is not equivalent to an agent-authored acceptance PR. Preserve existing
+expected-parent CAS, stale-writer refusal, snapshot-bound authorization, typed plans and effect receipts
+where they provide the external contract. Removing prompt ceremony does not authorize bypassing the
+reconciler or weakening an unrelated kernel invariant. Changes to that contract require their own accepted
+model/policy change before use. GS2 child qualification, comprehensive parent closure, frozen-candidate
+rules and cutover/release authority are outside this proposed routine relaxation.
+
+Harness promotion would compare against the effective supported route, including the lightweight route
+once adopted. Charge implementation and maintenance of orchestration, verification, storage, UI and recovery
+to the benefiting program; exclude no failed attempts or deferred repair. For routine support, report the
+R0–R5 proposal's whole-unit 10% model-overhead objective and 20% ceiling separately from runner cost and
+latency. Missing telemetry prevents an efficiency claim, not otherwise authorized code delivery. No observed
+migration-driver percentage establishes live-v2 runtime cost. An enabled service must demonstrate incremental
+value; a simpler route meeting the need is a valid reason to stop the harness investment.
 
 ## 2. Goals and non-goals
 
@@ -687,6 +732,10 @@ The same policy package can then drive simulation, replay an incident, explain a
 counterexamples, and compare proposed versions without starting Akka or contacting GitHub.
 
 ## 7. OR models for the delivery lifecycle
+
+The detailed planners below describe enabled harness modes under their accepted obligation set. They do
+not make those modes mandatory for the proposed routine profile in §1.2; policy adoption precedes any
+change to current review, selection or evidence requirements.
 
 The common planning snapshot does not imply one common algorithm. Each lifecycle surface receives the
 smallest model that captures its real decision, uncertainty, and failure cost.
@@ -2441,14 +2490,20 @@ The optional cooperative-orchestrator track in §8A.12 attaches F0–F5 to these
 security and verification work is additional scope, not implicitly included in completion of H0–H8.
 Neither roadmap authorizes peer access or provider mutations by publication of this proposal.
 
-The first implementation target is one durable vertical slice: assignment, execution, quarantined submission,
-owner-controlled verification, acceptance and protected delivery. It begins with a deterministic baseline,
-one work class and a local execution mode; one enrolled remote mode exercises the same path through F0–F4.
-Production delivery remains gated by H6 eligibility. The first UI needs exact work/receipt rows and one
-accessible causal graph, not the entire visualization catalogue. OR-first means explicit decisions and
-constraints first, not advanced optimization everywhere before useful operation.
+The first harness investment decision compares a measured unmet need with the supported native route;
+R0–R5 routine simplification does not wait for it. If justified, the first implementation target is one local
+durable vertical slice with a deterministic baseline, one work class, bounded execution, verification and
+protected delivery under the existing external contract. Remote contribution through F0–F4 is separately
+funded and qualified after that local slice; it is not an initial exit condition. Production delivery remains
+gated by H6 eligibility. A compact read-only table is sufficient initial inspection; a causal graph or richer
+UI follows only when a demonstrated operational question needs it. Enabled UI surfaces retain their security
+and accessibility qualification. OR-first means explicit decisions and constraints, not a solver prerequisite.
 
 ### H0 — OR domain, measurement, and authority specification
+
+Before funding the remaining harness, identify the unmet scheduling/recovery need, compare the smallest
+supported route, and bound prototype investment. Stop if incremental value cannot be demonstrated. H0
+does not require R0–R5 to finish before independent read-only research, and does not gate their delivery.
 
 - Accept or amend the OR-first architecture and name the policy, data, security, and operational owners.
 - Specify one end-to-end issue lifecycle in Quint and the compiled FS.GG contract.
@@ -2461,8 +2516,8 @@ constraints first, not advanced optimization everywhere before useful operation.
 - Define operation-specific effect/revocation guarantees, coherent-observation rules, cold-start policy,
   outcome measures and failure-domain recovery targets for the first slice.
 - Run the bounded runtime comparison in §20 before committing to candidate-specific persistence machinery.
-- Define the visualization schema, visual grammar, accessibility target, diagram asset manifest, view budgets,
-  and exact Community/Enterprise feature and licence decision for AG Grid/AG Charts.
+- Define the minimal observation/table schema and accessibility target. Defer graph assets, chart budgets
+  and AG Grid/AG Charts edition/licence decisions until the corresponding view is justified for shipment.
 
 **Exit:** an independently reviewable mathematical/domain specification and measurement contract exist;
 unknown data is explicit; no hosted runtime or provider mutation is required.
@@ -2477,8 +2532,8 @@ unknown data is explicit; no hosted runtime or provider mutation is required.
   when a measured bottleneck justifies it; solver deployment is not required to complete H1.
 - Replay historical board and incident snapshots and publish objective, sensitivity, calibration, and
   constraint-mutation evidence.
-- Generate a deterministic causal SVG and exact-value rows for the first slice and named incident traces;
-  verify each visual aggregate against an independent query.
+- Generate exact-value rows for the first slice and named incident traces; verify each aggregate against
+  an independent query. A causal SVG is an optional extension when the rows cannot answer a named question.
 
 **Exit:** the first-slice baseline is deterministic, independently checked and explainable; its hard
 constraints and recovery cases are qualified and unsupported modes are explicit. The laboratory still
@@ -2492,9 +2547,9 @@ cannot dispatch work. Completion of every advanced planner is not a prerequisite
 - Add actor-system, journal, dependency, OR-decision, and workflow health endpoints.
 - Observe GitHub through the typed engine without mutation and materialize canonical planning snapshots.
 - Persist shadow decisions and compare them with actual operator/CLI choices and outcomes.
-- Deliver a bounded read-only Overview/Audit slice with exact-value rows, an accessible SVG pipeline,
-  coherent snapshot/reconnect behavior and reproducibility exports; add conventional charts where they
-  answer an observed operator question rather than making the full dashboard a hosting prerequisite.
+- Deliver a bounded read-only Overview/Audit table with coherent snapshot/reconnect behavior and
+  reproducibility exports. Add an accessible SVG pipeline or conventional chart only for a demonstrated
+  operator question; neither is a prerequisite for the initial host.
 
 **Exit:** restart, reconnect, revocation, malformed-message, read-completeness, snapshot, and shadow-decision
 tests pass; the service cannot mutate GitHub or create a write-capable agent.
@@ -2538,8 +2593,8 @@ optimizer repeats the relevant qualification and promotion steps instead of inhe
 - Complete the runner/WebSocket/database/App/Git threat model, data classification, and disaster-recovery proof.
 - Qualify the hostile-code verifier, verification quotas, per-operation atomicity/revocation cases and
   old-backup restore admission before increasing concurrency or enabling remote production contributions.
-- Deliver the Recovery route with causally ordered saga/effect SVGs and prove that the display cannot infer
-  success, trigger a retry, or cross an authority boundary from journal/chart state alone.
+- Expose causally ordered recovery facts in the initial table; qualify saga/effect SVGs only if enabled.
+  Prove the display cannot infer success, trigger a retry, or cross an authority boundary from view state.
 
 **Exit:** every injected interruption converges without an unfenced effect; shadow divergence is adjudicated;
 no production mutation permission exists.
@@ -2557,7 +2612,9 @@ or hard-constraint violations and with accepted objective/calibration bounds.
 
 ### H7 — normal single-node writer
 
-- Route separately approved operation classes through the OR controller and orchestrator by default.
+- Route only separately approved operation classes through the OR controller and orchestrator by default;
+  preserve the independently authorized routine path and verify that installed guidance does not force it
+  through the service. Normal-writer eligibility for one class is not fleet-wide default adoption.
 - Retain external GitHub/Git fencing, independent plan verification, and emergency CLI.
 - Establish SLOs, on-call/incident ownership, backup restoration, key rotation, policy rollback, and upgrades.
 - Remove only prompt choreography proven redundant; keep typed provider and evidence semantics.
@@ -2575,8 +2632,14 @@ or hard-constraint violations and with accepted objective/calibration bounds.
 
 ## 18. Acceptance criteria
 
-The architecture is ready for normal-writer consideration only when:
+The architecture is ready for normal-writer consideration for its named operation classes only when the
+following applicable criteria pass. Disabled federation, optimization and UI features are not hidden
+requirements for the local slice; they require their own qualification before enablement. These are harness
+acceptance proposals, not added GS2 or ordinary-delivery gates.
 
+- the harness demonstrates incremental value over the supported route, including whole-unit overhead,
+  maintenance, failed attempts and delayed repairs; routine support preserves the effective lightweight
+  profile on clean and upgraded receivers, and telemetry/service loss cannot become a second authorizer;
 - every decision binds one canonical observation bundle with checked completeness and cross-fact compatibility,
   an accepted policy/estimate set, and exact solver or baseline identity;
 - each enabled work-shape, SDD, portfolio/WIP, CI, review, allocation and recovery mode has a bounded model,
