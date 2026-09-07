@@ -31,10 +31,10 @@ Prose status: planned
 - PD-002 [AC-001] [FR-002] complete: Keep `strict` as the only route for publication, deployment, credentials, destructive effects, migrations or cutovers, externally enforced contracts, and all work already operating under strict authority; never infer routine eligibility from size.
 
 ## Contract Impact
-- PC-001 [PD-001] command report: Version the delivery-route policy and CLI result so callers can select `routine` prospectively while existing `lightweight` and `sdd-required` records retain strict legacy meaning. Update shared skill sources and regenerate Claude/Codex twins from the same source.
+- PC-001 [PD-001] command report: Version the delivery-route policy and validator so callers can select `routine` prospectively while existing `lightweight` and `sdd-required` records retain strict legacy meaning. Emit `routine-eligibility` from a least-privilege `pull_request_target` definition loaded from the default branch; fetch base/head only as Git data, execute the validator and dependency from the exact base SHA, and leave candidate-controlled `claim-generation` as the strict item gate. Update shared skill sources and regenerate Claude/Codex twins from the same source.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Prove routine admission succeeds without issue, claim, SDD, lifecycle, critique, feedback/receipt-cycle, or metadata-Done inputs; invert every protected-operation and changed-head predicate and observe refusal; run focused unit/CLI and skill-projection parity suites.
+- VO-001 [PD-001] [PC-001] semanticTest: Prove routine admission succeeds without issue, claim, SDD, lifecycle, critique, feedback/receipt-cycle, or metadata-Done inputs; invert every protected-operation and changed-head predicate; prove replacing or deleting candidate workflow/validator bytes cannot influence the trusted result; run focused unit/CLI and skill-projection parity suites.
 
 ## Performance Intent
 No performance intent is declared for this work item.

@@ -1,0 +1,136 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract",
+  "milestone": "R0 — Adopt the smaller contract",
+  "critic": "r0_critic",
+  "initial_reviewed_commit": "2960f09657b4694ded7f3fb5bc4b0021974672bb",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "2960f09657b4694ded7f3fb5bc4b0021974672bb",
+    "2fe3e653049310e9197f9b8a7b350ea0606a78c3"
+  ],
+  "findings": [
+    {
+      "id": "R0-CRIT-001",
+      "severity": "blocker",
+      "summary": "A routine pull request can modify the candidate-side executable that decides whether that same pull request is routine-eligible.",
+      "evidence": [
+        "Verification: `.github/workflows/coherence.yml:287-312` checks out the candidate and executes its `scripts/check-claim-generation.py`, while the trusted-base input is used only to load `.fsgg/routine-development.json`.",
+        "Verification: `.fsgg/routine-development.json:19-24` does not protect `scripts/check-claim-generation.py` or `.github/workflows/coherence.yml`, and `scripts/check-claim-generation.py:642-650` consults only the changed-path list interpreted by that candidate-side program.",
+        "Verification: an isolated direct evaluation of `evaluate_routine` at 2960f09657b4694ded7f3fb5bc4b0021974672bb, with exact marker/head and the changed path `scripts/check-claim-generation.py`, returned `(None, 'routine delivery admitted ...')`; the same result occurred for `.github/workflows/coherence.yml`."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Verification: repair head 2fe3e653049310e9197f9b8a7b350ea0606a78c3 makes `.github/workflows/coherence.yml:309-316` extract and run the Python gate from `BASE_SHA`, and the expanded fixture passes a base-gate inversion, but the enclosing workflow remains candidate-controlled on `pull_request`.",
+        "Verification: `gh api repos/FS-GG/.github/branches/main/protection` lists `claim-generation` as a required status context, while `gh api repos/FS-GG/.github/rulesets --paginate` returns only the active tag ruleset `release-tags-are-immutable`; no required-workflow or protected-path ruleset provides an authority boundary outside this editable workflow.",
+        "Verification: GitHub documents that a `pull_request` workflow uses the PR merge branch and the workflow version present in the event-associated SHA/ref (https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows and https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request). A routine candidate can therefore replace `.github/workflows/coherence.yml` itself, preserve a green job named `claim-generation`, and bypass the base-gate extraction. Repair remains required at a base/organization-trusted required-workflow or path-restriction boundary."
+      ]
+    },
+    {
+      "id": "R0-CRIT-002",
+      "severity": "major",
+      "summary": "Protected-operation refusal relies on a claimant-supplied operation label and an incomplete protected-path list, so publication automation can be admitted as a source change.",
+      "evidence": [
+        "Verification: `.fsgg/routine-development.json:6-24` allows `source-change`, rejects a marker that declares `publish`, but protects only `.fsgg/`, three workflow-name prefixes, and `registry/`.",
+        "Verification: `.github/workflows/kit-auto-publish.yml` and `scripts/kit-auto-publish.py` are publication surfaces whose paths do not match any configured protected prefix; isolated direct evaluations of `evaluate_routine` with either changed path and `operation=source-change` returned routine admission.",
+        "Verification: `tests/claim-generation/run.sh:243-259` tests a marker that truthfully declares `publish` and one `.fsgg/` path, but has no negative leg for a protected effect mislabeled `source-change` or for the repository's unlisted publication/authority surfaces."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `.fsgg/routine-development.json:19-32` at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 expands the base-loaded protected set to `.github/`, both roadmap-skill roots, `eng/`, `registry/`, `scripts/`, Coordination authority source, and build/tool configuration surfaces.",
+        "Verification: `tests/claim-generation/run.sh:263-292` now inverts candidate mutations of the gate, coherence workflow, kit publisher workflow/script, dispatch broker, and Coordination CLI; independent `tests/claim-generation/run.sh` execution passed 58/58. The remaining enclosing-workflow authority defect is retained separately as R0-CRIT-001."
+      ]
+    },
+    {
+      "id": "R0-CRIT-003",
+      "severity": "major",
+      "summary": "The milestone does not deliver the required per-removal receiving-surface and evidence-status mapping.",
+      "evidence": [
+        "Verification: `docs/2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md:196,216` requires each proposed removal to be mapped to the migration driver, shared driver, SDD consumer, or v2 runtime with observed/inferred/unmeasured status, and says R0 records those bindings in the implementation plan.",
+        "Verification: `git diff 27ccf141420f41e364f79d8a3c47ebc0aefe97b9..2960f09657b4694ded7f3fb5bc4b0021974672bb -- docs/2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md` adds route labels, renamed milestones, and the checkbox ledger but no receiving-surface/status mapping.",
+        "Verification: `work/3308-routine-development-route/plan.md:23-46` contains two general policy decisions and one generic migration-posture line; it does not enumerate the proposed removals, their receiver, or their observed/inferred/unmeasured state."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `work/3308-routine-development-route/plan.md:45-72` at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 enumerates all sixteen guarantee-removal rows, names receiving surfaces, distinguishes observed/inferred/unmeasured status, and assigns later R1-R5 adoption ownership.",
+        "Verification: `docs/2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md:214-217` now points R0 evidence to that explicit implementation-plan map without claiming later adoption complete."
+      ]
+    },
+    {
+      "id": "R0-CRIT-004",
+      "severity": "major",
+      "summary": "The observable exit calls for a real routine pull request, but the candidate evidence proves only an offline fixture and the candidate commit is not available as a GitHub pull-request head.",
+      "evidence": [
+        "Verification: `docs/2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md:196` requires that a real routine PR be eligible without hidden old validators or an issue/claim chain.",
+        "Verification: `tests/claim-generation/run.sh:209-259` creates a temporary local Git repository and directly invokes the Python gate; it does not exercise GitHub's required `claim-generation` context or branch-protection boundary.",
+        "Verification: `gh api -H 'Accept: application/vnd.github+json' repos/FS-GG/.github/commits/2960f09657b4694ded7f3fb5bc4b0021974672bb/pulls` returned HTTP 422 `No commit found for SHA`, so no live PR/check evidence for this candidate head was available to review."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: live stacked canary PR https://github.com/FS-GG/.github/pull/3309 targets `work/r0-smaller-contract-rook-fff7`, changes only `tests/routine-canary/route_canary.py`, and carries exactly one routine marker bound to head `34063e50bf18e99f1ea22a3328bdfdf7e6a9a9f1` with `operation=source-change`.",
+        "Verification: https://github.com/FS-GG/.github/actions/runs/34105514011/job/101689492987 is the live canary's completed successful `claim-generation` check; `gh pr view 3309 --repo FS-GG/.github --json headRefOid,statusCheckRollup,files,body` independently returned the same head, one changed canary file, and successful check."
+      ]
+    },
+    {
+      "id": "R0-CRIT-005",
+      "severity": "major",
+      "summary": "The strict R0 worker-to-critic handoff lacks the required completed lifecycle and feedback evidence.",
+      "evidence": [
+        "Verification: `gh api repos/FS-GG/.github/issues/3308/comments --paginate --slurp` on 2026-09-07 returned one accepted `fsgg:item-lifecycle/v1` event, issue comment 5567697683, whose phase is `sdd-planning-bootstrap`, event is `started`, and token usage is `pending`; there are no completed SDD, implementation/test, or critic-handoff lifecycle phases.",
+        "Verification: the durable event is https://github.com/FS-GG/.github/issues/3308#issuecomment-5567697683; issue comment https://github.com/FS-GG/.github/issues/3308#issuecomment-5567929438 separately acknowledges the bootstrap/export failure and absence of the local feedback skill but does not supply a validated lifecycle successor or feedback report.",
+        "Verification: `rg -l 'roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract' feedback reviews logs /tmp` before creation of this critique found no cycle feedback report/audit or tracked lifecycle export; `.agents/skills/work-roadmap/SKILL.md` requires lifecycle validation at the worker/critic handoff and a schema-v2 feedback report for this strict bootstrap."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: fresh `gh api repos/FS-GG/.github/issues/3308/comments --paginate --slurp` plus `scripts/fsgg-coord telemetry lifecycle export-comments --run roadmap-radical-development-bureaucracy-reduction-design-and-roadmap --unit r0` exported eight accepted events completing `sdd-planning-bootstrap`, `initial-critique`, `repair-round-1`, and `telemetry-reconciliation-repair-round-1` with no active phase.",
+        "Verification: `scripts/fsgg-coord telemetry lifecycle validate --run roadmap-radical-development-bureaucracy-reduction-design-and-roadmap --unit r0 --log /tmp/r0-confirm-lifecycle.jsonl --usage /tmp/fsgg-r0-lifecycle.9YF6Uc/worker.csv --usage /tmp/fsgg-r0-lifecycle.9YF6Uc/critic.csv --usage /tmp/fsgg-r0-lifecycle.9YF6Uc/worker-v2.csv --usage /tmp/fsgg-r0-lifecycle.9YF6Uc/repair-recon.csv --require-terminal --require-reconciled` exited 0 and reported eight events, four completed phases, and no active/blocked phases.",
+        "Verification: `scripts/fsgg-coord telemetry feedback validate --cycle roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract --report feedback/2026-09-07-roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract.md --audit feedback/audits/2026-09-07-roadmap-radical-development-bureaucracy-reduction-design-and-roadmap-m0-adopt-smaller-contract.audit.json --phases onboarding-first-build,lifecycle-authoring,implementation-test-evidence,verify-ship-pr` exited 0."
+      ]
+    },
+    {
+      "id": "R0-CRIT-006",
+      "severity": "major",
+      "summary": "The generated-guidance/projection refresh promised by the R0 plan is not coherent at the candidate head.",
+      "evidence": [
+        "Verification: `work/3308-routine-development-route/plan.md:45-46` requires regeneration of `AGENTS.md`, `CLAUDE.md`, and both runtime skill twins with projection tests.",
+        "Verification: `readiness/3308-routine-development-route/summary.md:12-29` still says verification, ship, ship-verdict, and governance-handoff are missing although all four files are committed in the candidate.",
+        "Verification: `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at 2960f09657b4694ded7f3fb5bc4b0021974672bb reported `coherent: false`, an update to `readiness/3308-routine-development-route/summary.md`, and creation of the missing generated SDD skill projections; `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` separately exited 0, so this finding is specifically projection/refresh currency rather than verification-stage failure."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Verification: `readiness/3308-routine-development-route/summary.md:12-29` at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 now reports every tracked view current, no diagnostics, and `refreshed-current`; `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` exits 0 with no change and coherent verification readiness.",
+        "Verification: `work/3308-routine-development-route/plan.md:74-75` narrows GV-001 to the two tracked roadmap-skill twins and driver manifest, and explicitly assigns the repository's pre-existing partial SDD skill materialization to `.github#2366`; `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` proposes only those intentionally absent `fs-gg-sdd-*` skill files and no update to the now-current summary."
+      ]
+    }
+  ],
+  "verification_evidence": [
+    "Verification: `git rev-parse HEAD` returned 2960f09657b4694ded7f3fb5bc4b0021974672bb and `git merge-base HEAD 27ccf141420f41e364f79d8a3c47ebc0aefe97b9` returned the exact supplied base 27ccf141420f41e364f79d8a3c47ebc0aefe97b9.",
+    "Verification: `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` exited 0 with `outcome: noChange`, `coherent: true`, 6/6 supported and observed evidence declarations, and verification readiness.",
+    "Verification: `tests/claim-generation/run.sh` exited 0 with 51 passed and 0 failed; `python3 tests/skill-quality/routine-development-route.py` exited 0. The aggregate `tests/skill-quality/run.sh` could not be independently rerun in this checkout because PyYAML is absent and exited 3 with its dependency-install instruction.",
+    "Verification: the exact base-to-head diff changes shared development policy, delivery routing, documentation, SDD artifacts, and tests; no game source or game functionality is present, so `game_functionality` is false.",
+    "Verification: repair head `2fe3e653049310e9197f9b8a7b350ea0606a78c3` is the unique next commit after initial head `2960f09657b4694ded7f3fb5bc4b0021974672bb`; `git merge-base` returned the initial head and `git diff --name-status` showed only the bounded repair files plus feedback evidence.",
+    "Verification: independent confirmation at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 passed `tests/claim-generation/run.sh` 58/58, targeted `python3 tests/skill-quality/routine-development-route.py`, SDD observed verification, feedback validation, and terminal/reconciled lifecycle validation.",
+    "Verification: confirmation remains changes-required solely because the editable `pull_request` workflow is not an external authority boundary; findings R0-CRIT-002 through R0-CRIT-006 are resolved at this head."
+  ],
+  "confirmation": {
+    "reviewed_commit": "2fe3e653049310e9197f9b8a7b350ea0606a78c3",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "R0-CRIT-001"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
