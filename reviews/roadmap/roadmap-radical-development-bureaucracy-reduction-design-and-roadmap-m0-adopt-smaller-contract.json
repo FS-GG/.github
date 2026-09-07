@@ -12,10 +12,11 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 1,
+  "repair_rounds": 2,
   "reviewed_commits": [
     "2960f09657b4694ded7f3fb5bc4b0021974672bb",
-    "2fe3e653049310e9197f9b8a7b350ea0606a78c3"
+    "2fe3e653049310e9197f9b8a7b350ea0606a78c3",
+    "fb144381f167559095a8211f3153eee46eba4038"
   ],
   "findings": [
     {
@@ -27,11 +28,14 @@
         "Verification: `.fsgg/routine-development.json:19-24` does not protect `scripts/check-claim-generation.py` or `.github/workflows/coherence.yml`, and `scripts/check-claim-generation.py:642-650` consults only the changed-path list interpreted by that candidate-side program.",
         "Verification: an isolated direct evaluation of `evaluate_routine` at 2960f09657b4694ded7f3fb5bc4b0021974672bb, with exact marker/head and the changed path `scripts/check-claim-generation.py`, returned `(None, 'routine delivery admitted ...')`; the same result occurred for `.github/workflows/coherence.yml`."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
         "Verification: repair head 2fe3e653049310e9197f9b8a7b350ea0606a78c3 makes `.github/workflows/coherence.yml:309-316` extract and run the Python gate from `BASE_SHA`, and the expanded fixture passes a base-gate inversion, but the enclosing workflow remains candidate-controlled on `pull_request`.",
         "Verification: `gh api repos/FS-GG/.github/branches/main/protection` lists `claim-generation` as a required status context, while `gh api repos/FS-GG/.github/rulesets --paginate` returns only the active tag ruleset `release-tags-are-immutable`; no required-workflow or protected-path ruleset provides an authority boundary outside this editable workflow.",
-        "Verification: GitHub documents that a `pull_request` workflow uses the PR merge branch and the workflow version present in the event-associated SHA/ref (https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows and https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request). A routine candidate can therefore replace `.github/workflows/coherence.yml` itself, preserve a green job named `claim-generation`, and bypass the base-gate extraction. Repair remains required at a base/organization-trusted required-workflow or path-restriction boundary."
+        "Verification: GitHub documents that a `pull_request` workflow uses the PR merge branch and the workflow version present in the event-associated SHA/ref (https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows and https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request). A routine candidate can therefore replace `.github/workflows/coherence.yml` itself, preserve a green job named `claim-generation`, and bypass the base-gate extraction. Repair remains required at a base/organization-trusted required-workflow or path-restriction boundary.",
+        "Verification: at combined head fb144381f167559095a8211f3153eee46eba4038, `.fsgg/routine-development.json:5-9`, `.fsgg/routine-eligibility-activation.json:4-10`, `work/3308-routine-development-route/plan.md` under `Accepted Threat Model`, the roadmap at lines 218-223, and `docs/architecture.md` under `Prospective routine-development authority` all define the same durable boundary: repository writers are trusted, the routine route catches accidental mistakes/drift, and adversarial workflow alteration or name-based context spoofing is explicitly not guaranteed.",
+        "Verification: the human user explicitly accepted that trusted-writer threat model for this confirmation; `.fsgg/routine-eligibility-activation.json:9-10` records `acceptedBy: human-user` and `acceptanceSource: explicit interactive instruction`. This disposition is resolution by accepted risk and narrowed acceptance scope, not technical elimination of the spoofing path.",
+        "Verification: `.github/workflows/routine-eligibility.yml` at fb144381f167559095a8211f3153eee46eba4038 uses `pull_request_target`, `contents: read`, a default-branch target guard, exact event/ref/SHA comparisons, and extracts all executable validator bytes from the exact base SHA; independent `bash tests/routine-eligibility/run.sh` passed the target/ref/SHA and base-loaded-execution inversions. Protected and high-assurance operations remain strict under `.fsgg/routine-development.json`."
       ]
     },
     {
@@ -104,10 +108,12 @@
         "Verification: `readiness/3308-routine-development-route/summary.md:12-29` still says verification, ship, ship-verdict, and governance-handoff are missing although all four files are committed in the candidate.",
         "Verification: `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at 2960f09657b4694ded7f3fb5bc4b0021974672bb reported `coherent: false`, an update to `readiness/3308-routine-development-route/summary.md`, and creation of the missing generated SDD skill projections; `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` separately exited 0, so this finding is specifically projection/refresh currency rather than verification-stage failure."
       ],
-      "disposition": "resolved",
+      "disposition": "follow-up",
       "resolution_evidence": [
         "Verification: `readiness/3308-routine-development-route/summary.md:12-29` at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 now reports every tracked view current, no diagnostics, and `refreshed-current`; `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` exits 0 with no change and coherent verification readiness.",
-        "Verification: `work/3308-routine-development-route/plan.md:74-75` narrows GV-001 to the two tracked roadmap-skill twins and driver manifest, and explicitly assigns the repository's pre-existing partial SDD skill materialization to `.github#2366`; `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` proposes only those intentionally absent `fs-gg-sdd-*` skill files and no update to the now-current summary."
+        "Verification: `work/3308-routine-development-route/plan.md:74-75` narrows GV-001 to the two tracked roadmap-skill twins and driver manifest, and explicitly assigns the repository's pre-existing partial SDD skill materialization to `.github#2366`; `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at the round-1 head proposed only those intentionally absent `fs-gg-sdd-*` skill files and no update to the then-current summary.",
+        "Verification: independent `fsgg-sdd refresh --root . --work 3308-routine-development-route --dry-run` at combined head fb144381f167559095a8211f3153eee46eba4038 now reports `coherent: false` and would update both `readiness/3308-routine-development-route/agent-commands/{claude,codex}/guidance.json` plus `readiness/3308-routine-development-route/summary.md`; the newly accepted threat-model/plan inputs were not regenerated into those tracked views. The separately listed missing `fs-gg-sdd-*` files remain the accepted `.github#2366` deferral and are not this finding.",
+        "Verification: `fsgg-sdd verify --root . --work 3308-routine-development-route --require-observed --dry-run` still exits 0 with verification readiness, so the required repair is narrowly to refresh and commit the three stale generated views (and any generator-required exact consequences), then reconfirm the exact repaired head."
       ]
     }
   ],
@@ -118,13 +124,15 @@
     "Verification: the exact base-to-head diff changes shared development policy, delivery routing, documentation, SDD artifacts, and tests; no game source or game functionality is present, so `game_functionality` is false.",
     "Verification: repair head `2fe3e653049310e9197f9b8a7b350ea0606a78c3` is the unique next commit after initial head `2960f09657b4694ded7f3fb5bc4b0021974672bb`; `git merge-base` returned the initial head and `git diff --name-status` showed only the bounded repair files plus feedback evidence.",
     "Verification: independent confirmation at 2fe3e653049310e9197f9b8a7b350ea0606a78c3 passed `tests/claim-generation/run.sh` 58/58, targeted `python3 tests/skill-quality/routine-development-route.py`, SDD observed verification, feedback validation, and terminal/reconciled lifecycle validation.",
-    "Verification: confirmation remains changes-required solely because the editable `pull_request` workflow is not an external authority boundary; findings R0-CRIT-002 through R0-CRIT-006 are resolved at this head."
+    "Verification: combined head fb144381f167559095a8211f3153eee46eba4038 is the exact head shared by closed-unmerged PR #3312 and its live canonical successor PR #3313; `gh pr view` reports #3309, #3311, and #3312 closed unmerged and #3313 open, so only #3313 remains a delivery PR. The #3313 body explains that the engine refused #3312's noncanonical remote branch and records the exact authorization marker for the canonical item branch.",
+    "Verification: independent round-2 checks at fb144381f167559095a8211f3153eee46eba4038 passed `tests/claim-generation/run.sh` 59/59, `bash tests/routine-eligibility/run.sh`, targeted `python3 tests/skill-quality/routine-development-route.py`, feedback validation, `git diff --check` apart from four generated markdown blank-lines-at-EOF diagnostics, and SDD observed verification. Live architecture-map checks on the exact head completed successfully; live semantic-skill-quality reached all semantic fixtures and failed only because this critique artifact truthfully still carried its round-1 non-passing verdict.",
+    "Verification: R0-CRIT-001 is resolved only by the explicitly accepted and durably documented trusted-writer risk boundary; the adversarial status-context path remains technically possible and is not represented as eliminated. R0-CRIT-002 through R0-CRIT-005 remain resolved. Confirmation remains changes-required solely because R0-CRIT-006 reopened when the round-2 authored inputs made three tracked generated views stale."
   ],
   "confirmation": {
-    "reviewed_commit": "2fe3e653049310e9197f9b8a7b350ea0606a78c3",
+    "reviewed_commit": "fb144381f167559095a8211f3153eee46eba4038",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "R0-CRIT-001"
+      "R0-CRIT-006"
     ]
   },
   "human_escalation": null,
