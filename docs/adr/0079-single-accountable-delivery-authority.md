@@ -6,6 +6,12 @@
 - **Affects:** FS-GG delivery skills, coordination review records, repository protection, and GitHub Substrate v2
 - **Clarifies:** ADR-0078 review evidence and the historical `pnext-item` review procedure do not create additional authorizers
 
+**Narrowed prospectively on 2026-09-07:** for work explicitly admitted by
+`.fsgg/routine-development.json`, the accountable owner needs no structured review ledger or phase
+identities. Independent review is optional or sampled; native exact-head required checks remain the
+technical boundary. The structured review evidence described below remains applicable to the strict
+route and retains its historical meaning.
+
 ## Context
 
 FS-GG already protects delivery with exact-head required checks, deterministic evidence, mutation controls,

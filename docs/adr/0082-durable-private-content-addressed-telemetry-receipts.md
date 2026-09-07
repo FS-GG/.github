@@ -10,6 +10,12 @@
 retention or reviewed legacy-proof mechanisms may use one explicitly human-authorized synthetic
 checkpoint; ADR-0083 does not weaken this ADR's normal path or reconstruct missing evidence.
 
+**Narrowed prospectively on 2026-09-07:** these receipts remain mandatory evidence for strict lifecycle
+telemetry, but routine pilot delivery has no lifecycle-receipt prerequisite. Routine usage collection is
+best effort and asynchronous; missing or corrupt samples are discarded and reported as measurement gaps
+without blocking a technically valid merge or requiring synthetic reconstruction. Existing receipts and
+strict histories retain their original validation rules.
+
 ## Context
 
 Lifecycle events publish aggregate token counts and a SHA-256 reference to a private runtime-usage CSV.

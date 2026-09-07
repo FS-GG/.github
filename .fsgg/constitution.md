@@ -6,11 +6,28 @@ prompts, and generated plans. It was seeded by the SDD skeleton as a populated
 baseline; ratify or amend it to fit this product, then treat it as the contract
 every change is measured against.
 
+## Prospective Routine-Development Pilot
+
+The machine-readable policy at `.fsgg/routine-development.json` defines a bounded prospective
+exception to the spec-driven workflow below. An explicitly admitted routine change uses one
+accountable owner, one `routine/*` PR, the repository's selected technical checks, and an exact-head
+binding. It does not require an issue or claim, SDD artifacts, a phase lifecycle ledger, an independent
+critic, feedback or receipt-cycle artifacts, or a metadata-`Done` transition. Those absences are part of
+the smaller contract, not incomplete evidence.
+
+Routine eligibility is never inferred from size. Publication, deployment, credentials, destructive
+effects, migration or cutover, external-contract acceptance, changes to the routine policy itself, and
+continuation of work already under strict authority remain governed by the full workflow. Existing
+strict evidence retains its original meaning and is not retroactively relaxed. The required
+`claim-generation` status context is also the routine exact-head/protected-boundary gate, so the pilot
+removes process evidence without removing changed-head refusal or inexpensive automated checks.
+
 ## Core Principles
 
 ### I. Specify Before Implementing
 
-Every non-trivial change MUST start from a written specification: the
+Except for a change admitted by the prospective routine-development policy, every non-trivial change
+MUST start from a written specification: the
 user-visible outcome, the scope boundary, the change tier, the public-surface
 impact, and how the change will be verified. Sketch the public shape and exercise
 it interactively before the implementation hardens it. Specs precede code so that
@@ -79,7 +96,8 @@ fast and visibly; optional integrations degrade explicitly rather than silently.
 
 ## Change Classification
 
-Every change declares a tier in its spec:
+Every strict-route change declares a tier in its spec. Routine pilot work declares its operation in the
+exact-head PR marker instead:
 
 - **Tier 1 (contracted change):** public surface, schema, generated view, command,
   artifact layout, agent-skill contract, or external integration. Requires a spec,
@@ -91,7 +109,7 @@ Every change declares a tier in its spec:
 
 ## Development Workflow
 
-Use the spec-driven loop: specify, clarify as needed, plan, break into tasks,
+For strict-route work, use the spec-driven loop: specify, clarify as needed, plan, break into tasks,
 implement, and analyze before merge. For lifecycle features, the plan identifies
 the authored artifacts, the structured contracts, the generated views, the schema
 and migration posture, the agent-facing behavior, any optional external governance
@@ -114,3 +132,7 @@ Versioning policy:
 
 Ratified on 2026-08-30 following review and adoption of these principles as the
 product's governing engineering contract.
+
+Amended prospectively on 2026-09-07 for the bounded routine-development pilot. This is a MINOR policy
+change: it narrows mandatory lifecycle obligations for explicitly admitted future routine work while
+preserving the strict route and all existing authority.
