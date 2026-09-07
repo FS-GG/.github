@@ -1,4 +1,6 @@
-<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  non-item branch: OK, nothing to fence
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[routine-eligibility: default-branch workflow and base validator remain outside candidate authority
+PASS  non-item branch: OK, nothing to fence
+PASS  routine branch: candidate-controlled strict context is not routine authority
 PASS  routine: exact-head source change is admitted without a board read
 PASS  routine: a moved head is refused
 PASS  routine: duplicate marker fields are refused as ambiguous
@@ -57,5 +59,5 @@ PASS  F4: [expired] names the worker who lapsed MOST RECENTLY, not the youngest 
 PASS  F4: and it reports that holder's own lease and lapse instant
 PASS  repair 1: an unusable --lease-minutes is refused up front, naming the flag
 
-claim-generation fixture: 58 passed, 0 failed
+claim-generation fixture: 59 passed, 0 failed
 ]]></system-out></testcase></testsuite>

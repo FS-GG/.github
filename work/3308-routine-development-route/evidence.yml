@@ -11,7 +11,7 @@ sourceAnalysis: readiness/3308-routine-development-route/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/3308-routine-development-route/analysis.json
-    digest: 4af010005b28058c4e51cf2320dd4702c243d1d30318b8d66aa457583d0de46f
+    digest: a2e4dd91bc22f53faa887ff28c53e751cc17be3f0091100089575f3a86f6f56f
     schemaVersion: 1
   - label: checklist
     path: work/3308-routine-development-route/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/3308-routine-development-route/plan.md
-    digest: 6d26c0bc70418d1f88911b18dd48f4ac9f0b4770c2398a57e805d0063ee1e680
+    digest: a7c70a356e21c0d2bbbd58119fae025f121d3612145b5b3c9517db1745f6fef1
     schemaVersion: 1
   - label: spec
     path: work/3308-routine-development-route/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/3308-routine-development-route/tasks.yml
-    digest: bb8d32a72d30a8cc4e4706d7ed077f85619861d91e44c1b3c44d68159307f1ef
+    digest: d9beabd4188cc6ec9cfe23b5af3a78ec6aeb2217e2690748622723ff0d778513
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -56,7 +56,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:946932e1cd4f082fffbfe6ca87350966b2862ffb3f6109bcafb661a9263c1b9f"
+      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -85,7 +85,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:946932e1cd4f082fffbfe6ca87350966b2862ffb3f6109bcafb661a9263c1b9f"
+      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -114,7 +114,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:946932e1cd4f082fffbfe6ca87350966b2862ffb3f6109bcafb661a9263c1b9f"
+      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -143,7 +143,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:946932e1cd4f082fffbfe6ca87350966b2862ffb3f6109bcafb661a9263c1b9f"
+      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -172,7 +172,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/3308-routine-development-route/verification/routine-gates.junit.xml
-      digest: "sha256:946932e1cd4f082fffbfe6ca87350966b2862ffb3f6109bcafb661a9263c1b9f"
+      digest: "sha256:51aa184dc40b3addcc269a0432d751c782f29ff4b231a3fb9bbcd145eab68400"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
