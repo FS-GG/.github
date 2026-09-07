@@ -53,6 +53,7 @@ FSGG_COORD_ENGINE_BIN="$($ROOT/scripts/build-gate-engine)"
 export FSGG_COORD_ENGINE_BIN
 python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 python3 "$ROOT/tests/skill-quality/routine-development-route.py"
+python3 "$ROOT/tests/skill-quality/routine-delivery.py"
 python3 "$ROOT/tests/skill-quality/review-round-contract.py"
 python3 "$ROOT/tests/skill-quality/roadmap-critique-contract.py"
 python3 "$ROOT/tests/skill-quality/agent-definition-coverage.py"
