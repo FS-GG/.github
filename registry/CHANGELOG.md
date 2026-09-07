@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-07** — **coordination coherent set `github:0.86.1` source prepared; `0.86.0` published frontier reconciled**
+  (owner github; routine-route correction [PR #3338](https://github.com/FS-GG/.github/pull/3338),
+  immutable prior release [`github:0.86.0`](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.86.0)):
+  advances the source frontier from 0.86.0 to 0.86.1 for a compatible board-driver wording fix: only
+  strict items enter the three-round fresh implementer/critic repair chain. It also records the already
+  promoted 0.86.0 set as the published frontier. Both feeds verified the three 0.86.0 packages from
+  source `beb3456ecb2c4b4cadb6bc8dc268598246449aaf`; content
+  `sha256:01d0c921ab23b6807e1d6da1a9c623cd0cfb5a595bf790b51662746a0681b974`;
+  manifest `sha256:39e2d49e0ea21b75045f849dbfba3d30b818401b98fcce51fe324688d989c9f0`;
+  stable channel `sha256:4cd7e3afe05d03d6417d445f758ae03a29d12d03a8c8dd8ba24d4855061a45e0`.
+  The published frontier remains 0.86.0 until 0.86.1 is packed once and promoted through the saga.
+
 - **2026-09-07** — **coordination coherent set `github:0.86.0` source prepared**
   (owner github; [PR #3330](https://github.com/FS-GG/.github/pull/3330)):
   advances the source frontier from 0.85.2 to 0.86.0 for the reduced routine-development route.

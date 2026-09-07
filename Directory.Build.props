@@ -563,8 +563,13 @@
        reversible source work. Protected operations and non-routine items retain the strict
        claim/review/completion route. The coordination engine's command, option, result, and exit-code
        vocabulary is unchanged; all three packages advance together under the coherent-set rule. -->
+  <!-- 0.86.0 -> 0.86.1 (R5 release preparation): PATCH. The routed board drivers now reserve the
+       three-round fresh implementer/critic repair chain for strict items, removing the last wording
+       that could send routine work back through strict ceremony. No coordination-engine command,
+       option, result, or exit-code vocabulary changes; all three packages advance together under the
+       coherent-set rule. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.86.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.86.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

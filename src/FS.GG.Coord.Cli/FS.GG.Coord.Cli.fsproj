@@ -130,13 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.86.0 — carry the reduced routine-development route in the coherent workflow packages.
+    <PackageReleaseNotes>0.86.1 — keep routine board work out of the strict repair chain.
 
-FS.GG.Drivers and FS.GG.Kit let explicitly admitted routine, reversible source work use one accountable
-owner, one PR, exact-head eligibility, required automated checks, and native merge readback without a
-separate issue or claim, critic, receipt, or projection cycle. Protected operations and non-routine items retain the
-strict route. FS.GG.Coord.Cli advances with the coherent set; its command, option, result, and exit-code
-vocabulary is unchanged.
+FS.GG.Drivers' routed work-board variants now invoke the three-round fresh implementer/critic repair
+chain only for strict items. Explicitly admitted routine, reversible source work remains on the reduced
+one-owner, one-PR route through repair and completion. FS.GG.Kit and FS.GG.Coord.Cli advance with the
+coherent set; the coordination engine's command, option, result, and exit-code vocabulary is unchanged.
 
 $(FsggStandingAdvisories)
 
