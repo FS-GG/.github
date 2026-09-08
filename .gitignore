@@ -21,6 +21,10 @@ obj/
 # reasoning belongs in the issue/PR comment that records the decision (including structured
 # delivery-route and review receipts); board fields remain projections of those records.
 .fsgg/coord-report/
+# Raw sessions and telemetry receipts are private inputs, never repository evidence.
+**/.codex/sessions/
+**/*raw-receipt*
+**/*.jsonl
 # M5: bulky execution output belongs in immutable CI artifacts. Existing tracked
 # files remain tracked until their recoverable M6 migration; this prevents new copies.
 **/test-results/

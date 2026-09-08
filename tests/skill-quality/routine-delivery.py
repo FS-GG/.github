@@ -5,6 +5,7 @@ import importlib.util
 import pathlib
 import sys
 import unittest
+from dataclasses import asdict
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -62,23 +63,27 @@ class RoutineDeliveryTests(unittest.TestCase):
         api = FakeApi([opened()])
         code, result = self.call(api, apply=False)
         self.assertEqual((code, result.outcome, api.attempts), (0, "ready", 0))
+        self.assertEqual((asdict(result)["expectedHead"], asdict(result)["observedHead"]), (HEAD, HEAD))
 
     def test_changed_head_refuses_before_a_write(self):
         api = FakeApi([opened("c" * 40)])
         code, result = self.call(api)
         self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 0))
         self.assertIn("changed head", result.reason)
+        self.assertEqual(asdict(result)["observedHead"], "c" * 40)
 
     def test_success_requires_native_merged_readback(self):
         api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
         code, result = self.call(api, publication=True)
         self.assertEqual((code, result.codeDelivery, result.publication), (0, "delivered", "pending"))
         self.assertEqual((result.mergeCommit, result.attempts), (MERGE, 1))
+        self.assertEqual(asdict(result)["observedHead"], HEAD)
 
     def test_ambiguous_write_reads_back_before_retry(self):
         api = FakeApi([opened(), merged()], [MODULE.AmbiguousWrite("timeout")])
         code, result = self.call(api)
         self.assertEqual((code, result.outcome, api.attempts), (0, "delivered-after-readback", 1))
+        self.assertEqual(asdict(result)["expectedHead"], HEAD)
 
     def test_definitely_unmerged_readback_allows_one_retry(self):
         api = FakeApi(
@@ -96,6 +101,7 @@ class RoutineDeliveryTests(unittest.TestCase):
         code, result = self.call(api)
         self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
                          (3, "indeterminate", "unknown", 2))
+        self.assertEqual(asdict(result)["observedHead"], HEAD)
 
     def test_retry_requires_current_native_merge_eligibility(self):
         blocked = {**opened(), "mergeable_state": "blocked"}
