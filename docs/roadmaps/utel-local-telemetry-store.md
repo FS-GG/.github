@@ -104,3 +104,34 @@ SQLite locking and deduplication continue to protect recovery and mixed-version 
 This window selects no population automatically, adds no workflow or service, and changes no Coordination or
 §7.4 counters. It does not collect billing, scan historical sessions, backfill, upload private data or inspect
 the retained host database. Publication, generated-workspace defaults and receiver adoption remain pending.
+
+## UTEL-05A — Derived whole-item budget assessment
+
+- [x] Add a pure `TelemetryBudget` domain for exact, overflow-safe rational thresholds. More than 10% is a
+  breach, more than 25% is severe, and 15 distinct breaching original items opens one intervention; equality
+  at either boundary is non-triggering.
+- [x] Accept only source-referenced population, attribution, interval and intervention-evidence facts through
+  the existing immutable inbox. Callers cannot submit pass/breach/reset decisions. Native original-item
+  completion gates assessment, while incomplete population, partial source coverage, unresolved attribution,
+  runtime gaps and unwitnessed intervals remain unknown. Known zero activity is not applicable.
+  `budget-population` is the canonical whole-item completion and epoch-membership fact keyed by
+  `originalItemId`; there is no redundant fifth whole-item fact kind.
+- [x] Add checksummed migration 4 for normalized fact projections, shared-cost references, dirty items,
+  immutable assessment revisions, sticky epoch membership, dimension-level breaches and one intervention per
+  epoch. Provider/accounting scopes remain separate and unique cost references prevent overlapping legacy and
+  runtime totals from being counted twice.
+- [x] Reevaluate at most 32 dirty items and 4,096 cost references per item under the existing writer lock and
+  short transaction. Corrections can remove a mistaken breach, but replay, retries, extra dimensions and new
+  attempts do not create another distinct item. Further breaches fold into an open intervention.
+- [x] Union administrative intervals before subtracting witnessed useful/productive overlap at nanosecond
+  precision. Useful validation, including expensive or duplicated tests, is excluded; CI-only administrative
+  diagnostics cannot independently trigger an intervention.
+- [x] Advance exactly one successor epoch only from complete evidence that deployment preceded a verified
+  improvement. Deployment alone, verification-before-deployment, failed improvement and unknown coverage do
+  not reset. Old-epoch items remain bound to their original epoch.
+- [x] Provide read-only `telemetry budget summary --item` and `telemetry budget status` JSON. They expose no
+  source references, assignment IDs, local paths or content and never drain, reset or mutate the store.
+
+This window adds no authoritative mutation command, automatic population selection, workflow, service,
+Coordination counter, private backfill or package publication. Generated workspaces and defaults remain
+unchanged; source publication and adoption remain pending.

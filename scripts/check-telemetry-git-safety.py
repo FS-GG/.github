@@ -18,7 +18,7 @@ RAW_MARKERS = (
 PRIVATE_SUFFIXES = (
     ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm", ".sqlite-journal",
     ".sqlite3-wal", ".sqlite3-shm", ".sqlite3-journal", ".ready", ".rejected",
-    "drain.cursor", "writer.lock",
+    ".budget-batch", ".budget-ref", "drain.cursor", "writer.lock",
 )
 
 
@@ -49,7 +49,10 @@ def main() -> int:
                 raise ValueError("unsafe-telemetry-path")
             blob = git(args.repo, "show", f"HEAD:{path}" if args.base else f":{path}", binary=True)
             lowered = blob.lower()
-            telemetry_evidence = any(word in normalized for word in ("telemetry", "usage", "receipt"))
+            # The size cap is for checked-in evidence, not implementation source whose module name
+            # happens to contain "Telemetry". Raw markers and unsafe suffixes still apply everywhere.
+            telemetry_evidence = not normalized.startswith(("/src/", "/tests/")) and any(
+                word in normalized for word in ("telemetry", "usage", "receipt"))
             if telemetry_evidence and len(blob) > MAX_PUBLIC_EVIDENCE:
                 raise ValueError("telemetry-evidence-too-large")
             if any(marker in lowered for marker in RAW_MARKERS):

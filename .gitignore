@@ -36,6 +36,8 @@ obj/
 **/*.sqlite3-journal
 **/*.ready
 **/*.rejected
+**/*.budget-batch
+**/*.budget-ref
 **/*.private-export*
 **/*private-analytics*
 **/drain.cursor

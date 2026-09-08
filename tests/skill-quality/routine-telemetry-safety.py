@@ -48,4 +48,8 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     (repo / "worker.ready").write_text('{"schema":"fsgg.telemetry.' + 'ingest/1"}')
     subprocess.run(["git", "-C", str(repo), "add", "-f", "worker.ready"], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", "worker.ready"], check=True)
+    (repo / "renamed-budget-reference.budget-ref").write_text('{"sourceRef":"private:synthetic"}')
+    subprocess.run(["git", "-C", str(repo), "add", "-f", "renamed-budget-reference.budget-ref"], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
 print("routine-telemetry-safety: bounded I/O and forced-index rejection pass")

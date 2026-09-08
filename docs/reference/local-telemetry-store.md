@@ -38,6 +38,13 @@ The coverage row keeps inventory, attempts, job pages, terminal state, timestamp
 critical-path evidence independent. Older v1/v2 stores upgrade in place; migration SQL and checksum receipts
 are immutable.
 
+Migration 4 adds private `budget_population_facts`, `budget_attribution_facts`, `budget_interval_facts` and
+`budget_intervention_facts` projections. `budget_shared_cost_refs` prevents one source cost from entering two
+provider/accounting scopes. `budget_dirty_items` bounds reevaluation work; `budget_epochs` and
+`budget_epoch_membership` retain an original item's first epoch; `budget_assessment_revisions` preserves each
+derived dimension decision; `budget_breaches` counts distinct items; and `budget_interventions` permits one
+open-to-verified transition per epoch. Stores at schema versions 1, 2 or 3 upgrade in place under `writer.lock`.
+
 ## Identities, inbox, and drain
 
 Assignments use schema `fsgg.telemetry.codex-assignment/1` with only `featureId`, `itemId`, `attemptId`, optional
@@ -85,6 +92,51 @@ and records rationale. Missing or drifted matches are unclassified and classific
 `mixed` is not redistributed. Runner seconds sum valid job intervals, while wall seconds union them. Queue,
 avoidable-rerun and critical-path values require their own native witnesses; absent, reversed, pending or
 skipped timestamps never become zero. Monetary cost is not collected.
+
+## Whole-item budget assessment
+
+```console
+fsgg-coord-engine telemetry budget summary --item UTEL-05A --store-root /durable/private/fsgg-telemetry
+fsgg-coord-engine telemetry budget status --store-root /durable/private/fsgg-telemetry
+```
+
+Budget input remains ordinary closed `fsgg.telemetry.ingest/1` observations. A native population fact declares
+the stable original item and whether it has completed; attribution facts name a dimension, provider,
+accounting scope, coverage, attribution quality and private source reference. Interval facts use integer
+nanoseconds and classify administrative, useful or productive time. Intervention facts are evidence of a
+deployment or later verification, never caller-authored reset authority.
+`budget-population` is therefore both the whole-item completion fact and the sticky-membership source keyed by
+`originalItemId`; no separate whole-item fact duplicates that authority.
+
+The reducer assesses dimensions independently. It computes the 10% ceiling as `10 × numerator > denominator`
+and the severe threshold as `4 × numerator > denominator` with overflow-safe integers and no rounding. Zero
+over zero is not applicable. Missing denominators, partial CI pages, runtime gaps, mixed attribution, incomplete
+lineage and unwitnessed critical-path intervals are unknown, so they neither pass nor breach. Administrative
+intervals are unioned before witnessed useful/productive overlap is removed; useful tests do not become
+bureaucracy merely because they are slow or repeated.
+
+Each completed original item remains in its first epoch. Fifteen distinct nonsevere breaching items, or any
+item above 25%, opens the epoch's sole intervention. Corrections may revise the item's assessment and breach,
+but retries, dimensions and attempts cannot multiply the distinct count. An epoch advances atomically only
+when complete evidence proves deployment occurred before a successful verification; all other combinations
+leave the intervention open. Evaluation is capped at 32 dirty items per transaction and 4,096 references per
+item, with remaining dirty work visible to a later drain.
+
+Representative read-only inspection:
+
+```sql
+SELECT item_id, dimension, provider, accounting_scope, verdict, numerator, denominator, severe, reason
+FROM budget_assessment_revisions a
+WHERE assessment_revision = (
+  SELECT max(assessment_revision) FROM budget_assessment_revisions b
+  WHERE b.item_id=a.item_id AND b.dimension=a.dimension
+    AND b.provider=a.provider AND b.accounting_scope=a.accounting_scope
+)
+ORDER BY item_id, dimension, provider, accounting_scope;
+SELECT epoch_id, count(DISTINCT item_id) AS distinct_breaches
+FROM budget_breaches GROUP BY epoch_id ORDER BY epoch_id;
+SELECT epoch_id, state, trigger_kind FROM budget_interventions ORDER BY epoch_id;
+```
 
 ## Locking and crash recovery
 
