@@ -1348,9 +1348,14 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-00; GS2-02 epoch/manifest vocabulary before publication
 **Exit:** every released v1 writer is fenced fleet-wide
 
-- [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define states including `ObservingV2` and
-  `ContractingV1`, legal transitions, manifest binding, ledger/ref/tag layout, ancestry proof, failure
-  semantics, caching ceiling, operation-generation fencing, and issue projection.
+- [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define the complete
+  `OperatingV1 -> Preparing -> FreezeRequested -> Frozen -> SwitchedV2 -> VerifiedV2 -> OpenV2 -> ObservingV2 -> ContractingV1 -> OperatingV2`
+  sequence, legal pre-open rollback transitions, manifest binding, canonical fleet identity, exact
+  ledger/ref/tag/genesis layout, ancestry proof, explicit partial/refused/indeterminate failure semantics,
+  fresh-read/cache policy, claim and operation-generation fencing at the effect boundary, and non-authoritative
+  issue projection. `Preparing` preserves only already-admitted eligible incumbent operations under the current
+  manifest and exact generations; `FreezeRequested` and every later state refuse new ordinary v1 effects.
+  `RollingBack` never independently reopens writing, and no transition restores v1 after `OpenV2`.
 - [ ] **GS2-08.2 — Complete ledger protections.** Preserve and continuously audit the authority
   repository's split branch rulesets; add immutable tag rules, the protected `fleet-cutover` environment,
   a contents-only selected-repository journal App (or explicit security acceptance of the shared App),
