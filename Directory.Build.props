@@ -568,8 +568,12 @@
        that could send routine work back through strict ceremony. No coordination-engine command,
        option, result, or exit-code vocabulary changes; all three packages advance together under the
        coherent-set rule. -->
+  <!-- 0.86.1 -> 0.87.0 (UTEL-06.5 release preparation): MINOR on the stable 0.x line. The coherent
+       set adds prospective host-local SQLite telemetry commands, repository-owned Codex lifecycle
+       observation, exact-head CI population reconciliation, and machine-derived whole-item budget
+       inputs. Telemetry remains advisory and future-only; all three packages advance together. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.86.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.87.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
