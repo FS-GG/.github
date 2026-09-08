@@ -9,6 +9,7 @@ import subprocess
 import sys
 import unittest
 from dataclasses import asdict
+from datetime import datetime, timezone
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -274,6 +275,45 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual(callbacks, ["ready"])
         self.assertEqual((code, result.codeDelivery, api.attempts), (0, "delivered", 1))
 
+    def test_driver_observes_pre_admission_then_later_final_native_readback(self):
+        moments = iter([
+            datetime(2026, 9, 7, 0, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 9, 7, 0, 2, 0, tzinfo=timezone.utc),
+        ])
+
+        class Clock:
+            @staticmethod
+            def now(zone):
+                self.assertEqual(zone, timezone.utc)
+                return next(moments)
+
+            fromisoformat = staticmethod(datetime.fromisoformat)
+
+        observations = []
+        prior_api, prior_observe, prior_datetime = MODULE.GhApi, MODULE.observe_candidate, MODULE.datetime
+        try:
+            MODULE.GhApi = lambda: FakeApi(
+                [opened(), {**merged(), "merged_at": "2026-09-07T00:01:00Z"}],
+                [{"merged": True, "sha": MERGE}],
+            )
+            MODULE.datetime = Clock
+            MODULE.observe_candidate = lambda summary, **_: observations.append(summary) or "complete"
+            code = MODULE.main([
+                "--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD, "--apply",
+                "--telemetry-assignment", "/private/assignment.json",
+                "--telemetry-store-root", "/private/store",
+            ])
+        finally:
+            MODULE.GhApi, MODULE.observe_candidate, MODULE.datetime = prior_api, prior_observe, prior_datetime
+        self.assertEqual(code, 0)
+        self.assertEqual([value.outcome for value in observations], ["ready", "delivered"])
+        pre = datetime.fromisoformat(observations[0].observedAt.replace("Z", "+00:00"))
+        final = datetime.fromisoformat(observations[1].observedAt.replace("Z", "+00:00"))
+        occurred = datetime.fromisoformat(observations[1].outcomeAt.replace("Z", "+00:00"))
+        self.assertLess(pre, final)
+        self.assertLessEqual(occurred, final)
+        self.assertEqual(observations[1].telemetryHealth, "not-configured")
+
     def test_changed_head_never_calls_population_observer(self):
         callbacks: list[object] = []
         code, result = MODULE.summarize(
@@ -282,6 +322,22 @@ class RoutineDeliveryTests(unittest.TestCase):
             apply=True, candidate_observer=callbacks.append,
         )
         self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
+
+    def test_driver_records_native_refusal_without_creating_pre_admission(self):
+        observations = []
+        prior_api, prior_observe = MODULE.GhApi, MODULE.observe_candidate
+        try:
+            MODULE.GhApi = lambda: FakeApi([opened("c" * 40)])
+            MODULE.observe_candidate = lambda summary, **_: observations.append(summary) or "complete"
+            code = MODULE.main([
+                "--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD, "--apply",
+                "--telemetry-assignment", "/private/assignment.json",
+                "--telemetry-store-root", "/private/store",
+            ])
+        finally:
+            MODULE.GhApi, MODULE.observe_candidate = prior_api, prior_observe
+        self.assertEqual(code, 2)
+        self.assertEqual([(value.outcome, value.codeDelivery) for value in observations], [("refused", "not-delivered")])
 
     def test_exact_head_but_ineligible_pr_never_calls_population_observer(self):
         callbacks: list[object] = []

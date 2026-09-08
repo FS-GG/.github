@@ -54,11 +54,13 @@ changes native output, exit or delivery.
   source preparation until the delivery driver invokes it automatically. Source now includes the advisory
   routine-delivery hook and executable reconciliation tests; publication, installation, activation and operational
   qualification remain pending.
-- [ ] **UTEL-06.4 — Derive whole-item inputs and fail-visible budget reconciliation.** Derive population,
+- [x] **UTEL-06.4 — Derive whole-item inputs and fail-visible budget reconciliation.** Derive population,
   attribution and interval facts from admitted runtime, CI and native outcome; accept no caller-authored verdicts.
   Merge does not close running children, and a late follow-up revises assessment. Expose this in the existing
   driver health summary without board counter or report ceremony. Preserve the more-than-10%, more-than-25%, 15
-  distinct and verified-reset semantics and unknown dimensions.
+  distinct and verified-reset semantics and unknown dimensions. Source evidence is additive migration 7,
+  transactionally derived projections and executable Core/CLI/driver journeys; publication, installation,
+  activation and operational qualification remain pending.
 - [ ] **UTEL-06.5 — Publish and qualify the coherent producer.** After 06.1–06.4 merge, select the next unoccupied
   stable minor (`0.87.0` is only a candidate), release all three members from one source through the existing saga,
   and verify gates, both feeds, normalized payload, clean installation, native SQLite and every supported

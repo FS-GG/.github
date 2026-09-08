@@ -53,3 +53,12 @@ module TelemetryBudgetTests =
     let ``completion must come from the native item source`` () =
         let bytes = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"bad-population","sourceIdentity":"worker","generation":"g","cursor":"1","eventCount":1,"events":[{{"kind":"budget-population","identity":"population","itemId":"item","revision":0,"originalItemId":"item","state":"completed","sourceKind":"caller","sourceRef":"fake"}}]}}"""
         Assert.True(TelemetryStore.parseBatch bytes |> Result.isError)
+
+    [<Fact>]
+    let ``machine native outcome is closed and does not carry an assessment verdict`` () =
+        let valid = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-outcome","sourceIdentity":"routine-delivery","generation":"candidate","cursor":"1","eventCount":1,"events":[{{"kind":"native-item-outcome","identity":"native-item","itemId":"item","revision":1,"repository":"FS-GG/.github","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-09-08T10:00:00Z","observedAt":"2026-09-08T10:00:01Z","sourceKind":"routine-delivery","sourceRef":"routine-delivery:item"}}]}}"""
+        Assert.True(TelemetryStore.parseBatch valid |> Result.isOk)
+        let withVerdict = Encoding.UTF8.GetString(valid).Replace("\"sourceRef\":\"routine-delivery:item\"", "\"sourceRef\":\"routine-delivery:item\",\"verdict\":\"pass\"") |> Encoding.UTF8.GetBytes
+        match TelemetryStore.parseBatch withVerdict with
+        | Error errors -> Assert.Contains("unknown field", String.concat ";" errors)
+        | Ok _ -> failwith "caller-authored outcome verdict was accepted"

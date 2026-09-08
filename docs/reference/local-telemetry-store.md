@@ -62,6 +62,12 @@ all attempts, attempt-specific jobs and native check-runs are reconciled indepen
 inventory mutation, external checks and unsupported event bindings stay explicit rather than becoming zero or
 complete. Stores at schema versions 1 through 5 upgrade in place without changing earlier migration checksums.
 
+Migration 7 adds `native_item_outcomes`, the durable machine-authored result of the repository-owned routine
+delivery readback. Each revision binds item, repository, PR, base ref/SHA, candidate head, delivery outcome,
+code-delivery truth, optional merge commit, native occurrence time, observation time and private source reference.
+It is queued and drained before provider reconciliation, so the native result survives unavailable CI reads.
+Stores at schema versions 1 through 6 upgrade in place without changing earlier migrations.
+
 ## Identities, inbox, and drain
 
 Assignments use schema `fsgg.telemetry.codex-assignment/1` with only `featureId`, `itemId`, `attemptId`, optional
@@ -167,8 +173,12 @@ python3 tools/routine-delivery.py --repo FS-GG/.github --pr 1234 --head 01234567
   --telemetry-store-root /durable/private/fsgg-telemetry
 ```
 
-The driver passes its exact generated public delivery JSON to `telemetry ci reconcile`; assignment and store
-locations remain private command context. Observer failure is diagnostic and cannot change delivery outcome.
+The driver passes its exact generated public delivery JSON to `telemetry ci reconcile` before an eligible merge
+and again after the final native readback; assignment and store locations remain private command context. Each
+readback has a fresh observation timestamp ordered after its native outcome timestamp. The observer drains its
+bounded inbox before checking an existing admission and after publishing a revision, closing the pre/post process
+race without waiting indefinitely. `telemetryHealth` in the existing delivery summary is `complete`, `open`,
+`pending`, `missing-outcome`, or `unavailable`. Observer failure is diagnostic and cannot change delivery outcome.
 This is source capability only until a coherent package is published, installed and activated.
 
 ## Whole-item budget assessment
@@ -178,18 +188,28 @@ fsgg-coord-engine telemetry budget summary --item UTEL-05A --store-root /durable
 fsgg-coord-engine telemetry budget status --store-root /durable/private/fsgg-telemetry
 ```
 
-Budget input remains ordinary closed `fsgg.telemetry.ingest/1` observations. A native population fact declares
-the stable original item and whether it has completed; attribution facts name a dimension, provider,
-accounting scope, coverage, attribution quality and private source reference. Interval facts use integer
-nanoseconds and classify administrative, useful or productive time. Intervention facts are evidence of a
-deployment or later verification, never caller-authored reset authority.
-`budget-population` is therefore both the whole-item completion fact and the sticky-membership source keyed by
-`originalItemId`; no separate whole-item fact duplicates that authority.
+For an item with a migration-7 outcome, the writer transaction derives budget population, attribution and interval
+projections from native runtime/lineage, CI and delivery facts. Callers do not supply Budget facts or assessment
+verdicts on this route. A delivered outcome completes only after a prospective activation/root expectation exists
+and every expected supported dispatch has exactly one terminal invocation. A native refusal may complete the
+zero-dispatch population. A merge with a live child remains open; a later expected follow-up rewrites the one stable
+derived population identity to open, then its terminal/usage produces a new assessment revision. The reducer reads
+exactly the latest canonical population projection. Migration-4 caller facts remain readable for old stores but
+cannot override machine-derived projections for a migration-7 item.
+
+Runtime usage supplies known provider denominators, but absent activity classification leaves the administrative
+numerator and verdict unknown. Human effort and priced cost remain unknown. CI step timestamps produce private
+administrative/useful/productive interval projections, but absent native critical-path binding leaves them
+unwitnessed and the delay verdict unknown. CI administrative runner share is reported as diagnostic
+`not-applicable`; it cannot enter the section 7.4 breach trigger. Missing facts never become zero or a passing
+verdict. Intervention facts remain evidence of deployment or later verification, never caller-authored reset
+authority.
 
 The reducer assesses dimensions independently. It computes the 10% ceiling as `10 × numerator > denominator`
 and the severe threshold as `4 × numerator > denominator` with overflow-safe integers and no rounding. Zero
 over zero is not applicable. Missing denominators, partial CI pages, runtime gaps, mixed attribution, incomplete
-lineage and unwitnessed critical-path intervals are unknown, so they neither pass nor breach. Administrative
+lineage and unwitnessed critical-path intervals are unknown, so they neither pass nor breach. Known partial
+measurements remain visible beside an unknown verdict. Administrative
 intervals are unioned before witnessed useful/productive overlap is removed; useful tests do not become
 bureaucracy merely because they are slow or repeated.
 

@@ -45,6 +45,7 @@ module TelemetryStore =
         | CiPopulationAdmission of collectionId: string * repository: string * pullRequest: int64 * baseRef: string * baseSha: string * head: string * witness: string
         | CiCheck of repository: string * checkId: int64 * name: string * appSlug: string option * status: string * conclusion: string option * startedAt: string option * completedAt: string option
         | CiPopulationCoverage of collectionId: string * actions: string * checks: string * attempts: string * jobs: string * terminal: string * timestamps: string * continuation: string * externalChecks: int64 * gaps: string
+        | NativeItemOutcome of repository: string * pullRequest: int64 * baseRef: string * baseSha: string * head: string * outcome: string * codeDelivery: string * mergeCommit: string option * occurredAt: string option * observedAt: string * sourceKind: string * sourceRef: string
         | BudgetPopulation of originalItemId: string * state: string * sourceKind: string * sourceRef: string
         | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
         | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string

@@ -30,14 +30,18 @@ module TelemetryCi =
                 match root.TryGetProperty name with
                 | true, value when value.ValueKind = JsonValueKind.String && safe(value.GetString()) -> Some(value.GetString())
                 | _ -> None
+            let schema =
+                match root.TryGetProperty "schema" with
+                | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = AssignmentSchema -> Some AssignmentSchema
+                | _ -> None
             let parent =
                 match root.TryGetProperty "parentAttemptId" with
                 | false, _ -> Some None
                 | true, value when value.ValueKind = JsonValueKind.Null -> Some None
                 | true, value when value.ValueKind = JsonValueKind.String && safe(value.GetString()) -> Some(Some(value.GetString()))
                 | _ -> None
-            match text "schema", text "featureId", text "itemId", text "attemptId", parent, text "producerStream" with
-            | Some schema, Some feature, Some item, Some attempt, Some parentAttempt, Some producer when schema = AssignmentSchema && unknown.IsEmpty ->
+            match schema, text "featureId", text "itemId", text "attemptId", parent, text "producerStream" with
+            | Some _, Some feature, Some item, Some attempt, Some parentAttempt, Some producer when unknown.IsEmpty ->
                 Ok { FeatureId = feature; ItemId = item; AttemptId = attempt; ParentAttemptId = parentAttempt; ProducerStream = producer }
             | _ when not unknown.IsEmpty -> Error [ "assignment contains unknown fields: " + String.concat "," unknown ]
             | _ -> Error [ "assignment must be closed, schema-current, and contain safe identifiers" ]

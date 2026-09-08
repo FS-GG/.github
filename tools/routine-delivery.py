@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
 
@@ -160,6 +160,9 @@ class Summary:
     coherentValidation: str
     baseRef: str | None = None
     baseSha: str | None = None
+    outcomeAt: str | None = None
+    observedAt: str | None = None
+    telemetryHealth: str = "not-configured"
 
 
 def observe_candidate(
@@ -169,7 +172,7 @@ def observe_candidate(
     store_root: str,
     engine: str,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-) -> bool:
+) -> str:
     """Invoke advisory CI reconciliation with the exact generated delivery JSON."""
     payload = json.dumps(asdict(summary), separators=(",", ":"), sort_keys=True) + "\n"
     try:
@@ -184,11 +187,18 @@ def observe_candidate(
                 check=False, capture_output=True, text=True, timeout=35,
             )
         if completed.returncode == 0:
-            return True
+            try:
+                result = json.loads(completed.stdout)
+                health = result.get("driverHealth")
+                if health in {"complete", "open", "pending", "missing-outcome"}:
+                    return health
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            return "pending"
     except (OSError, subprocess.SubprocessError):
         pass
     print("fsgg routine telemetry: CI observation unavailable; native delivery is unchanged", file=sys.stderr)
-    return False
+    return "unavailable"
 
 
 def head_of(pr: dict[str, Any]) -> str | None:
@@ -208,6 +218,11 @@ def base_of(pr: dict[str, Any]) -> tuple[str | None, str | None]:
 def merged_commit_of(pr: dict[str, Any]) -> str | None:
     value = pr.get("merge_commit_sha")
     return value if isinstance(value, str) and SHA_RE.fullmatch(value) else None
+
+
+def outcome_time_of(pr: dict[str, Any]) -> str | None:
+    value = pr.get("merged_at")
+    return value if isinstance(value, str) and value else None
 
 
 def is_merged(pr: dict[str, Any]) -> bool:
@@ -352,8 +367,16 @@ def summarize(
     publication = "pending" if publication_required else "not-required"
     before = api.get_pr(repo, pr_number)
     base_ref, base_sha = base_of(before)
-    def bound(*values: Any) -> Summary:
-        return Summary(*values, baseRef=base_ref, baseSha=base_sha)
+    def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
+        now = datetime.now(timezone.utc)
+        outcome_at = outcome_time_of(native)
+        if outcome_at:
+            parsed_outcome = datetime.fromisoformat(outcome_at.replace("Z", "+00:00"))
+            if parsed_outcome > now:
+                now = parsed_outcome
+        return Summary(*values, baseRef=base_ref, baseSha=base_sha,
+                       outcomeAt=outcome_at,
+                       observedAt=now.isoformat().replace("+00:00", "Z"))
     allowed, reason = eligible(before, expected_head)
     observed = head_of(before)
     if not allowed:
@@ -407,7 +430,7 @@ def summarize(
                     "delivered-disputed" if disputed else "delivered-after-readback",
                     "delivered", publication,
                     merged_commit_of(after), attempts, reason if disputed else None, disposition,
-                    "disputed" if disputed else coherent,
+                    "disputed" if disputed else coherent, native=after,
                 )
             if not allowed:
                 return 2, bound(
@@ -432,7 +455,7 @@ def summarize(
                     "delivered-disputed" if disputed else "delivered-after-readback",
                     "delivered", publication,
                     merged_commit_of(after), attempts, reason if disputed else None, disposition,
-                    "disputed" if disputed else coherent,
+                    "disputed" if disputed else coherent, native=after,
                 )
             return 2, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
@@ -452,7 +475,7 @@ def summarize(
                 return 4, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                     "delivered-disputed", "delivered", publication, merged_commit_of(after), attempts, reason,
-                    disposition, "disputed",
+                    disposition, "disputed", native=after,
                 )
         if response.get("merged") is True and is_merged(after) and head_of(after) == expected_head:
             merge_commit = response.get("sha")
@@ -460,7 +483,7 @@ def summarize(
                 merge_commit = merged_commit_of(after)
             return 0, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                "delivered", "delivered", publication, merge_commit, attempts, None, disposition, coherent,
+                "delivered", "delivered", publication, merge_commit, attempts, None, disposition, coherent, native=after,
             )
         return 3, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
@@ -497,11 +520,13 @@ def main(argv: list[str]) -> int:
     if bool(args.telemetry_assignment) != bool(args.telemetry_store_root):
         parser().error("--telemetry-assignment and --telemetry-store-root must be supplied together")
     observer = None
+    observation_health: list[str] = []
     if args.telemetry_assignment and args.telemetry_store_root:
-        observer = lambda summary: observe_candidate(
-            summary, assignment=args.telemetry_assignment, store_root=args.telemetry_store_root,
-            engine=args.telemetry_engine,
-        )
+        def observer(summary: Summary) -> None:
+            observation_health.append(observe_candidate(
+                summary, assignment=args.telemetry_assignment, store_root=args.telemetry_store_root,
+                engine=args.telemetry_engine,
+            ))
     try:
         code, result = summarize(
             GhApi(), repo=args.repo, pr_number=args.pr, expected_head=args.head,
@@ -516,6 +541,10 @@ def main(argv: list[str]) -> int:
             "pending" if args.publication == "required" else "not-required",
             None, 0, str(error), "current", "unobserved",
         )
+    if observer is not None and result.outcome != "ready":
+        observer(result)
+    if observer is not None:
+        result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     print(json.dumps(asdict(result), separators=(",", ":"), sort_keys=True))
     return code
 
