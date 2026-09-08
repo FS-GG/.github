@@ -38,6 +38,10 @@ The [Unity native shim and full Fable replacement-client design](2026-09-08-1448
 researches reusable engine integration, title admission, browser rendering and custom WASM control.
 Its seven-milestone roadmap separates a playable reference, external-title qualification and published Fable game adoption.
 
+The [4D grid tactics algorithm design and roadmap](2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md)
+proposes an original squad tactics foundation with four spatial coordinates, including movement, visibility,
+cover, combat, AI and readable slice views. Six milestones lead from exact grid queries to a validated playable encounter.
+
 FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
 independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
 the current v1 production machinery after verification. Follow the living
