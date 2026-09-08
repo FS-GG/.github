@@ -26,6 +26,11 @@ Before creating the branch, search for the item's open PR. Continue one unambigu
 accountable owner; never create a second PR because board projection lagged. Multiple or ambiguous open
 PRs refuse routine admission.
 
+Routine owners apply ADR-0084 (`https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md`)
+through the shared delivery helper: classify first, then start coherent validation; valid exact-head reuse may
+start delivery alongside it. Pending and disputed validation remain visible board facts, and disputed work
+blocks dependent acceptance or activation without selecting heavyweight process.
+
 The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
 A technical or operation refusal blocks its affected effect without entering that protocol.
 

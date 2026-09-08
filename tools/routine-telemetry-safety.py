@@ -16,6 +16,7 @@ MAX_OUTPUT_BYTES = 64 * 1024
 PUBLIC_FIELDS = {
     "schema", "repo", "pr", "expectedHead", "observedHead", "head", "outcome", "codeDelivery",
     "publication", "mergeCommit", "attempts", "reason", "unit", "scope", "freshInputTokens",
+    "validationDisposition", "coherentValidation",
     "cachedInputTokens", "outputTokens", "reasoningTokens", "productiveTokens", "overheadTokens",
     "unclassifiedTokens", "dataStatus", "completeness", "complete", "attemptsExpected", "attemptsObserved",
 }

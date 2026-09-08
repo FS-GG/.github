@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import pathlib
 import sys
 import unittest
@@ -36,10 +38,16 @@ def merged(head: str = HEAD) -> dict:
 
 
 class FakeApi:
-    def __init__(self, reads: list[dict], writes: list[object] | None = None):
+    def __init__(self, reads: list[dict], writes: list[object] | None = None,
+                 runs: list[dict] | None = None, selections: dict[int, bytes] | None = None,
+                 jobs: list[dict] | None = None, job_reads: list[list[dict]] | None = None):
         self.reads = iter(reads)
         self.writes = iter(writes or [])
         self.attempts = 0
+        self.runs = runs or []
+        self.selections = selections or {}
+        self.jobs = jobs or []
+        self.job_reads = iter(job_reads) if job_reads is not None else None
 
     def get_pr(self, repo: str, pr: int) -> dict:
         return next(self.reads)
@@ -51,12 +59,52 @@ class FakeApi:
             raise value
         return value
 
+    def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict]:
+        return self.runs
+
+    def qualification_selection(self, repo: str, run_id: int, head: str) -> bytes | None:
+        return self.selections.get(run_id)
+
+    def coherent_jobs(self, repo: str, run_id: int) -> list[dict]:
+        return next(self.job_reads) if self.job_reads is not None else self.jobs
+
+
+def run(status: str = "in_progress", conclusion: str | None = None, run_id: int = 7) -> dict:
+    return {"id": run_id, "head_sha": HEAD, "status": status, "conclusion": conclusion,
+            "updated_at": "2026-09-08T00:00:00Z", "run_attempt": 1}
+
+
+def selection(disposition: str) -> bytes:
+    prior = None
+    empty = False
+    if disposition == "reused":
+        prior = {"candidateObligationSha256": "1" * 64, "runId": 4, "attempt": 1,
+                 "executedReceiptSha256": "2" * 64, "completedAt": "2020-09-07T00:00:00Z",
+                 "expiresAt": "2099-10-07T00:00:00Z", "authentic": True, "complete": True}
+        empty = True
+    value = {
+        "schema": "fsgg.coordination.qualification-selection/1",
+        "candidateObligationSha256": "3" * 64,
+        "disposition": disposition,
+        "reason": "fixture",
+        "prior": prior,
+        "semanticDelta": {"evaluatorSha256": "4" * 64, "deltaSha256": "5" * 64, "empty": empty},
+        "bindingCorrespondenceSha256": None,
+        "coherentRunPending": True,
+        "coherentState": "pending",
+    }
+    payload = json.dumps(value, separators=(",", ":")).encode()
+    value["selectionSha256"] = hashlib.sha256(payload).hexdigest()
+    return json.dumps(value, separators=(",", ":")).encode() + b"\n"
+
 
 class RoutineDeliveryTests(unittest.TestCase):
-    def call(self, api: FakeApi, *, apply: bool = True, publication: bool = False):
+    def call(self, api: FakeApi, *, apply: bool = True, publication: bool = False,
+             coherent: bool = False):
         return MODULE.summarize(
             api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
             merge_method="squash", publication_required=publication, apply=apply,
+            coherent_workflow="optimistic.yml" if coherent else None,
         )
 
     def test_dry_run_is_ready_without_a_write(self):
@@ -109,6 +157,78 @@ class RoutineDeliveryTests(unittest.TestCase):
         code, result = self.call(api)
         self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 1))
         self.assertIn("blocked", result.reason)
+
+    def test_current_candidate_waits_for_coherent_pass(self):
+        api = FakeApi([opened()], runs=[run()], selections={7: selection("current")})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.outcome, result.validationDisposition,
+                          result.coherentValidation, api.attempts),
+                         (2, "refused", "current", "pending", 0))
+
+    def test_valid_reuse_can_merge_while_coherent_run_is_pending(self):
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}],
+                      [run()], {7: selection("reused")})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.codeDelivery, result.validationDisposition,
+                          result.coherentValidation, api.attempts),
+                         (0, "delivered", "reused", "pending", 1))
+
+    def test_missing_or_tampered_reuse_cannot_bypass_current_run(self):
+        bad = selection("reused").replace(b'"reason":"fixture"', b'"reason":"tampered"')
+        api = FakeApi([opened()], runs=[run()], selections={7: bad})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.validationDisposition, api.attempts), (2, "invalid", 0))
+
+    def test_current_candidate_can_merge_after_coherent_pass(self):
+        completed = run("completed", "success")
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}],
+                      [completed], {7: selection("current")})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.codeDelivery, result.coherentValidation),
+                         (0, "delivered", "passed"))
+
+    def test_merged_reuse_stays_pending_without_becoming_disputed(self):
+        api = FakeApi([merged()], runs=[run()], selections={7: selection("reused")})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.codeDelivery, result.coherentValidation),
+                         (0, "delivered", "pending"))
+
+    def test_late_coherent_failure_marks_merged_delivery_disputed(self):
+        failed = run("completed", "failure")
+        api = FakeApi([merged()], runs=[failed], selections={7: selection("reused")})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.codeDelivery, result.coherentValidation),
+                         (4, "delivered", "disputed"))
+
+    def test_deferred_or_failed_selection_never_launches_delivery(self):
+        for disposition in ("deferred", "failed"):
+            with self.subTest(disposition=disposition):
+                api = FakeApi([opened()], runs=[run()], selections={7: selection(disposition)})
+                code, result = self.call(api, coherent=True)
+                self.assertEqual((code, result.validationDisposition, api.attempts),
+                                 (2, disposition, 0))
+
+    def test_failed_partition_blocks_reuse_before_run_finishes(self):
+        jobs = [{"status": "completed", "conclusion": "failure", "name": "run-partition (3)"}]
+        api = FakeApi([opened()], runs=[run()], selections={7: selection("reused")}, jobs=jobs)
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.validationDisposition, result.coherentValidation, api.attempts),
+                         (2, "failed", "failed", 0))
+
+    def test_failure_after_unsuccessful_merge_attempt_is_not_called_delivered(self):
+        failure = {"status": "completed", "conclusion": "failure", "name": "run-partition (3)"}
+        api = FakeApi([opened(), opened()], [{"merged": False}], [run()], {7: selection("reused")},
+                      job_reads=[[], [failure]])
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.outcome, result.codeDelivery),
+                         (2, "refused", "not-delivered"))
+
+    def test_merged_source_with_invalid_selection_is_disputed_not_undelivered(self):
+        bad = selection("reused").replace(b'"reason":"fixture"', b'"reason":"tampered"')
+        api = FakeApi([merged()], runs=[run()], selections={7: bad})
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.outcome, result.codeDelivery, result.coherentValidation),
+                         (4, "delivered-disputed", "delivered", "disputed"))
 
 
 if __name__ == "__main__":

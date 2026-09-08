@@ -30,18 +30,19 @@ claim/operation generations still match a fresh authority read; it refuses new o
 rewind, wrong manifest, unknown or duplicate fields, and unreadable or contradictory authority. A lost response
 settles only by rereading the exact authoritative operation identity; a known effect is never repeated.
 
-## Ready window: GS2-08.1
+## Accepted window: GS2-08.1
 
-- [ ] Amend the governing sequence and freeze the complete canonical wire contract in Coordination's
-  `Protocol.md`, with generated bindings and content-addressed projections.
-- [ ] Implement a narrow pure qualification contract and independent cases for state/transition completeness,
-  fleet/layout/genesis/manifest identity, admission and effect fencing, observation freshness, issue projection,
-  and exact reread settlement.
-- [ ] Register the unit and executable gate in Coordination's native unit/gate catalogs, bind the exact roadmap
-  bytes, prove accepted prerequisites, and run its declared formal/conformance/native qualification.
-- [ ] Deliver one routine PR per affected repository, repair on those PRs, and read back native merged state.
+GS2-08.1 is accepted by Coordination's native content-addressed receipt
+`49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31` ([Coordination PR #334](https://github.com/FS-GG/FS.GG.Coordination/pull/334)).
+That authority covers the frozen wire contract and its qualified source; this navigation plan does not duplicate
+its checklist or reinterpret source acceptance as publication, installation, or live authority.
 
-This window stops at source qualification. It does not create or move a live ref or tag, modify the Authority
+## Ready window: GS2-08.2 source preparation
+
+- [ ] Prepare and qualify only the source needed to install and audit the protected
+  ledger/tag/environment/App/control-issue boundary in a later separately authorized operation.
+
+This window remains source-only and pending. It does not create or move a live ref or tag, modify the Authority
 repository, App, environment, control issue, credential, receiver, or production state, publish a package, or
 perform a cutover transition.
 

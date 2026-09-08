@@ -12,6 +12,8 @@ engine-currency repair, and termination remain owned by `drive-board`.
 Inherit `drive-board`'s routine route unchanged. The table below selects the single routine owner only
 when a delegated owner is needed; it does not authorize a critic, confirmation worker, or any
 strict-route artifact.
+That inheritance explicitly includes canonical `drive-board`'s ADR-0084 selection/reuse, coherent-pending,
+late-dispute, and dependent-activation behavior; this variant changes none of it.
 
 Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
 subagent spawn:
