@@ -20,7 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      # Draft releases are intentionally visible only to tokens with push-level repository access.
+      # Read-only inspection mistakes an existing draft for an absent release and needlessly enters
+      # preparation, even though preparation's byte-equivalence check still prevents replacement.
+      contents: write
     outputs:
       action: ${{ steps.state.outputs.action }}
       source-sha: ${{ steps.state.outputs.source_sha }}
@@ -108,6 +111,7 @@ jobs:
       - name: Atomically tag fresh members and exact-source resume existing members
         env:
           GH_TOKEN: ${{ github.token }}
+          PROMOTION_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_SHA: ${{ needs.inspect.outputs.source-sha }}
         run: |
           set -euo pipefail
@@ -149,13 +153,20 @@ jobs:
             git push --atomic origin "${push_refs[@]}"
           fi
 
-          # Existing tags mean their original publisher event may have failed or been lost. A manual
-          # workflow_dispatch is the exact-source, manifest-bound recovery edge; GITHUB_TOKEN is
-          # intentionally sufficient because workflow_dispatch is exempt from recursive-run suppression.
+          # Existing tags mean their original publisher event may have failed or been lost. The
+          # run-scoped token may start workflow_dispatch, but GitHub suppresses the subsequent
+          # workflow_run cascade. Therefore recovery also sends one App-authored, contents-scoped
+          # reconciliation event; the observer waits for all three durable journals and receipts.
           for workflow in "${recovery_workflows[@]}"; do
             gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref main \
               -f source_sha="$SOURCE_SHA"
           done
+          if [ "${#recovery_workflows[@]}" -gt 0 ]; then
+            GH_TOKEN="$PROMOTION_TOKEN" gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/dispatches" \
+              -f event_type=release-saga-reconcile \
+              -F "client_payload[source_sha]=$SOURCE_SHA"
+          fi
 
           {
             echo "### Coherent-set publishers started"

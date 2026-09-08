@@ -380,6 +380,15 @@ start = start_path.read_text()
 start_doc = yaml.safe_load(start)
 start_jobs = start_doc["jobs"]
 assert start_jobs["prepare"]["uses"] == "./.github/workflows/release-saga-prepare.yml"
+assert start_jobs["inspect"]["permissions"]["contents"] == "write", \
+    "durable-state inspection cannot see draft releases without push-level contents access"
+publisher_steps = start_jobs["start-publishers"]["steps"]
+app_step = next(step for step in publisher_steps if step.get("id") == "app-token")
+publisher_run_step = next(step for step in publisher_steps if "gh workflow run" in str(step.get("run", "")))
+assert publisher_run_step["env"]["PROMOTION_TOKEN"] == "${{ steps.app-token.outputs.token }}"
+for token in ("release-saga-reconcile", 'repos/$GITHUB_REPOSITORY/dispatches',
+              'client_payload[source_sha]=$SOURCE_SHA'):
+    assert token in publisher_run_step["run"], token
 
 def start_topology_problems(doc):
     jobs = doc.get("jobs", {})
@@ -466,6 +475,10 @@ assert 'cmp "/tmp/prior/' not in prepare, "reuse branch compares raw archive byt
 promote = (root / ".github/workflows/release-saga-promote.yml").read_text()
 for token in ("assert-identity", "merge-journals", "verify-receivers", "receiver-receipts-", "record-observed", "stable-channel.json", "--draft=false"):
     assert token in promote or token in (root / "scripts/release-saga-promote-release.sh").read_text(), token
+for token in ("repository_dispatch:", "release-saga-reconcile", "github.event_name == 'repository_dispatch'",
+              "for _ in $(seq 1 40)", 'feeds.github.packages[$package].state == "verified"',
+              'feeds.nuget.packages[$package].state == "verified"'):
+    assert token in promote, token
 for token in ("source_sha=", 'refs/tags/$tag^{}', "head -1 | sed 's:/*$::'", '"${github_base}/${lower}'):
     assert token in promote, token
 assert 'journal_count=$((journal_count + 1))' in promote

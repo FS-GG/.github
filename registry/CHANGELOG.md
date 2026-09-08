@@ -19,6 +19,18 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-07** — **coordination coherent set `github:0.86.1` promoted and published frontier reconciled**
+  (owner github; source [PR #3339](https://github.com/FS-GG/.github/pull/3339),
+  [promotion run 34170008422](https://github.com/FS-GG/.github/actions/runs/34170008422)):
+  advances `coord-engine.package-version` from 0.86.0 to 0.86.1 after immutable promotion from exact
+  source `ce6edfd8e3f569867e6809ca3933c6ae65769a1d`. Both feeds verified the three members with content
+  `sha256:ccea15d2acd633188f34bdaa9761137538dd834fafa43cda185dbf90c473307c` and payload hashes
+  `8662051fa07b44c0ac4f47181218a02adddb71025fb199bdc2275b5747afdad8` (Coord.Cli),
+  `4c7fd96ce22c765e998aae0499aa16d7430003615698310fa5c2d6e3b8e039bb` (Drivers), and
+  `c827b6f79db6e95374dd74b825289c1337e6aafd4b8de01b1e2a820452dbad1d` (Kit). The manifest digest is
+  `87b2c25374e3d53e80bc7f7def90adec4b76b3bd11337fa73f331a004d3be437`; the stable-channel digest is
+  `c240e52d5095f0369189d6611853a7b457274190642e496d094ffa9a8fac267d`.
+
 - **2026-09-07** — **coordination coherent set `github:0.86.1` source prepared; `0.86.0` published frontier reconciled**
   (owner github; routine-route correction [PR #3338](https://github.com/FS-GG/.github/pull/3338),
   immutable prior release [`github:0.86.0`](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.86.0)):
