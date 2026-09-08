@@ -34,6 +34,10 @@ The analogous [Beyond All Reason research, design and roadmap](2026-09-08-134900
 builds on the existing HighBar/FSBar repositories and explicitly targets the FS.GG Fable game template.
 It also remains a proposal, with existing source, synthetic evidence and required live qualification distinguished.
 
+The [Unity native shim and full Fable replacement-client design](2026-09-08-144823-unity-native-shim-fable-client-design-roadmap.md)
+researches reusable engine integration, title admission, browser rendering and custom WASM control.
+Its seven-milestone roadmap separates a playable reference, external-title qualification and published Fable game adoption.
+
 FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
 independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
 the current v1 production machinery after verification. Follow the living
