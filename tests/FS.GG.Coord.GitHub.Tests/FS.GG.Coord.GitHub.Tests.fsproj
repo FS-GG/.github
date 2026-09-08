@@ -32,6 +32,7 @@
     <Compile Include="BoardTests.fs" />
     <Compile Include="DoneTests.fs" />
     <Compile Include="HttpTransportTests.fs" />
+    <Compile Include="CiReadsTests.fs" />
     <Compile Include="ScanBoardTests.fs" />
     <Compile Include="BlockerGraphTests.fs" />
     <Compile Include="DoneFactsTests.fs" />

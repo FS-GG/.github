@@ -78,3 +78,29 @@ This window does not scan historical sessions, hook or wrap existing agent launc
 default. Current-host qualification is a separate post-merge future-only check. Publication and adoption remain
 pending. The immutable assignment plus observation batch remains compatible with a later telemetry-writer actor;
 SQLite locking and deduplication continue to protect recovery and mixed-version overlap.
+
+## UTEL-04A — One explicit workflow/head CI population
+
+- [x] Add `telemetry ci collect --assignment <private-file> --repo <owner/repo> --pr <n> --head
+  <40hex> --workflow <id-or-file> --store-root <root>` and read-only `telemetry ci summary --item <id>`.
+  Collection is explicit and limited to that repository, PR, head and workflow; moved heads remain unresolved
+  and merge-group heads are unsupported.
+- [x] Use an additive single-page GitHub transport capped at 4 MiB per response, 100 rows per page, 20 GETs
+  and 30 seconds overall, with no retry or sleep. Redirects, cross-origin/repository continuations, loops,
+  malformed counts and inventories over 1,000 fail closed. A failure after an accepted page is retained as
+  partial, resumable coverage rather than reported complete.
+- [x] Collect native workflow runs and every declared run attempt through attempt-specific job endpoints,
+  including embedded steps and source timestamps. Empty native `pull_requests` is allowed only after the
+  independently supplied PR/head binding succeeds.
+- [x] Add checksummed migration 3 for private collection bindings/pages, run attempts, jobs, steps and eight
+  independent coverage dimensions. Facts retain repository-scoped native identity and flow through the same
+  immutable inbox, single writer, transaction, cursor and replay/conflict boundary as earlier observations.
+- [x] Reduce runner duration as valid job-interval sum and wall duration as their union. Invalid, missing,
+  pending or skipped endpoints remain unknown rather than zero. Exact workflow/job/step attribution rules
+  classify useful validation, administration, necessary setup, mixed or unclassified work; unmatched profile
+  identities remain unknown. Money and avoidable rerun remain unknown without explicit native evidence, and
+  critical path remains unknown without supported causal witnesses.
+
+This window selects no population automatically, adds no workflow or service, and changes no Coordination or
+§7.4 counters. It does not collect billing, scan historical sessions, backfill, upload private data or inspect
+the retained host database. Publication, generated-workspace defaults and receiver adoption remain pending.

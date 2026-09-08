@@ -38,6 +38,12 @@ module TelemetryStore =
         | RuntimeTurnUsage of invocationId: string * threadId: string * turnId: string option * turnSequence: int64 * provider: string option * requestedModel: string option * observedModel: string option * requestedEffort: string option * observedEffort: string option * backend: string option * scope: string * provenance: string * input: int64 * cachedInput: int64 * output: int64 * reasoning: int64 option * total: int64
         | RuntimeTerminal of invocationId: string * threadId: string option * outcome: string * exitCode: int64
         | RuntimeGap of invocationId: string * code: string
+        | CiBinding of collectionId: string * repository: string * head: string * pullRequest: int64 * workflow: string * featureId: string * attemptId: string * parentAttemptId: string option * producerStream: string * binding: string
+        | CiPage of collectionId: string * resource: string * page: int64 * count: int64 * total: int64
+        | CiRun of repository: string * runId: int64 * attempt: int64 * workflow: string * event: string * head: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * updatedAt: string option
+        | CiJob of repository: string * runId: int64 * attempt: int64 * jobId: int64 * name: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * completedAt: string option
+        | CiStep of repository: string * runId: int64 * attempt: int64 * jobId: int64 * number: int64 * name: string * status: string * conclusion: string option * startedAt: string option * completedAt: string option * classification: string * rationale: string
+        | CiCoverage of collectionId: string * inventory: string * attempts: string * jobPages: string * terminal: string * timestamps: string * lineage: string * classification: string * criticalPath: string
     type Fact =
         { Identity: string; ItemId: string option; Revision: int64; Kind: string; Payload: Payload
           Canonical: string; ContentDigest: string }
@@ -183,6 +189,32 @@ module TelemetryStore =
             | "runtime-gap" ->
                 match requiredText label node "invocationId", requiredText label node "code" with
                 | Ok invocation, Ok code -> make [ "invocationId"; "code" ] (RuntimeGap(invocation,code))
+                | values -> Error(sprintf "%A" values)
+            | "ci-binding" ->
+                match requiredText label node "collectionId", requiredText label node "repository", requiredText label node "head", requiredInt label node "prNumber", requiredText label node "workflow", requiredText label node "featureId", requiredText label node "attemptId", optionalText label node "parentAttemptId", requiredText label node "producerStream", requiredText label node "binding" with
+                | Ok collection, Ok repository, Ok head, Ok pr, Ok workflow, Ok feature, Ok attempt, Ok parent, Ok producer, Ok binding when head.Length = 40 && head |> Seq.forall Char.IsAsciiHexDigitLower -> make [ "collectionId"; "repository"; "head"; "prNumber"; "workflow"; "featureId"; "attemptId"; "parentAttemptId"; "producerStream"; "binding" ] (CiBinding(collection,repository,head,pr,workflow,feature,attempt,parent,producer,binding))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.head must be 40 lowercase hexadecimal characters"
+                | values -> Error(sprintf "%A" values)
+            | "ci-page" ->
+                match requiredText label node "collectionId", requiredText label node "resource", requiredInt label node "page", requiredInt label node "count", requiredInt label node "total" with
+                | Ok collection, Ok resource, Ok page, Ok count, Ok total when page > 0L && count <= 100L && total <= 1000L -> make [ "collectionId"; "resource"; "page"; "count"; "total" ] (CiPage(collection,resource,page,count,total))
+                | Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} page/count/total exceeds the bounded collection contract"
+                | values -> Error(sprintf "%A" values)
+            | "ci-run" ->
+                match requiredText label node "repository", requiredInt label node "runId", requiredInt label node "attempt", requiredText label node "workflow", requiredText label node "event", requiredText label node "head", requiredText label node "status", optionalText label node "conclusion", optionalText label node "createdAt", optionalText label node "startedAt", optionalText label node "updatedAt" with
+                | Ok repository, Ok runId, Ok attempt, Ok workflow, Ok event, Ok head, Ok status, Ok conclusion, Ok created, Ok started, Ok updated -> make [ "repository"; "runId"; "attempt"; "workflow"; "event"; "head"; "status"; "conclusion"; "createdAt"; "startedAt"; "updatedAt" ] (CiRun(repository,runId,attempt,workflow,event,head,status,conclusion,created,started,updated))
+                | values -> Error(sprintf "%A" values)
+            | "ci-job" ->
+                match requiredText label node "repository", requiredInt label node "runId", requiredInt label node "attempt", requiredInt label node "jobId", requiredText label node "name", requiredText label node "status", optionalText label node "conclusion", optionalText label node "createdAt", optionalText label node "startedAt", optionalText label node "completedAt" with
+                | Ok repository, Ok runId, Ok attempt, Ok jobId, Ok name, Ok status, Ok conclusion, Ok created, Ok started, Ok completed -> make [ "repository"; "runId"; "attempt"; "jobId"; "name"; "status"; "conclusion"; "createdAt"; "startedAt"; "completedAt" ] (CiJob(repository,runId,attempt,jobId,name,status,conclusion,created,started,completed))
+                | values -> Error(sprintf "%A" values)
+            | "ci-step" ->
+                match requiredText label node "repository", requiredInt label node "runId", requiredInt label node "attempt", requiredInt label node "jobId", requiredInt label node "number", requiredText label node "name", requiredText label node "status", optionalText label node "conclusion", optionalText label node "startedAt", optionalText label node "completedAt", requiredText label node "classification", requiredText label node "rationale" with
+                | Ok repository, Ok runId, Ok attempt, Ok jobId, Ok number, Ok name, Ok status, Ok conclusion, Ok started, Ok completed, Ok classification, Ok rationale -> make [ "repository"; "runId"; "attempt"; "jobId"; "number"; "name"; "status"; "conclusion"; "startedAt"; "completedAt"; "classification"; "rationale" ] (CiStep(repository,runId,attempt,jobId,number,name,status,conclusion,started,completed,classification,rationale))
+                | values -> Error(sprintf "%A" values)
+            | "ci-coverage" ->
+                match requiredText label node "collectionId", requiredText label node "inventory", requiredText label node "attempts", requiredText label node "jobPages", requiredText label node "terminal", requiredText label node "timestamps", requiredText label node "lineage", requiredText label node "classification", requiredText label node "criticalPath" with
+                | Ok collection, Ok inventory, Ok attempts, Ok jobPages, Ok terminal, Ok timestamps, Ok lineage, Ok classification, Ok criticalPath -> make [ "collectionId"; "inventory"; "attempts"; "jobPages"; "terminal"; "timestamps"; "lineage"; "classification"; "criticalPath" ] (CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath))
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

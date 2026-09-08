@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 2
+    let private currentSchemaVersion = 3
 
     module private Native =
         [<Literal>]
@@ -66,6 +66,16 @@ CREATE TABLE runtime_gaps(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invo
 PRAGMA user_version=2;
 """
     let private migration2Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration2Sql)
+    let private migration3Sql = """
+CREATE TABLE ci_bindings(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL UNIQUE, repository TEXT NOT NULL, head TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), workflow TEXT NOT NULL, feature_id TEXT NOT NULL, attempt_id TEXT NOT NULL, parent_attempt_id TEXT, producer_stream TEXT NOT NULL, binding TEXT NOT NULL) STRICT;
+CREATE TABLE ci_pages(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_bindings(collection_id), resource TEXT NOT NULL, page INTEGER NOT NULL CHECK(page > 0), count INTEGER NOT NULL CHECK(count BETWEEN 0 AND 100), total INTEGER NOT NULL CHECK(total BETWEEN 0 AND 1000), UNIQUE(collection_id,resource,page)) STRICT;
+CREATE TABLE ci_runs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), workflow TEXT NOT NULL, event TEXT NOT NULL, head TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, created_at TEXT, started_at TEXT, updated_at TEXT, UNIQUE(repository,run_id,attempt)) STRICT;
+CREATE TABLE ci_jobs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), job_id INTEGER NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, created_at TEXT, started_at TEXT, completed_at TEXT, UNIQUE(repository,run_id,attempt,job_id)) STRICT;
+CREATE TABLE ci_steps(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), job_id INTEGER NOT NULL, number INTEGER NOT NULL CHECK(number >= 0), name TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, started_at TEXT, completed_at TEXT, classification TEXT NOT NULL, rationale TEXT NOT NULL, UNIQUE(repository,run_id,attempt,job_id,number)) STRICT;
+CREATE TABLE ci_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_bindings(collection_id), inventory TEXT NOT NULL, attempts TEXT NOT NULL, job_pages TEXT NOT NULL, terminal TEXT NOT NULL, timestamps TEXT NOT NULL, lineage TEXT NOT NULL, classification TEXT NOT NULL, critical_path TEXT NOT NULL) STRICT;
+PRAGMA user_version=3;
+"""
+    let private migration3Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration3Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -219,7 +229,21 @@ PRAGMA user_version=2;
                                         execute connection "COMMIT;"
                                     with error -> rollback connection; raise error
                                 if scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
-                                else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                else
+                                    let afterV2 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                    if afterV2 = 2 then
+                                        beginImmediate connection
+                                        try
+                                            execute connection migration3Sql
+                                            use migration = connection.CreateCommand()
+                                            migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(3,$digest,$utc);"
+                                            parameter migration "$digest" migration3Digest
+                                            parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                            migration.ExecuteNonQuery() |> ignore
+                                            execute connection "COMMIT;"
+                                        with error -> rollback connection; raise error
+                                    if scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
+                                    else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -239,6 +263,7 @@ PRAGMA user_version=2;
                     elif version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;" <> migrationDigest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -246,7 +271,7 @@ PRAGMA user_version=2;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -278,6 +303,12 @@ PRAGMA user_version=2;
         | TelemetryStore.RuntimeTurnUsage(invocation,threadId,turnId,sequence,provider,requestedModel,observedModel,requestedEffort,observedEffort,backend,scope,provenance,input,cached,output,reasoning,total) -> run "INSERT INTO runtime_turn_usage VALUES($identity,$item,$invocation,$thread,$turn,$sequence,$provider,$requestedModel,$observedModel,$requestedEffort,$observedEffort,$backend,$scope,$provenance,$input,$cached,$output,$reasoning,$total);" [ "$invocation",box invocation; "$thread",box threadId; "$turn",optional turnId; "$sequence",box sequence; "$provider",optional provider; "$requestedModel",optional requestedModel; "$observedModel",optional observedModel; "$requestedEffort",optional requestedEffort; "$observedEffort",optional observedEffort; "$backend",optional backend; "$scope",box scope; "$provenance",box provenance; "$input",box input; "$cached",box cached; "$output",box output; "$reasoning",optional reasoning; "$total",box total ]
         | TelemetryStore.RuntimeTerminal(invocation,threadId,outcome,exitCode) -> run "INSERT INTO runtime_terminals VALUES($identity,$item,$invocation,$thread,$outcome,$exit);" [ "$invocation",box invocation; "$thread",optional threadId; "$outcome",box outcome; "$exit",box exitCode ]
         | TelemetryStore.RuntimeGap(invocation,code) -> run "INSERT INTO runtime_gaps VALUES($identity,$item,$invocation,$code);" [ "$invocation",box invocation; "$code",box code ]
+        | TelemetryStore.CiBinding(collection,repository,head,pr,workflow,feature,attempt,parent,producer,binding) -> run "INSERT INTO ci_bindings VALUES($identity,$item,$collection,$repository,$head,$pr,$workflow,$feature,$attempt,$parent,$producer,$binding);" [ "$collection",box collection; "$repository",box repository; "$head",box head; "$pr",box pr; "$workflow",box workflow; "$feature",box feature; "$attempt",box attempt; "$parent",optional parent; "$producer",box producer; "$binding",box binding ]
+        | TelemetryStore.CiPage(collection,resource,page,count,total) -> run "INSERT INTO ci_pages VALUES($identity,$item,$collection,$resource,$page,$count,$total);" [ "$collection",box collection; "$resource",box resource; "$page",box page; "$count",box count; "$total",box total ]
+        | TelemetryStore.CiRun(repository,runId,attempt,workflow,event,head,status,conclusion,created,started,updated) -> run "INSERT INTO ci_runs VALUES($identity,$item,$repository,$run,$attempt,$workflow,$event,$head,$status,$conclusion,$created,$started,$updated);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$workflow",box workflow; "$event",box event; "$head",box head; "$status",box status; "$conclusion",optional conclusion; "$created",optional created; "$started",optional started; "$updated",optional updated ]
+        | TelemetryStore.CiJob(repository,runId,attempt,jobId,name,status,conclusion,created,started,completed) -> run "INSERT INTO ci_jobs VALUES($identity,$item,$repository,$run,$attempt,$job,$name,$status,$conclusion,$created,$started,$completed);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$created",optional created; "$started",optional started; "$completed",optional completed ]
+        | TelemetryStore.CiStep(repository,runId,attempt,jobId,number,name,status,conclusion,started,completed,classification,rationale) -> run "INSERT INTO ci_steps VALUES($identity,$item,$repository,$run,$attempt,$job,$number,$name,$status,$conclusion,$started,$completed,$classification,$rationale);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$number",box number; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$classification",box classification; "$rationale",box rationale ]
+        | TelemetryStore.CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath) -> run "INSERT INTO ci_coverage VALUES($identity,$item,$collection,$inventory,$attempts,$jobPages,$terminal,$timestamps,$lineage,$classification,$criticalPath);" [ "$collection",box collection; "$inventory",box inventory; "$attempts",box attempts; "$jobPages",box jobPages; "$terminal",box terminal; "$timestamps",box timestamps; "$lineage",box lineage; "$classification",box classification; "$criticalPath",box criticalPath ]
 
     let private ingestBatchLocked root beforeCommit (batch: TelemetryStore.Batch) =
             if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ] else
@@ -516,6 +547,56 @@ PRAGMA user_version=2;
         | Ok(connection, _) ->
             use connection = connection
             Ok(TelemetryStore.publicJson (readSummary connection itemId))
+
+    let ciSummary path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            let scalar sql =
+                use command = connection.CreateCommand()
+                command.CommandText <- sql
+                parameter command "$item" itemId
+                Convert.ToInt64(command.ExecuteScalar())
+            let intervals sql =
+                use command = connection.CreateCommand()
+                command.CommandText <- sql
+                parameter command "$item" itemId
+                use reader = command.ExecuteReader()
+                let values = ResizeArray<TelemetryCi.Interval>()
+                while reader.Read() do
+                    let startAt = if reader.IsDBNull 0 then None else Some(reader.GetString 0)
+                    let endAt = if reader.IsDBNull 1 then None else Some(reader.GetString 1)
+                    TelemetryCi.interval startAt endAt |> Option.iter values.Add
+                values |> Seq.toList
+            let coverage column =
+                use command = connection.CreateCommand()
+                command.CommandText <- $"SELECT %s{column} FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
+                parameter command "$item" itemId
+                let value = command.ExecuteScalar()
+                if isNull value || value = box DBNull.Value then "unknown" else string value
+            let jobs = intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
+            let queues = intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
+            let runner = if jobs.IsEmpty then None else jobs |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds) |> Some
+            let wall = TelemetryCi.unionSeconds jobs
+            let classified classification =
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT started_at,completed_at FROM ci_steps WHERE item_id=$item AND classification=$classification;"
+                parameter command "$item" itemId; parameter command "$classification" classification
+                use reader = command.ExecuteReader()
+                let values = ResizeArray<TelemetryCi.Interval>()
+                while reader.Read() do TelemetryCi.interval (if reader.IsDBNull 0 then None else Some(reader.GetString 0)) (if reader.IsDBNull 1 then None else Some(reader.GetString 1)) |> Option.iter values.Add
+                values |> Seq.toList |> TelemetryCi.unionSeconds
+            Ok(JsonSerializer.Serialize
+                {| schema = "fsgg.telemetry.ci-summary/1"; item = itemId
+                   runs = scalar "SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id FROM ci_jobs WHERE item_id=$item);"
+                   attempts = scalar "SELECT count(*) FROM (SELECT repository,run_id,attempt FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id,attempt FROM ci_jobs WHERE item_id=$item);"
+                   jobs = scalar "SELECT count(*) FROM ci_jobs WHERE item_id=$item;"
+                   steps = scalar "SELECT count(*) FROM ci_steps WHERE item_id=$item;"
+                   runnerSeconds = runner; wallSeconds = wall; queueSeconds = TelemetryCi.unionSeconds queues
+                   usefulValidationSeconds = classified "useful-validation"; administrativeSeconds = classified "admin"; necessarySetupSeconds = classified "necessary-setup"; mixedSeconds = classified "mixed"; unclassifiedSeconds = classified "unclassified"
+                   monetary = "unknown"; avoidableRerun = "unknown"
+                   inventoryCoverage = coverage "inventory"; attemptCoverage = coverage "attempts"; jobPageCoverage = coverage "job_pages"; terminalCoverage = coverage "terminal"; timestampCoverage = coverage "timestamps"; lineageCoverage = coverage "lineage"; classificationCoverage = coverage "classification"; criticalPathCoverage = coverage "critical_path" |} + "\n")
 
     let exportPublic path assessment itemId outputPath =
         try

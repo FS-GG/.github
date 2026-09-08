@@ -83,6 +83,9 @@ module TelemetryApplication =
             match List.tryFindIndex ((=) "--") args with
             | None -> Some(Error "telemetry runtime codex-exec requires -- before Codex arguments")
             | Some delimiter -> validateArgs [ "--assignment"; "--store-root" ] [] args[..delimiter - 1] |> Some
+        | "telemetry" :: "ci" :: "collect" :: args ->
+            shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
+        | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "roadmap" :: "unit" :: "prepare" :: action :: args
             when action = "inspect" || action = "render" || action = "verify" ->
             shape [ "--input"; "--registry"; "--source-registry"; "--output" ] [] args
@@ -566,6 +569,7 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
+        | "telemetry" :: "ci" :: action :: args -> Some(TelemetryCiApplication.run action args)
         | "telemetry" :: "runtime" :: "codex-exec" :: args -> Some(TelemetryRuntimeApplication.runCodexExec args)
         | "telemetry" :: "runtime" :: "status" :: args -> Some(validated "telemetry runtime status" [ "--store-root" ] [] args TelemetryRuntimeApplication.capabilityStatus)
         | "telemetry" :: "store" :: action :: args ->

@@ -135,6 +135,11 @@ module Transport =
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
 
+    /// One bounded response page for collectors that own their pagination and completeness evidence.
+    /// This seam never follows redirects or `Link` continuations and leaves `Send` unchanged.
+    type ISinglePageGitHubTransport =
+        abstract SendSingle: request: Request -> IoResult<Response>
+
     /// The real one.
     ///
     /// `apiBase` is CONFIGURABLE (`FSGG_GITHUB_API_BASE`, default `https://api.github.com`). That is
@@ -148,6 +153,7 @@ module Transport =
         new: apiBase: string * token: string -> HttpTransport
 
         interface IGitHubTransport
+        interface ISinglePageGitHubTransport
         interface System.IDisposable
 
     /// Read the API base from the environment, so the corpus can redirect it.

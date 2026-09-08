@@ -117,6 +117,22 @@ let private get (path: string) =
       IfNoneMatch = None
       Subject = path }
 
+[<Fact>]
+let ``UTEL-04A single-page transport does not paginate and rejects oversized bodies`` () =
+    use server = new Server()
+    server.On(fun req res ->
+        if req.Url.AbsolutePath.EndsWith("oversize") then
+            server.Json res 200 (String('x', 4 * 1024 * 1024 + 1)) []
+        else server.Json res 200 "{}" [ "Link", $"<%s{server.Base}/repos/o/r/page2>; rel=\"next\"" ])
+    use transport = new HttpTransport(server.Base, "t")
+    let single = transport :> ISinglePageGitHubTransport
+    match single.SendSingle(get "repos/o/r/one") with
+    | Ok response -> Assert.Equal("{}", response.Body); Assert.Single(server.Requests) |> ignore
+    | Error error -> failwithf "%A" error
+    match single.SendSingle(get "repos/o/r/oversize") with
+    | Error(Malformed(_, detail)) -> Assert.Contains("4 MiB", detail)
+    | result -> failwithf "expected bounded rejection, got %A" result
+
 // ---- pagination: the Link header ---------------------------------------------------------------------
 
 [<Fact>]

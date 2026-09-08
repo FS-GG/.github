@@ -39,6 +39,7 @@
     <Compile Include="CycleLedgerTests.fs" />
     <Compile Include="TelemetryTests.fs" />
     <Compile Include="TelemetryStoreTests.fs" />
+    <Compile Include="TelemetryCiTests.fs" />
     <Compile Include="QualificationTests.fs" />
     <Compile Include="RoadmapWorkUnitTests.fs" />
     <Compile Include="DeliveryTests.fs" />
