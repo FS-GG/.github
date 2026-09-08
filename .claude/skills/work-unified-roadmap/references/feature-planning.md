@@ -6,10 +6,15 @@ near-term horizon expansion. The planner is `gpt-6-astra` with effort `high`; im
 
 ## Give the planner a bounded evidence packet
 
-Include the user's feature outcome, its unified stage, relevant original design sections, owning
-repository locations, current default revisions, existing plans/PRs/tests and known failures. Include
+Include the user's feature outcome, its named part from unified section 9.8, stage, relevant original
+design sections, owning repository locations, current default revisions, existing plans/PRs/tests and known failures. Include
 applicable contracts and the actual implementation/operation authority already provided by the user.
 Do not require an organization-wide board census or every historical roadmap to plan one feature.
+
+Use the named part as the assignment boundary and inspect its linked subroadmaps first. An existing
+bounded plan can cover only part of the row; preserve its identity and delivered work. Propose a narrower
+part only when its outcome, owner or dependency makes independent execution useful. Do not expand all
+other rows while planning the selected part.
 
 Ask the planner to inspect actual prior work before proposing new work. Classify relevant capabilities
 as implemented, independently demonstrated, missing or uncertain; a merged source change alone does not
@@ -29,12 +34,19 @@ the uncertain remainder as an outcome outline without executable checkboxes.
 
 The document should establish:
 
-- A stable feature identity, owning repository, unified stage, requested outcome and completion examples.
+- A stable feature identity, owning repository, named unified part and stage, a backlink to the unified
+  section 9.8 index, requested outcome and completion examples.
 - Prior work to reuse, with the exact source/evidence references that matter and explicit gaps.
 - Scope, dependencies, key assumptions and decisions that would invalidate the current plan.
 - Ready milestones with stable IDs, outcome, prerequisites, likely scope, process route and meaningful
   acceptance examples. Separate routine source delivery from any protected publication or operation.
 - Later outline work and the concrete evidence needed to make its next portion executable.
+- Generated-workspace impact under unified section 9.9: affected provider/lifecycle families, user-visible
+  before/after behavior, and the first milestone that changes fresh creation or enabled runtime behavior.
+  Name the producer publication and scaffold/receiver adoption steps, exact release identities when known,
+  default or opt-in choice, clean-creation acceptance and separate existing-workspace upgrade handling.
+  State no impact or pending adoption when appropriate; source merge alone does not change an installed
+  scaffold tool, activate v2, or select a new lifecycle default.
 - The observation source and known logging/attribution gaps, preserving the unified accounting definitions.
 
 For new work, a ready milestone can use this compact form:
@@ -55,10 +67,12 @@ For an existing registered unit such as GS2, reference its current owning roadma
 without creating a second mutable checkbox. A feature may combine new milestones with these references,
 but there must be one source of completion authority per unit.
 
-Return the proposed path, the complete Markdown, the first executable window, unresolved decisions and
-any reason the window cannot yet run. Persist it in the authorized workspace if the parent assigned a
+Return the proposed path, complete Markdown, the section 9.8 row/link update, first executable window,
+unresolved decisions and any reason the window cannot yet run. Persist it in the authorized workspace if the parent assigned a
 path; otherwise return the draft for the parent to place. Do not create issues, claims, planning-only PRs,
-new policy registries or a second orchestration service solely to produce the plan.
+new policy registries or a second orchestration service solely to produce the plan. Link an actual draft
+location while unmerged and its durable document after delivery; preserve previous plan links. The parent
+can apply a cross-repository index update asynchronously with existing work, without delaying valid delivery.
 
 ## Replanning contract
 
