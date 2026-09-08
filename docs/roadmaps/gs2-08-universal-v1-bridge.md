@@ -1,0 +1,70 @@
+# GS2-08 universal v1 bridge and epoch ledger
+
+This subroadmap implements the **Universal bridge and receiver fencing** part in the
+[Unified Development Roadmap section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
+The native [GitHub Substrate v2 roadmap](../github-substrate-v2-roadmap.md#gs2-08--ship-the-universal-v1-bridge-and-protected-epoch-ledger)
+and its content-addressed Coordination unit records remain completion authority. This plan is navigation and
+bounded delivery detail; it does not create another status ledger.
+
+## Baseline and fixed decisions
+
+GS2-00 and the affected GS2-02/GS2-03.10 contracts are accepted. GS2-07.8 accepted the no-host runtime:
+scheduled complete audits remain authoritative, and this feature does not introduce an orchestration service.
+The existing protected Authority journal supplies append-only expected-parent CAS, generations, snapshots,
+and reread settlement. GS2-08 reuses it as one canonical fleet aggregate instead of accepting a caller-selected
+authority.
+
+The bridge wire contract is versioned and content-addressed. It fixes canonical fleet identity; exact
+journal/ref/tag and genesis/trust-anchor layout; manifest identity; complete epoch states and legal transitions;
+operation and claim generation fencing at the effect boundary; fresh-read/cache rules; issue projection; and
+distinct success, refusal, partial, and indeterminate outcomes. The amended post-open sequence is
+`OpenV2 -> ObservingV2 -> ContractingV1 -> OperatingV2`; obsolete `RetiringV1` is not a state. There is no
+post-`OpenV2` restoration of v1. `RollingBack` never independently enables writing: only a verified transition
+back to `OperatingV1` can do so.
+
+Before freeze, incumbent behavior is explicit rather than inferred. `OperatingV1` admits eligible incumbent
+ordinary effects. `Preparing` admits only incumbents whose operation began under the current manifest and whose
+claim/operation generations still match a fresh authority read; it refuses new ordinary admission.
+`FreezeRequested`, `Frozen`, `SwitchedV2`, `VerifiedV2`, `OpenV2`, `ObservingV2`, `ContractingV1`, and
+`OperatingV2` refuse ordinary v1 effects. Every effect refuses stale generations or cache, missing parent/tag,
+rewind, wrong manifest, unknown or duplicate fields, and unreadable or contradictory authority. A lost response
+settles only by rereading the exact authoritative operation identity; a known effect is never repeated.
+
+## Ready window: GS2-08.1
+
+- [ ] Amend the governing sequence and freeze the complete canonical wire contract in Coordination's
+  `Protocol.md`, with generated bindings and content-addressed projections.
+- [ ] Implement a narrow pure qualification contract and independent cases for state/transition completeness,
+  fleet/layout/genesis/manifest identity, admission and effect fencing, observation freshness, issue projection,
+  and exact reread settlement.
+- [ ] Register the unit and executable gate in Coordination's native unit/gate catalogs, bind the exact roadmap
+  bytes, prove accepted prerequisites, and run its declared formal/conformance/native qualification.
+- [ ] Deliver one routine PR per affected repository, repair on those PRs, and read back native merged state.
+
+This window stops at source qualification. It does not create or move a live ref or tag, modify the Authority
+repository, App, environment, control issue, credential, receiver, or production state, publish a package, or
+perform a cutover transition.
+
+## Later outcome outline
+
+1. GS2-08.2 installs and audits the protected ledger/tag/environment/App/control-issue boundary.
+2. GS2-08.3 inventories every incumbent writer; GS2-08.4 applies the common fresh epoch precondition.
+3. GS2-08.5 proves eligible `OperatingV1` and `Preparing` incumbent behavior is preserved; GS2-08.6 attacks
+   every fence and old-client generation independently.
+4. GS2-08.7 publishes one immutable bridge artifact. GS2-08.8 adopts that identity across every receiver.
+   GS2-08.9 disables or revokes any client that cannot honor the fence.
+
+Each later protected operation needs its own native authority. Source qualification in 08.1 is neither
+publication nor installation, and neither event authorizes a fleet transition.
+
+## Workspace, authority, and observation boundaries
+
+GS2-08.1 changes no generated workspace and enables no runtime behavior. The first possible new-workspace
+effect is receiver adoption in GS2-08.8 after the GS2-08.7 producer publication; each family must pin the exact
+artifact and prove a clean creation obeys the same fence as an upgrade. Adoption remains explicit rather than a
+default flip. Existing workspaces require their separately owned upgrade path; publication does not rewrite them.
+
+The protected Git ledger is semantic authority, while the control issue is only a projection. Readers use a
+fresh authoritative read at every effect boundary; a cache can help discovery but cannot authorize an effect.
+Provider or telemetry loss remains unknown and cannot manufacture success. UTEL-01 v2 owns programme telemetry;
+missing usage or coverage is reported as unknown and does not weaken this feature's native qualification.

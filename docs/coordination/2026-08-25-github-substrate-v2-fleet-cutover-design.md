@@ -374,14 +374,19 @@ OperatingV1
     -> SwitchedV2(candidate)
     -> VerifiedV2(evidence)
     -> OpenV2(acceptance)       # point of no return
-    -> RetiringV1(deletion)
+    -> ObservingV2(readings)
+    -> ContractingV1(deletion)
     -> OperatingV2(report)
 
 Before OpenV2 only:
     Preparing | FreezeRequested | Frozen | SwitchedV2 | VerifiedV2
-        -> RollingBack(reason)
-        -> OperatingV1(recovery)
+        -> RollingBack(reason) -> OperatingV1(recovery)
 ```
+
+`RollingBack` is a closed recovery phase and never independently re-enables writing. Only its verified
+`OperatingV1(recovery)` successor does so. `Preparing` refuses new ordinary admission but preserves an incumbent
+operation already admitted under the current manifest when its claim and operation generations remain exact.
+`FreezeRequested` and every later phase refuse ordinary v1 effects, and no state after `OpenV2` can return to v1.
 
 Every v1 bridge writer and every v2 writer reads the ledger ref fresh before a mutation, verifies its commit
 ancestry, manifest fingerprint, phase tag, and transition legality, and fails closed on an unreadable or
