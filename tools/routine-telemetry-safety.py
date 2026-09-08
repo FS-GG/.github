@@ -14,7 +14,7 @@ from typing import Any
 MAX_INPUT_BYTES = 1024 * 1024
 MAX_OUTPUT_BYTES = 64 * 1024
 PUBLIC_FIELDS = {
-    "schema", "repo", "pr", "expectedHead", "observedHead", "head", "outcome", "codeDelivery",
+    "schema", "repo", "pr", "baseRef", "baseSha", "expectedHead", "observedHead", "head", "outcome", "codeDelivery",
     "publication", "mergeCommit", "attempts", "reason", "unit", "scope", "freshInputTokens",
     "validationDisposition", "coherentValidation",
     "cachedInputTokens", "outputTokens", "reasoningTokens", "productiveTokens", "overheadTokens",

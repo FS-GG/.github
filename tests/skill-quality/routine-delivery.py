@@ -5,6 +5,7 @@ import importlib.util
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 import unittest
 from dataclasses import asdict
@@ -27,6 +28,7 @@ def opened(head: str = HEAD) -> dict:
     return {
         "head": {"sha": head}, "state": "open", "draft": False, "merged": False,
         "merged_at": None, "mergeable": True, "mergeable_state": "clean",
+        "base": {"ref": "main", "sha": "d" * 40},
     }
 
 
@@ -34,6 +36,7 @@ def merged(head: str = HEAD) -> dict:
     return {
         "head": {"sha": head}, "state": "closed", "draft": False, "merged": True,
         "merged_at": "2026-09-07T00:00:00Z", "merge_commit_sha": MERGE,
+        "base": {"ref": "main", "sha": "d" * 40},
     }
 
 
@@ -229,6 +232,76 @@ class RoutineDeliveryTests(unittest.TestCase):
         code, result = self.call(api, coherent=True)
         self.assertEqual((code, result.outcome, result.codeDelivery, result.coherentValidation),
                          (4, "delivered-disputed", "delivered", "disputed"))
+
+    def test_advisory_ci_hook_receives_exact_generated_delivery_json(self):
+        summary = MODULE.Summary(
+            "fsgg.routine-delivery/v1", "FS-GG/.github", 7, HEAD, HEAD,
+            "ready", "not-delivered", "not-required", None, 0, None, "current", "unobserved",
+        )
+        observed: dict = {}
+
+        def runner(command, **kwargs):
+            delivery = pathlib.Path(command[command.index("--delivery") + 1])
+            observed.update(json.loads(delivery.read_text(encoding="utf-8")))
+            self.assertEqual(command[:4], ["engine", "telemetry", "ci", "reconcile"])
+            self.assertEqual(command[command.index("--assignment") + 1], "/private/assignment.json")
+            self.assertEqual(command[command.index("--store-root") + 1], "/private/store")
+            self.assertEqual(kwargs["timeout"], 35)
+            return subprocess.CompletedProcess(command, 0, "{}", "")
+
+        self.assertTrue(MODULE.observe_candidate(
+            summary, assignment="/private/assignment.json", store_root="/private/store",
+            engine="engine", runner=runner,
+        ))
+        self.assertEqual(observed, asdict(summary))
+
+    def test_observation_failure_does_not_change_native_delivery(self):
+        callbacks: list[str] = []
+
+        def unavailable(summary):
+            callbacks.append(summary.outcome)
+            MODULE.observe_candidate(
+                summary, assignment="/private/assignment.json", store_root="/private/store",
+                engine="missing", runner=lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")),
+            )
+
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
+        code, result = MODULE.summarize(
+            api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
+            merge_method="squash", publication_required=False, apply=True,
+            candidate_observer=unavailable,
+        )
+        self.assertEqual(callbacks, ["ready"])
+        self.assertEqual((code, result.codeDelivery, api.attempts), (0, "delivered", 1))
+
+    def test_changed_head_never_calls_population_observer(self):
+        callbacks: list[object] = []
+        code, result = MODULE.summarize(
+            FakeApi([opened("c" * 40)]), repo="FS-GG/.github", pr_number=1,
+            expected_head=HEAD, merge_method="squash", publication_required=False,
+            apply=True, candidate_observer=callbacks.append,
+        )
+        self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
+
+    def test_exact_head_but_ineligible_pr_never_calls_population_observer(self):
+        callbacks: list[object] = []
+        draft = {**opened(), "draft": True}
+        code, result = MODULE.summarize(
+            FakeApi([draft]), repo="FS-GG/.github", pr_number=1,
+            expected_head=HEAD, merge_method="squash", publication_required=False,
+            apply=True, candidate_observer=callbacks.append,
+        )
+        self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
+
+    def test_exact_head_but_failed_coherent_validation_never_calls_population_observer(self):
+        callbacks: list[object] = []
+        api = FakeApi([opened()], runs=[run(conclusion="failure")])
+        code, result = MODULE.summarize(
+            api, repo="FS-GG/.github", pr_number=1, expected_head=HEAD,
+            merge_method="squash", publication_required=False, apply=True,
+            coherent_workflow="coherent.yml", candidate_observer=callbacks.append,
+        )
+        self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
 
 
 if __name__ == "__main__":

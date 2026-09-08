@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 5
+    let private currentSchemaVersion = 6
 
     module private Native =
         [<Literal>]
@@ -104,6 +104,13 @@ CREATE INDEX operational_event_times_invocation ON operational_event_times(invoc
 PRAGMA user_version=5;
 """
     let private migration5Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration5Sql)
+    let private migration6Sql = """
+CREATE TABLE ci_population_admissions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL UNIQUE, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, witness TEXT NOT NULL CHECK(witness='native-pr-head'), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,repository,pr_number,base_ref,base_sha,head)) STRICT;
+CREATE TABLE ci_check_runs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, check_id INTEGER NOT NULL, name TEXT NOT NULL, app_slug TEXT, status TEXT NOT NULL, conclusion TEXT, started_at TEXT, completed_at TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(repository,check_id)) STRICT;
+CREATE TABLE ci_population_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_population_admissions(collection_id), actions TEXT NOT NULL CHECK(actions IN ('complete','partial','unknown')), checks TEXT NOT NULL CHECK(checks IN ('complete','partial','unknown')), attempts TEXT NOT NULL CHECK(attempts IN ('complete','partial','unknown')), jobs TEXT NOT NULL CHECK(jobs IN ('complete','partial','unknown')), terminal TEXT NOT NULL CHECK(terminal IN ('complete','partial','unknown')), timestamps TEXT NOT NULL CHECK(timestamps IN ('complete','partial','unknown')), continuation TEXT NOT NULL CHECK(continuation IN ('none','pending')), external_checks INTEGER NOT NULL CHECK(external_checks >= 0), gaps TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(collection_id)) STRICT;
+PRAGMA user_version=6;
+"""
+    let private migration6Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration6Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -299,7 +306,21 @@ PRAGMA user_version=5;
                                                     execute connection "COMMIT;"
                                                 with error -> rollback connection; raise error
                                             if scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
-                                            else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                            else
+                                                let afterV5 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                                if afterV5 = 5 then
+                                                    beginImmediate connection
+                                                    try
+                                                        execute connection migration6Sql
+                                                        use migration = connection.CreateCommand()
+                                                        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(6,$digest,$utc);"
+                                                        parameter migration "$digest" migration6Digest
+                                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                        migration.ExecuteNonQuery() |> ignore
+                                                        execute connection "COMMIT;"
+                                                    with error -> rollback connection; raise error
+                                                if scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
+                                                else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -322,6 +343,7 @@ PRAGMA user_version=5;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -329,7 +351,7 @@ PRAGMA user_version=5;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -367,6 +389,12 @@ PRAGMA user_version=5;
         | TelemetryStore.CiJob(repository,runId,attempt,jobId,name,status,conclusion,created,started,completed) -> run "INSERT INTO ci_jobs VALUES($identity,$item,$repository,$run,$attempt,$job,$name,$status,$conclusion,$created,$started,$completed);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$created",optional created; "$started",optional started; "$completed",optional completed ]
         | TelemetryStore.CiStep(repository,runId,attempt,jobId,number,name,status,conclusion,started,completed,classification,rationale) -> run "INSERT INTO ci_steps VALUES($identity,$item,$repository,$run,$attempt,$job,$number,$name,$status,$conclusion,$started,$completed,$classification,$rationale);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$number",box number; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$classification",box classification; "$rationale",box rationale ]
         | TelemetryStore.CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath) -> run "INSERT INTO ci_coverage VALUES($identity,$item,$collection,$inventory,$attempts,$jobPages,$terminal,$timestamps,$lineage,$classification,$criticalPath);" [ "$collection",box collection; "$inventory",box inventory; "$attempts",box attempts; "$jobPages",box jobPages; "$terminal",box terminal; "$timestamps",box timestamps; "$lineage",box lineage; "$classification",box classification; "$criticalPath",box criticalPath ]
+        | TelemetryStore.CiPopulationAdmission(collection,repository,pr,baseRef,baseSha,head,witness) ->
+            run "INSERT INTO ci_population_admissions VALUES($identity,$item,$collection,$repository,$pr,$baseRef,$baseSha,$head,$witness,$revision);" [ "$collection",box collection; "$repository",box repository; "$pr",box pr; "$baseRef",box baseRef; "$baseSha",box baseSha; "$head",box head; "$witness",box witness; "$revision",box fact.Revision ]
+        | TelemetryStore.CiCheck(repository,checkId,name,app,status,conclusion,started,completed) ->
+            run "INSERT INTO ci_check_runs VALUES($identity,$item,$repository,$check,$name,$app,$status,$conclusion,$started,$completed,$revision);" [ "$repository",box repository; "$check",box checkId; "$name",box name; "$app",optional app; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$revision",box fact.Revision ]
+        | TelemetryStore.CiPopulationCoverage(collection,actions,checks,attempts,jobs,terminal,timestamps,continuation,externalChecks,gaps) ->
+            run "INSERT INTO ci_population_coverage VALUES($identity,$item,$collection,$actions,$checks,$attempts,$jobs,$terminal,$timestamps,$continuation,$external,$gaps,$revision);" [ "$collection",box collection; "$actions",box actions; "$checks",box checks; "$attempts",box attempts; "$jobs",box jobs; "$terminal",box terminal; "$timestamps",box timestamps; "$continuation",box continuation; "$external",box externalChecks; "$gaps",box gaps; "$revision",box fact.Revision ]
         | TelemetryStore.BudgetPopulation(original,state,sourceKind,sourceRef) ->
             run "INSERT INTO budget_population_facts VALUES($identity,$item,$original,$state,$sourceKind,$sourceRef,$revision);" [ "$original",box original; "$state",box state; "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
         | TelemetryStore.BudgetAttribution(dimension,provider,scope,numerator,denominator,coverage,attribution,sourceKind,sourceRef) ->
@@ -708,7 +736,7 @@ PRAGMA user_version=5;
                     | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
                     | Ok batch ->
                         match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
-                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal)) ->
+                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_population_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_check_runs", StringComparison.Ordinal)) ->
                             quarantine root ready errors; quarantined <- quarantined + 1
                         | Error errors -> failures <- (String.concat "; " errors) :: failures
                         | Ok result ->
@@ -968,6 +996,12 @@ PRAGMA user_version=5;
                 parameter command "$item" itemId
                 let value = command.ExecuteScalar()
                 if isNull value || value = box DBNull.Value then "unknown" else string value
+            let population column fallback =
+                use command = connection.CreateCommand()
+                command.CommandText <- $"SELECT %s{column} FROM ci_population_coverage WHERE item_id=$item ORDER BY fact_revision DESC LIMIT 1;"
+                parameter command "$item" itemId
+                let value = command.ExecuteScalar()
+                if isNull value || value = box DBNull.Value then fallback else string value
             let jobs = intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
             let queues = intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
             let runner = if jobs.IsEmpty then None else jobs |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds) |> Some
@@ -989,7 +1023,21 @@ PRAGMA user_version=5;
                    runnerSeconds = runner; wallSeconds = wall; queueSeconds = TelemetryCi.unionSeconds queues
                    usefulValidationSeconds = classified "useful-validation"; administrativeSeconds = classified "admin"; necessarySetupSeconds = classified "necessary-setup"; mixedSeconds = classified "mixed"; unclassifiedSeconds = classified "unclassified"
                    monetary = "unknown"; avoidableRerun = "unknown"
-                   inventoryCoverage = coverage "inventory"; attemptCoverage = coverage "attempts"; jobPageCoverage = coverage "job_pages"; terminalCoverage = coverage "terminal"; timestampCoverage = coverage "timestamps"; lineageCoverage = coverage "lineage"; classificationCoverage = coverage "classification"; criticalPathCoverage = coverage "critical_path" |} + "\n")
+                   inventoryCoverage = population "actions" (coverage "inventory"); checkCoverage = population "checks" "unknown"; attemptCoverage = population "attempts" (coverage "attempts"); jobPageCoverage = population "jobs" (coverage "job_pages"); terminalCoverage = population "terminal" (coverage "terminal"); timestampCoverage = population "timestamps" (coverage "timestamps"); continuation = population "continuation" "none"; externalChecks = Int64.Parse(population "external_checks" "0"); populationGaps = population "gaps" "[]"; lineageCoverage = coverage "lineage"; classificationCoverage = coverage "classification"; criticalPathCoverage = coverage "critical_path" |} + "\n")
+
+    let ciPopulationAdmissionExists path assessment (itemId: string) (repository: string) (pullRequest: int) (baseRef: string) (baseSha: string) (head: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                if Int32.Parse(scalarText connection "PRAGMA user_version;") <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                else
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT count(*) FROM ci_population_admissions WHERE item_id=$item AND repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head AND witness='native-pr-head';"
+                    parameter command "$item" itemId; parameter command "$repo" repository; parameter command "$pr" pullRequest; parameter command "$baseRef" baseRef; parameter command "$baseSha" baseSha; parameter command "$head" head
+                    Ok(Convert.ToInt64(command.ExecuteScalar()) = 1L)
+            with error -> Error [ error.Message ]
 
     let budgetSummary path assessment (itemId: string) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with

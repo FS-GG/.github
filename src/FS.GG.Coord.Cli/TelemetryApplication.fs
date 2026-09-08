@@ -85,6 +85,8 @@ module TelemetryApplication =
             | Some delimiter -> validateArgs [ "--assignment"; "--store-root"; "--relation"; "--late-after-seconds" ] [] args[..delimiter - 1] |> Some
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
+        | "telemetry" :: "ci" :: "reconcile" :: args ->
+            shape [ "--assignment"; "--delivery"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "telemetry" :: "budget" :: "status" :: args -> shape [ "--store-root" ] [] args
         | "telemetry" :: "budget" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args

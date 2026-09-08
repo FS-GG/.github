@@ -45,13 +45,15 @@ changes native output, exit or delivery.
   calls explicit. Package helpers; source tests do not prove installation. Source evidence is the packaged CLI
   entrypoint and executable `TelemetryRuntimeApplicationTests`, including migration-5 ingestion/reconciliation with
   no caller-authored observation batches; publication, installation, activation and qualification remain pending.
-- [ ] **UTEL-06.3 — Discover and reconcile admitted exact-head CI population.** The actual delivery path registers
+- [x] **UTEL-06.3 — Discover and reconcile admitted exact-head CI population.** The actual delivery path registers
   repository, PR, base and head; independently witness first admission and retain admitted superseded heads.
   Discover nonrequired workflows, all runs/attempts/jobs/steps/check-runs, keeping unsupported causal bindings
   explicit. Use revision-safe bounded polls, continuation, pending/partial and visible rate-limit semantics with no
   model polling. Cover late runs, attempts, head movement, concurrent inventory, partial pagination,
   cancellation, late completion, correction/replay and an omitted-run incomplete control. A provider command is
-  source preparation until the delivery driver invokes it automatically.
+  source preparation until the delivery driver invokes it automatically. Source now includes the advisory
+  routine-delivery hook and executable reconciliation tests; publication, installation, activation and operational
+  qualification remain pending.
 - [ ] **UTEL-06.4 — Derive whole-item inputs and fail-visible budget reconciliation.** Derive population,
   attribution and interval facts from admitted runtime, CI and native outcome; accept no caller-authored verdicts.
   Merge does not close running children, and a late follow-up revises assessment. Expose this in the existing

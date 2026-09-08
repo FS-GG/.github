@@ -45,6 +45,9 @@ module TelemetryStore =
         | CiJob of repository: string * runId: int64 * attempt: int64 * jobId: int64 * name: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * completedAt: string option
         | CiStep of repository: string * runId: int64 * attempt: int64 * jobId: int64 * number: int64 * name: string * status: string * conclusion: string option * startedAt: string option * completedAt: string option * classification: string * rationale: string
         | CiCoverage of collectionId: string * inventory: string * attempts: string * jobPages: string * terminal: string * timestamps: string * lineage: string * classification: string * criticalPath: string
+        | CiPopulationAdmission of collectionId: string * repository: string * pullRequest: int64 * baseRef: string * baseSha: string * head: string * witness: string
+        | CiCheck of repository: string * checkId: int64 * name: string * appSlug: string option * status: string * conclusion: string option * startedAt: string option * completedAt: string option
+        | CiPopulationCoverage of collectionId: string * actions: string * checks: string * attempts: string * jobs: string * terminal: string * timestamps: string * continuation: string * externalChecks: int64 * gaps: string
         | BudgetPopulation of originalItemId: string * state: string * sourceKind: string * sourceRef: string
         | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
         | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string
@@ -243,6 +246,24 @@ module TelemetryStore =
             | "ci-coverage" ->
                 match requiredText label node "collectionId", requiredText label node "inventory", requiredText label node "attempts", requiredText label node "jobPages", requiredText label node "terminal", requiredText label node "timestamps", requiredText label node "lineage", requiredText label node "classification", requiredText label node "criticalPath" with
                 | Ok collection, Ok inventory, Ok attempts, Ok jobPages, Ok terminal, Ok timestamps, Ok lineage, Ok classification, Ok criticalPath -> make [ "collectionId"; "inventory"; "attempts"; "jobPages"; "terminal"; "timestamps"; "lineage"; "classification"; "criticalPath" ] (CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath))
+                | values -> Error(sprintf "%A" values)
+            | "ci-population-admission" ->
+                match requiredText label node "collectionId", requiredText label node "repository", requiredInt label node "prNumber", requiredText label node "baseRef", requiredText label node "baseSha", requiredText label node "head", requiredText label node "witness" with
+                | Ok collection, Ok repository, Ok pr, Ok baseRef, Ok baseSha, Ok head, Ok witness when pr > 0L && baseSha.Length = 40 && baseSha |> Seq.forall Char.IsAsciiHexDigitLower && head.Length = 40 && head |> Seq.forall Char.IsAsciiHexDigitLower && witness = "native-pr-head" ->
+                    make [ "collectionId"; "repository"; "prNumber"; "baseRef"; "baseSha"; "head"; "witness" ] (CiPopulationAdmission(collection,repository,pr,baseRef,baseSha,head,witness))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} requires a positive PR, base ref, lowercase base/head SHAs, and native-pr-head witness"
+                | values -> Error(sprintf "%A" values)
+            | "ci-check" ->
+                match requiredText label node "repository", requiredInt label node "checkId", requiredText label node "name", optionalText label node "appSlug", requiredText label node "status", optionalText label node "conclusion", optionalTimestamp label node "startedAt", optionalTimestamp label node "completedAt" with
+                | Ok repository, Ok checkId, Ok name, Ok app, Ok status, Ok conclusion, Ok started, Ok completed ->
+                    make [ "repository"; "checkId"; "name"; "appSlug"; "status"; "conclusion"; "startedAt"; "completedAt" ] (CiCheck(repository,checkId,name,app,status,conclusion,started,completed))
+                | values -> Error(sprintf "%A" values)
+            | "ci-population-coverage" ->
+                match requiredText label node "collectionId", requiredText label node "actions", requiredText label node "checks", requiredText label node "attempts", requiredText label node "jobs", requiredText label node "terminal", requiredText label node "timestamps", requiredText label node "continuation", requiredInt label node "externalChecks", requiredText label node "gaps" with
+                | Ok collection, Ok actions, Ok checks, Ok attempts, Ok jobs, Ok terminal, Ok timestamps, Ok continuation, Ok externalChecks, Ok gaps
+                    when [ actions; checks; attempts; jobs; terminal; timestamps ] |> List.forall (fun value -> Set.contains value (Set [ "complete"; "partial"; "unknown" ])) && Set.contains continuation (Set [ "none"; "pending" ]) ->
+                    make [ "collectionId"; "actions"; "checks"; "attempts"; "jobs"; "terminal"; "timestamps"; "continuation"; "externalChecks"; "gaps" ] (CiPopulationCoverage(collection,actions,checks,attempts,jobs,terminal,timestamps,continuation,externalChecks,gaps))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported population coverage"
                 | values -> Error(sprintf "%A" values)
             | "budget-population" ->
                 match requiredText label node "originalItemId", requiredText label node "state", requiredText label node "sourceKind", requiredText label node "sourceRef" with

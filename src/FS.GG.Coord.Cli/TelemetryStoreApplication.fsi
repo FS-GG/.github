@@ -17,6 +17,7 @@ module TelemetryStoreApplication =
     val summary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val reconcile: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val ciSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val ciPopulationAdmissionExists: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> repository: string -> pullRequest: int -> baseRef: string -> baseSha: string -> head: string -> Result<bool, string list>
     val budgetSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val budgetStatus: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
