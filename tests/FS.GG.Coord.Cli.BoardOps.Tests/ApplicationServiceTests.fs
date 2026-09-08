@@ -59,6 +59,19 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
+        let root = Path.Combine(Path.GetTempPath(), $"fsgg-sdd-evidence-{Guid.NewGuid():N}")
+        let previousRoot = Environment.GetEnvironmentVariable "FSGG_COORD_SDD_ROOT"
+        let workId = "2137-delivery-route"
+        let specHome = $"work/{workId}/spec.md"
+
+        Directory.CreateDirectory(Path.Combine(root, "work", workId)) |> ignore
+        Directory.CreateDirectory(Path.Combine(root, "readiness", workId)) |> ignore
+        File.WriteAllText(Path.Combine(root, specHome), "# Synthetic delivery-route fixture\n")
+        File.WriteAllText(
+            Path.Combine(root, "readiness", workId, "analysis.json"),
+            $"{{\"workId\":\"{workId}\",\"status\":\"implementationReady\"}}")
+        Environment.SetEnvironmentVariable("FSGG_COORD_SDD_ROOT", root)
+
         let current : DeliveryRoute.Receipt =
             { Schema = DeliveryRoute.Schema
               Subject = "FS-GG/.github#2137"
@@ -70,18 +83,22 @@ module ApplicationServiceTests =
               Rationale = "fixture route receipt"
               DeclaredImpacts = [ "internal" ]
               ObservedFacts = [ "localized" ]
-              SddWorkId = Some "2137-delivery-route"
-              SpecHome = Some "work/2137-delivery-route/spec.md"
+              SddWorkId = Some workId
+              SpecHome = Some specHome
               RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
 
-        Assert.Empty(Client.sddEvidenceErrors current)
+        try
+            Assert.Empty(Client.sddEvidenceErrors current)
 
-        let nonexistent =
-            { current with
-                SddWorkId = Some "does-not-exist"
-                SpecHome = Some "work/does-not-exist/spec.md" }
+            let nonexistent =
+                { current with
+                    SddWorkId = Some "does-not-exist"
+                    SpecHome = Some "work/does-not-exist/spec.md" }
 
-        Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
+            Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_SDD_ROOT", previousRoot)
+            Directory.Delete(root, true)
 
     [<Fact>]
     let ``#2137 SDD readiness rejects a substituted work id and non-implementation-ready status`` () =
