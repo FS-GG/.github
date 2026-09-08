@@ -2157,8 +2157,9 @@ fi
 
 # The provider boundary consumes exact artifact bytes, not provenance fields asserted by the cycle
 # caller. Registration supplies the canonical cycle id used by all three provider envelopes.
-printf '%s\n' \
-  '{"sourceRevision":"base","units":[{"id":"2206-board-roster-closure","providerCycleId":"roadmap-cycle-ledger-m1-production","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
+provider_unit="typed-sdd-p4-floor"
+jq -n --arg unit "$provider_unit" \
+  '{sourceRevision:"base",units:[{id:$unit,providerCycleId:"roadmap-cycle-ledger-m1-production",dependencies:[],completed:false,evidence:[]}],executor:"worker",repository:".github",baseCommit:"base",liveCycles:[]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_register="$(run cycle register --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_register_rc=$?
 cycle_id="$(printf '%s' "$cycle_register" | jq -r '.cycleId // empty' 2>/dev/null)"
@@ -2180,8 +2181,17 @@ printf '%s\n' '---' 'feedbackSchema: 2' "cycle: $provider_cycle" '---' '## §1 P
 report_digest="$(sed 's/\r$//' "$provider_root/feedback/$provider_cycle.md" | sha256sum | cut -d' ' -f1)"
 jq -n --arg report "feedback/$provider_cycle.md" --arg digest "$report_digest" '{auditSchema:1,report:$report,reportSha256:$digest,findings:[]}' >"$provider_root/feedback/audits/$provider_cycle.audit.json"
 
-jq -n --arg cycle "$cycle_id" --arg providerCycle "$provider_cycle" --arg head "$candidate_head" --arg repo "$REPO_ROOT" --arg providerRoot "$provider_root" \
-  '{sourceRevision:"base",units:[{id:"2206-board-roster-closure",providerCycleId:$providerCycle,dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"2206-board-roster-closure",executor:"worker",repository:".github",baseCommit:"base"},implementation:{rootPath:$repo,artifactPath:"readiness/2206-board-roster-closure/verify.json"},review:{rootPath:$providerRoot,artifactPath:("reviews/roadmap/"+$providerCycle+".json")},feedback:{rootPath:$providerRoot,artifactPath:("feedback/"+$providerCycle+".md"),auditPath:("feedback/audits/"+$providerCycle+".audit.json"),phases:["implementation-test-evidence","verify-ship-pr"]},evidence:{implementationHead:$head,reviewHead:$head,feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:$head,evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
+implementation_root="$CYCLE_FIX/implementation-root"
+mkdir -p "$implementation_root/work" "$implementation_root/readiness/$provider_unit"
+cp -R "$REPO_ROOT/work/$provider_unit" "$implementation_root/work/"
+cp "$REPO_ROOT/readiness/$provider_unit/analysis.json" "$implementation_root/readiness/$provider_unit/analysis.json"
+cp "$REPO_ROOT/readiness/$provider_unit/work-model.json" "$implementation_root/readiness/$provider_unit/work-model.json"
+cp "$REPO_ROOT/tests/coord-engine-e2e/fixtures/valid-sdd-provider-v1.json" "$implementation_root/readiness/$provider_unit/verify.json"
+for entry in .agents .fsgg .github docs registry scripts src tests Directory.Packages.props; do
+  ln -s "$REPO_ROOT/$entry" "$implementation_root/$entry"
+done
+jq -n --arg cycle "$cycle_id" --arg providerCycle "$provider_cycle" --arg unit "$provider_unit" --arg head "$candidate_head" --arg repo "$implementation_root" --arg providerRoot "$provider_root" \
+  '{sourceRevision:"base",units:[{id:$unit,providerCycleId:$providerCycle,dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:$unit,executor:"worker",repository:".github",baseCommit:"base"},implementation:{rootPath:$repo,artifactPath:("readiness/"+$unit+"/verify.json")},review:{rootPath:$providerRoot,artifactPath:("reviews/roadmap/"+$providerCycle+".json")},feedback:{rootPath:$providerRoot,artifactPath:("feedback/"+$providerCycle+".md"),auditPath:("feedback/audits/"+$providerCycle+".audit.json"),phases:["implementation-test-evidence","verify-ship-pr"]},evidence:{implementationHead:$head,reviewHead:$head,feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:$head,evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
 cycle_advance="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_advance_rc=$?
 if [ "$cycle_advance_rc" -eq 0 ] && [ "$(printf '%s' "$cycle_advance" | jq -r .action 2>/dev/null)" = advance ]; then
   ok "#2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes"
@@ -2263,7 +2273,7 @@ mkdir -p "$fake_sdd_dir"
 cat >"$fake_sdd_dir/fsgg-sdd" <<'FAKE_SDD'
 #!/usr/bin/env bash
 cat <<'JSON'
-{"schema":"fsgg.sdd.verify/1","toolVersion":"9.9.9","command":{"name":"verify"},"context":{"workId":"2206-board-roster-closure"},"coherent":true,"outcome":"noChange"}
+{"schema":"fsgg.sdd.verify/1","toolVersion":"9.9.9","command":{"name":"verify"},"context":{"workId":"typed-sdd-p4-floor"},"coherent":true,"outcome":"noChange"}
 JSON
 FAKE_SDD
 chmod +x "$fake_sdd_dir/fsgg-sdd"

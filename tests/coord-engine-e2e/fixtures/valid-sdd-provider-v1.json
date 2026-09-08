@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "workId": "typed-sdd-p4-floor",
+  "stage": "verify",
+  "status": "verificationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "diagnostics": [],
+  "readiness": "verificationReady"
+}
