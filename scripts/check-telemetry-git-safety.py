@@ -11,6 +11,14 @@ RAW_MARKERS = (
     b'"type":"response_' + b'item"', b'"type": "response_' + b'item"',
     b'"session_' + b'id"', b'"conversation_' + b'id"', b'"encrypted_' + b'content"',
     b'fsgg.telemetry.runtime-usage-' + b'receipt/', b'fsgg.telemetry.lifecycle-' + b'event/',
+    b'sqlite format ' + b'3\x00',
+    b'"schema":"fsgg.telemetry.' + b'ingest/1"',
+    b'"schema": "fsgg.telemetry.' + b'ingest/1"',
+)
+PRIVATE_SUFFIXES = (
+    ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm", ".sqlite-journal",
+    ".sqlite3-wal", ".sqlite3-shm", ".sqlite3-journal", ".ready", ".rejected",
+    "drain.cursor", "writer.lock",
 )
 
 
@@ -34,7 +42,10 @@ def main() -> int:
         for path in paths:
             normalized = "/" + path.replace("\\", "/").lower()
             if ("/.codex/sessions/" in normalized or normalized.endswith(".jsonl")
-                    or "raw-receipt" in normalized or "receipt-store/" in normalized):
+                    or normalized.endswith(PRIVATE_SUFFIXES) or "raw-receipt" in normalized
+                    or "receipt-store/" in normalized or "telemetry-inbox/" in normalized
+                    or "telemetry-quarantine/" in normalized or "private-export" in normalized
+                    or "private-analytics" in normalized or ".ready.rejected" in normalized):
                 raise ValueError("unsafe-telemetry-path")
             blob = git(args.repo, "show", f"HEAD:{path}" if args.base else f":{path}", binary=True)
             lowered = blob.lower()

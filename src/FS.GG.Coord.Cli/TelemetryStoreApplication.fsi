@@ -1,0 +1,19 @@
+namespace FS.GG.Coord.Cli
+
+open FS.GG.Coord
+
+module TelemetryStoreApplication =
+    type DrainHooks =
+        { BeforeCommit: unit -> unit
+          AfterCommitBeforeDelete: unit -> unit }
+    val databaseFileName: string
+    val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
+    val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
+    val status: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
+    val publish: path: string -> assessment: TelemetryStore.DurabilityAssessment -> bytes: byte array -> Result<string, string list>
+    val drain: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
+    val drainWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> hooks: DrainHooks -> Result<string, string list>
+    val ingest: path: string -> assessment: TelemetryStore.DurabilityAssessment -> bytes: byte array -> Result<string, string list>
+    val summary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
+    val run: action: string -> args: string list -> int

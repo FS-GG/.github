@@ -69,6 +69,14 @@ module TelemetryApplication =
             shape [ "--head"; "--kind"; "--id"; "--output" ] [] args
         | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
             shape [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args
+        | "telemetry" :: "store" :: action :: args when action = "status" || action = "init" || action = "drain" ->
+            shape [ "--store-root" ] [] args
+        | "telemetry" :: "store" :: action :: args when action = "ingest" || action = "publish" ->
+            shape [ "--store-root"; "--input" ] [] args
+        | "telemetry" :: "store" :: "summary" :: args ->
+            shape [ "--store-root"; "--item" ] [] args
+        | "telemetry" :: "store" :: "export" :: args ->
+            shape [ "--store-root"; "--item"; "--output" ] [ "--public" ] args
         | "roadmap" :: "unit" :: "prepare" :: action :: args
             when action = "inspect" || action = "render" || action = "verify" ->
             shape [ "--input"; "--registry"; "--source-registry"; "--output" ] [] args
@@ -552,6 +560,15 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
+        | "telemetry" :: "store" :: action :: args ->
+            let values, switches =
+                match action with
+                | "status" | "init" | "drain" -> [ "--store-root" ], []
+                | "ingest" | "publish" -> [ "--store-root"; "--input" ], []
+                | "summary" -> [ "--store-root"; "--item" ], []
+                | "export" -> [ "--store-root"; "--item"; "--output" ], [ "--public" ]
+                | _ -> [], []
+            Some(validated "telemetry store" values switches args (TelemetryStoreApplication.run action))
         | "telemetry" :: "usage" :: "collect" :: runtime :: args ->
             Some(validated "telemetry usage"
                     [ "--session-file"; "--snapshot"; "--task"; "--turn-id"; "--since"; "--until"; "--format"; "--append"; "--output"; "--coord-version"; "--sdd-version"; "--contracts-version"; "--receipt-store" ]

@@ -25,6 +25,23 @@ obj/
 **/.codex/sessions/
 **/*raw-receipt*
 **/*.jsonl
+# UTEL-02 private stores, WAL state, worker inboxes and quarantines.
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite-journal
+**/*.sqlite3-wal
+**/*.sqlite3-shm
+**/*.sqlite3-journal
+**/*.ready
+**/*.rejected
+**/*.private-export*
+**/*private-analytics*
+**/drain.cursor
+**/writer.lock
+**/telemetry-inbox/
+**/telemetry-quarantine/
 # M5: bulky execution output belongs in immutable CI artifacts. Existing tracked
 # files remain tracked until their recoverable M6 migration; this prevents new copies.
 **/test-results/

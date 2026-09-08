@@ -253,6 +253,8 @@ the standing safety advisories carry forward.
     <Compile Include="SemanticDiffApplication.fs" />
     <Compile Include="QualificationApplication.fsi" />
     <Compile Include="QualificationApplication.fs" />
+    <Compile Include="TelemetryStoreApplication.fsi" />
+    <Compile Include="TelemetryStoreApplication.fs" />
     <Compile Include="TelemetryApplication.fsi" />
     <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />
@@ -280,5 +282,7 @@ the standing safety advisories carry forward.
 
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
 </Project>

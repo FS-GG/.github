@@ -22,6 +22,10 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
+    <!-- UTEL-02: ADO.NET only (no ORM), with an explicit native bundle whose SQLite is newer than
+         the 3.51.3 WAL-reset fix floor. The runtime smoke test reads sqlite_version(). -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
   <!-- api-breaking-change-gate (.github#20, #609). The root Directory.Build.props imports the org-shared
