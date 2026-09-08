@@ -19,6 +19,14 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-08** — **coordination coherent set `github:0.87.0` source prepared**
+  (owner github; UTEL source [PR #3360](https://github.com/FS-GG/.github/pull/3360) through
+  [PR #3363](https://github.com/FS-GG/.github/pull/3363)): advances the source frontier from 0.86.1
+  to 0.87.0 for prospective private host-local SQLite telemetry, automatic repository-owned Codex
+  lifecycle observation, exact-head CI population reconciliation, native delivery outcomes, and
+  machine-derived whole-item budget inputs. The published frontier remains 0.86.1 until exact 0.87.0
+  bytes are packed once, verified on both feeds, and promoted through the coherent release saga.
+
 - **2026-09-07** — **coordination coherent set `github:0.86.1` promoted and published frontier reconciled**
   (owner github; source [PR #3339](https://github.com/FS-GG/.github/pull/3339),
   [promotion run 34170008422](https://github.com/FS-GG/.github/actions/runs/34170008422)):

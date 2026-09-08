@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.86.1 — keep routine board work out of the strict repair chain.
+    <PackageReleaseNotes>0.87.0 — add prospective operational telemetry over a private host-local SQLite store.
 
-FS.GG.Drivers' routed work-board variants now invoke the three-round fresh implementer/critic repair
-chain only for strict items. Explicitly admitted routine, reversible source work remains on the reduced
-one-owner, one-PR route through repair and completion. FS.GG.Kit and FS.GG.Coord.Cli advance with the
-coherent set; the coordination engine's command, option, result, and exit-code vocabulary is unchanged.
+FS.GG.Coord.Cli adds durable local-store commands, repository-owned Codex root/child lifecycle
+observation, admitted exact-head CI reconciliation, native delivery outcomes, and machine-derived
+whole-item population and budget inputs. The collector is future-only and advisory: missing telemetry
+stays visible without changing native execution or delivery. FS.GG.Kit and FS.GG.Drivers advance with
+the coherent set.
 
 $(FsggStandingAdvisories)
 
