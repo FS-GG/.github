@@ -259,11 +259,10 @@ def validate(data: dict[str, Any], acceptance: bool = False) -> list[str]:
             errors.append(f"governingArtifacts[{path}]: source file missing")
         else:
             try:
-                authority_bytes = (
-                    run_bytes(["git", "show", f"{ROADMAP_AUTHORITY_REVISION}:{path}"])
-                    if path == ROADMAP_PROJECTION_PATH
-                    else artifact_path.read_bytes()
-                )
+                # Q0 evidence is an accepted historical snapshot. Later governing
+                # amendments have their own native contracts and must not rewrite
+                # the independently reviewed Q0 subject.
+                authority_bytes = run_bytes(["git", "show", f"{ROADMAP_AUTHORITY_REVISION}:{path}"])
             except subprocess.CalledProcessError:
                 errors.append(f"governingArtifacts[{path}]: accepted authority snapshot is unavailable")
                 authority_bytes = b""
