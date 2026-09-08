@@ -30,6 +30,10 @@ The [Fable SC2 client and custom WASM design](2026-09-08-132131-fable-sc2-wasm-c
 proposes a browser tactical client, native SC2 gateway, mouse/keyboard control and a staged product roadmap.
 It is a proposal; implementation and deployment are separate work.
 
+The analogous [Beyond All Reason research, design and roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md)
+builds on the existing HighBar/FSBar repositories and explicitly targets the FS.GG Fable game template.
+It also remains a proposal, with existing source, synthetic evidence and required live qualification distinguished.
+
 FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
 independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
 the current v1 production machinery after verification. Follow the living
