@@ -48,6 +48,7 @@ module TelemetryStore =
         | CiPopulationAdmission of collectionId: string * repository: string * pullRequest: int64 * baseRef: string * baseSha: string * head: string * witness: string
         | CiCheck of repository: string * checkId: int64 * name: string * appSlug: string option * status: string * conclusion: string option * startedAt: string option * completedAt: string option
         | CiPopulationCoverage of collectionId: string * actions: string * checks: string * attempts: string * jobs: string * terminal: string * timestamps: string * continuation: string * externalChecks: int64 * gaps: string
+        | NativeItemOutcome of repository: string * pullRequest: int64 * baseRef: string * baseSha: string * head: string * outcome: string * codeDelivery: string * mergeCommit: string option * occurredAt: string option * observedAt: string * sourceKind: string * sourceRef: string
         | BudgetPopulation of originalItemId: string * state: string * sourceKind: string * sourceRef: string
         | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
         | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string
@@ -264,6 +265,23 @@ module TelemetryStore =
                     when [ actions; checks; attempts; jobs; terminal; timestamps ] |> List.forall (fun value -> Set.contains value (Set [ "complete"; "partial"; "unknown" ])) && Set.contains continuation (Set [ "none"; "pending" ]) ->
                     make [ "collectionId"; "actions"; "checks"; "attempts"; "jobs"; "terminal"; "timestamps"; "continuation"; "externalChecks"; "gaps" ] (CiPopulationCoverage(collection,actions,checks,attempts,jobs,terminal,timestamps,continuation,externalChecks,gaps))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported population coverage"
+                | values -> Error(sprintf "%A" values)
+            | "native-item-outcome" ->
+                match requiredText label node "repository", requiredInt label node "prNumber", requiredText label node "baseRef", requiredText label node "baseSha", requiredText label node "head", requiredText label node "outcome", requiredText label node "codeDelivery", optionalText label node "mergeCommit", optionalTimestamp label node "occurredAt", requiredTimestamp label node "observedAt", requiredText label node "sourceKind", requiredText label node "sourceRef" with
+                | Ok repository, Ok pullRequest, Ok baseRef, Ok baseSha, Ok head, Ok outcome, Ok codeDelivery, Ok mergeCommit, Ok occurredAt, Ok observedAt, Ok sourceKind, Ok sourceRef
+                    when pullRequest > 0L && Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+                         && [ baseSha; head ] |> List.forall (fun sha -> sha.Length = 40 && sha |> Seq.forall Char.IsAsciiHexDigitLower)
+                         && mergeCommit |> Option.forall (fun sha -> sha.Length = 40 && sha |> Seq.forall Char.IsAsciiHexDigitLower)
+                         && Set.contains outcome (Set [ "ready"; "refused"; "delivered"; "delivered-after-readback"; "delivered-disputed"; "indeterminate" ])
+                         && Set.contains codeDelivery (Set [ "delivered"; "not-delivered"; "unknown" ])
+                         && ((Set.contains outcome (Set [ "delivered"; "delivered-after-readback"; "delivered-disputed" ]) && codeDelivery = "delivered" && mergeCommit.IsSome && occurredAt.IsSome)
+                             || (outcome = "ready" && codeDelivery = "not-delivered" && mergeCommit.IsNone)
+                             || (outcome = "refused" && codeDelivery = "not-delivered" && mergeCommit.IsNone)
+                             || (outcome = "indeterminate" && codeDelivery = "unknown" && mergeCommit.IsNone))
+                         && (occurredAt |> Option.forall (fun value -> DateTimeOffset.Parse(value, CultureInfo.InvariantCulture) <= DateTimeOffset.Parse(observedAt, CultureInfo.InvariantCulture)))
+                         && sourceKind = "routine-delivery" ->
+                    make [ "repository"; "prNumber"; "baseRef"; "baseSha"; "head"; "outcome"; "codeDelivery"; "mergeCommit"; "occurredAt"; "observedAt"; "sourceKind"; "sourceRef" ] (NativeItemOutcome(repository,pullRequest,baseRef,baseSha,head,outcome,codeDelivery,mergeCommit,occurredAt,observedAt,sourceKind,sourceRef))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} is not a valid machine-authored native item outcome"
                 | values -> Error(sprintf "%A" values)
             | "budget-population" ->
                 match requiredText label node "originalItemId", requiredText label node "state", requiredText label node "sourceKind", requiredText label node "sourceRef" with

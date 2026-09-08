@@ -17,6 +17,7 @@ PUBLIC_FIELDS = {
     "schema", "repo", "pr", "baseRef", "baseSha", "expectedHead", "observedHead", "head", "outcome", "codeDelivery",
     "publication", "mergeCommit", "attempts", "reason", "unit", "scope", "freshInputTokens",
     "validationDisposition", "coherentValidation",
+    "outcomeAt", "observedAt", "telemetryHealth",
     "cachedInputTokens", "outputTokens", "reasoningTokens", "productiveTokens", "overheadTokens",
     "unclassifiedTokens", "dataStatus", "completeness", "complete", "attemptsExpected", "attemptsObserved",
 }

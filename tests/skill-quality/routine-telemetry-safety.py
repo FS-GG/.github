@@ -12,6 +12,8 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     assert module.read_public_object(str(source)) == ({"schema":"synthetic/1","attempts":1}, None)
     source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "baseRef":"main", "baseSha":"d" * 40}))
     assert module.read_public_object(str(source))[1] is None
+    source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "outcomeAt":"2026-09-08T10:00:00Z", "observedAt":"2026-09-08T10:00:01Z", "telemetryHealth":"pending"}))
+    assert module.read_public_object(str(source))[1] is None
     source.write_text(json.dumps({"schema":"fsgg.routine-delivery/v1", "telemetryAssignment":"/private/a"}))
     assert module.read_public_object(str(source))[1] == "input-fields-invalid"
     source.write_text('{"schema":"synthetic/1","attempts":1}')

@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 6
+    let private currentSchemaVersion = 7
 
     module private Native =
         [<Literal>]
@@ -111,6 +111,12 @@ CREATE TABLE ci_population_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT 
 PRAGMA user_version=6;
 """
     let private migration6Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration6Sql)
+    let private migration7Sql = """
+CREATE TABLE native_item_outcomes(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind='routine-delivery'), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
+PRAGMA user_version=7;
+"""
+    let private migration7Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration7Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -320,7 +326,21 @@ PRAGMA user_version=6;
                                                         execute connection "COMMIT;"
                                                     with error -> rollback connection; raise error
                                                 if scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
-                                                else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                                else
+                                                    let afterV6 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                                    if afterV6 = 6 then
+                                                        beginImmediate connection
+                                                        try
+                                                            execute connection migration7Sql
+                                                            use migration = connection.CreateCommand()
+                                                            migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(7,$digest,$utc);"
+                                                            parameter migration "$digest" migration7Digest
+                                                            parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                            migration.ExecuteNonQuery() |> ignore
+                                                            execute connection "COMMIT;"
+                                                        with error -> rollback connection; raise error
+                                                    if scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;" <> migration7Digest then Error [ "migration checksum mismatch" ]
+                                                    else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -344,6 +364,7 @@ PRAGMA user_version=6;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;" <> migration7Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -351,7 +372,7 @@ PRAGMA user_version=6;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "native_item_outcomes"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -395,6 +416,8 @@ PRAGMA user_version=6;
             run "INSERT INTO ci_check_runs VALUES($identity,$item,$repository,$check,$name,$app,$status,$conclusion,$started,$completed,$revision);" [ "$repository",box repository; "$check",box checkId; "$name",box name; "$app",optional app; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$revision",box fact.Revision ]
         | TelemetryStore.CiPopulationCoverage(collection,actions,checks,attempts,jobs,terminal,timestamps,continuation,externalChecks,gaps) ->
             run "INSERT INTO ci_population_coverage VALUES($identity,$item,$collection,$actions,$checks,$attempts,$jobs,$terminal,$timestamps,$continuation,$external,$gaps,$revision);" [ "$collection",box collection; "$actions",box actions; "$checks",box checks; "$attempts",box attempts; "$jobs",box jobs; "$terminal",box terminal; "$timestamps",box timestamps; "$continuation",box continuation; "$external",box externalChecks; "$gaps",box gaps; "$revision",box fact.Revision ]
+        | TelemetryStore.NativeItemOutcome(repository,pullRequest,baseRef,baseSha,head,outcome,codeDelivery,mergeCommit,occurredAt,observedAt,sourceKind,sourceRef) ->
+            run "INSERT INTO native_item_outcomes VALUES($identity,$item,$repository,$pr,$baseRef,$baseSha,$head,$outcome,$codeDelivery,$mergeCommit,$occurred,$observed,$sourceKind,$sourceRef,$revision);" [ "$repository",box repository; "$pr",box pullRequest; "$baseRef",box baseRef; "$baseSha",box baseSha; "$head",box head; "$outcome",box outcome; "$codeDelivery",box codeDelivery; "$mergeCommit",optional mergeCommit; "$occurred",optional occurredAt; "$observed",box observedAt; "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
         | TelemetryStore.BudgetPopulation(original,state,sourceKind,sourceRef) ->
             run "INSERT INTO budget_population_facts VALUES($identity,$item,$original,$state,$sourceKind,$sourceRef,$revision);" [ "$original",box original; "$state",box state; "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
         | TelemetryStore.BudgetAttribution(dimension,provider,scope,numerator,denominator,coverage,attribution,sourceKind,sourceRef) ->
@@ -413,12 +436,121 @@ PRAGMA user_version=6;
             run "INSERT INTO operational_event_times VALUES($identity,$item,$invocation,$event,$occurred,$occurredClock,$observed,$observedClock,$revision);" [ "$invocation",box invocation; "$event",box event; "$occurred",optional occurred; "$occurredClock",optional occurredClock; "$observed",optional observed; "$observedClock",optional observedClock; "$revision",box fact.Revision ]
 
         match fact.ItemId, fact.Payload with
-        | Some item, (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _ | TelemetryStore.RuntimeGap _ | TelemetryStore.CiCoverage _) ->
+        | Some item, (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _
+                    | TelemetryStore.RuntimeAdmission _ | TelemetryStore.RuntimeStart _ | TelemetryStore.RuntimeTurnUsage _ | TelemetryStore.RuntimeTerminal _ | TelemetryStore.RuntimeGap _
+                    | TelemetryStore.CiBinding _ | TelemetryStore.CiPage _ | TelemetryStore.CiRun _ | TelemetryStore.CiJob _ | TelemetryStore.CiStep _ | TelemetryStore.CiCoverage _
+                    | TelemetryStore.CiPopulationAdmission _ | TelemetryStore.CiCheck _ | TelemetryStore.CiPopulationCoverage _ | TelemetryStore.NativeItemOutcome _
+                    | TelemetryStore.OperationalActivation _ | TelemetryStore.ExpectedDispatch _ | TelemetryStore.InvocationLineage _ | TelemetryStore.EventTime _) ->
             use dirty = connection.CreateCommand()
             dirty.CommandText <- "INSERT INTO budget_dirty_items(item_id) VALUES($item) ON CONFLICT(item_id) DO NOTHING;"
             parameter dirty "$item" item
             dirty.ExecuteNonQuery() |> ignore
         | _ -> ()
+
+    let private deriveBudgetInputs (connection: SqliteConnection) item =
+        let parameterized sql =
+            let command = connection.CreateCommand()
+            command.CommandText <- sql
+            parameter command "$item" item
+            command
+        let scalarInt64 sql = use command = parameterized sql in Convert.ToInt64(command.ExecuteScalar())
+        let stable suffix = CanonicalJson.sha256(Encoding.UTF8.GetBytes($"%s{item}\u001f%s{suffix}")).Substring(0, 40)
+        let optional value = value |> Option.map box |> Option.defaultValue DBNull.Value
+        let revision = scalarInt64 "SELECT count(*) FROM ingest_facts WHERE item_id=$item;"
+        let latestOutcome =
+            use command = parameterized "SELECT outcome,code_delivery,occurred_at,observed_at FROM native_item_outcomes WHERE item_id=$item ORDER BY observed_at DESC,fact_revision DESC,identity DESC LIMIT 1;"
+            use reader = command.ExecuteReader()
+            if reader.Read() then Some(reader.GetString 0,reader.GetString 1,(if reader.IsDBNull 2 then None else Some(reader.GetString 2)),reader.GetString 3) else None
+        match latestOutcome with
+        | None -> ()
+        | Some(outcome,codeDelivery,outcomeAt,observedAt) ->
+            let expected = scalarInt64 "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND runtime='codex-exec';"
+            let settled =
+                scalarInt64 """SELECT count(*) FROM expected_dispatches d WHERE d.item_id=$item AND d.runtime='codex-exec'
+AND (SELECT count(*) FROM invocation_lineage l WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id)=1
+AND EXISTS(SELECT 1 FROM invocation_lineage l JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id);"""
+            let activation = scalarInt64 "SELECT count(*) FROM operational_activations WHERE item_id=$item AND runtime='codex-exec';" > 0L
+            let rootExpected = scalarInt64 "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND runtime='codex-exec' AND relation='root';" = 1L
+            let deliveredComplete = codeDelivery = "delivered" && activation && rootExpected && expected > 0L && settled = expected
+            let refusedComplete = outcome = "refused" && settled = expected
+            let state = if deliveredComplete || refusedComplete then "completed" else "open"
+            let prefix = "derived:" + stable "projection"
+            use purge = parameterized """DELETE FROM budget_shared_cost_refs WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_interval_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_attribution_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';"""
+            purge.ExecuteNonQuery() |> ignore
+            use population = parameterized "INSERT INTO budget_population_facts VALUES($identity,$item,$item,$state,'native-item',$source,$revision);"
+            parameter population "$identity" ("derived-population-" + stable "population")
+            parameter population "$state" state; parameter population "$source" (prefix + ":population"); parameter population "$revision" revision
+            population.ExecuteNonQuery() |> ignore
+
+            let insertAttribution dimension provider scope numerator denominator coverage attribution sourceKind suffix =
+                let sourceRef = prefix + ":" + suffix
+                let identity = "derived-attribution-" + stable suffix
+                use command = parameterized "INSERT INTO budget_attribution_facts VALUES($identity,$item,$dimension,$provider,$scope,$numerator,$denominator,$coverage,$attribution,$sourceKind,$source,$revision); INSERT INTO budget_shared_cost_refs VALUES($identity,$item,$source,$dimension,$provider,$scope);"
+                [ "$identity",box identity; "$dimension",box dimension; "$provider",box provider; "$scope",box scope; "$numerator",optional numerator; "$denominator",optional denominator; "$coverage",box coverage; "$attribution",box attribution; "$sourceKind",box sourceKind; "$source",box sourceRef; "$revision",box revision ] |> List.iter (fun (name,value) -> parameter command name value)
+                command.ExecuteNonQuery() |> ignore
+            let runtimeIncomplete =
+                scalarInt64 "SELECT count(*) FROM runtime_gaps WHERE item_id=$item;" > 0L
+                || scalarInt64 "SELECT count(*) FROM runtime_admissions a WHERE a.item_id=$item AND NOT EXISTS(SELECT 1 FROM runtime_terminals t WHERE t.item_id=a.item_id AND t.invocation_id=a.invocation_id);" > 0L
+                || scalarInt64 "SELECT count(*) FROM runtime_terminals t WHERE t.item_id=$item AND NOT EXISTS(SELECT 1 FROM runtime_turn_usage u WHERE u.item_id=t.item_id AND u.invocation_id=t.invocation_id);" > 0L
+            let runtimeRows =
+                use command = parameterized "SELECT coalesce(provider,'unknown'),sum(total) FROM runtime_turn_usage WHERE item_id=$item GROUP BY coalesce(provider,'unknown') ORDER BY 1;"
+                use reader = command.ExecuteReader()
+                let rows = ResizeArray<_>()
+                while reader.Read() do rows.Add(reader.GetString 0,reader.GetInt64 1)
+                List.ofSeq rows
+            let runtimeRows = if runtimeRows.IsEmpty then [ "unknown",0L ] else runtimeRows
+            for provider,total in runtimeRows do
+                insertAttribution "model-usage" provider "whole-item" None (if total = 0L then None else Some total) (if runtimeIncomplete then "unknown" else "complete") "unclassified" "runtime" ("runtime:" + provider)
+            insertAttribution "owner-effort" "human" "whole-item" None None "unknown" "unclassified" "native-item" "owner-effort"
+            insertAttribution "priced-cost" "unknown" "whole-item" None None "unknown" "unclassified" "native-item" "priced-cost"
+
+            let timestampNanoseconds (value: string) =
+                match DateTimeOffset.TryParse value with
+                | true, parsed -> Some(parsed.ToUnixTimeMilliseconds() * 1_000_000L)
+                | _ -> None
+            let activationAt =
+                use command = parameterized "SELECT activated_at FROM operational_activations WHERE item_id=$item ORDER BY activated_at LIMIT 1;"
+                let value = command.ExecuteScalar()
+                if isNull value || value = box DBNull.Value then None else timestampNanoseconds (string value)
+            let completedAt = outcomeAt |> Option.orElse (Some observedAt) |> Option.bind timestampNanoseconds
+            let lead = match activationAt,completedAt with Some first,Some last when last >= first -> Some(last-first) | _ -> None
+            insertAttribution "critical-path-delay" "github" "whole-item" None lead "unknown" "unclassified" "ci" "critical-path"
+            let jobTotal =
+                use command = parameterized "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
+                use reader = command.ExecuteReader()
+                let mutable total = 0L
+                while reader.Read() do
+                    if not (reader.IsDBNull 0 || reader.IsDBNull 1) then
+                        match timestampNanoseconds(reader.GetString 0),timestampNanoseconds(reader.GetString 1) with Some first,Some last when last >= first -> total <- total + last-first | _ -> ()
+                total
+            let mutable adminTotal = 0L
+            let stepValues =
+                use steps = parameterized "SELECT identity,classification,started_at,completed_at FROM ci_steps WHERE item_id=$item ORDER BY identity;"
+                use stepRows = steps.ExecuteReader()
+                let values = ResizeArray<_>()
+                while stepRows.Read() do values.Add(stepRows.GetString 0,stepRows.GetString 1,(if stepRows.IsDBNull 2 then None else Some(stepRows.GetString 2)),(if stepRows.IsDBNull 3 then None else Some(stepRows.GetString 3)))
+                List.ofSeq values
+            for stepIdentity,classification,startedAt,endedAt in stepValues do
+                match startedAt |> Option.bind timestampNanoseconds,endedAt |> Option.bind timestampNanoseconds with
+                | Some first,Some last when last >= first ->
+                    if classification = "admin" then adminTotal <- adminTotal + last-first
+                    let budgetClass,witnessed =
+                        match classification with
+                        | "admin" -> "administrative",false
+                        | "useful-validation" -> "useful",false
+                        | "necessary-setup" -> "productive",false
+                        | _ -> "administrative",false
+                    let suffix = "ci-interval:" + stepIdentity
+                    let sourceRef = prefix + ":" + suffix
+                    let identity = "derived-interval-" + stable suffix
+                    use interval = parameterized "INSERT INTO budget_interval_facts VALUES($identity,$item,'critical-path-delay',$classification,$start,$end,$witnessed,'ci',$source,$revision); INSERT INTO budget_shared_cost_refs VALUES($identity,$item,$source,'critical-path-delay','interval','interval');"
+                    [ "$identity",box identity; "$classification",box budgetClass; "$start",box first; "$end",box last; "$witnessed",box (if witnessed then 1 else 0); "$source",box sourceRef; "$revision",box revision ] |> List.iter (fun (name,value) -> parameter interval name value)
+                    interval.ExecuteNonQuery() |> ignore
+                | _ -> ()
+            insertAttribution "ci-runner-administration" "github-actions" "diagnostic-only" (Some adminTotal) (if jobTotal = 0L then None else Some jobTotal) "not-applicable" "classified" "ci" "ci-runner-diagnostic"
 
     let private budgetReevaluate (connection: SqliteConnection) =
         let scalarInt sql parameters =
@@ -441,10 +573,11 @@ PRAGMA user_version=6;
             while reader.Read() do values.Add(reader.GetString 0)
             List.ofSeq values
         for item in dirtyItems do
+            deriveBudgetInputs connection item
             let itemParameter = [ "$item", box item ]
             let population =
                 use command = connection.CreateCommand()
-                command.CommandText <- "SELECT original_item_id,state,source_ref FROM budget_population_facts WHERE item_id=$item ORDER BY fact_revision DESC,identity LIMIT 2;"
+                command.CommandText <- "SELECT original_item_id,state,source_ref FROM budget_population_facts WHERE item_id=$item ORDER BY CASE WHEN source_ref LIKE 'derived:%' THEN 0 ELSE 1 END,fact_revision DESC,identity DESC LIMIT 1;"
                 parameter command "$item" item
                 use reader = command.ExecuteReader()
                 let values = ResizeArray<string * string * string>()
@@ -464,7 +597,8 @@ PRAGMA user_version=6;
                     insert.ExecuteNonQuery() |> ignore
                     Some value
                 | None, None -> None
-            let references = scalarInt "SELECT count(*) FROM budget_shared_cost_refs WHERE item_id=$item;" itemParameter
+            let machineDerived = scalarInt "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item;" itemParameter > 0L
+            let references = scalarInt (if machineDerived then "SELECT count(*) FROM budget_shared_cost_refs WHERE item_id=$item AND source_ref LIKE 'derived:%';" else "SELECT count(*) FROM budget_shared_cost_refs WHERE item_id=$item;") itemParameter
             let runtimeGap = scalarInt "SELECT count(*) FROM runtime_gaps WHERE item_id=$item;" itemParameter > 0L
             let ciIncomplete =
                 use command = connection.CreateCommand()
@@ -474,8 +608,9 @@ PRAGMA user_version=6;
                 reader.Read() && [0..6] |> List.exists (fun index -> reader.GetString index <> "complete")
             let attributions =
                 use command = connection.CreateCommand()
-                command.CommandText <- "SELECT dimension,provider,accounting_scope,numerator,denominator,coverage,attribution,source_kind,source_ref,fact_revision FROM budget_attribution_facts WHERE item_id=$item ORDER BY dimension,provider,accounting_scope,identity LIMIT 4097;"
+                command.CommandText <- "SELECT dimension,provider,accounting_scope,numerator,denominator,coverage,attribution,source_kind,source_ref,fact_revision FROM budget_attribution_facts WHERE item_id=$item AND ($derived=0 OR source_ref LIKE 'derived:%') ORDER BY dimension,provider,accounting_scope,identity LIMIT 4097;"
                 parameter command "$item" item
+                parameter command "$derived" (if machineDerived then 1 else 0)
                 use reader = command.ExecuteReader()
                 let values = ResizeArray<_>()
                 while reader.Read() do
@@ -484,8 +619,8 @@ PRAGMA user_version=6;
             for dimension,provider,scope,suppliedNumerator,denominator,coverage,attribution,sourceKind,sourceRef,factRevision in attributions |> List.truncate 4096 do
                 let intervals =
                     use command = connection.CreateCommand()
-                    command.CommandText <- "SELECT classification,start_ns,end_ns,witnessed,source_ref FROM budget_interval_facts WHERE item_id=$item AND dimension=$dimension ORDER BY start_ns,end_ns LIMIT 4097;"
-                    parameter command "$item" item; parameter command "$dimension" dimension
+                    command.CommandText <- "SELECT classification,start_ns,end_ns,witnessed,source_ref FROM budget_interval_facts WHERE item_id=$item AND dimension=$dimension AND ($derived=0 OR source_ref LIKE 'derived:%') ORDER BY start_ns,end_ns LIMIT 4097;"
+                    parameter command "$item" item; parameter command "$dimension" dimension; parameter command "$derived" (if machineDerived then 1 else 0)
                     use reader = command.ExecuteReader()
                     let values = ResizeArray<_>()
                     while reader.Read() do values.Add(reader.GetString 0,reader.GetInt64 1,reader.GetInt64 2,reader.GetInt64 3 = 1L,reader.GetString 4)
@@ -513,7 +648,7 @@ PRAGMA user_version=6;
                 let verdict = TelemetryBudget.assess usability
                 let verdictText,numeratorValue,denominatorValue,severe,reason =
                     match verdict with
-                    | TelemetryBudget.UnknownVerdict why -> "unknown",None,None,false,why
+                    | TelemetryBudget.UnknownVerdict why -> "unknown",intervalNumerator,denominator,false,why
                     | TelemetryBudget.NotApplicableVerdict why -> "not-applicable",intervalNumerator,denominator,false,why
                     | TelemetryBudget.Pass(numerator,value) -> "pass",Some numerator,Some value,false,"within-ceiling"
                     | TelemetryBudget.Breach(numerator,value,isSevere) -> "breach",Some numerator,Some value,isSevere,(if isSevere then "above-severe-threshold" else "above-ceiling")
@@ -1087,6 +1222,30 @@ PRAGMA user_version=6;
                     let value = command.ExecuteScalar()
                     if isNull value || value = box DBNull.Value then "none" else string value
                 Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.budget-status/1"; epoch = epoch; distinctBreaches = scalar $"SELECT count(DISTINCT item_id) FROM budget_breaches WHERE epoch_id='%s{epoch}';"; intervention = intervention; dirtyItems = scalar "SELECT count(*) FROM budget_dirty_items;" |} + "\n")
+            with error -> Error [ error.Message ]
+
+    let budgetHealth path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                if Int32.Parse(scalarText connection "PRAGMA user_version;") <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ] else
+                let scalar sql =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- sql; parameter command "$item" itemId
+                    Convert.ToInt64(command.ExecuteScalar())
+                let text sql fallback =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- sql; parameter command "$item" itemId
+                    let value = command.ExecuteScalar()
+                    if isNull value || value = box DBNull.Value then fallback else string value
+                let population = text "SELECT state FROM budget_population_facts WHERE item_id=$item ORDER BY CASE WHEN source_ref LIKE 'derived:%' THEN 0 ELSE 1 END,fact_revision DESC,identity DESC LIMIT 1;" "missing"
+                let pending = scalar "SELECT count(*) FROM budget_dirty_items WHERE item_id=$item;" > 0L
+                let outcomes = scalar "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item;"
+                let unknown = scalar "SELECT count(*) FROM budget_assessment_revisions a WHERE item_id=$item AND verdict='unknown' AND assessment_revision=(SELECT max(assessment_revision) FROM budget_assessment_revisions b WHERE b.item_id=a.item_id AND b.dimension=a.dimension AND b.provider=a.provider AND b.accounting_scope=a.accounting_scope);"
+                let status = if pending then "pending" elif outcomes = 0L then "missing-outcome" elif population = "completed" then "complete" else "open"
+                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.budget-health/1"; item = itemId; status = status; population = population; unknownDimensions = unknown; dirty = pending |} + "\n")
             with error -> Error [ error.Message ]
 
     let exportPublic path assessment itemId outputPath =
