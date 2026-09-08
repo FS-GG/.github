@@ -25,6 +25,7 @@ module TelemetryStoreApplicationTests =
         command.ExecuteNonQuery() |> ignore
     let private dropBudgetSchema = "DROP TABLE budget_interventions; DROP TABLE budget_breaches; DROP TABLE budget_assessment_revisions; DROP TABLE budget_epoch_membership; DROP INDEX budget_one_open_epoch; DROP TABLE budget_epochs; DROP TABLE budget_dirty_items; DROP TABLE budget_shared_cost_refs; DROP TABLE budget_intervention_facts; DROP TABLE budget_interval_facts; DROP TABLE budget_attribution_facts; DROP TABLE budget_population_facts; DELETE FROM schema_migrations WHERE version=4;"
     let private dropOperationalSchema = "DROP TABLE operational_event_times; DROP TABLE invocation_lineage; DROP TABLE expected_dispatches; DROP TABLE operational_activations; DELETE FROM schema_migrations WHERE version=5;"
+    let private dropCiPopulationSchema = "DROP TABLE ci_population_coverage; DROP TABLE ci_check_runs; DROP TABLE ci_population_admissions; DELETE FROM schema_migrations WHERE version=6;"
     let private budgetBatch ingest cursor events =
         Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"budget-worker","generation":"g1","cursor":"{cursor}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
     let private population item revision state source =
@@ -34,6 +35,8 @@ module TelemetryStoreApplicationTests =
         $"""{{"kind":"budget-attribution","identity":"attribution-{item}","itemId":"{item}","revision":{revision},"dimension":"model-tokens","provider":"openai","accountingScope":"whole-item","numerator":{number numerator},"denominator":{number denominator},"coverage":"{coverage}","attribution":"{attribution}","sourceKind":"{sourceKind}","sourceRef":"{source}"}}"""
     let private operationalBatch ingest item events =
         Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"operational-observer","generation":"g1","cursor":"{ingest}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
+    let private ciPopulationBatch ingest item revision checkStatus coverage continuation =
+        Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"ci-population","generation":"candidate-a","cursor":"{ingest}","eventCount":3,"events":[{{"kind":"ci-population-admission","identity":"ci-admission-a","itemId":"{item}","revision":1,"collectionId":"collection-a","repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","witness":"native-pr-head"}},{{"kind":"ci-check","identity":"ci-check-a","itemId":"{item}","revision":{revision},"repository":"o/r","checkId":101,"name":"build","appSlug":"github-actions","status":"{checkStatus}","conclusion":null,"startedAt":"2026-09-08T10:00:00Z","completedAt":null}},{{"kind":"ci-population-coverage","identity":"ci-coverage-a","itemId":"{item}","revision":{revision},"collectionId":"collection-a","actions":"{coverage}","checks":"{coverage}","attempts":"{coverage}","jobs":"{coverage}","terminal":"{coverage}","timestamps":"{coverage}","continuation":"{continuation}","externalChecks":0,"gaps":"[]"}}]}}"""
     let private activation item runtime delay =
         $"""{{"kind":"operational-activation","identity":"activation-{item}","itemId":"{item}","revision":0,"activationId":"activation-{item}","scope":"explicit-future-dispatches","runtime":"{runtime}","activatedAt":"2026-09-08T10:00:00Z","clockProvenance":"host-wall","lateAfterSeconds":{delay}}}"""
     let private dispatch item id relation parent runtime minute =
@@ -159,10 +162,10 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 6
+        pragma path 7
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready")) |> ignore
-        pragma path 5
+        pragma path 6
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
         let output = Path.Combine(Path.GetTempPath(), "fsgg-utel02-public-" + Guid.NewGuid().ToString("N") + ".json")
         try
@@ -209,18 +212,18 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
+        command.CommandText <- dropCiPopulationSchema + " " + dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":5", initialized)
+        Assert.Contains("\"schemaVersion\":6", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
 
     [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":6", TelemetryStoreApplication.initialize path approved |> unwrap)
         let ci = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ci-batch-1","sourceIdentity":"ci-worker","generation":"g1","cursor":"1","eventCount":4,"events":[{{"kind":"ci-binding","identity":"ci-binding-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":1,"workflow":"ci.yml","featureId":"UTEL","attemptId":"a1","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}},{{"kind":"ci-job","identity":"ci-job-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"name":"build","status":"completed","conclusion":"success","createdAt":"2026-01-01T00:00:00Z","startedAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:01:00Z"}},{{"kind":"ci-step","identity":"ci-step-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"number":1,"name":"test","status":"completed","conclusion":"success","startedAt":"2026-01-01T00:00:10Z","completedAt":"2026-01-01T00:00:50Z","classification":"useful-validation","rationale":"exact fixture"}},{{"kind":"ci-coverage","identity":"ci-coverage-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}]}}"""
         TelemetryStoreApplication.ingest path approved ci |> unwrap |> ignore
         let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-04A" |> unwrap
@@ -234,6 +237,16 @@ module TelemetryStoreApplicationTests =
     let ``UTEL-04A command shapes require explicit selected population arguments`` () =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "collect"; "--assignment"; "/private/a.json"; "--repo"; "o/r"; "--pr"; "1"; "--head"; String.replicate 40 "a"; "--workflow"; "ci.yml"; "--store-root"; "/durable/store" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "summary"; "--item"; "UTEL-04A" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "reconcile"; "--assignment"; "/private/a.json"; "--delivery"; "/tmp/public.json"; "--store-root"; "/durable/store" ])
+
+    [<Fact>]
+    let ``UTEL-06C first admission accepts only explicit eligible exact-head candidates`` () =
+        let head = String.replicate 40 "a"
+        Assert.True(TelemetryCiApplication.canCreateAdmission "ready" "not-delivered" (Some head) head)
+        Assert.False(TelemetryCiApplication.canCreateAdmission "refused" "not-delivered" (Some head) head)
+        Assert.False(TelemetryCiApplication.canCreateAdmission "ready" "delivered" (Some head) head)
+        Assert.False(TelemetryCiApplication.canCreateAdmission "ready" "not-delivered" None head)
+        Assert.False(TelemetryCiApplication.canCreateAdmission "ready" "not-delivered" (Some(String.replicate 40 "b")) head)
 
     [<Fact>]
     let ``UTEL-04A v2 upgrade preserves runtime observations`` () =
@@ -243,10 +256,10 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); " + dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
+        command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); " + dropCiPopulationSchema + " " + dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":6", TelemetryStoreApplication.initialize path approved |> unwrap)
         let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
         Assert.Contains("\"admitted\":1", summary)
 
@@ -414,10 +427,10 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); " + dropOperationalSchema + " " + dropBudgetSchema + " PRAGMA user_version=3;"
+        command.CommandText <- "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); " + dropCiPopulationSchema + " " + dropOperationalSchema + " " + dropBudgetSchema + " PRAGMA user_version=3;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":6", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use count = verify.CreateCommand()
@@ -675,10 +688,10 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "INSERT INTO budget_population_facts VALUES('keep-population','UTEL-06A','UTEL-06A','completed','native-item','native:keep',0); " + dropOperationalSchema + " PRAGMA user_version=4;"
+        command.CommandText <- "INSERT INTO budget_population_facts VALUES('keep-population','UTEL-06A','UTEL-06A','completed','native-item','native:keep',0); " + dropCiPopulationSchema + " " + dropOperationalSchema + " PRAGMA user_version=4;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":6", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use count = verify.CreateCommand()
@@ -707,3 +720,58 @@ module TelemetryStoreApplicationTests =
         connection.Close()
         Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
         Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.initialize path approved))
+
+    [<Fact>]
+    let ``UTEL-06C v5 stores upgrade and preserve prospective operational facts`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO operational_activations VALUES('keep-activation','UTEL-06C','activation','explicit-future-dispatches','codex-exec','2026-09-08T10:00:00Z','host-wall',60,0); " + dropCiPopulationSchema + " PRAGMA user_version=5;"
+        command.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("\"schemaVersion\":6", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.False(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "main" "dddddddddddddddddddddddddddddddddddddddd" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
+        use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        verify.Open()
+        use count = verify.CreateCommand()
+        count.CommandText <- "SELECT count(*) FROM operational_activations WHERE identity='keep-activation';"
+        Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
+
+    [<Fact>]
+    let ``UTEL-06C admission correction and replay remain revision safe`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let first = TelemetryStoreApplication.ingest path approved (ciPopulationBatch "ci-first" "UTEL-06C" 1 "in_progress" "partial" "pending") |> unwrap
+        Assert.Contains("\"accepted\":3", first)
+        Assert.True(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "main" "dddddddddddddddddddddddddddddddddddddddd" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
+        Assert.False(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "release" "dddddddddddddddddddddddddddddddddddddddd" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
+        Assert.False(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "main" "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
+        let corrected = TelemetryStoreApplication.ingest path approved (ciPopulationBatch "ci-corrected" "UTEL-06C" 2 "completed" "complete" "none") |> unwrap
+        Assert.Contains("\"accepted\":2", corrected)
+        let replayed = TelemetryStoreApplication.ingest path approved (ciPopulationBatch "ci-replay" "UTEL-06C" 2 "completed" "complete" "none") |> unwrap
+        Assert.Contains("\"replayed\":3", replayed)
+        let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-06C" |> unwrap
+        Assert.Contains("\"inventoryCoverage\":\"complete\"", summary)
+        Assert.Contains("\"continuation\":\"none\"", summary)
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use count = connection.CreateCommand()
+        count.CommandText <- "SELECT count(*) FROM corrections WHERE identity IN ('ci-check-a','ci-coverage-a');"
+        Assert.Equal(2L, Convert.ToInt64(count.ExecuteScalar()))
+
+    [<Fact>]
+    let ``UTEL-06C migration checksum is verified`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use corrupt = connection.CreateCommand()
+        corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=6;"
+        corrupt.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))

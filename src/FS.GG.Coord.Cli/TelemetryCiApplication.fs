@@ -12,6 +12,8 @@ open FS.GG.Coord
 open FS.GG.Coord.GitHub
 
 module TelemetryCiApplication =
+    let canCreateAdmission (outcome: string) (codeDelivery: string) (observedHead: string option) (expectedHead: string) =
+        outcome = "ready" && codeDelivery = "not-delivered" && observedHead = Some expectedHead
     let private option name args = args |> List.indexed |> List.tryPick (fun (index,value) -> if value = name then List.tryItem (index + 1) args else None)
     let private root args = option "--store-root" args |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE") |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not))
     let private fail reasons = reasons |> List.iter (fun reason -> Console.Error.WriteLine("fsgg-coord-engine: telemetry ci: " + reason)); 1
@@ -50,6 +52,7 @@ module TelemetryCiApplication =
         loop 1 [] events []
 
     type private Rule = { Workflow: string; Job: string; Step: string; Classification: string; Rationale: string }
+    type private DeliveryBinding = { Repository: string; PullRequest: int; BaseRef: string; BaseSha: string; Head: string; Outcome: string; CodeDelivery: string; ObservedHead: string option }
     let private readRules (path: string) =
         try
             use document = JsonDocument.Parse(File.ReadAllBytes path)
@@ -97,6 +100,65 @@ module TelemetryCiApplication =
             else File.ReadAllBytes full |> TelemetryCi.parseAssignment
         with error -> Error [ "assignment is unavailable: " + error.Message ]
 
+    let private readDelivery path =
+        try
+            let full = Path.GetFullPath path
+            let info = FileInfo full
+            if not (Path.IsPathFullyQualified path) then Error [ "delivery path must be absolute" ]
+            elif not info.Exists || not (isNull info.LinkTarget) then Error [ "delivery must be a regular non-symlink file" ]
+            elif info.Length > 16384L then Error [ "delivery exceeds 16 KiB" ]
+            else
+                use document = JsonDocument.Parse(File.ReadAllBytes full)
+                let value = document.RootElement
+                let text (name: string) = match value.TryGetProperty name with true, field when field.ValueKind = JsonValueKind.String -> Some(field.GetString()) | _ -> None
+                let number (name: string) =
+                    match value.TryGetProperty name with
+                    | true, field when field.ValueKind = JsonValueKind.Number -> match field.TryGetInt32() with true, result -> Some result | _ -> None
+                    | _ -> None
+                let observed = text "observedHead"
+                match text "schema", text "repo", number "pr", text "baseRef", text "baseSha", text "expectedHead", text "outcome", text "codeDelivery" with
+                | Some "fsgg.routine-delivery/v1", Some repository, Some pr, Some baseRef, Some baseSha, Some head, Some outcome, Some codeDelivery
+                    when Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") && pr > 0 && Regex.IsMatch(head, "^[0-9a-f]{40}$")
+                         && not (String.IsNullOrWhiteSpace baseRef) && Regex.IsMatch(baseSha, "^[0-9a-f]{40}$")
+                         && Set.contains outcome (Set [ "ready"; "refused"; "delivered"; "delivered-after-readback"; "delivered-disputed"; "indeterminate" ])
+                         && Set.contains codeDelivery (Set [ "delivered"; "not-delivered"; "unknown" ])
+                         && observed |> Option.forall ((=) head) -> Ok { Repository = repository; PullRequest = pr; BaseRef = baseRef; BaseSha = baseSha; Head = head; Outcome = outcome; CodeDelivery = codeDelivery; ObservedHead = observed }
+                | _ -> Error [ "delivery is not a valid exact-head fsgg.routine-delivery/v1 candidate binding" ]
+        with error -> Error [ "delivery is unavailable: " + error.Message ]
+
+    let private projectPopulation (assignment: TelemetryCi.Assignment) (rules: Rule list) (population: CiReads.PopulationSnapshot) =
+        let snapshot = population.Snapshot
+        let collection = CanonicalJson.sha256(Encoding.UTF8.GetBytes($"%s{snapshot.Repository}\u001f%s{snapshot.Head}\u001f%d{snapshot.PullRequest}\u001f%s{assignment.ItemId}\u001fall-workflows"))
+        let revision = population.Revision
+        let revised kind nativeIdentity = let node = common kind nativeIdentity assignment.ItemId in node["revision"] <- revision; node
+        let admission =
+            if population.AdmissionWitness then
+                let node = common "ci-population-admission" (identity "ci-population-admission-" [collection]) assignment.ItemId
+                node["revision"] <- 1; node["collectionId"] <- collection; node["repository"] <- snapshot.Repository; node["prNumber"] <- snapshot.PullRequest; node["baseRef"] <- population.BaseRef.Value; node["baseSha"] <- population.BaseSha.Value; node["head"] <- snapshot.Head; node["witness"] <- "native-pr-head"
+                [node]
+            else []
+        let binding = revised "ci-binding" (identity "ci-binding-" [collection])
+        binding["collectionId"] <- collection; binding["repository"] <- snapshot.Repository; binding["head"] <- snapshot.Head; binding["prNumber"] <- snapshot.PullRequest; binding["workflow"] <- "*"
+        binding["featureId"] <- assignment.FeatureId; binding["attemptId"] <- assignment.AttemptId; addOptional binding "parentAttemptId" assignment.ParentAttemptId; binding["producerStream"] <- assignment.ProducerStream; binding["binding"] <- snapshot.Binding
+        let pages = snapshot.Pages |> List.map (fun page -> let node = revised "ci-page" (identity "ci-page-" [collection;page.Resource;string page.Index]) in node["collectionId"] <- collection; node["resource"] <- page.Resource; node["page"] <- page.Index; node["count"] <- page.Count; node["total"] <- page.Total; node)
+        let runs = snapshot.Runs |> List.map (fun run -> let node = revised "ci-run" (identity "ci-run-" [snapshot.Repository;string run.Id;string run.Attempt]) in node["repository"] <- snapshot.Repository; node["runId"] <- run.Id; node["attempt"] <- run.Attempt; node["workflow"] <- run.Workflow; node["event"] <- run.Event; node["head"] <- run.HeadSha; node["status"] <- run.Status; addOptional node "conclusion" run.Conclusion; addOptional node "createdAt" run.CreatedAt; addOptional node "startedAt" run.RunStartedAt; addOptional node "updatedAt" run.UpdatedAt; node)
+        let jobs = snapshot.Jobs |> List.map (fun job -> let node = revised "ci-job" (identity "ci-job-" [snapshot.Repository;string job.RunId;string job.Attempt;string job.Id]) in node["repository"] <- snapshot.Repository; node["runId"] <- job.RunId; node["attempt"] <- job.Attempt; node["jobId"] <- job.Id; node["name"] <- job.Name; node["status"] <- job.Status; addOptional node "conclusion" job.Conclusion; addOptional node "createdAt" job.CreatedAt; addOptional node "startedAt" job.StartedAt; addOptional node "completedAt" job.CompletedAt; node)
+        let steps = snapshot.Jobs |> List.collect (fun job -> job.Steps |> List.map (fun step ->
+            let workflow = snapshot.Runs |> List.tryFind (fun run -> run.Id = job.RunId && run.Attempt = job.Attempt) |> Option.map _.Workflow |> Option.defaultValue "*"
+            let matched = rules |> List.tryFind (fun rule -> rule.Workflow = workflow && rule.Job = job.Name && rule.Step = step.Name)
+            let classification,rationale = matched |> Option.map (fun rule -> rule.Classification,rule.Rationale) |> Option.defaultValue ("unclassified","no exact attribution rule")
+            let node = revised "ci-step" (identity "ci-step-" [snapshot.Repository;string job.RunId;string job.Attempt;string job.Id;string step.Number])
+            node["repository"] <- snapshot.Repository; node["runId"] <- job.RunId; node["attempt"] <- job.Attempt; node["jobId"] <- job.Id; node["number"] <- step.Number; node["name"] <- step.Name; node["status"] <- step.Status; addOptional node "conclusion" step.Conclusion; addOptional node "startedAt" step.StartedAt; addOptional node "completedAt" step.CompletedAt; node["classification"] <- classification; node["rationale"] <- rationale; node))
+        let checks = population.Checks |> List.map (fun check -> let node = revised "ci-check" (identity "ci-check-" [snapshot.Repository;string check.Id]) in node["repository"] <- snapshot.Repository; node["checkId"] <- check.Id; node["name"] <- check.Name; addOptional node "appSlug" check.AppSlug; node["status"] <- check.Status; addOptional node "conclusion" check.Conclusion; addOptional node "startedAt" check.StartedAt; addOptional node "completedAt" check.CompletedAt; node)
+        let gaps = JsonSerializer.Serialize(Array.ofList population.Gaps)
+        let coverage = revised "ci-population-coverage" (identity "ci-population-coverage-" [collection])
+        coverage["collectionId"] <- collection; coverage["actions"] <- snapshot.InventoryCoverage; coverage["checks"] <- population.CheckCoverage; coverage["attempts"] <- snapshot.AttemptCoverage; coverage["jobs"] <- snapshot.JobPageCoverage; coverage["terminal"] <- snapshot.TerminalCoverage; coverage["timestamps"] <- snapshot.TimestampCoverage; coverage["continuation"] <- (if population.Pending.IsEmpty then "none" else "pending"); coverage["externalChecks"] <- population.ExternalChecks; coverage["gaps"] <- gaps
+        let oldCoverage = revised "ci-coverage" (identity "ci-coverage-" [collection])
+        let classification = if steps.IsEmpty || steps |> List.exists (fun step -> step["classification"].GetValue<string>() = "unclassified") then "unknown" else "complete"
+        oldCoverage["collectionId"] <- collection; oldCoverage["inventory"] <- snapshot.InventoryCoverage; oldCoverage["attempts"] <- snapshot.AttemptCoverage; oldCoverage["jobPages"] <- snapshot.JobPageCoverage; oldCoverage["terminal"] <- snapshot.TerminalCoverage; oldCoverage["timestamps"] <- snapshot.TimestampCoverage; oldCoverage["lineage"] <- snapshot.LineageCoverage; oldCoverage["classification"] <- classification; oldCoverage["criticalPath"] <- "unknown"
+        let diagnostics = (population.Pending @ population.Gaps) |> List.distinct |> List.map (fun code -> let node = revised "diagnostic" (identity "ci-diagnostic-" [collection;code]) in node["code"] <- code; node["severity"] <- "warning"; node)
+        collection, admission @ [binding] @ pages @ runs @ jobs @ steps @ checks @ [oldCoverage;coverage] @ diagnostics
+
     let run action args =
         match action with
         | "summary" ->
@@ -132,4 +194,38 @@ module TelemetryCiApplication =
                     | _ -> fail [ "--pr must be a positive integer" ]
                 | _ -> fail [ "--repo must be owner/name and --head must be 40 lowercase hexadecimal characters" ]
             | _ -> fail [ "collect requires --assignment, --repo, --pr, --head, --workflow, and a configured store root" ]
-        | _ -> fail [ "action must be collect or summary" ]
+        | "reconcile" ->
+            match option "--assignment" args, option "--delivery" args, root args with
+            | Some assignmentPath, Some deliveryPath, Some storeRoot ->
+                match readAssignment assignmentPath, readDelivery deliveryPath, readRules (Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")) with
+                | Ok assignment, Ok delivery, Ok rules ->
+                    let values = delivery.Repository.Split('/')
+                    let assessment = TelemetryStoreApplication.assessProductionRoot storeRoot
+                    match TelemetryStoreApplication.ciPopulationAdmissionExists storeRoot assessment assignment.ItemId delivery.Repository delivery.PullRequest delivery.BaseRef delivery.BaseSha delivery.Head with
+                    | Error errors -> fail errors
+                    | Ok false when not (canCreateAdmission delivery.Outcome delivery.CodeDelivery delivery.ObservedHead delivery.Head) -> fail [ "first CI population admission requires ready, not-delivered, and an explicit matching observed head" ]
+                    | Ok admitted ->
+                        let token = Environment.GetEnvironmentVariable("GITHUB_TOKEN") |> Option.ofObj |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("GH_TOKEN") |> Option.ofObj)
+                        match token with
+                        | None -> fail [ "GITHUB_TOKEN or GH_TOKEN is required" ]
+                        | Some token ->
+                            use transport = new Transport.HttpTransport(Transport.apiBaseFromEnv(), token)
+                            match CiReads.discoverPopulation (transport :> Transport.ISinglePageGitHubTransport) (Transport.apiBaseFromEnv()) values[0] values[1] delivery.PullRequest delivery.Head delivery.BaseRef delivery.BaseSha admitted with
+                            | Error error -> fail [ string error ]
+                            | Ok population when not population.AdmissionWitness && not admitted ->
+                                Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = "incomplete"; binding = "unadmitted-head"; queued = false; population = "unknown"; pending = population.Pending |> List.toArray; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                            | Ok population ->
+                                let collection, events = projectPopulation assignment rules population
+                                match boundedBatches assignment collection events with
+                                | Error errors -> fail errors
+                                | Ok batches ->
+                                    let results = batches |> List.map (TelemetryStoreApplication.publish storeRoot assessment)
+                                    match results |> List.tryPick (function Error errors -> Some errors | _ -> None) with
+                                    | Some errors -> fail errors
+                                    | None ->
+                                        let status = if population.Pending.IsEmpty && population.Gaps.IsEmpty && population.Snapshot.InventoryCoverage = "complete" && population.CheckCoverage = "complete" then "complete" else "partial"
+                                        let workflows = population.Snapshot.Runs |> List.map _.Workflow |> List.distinct |> List.sort |> List.toArray
+                                        Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = status; binding = population.Snapshot.Binding; queued = true; batches = batches.Length; observations = events.Length; workflows = workflows; attempts = population.Snapshot.Runs.Length; checks = population.Checks.Length; externalChecks = population.ExternalChecks; pending = population.Pending |> List.toArray; gaps = population.Gaps |> List.toArray; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                | Error errors, _, _ | _, Error errors, _ | _, _, Error errors -> fail errors
+            | _ -> fail [ "reconcile requires --assignment, --delivery, and a configured store root" ]
+        | _ -> fail [ "action must be collect, reconcile, or summary" ]

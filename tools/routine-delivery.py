@@ -10,10 +10,11 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -157,11 +158,51 @@ class Summary:
     reason: str | None
     validationDisposition: str
     coherentValidation: str
+    baseRef: str | None = None
+    baseSha: str | None = None
+
+
+def observe_candidate(
+    summary: Summary,
+    *,
+    assignment: str,
+    store_root: str,
+    engine: str,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> bool:
+    """Invoke advisory CI reconciliation with the exact generated delivery JSON."""
+    payload = json.dumps(asdict(summary), separators=(",", ":"), sort_keys=True) + "\n"
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", prefix="fsgg-routine-delivery-", suffix=".json"
+        ) as delivery:
+            delivery.write(payload)
+            delivery.flush()
+            completed = runner(
+                [engine, "telemetry", "ci", "reconcile", "--assignment", assignment,
+                 "--delivery", delivery.name, "--store-root", store_root],
+                check=False, capture_output=True, text=True, timeout=35,
+            )
+        if completed.returncode == 0:
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    print("fsgg routine telemetry: CI observation unavailable; native delivery is unchanged", file=sys.stderr)
+    return False
 
 
 def head_of(pr: dict[str, Any]) -> str | None:
     head = pr.get("head")
     return head.get("sha") if isinstance(head, dict) and isinstance(head.get("sha"), str) else None
+
+
+def base_of(pr: dict[str, Any]) -> tuple[str | None, str | None]:
+    base = pr.get("base")
+    if not isinstance(base, dict):
+        return None, None
+    ref = base.get("ref") if isinstance(base.get("ref"), str) else None
+    sha = base.get("sha") if isinstance(base.get("sha"), str) and SHA_RE.fullmatch(base["sha"]) else None
+    return ref, sha
 
 
 def merged_commit_of(pr: dict[str, Any]) -> str | None:
@@ -306,13 +347,17 @@ def summarize(
     publication_required: bool,
     apply: bool,
     coherent_workflow: str | None = None,
+    candidate_observer: Callable[[Summary], None] | None = None,
 ) -> tuple[int, Summary]:
     publication = "pending" if publication_required else "not-required"
     before = api.get_pr(repo, pr_number)
+    base_ref, base_sha = base_of(before)
+    def bound(*values: Any) -> Summary:
+        return Summary(*values, baseRef=base_ref, baseSha=base_sha)
     allowed, reason = eligible(before, expected_head)
     observed = head_of(before)
     if not allowed:
-        return 2, Summary(
+        return 2, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "refused", "not-delivered", publication, None, 0, reason, "current", "unobserved",
         )
@@ -321,21 +366,26 @@ def summarize(
         disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
         if not is_merged(before) and (disposition in {"invalid", "deferred", "failed"}
                                       or (coherent != "passed" and disposition != "reused")):
-            return 2, Summary(
+            return 2, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
                 "refused", "not-delivered", publication, None, 0, reason,
                 disposition, coherent,
             )
     if is_merged(before):
         disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
-        return 4 if disputed else 0, Summary(
+        return 4 if disputed else 0, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "delivered-disputed" if disputed else "delivered", "delivered",
             publication, merged_commit_of(before), 0, reason if disputed else None, disposition,
             "disputed" if disputed else coherent,
         )
+    if observed == expected_head and candidate_observer is not None:
+        candidate_observer(bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
+        ))
     if not apply:
-        return 0, Summary(
+        return 0, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
         )
@@ -352,7 +402,7 @@ def summarize(
                 if coherent_workflow:
                     disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
                 disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
-                return 4 if disputed else 0, Summary(
+                return 4 if disputed else 0, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                     "delivered-disputed" if disputed else "delivered-after-readback",
                     "delivered", publication,
@@ -360,13 +410,13 @@ def summarize(
                     "disputed" if disputed else coherent,
                 )
             if not allowed:
-                return 2, Summary(
+                return 2, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                     "refused", "not-delivered", publication, None, attempts, reason, disposition, coherent,
                 )
             if attempts < 2:
                 continue
-            return 3, Summary(
+            return 3, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "indeterminate", "unknown", publication, None, attempts,
                 "two ambiguous merge attempts; native readback still reports an eligible open PR", disposition, coherent,
@@ -377,14 +427,14 @@ def summarize(
                 if coherent_workflow:
                     disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
                 disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
-                return 4 if disputed else 0, Summary(
+                return 4 if disputed else 0, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                     "delivered-disputed" if disputed else "delivered-after-readback",
                     "delivered", publication,
                     merged_commit_of(after), attempts, reason if disputed else None, disposition,
                     "disputed" if disputed else coherent,
                 )
-            return 2, Summary(
+            return 2, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "refused", "not-delivered", publication, None, attempts, str(error), disposition, coherent,
             )
@@ -394,12 +444,12 @@ def summarize(
             disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
             if coherent == "failed" or disposition in {"invalid", "deferred", "failed"}:
                 if not is_merged(after) or head_of(after) != expected_head:
-                    return 2, Summary(
+                    return 2, bound(
                         "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                         "refused", "not-delivered", publication, None, attempts, reason,
                         disposition, coherent,
                     )
-                return 4, Summary(
+                return 4, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                     "delivered-disputed", "delivered", publication, merged_commit_of(after), attempts, reason,
                     disposition, "disputed",
@@ -408,11 +458,11 @@ def summarize(
             merge_commit = response.get("sha")
             if not isinstance(merge_commit, str) or not SHA_RE.fullmatch(merge_commit):
                 merge_commit = merged_commit_of(after)
-            return 0, Summary(
+            return 0, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "delivered", "delivered", publication, merge_commit, attempts, None, disposition, coherent,
             )
-        return 3, Summary(
+        return 3, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
             "indeterminate", "unknown", publication, None, attempts,
             "merge response and native PR readback do not both establish delivery", disposition, coherent,
@@ -429,6 +479,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--merge-method", choices=("merge", "squash", "rebase"), default="squash")
     result.add_argument("--publication", choices=("none", "required"), default="none")
     result.add_argument("--coherent-workflow", help="candidate-scoped coherent workflow file or id")
+    result.add_argument("--telemetry-assignment", help="private CI assignment for advisory automatic observation")
+    result.add_argument("--telemetry-store-root", help="private durable telemetry store root")
+    result.add_argument("--telemetry-engine", default="fsgg-coord-engine", help="installed telemetry-capable coordination engine")
     result.add_argument("--apply", action="store_true")
     return result
 
@@ -441,11 +494,19 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if bool(args.telemetry_assignment) != bool(args.telemetry_store_root):
+        parser().error("--telemetry-assignment and --telemetry-store-root must be supplied together")
+    observer = None
+    if args.telemetry_assignment and args.telemetry_store_root:
+        observer = lambda summary: observe_candidate(
+            summary, assignment=args.telemetry_assignment, store_root=args.telemetry_store_root,
+            engine=args.telemetry_engine,
+        )
     try:
         code, result = summarize(
             GhApi(), repo=args.repo, pr_number=args.pr, expected_head=args.head,
             merge_method=args.merge_method, publication_required=args.publication == "required",
-            apply=args.apply, coherent_workflow=args.coherent_workflow,
+            apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3

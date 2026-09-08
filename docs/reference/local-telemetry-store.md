@@ -54,6 +54,14 @@ with separate `host-wall`, `provider-native`, or `github-native` clock provenanc
 are closed to `admission`, `start`, and `terminal`, with one row per item/invocation/event. Stores at schema
 versions 1 through 4 upgrade in place. Migrations 1–4 and their stored checksums are unchanged.
 
+Migration 6 adds immutable `ci_population_admissions`, revisioned `ci_check_runs`, and
+`ci_population_coverage`. First admission requires a routine-eligible `ready`/`not-delivered` candidate plus
+an explicit matching observed head and native confirmation of repository, PR, base ref, base SHA, and head.
+Later observations remain fenced to that stored admission, including after the PR head moves. Actions runs,
+all attempts, attempt-specific jobs and native check-runs are reconciled independently; partial pagination,
+inventory mutation, external checks and unsupported event bindings stay explicit rather than becoming zero or
+complete. Stores at schema versions 1 through 5 upgrade in place without changing earlier migration checksums.
+
 ## Identities, inbox, and drain
 
 Assignments use schema `fsgg.telemetry.codex-assignment/1` with only `featureId`, `itemId`, `attemptId`, optional
@@ -150,6 +158,18 @@ and records rationale. Missing or drifted matches are unclassified and classific
 `mixed` is not redistributed. Runner seconds sum valid job intervals, while wall seconds union them. Queue,
 avoidable-rerun and critical-path values require their own native witnesses; absent, reversed, pending or
 skipped timestamps never become zero. Monetary cost is not collected.
+
+Repository-owned routine delivery can invoke the same bounded observer advisory-only:
+
+```console
+python3 tools/routine-delivery.py --repo FS-GG/.github --pr 1234 --head 0123456789abcdef0123456789abcdef01234567 \
+  --telemetry-engine fsgg-coord-engine --telemetry-assignment /private/ci-attempt.json \
+  --telemetry-store-root /durable/private/fsgg-telemetry
+```
+
+The driver passes its exact generated public delivery JSON to `telemetry ci reconcile`; assignment and store
+locations remain private command context. Observer failure is diagnostic and cannot change delivery outcome.
+This is source capability only until a coherent package is published, installed and activated.
 
 ## Whole-item budget assessment
 
