@@ -86,6 +86,8 @@ module TelemetryApplication =
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
+        | "telemetry" :: "budget" :: "status" :: args -> shape [ "--store-root" ] [] args
+        | "telemetry" :: "budget" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "roadmap" :: "unit" :: "prepare" :: action :: args
             when action = "inspect" || action = "render" || action = "verify" ->
             shape [ "--input"; "--registry"; "--source-registry"; "--output" ] [] args
@@ -570,6 +572,9 @@ module TelemetryApplication =
     let tryRun argv =
         match argv with
         | "telemetry" :: "ci" :: action :: args -> Some(TelemetryCiApplication.run action args)
+        | "telemetry" :: "budget" :: action :: args ->
+            let values = if action = "summary" then [ "--item"; "--store-root" ] else [ "--store-root" ]
+            Some(validated "telemetry budget" values [] args (TelemetryStoreApplication.runBudget action))
         | "telemetry" :: "runtime" :: "codex-exec" :: args -> Some(TelemetryRuntimeApplication.runCodexExec args)
         | "telemetry" :: "runtime" :: "status" :: args -> Some(validated "telemetry runtime status" [ "--store-root" ] [] args TelemetryRuntimeApplication.capabilityStatus)
         | "telemetry" :: "store" :: action :: args ->

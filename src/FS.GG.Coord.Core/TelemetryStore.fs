@@ -44,6 +44,10 @@ module TelemetryStore =
         | CiJob of repository: string * runId: int64 * attempt: int64 * jobId: int64 * name: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * completedAt: string option
         | CiStep of repository: string * runId: int64 * attempt: int64 * jobId: int64 * number: int64 * name: string * status: string * conclusion: string option * startedAt: string option * completedAt: string option * classification: string * rationale: string
         | CiCoverage of collectionId: string * inventory: string * attempts: string * jobPages: string * terminal: string * timestamps: string * lineage: string * classification: string * criticalPath: string
+        | BudgetPopulation of originalItemId: string * state: string * sourceKind: string * sourceRef: string
+        | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
+        | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string
+        | BudgetIntervention of interventionId: string * transition: string * sequence: int64 * result: string * coverage: string * sourceRef: string
     type Fact =
         { Identity: string; ItemId: string option; Revision: int64; Kind: string; Payload: Payload
           Canonical: string; ContentDigest: string }
@@ -80,6 +84,11 @@ module TelemetryStore =
         | true, value when value.ValueKind = JsonValueKind.Number ->
             match value.TryGetInt64() with true, number when number >= 0L -> Ok(Some number) | _ -> Error $"%s{label}.%s{name} must be a non-negative integer or null"
         | _ -> Error $"%s{label}.%s{name} must be a non-negative integer or null"
+    let private requiredBool (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.True -> Ok true
+        | true, value when value.ValueKind = JsonValueKind.False -> Ok false
+        | _ -> Error $"%s{label}.%s{name} must be a boolean"
     let private closed label allowed (node: JsonElement) =
         let unknown = node.EnumerateObject() |> Seq.map _.Name |> Seq.filter (fun name -> not (Set.contains name allowed)) |> Seq.toList
         let names = String.concat "," unknown
@@ -215,6 +224,33 @@ module TelemetryStore =
             | "ci-coverage" ->
                 match requiredText label node "collectionId", requiredText label node "inventory", requiredText label node "attempts", requiredText label node "jobPages", requiredText label node "terminal", requiredText label node "timestamps", requiredText label node "lineage", requiredText label node "classification", requiredText label node "criticalPath" with
                 | Ok collection, Ok inventory, Ok attempts, Ok jobPages, Ok terminal, Ok timestamps, Ok lineage, Ok classification, Ok criticalPath -> make [ "collectionId"; "inventory"; "attempts"; "jobPages"; "terminal"; "timestamps"; "lineage"; "classification"; "criticalPath" ] (CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath))
+                | values -> Error(sprintf "%A" values)
+            | "budget-population" ->
+                match requiredText label node "originalItemId", requiredText label node "state", requiredText label node "sourceKind", requiredText label node "sourceRef" with
+                | Ok original, Ok state, Ok sourceKind, Ok sourceRef when (state = "open" || state = "completed") && sourceKind = "native-item" ->
+                    make [ "originalItemId"; "state"; "sourceKind"; "sourceRef" ] (BudgetPopulation(original,state,sourceKind,sourceRef))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} requires open/completed state from native-item"
+                | values -> Error(sprintf "%A" values)
+            | "budget-attribution" ->
+                match requiredText label node "dimension", requiredText label node "provider", requiredText label node "accountingScope", optionalInt label node "numerator", optionalInt label node "denominator", requiredText label node "coverage", requiredText label node "attribution", requiredText label node "sourceKind", requiredText label node "sourceRef" with
+                | Ok dimension, Ok provider, Ok scope, Ok numerator, Ok denominator, Ok coverage, Ok attribution, Ok sourceKind, Ok sourceRef
+                    when Set.contains coverage (Set [ "complete"; "partial"; "unknown"; "not-applicable" ]) && Set.contains attribution (Set [ "classified"; "mixed"; "unclassified" ]) && Set.contains sourceKind (Set [ "runtime"; "ci"; "legacy"; "native-item" ]) ->
+                    make [ "dimension"; "provider"; "accountingScope"; "numerator"; "denominator"; "coverage"; "attribution"; "sourceKind"; "sourceRef" ] (BudgetAttribution(dimension,provider,scope,numerator,denominator,coverage,attribution,sourceKind,sourceRef))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported coverage or attribution"
+                | values -> Error(sprintf "%A" values)
+            | "budget-interval" ->
+                match requiredText label node "dimension", requiredText label node "classification", requiredInt label node "startNanoseconds", requiredInt label node "endNanoseconds", requiredBool label node "witnessed", requiredText label node "sourceKind", requiredText label node "sourceRef" with
+                | Ok dimension, Ok classification, Ok startAt, Ok endAt, Ok witnessed, Ok sourceKind, Ok sourceRef
+                    when endAt >= startAt && Set.contains classification (Set [ "administrative"; "useful"; "productive" ]) && Set.contains sourceKind (Set [ "runtime"; "ci"; "legacy"; "native-item" ]) ->
+                    make [ "dimension"; "classification"; "startNanoseconds"; "endNanoseconds"; "witnessed"; "sourceKind"; "sourceRef" ] (BudgetInterval(dimension,classification,startAt,endAt,witnessed,sourceKind,sourceRef))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid interval or classification"
+                | values -> Error(sprintf "%A" values)
+            | "budget-intervention" ->
+                match requiredText label node "interventionId", requiredText label node "transition", requiredInt label node "sequence", requiredText label node "result", requiredText label node "coverage", requiredText label node "sourceRef" with
+                | Ok intervention, Ok transition, Ok sequence, Ok result, Ok coverage, Ok sourceRef
+                    when ((transition = "deployed" && result = "not-evaluated") || (transition = "verified" && Set.contains result (Set [ "improved"; "failed"; "unknown" ]))) && Set.contains coverage (Set [ "complete"; "partial"; "unknown" ]) ->
+                    make [ "interventionId"; "transition"; "sequence"; "result"; "coverage"; "sourceRef" ] (BudgetIntervention(intervention,transition,sequence,result,coverage,sourceRef))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported intervention evidence"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

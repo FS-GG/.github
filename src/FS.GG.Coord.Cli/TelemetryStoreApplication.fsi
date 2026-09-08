@@ -16,5 +16,8 @@ module TelemetryStoreApplication =
     val ingest: path: string -> assessment: TelemetryStore.DurabilityAssessment -> bytes: byte array -> Result<string, string list>
     val summary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val ciSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val budgetSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val budgetStatus: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
     val run: action: string -> args: string list -> int
+    val runBudget: action: string -> args: string list -> int

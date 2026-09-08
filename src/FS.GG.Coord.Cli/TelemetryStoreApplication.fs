@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 3
+    let private currentSchemaVersion = 4
 
     module private Native =
         [<Literal>]
@@ -76,6 +76,23 @@ CREATE TABLE ci_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, colle
 PRAGMA user_version=3;
 """
     let private migration3Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration3Sql)
+    let private migration4Sql = """
+CREATE TABLE budget_population_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, original_item_id TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('open','completed')), source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_attribution_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, numerator INTEGER CHECK(numerator >= 0), denominator INTEGER CHECK(denominator >= 0), coverage TEXT NOT NULL, attribution TEXT NOT NULL, source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_interval_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dimension TEXT NOT NULL, classification TEXT NOT NULL CHECK(classification IN ('administrative','useful','productive')), start_ns INTEGER NOT NULL CHECK(start_ns >= 0), end_ns INTEGER NOT NULL CHECK(end_ns >= start_ns), witnessed INTEGER NOT NULL CHECK(witnessed IN (0,1)), source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_intervention_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, intervention_id TEXT NOT NULL, transition TEXT NOT NULL CHECK(transition IN ('deployed','verified')), sequence INTEGER NOT NULL CHECK(sequence >= 0), result TEXT NOT NULL, coverage TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_shared_cost_refs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL) STRICT;
+CREATE TABLE budget_dirty_items(item_id TEXT PRIMARY KEY) STRICT;
+CREATE TABLE budget_epochs(epoch_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL UNIQUE CHECK(ordinal > 0), state TEXT NOT NULL CHECK(state IN ('open','verified'))) STRICT;
+CREATE UNIQUE INDEX budget_one_open_epoch ON budget_epochs(state) WHERE state='open';
+CREATE TABLE budget_epoch_membership(epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), item_id TEXT NOT NULL, original_item_id TEXT NOT NULL, PRIMARY KEY(epoch_id,item_id), UNIQUE(item_id)) STRICT;
+CREATE TABLE budget_assessment_revisions(item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, assessment_revision INTEGER NOT NULL CHECK(assessment_revision > 0), epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), verdict TEXT NOT NULL CHECK(verdict IN ('unknown','not-applicable','pass','breach')), numerator INTEGER, denominator INTEGER, severe INTEGER NOT NULL CHECK(severe IN (0,1)), reason TEXT NOT NULL, source_digest TEXT NOT NULL, PRIMARY KEY(item_id,dimension,provider,accounting_scope,assessment_revision)) STRICT;
+CREATE TABLE budget_breaches(epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, assessment_revision INTEGER NOT NULL, severe INTEGER NOT NULL CHECK(severe IN (0,1)), PRIMARY KEY(epoch_id,item_id,dimension,provider,accounting_scope)) STRICT;
+CREATE TABLE budget_interventions(intervention_id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL UNIQUE REFERENCES budget_epochs(epoch_id), state TEXT NOT NULL CHECK(state IN ('open','verified')), trigger_item_id TEXT NOT NULL, trigger_kind TEXT NOT NULL CHECK(trigger_kind IN ('fifteenth-distinct','severe')), deployed_ref TEXT, verified_ref TEXT) STRICT;
+INSERT INTO budget_epochs(epoch_id,ordinal,state) VALUES('epoch-1',1,'open');
+PRAGMA user_version=4;
+"""
+    let private migration4Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration4Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -243,7 +260,21 @@ PRAGMA user_version=3;
                                             execute connection "COMMIT;"
                                         with error -> rollback connection; raise error
                                     if scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
-                                    else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                    else
+                                        let afterV3 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                        if afterV3 = 3 then
+                                            beginImmediate connection
+                                            try
+                                                execute connection migration4Sql
+                                                use migration = connection.CreateCommand()
+                                                migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(4,$digest,$utc);"
+                                                parameter migration "$digest" migration4Digest
+                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                migration.ExecuteNonQuery() |> ignore
+                                                execute connection "COMMIT;"
+                                            with error -> rollback connection; raise error
+                                        if scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
+                                        else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -264,6 +295,7 @@ PRAGMA user_version=3;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;" <> migrationDigest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -271,7 +303,7 @@ PRAGMA user_version=3;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -309,8 +341,180 @@ PRAGMA user_version=3;
         | TelemetryStore.CiJob(repository,runId,attempt,jobId,name,status,conclusion,created,started,completed) -> run "INSERT INTO ci_jobs VALUES($identity,$item,$repository,$run,$attempt,$job,$name,$status,$conclusion,$created,$started,$completed);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$created",optional created; "$started",optional started; "$completed",optional completed ]
         | TelemetryStore.CiStep(repository,runId,attempt,jobId,number,name,status,conclusion,started,completed,classification,rationale) -> run "INSERT INTO ci_steps VALUES($identity,$item,$repository,$run,$attempt,$job,$number,$name,$status,$conclusion,$started,$completed,$classification,$rationale);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$number",box number; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$classification",box classification; "$rationale",box rationale ]
         | TelemetryStore.CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath) -> run "INSERT INTO ci_coverage VALUES($identity,$item,$collection,$inventory,$attempts,$jobPages,$terminal,$timestamps,$lineage,$classification,$criticalPath);" [ "$collection",box collection; "$inventory",box inventory; "$attempts",box attempts; "$jobPages",box jobPages; "$terminal",box terminal; "$timestamps",box timestamps; "$lineage",box lineage; "$classification",box classification; "$criticalPath",box criticalPath ]
+        | TelemetryStore.BudgetPopulation(original,state,sourceKind,sourceRef) ->
+            run "INSERT INTO budget_population_facts VALUES($identity,$item,$original,$state,$sourceKind,$sourceRef,$revision);" [ "$original",box original; "$state",box state; "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
+        | TelemetryStore.BudgetAttribution(dimension,provider,scope,numerator,denominator,coverage,attribution,sourceKind,sourceRef) ->
+            run "INSERT INTO budget_attribution_facts VALUES($identity,$item,$dimension,$provider,$scope,$numerator,$denominator,$coverage,$attribution,$sourceKind,$sourceRef,$revision); INSERT INTO budget_shared_cost_refs VALUES($identity,$item,$sourceRef,$dimension,$provider,$scope);" [ "$dimension",box dimension; "$provider",box provider; "$scope",box scope; "$numerator",optional numerator; "$denominator",optional denominator; "$coverage",box coverage; "$attribution",box attribution; "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
+        | TelemetryStore.BudgetInterval(dimension,classification,startAt,endAt,witnessed,sourceKind,sourceRef) ->
+            run "INSERT INTO budget_interval_facts VALUES($identity,$item,$dimension,$classification,$start,$end,$witnessed,$sourceKind,$sourceRef,$revision); INSERT INTO budget_shared_cost_refs VALUES($identity,$item,$sourceRef,$dimension,'interval','interval');" [ "$dimension",box dimension; "$classification",box classification; "$start",box startAt; "$end",box endAt; "$witnessed",box (if witnessed then 1 else 0); "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
+        | TelemetryStore.BudgetIntervention(intervention,transition,sequence,result,coverage,sourceRef) ->
+            run "INSERT INTO budget_intervention_facts VALUES($identity,$item,$intervention,$transition,$sequence,$result,$coverage,$sourceRef,$revision);" [ "$intervention",box intervention; "$transition",box transition; "$sequence",box sequence; "$result",box result; "$coverage",box coverage; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
 
-    let private ingestBatchLocked root beforeCommit (batch: TelemetryStore.Batch) =
+        match fact.ItemId, fact.Payload with
+        | Some item, (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _ | TelemetryStore.RuntimeGap _ | TelemetryStore.CiCoverage _) ->
+            use dirty = connection.CreateCommand()
+            dirty.CommandText <- "INSERT INTO budget_dirty_items(item_id) VALUES($item) ON CONFLICT(item_id) DO NOTHING;"
+            parameter dirty "$item" item
+            dirty.ExecuteNonQuery() |> ignore
+        | _ -> ()
+
+    let private budgetReevaluate (connection: SqliteConnection) =
+        let scalarInt sql parameters =
+            use command = connection.CreateCommand()
+            command.CommandText <- sql
+            parameters |> List.iter (fun (name,value) -> parameter command name value)
+            Convert.ToInt64(command.ExecuteScalar())
+        let scalarOptionalText sql parameters =
+            use command = connection.CreateCommand()
+            command.CommandText <- sql
+            parameters |> List.iter (fun (name,value) -> parameter command name value)
+            let value = command.ExecuteScalar()
+            if isNull value || value = box DBNull.Value then None else Some(string value)
+        let currentEpoch () = scalarText connection "SELECT epoch_id FROM budget_epochs WHERE state='open';"
+        let dirtyItems =
+            use command = connection.CreateCommand()
+            command.CommandText <- "SELECT item_id FROM budget_dirty_items ORDER BY item_id LIMIT 32;"
+            use reader = command.ExecuteReader()
+            let values = ResizeArray<string>()
+            while reader.Read() do values.Add(reader.GetString 0)
+            List.ofSeq values
+        for item in dirtyItems do
+            let itemParameter = [ "$item", box item ]
+            let population =
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT original_item_id,state,source_ref FROM budget_population_facts WHERE item_id=$item ORDER BY fact_revision DESC,identity LIMIT 2;"
+                parameter command "$item" item
+                use reader = command.ExecuteReader()
+                let values = ResizeArray<string * string * string>()
+                while reader.Read() do values.Add(reader.GetString 0,reader.GetString 1,reader.GetString 2)
+                List.ofSeq values
+            let completed = population |> List.filter (fun (_,state,_) -> state = "completed")
+            let original = completed |> List.tryHead |> Option.map (fun (value,_,_) -> value)
+            let membership = scalarOptionalText "SELECT epoch_id FROM budget_epoch_membership WHERE item_id=$item;" itemParameter
+            let epoch =
+                match membership, original with
+                | Some value, _ -> Some value
+                | None, Some originalItem ->
+                    let value = currentEpoch ()
+                    use insert = connection.CreateCommand()
+                    insert.CommandText <- "INSERT INTO budget_epoch_membership(epoch_id,item_id,original_item_id) VALUES($epoch,$item,$original);"
+                    parameter insert "$epoch" value; parameter insert "$item" item; parameter insert "$original" originalItem
+                    insert.ExecuteNonQuery() |> ignore
+                    Some value
+                | None, None -> None
+            let references = scalarInt "SELECT count(*) FROM budget_shared_cost_refs WHERE item_id=$item;" itemParameter
+            let runtimeGap = scalarInt "SELECT count(*) FROM runtime_gaps WHERE item_id=$item;" itemParameter > 0L
+            let ciIncomplete =
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT inventory,attempts,job_pages,terminal,timestamps,lineage,classification FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
+                parameter command "$item" item
+                use reader = command.ExecuteReader()
+                reader.Read() && [0..6] |> List.exists (fun index -> reader.GetString index <> "complete")
+            let attributions =
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT dimension,provider,accounting_scope,numerator,denominator,coverage,attribution,source_kind,source_ref,fact_revision FROM budget_attribution_facts WHERE item_id=$item ORDER BY dimension,provider,accounting_scope,identity LIMIT 4097;"
+                parameter command "$item" item
+                use reader = command.ExecuteReader()
+                let values = ResizeArray<_>()
+                while reader.Read() do
+                    values.Add(reader.GetString 0,reader.GetString 1,reader.GetString 2,(if reader.IsDBNull 3 then None else Some(reader.GetInt64 3)),(if reader.IsDBNull 4 then None else Some(reader.GetInt64 4)),reader.GetString 5,reader.GetString 6,reader.GetString 7,reader.GetString 8,reader.GetInt64 9)
+                List.ofSeq values
+            for dimension,provider,scope,suppliedNumerator,denominator,coverage,attribution,sourceKind,sourceRef,factRevision in attributions |> List.truncate 4096 do
+                let intervals =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT classification,start_ns,end_ns,witnessed,source_ref FROM budget_interval_facts WHERE item_id=$item AND dimension=$dimension ORDER BY start_ns,end_ns LIMIT 4097;"
+                    parameter command "$item" item; parameter command "$dimension" dimension
+                    use reader = command.ExecuteReader()
+                    let values = ResizeArray<_>()
+                    while reader.Read() do values.Add(reader.GetString 0,reader.GetInt64 1,reader.GetInt64 2,reader.GetInt64 3 = 1L,reader.GetString 4)
+                    List.ofSeq values
+                let intervalOverflow = intervals.Length > 4096
+                let intervalNumerator =
+                    let administrative = intervals |> List.choose (fun (kind,startAt,endAt,witnessed,_) -> if kind = "administrative" && witnessed then Some({ StartNanoseconds = startAt; EndNanoseconds = endAt } : TelemetryBudget.Interval) else None)
+                    let exclusions = intervals |> List.choose (fun (kind,startAt,endAt,witnessed,_) -> if kind <> "administrative" && witnessed then Some({ StartNanoseconds = startAt; EndNanoseconds = endAt } : TelemetryBudget.Interval) else None)
+                    if administrative.IsEmpty then suppliedNumerator else TelemetryBudget.subtractNanoseconds administrative exclusions
+                let unwitnessed = intervals |> List.exists (fun (_,_,_,witnessed,_) -> not witnessed)
+                let usability =
+                    if completed.IsEmpty then TelemetryBudget.Unknown "whole-item-incomplete"
+                    elif completed |> List.map (fun (value,_,_) -> value) |> List.distinct |> List.length <> 1 then TelemetryBudget.Unknown "population-conflict"
+                    elif references > 4096L || intervalOverflow then TelemetryBudget.Unknown "reference-limit"
+                    elif coverage = "not-applicable" then TelemetryBudget.NotApplicable "source-not-applicable"
+                    elif coverage <> "complete" then TelemetryBudget.Unknown "source-coverage"
+                    elif attribution <> "classified" then TelemetryBudget.Unknown "attribution-unknown"
+                    elif sourceKind = "runtime" && runtimeGap then TelemetryBudget.Unknown "runtime-gap"
+                    elif sourceKind = "ci" && ciIncomplete then TelemetryBudget.Unknown "ci-coverage"
+                    elif unwitnessed && not intervals.IsEmpty then TelemetryBudget.Unknown "unwitnessed-critical-path"
+                    else
+                        match intervalNumerator, denominator with
+                        | Some numerator, Some value -> TelemetryBudget.Usable(numerator,value)
+                        | _ -> TelemetryBudget.Unknown "missing-measurement"
+                let verdict = TelemetryBudget.assess usability
+                let verdictText,numeratorValue,denominatorValue,severe,reason =
+                    match verdict with
+                    | TelemetryBudget.UnknownVerdict why -> "unknown",None,None,false,why
+                    | TelemetryBudget.NotApplicableVerdict why -> "not-applicable",intervalNumerator,denominator,false,why
+                    | TelemetryBudget.Pass(numerator,value) -> "pass",Some numerator,Some value,false,"within-ceiling"
+                    | TelemetryBudget.Breach(numerator,value,isSevere) -> "breach",Some numerator,Some value,isSevere,(if isSevere then "above-severe-threshold" else "above-ceiling")
+                match epoch with
+                | None -> ()
+                | Some epochId ->
+                    let sourceDigest = CanonicalJson.sha256(Encoding.UTF8.GetBytes(String.concat "|" [ string factRevision; sourceRef; coverage; attribution; string intervalNumerator; string denominator; string runtimeGap; string ciIncomplete; reason ]))
+                    let latestDigest = scalarOptionalText "SELECT source_digest FROM budget_assessment_revisions WHERE item_id=$item AND dimension=$dimension AND provider=$provider AND accounting_scope=$scope ORDER BY assessment_revision DESC LIMIT 1;" [ "$item",box item; "$dimension",box dimension; "$provider",box provider; "$scope",box scope ]
+                    let assessmentRevision = scalarInt "SELECT coalesce(max(assessment_revision),0)+1 FROM budget_assessment_revisions WHERE item_id=$item AND dimension=$dimension AND provider=$provider AND accounting_scope=$scope;" [ "$item",box item; "$dimension",box dimension; "$provider",box provider; "$scope",box scope ]
+                    let effectiveRevision = if latestDigest = Some sourceDigest then assessmentRevision - 1L else assessmentRevision
+                    if latestDigest <> Some sourceDigest then
+                        use insert = connection.CreateCommand()
+                        insert.CommandText <- "INSERT INTO budget_assessment_revisions VALUES($item,$dimension,$provider,$scope,$revision,$epoch,$verdict,$numerator,$denominator,$severe,$reason,$digest);"
+                        [ "$item",box item; "$dimension",box dimension; "$provider",box provider; "$scope",box scope; "$revision",box assessmentRevision; "$epoch",box epochId; "$verdict",box verdictText; "$numerator",numeratorValue |> Option.map box |> Option.defaultValue DBNull.Value; "$denominator",denominatorValue |> Option.map box |> Option.defaultValue DBNull.Value; "$severe",box (if severe then 1 else 0); "$reason",box reason; "$digest",box sourceDigest ] |> List.iter (fun (name,value) -> parameter insert name value)
+                        insert.ExecuteNonQuery() |> ignore
+                    use breach = connection.CreateCommand()
+                    if verdictText = "breach" then
+                        breach.CommandText <- "INSERT INTO budget_breaches VALUES($epoch,$item,$dimension,$provider,$scope,$revision,$severe) ON CONFLICT(epoch_id,item_id,dimension,provider,accounting_scope) DO UPDATE SET assessment_revision=excluded.assessment_revision,severe=excluded.severe;"
+                        parameter breach "$revision" effectiveRevision; parameter breach "$severe" (if severe then 1 else 0)
+                    else
+                        breach.CommandText <- "DELETE FROM budget_breaches WHERE epoch_id=$epoch AND item_id=$item AND dimension=$dimension AND provider=$provider AND accounting_scope=$scope;"
+                    parameter breach "$epoch" epochId; parameter breach "$item" item; parameter breach "$dimension" dimension; parameter breach "$provider" provider; parameter breach "$scope" scope
+                    breach.ExecuteNonQuery() |> ignore
+            use clean = connection.CreateCommand()
+            clean.CommandText <- "DELETE FROM budget_dirty_items WHERE item_id=$item;"
+            parameter clean "$item" item
+            clean.ExecuteNonQuery() |> ignore
+
+        let epochId = currentEpoch ()
+        let breachCount = scalarInt "SELECT count(DISTINCT item_id) FROM budget_breaches WHERE epoch_id=$epoch;" [ "$epoch",box epochId ]
+        let hasSevere = scalarInt "SELECT count(*) FROM budget_breaches WHERE epoch_id=$epoch AND severe=1;" [ "$epoch",box epochId ] > 0L
+        let intervention = $"%s{epochId}-intervention"
+        if TelemetryBudget.interventionDue (int breachCount) hasSevere then
+            let trigger = scalarText connection (if hasSevere then $"SELECT item_id FROM budget_breaches WHERE epoch_id='%s{epochId}' AND severe=1 ORDER BY item_id LIMIT 1;" else $"SELECT item_id FROM budget_breaches WHERE epoch_id='%s{epochId}' ORDER BY item_id LIMIT 1;")
+            use insert = connection.CreateCommand()
+            insert.CommandText <- "INSERT INTO budget_interventions(intervention_id,epoch_id,state,trigger_item_id,trigger_kind) VALUES($intervention,$epoch,'open',$item,$kind) ON CONFLICT(epoch_id) DO NOTHING;"
+            parameter insert "$intervention" intervention; parameter insert "$epoch" epochId; parameter insert "$item" trigger; parameter insert "$kind" (if hasSevere then "severe" else "fifteenth-distinct")
+            insert.ExecuteNonQuery() |> ignore
+
+        match scalarOptionalText "SELECT intervention_id FROM budget_interventions WHERE epoch_id=$epoch AND state='open';" [ "$epoch",box epochId ] with
+        | None -> ()
+        | Some openIntervention ->
+            use evidence = connection.CreateCommand()
+            evidence.CommandText <- "SELECT transition,sequence,result,coverage,source_ref FROM budget_intervention_facts WHERE intervention_id=$intervention ORDER BY sequence,identity;"
+            parameter evidence "$intervention" openIntervention
+            use reader = evidence.ExecuteReader()
+            let values = ResizeArray<_>()
+            while reader.Read() do values.Add(reader.GetString 0,reader.GetInt64 1,reader.GetString 2,reader.GetString 3,reader.GetString 4)
+            reader.Close()
+            let deployed = values |> Seq.filter (fun (transition,_,_,coverage,_) -> transition = "deployed" && coverage = "complete") |> Seq.tryHead
+            let verified =
+                match deployed with
+                | None -> None
+                | Some(_,deployedSequence,_,_,_) -> values |> Seq.tryFind (fun (transition,sequence,result,coverage,_) -> transition = "verified" && sequence > deployedSequence && result = "improved" && coverage = "complete")
+            match deployed, verified with
+            | Some(_,_,_,_,deployedRef), Some(_,_,_,_,verifiedRef) ->
+                use close = connection.CreateCommand()
+                close.CommandText <- "UPDATE budget_interventions SET state='verified',deployed_ref=$deployed,verified_ref=$verified WHERE intervention_id=$intervention AND state='open'; UPDATE budget_epochs SET state='verified' WHERE epoch_id=$epoch; INSERT INTO budget_epochs(epoch_id,ordinal,state) SELECT 'epoch-' || (ordinal+1),ordinal+1,'open' FROM budget_epochs WHERE epoch_id=$epoch;"
+                parameter close "$deployed" deployedRef; parameter close "$verified" verifiedRef; parameter close "$intervention" openIntervention; parameter close "$epoch" epochId
+                close.ExecuteNonQuery() |> ignore
+            | _ -> ()
+
+    let private ingestBatchLocked root beforeCommit reevaluateBudget (batch: TelemetryStore.Batch) =
             if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ] else
             match connect root SqliteOpenMode.ReadWrite with
             | Error errors -> Error errors
@@ -359,6 +563,7 @@ PRAGMA user_version=3;
                                 insertBatch.CommandText <- "INSERT INTO ingest_batches VALUES($id,$digest,$source,$generation,$cursor,$accepted,$replayed);"
                                 [ "$id",box batch.IngestId; "$digest",batch.ContentDigest; "$source",batch.SourceIdentity; "$generation",batch.Generation; "$cursor",batch.Cursor; "$accepted",accepted; "$replayed",replayed ] |> List.iter (fun (name,value) -> parameter insertBatch name value)
                                 insertBatch.ExecuteNonQuery() |> ignore
+                            if reevaluateBudget then budgetReevaluate connection
                             beforeCommit ()
                             execute connection "COMMIT;"
                             Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ingest-result/1"; ingestId = batch.IngestId; digest = batch.ContentDigest; accepted = accepted; replayed = replayed; cursor = batch.Cursor; nativeEngine = engine |} + "\n")
@@ -459,6 +664,7 @@ PRAGMA user_version=3;
                 let mutable replayed = 0
                 let mutable quarantined = 0
                 let mutable failures: string list = []
+                let mutable reevaluated = false
                 for ready in selected do
                     let bytes = try File.ReadAllBytes ready with error -> failures <- error.Message :: failures; Array.empty
                     let parsed = TelemetryStore.parseBatch bytes
@@ -467,15 +673,26 @@ PRAGMA user_version=3;
                     | Error errors -> quarantine root ready errors; quarantined <- quarantined + 1
                     | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
                     | Ok batch ->
-                        match ingestBatchLocked root hooks.BeforeCommit batch with
-                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal)) ->
+                        match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
+                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal)) ->
                             quarantine root ready errors; quarantined <- quarantined + 1
                         | Error errors -> failures <- (String.concat "; " errors) :: failures
                         | Ok result ->
+                            reevaluated <- true
                             use doc = JsonDocument.Parse result
                             accepted <- accepted + doc.RootElement.GetProperty("accepted").GetInt32()
                             replayed <- replayed + doc.RootElement.GetProperty("replayed").GetInt32()
                             try hooks.AfterCommitBeforeDelete(); File.Delete ready; fsyncDirectory(Path.GetDirectoryName ready) with error -> failures <- ("committed but ready removal failed: " + error.Message) :: failures
+                if not reevaluated then
+                    match connect root SqliteOpenMode.ReadWrite with
+                    | Error errors -> failures <- String.concat "; " errors :: failures
+                    | Ok(connection, _) ->
+                        use connection = connection
+                        try
+                            beginImmediate connection
+                            budgetReevaluate connection
+                            execute connection "COMMIT;"
+                        with error -> rollback connection; failures <- error.Message :: failures
                 match List.tryLast selected with
                 | Some last ->
                     let cursorPath = Path.Combine(root, "drain.cursor")
@@ -598,6 +815,56 @@ PRAGMA user_version=3;
                    monetary = "unknown"; avoidableRerun = "unknown"
                    inventoryCoverage = coverage "inventory"; attemptCoverage = coverage "attempts"; jobPageCoverage = coverage "job_pages"; terminalCoverage = coverage "terminal"; timestampCoverage = coverage "timestamps"; lineageCoverage = coverage "lineage"; classificationCoverage = coverage "classification"; criticalPathCoverage = coverage "critical_path" |} + "\n")
 
+    let budgetSummary path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                if version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ] else
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT dimension,provider,accounting_scope,verdict,numerator,denominator,severe,reason,epoch_id FROM budget_assessment_revisions a WHERE item_id=$item AND assessment_revision=(SELECT max(assessment_revision) FROM budget_assessment_revisions b WHERE b.item_id=a.item_id AND b.dimension=a.dimension AND b.provider=a.provider AND b.accounting_scope=a.accounting_scope) ORDER BY dimension,provider,accounting_scope;"
+                parameter command "$item" itemId
+                use reader = command.ExecuteReader()
+                let dimensions = ResizeArray<_>()
+                while reader.Read() do
+                    dimensions.Add(
+                        {| dimension = reader.GetString 0; provider = reader.GetString 1; accountingScope = reader.GetString 2
+                           verdict = reader.GetString 3; numerator = if reader.IsDBNull 4 then None else Some(reader.GetInt64 4)
+                           denominator = (if reader.IsDBNull 5 then None else Some(reader.GetInt64 5)); severe = (reader.GetInt64 6 = 1L)
+                           reason = reader.GetString 7; epoch = reader.GetString 8 |})
+                reader.Close()
+                use membership = connection.CreateCommand()
+                membership.CommandText <- "SELECT epoch_id FROM budget_epoch_membership WHERE item_id=$item;"
+                parameter membership "$item" itemId
+                let epochValue = membership.ExecuteScalar()
+                let epoch = if isNull epochValue || epochValue = box DBNull.Value then None else Some(string epochValue)
+                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.budget-summary/1"; item = itemId; epoch = epoch; dimensions = dimensions.ToArray() |} + "\n")
+            with error -> Error [ error.Message ]
+
+    let budgetStatus path assessment =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                if version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ] else
+                let epoch = scalarText connection "SELECT epoch_id FROM budget_epochs WHERE state='open';"
+                let scalar sql =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- sql
+                    Convert.ToInt64(command.ExecuteScalar())
+                let intervention =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT state FROM budget_interventions WHERE epoch_id=$epoch;"
+                    parameter command "$epoch" epoch
+                    let value = command.ExecuteScalar()
+                    if isNull value || value = box DBNull.Value then "none" else string value
+                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.budget-status/1"; epoch = epoch; distinctBreaches = scalar $"SELECT count(DISTINCT item_id) FROM budget_breaches WHERE epoch_id='%s{epoch}';"; intervention = intervention; dirtyItems = scalar "SELECT count(*) FROM budget_dirty_items;" |} + "\n")
+            with error -> Error [ error.Message ]
+
     let exportPublic path assessment itemId outputPath =
         try
             let content =
@@ -667,3 +934,15 @@ PRAGMA user_version=3;
             | "export" when List.contains "--public" args -> match option "--output" args with Some target -> exportPublic path assessment (option "--item" args) target |> output | _ -> output(Error [ "--output is required" ])
             | "export" -> output(Error [ "only --public export is supported" ])
             | _ -> output(Error [ "action must be status, init, ingest, summary, or export" ])
+
+    let runBudget action args =
+        match root args with
+        | None ->
+            if action = "status" then Console.Out.WriteLine("{\"schema\":\"fsgg.telemetry.budget-status/1\",\"status\":\"unconfigured\"}"); 0
+            else output(Error [ "store root is not configured; use --store-root or FSGG_TELEMETRY_STORE" ])
+        | Some path ->
+            let assessment = assessProductionRoot path
+            match action with
+            | "status" -> budgetStatus path assessment |> output
+            | "summary" -> match option "--item" args with Some item -> budgetSummary path assessment item |> output | None -> output(Error [ "--item is required" ])
+            | _ -> output(Error [ "action must be status or summary" ])
