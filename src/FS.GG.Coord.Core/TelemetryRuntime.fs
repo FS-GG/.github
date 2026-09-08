@@ -8,9 +8,31 @@ module TelemetryRuntime =
     [<Literal>]
     let AssignmentSchema = "fsgg.telemetry.codex-assignment/1"
 
+    [<Literal>]
+    let InvocationContextSchema = "fsgg.telemetry.codex-invocation-context/1"
+
+    [<Literal>]
+    let InvocationContextEnvironment = "FSGG_TELEMETRY_CODEX_INVOCATION"
+
     type Assignment =
         { FeatureId: string; ItemId: string; AttemptId: string
           ParentAttemptId: string option; ProducerStream: string }
+
+    type InvocationContext =
+        { Assignment: Assignment; ActivationId: string; DispatchId: string
+          InvocationId: string; RootInvocationId: string; StoreRoot: string option
+          LateAfterSeconds: int64 }
+
+    type InvocationRelation = Root | Child | FollowUp
+
+    let relationText relation = match relation with Root -> "root" | Child -> "child" | FollowUp -> "follow-up"
+
+    let parseRelation value =
+        match value with
+        | "root" -> Some Root
+        | "child" -> Some Child
+        | "follow-up" -> Some FollowUp
+        | _ -> None
 
     type TurnUsage =
         { ThreadId: string; TurnId: string option; TurnSequence: int64
@@ -25,6 +47,12 @@ module TelemetryRuntime =
         match root.TryGetProperty name with
         | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> Some(value.GetString())
         | _ -> None
+    let private optionalText (root: JsonElement) (name: string) =
+        match root.TryGetProperty name with
+        | false, _ -> Ok None
+        | true, value when value.ValueKind = JsonValueKind.Null -> Ok None
+        | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> Ok(Some(value.GetString()))
+        | _ -> Error ()
     let private number (root: JsonElement) (name: string) =
         match root.TryGetProperty name with
         | true, value when value.ValueKind = JsonValueKind.Number -> match value.TryGetInt64() with true, count when count >= 0L -> Some count | _ -> None
@@ -49,6 +77,40 @@ module TelemetryRuntime =
             | _ when not unknown.IsEmpty -> Error [ "assignment contains unknown fields: " + String.concat "," unknown ]
             | _ -> Error [ "assignment must be closed, schema-current, and contain safe feature/item/attempt/producer identifiers" ]
         with :? JsonException as error -> Error [ "invalid assignment JSON: " + error.Message ]
+
+    let parseInvocationContext (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            let allowed =
+                Set.ofList
+                    [ "schema"; "featureId"; "itemId"; "attemptId"; "parentAttemptId"; "producerStream"
+                      "activationId"; "dispatchId"; "invocationId"; "rootInvocationId"; "storeRoot"; "lateAfterSeconds" ]
+            let unknown = root.EnumerateObject() |> Seq.map _.Name |> Seq.filter (fun name -> not (Set.contains name allowed)) |> Seq.toList
+            let parent =
+                match root.TryGetProperty "parentAttemptId" with
+                | false, _ -> Some None
+                | true, value when value.ValueKind = JsonValueKind.Null -> Some None
+                | true, value when value.ValueKind = JsonValueKind.String && safe(value.GetString()) -> Some(Some(value.GetString()))
+                | _ -> None
+            let lateAfter = number root "lateAfterSeconds"
+            match text root "schema", text root "featureId", text root "itemId", text root "attemptId", parent,
+                  text root "producerStream", text root "activationId", text root "dispatchId", text root "invocationId",
+                  text root "rootInvocationId", optionalText root "storeRoot", lateAfter with
+            | Some schema, Some feature, Some item, Some attempt, Some parentAttempt, Some producer,
+              Some activation, Some dispatch, Some invocation, Some rootInvocation, Ok storeRoot, Some late
+                when schema = InvocationContextSchema && unknown.IsEmpty
+                     && List.forall safe [ feature; item; attempt; producer; activation; dispatch; invocation; rootInvocation ]
+                     && (storeRoot |> Option.forall IO.Path.IsPathFullyQualified) ->
+                Ok
+                    { Assignment = { FeatureId = feature; ItemId = item; AttemptId = attempt; ParentAttemptId = parentAttempt; ProducerStream = producer }
+                      ActivationId = activation; DispatchId = dispatch; InvocationId = invocation
+                      RootInvocationId = rootInvocation; StoreRoot = storeRoot |> Option.map IO.Path.GetFullPath; LateAfterSeconds = late }
+            | _ when not unknown.IsEmpty -> Error [ "invocation context contains unknown fields: " + String.concat "," unknown ]
+            | _ -> Error [ "invocation context must be closed, schema-current, private, and contain safe lineage identifiers" ]
+        with
+        | :? JsonException as error -> Error [ "invalid invocation context JSON: " + error.Message ]
+        | error -> Error [ "invalid invocation context: " + error.Message ]
 
     let projectLine (currentThreadId: string option) (turnSequence: int64) (raw: string) =
         try

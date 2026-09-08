@@ -95,15 +95,39 @@ diagnostic and cannot change native delivery truth or establish qualification.
 
 ```console
 fsgg-coord-engine telemetry runtime codex-exec \
-  --assignment /private/attempt.json -- --json --ephemeral -m MODEL "explicit task"
+  --assignment /private/attempt.json --late-after-seconds 60 -- \
+  --json --ephemeral -m MODEL "root task"
+# Inside that worker, the inherited context makes this a child by default:
+fsgg-coord-engine telemetry runtime codex-exec -- \
+  --json --ephemeral -m MODEL "child task"
+# Use the same inherited context for a later follow-up:
+fsgg-coord-engine telemetry runtime codex-exec --relation follow-up -- \
+  --json --ephemeral -m MODEL "follow-up task"
 fsgg-coord-engine telemetry runtime status
 ```
 
-The adapter admits before launch, tees exact child stdout, inherits stdin and working directory, and returns the
-child exit status. Its bounded projector retains only thread identity, completed-turn token counters and typed
-outcomes. It discards prompts, messages, reasoning, commands, tool I/O, diffs, paths and raw JSON. Publication,
-framing and queue loss are gaps, not delivery failures. `collaboration.spawn_agent` is currently unsupported;
-this command covers only future explicit launches through it.
+The dotnet tool package contains this launcher entrypoint; no sibling script or receiver manifest is required.
+The root caller supplies the closed private assignment once. The launcher then creates the prospective activation,
+expected dispatch, invocation lineage, admission/start/terminal observations and host-wall event times. It passes a
+closed private invocation context in the child environment containing only work and lineage identities, the selected
+store root and activation delay. A descendant calling the same entrypoint consumes that inherited context, creates a
+new child or follow-up dispatch and invocation, and passes the new context onward. Grandchildren, repeated child
+attempts, and follow-ups therefore need no assignment copy and callers never author ingest batches.
+
+The adapter admits before launch, tees exact child stdout, inherits stdin and working directory, preserves every
+Codex argument (including model, effort, sandbox and permission options), and returns the child exit status. A
+successful process with no completed usage remains an explicit usage gap; launch failure records a terminal without
+a start; conventional cancellation exits are classified as cancelled without changing their code. Projection waits
+for delayed stdout frames before terminal publication. Because the context is inherited by value, a surviving child
+can launch a descendant after its parent process has exited.
+
+Its bounded projector retains only thread identity, completed-turn token counters and typed outcomes. It discards
+prompts, messages, reasoning, commands, tool I/O, diffs, paths and raw JSON. Publication, framing, queue loss, a full
+inbox and writer-lock contention are fail-visible telemetry diagnostics, never delivery failures; a bounded
+opportunistic drain after the native process exits does not change that exit. `telemetry runtime status` reports the
+packaged entrypoint but deliberately reports host activation as `not-installed`. Source merge and package presence do
+not claim receiver installation or default activation. `collaboration.spawn_agent` remains explicitly unsupported;
+coverage is limited to future repository-owned launches that use this entrypoint.
 
 ## Explicit CI collection
 

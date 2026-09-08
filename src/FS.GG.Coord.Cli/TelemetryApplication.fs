@@ -82,7 +82,7 @@ module TelemetryApplication =
         | "telemetry" :: "runtime" :: "codex-exec" :: args ->
             match List.tryFindIndex ((=) "--") args with
             | None -> Some(Error "telemetry runtime codex-exec requires -- before Codex arguments")
-            | Some delimiter -> validateArgs [ "--assignment"; "--store-root" ] [] args[..delimiter - 1] |> Some
+            | Some delimiter -> validateArgs [ "--assignment"; "--store-root"; "--relation"; "--late-after-seconds" ] [] args[..delimiter - 1] |> Some
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
