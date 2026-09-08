@@ -1172,6 +1172,12 @@ elect concurrent children. Roadmap closure derives heads and outcomes from conte
 then limits rendering and verification to one marker-bounded unit. Semantic critique, finding disposition,
 exceptions, and merge authorization remain independent judgment boundaries.
 
+Durable private telemetry is a per-host `FS.GG.Coord.Cli` boundary: workers atomically publish bounded,
+immutable typed batches into private inboxes, while one orchestrator-owned drain serializes SQLite writes.
+Readers use read-only WAL snapshots; a stable host writer lock plus native-identity deduplication protects
+recovery and old/new process overlap. The batch is compatible with a future actor message contract, but no
+actor runtime, permanent daemon, network-shared database, collection hook, or publication path is introduced.
+
 Adoption is publish-before-use: release the compiled command family, verify a receiver against those exact
 package bytes, flip both item-process skills together, regenerate Claude projections from `.agents`, and
 only then delete the Python compatibility implementations and references.

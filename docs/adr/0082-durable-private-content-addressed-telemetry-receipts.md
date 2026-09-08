@@ -16,6 +16,13 @@ best effort and asynchronous; missing or corrupt samples are discarded and repor
 without blocking a technically valid merge or requiring synthetic reconstruction. Existing receipts and
 strict histories retain their original validation rules.
 
+**Structured-store clarification on 2026-09-07:** immutable receipt files remain the authority described
+here and are neither rewritten nor backfilled. A separate host-local SQLite analytics store may retain
+validated typed observations and aggregate indexes without transcript content. Workers publish bounded,
+immutable private batches; one orchestrator drain owns normal writes, while a stable OS lock plus native
+identity/digest deduplication covers crash recovery and old/new process overlap. SQLite is never network
+shared, and losing this advisory observer cannot change delivery truth.
+
 ## Context
 
 Lifecycle events publish aggregate token counts and a SHA-256 reference to a private runtime-usage CSV.

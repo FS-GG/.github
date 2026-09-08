@@ -135,6 +135,8 @@
     <Compile Include="CycleLedger.fs" />
     <Compile Include="Telemetry.fsi" />
     <Compile Include="Telemetry.fs" />
+    <Compile Include="TelemetryStore.fsi" />
+    <Compile Include="TelemetryStore.fs" />
     <Compile Include="Qualification.fsi" />
     <Compile Include="Qualification.fs" />
     <Compile Include="RoadmapWorkUnit.fsi" />

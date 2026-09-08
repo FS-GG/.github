@@ -773,6 +773,13 @@ backup/restore, key rotation, retention, an operating owner and an outage-tested
 Restore must not resurrect stale authority. Start single-node unless measured recovery targets demand
 more. Federation adds a separate trust boundary and is deferred until local execution has demonstrated value.
 
+UTEL-02 contributes one concrete datapoint to that later selection: concurrent workers producing observations
+for one host-local writer naturally fit actor mailbox serialization, supervision/durable delivery and explicit
+parent-child correlation. Its immutable inbox batch is deliberately compatible with a future per-host
+telemetry-writer actor message contract. This is evidence for the Akka comparison, not an early dependency or
+mandate: the SQLite lock and native identity/digest deduplication remain necessary across process recovery,
+upgrades and old/new overlap even if an actor owns normal-path drains.
+
 Begin observation with one compact table and inspectable operation history. Rich UI is selected by an
 actual operator question. Enabled charts, graphs and exports still require accessibility, truthful
 partial/stale states, secure content handling, canonical identities and bounded rendering cost; rendering
@@ -1042,7 +1049,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
-| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | [UTEL-01 telemetry correctness](roadmaps/utel-01-telemetry-correctness.md) covers the bounded observer/public-evidence repair; reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence for the remaining V0 scope |
+| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | [UTEL-01 telemetry correctness](roadmaps/utel-01-telemetry-correctness.md) covers the bounded observer/public-evidence repair; [UTEL-02 local telemetry store](roadmaps/utel-local-telemetry-store.md) covers durable host-local ingestion and replay; reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence for the remaining V0 scope |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1, GS2-07.8: qualify deployment, rollback, rotation, outage recovery and emergency disable for the runtime actually included | Coordination; accepted event/queue prerequisites; decide which runtime is included or explicitly disabled | No subroadmap linked yet |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; qualified epoch prerequisites | No subroadmap linked yet |

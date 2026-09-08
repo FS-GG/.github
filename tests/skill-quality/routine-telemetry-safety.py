@@ -38,4 +38,14 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     (repo / "telemetry-evidence.json").write_text(' ' * (64 * 1024 + 1))
     subprocess.run(["git", "-C", str(repo), "add", "-f", "telemetry-evidence.json"], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", "telemetry-evidence.json"], check=True)
+    # Binary fixtures exist only in this temporary repo. Extension and renamed-signature detection are
+    # independent: neither a renamed database nor a private immutable spool batch may be forced in.
+    (repo / "innocent.bin").write_bytes(b"SQLite format " + b"3\x00" + b"synthetic")
+    subprocess.run(["git", "-C", str(repo), "add", "-f", "innocent.bin"], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", "innocent.bin"], check=True)
+    (repo / "worker.ready").write_text('{"schema":"fsgg.telemetry.' + 'ingest/1"}')
+    subprocess.run(["git", "-C", str(repo), "add", "-f", "worker.ready"], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
 print("routine-telemetry-safety: bounded I/O and forced-index rejection pass")
