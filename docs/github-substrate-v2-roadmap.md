@@ -1663,14 +1663,23 @@ evidence that either definition holds.
 
 ## 12. Accepted amendment: routine-development simplification and ordinary v2 carryover
 
-Status: **accepted prospectively on 2026-09-07; implemented current-route profile, inactive as a v2 writer
-until `OpenV2`, with candidate and receiver qualification still required**.
+Status: **amended by explicit human decision on 2026-09-08: routine delivery is the active default process;
+candidate and receiver qualification and protected-effect authority remain independently required**.
 The [analysis and disposition](coordination/2026-09-07-131445-v2-roadmap-ci-simplification-analysis.md)
 compares the [radical development proposal](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md)
 with the current roadmap. This section is the accepted integration contract for that profile. Sections 1–11,
 all unit IDs/titles/states, accepted histories, prerequisites and exit gates retain their current meaning.
 No row below independently authorizes execution, accepts a unit, changes the operating epoch or approves a
 protected effect.
+
+For all unified-roadmap work, only a recorded explicit human instruction selects heavyweight ceremony for
+named scope; absence or ambiguity selects routine. Strict labels, GS2 registration, protected paths, policy
+changes, modeled work, protected operations and inherited strict state are not heavyweight triggers. One
+accountable owner uses one routine branch and PR, focused and native checks, same-PR repair, native
+merge/readback and asynchronous telemetry. Issue/claim, SDD artifact families, phase lifecycles, mandatory
+critics, feedback/receipt cycles, metadata-`Done` and projection PRs are not delivery prerequisites.
+Substantive formal/model checks, permissions, release/deploy/credential/destructive/cutover safeguards and
+external acceptance remain orthogonal and fail-closed; missing authority leaves the affected effect pending.
 
 ### 12.1 Obligation scope and selection
 
@@ -1685,8 +1694,8 @@ coverage/recovery tradeoff is explicit. No mutable label, skip flag or candidate
 remove an obligation. Until a replacement is accepted, GS2-06.7's soundness, unknown-impact refusal and
 sentinel response remain authoritative; its accepted receipt is not rewritten to describe a new policy.
 
-The accepted profile distinguishes ordinary development, modeled protocol changes and protected operations
-through the common published policy. It does not classify all GS2 work as routine or require a
+The accepted profile applies routine delivery to ordinary development, modeled protocol changes and source
+work associated with protected operations. GS2 registration does not select heavyweight ceremony or require a
 new policy registry. Formal-input changes, comprehensive GS2 parent closure, freeze, release, cutover,
 rollback authority and OpenV2 retain their accepted qualification. Removing an agent handoff does not remove
 Quint authority, current implementation correspondence, typed effect plans or external fencing.
@@ -1700,12 +1709,12 @@ is not retroactively attributed to an old receipt.
 
 | Existing surface | Accepted amendment | Evidence or disposition before claiming it |
 |---|---|---|
-| §1 execution/evidence and GS2-05.6 delivery semantics | Distinguish migration qualification from ordinary source delivery; retain automatic records where useful and remove only adopted caller ceremony | Map native merge, technical checks, journal authority and publication state; a merge alone does not qualify a GS2 unit |
+| §1 execution/evidence and GS2-05.6 delivery semantics | Use routine source delivery by default while retaining automatic technical records where useful | Map native merge, technical checks, journal authority and publication state; a merge alone does not authorize a protected effect |
 | GS2-06.7 CI policy | Record retained, removed and asynchronous obligations for the chosen routine profile, plus the explicit selection guarantee and fallback scope | Accepted policy/model change where necessary, corresponding aggregate/settings behavior and real receiver selection cases; preserve the original accepted record |
 | GS2-07.6 queue pilot | Add bursts of PR edits, superseded hints, unrelated routine PRs, source/base movement and required-check identity changes | Bound work and waiting attributable to the burst; no unsafe cancellation of in-flight effects, missing required context or stale-green authorization |
 | GS2-07.7 event benefit | Measure narrow reconciliation, coalescing, audit repair and queue isolation by subject | Lost hints eventually repair; distinct subjects and non-coalescible commands are preserved; full audits do not become universal routine merge dependencies |
 | GS2-10.1 candidate freeze | Bind the approved routine-policy version, selected obligation/aggregate set, driver/tool identities and intended receiver classes | Identify whether the profile is enabled in this candidate or explicitly deferred; an unimplemented proposal is not frozen as supported behavior |
-| GS2-10.5 receiver preparation | Prepare exact pins, required contexts, generated guidance and configuration for the selected profile | Installed clean/upgrade receiver cases show the effective policy; no hidden legacy validator or phase/receipt requirement contradicts the profile |
+| GS2-10.5 receiver preparation | Prepare exact pins, required contexts, generated guidance and configuration for the default routine profile | Installed clean/upgrade receiver cases show the effective policy; no hidden legacy validator or phase/receipt requirement contradicts the profile |
 | GS2-12.7 closed-fleet canaries | Add a routine-profile example beside the comprehensive protocol journey, in the isolated cutover environment | Same-PR repair, absent usage and delayed views preserve correct delivery facts; no ordinary production writes are opened early |
 | GS2-12.8 failure matrix | Cover self-edited eligibility, omitted or stale required checks, wrong policy pins, lost/duplicated hints and unavailable observers | Missing technical/authority evidence refuses its action; missing telemetry cannot certify efficiency and does not become a merge authorizer |
 | GS2-13.3 real journey | Exercise an actual low-risk ordinary change under the enabled profile as well as the required protocol capabilities | One owner/PR and selected checks where adopted; native code delivery distinct from publication pending; required protocol cases remain covered separately or in the same valid journey |

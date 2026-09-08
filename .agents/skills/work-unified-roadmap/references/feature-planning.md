@@ -46,9 +46,10 @@ For new work, a ready milestone can use this compact form:
   Acceptance: meaningful behavior and focused verification.
 ```
 
-Use `routine` or `routine implementation; strict operation` only when the current owning policy admits
-it. Otherwise identify the applicable protected/existing route; the worker verifies eligibility again
-against the actual change. A small diff does not establish routine eligibility.
+Use `routine` by default. Only a recorded explicit human instruction selects heavyweight process for its
+named scope. Sensitive paths, policy or modeled work, GS2 registration, inherited strict state and a pending
+protected operation do not change the process route; record their substantive checks or operation boundary
+separately. Invalid or unknown authorization still blocks its affected effect.
 
 For an existing registered unit such as GS2, reference its current owning roadmap, contract and evidence
 without creating a second mutable checkbox. A feature may combine new milestones with these references,

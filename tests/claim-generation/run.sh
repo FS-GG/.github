@@ -207,7 +207,7 @@ expect "routine branch: candidate-controlled strict context is not routine autho
   0 "separate trusted context" "$W0" "$REPO" "routine/example" "$HEAD_SHA" ""
 
 # =============================================================================================
-# R0. ROUTINE DEVELOPMENT — no GitHub/board/issue/claim read, exact-head + protected boundary.
+# R0. ROUTINE DEVELOPMENT — no GitHub/board/issue/claim read, exact-head + operation boundary.
 # =============================================================================================
 ROUTINE_REPO="$WORK/routine-repo"
 mkdir -p "$ROUTINE_REPO/.fsgg" "$ROUTINE_REPO/src" "$ROUTINE_REPO/scripts/lib"
@@ -247,20 +247,20 @@ routine_expect() {
 
 routine_marker="<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
 routine_expect "routine: exact-head source change is admitted without a board read" 0 \
-  "no issue, claim, SDD, phase ledger, critic, feedback/receipt cycle, or metadata-Done input was read" \
+  "metadata-Done, or projection-PR input was read" \
   "$routine_marker"
 routine_expect "routine: a moved head is refused" 1 "routine-changed-head" \
   "<!-- fsgg:routine-development/v1 head=$HEAD_SHA operation=source-change -->"
 routine_expect "routine: duplicate marker fields are refused as ambiguous" 1 "routine-ambiguous" \
   "<!-- fsgg:routine-development/v1 head=$HEAD_SHA head=$ROUTINE_HEAD operation=source-change -->"
-routine_expect "routine: protected operation is refused" 1 "routine-protected-operation" \
+routine_expect "routine: unauthorized protected effect remains pending" 1 "affected effect remains pending" \
   "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=publish -->"
 
 printf '{}\n' > "$ROUTINE_REPO/.fsgg/new-authority.json"
 git -C "$ROUTINE_REPO" add .fsgg/new-authority.json
 git -C "$ROUTINE_REPO" commit -qm protected
 ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
-routine_expect "routine: protected policy path is refused" 1 "routine-protected-path" \
+routine_expect "routine: policy path does not select heavyweight process" 0 "changed paths and inherited strict state do not select heavyweight process" \
   "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
 
 for protected_path in \
@@ -276,8 +276,8 @@ do
   git -C "$ROUTINE_REPO" add "$protected_path"
   git -C "$ROUTINE_REPO" commit -qm "protected $protected_path"
   ROUTINE_HEAD="$(git -C "$ROUTINE_REPO" rev-parse HEAD)"
-  routine_expect "routine: base policy refuses protected surface $protected_path mislabeled source-change" \
-    1 "routine-protected-path" \
+  routine_expect "routine: sensitive surface $protected_path does not select heavyweight process" \
+    0 "routine delivery admitted" \
     "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=source-change -->"
 done
 
@@ -290,8 +290,8 @@ printf '%s' "<!-- fsgg:routine-development/v1 head=$ROUTINE_HEAD operation=sourc
 trusted_out="$(cd "$ROUTINE_REPO" && python3 "$TRUSTED_GATE/check-claim-generation.py" \
   --repo "$REPO" --head-ref routine/example --base-sha "$ROUTINE_BASE" --head-sha "$ROUTINE_HEAD" \
   --routine-policy-ref "$ROUTINE_BASE" --body body.md 2>&1)" && trusted_rc=0 || trusted_rc=$?
-if [ "$trusted_rc" -eq 1 ] && grep -qF 'routine-protected-path' <<<"$trusted_out"; then
-  ok "routine: base-revision executable refuses its candidate-side replacement"
+if [ "$trusted_rc" -eq 0 ] && grep -qF 'routine delivery admitted' <<<"$trusted_out"; then
+  ok "routine: base-revision executable retains active-default authority over candidate replacement"
 else
   bad "routine: base-revision executable did not retain authority (exit $trusted_rc)" "$trusted_out"
 fi

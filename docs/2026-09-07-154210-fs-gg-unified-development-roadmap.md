@@ -240,9 +240,18 @@ a release or authority change routine. An unresolved observation cannot be norma
 
 ### 4.1 Process selection matrix
 
-This is the proposed effective process **after the prerequisite simplification profile is adopted for the
-receiver**. Existing GS2 and protected contracts retain their requirements until their owners amend them.
-The selection follows the changed behavior and effects, not repository name alone.
+**Binding human decision — 2026-09-08:** lightweight routine delivery is the default process for all work
+under this unified roadmap. Only a recorded explicit human instruction selects heavyweight ceremony for
+named scope; absence or ambiguity selects routine. Strict labels, GS2 registration, protected paths, policy
+changes, modeled work, protected operations and inherited strict state do not select the heavyweight route.
+The matrix's process distinctions describe substantive technical evidence and effect safeguards within the
+routine route unless such a human instruction says otherwise.
+
+One accountable owner uses one routine branch and one PR, focused and native checks, same-PR repairs, native
+merge/readback and asynchronous telemetry. No issue/claim, SDD artifact family, phase lifecycle, mandatory
+critic, feedback/receipt cycle, metadata-`Done`, or projection PR is implied. Canonical model authority,
+permissions and release/deploy/credential/destructive/cutover/external-acceptance safeguards remain
+independent and fail-closed; invalid or unknown authorization blocks the affected effect, not source delivery.
 
 | Work class and examples | Where it occurs | Development process | Evidence needed before delivery | What is needed to enable it |
 |---|---|---|---|---|
@@ -276,15 +285,15 @@ semantic change, amend the actual canonical source and make the before/after beh
 the shipped toolchain cannot verify a desired temporal claim, record the supported narrower evidence or
 request a bounded producer extension; do not claim a simulation proves eventual delivery.
 
-Ordinary eligible work uses one owner and at most one optional independent critique under the predecessor
+Routine work uses one owner and at most one optional independent critique under the predecessor
 profile. Material findings repair on the same PR; style preferences do not create a confirmation cycle.
 Modeled/protected work uses the applicable substantive review and negative controls, while avoiding
-duplicate acceptance actors. Existing strict migration artifact/receipt requirements remain until their
-actual contracts are amended. Telemetry retirement does not implicitly remove GS2 qualification.
+duplicate acceptance actors. Existing strict migration artifacts remain evidence, not a process selector.
+Telemetry retirement does not remove substantive GS2 qualification predicates.
 
 Requirement uncertainty first calls for focused clarification and a behavioral example. It does not by
-itself force a routine-eligible feature into a complete SDD artifact family. Use the installed Standard
-SDD route where it applies or the owner deliberately selects it for the unresolved scope.
+itself force a feature into a complete SDD artifact family. Use heavyweight SDD ceremony only when a human
+explicitly selects it for named scope.
 
 Omitted lifecycle remains whatever the installed accepted configuration specifies. The current SDD guide
 says `sdd`; this document does not flip it to `typed-sdd` or `none`. A lightweight delivery profile and a
@@ -1041,9 +1050,9 @@ a mandatory checklist repeated for every ordinary PR.
 |---|---|---|
 | Two isolated routine code PRs | Independent progress with selected checks, no global board-scan wait or manufactured claim | V0/V3 receiver integration |
 | Two routine workers need one exclusive environment | One valid usable grant; only the conflicting action waits | V0 resource adapter and Coordination |
-| Partial routing facts or unreadable policy | Unknown/refused classification for affected action, never routine by missing data | V0 policy/Governance handoff |
-| Existing strict work is relabeled routine | Existing authority remains binding | V0/V1 caller and fence |
-| Candidate changes policy or check-selection inputs | Protected handling under adopted evaluator authority | V0/V3 enforcement |
+| Partial authorization facts or unreadable policy | Affected effect is refused or pending; source delivery remains routine unless a human selected heavyweight process | V0 policy/Governance handoff |
+| Existing strict work continues without a new human heavy instruction | Existing evidence is retained; one-owner routine delivery is used | V0/V1 caller and fence |
+| Candidate changes policy or check-selection inputs | Routine source delivery with trusted-base exact-head validation and all applicable native checks | V0/V3 enforcement |
 | Ordinary source changes after checks | Same PR, relevant fresh checks and changed-head refusal | V2/V3 delivery |
 | Unrelated target movement | Accepted native integration/key refresh; no agent-mediated review/claim restart merely to copy unchanged facts | V1/V3 with existing freshness semantics |
 | Current grant revoked after a green check | Stale protected effect rejected with declared in-flight ordering | V1/V4 authority qualification |
