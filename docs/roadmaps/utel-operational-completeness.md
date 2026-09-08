@@ -38,11 +38,13 @@ changes native output, exit or delivery.
   event time and reconciliation; preserve migrations 1–4. Cover root/child/follow-up, missing parent, identity
   conflict/cycle, unsupported runtime, timestamp/clock/order/late cases and old stores. Do not claim host
   completeness.
-- [ ] **UTEL-06.2 — Automatically observe repository-owned roots and nested workers.** Extend the packaged
+- [x] **UTEL-06.2 — Automatically observe repository-owned roots and nested workers.** Extend the packaged
   `codex-exec` launcher with machine-authored facts and inherited private context; cover child, grandchild,
   follow-up, retry, no-op, failure, cancellation, delayed usage, parent death, full inbox and writer contention.
   Preserve arguments, model/effort, worktree, stdin/stdout, permissions and exit. Keep unsupported platform-native
-  calls explicit. Package helpers; source tests do not prove installation.
+  calls explicit. Package helpers; source tests do not prove installation. Source evidence is the packaged CLI
+  entrypoint and executable `TelemetryRuntimeApplicationTests`, including migration-5 ingestion/reconciliation with
+  no caller-authored observation batches; publication, installation, activation and qualification remain pending.
 - [ ] **UTEL-06.3 — Discover and reconcile admitted exact-head CI population.** The actual delivery path registers
   repository, PR, base and head; independently witness first admission and retain admitted superseded heads.
   Discover nonrequired workflows, all runs/attempts/jobs/steps/check-runs, keeping unsupported causal bindings

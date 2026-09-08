@@ -25,6 +25,16 @@ module TelemetryRuntimeApplicationTests =
         path
     let private batchFacts bytes = TelemetryStore.parseBatch bytes |> unwrap |> _.Facts
 
+    let private observed executable parent relation exitCode =
+        let published = ResizeArray<byte array>()
+        let publish bytes = published.Add bytes; Ok "queued"
+        let actual =
+            TelemetryRuntimeApplication.runObservedCodexExecWith executable (assignment "worker-observer") parent relation
+                (Some "/durable/private/fsgg-telemetry") 60L
+                [ "--json"; "--ephemeral"; "-m"; "gpt-test"; "-c"; "model_reasoning_effort=high"; "--sandbox"; "workspace-write"; "synthetic" ] publish
+        Assert.Equal(exitCode, actual)
+        published |> Seq.collect batchFacts |> Seq.toList
+
     [<Fact>]
     let ``UTEL-03A assignment is closed and projector discards content-bearing fields`` () =
         let valid = Encoding.UTF8.GetBytes """{"schema":"fsgg.telemetry.codex-assignment/1","featureId":"UTEL-03A","itemId":"UTEL-03A","attemptId":"a1","parentAttemptId":null,"producerStream":"worker-1"}"""
@@ -148,4 +158,146 @@ module TelemetryRuntimeApplicationTests =
     [<Fact>]
     let ``UTEL-03A command shapes require explicit ephemeral JSON and report collaboration unsupported`` () =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "runtime"; "status" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "runtime"; "codex-exec"; "--relation"; "follow-up"; "--"; "--json"; "--ephemeral" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "runtime"; "codex-exec"; "--assignment"; "/private/attempt.json"; "--late-after-seconds"; "60"; "--"; "--json"; "--ephemeral" ])
         Assert.Equal(2, TelemetryRuntimeApplication.runCodexExecWith "unused" (assignment "worker-1") [ "--json" ] (fun _ -> Ok ""))
+
+    [<Fact>]
+    let ``UTEL-06_2 packaged launcher machine observes inherited root child grandchild follow-up and retries`` () =
+        if not (OperatingSystem.IsWindows()) then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let contextPath name = Path.Combine(root, name + ".context")
+            let argumentPath name = Path.Combine(root, name + ".args")
+            let workingPath name = Path.Combine(root, name + ".cwd")
+            let executable name delay exitCode =
+                let path = Path.Combine(root, name)
+                let content =
+                    "#!/bin/sh\n" +
+                    (sprintf "printf '%%s' \"$%s\" > '%s'\n" TelemetryRuntime.InvocationContextEnvironment (contextPath name)) +
+                    (sprintf "printf '%%s\\n' \"$@\" > '%s'\n" (argumentPath name)) +
+                    (sprintf "pwd > '%s'\n" (workingPath name)) +
+                    (if delay then "sleep 0.05\n" else "") +
+                    "printf '%s\\n' '{\"type\":\"thread.started\",\"thread_id\":\"native-thread\"}'\n" +
+                    "printf '%s\\n' '{\"type\":\"turn.completed\",\"turn_id\":\"native-turn\",\"usage\":{\"input_tokens\":3,\"cached_input_tokens\":1,\"output_tokens\":2}}'\n" +
+                    $"exit %d{exitCode}\n"
+                File.WriteAllText(path, content)
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                path
+            let parseContext name = File.ReadAllBytes(contextPath name) |> TelemetryRuntime.parseInvocationContext |> unwrap
+            let facts = ResizeArray<TelemetryStore.Fact>()
+            let rootExecutable = executable "root" false 0
+            observed rootExecutable None TelemetryRuntime.Root 0 |> List.iter facts.Add
+            let rootContext = parseContext "root"
+            let childExecutable = executable "child" true 0
+            observed childExecutable (Some rootContext) TelemetryRuntime.Child 0 |> List.iter facts.Add
+            let childContext = parseContext "child"
+            let grandchildExecutable = executable "grandchild" false 0
+            observed grandchildExecutable (Some childContext) TelemetryRuntime.Child 0 |> List.iter facts.Add
+            let grandchildContext = parseContext "grandchild"
+            let followExecutable = executable "follow" false 0
+            observed followExecutable (Some childContext) TelemetryRuntime.FollowUp 0 |> List.iter facts.Add
+            let followContext = parseContext "follow"
+            let retryExecutable = executable "retry" false 0
+            observed retryExecutable (Some rootContext) TelemetryRuntime.Child 0 |> List.iter facts.Add
+            let retryContext = parseContext "retry"
+
+            Assert.Equal(rootContext.ActivationId, childContext.ActivationId)
+            Assert.Equal(rootContext.ActivationId, grandchildContext.ActivationId)
+            Assert.Equal(rootContext.InvocationId, childContext.RootInvocationId)
+            Assert.Equal(rootContext.InvocationId, grandchildContext.RootInvocationId)
+            Assert.Equal(rootContext.InvocationId, followContext.RootInvocationId)
+            Assert.NotEqual<string>(childContext.InvocationId, retryContext.InvocationId)
+            Assert.Equal(Directory.GetCurrentDirectory(), File.ReadAllText(workingPath "root").Trim())
+            let arguments = File.ReadAllLines(argumentPath "root")
+            Assert.Equal("exec", arguments[0])
+            Assert.Contains("gpt-test", arguments)
+            Assert.Contains("workspace-write", arguments)
+
+            let activations = facts |> Seq.choose (fun fact -> match fact.Payload with TelemetryStore.OperationalActivation _ -> Some fact | _ -> None) |> Seq.length
+            let dispatches = facts |> Seq.choose (fun fact -> match fact.Payload with TelemetryStore.ExpectedDispatch(a,b,c,d,e,f,g) -> Some(a,b,c,d,e,f,g) | _ -> None) |> Seq.toList
+            let lineages = facts |> Seq.choose (fun fact -> match fact.Payload with TelemetryStore.InvocationLineage(a,b,c,d,e,f) -> Some(a,b,c,d,e,f) | _ -> None) |> Seq.toList
+            let admissions = facts |> Seq.filter (fun fact -> match fact.Payload with TelemetryStore.RuntimeAdmission _ -> true | _ -> false) |> Seq.length
+            let eventTimes = facts |> Seq.choose (fun fact -> match fact.Payload with TelemetryStore.EventTime(_,event,_,_,_,_) -> Some event | _ -> None) |> Seq.toList
+            Assert.Equal(1, activations)
+            Assert.Equal(5, dispatches.Length)
+            Assert.Equal(5, lineages.Length)
+            Assert.Equal(5, admissions)
+            Assert.Equal(5, eventTimes |> List.filter ((=) "admission") |> List.length)
+            Assert.Equal(5, eventTimes |> List.filter ((=) "start") |> List.length)
+            Assert.Equal(5, eventTimes |> List.filter ((=) "terminal") |> List.length)
+            Assert.Contains(dispatches, fun (_,_,relation,parent,_,_,_) -> relation = "root" && parent.IsNone)
+            Assert.Contains(dispatches, fun (_,_,relation,parent,_,_,_) -> relation = "follow-up" && parent = Some childContext.DispatchId)
+            Assert.Contains(lineages, fun (_,invocation,relation,parent,rootInvocation,_) -> invocation = grandchildContext.InvocationId && relation = "child" && parent = Some childContext.InvocationId && rootInvocation = rootContext.InvocationId)
+            Assert.Contains(facts, function | { Payload = TelemetryStore.RuntimeAdmission(_,_,_,_,_,Some "gpt-test",Some "high",_) } -> true | _ -> false)
+
+    [<Fact>]
+    let ``UTEL-06_2 launch failure cancellation and no-op stay native while facts remain machine authored`` () =
+        if not (OperatingSystem.IsWindows()) then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let noOp = script root "fake-codex-no-op" [] 0
+            let cancelled = script root "fake-codex-cancelled" [] 130
+            let noOpFacts = observed noOp None TelemetryRuntime.Root 0
+            let cancelledFacts = observed cancelled None TelemetryRuntime.Root 130
+            let failedFacts = observed (Path.Combine(root, "missing-codex")) None TelemetryRuntime.Root 127
+            Assert.Contains(noOpFacts, function | { Payload = TelemetryStore.RuntimeGap(_, "exit-zero-without-usage") } -> true | _ -> false)
+            Assert.Contains(cancelledFacts, function | { Payload = TelemetryStore.RuntimeTerminal(_,_,"cancelled",130L) } -> true | _ -> false)
+            Assert.Contains(failedFacts, function | { Payload = TelemetryStore.RuntimeTerminal(_,_,"launch-failed",127L) } -> true | _ -> false)
+            Assert.DoesNotContain(failedFacts, function | { Payload = TelemetryStore.EventTime(_,"start",_,_,_,_) } -> true | _ -> false)
+            Assert.Contains(failedFacts, function | { Payload = TelemetryStore.EventTime(_,"terminal",_,_,_,_) } -> true | _ -> false)
+
+    [<Fact>]
+    let ``UTEL-06_2 executable launcher facts ingest through migration five and reconcile without authored batches`` () =
+        if not (OperatingSystem.IsWindows()) then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let runtimeCleanup, runtimeRoot = temp ()
+            use runtimeCleanup = runtimeCleanup
+            TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
+            let executable =
+                script runtimeRoot "fake-codex-reconcile"
+                    [ "{\"type\":\"thread.started\",\"thread_id\":\"native-thread\"}"
+                      "{\"type\":\"turn.completed\",\"turn_id\":\"native-turn\",\"usage\":{\"input_tokens\":2,\"cached_input_tokens\":0,\"output_tokens\":1}}" ] 0
+            let publish bytes = TelemetryStoreApplication.publish root approved bytes
+            let code =
+                TelemetryRuntimeApplication.runObservedCodexExecWith executable (assignment "migration-five-worker") None TelemetryRuntime.Root
+                    (Some root) 60L [ "--json"; "--ephemeral"; "synthetic" ] publish
+            Assert.Equal(0, code)
+            TelemetryStoreApplication.drain root approved |> unwrap |> ignore
+            let reconciliation = TelemetryStoreApplication.reconcile root approved "UTEL-03A" |> unwrap
+            Assert.Contains("\"matched\":1", reconciliation)
+            Assert.Contains("\"complete\":1", reconciliation)
+
+    [<Fact>]
+    let ``UTEL-06_2 packaged command consumes inherited context after root process death`` () =
+        if not (OperatingSystem.IsWindows()) then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let assignmentPath = Path.Combine(root, "assignment.json")
+            File.WriteAllText(assignmentPath, """{"schema":"fsgg.telemetry.codex-assignment/1","featureId":"UTEL-06","itemId":"UTEL-06.2","attemptId":"attempt-1","parentAttemptId":null,"producerStream":"worker-command"}""")
+            File.SetUnixFileMode(assignmentPath, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let contextPath = Path.Combine(root, "observed.context")
+            let codex = Path.Combine(root, "codex")
+            File.WriteAllText(codex,
+                "#!/bin/sh\n" +
+                (sprintf "printf '%%s' \"$%s\" > '%s'\n" TelemetryRuntime.InvocationContextEnvironment contextPath) +
+                "printf '%s\\n' '{\"type\":\"thread.started\",\"thread_id\":\"command-thread\"}'\n" +
+                "printf '%s\\n' '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1}}'\n")
+            File.SetUnixFileMode(codex, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let originalPath = Environment.GetEnvironmentVariable "PATH"
+            let originalContext = Environment.GetEnvironmentVariable TelemetryRuntime.InvocationContextEnvironment
+            try
+                Environment.SetEnvironmentVariable("PATH", root + string Path.PathSeparator + originalPath)
+                Environment.SetEnvironmentVariable(TelemetryRuntime.InvocationContextEnvironment, null)
+                Assert.Equal(0, TelemetryRuntimeApplication.runCodexExec [ "--assignment"; assignmentPath; "--"; "--json"; "--ephemeral"; "root" ])
+                let rootContext = File.ReadAllBytes contextPath |> TelemetryRuntime.parseInvocationContext |> unwrap
+                Environment.SetEnvironmentVariable(TelemetryRuntime.InvocationContextEnvironment, File.ReadAllText contextPath)
+                Assert.Equal(0, TelemetryRuntimeApplication.runCodexExec [ "--relation"; "follow-up"; "--"; "--json"; "--ephemeral"; "follow" ])
+                let followContext = File.ReadAllBytes contextPath |> TelemetryRuntime.parseInvocationContext |> unwrap
+                Assert.Equal(rootContext.ActivationId, followContext.ActivationId)
+                Assert.Equal(rootContext.InvocationId, followContext.RootInvocationId)
+                Assert.NotEqual<string>(rootContext.InvocationId, followContext.InvocationId)
+            finally
+                Environment.SetEnvironmentVariable("PATH", originalPath)
+                Environment.SetEnvironmentVariable(TelemetryRuntime.InvocationContextEnvironment, originalContext)
