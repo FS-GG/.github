@@ -26,6 +26,10 @@ description: Index for the FS.GG split-repository direction and the documents th
 For the wider development portfolio, start at the [development master](development-master.md):
 it connects the current designs, their dependencies and open decisions, with a complete documentation inventory.
 
+The [Fable SC2 client and custom WASM design](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md)
+proposes a browser tactical client, native SC2 gateway, mouse/keyboard control and a staged product roadmap.
+It is a proposal; implementation and deployment are separate work.
+
 FS.GG is preparing a coordinated replacement of its GitHub coordination substrate. The work builds a new
 independently qualified `FS.GG.Coordination` component, performs one fail-closed fleet cutover, and retires
 the current v1 production machinery after verification. Follow the living
