@@ -1,22 +1,27 @@
 ---
 name: work-roadmap
-description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Use the prospective routine route when the roadmap explicitly admits it; retain the strict SDD route for protected work.
+description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Routine delivery is the default; use heavyweight ceremony only for human-named scope.
 ---
 
 # work-roadmap
 
 Burn down a markdown roadmap milestone by milestone. The roadmap—not a project board—is the ledger.
 
-## Choose the route explicitly
+## Routine is the default process
 
-Read `.fsgg/routine-development.json`. A milestone may use the reduced route only when the roadmap
-explicitly marks it `routine` or `routine implementation; strict operation`, the policy is a prospective
-pilot, and the work does not perform a protected operation or touch a protected path. Never infer the
-route from size. Existing strict items remain strict. Publication, deployment, credential changes,
-destructive effects, migration/cutover, external-contract acceptance, and continuation of an existing
-strict item use the strict route below.
+Read `.fsgg/routine-development.json`. Use the routine route for every unified-roadmap milestone unless a
+human has recorded an explicit instruction selecting heavyweight process for named scope. Absence,
+ambiguity, a strict label, GS2 registration, a protected or sensitive path, a policy change, modeled work,
+a protected operation, or inherited strict state does not select heavyweight ceremony. Preserve existing
+evidence as history, not as a route selector. Do not manufacture a heavy instruction from risk, size, rank,
+labels, artifacts, or tooling defaults.
 
-For an eligible `routine` milestone:
+Technical and operational safeguards are orthogonal. Keep focused and repository-native checks, canonical
+model/formal authority, permissions, and release/deploy/credential/destructive/cutover/external-acceptance
+controls fail-closed. A missing or invalid authorization blocks only its affected effect and may leave that
+operation pending; it does not add an issue/claim/SDD/critic/receipt lifecycle to source delivery.
+
+For routine delivery:
 
 1. Keep one accountable owner in the current implementation session. Create one fresh
    `routine/<milestone-slug>` branch from current default branch and one PR. The roadmap checkbox and
@@ -26,7 +31,7 @@ For an eligible `routine` milestone:
    or projection PR, or metadata-`Done` write. Independent review is optional or sampled and never a
    second authority. Best-effort telemetry is asynchronous and cannot block valid delivery.
 3. Run the smallest relevant automated technical checks. Before opening the PR, run the routine
-   eligibility and protected-boundary fixtures. Put exactly one
+   eligibility and operation-boundary fixtures. Put exactly one
    `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
    the PR body. The distinct `routine-eligibility` context is defined by a default-branch
    `pull_request_target` workflow and loads its validator and policy from the exact PR base; it never
@@ -45,13 +50,14 @@ For an eligible `routine` milestone:
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
    model turn or PR merely to copy already-merged facts.
 
-For `routine implementation; strict operation`, source changes use the routine steps, but the protected
-operation itself remains pending until its established strict authority executes it. If any routine gate
-refuses eligibility, reclassify before implementation; never weaken or bypass the gate.
+For source work associated with a protected operation, use the routine steps for the source PR and leave the
+operation pending until its independent authority and safeguards permit it. Invalid or unknown technical or
+operation authorization fails the affected effect; it does not reclassify delivery as heavyweight.
 
-## Strict route
+## Human-selected heavyweight route
 
-The following route remains mandatory for protected work and for this R0 bootstrap change itself.
+Use the following route only when a recorded explicit human instruction selects it for named scope. A prior
+strict route remains historical evidence unless that human instruction also says to continue it.
 
 1. Read the complete roadmap and select the next unchecked, dependency-ready milestone.
 2. Spawn one fresh disposable worker from current default branch and give it only that milestone.

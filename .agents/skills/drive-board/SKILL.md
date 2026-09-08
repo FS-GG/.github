@@ -10,10 +10,10 @@ cross-repo allocation, not item implementation.
 
 ## Choose each item's route before scheduling
 
-After reconciliation and triage, make an explicit route decision per candidate. Admit routine delivery
-only when the target repository has a prospective `.fsgg/routine-development.json`, the operation and
-proposed paths pass that policy, and no live claim or existing strict delivery state must be continued.
-Never infer the route from size, rank, labels, effort, or the absence of an SDD package.
+After reconciliation and triage, use routine delivery by default for unified-roadmap work. Only a recorded
+explicit human instruction selects heavyweight process for named scope. Absence or ambiguity stays routine;
+paths, operations, labels, GS2 registration and inherited strict state are not process selectors. Preserve
+their substantive checks and effect safeguards independently.
 
 For an admitted routine item, assign exactly one accountable owner to run
 [pnext-item](../pnext-item/SKILL.md)'s routine route in the target repository. The owner uses one
@@ -27,9 +27,8 @@ Before assigning the owner, search the target repository for the item's open PR.
 unambiguous routine PR; never create a second PR because Coordination projection lagged. Multiple or
 ambiguous open PRs refuse routine admission.
 
-The numbered claim/worker/critique/receipt protocol below applies only to strict items. A routine gate
-refusal, protected operation/path, or pre-existing strict state enters that protocol without weakening
-its safeguards.
+The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
+A technical or operation refusal blocks its affected effect without entering that protocol.
 
 1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and consume its complete
    four-part result before making a scheduling decision.

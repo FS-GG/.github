@@ -27,8 +27,8 @@ dependency-ready feature after completing the current one.
 
 Check the actual simplification handoff and operating epoch. This successor starts after the completed
 current-route handoff; R5's ordinary-v2 proof completes at its later receiver/observation boundaries.
-An unfinished predecessor is not permission to declare the handoff complete. Already authorized GS2 work
-may continue under its existing contract; do not relabel it routine to escape that contract.
+An unfinished predecessor is not permission to declare the handoff complete. Preserve already-produced GS2
+evidence, but do not let registration or inherited strict state select heavyweight delivery ceremony.
 Read each affected stage's actual entry conditions: a missing later canary/production prerequisite does
 not block earlier read-only research or otherwise authorized qualification.
 
@@ -64,21 +64,23 @@ inventing its behavior.
 The worker packet contains the feature subroadmap/path, ready milestone window, owning repository,
 existing implementation branch/PR where applicable, source/evidence references, applicable route and
 current authority, acceptance examples, and a clear stop condition. Later follow-ups reuse the same worker
-for routine work. A stricter owning workflow may require fresh milestone workers or additional review;
-honor those scoped requirements while keeping the implementation worker model Sol medium.
+for routine work. Only a recorded explicit human instruction may require heavyweight process for named
+scope; honor it while keeping the implementation worker model Sol medium.
 
 Invoke `work-roadmap` against the small subroadmap, not against the entire unified document. Use its
 admitted routine route for routine work: one accountable owner, focused technical verification, same-PR
 repair, native required checks and merged-state readback. Its routine exclusions apply to routine work;
 do not import the strict route's phase logs, receipt cycles or critic choreography into that branch.
 Keep normally bounded repairs and optional review within the installed route. For registered GS2 units,
-use the owning migration workflow where its contract requires it and keep that existing ledger authoritative.
+keep the existing ledger as substantive evidence and update its projection asynchronously; registration alone
+does not replace the routine process route.
 
-Route labels express a proposed classification, not permission. Evaluate actual policy, paths and effects
-before execution. Changes to eligibility, shared driver policy, protected operations and existing strict
-items retain their actual process. This temporary wrapper does not simplify accepted protected contracts
-by prose. A disagreement between the feature plan and the installed route is a specific integration gap
-to resolve in its owner; it does not authorize bypassing checks or creating an alternative delivery path.
+Routine is the default for all unified-roadmap work. Only a recorded explicit human instruction selecting
+heavyweight process for named scope changes that route; absence or ambiguity stays routine. Strict labels,
+GS2 registration, protected paths, policy changes, modeled work, protected operations and inherited strict
+state are not process selectors. They can still select substantive technical checks, formal/model authority,
+permissions, or operation safeguards. Invalid or unknown authorization blocks the affected effect, not the
+routine source PR, and never authorizes bypassing a check.
 
 Keep the subroadmap in the owning repository's existing roadmap location (otherwise
 `docs/roadmaps/<feature-slug>.md`). For new routine milestones, the plan and implementation evidence can

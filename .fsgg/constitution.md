@@ -6,28 +6,30 @@ prompts, and generated plans. It was seeded by the SDD skeleton as a populated
 baseline; ratify or amend it to fit this product, then treat it as the contract
 every change is measured against.
 
-## Prospective Routine-Development Pilot
+## Routine Delivery Is the Default
 
-The machine-readable policy at `.fsgg/routine-development.json` defines a bounded prospective
-exception to the spec-driven workflow below. An explicitly admitted routine change uses one
-accountable owner, one `routine/*` PR, the repository's selected technical checks, and an exact-head
-binding. It does not require an issue or claim, SDD artifacts, a phase lifecycle ledger, an independent
-critic, feedback or receipt-cycle artifacts, or a metadata-`Done` transition. Those absences are part of
-the smaller contract, not incomplete evidence.
+The machine-readable policy at `.fsgg/routine-development.json` makes lightweight routine delivery the
+default for all unified-roadmap work. It uses one accountable owner, one `routine/*` branch, one PR,
+focused and repository-native checks, same-PR repairs, native merge and merged-state readback. It does not
+require an issue or claim, SDD artifacts, a phase lifecycle ledger, an independent critic, feedback or
+receipt-cycle artifacts, metadata-`Done`, or a projection PR. Telemetry and projections are asynchronous.
 
-Routine eligibility is never inferred from size. Publication, deployment, credentials, destructive
-effects, migration or cutover, external-contract acceptance, changes to the routine policy itself, and
-continuation of work already under strict authority remain governed by the full workflow. Existing
-strict evidence retains its original meaning and is not retroactively relaxed. The required
-`claim-generation` status context is also the routine exact-head/protected-boundary gate, so the pilot
-removes process evidence without removing changed-head refusal or inexpensive automated checks.
+Only a recorded explicit human instruction selects heavyweight ceremony for named scope. Absence or
+ambiguity selects routine delivery. Strict labels, GS2 registration, protected paths, policy changes,
+modeled work, protected operations and inherited strict state are not heavyweight triggers; existing
+evidence retains its historical meaning without selecting the next process.
+
+This process choice does not weaken technical or operational authority. Required checks, canonical formal
+models and correspondence, permissions, release/deploy/credential/destructive/cutover safeguards and
+external acceptance remain fail-closed. Missing or invalid authorization blocks its affected effect and may
+leave an operation pending, but does not manufacture lifecycle ceremony for the source PR.
 
 ## Core Principles
 
 ### I. Specify Before Implementing
 
-Except for a change admitted by the prospective routine-development policy, every non-trivial change
-MUST start from a written specification: the
+When a human explicitly selects the heavyweight process for named scope, every non-trivial change in that
+scope MUST start from a written specification: the
 user-visible outcome, the scope boundary, the change tier, the public-surface
 impact, and how the change will be verified. Sketch the public shape and exercise
 it interactively before the implementation hardens it. Specs precede code so that
@@ -133,6 +135,6 @@ Versioning policy:
 Ratified on 2026-08-30 following review and adoption of these principles as the
 product's governing engineering contract.
 
-Amended prospectively on 2026-09-07 for the bounded routine-development pilot. This is a MINOR policy
-change: it narrows mandatory lifecycle obligations for explicitly admitted future routine work while
-preserving the strict route and all existing authority.
+Amended on 2026-09-08 to make routine delivery the default and reserve heavyweight ceremony for a recorded
+explicit human instruction naming its scope. This is a MAJOR governance change. Technical and operational
+authority remains independent and fail-closed.

@@ -34,12 +34,13 @@ for driver in ("work-board", "drive-board"):
     folded = " ".join(body.lower().split())
     for phrase in (
         "Choose each item's route before scheduling",
-        ".fsgg/routine-development.json",
+        "recorded explicit human instruction",
+        "absence or ambiguity stays routine",
         "one accountable owner",
         "one PR",
-        "no live claim or existing strict delivery state",
+        "are not process selectors",
         "asynchronous and cannot block",
-        "applies only to strict items",
+        "applies only to human-named heavyweight scope",
         "never create a second PR",
         "Multiple or ambiguous open PRs refuse routine admission",
     ):

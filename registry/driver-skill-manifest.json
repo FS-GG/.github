@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "9a49d584dc066e6dbc101b89e6980b003b3fe0e6a91cf3bf19a1005534c71637",
-      "tree-sha256": "c789a71b6e0f406a26f985c0c7155105065b0601f5ca234136c68cda74a50bb0",
+      "sha256": "3a655dd58766475ffcb617d6e96859874e21a4131a0f9a71db288e8da1dfdc2c",
+      "tree-sha256": "344e72dab9e772629dd2ec2b2588816d99235a3a128c5225c0679164133378fa",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "9a49d584dc066e6dbc101b89e6980b003b3fe0e6a91cf3bf19a1005534c71637",
+          "sha256": "3a655dd58766475ffcb617d6e96859874e21a4131a0f9a71db288e8da1dfdc2c",
           "executable": false
         },
         {
@@ -54,12 +54,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "876506dc7088f2aeca986838916b5a32f2c20a256682752c5b730b4bbc7166ac",
-      "tree-sha256": "f7f27a4185164e190a35771f3ec185cfc0fb84c394920269ce13defd5cee457b",
+      "sha256": "8ec0cfe12f2bdb7f3c967b6b18e1d92988650f87f9dd7d085ba612b4a5b3e07d",
+      "tree-sha256": "a08652eca186695991bb9b0c0ad00b3fb584e7c597dc60fd58ca3af6d775763d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "876506dc7088f2aeca986838916b5a32f2c20a256682752c5b730b4bbc7166ac",
+          "sha256": "8ec0cfe12f2bdb7f3c967b6b18e1d92988650f87f9dd7d085ba612b4a5b3e07d",
           "executable": false
         },
         {
@@ -159,12 +159,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "b44fc863fc85e2de8aff58ee26d0631f3571e3b0e010872a212c24171390ef1d",
-      "tree-sha256": "9fc8f1fa42e3230e5ac03974ff1e0319d4305d74a4b084a4e52d9f49b97e37ab",
+      "sha256": "c84b023482a4b4cb9d6c5190721e00bb3628e7017c93226ab41809947820ba19",
+      "tree-sha256": "eb590d0b5482629cc082cf86256f19bd0bba216ae8dfcffe46c219c6c4d385b8",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "b44fc863fc85e2de8aff58ee26d0631f3571e3b0e010872a212c24171390ef1d",
+          "sha256": "c84b023482a4b4cb9d6c5190721e00bb3628e7017c93226ab41809947820ba19",
           "executable": false
         },
         {

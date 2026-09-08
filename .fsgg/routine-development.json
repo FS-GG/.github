@@ -1,7 +1,21 @@
 {
   "schema": "fsgg.routine-development-policy/v1",
-  "status": "pilot",
-  "prospective": true,
+  "status": "active",
+  "defaultRoute": "routine",
+  "heavyProcessSelection": {
+    "trigger": "recorded-explicit-human-instruction",
+    "namedScopeRequired": true,
+    "absenceOrAmbiguity": "routine"
+  },
+  "heavyProcessNonTriggers": [
+    "strict-label",
+    "gs2-registration",
+    "protected-path",
+    "policy-change",
+    "modeled-work",
+    "protected-operation",
+    "existing-strict-state"
+  ],
   "trustModel": {
     "repositoryWriters": "trusted",
     "purpose": "prevent accidental mistakes and drift",
@@ -18,10 +32,9 @@
     "credential-change",
     "destructive-effect",
     "migration-cutover",
-    "external-contract-acceptance",
-    "strict-item-continuation"
+    "external-contract-acceptance"
   ],
-  "protectedPaths": [
+  "sensitivePaths": [
     ".fsgg/",
     ".github/",
     ".agents/skills/work-roadmap/",
@@ -47,7 +60,10 @@
     "independent-critic",
     "feedback-report",
     "receipt-cycle",
-    "metadata-done"
+    "metadata-done",
+    "projection-pr"
   ],
-  "legacyAuthority": "strict"
+  "safeguardRule": "technical-checks-and-operation-authority-remain-independent-and-fail-closed",
+  "protectedOperationDisposition": "affected-effect-remains-pending-until-authorized",
+  "legacyAuthority": "evidence-retained-not-a-route-selector"
 }

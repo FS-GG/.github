@@ -63,7 +63,9 @@ The routine marker is:
 
 The distinct `routine-eligibility` context runs a workflow definition from the default branch, extracts
 this validator and policy from the exact PR base, and treats candidate commits only as diff data. A push
-makes the marker stale and red. Protected operations stay on `item/<n>-*` and the strict route.
+makes the marker stale and red. A protected operation named as the PR's effect stays pending until its
+independent authority is satisfied; neither that pending effect nor a sensitive path selects heavyweight
+delivery ceremony.
 
 STRICT APPLICABILITY: ONLY a pull request whose branch is `item/<n>-*` — `pnext-item` §2's own naming
 convention, the SAME test `Delivery.fs`'s `ItemBranchCanonical` already makes
@@ -297,7 +299,11 @@ SUPPORTED_VERSION = "1"
 ROUTINE_POLICY_SCHEMA = "fsgg.routine-development-policy/v1"
 ROUTINE_NOT_REQUIRED = {
     "issue", "claim", "sdd-artifacts", "phase-lifecycle-ledger", "independent-critic",
-    "feedback-report", "receipt-cycle", "metadata-done",
+    "feedback-report", "receipt-cycle", "metadata-done", "projection-pr",
+}
+ROUTINE_HEAVY_NON_TRIGGERS = {
+    "strict-label", "gs2-registration", "protected-path", "policy-change", "modeled-work",
+    "protected-operation", "existing-strict-state",
 }
 
 GEN_RE = re.compile(r"^[0-9]+$")
@@ -589,11 +595,26 @@ def load_routine_policy(path: str, revision: str | None) -> dict:
         raise GateError(f"cannot read routine-development policy at {path}: {error}") from error
     if not isinstance(policy, dict) or policy.get("schema") != ROUTINE_POLICY_SCHEMA:
         raise GateError(f"routine-development policy must use schema {ROUTINE_POLICY_SCHEMA}")
-    if policy.get("status") != "pilot" or policy.get("prospective") is not True:
-        raise GateError("routine-development policy must be an explicit prospective pilot")
+    if policy.get("status") != "active" or policy.get("defaultRoute") != "routine":
+        raise GateError("routine-development policy must make routine delivery the active default")
+    heavy = policy.get("heavyProcessSelection")
+    if not isinstance(heavy, dict) or heavy != {
+        "trigger": "recorded-explicit-human-instruction",
+        "namedScopeRequired": True,
+        "absenceOrAmbiguity": "routine",
+    }:
+        raise GateError("heavy process must require a recorded explicit human instruction for named scope")
+    if set(policy.get("heavyProcessNonTriggers", [])) != ROUTINE_HEAVY_NON_TRIGGERS:
+        raise GateError("routine-development policy does not name the complete heavy-process non-trigger set")
     if set(policy.get("notRequired", [])) != ROUTINE_NOT_REQUIRED:
         raise GateError("routine-development policy does not name the complete reduced routine contract")
-    for key in ("allowedOperations", "protectedOperations", "protectedPaths", "requiredChecks"):
+    if policy.get("safeguardRule") != "technical-checks-and-operation-authority-remain-independent-and-fail-closed":
+        raise GateError("routine-development policy must preserve independent fail-closed safeguards")
+    if policy.get("protectedOperationDisposition") != "affected-effect-remains-pending-until-authorized":
+        raise GateError("routine-development policy must keep unauthorized protected effects pending")
+    if policy.get("legacyAuthority") != "evidence-retained-not-a-route-selector":
+        raise GateError("legacy strict evidence must not select heavyweight process")
+    for key in ("allowedOperations", "protectedOperations", "sensitivePaths", "requiredChecks"):
         values = policy.get(key)
         if not isinstance(values, list) or not values or not all(isinstance(v, str) and v for v in values):
             raise GateError(f"routine-development policy field {key} must be a non-empty string list")
@@ -637,20 +658,18 @@ def evaluate_routine(args: argparse.Namespace, body: str) -> tuple[str | None, s
         )
     operation = marker["operation"]
     if operation in policy["protectedOperations"] or operation not in policy["allowedOperations"]:
-        return "routine-protected-operation", f"operation {operation!r} is not eligible for routine delivery"
+        return "routine-protected-operation", (
+            f"operation {operation!r} requires its independent technical/operation authority; "
+            "the affected effect remains pending, without selecting heavyweight process"
+        )
     changed = routine_changed_paths(args.base_sha.lower(), args.head_sha.lower())
     if not changed:
         return "routine-empty", "the exact base/head comparison contains no changed paths"
-    protected = [
-        path for path in changed
-        if any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in policy["protectedPaths"])
-    ]
-    if protected:
-        return "routine-protected-path", "protected paths require strict delivery: " + ", ".join(protected)
     return None, (
         f"routine delivery admitted at exact head {args.head_sha}: operation={operation}, "
         f"changedPaths={len(changed)}, requiredChecks={','.join(policy['requiredChecks'])}; "
-        "no issue, claim, SDD, phase ledger, critic, feedback/receipt cycle, or metadata-Done input was read"
+        "no issue, claim, SDD, phase ledger, critic, feedback/receipt cycle, metadata-Done, or projection-PR "
+        "input was read; changed paths and inherited strict state do not select heavyweight process"
     )
 
 

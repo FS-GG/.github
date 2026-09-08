@@ -9,11 +9,10 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 
 ## Choose each item's route before scheduling
 
-Reconcile and triage first, then make an explicit route decision for each candidate. Admit the routine
-route only when `.fsgg/routine-development.json` is present and prospective, the operation and proposed
-paths pass its boundary, and no live claim or existing strict delivery state must be continued. Do not
-infer routine eligibility from size, rank, labels, or effort, and do not create a receipt merely to
-authorize the reduced route.
+Reconcile and triage first. For unified-roadmap work, routine is the default and only a recorded explicit
+human instruction selects heavyweight process for named scope. Absence or ambiguity stays routine; paths,
+operations, labels, GS2 registration and inherited strict state are not process selectors. Preserve their
+substantive checks and effect safeguards independently.
 
 For an admitted routine item, use the installed `pnext-item` skill's routine route. One accountable
 owner completes one `routine/<item-slug>` branch and one PR. The host may remain that owner; use one
@@ -27,9 +26,8 @@ Before creating the branch, search for the item's open PR. Continue one unambigu
 accountable owner; never create a second PR because board projection lagged. Multiple or ambiguous open
 PRs refuse routine admission.
 
-The numbered claim/worker/critique/receipt protocol below applies only to strict items. A routine gate
-refusal, protected operation/path, or pre-existing strict state enters that protocol without weakening
-its safeguards.
+The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
+A technical or operation refusal blocks its affected effect without entering that protocol.
 
 1. Reconcile the workspace and consume the complete four-part `check-board` result.
 2. Run [backlog-triage](references/backlog-triage.md), classifying every relevant parked row without
