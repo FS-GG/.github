@@ -42,6 +42,19 @@ its checklist or reinterpret source acceptance as publication, installation, or 
 - [ ] Prepare and qualify only the source needed to install and audit the protected
   ledger/tag/environment/App/control-issue boundary in a later separately authorized operation.
 
+The source contract derives the exact `refs/heads/fsgg/v2/journal/cutover/d5` fleet ref through the existing
+Authority journal addressing machinery. It retains full-namespace deletion and non-fast-forward integrity,
+plans an exact fleet-ref exclusion from the shared writer, and requires a dedicated contents-only App identity
+before that ref can be written. Until a real dedicated App id is separately established, the missing identity
+is typed and application remains blocked; continued shared-App use is also a production blocker unless a later
+security acceptance explicitly authorizes it. The dry plan additionally separates phase-tag creation from
+immutable tag integrity and describes the protected environment and non-authoritative control issue.
+
+Qualification uses sanitized, deterministic observations and requires complete pagination, fresh revisions,
+content-addressed page evidence, prior-observation continuity, full effective-ruleset composition, and distinct
+unknown versus proven-absent outcomes. Registration and source qualification do not assert provider readback,
+authorize application, accept GS2-08.2, or satisfy the later installation and continuous-audit obligation.
+
 This window remains source-only and pending. It does not create or move a live ref or tag, modify the Authority
 repository, App, environment, control issue, credential, receiver, or production state, publish a package, or
 perform a cutover transition.
