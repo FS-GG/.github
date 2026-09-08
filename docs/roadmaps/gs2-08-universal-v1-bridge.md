@@ -37,7 +37,7 @@ GS2-08.1 is accepted by Coordination's native content-addressed receipt
 That authority covers the frozen wire contract and its qualified source; this navigation plan does not duplicate
 its checklist or reinterpret source acceptance as publication, installation, or live authority.
 
-## Ready window: GS2-08.2 source preparation
+## Qualified source window: GS2-08.2 deterministic protection plan
 
 - [ ] Prepare and qualify only the source needed to install and audit the protected
   ledger/tag/environment/App/control-issue boundary in a later separately authorized operation.
@@ -58,6 +58,30 @@ authorize application, accept GS2-08.2, or satisfy the later installation and co
 This window remains source-only and pending. It does not create or move a live ref or tag, modify the Authority
 repository, App, environment, control issue, credential, receiver, or production state, publish a package, or
 perform a cutover transition.
+
+## Ready window: GS2-08.2 read-only observation and operation planning
+
+- [ ] Qualify deterministic normalization of complete, content-addressed GitHub provider observations and bind
+  them to an exact dry operation plan without authorizing or performing any administrative effect.
+
+This bounded continuation accepts only explicit provider response envelopes: repository identity and revision,
+endpoint identity, status, pagination position, response digest, observation time, and typed ruleset, phase-tag,
+environment, App, and control-issue payloads. It proves page ordering and completeness, freshness, aggregate
+digest identity, and continuity from the previously sealed observation. Missing permissions, incomplete pages,
+unknown fields, contradictory duplicates, stale reads, or a changed repository/revision remain explicit unknown
+or refusal outcomes rather than evidence of absence.
+
+The normalized observation compiles through the already-qualified protection-plan adapter. A second deterministic
+seal binds the exact provider observation, effective ruleset composition, ordered administrative intents, typed
+preconditions, and unresolved blockers. The output remains a dry operation plan with `ApplyAuthorized=false`.
+Generated cases and independently authored expectations must agree on normalization, pagination, freshness,
+composition, continuity, tamper refusal, exact fleet-ref targeting, dedicated contents-only App requirements, and
+the no-apply boundary.
+
+This window may add repository-local pure parsing, normalization, planning, fixtures, validators, tests, and native
+qualification registration. It does not call GitHub, use credentials, create an acceptance receipt, or change any
+live ref, tag, ruleset, repository setting, App, environment, issue, workflow, schedule, receiver, package, or
+cutover state. Provider readback and administrative application remain later separately authorized operations.
 
 ## Later outcome outline
 
