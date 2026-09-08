@@ -73,7 +73,7 @@ module TelemetryApplication =
             shape [ "--store-root" ] [] args
         | "telemetry" :: "store" :: action :: args when action = "ingest" || action = "publish" ->
             shape [ "--store-root"; "--input" ] [] args
-        | "telemetry" :: "store" :: "summary" :: args ->
+        | "telemetry" :: "store" :: action :: args when action = "summary" || action = "reconcile" ->
             shape [ "--store-root"; "--item" ] [] args
         | "telemetry" :: "store" :: "export" :: args ->
             shape [ "--store-root"; "--item"; "--output" ] [ "--public" ] args
@@ -582,7 +582,7 @@ module TelemetryApplication =
                 match action with
                 | "status" | "init" | "drain" -> [ "--store-root" ], []
                 | "ingest" | "publish" -> [ "--store-root"; "--input" ], []
-                | "summary" -> [ "--store-root"; "--item" ], []
+                | "summary" | "reconcile" -> [ "--store-root"; "--item" ], []
                 | "export" -> [ "--store-root"; "--item"; "--output" ], [ "--public" ]
                 | _ -> [], []
             Some(validated "telemetry store" values switches args (TelemetryStoreApplication.run action))

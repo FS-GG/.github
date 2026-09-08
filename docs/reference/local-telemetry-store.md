@@ -45,6 +45,15 @@ provider/accounting scopes. `budget_dirty_items` bounds reevaluation work; `budg
 derived dimension decision; `budget_breaches` counts distinct items; and `budget_interventions` permits one
 open-to-verified transition per epoch. Stores at schema versions 1, 2 or 3 upgrade in place under `writer.lock`.
 
+Migration 5 adds `operational_activations`, `expected_dispatches`, `invocation_lineage`, and
+`operational_event_times`. These are prospective observation facts: an activation is limited to
+`explicit-future-dispatches`, binds one named runtime and activation time, and declares the delay after which an
+observation is late. Expected dispatches retain root, child, and follow-up parentage; invocation rows preserve the
+observed dispatch/invocation/root identities; event times retain nullable occurrence and observation timestamps
+with separate `host-wall`, `provider-native`, or `github-native` clock provenance for each timestamp. Event names
+are closed to `admission`, `start`, and `terminal`, with one row per item/invocation/event. Stores at schema
+versions 1 through 4 upgrade in place. Migrations 1–4 and their stored checksums are unchanged.
+
 ## Identities, inbox, and drain
 
 Assignments use schema `fsgg.telemetry.codex-assignment/1` with only `featureId`, `itemId`, `attemptId`, optional
@@ -56,6 +65,31 @@ drain accepts at most 128 batches/8 MiB fairly.
 Native fact identity is independent of importer and host. Same identity/content replays; changed content
 conflicts unless its explicit revision increases. Acceptance, facts, deduplication and cursor commit together.
 Malformed or conflicting ready files move to bounded private quarantine and do not become coverage.
+
+## Prospective dispatch reconciliation
+
+```console
+fsgg-coord-engine telemetry store reconcile --item UTEL-06.1 \
+  --store-root /durable/private/fsgg-telemetry
+```
+
+The read-only reconciliation joins expected dispatches to observed invocation identities and event times. It
+reports lineage coverage separately as matched, unknown, invalid, unsupported, or out of scope. Timing coverage
+is separately complete, late, missing, invalid, or not evaluated and requires one complete admission, start, and
+terminal timing witness. Stable diagnostics distinguish missing parents, conflicting identities, cycles,
+unsupported runtimes, missing/duplicate required events, missing timestamps or clocks, reversed event time, and
+observations beyond the activation's declared delay. Complete timing also requires the admission → start →
+terminal occurrence sequence and observation sequence to be nondecreasing on one common clock domain. Latency is
+evaluated only when occurrence and observation share that domain; incomparable clocks are invalid, not
+subtracted. Likewise, prospective scope is unknown rather than time-compared when activation and
+expected-dispatch clocks differ. Usage and native terminal outcome coverage remain `not-evaluated`. The first
+supported runtime is `codex-exec`; unsupported runtimes remain explicit rather than being counted as observed.
+Status and reconciliation never drain or mutate the store.
+
+This contract does not enumerate processes, discover historical sessions, read transcript/session storage, infer
+an expected population, or activate a host collector. Producers must first publish an explicit prospective
+activation and one expected-dispatch fact per invocation they intend to observe. Missing or late evidence remains
+diagnostic and cannot change native delivery truth or establish qualification.
 
 ## Runtime adapter
 

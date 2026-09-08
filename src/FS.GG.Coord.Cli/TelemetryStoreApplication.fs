@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 4
+    let private currentSchemaVersion = 5
 
     module private Native =
         [<Literal>]
@@ -93,6 +93,17 @@ INSERT INTO budget_epochs(epoch_id,ordinal,state) VALUES('epoch-1',1,'open');
 PRAGMA user_version=4;
 """
     let private migration4Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration4Sql)
+    let private migration5Sql = """
+CREATE TABLE operational_activations(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, activation_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope='explicit-future-dispatches'), runtime TEXT NOT NULL, activated_at TEXT NOT NULL, clock_provenance TEXT NOT NULL, late_after_seconds INTEGER NOT NULL CHECK(late_after_seconds >= 0), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,activation_id)) STRICT;
+CREATE TABLE expected_dispatches(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dispatch_id TEXT NOT NULL, activation_id TEXT NOT NULL, relation TEXT NOT NULL CHECK(relation IN ('root','child','follow-up')), parent_dispatch_id TEXT, runtime TEXT NOT NULL, expected_at TEXT NOT NULL, clock_provenance TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,dispatch_id)) STRICT;
+CREATE TABLE invocation_lineage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dispatch_id TEXT NOT NULL, invocation_id TEXT NOT NULL, relation TEXT NOT NULL CHECK(relation IN ('root','child','follow-up')), parent_invocation_id TEXT, root_invocation_id TEXT NOT NULL, runtime TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX invocation_lineage_dispatch ON invocation_lineage(dispatch_id);
+CREATE INDEX invocation_lineage_invocation ON invocation_lineage(invocation_id);
+CREATE TABLE operational_event_times(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, event TEXT NOT NULL CHECK(event IN ('admission','start','terminal')), occurred_at TEXT, occurred_clock_provenance TEXT, observed_at TEXT, observed_clock_provenance TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,invocation_id,event)) STRICT;
+CREATE INDEX operational_event_times_invocation ON operational_event_times(invocation_id);
+PRAGMA user_version=5;
+"""
+    let private migration5Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration5Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -274,7 +285,21 @@ PRAGMA user_version=4;
                                                 execute connection "COMMIT;"
                                             with error -> rollback connection; raise error
                                         if scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
-                                        else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                        else
+                                            let afterV4 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                            if afterV4 = 4 then
+                                                beginImmediate connection
+                                                try
+                                                    execute connection migration5Sql
+                                                    use migration = connection.CreateCommand()
+                                                    migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(5,$digest,$utc);"
+                                                    parameter migration "$digest" migration5Digest
+                                                    parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                    migration.ExecuteNonQuery() |> ignore
+                                                    execute connection "COMMIT;"
+                                                with error -> rollback connection; raise error
+                                            if scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
+                                            else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -296,6 +321,7 @@ PRAGMA user_version=4;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;" <> migration3Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;" <> migration4Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -303,7 +329,7 @@ PRAGMA user_version=4;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -349,6 +375,14 @@ PRAGMA user_version=4;
             run "INSERT INTO budget_interval_facts VALUES($identity,$item,$dimension,$classification,$start,$end,$witnessed,$sourceKind,$sourceRef,$revision); INSERT INTO budget_shared_cost_refs VALUES($identity,$item,$sourceRef,$dimension,'interval','interval');" [ "$dimension",box dimension; "$classification",box classification; "$start",box startAt; "$end",box endAt; "$witnessed",box (if witnessed then 1 else 0); "$sourceKind",box sourceKind; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
         | TelemetryStore.BudgetIntervention(intervention,transition,sequence,result,coverage,sourceRef) ->
             run "INSERT INTO budget_intervention_facts VALUES($identity,$item,$intervention,$transition,$sequence,$result,$coverage,$sourceRef,$revision);" [ "$intervention",box intervention; "$transition",box transition; "$sequence",box sequence; "$result",box result; "$coverage",box coverage; "$sourceRef",box sourceRef; "$revision",box fact.Revision ]
+        | TelemetryStore.OperationalActivation(activation,scope,runtime,activatedAt,clock,lateAfter) ->
+            run "INSERT INTO operational_activations VALUES($identity,$item,$activation,$scope,$runtime,$activatedAt,$clock,$lateAfter,$revision);" [ "$activation",box activation; "$scope",box scope; "$runtime",box runtime; "$activatedAt",box activatedAt; "$clock",box clock; "$lateAfter",box lateAfter; "$revision",box fact.Revision ]
+        | TelemetryStore.ExpectedDispatch(dispatch,activation,relation,parent,runtime,expectedAt,clock) ->
+            run "INSERT INTO expected_dispatches VALUES($identity,$item,$dispatch,$activation,$relation,$parent,$runtime,$expectedAt,$clock,$revision);" [ "$dispatch",box dispatch; "$activation",box activation; "$relation",box relation; "$parent",optional parent; "$runtime",box runtime; "$expectedAt",box expectedAt; "$clock",box clock; "$revision",box fact.Revision ]
+        | TelemetryStore.InvocationLineage(dispatch,invocation,relation,parent,root,runtime) ->
+            run "INSERT INTO invocation_lineage VALUES($identity,$item,$dispatch,$invocation,$relation,$parent,$root,$runtime,$revision);" [ "$dispatch",box dispatch; "$invocation",box invocation; "$relation",box relation; "$parent",optional parent; "$root",box root; "$runtime",box runtime; "$revision",box fact.Revision ]
+        | TelemetryStore.EventTime(invocation,event,occurred,occurredClock,observed,observedClock) ->
+            run "INSERT INTO operational_event_times VALUES($identity,$item,$invocation,$event,$occurred,$occurredClock,$observed,$observedClock,$revision);" [ "$invocation",box invocation; "$event",box event; "$occurred",optional occurred; "$occurredClock",optional occurredClock; "$observed",optional observed; "$observedClock",optional observedClock; "$revision",box fact.Revision ]
 
         match fact.ItemId, fact.Payload with
         | Some item, (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _ | TelemetryStore.RuntimeGap _ | TelemetryStore.CiCoverage _) ->
@@ -674,7 +708,7 @@ PRAGMA user_version=4;
                     | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
                     | Ok batch ->
                         match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
-                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal)) ->
+                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal)) ->
                             quarantine root ready errors; quarantined <- quarantined + 1
                         | Error errors -> failures <- (String.concat "; " errors) :: failures
                         | Ok result ->
@@ -764,6 +798,148 @@ PRAGMA user_version=4;
         | Ok(connection, _) ->
             use connection = connection
             Ok(TelemetryStore.publicJson (readSummary connection itemId))
+
+    type private ActivationRow =
+        { Id: string; Runtime: string; ActivatedAt: DateTimeOffset; Clock: string; LateAfterSeconds: int64 }
+    type private DispatchRow =
+        { Id: string; ActivationId: string; Relation: string; ParentId: string option; Runtime: string; ExpectedAt: DateTimeOffset; Clock: string }
+    type private LineageRow =
+        { DispatchId: string; InvocationId: string; Relation: string; ParentInvocationId: string option; RootInvocationId: string; Runtime: string }
+    type private TimeRow =
+        { InvocationId: string
+          Event: string
+          OccurredAt: DateTimeOffset option
+          OccurredClock: string option
+          ObservedAt: DateTimeOffset option
+          ObservedClock: string option }
+    type private ReconciliationRow =
+        { DispatchId: string
+          InvocationId: string option
+          LineageStatus: string
+          LineageCode: string
+          TimingStatus: string
+          TimingCode: string }
+
+    let reconcile path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                if version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ] else
+                let readStringOption (reader: SqliteDataReader) index = if reader.IsDBNull index then None else Some(reader.GetString index)
+                let activations =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT activation_id,runtime,activated_at,clock_provenance,late_after_seconds FROM operational_activations WHERE item_id=$item;"
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    [ while reader.Read() do
+                        yield { Id = reader.GetString 0; Runtime = reader.GetString 1; ActivatedAt = DateTimeOffset.Parse(reader.GetString 2); Clock = reader.GetString 3; LateAfterSeconds = reader.GetInt64 4 } ]
+                    |> List.map (fun row -> row.Id, row) |> Map.ofList
+                let dispatches =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT dispatch_id,activation_id,relation,parent_dispatch_id,runtime,expected_at,clock_provenance FROM expected_dispatches WHERE item_id=$item ORDER BY dispatch_id;"
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    [ while reader.Read() do
+                        yield { Id = reader.GetString 0; ActivationId = reader.GetString 1; Relation = reader.GetString 2; ParentId = readStringOption reader 3; Runtime = reader.GetString 4; ExpectedAt = DateTimeOffset.Parse(reader.GetString 5); Clock = reader.GetString 6 } ]
+                let byDispatch = dispatches |> List.map (fun row -> row.Id, row) |> Map.ofList
+                let lineages =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT dispatch_id,invocation_id,relation,parent_invocation_id,root_invocation_id,runtime FROM invocation_lineage WHERE item_id=$item ORDER BY rowid;"
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    [ while reader.Read() do
+                        yield { DispatchId = reader.GetString 0; InvocationId = reader.GetString 1; Relation = reader.GetString 2; ParentInvocationId = readStringOption reader 3; RootInvocationId = reader.GetString 4; Runtime = reader.GetString 5 } ]
+                let byLineage = lineages |> List.groupBy _.DispatchId |> Map.ofList
+                let invocationMultiplicity = lineages |> List.countBy _.InvocationId |> Map.ofList
+                let times =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT invocation_id,event,occurred_at,occurred_clock_provenance,observed_at,observed_clock_provenance FROM operational_event_times WHERE item_id=$item ORDER BY rowid;"
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    [ while reader.Read() do
+                        yield
+                            { InvocationId = reader.GetString 0
+                              Event = reader.GetString 1
+                              OccurredAt = readStringOption reader 2 |> Option.map DateTimeOffset.Parse
+                              OccurredClock = readStringOption reader 3
+                              ObservedAt = readStringOption reader 4 |> Option.map DateTimeOffset.Parse
+                              ObservedClock = readStringOption reader 5 } ]
+                    |> List.groupBy _.InvocationId |> Map.ofList
+                let cyclic dispatch =
+                    let rec loop seen current =
+                        if Set.contains current seen then true else
+                        match Map.tryFind current byDispatch |> Option.bind _.ParentId with
+                        | None -> false
+                        | Some parent -> loop (Set.add current seen) parent
+                    loop Set.empty dispatch.Id
+                let oneLineage id = Map.tryFind id byLineage |> Option.bind (function [ value ] -> Some value | _ -> None)
+                let reconcileOne dispatch =
+                    let rows = Map.tryFind dispatch.Id byLineage |> Option.defaultValue []
+                    let invocation = rows |> List.tryHead |> Option.map _.InvocationId
+                    let result lineageStatus lineageCode timingStatus timingCode =
+                        { DispatchId = dispatch.Id; InvocationId = invocation; LineageStatus = lineageStatus; LineageCode = lineageCode; TimingStatus = timingStatus; TimingCode = timingCode }
+                    let timing (activation: ActivationRow) (lineage: LineageRow) =
+                        let eventRows = Map.tryFind lineage.InvocationId times |> Option.defaultValue []
+                        let grouped = eventRows |> List.groupBy _.Event |> Map.ofList
+                        let required = [ "admission"; "start"; "terminal" ]
+                        if required |> List.exists (fun event -> Map.tryFind event grouped |> Option.exists (fun rows -> List.length rows > 1)) then "invalid", "event-time-conflict"
+                        elif required |> List.exists (fun event -> not (Map.containsKey event grouped)) then "missing", "required-event-missing"
+                        else
+                            let witnesses = required |> List.map (fun event -> Map.find event grouped |> List.exactlyOne)
+                            if witnesses |> List.exists (fun row -> row.OccurredAt.IsNone || row.ObservedAt.IsNone) then "missing", "timestamps-missing"
+                            elif witnesses |> List.exists (fun row -> row.OccurredClock.IsNone || row.ObservedClock.IsNone) then "missing", "clock-provenance-missing"
+                            elif witnesses |> List.exists (fun row -> row.OccurredClock <> row.ObservedClock) then "invalid", "clock-domain-mismatch"
+                            elif witnesses |> List.choose _.OccurredClock |> Set.ofList |> Set.count <> 1 then "invalid", "lifecycle-clock-domain-mismatch"
+                            else
+                                let complete = witnesses |> List.map (fun row -> row.OccurredAt.Value, row.ObservedAt.Value)
+                                if complete |> List.exists (fun (occurred, observed) -> observed < occurred) then "invalid", "event-time-reversed"
+                                elif complete |> List.map fst |> List.pairwise |> List.exists (fun (earlier, later) -> later < earlier) then "invalid", "lifecycle-occurrence-order-invalid"
+                                elif complete |> List.map snd |> List.pairwise |> List.exists (fun (earlier, later) -> later < earlier) then "invalid", "lifecycle-observation-order-invalid"
+                                elif complete |> List.exists (fun (occurred, observed) -> (observed - occurred).TotalSeconds > float activation.LateAfterSeconds) then "late", "observation-late"
+                                else "complete", "required-events-complete"
+                    match Map.tryFind dispatch.ActivationId activations with
+                    | None -> result "unknown" "activation-missing" "not-evaluated" "lineage-unavailable"
+                    | Some activation when dispatch.Runtime <> "codex-exec" || activation.Runtime <> "codex-exec" -> result "unsupported" "runtime-unsupported" "not-evaluated" "runtime-unsupported"
+                    | Some activation when dispatch.Clock <> activation.Clock -> result "unknown" "activation-clock-domain-mismatch" "not-evaluated" "dispatch-scope-unknown"
+                    | Some activation when dispatch.ExpectedAt < activation.ActivatedAt -> result "out-of-scope" "dispatch-predates-activation" "not-evaluated" "dispatch-out-of-scope"
+                    | Some _ when cyclic dispatch -> result "invalid" "cyclic-lineage" "not-evaluated" "lineage-invalid"
+                    | Some _ when List.length rows > 1 -> result "invalid" "conflicting-identity" "not-evaluated" "lineage-invalid"
+                    | Some _ when rows.IsEmpty -> result "unknown" "invocation-missing" "not-evaluated" "lineage-unavailable"
+                    | Some activation ->
+                        let lineage = List.head rows
+                        let duplicateInvocation = Map.tryFind lineage.InvocationId invocationMultiplicity |> Option.defaultValue 0 > 1
+                        if duplicateInvocation || lineage.Runtime <> dispatch.Runtime || lineage.Relation <> dispatch.Relation then result "invalid" "conflicting-identity" "not-evaluated" "lineage-invalid"
+                        else
+                            let parentProblem =
+                                match dispatch.Relation, dispatch.ParentId, lineage.ParentInvocationId with
+                                | "root", None, None when lineage.RootInvocationId = lineage.InvocationId -> None
+                                | "root", _, _ -> Some "conflicting-identity"
+                                | ("child" | "follow-up"), Some parentDispatch, Some parentInvocation ->
+                                    match oneLineage parentDispatch with
+                                    | None -> Some "missing-parent"
+                                    | Some parent when parent.InvocationId <> parentInvocation || parent.RootInvocationId <> lineage.RootInvocationId -> Some "conflicting-identity"
+                                    | Some _ -> None
+                                | _ -> Some "missing-parent"
+                            match parentProblem with
+                            | Some code -> result (if code = "missing-parent" then "unknown" else "invalid") code "not-evaluated" "lineage-unavailable"
+                            | None ->
+                                let timingStatus, timingCode = timing activation lineage
+                                result "matched" "expected-invocation-match" timingStatus timingCode
+                let rows = dispatches |> List.map reconcileOne
+                let lineageCount status = rows |> List.filter (fun row -> row.LineageStatus = status) |> List.length
+                let timingCount status = rows |> List.filter (fun row -> row.TimingStatus = status) |> List.length
+                Ok(JsonSerializer.Serialize
+                    {| schema = "fsgg.telemetry.operational-reconciliation/1"; item = itemId
+                       scope = "explicit-future-dispatches"; historicalSessionDiscovery = false; supportedRuntimes = [| "codex-exec" |]
+                       expected = rows.Length
+                       lineageCoverage = {| matched = lineageCount "matched"; unknown = lineageCount "unknown"; invalid = lineageCount "invalid"; unsupported = lineageCount "unsupported"; outOfScope = lineageCount "out-of-scope" |}
+                       timingCoverage = {| complete = timingCount "complete"; late = timingCount "late"; missing = timingCount "missing"; invalid = timingCount "invalid"; notEvaluated = timingCount "not-evaluated" |}
+                       usageCoverage = "not-evaluated"; terminalOutcomeCoverage = "not-evaluated"
+                       reconciliations = rows |> List.map (fun row -> {| dispatchId = row.DispatchId; invocationId = row.InvocationId; lineage = {| status = row.LineageStatus; code = row.LineageCode |}; timing = {| status = row.TimingStatus; code = row.TimingCode |} |}) |> List.toArray |} + "\n")
+            with error -> Error [ error.Message ]
 
     let ciSummary path assessment (itemId: string) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
@@ -931,9 +1107,10 @@ PRAGMA user_version=4;
             | "drain" -> drain path assessment |> output
             | "ingest" -> match option "--input" args with Some input -> ingest path assessment (readBounded input) |> output | None -> output(Error [ "--input is required" ])
             | "summary" -> match option "--item" args with Some item -> summary path assessment item |> output | None -> output(Error [ "--item is required" ])
+            | "reconcile" -> match option "--item" args with Some item -> reconcile path assessment item |> output | None -> output(Error [ "--item is required" ])
             | "export" when List.contains "--public" args -> match option "--output" args with Some target -> exportPublic path assessment (option "--item" args) target |> output | _ -> output(Error [ "--output is required" ])
             | "export" -> output(Error [ "only --public export is supported" ])
-            | _ -> output(Error [ "action must be status, init, ingest, summary, or export" ])
+            | _ -> output(Error [ "action must be status, init, ingest, summary, reconcile, or export" ])
 
     let runBudget action args =
         match root args with

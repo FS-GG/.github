@@ -2,6 +2,7 @@ namespace FS.GG.Coord
 
 open System
 open System.IO
+open System.Globalization
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -48,6 +49,10 @@ module TelemetryStore =
         | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
         | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string
         | BudgetIntervention of interventionId: string * transition: string * sequence: int64 * result: string * coverage: string * sourceRef: string
+        | OperationalActivation of activationId: string * scope: string * runtime: string * activatedAt: string * clockProvenance: string * lateAfterSeconds: int64
+        | ExpectedDispatch of dispatchId: string * activationId: string * relation: string * parentDispatchId: string option * runtime: string * expectedAt: string * clockProvenance: string
+        | InvocationLineage of dispatchId: string * invocationId: string * relation: string * parentInvocationId: string option * rootInvocationId: string * runtime: string
+        | EventTime of invocationId: string * event: string * occurredAt: string option * occurredClockProvenance: string option * observedAt: string option * observedClockProvenance: string option
     type Fact =
         { Identity: string; ItemId: string option; Revision: int64; Kind: string; Payload: Payload
           Canonical: string; ContentDigest: string }
@@ -89,6 +94,20 @@ module TelemetryStore =
         | true, value when value.ValueKind = JsonValueKind.True -> Ok true
         | true, value when value.ValueKind = JsonValueKind.False -> Ok false
         | _ -> Error $"%s{label}.%s{name} must be a boolean"
+    let private validTimestamp (value: string) =
+        Regex.IsMatch(value, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$")
+        && (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            |> function true, _ -> true | _ -> false)
+    let private requiredTimestamp label node name =
+        requiredText label node name
+        |> Result.bind (fun value -> if validTimestamp value then Ok value else Error $"%s{label}.%s{name} must be an RFC 3339 timestamp")
+    let private optionalTimestamp label node name =
+        optionalText label node name
+        |> Result.bind (function None -> Ok None | Some value when validTimestamp value -> Ok(Some value) | Some _ -> Error $"%s{label}.%s{name} must be an RFC 3339 timestamp or null")
+    let private validClock = function "host-wall" | "provider-native" | "github-native" -> true | _ -> false
+    let private optionalClock label node name =
+        optionalText label node name
+        |> Result.bind (function None -> Ok None | Some value when validClock value -> Ok(Some value) | Some _ -> Error $"%s{label}.%s{name} is unsupported")
     let private closed label allowed (node: JsonElement) =
         let unknown = node.EnumerateObject() |> Seq.map _.Name |> Seq.filter (fun name -> not (Set.contains name allowed)) |> Seq.toList
         let names = String.concat "," unknown
@@ -251,6 +270,34 @@ module TelemetryStore =
                     when ((transition = "deployed" && result = "not-evaluated") || (transition = "verified" && Set.contains result (Set [ "improved"; "failed"; "unknown" ]))) && Set.contains coverage (Set [ "complete"; "partial"; "unknown" ]) ->
                     make [ "interventionId"; "transition"; "sequence"; "result"; "coverage"; "sourceRef" ] (BudgetIntervention(intervention,transition,sequence,result,coverage,sourceRef))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported intervention evidence"
+                | values -> Error(sprintf "%A" values)
+            | "operational-activation" ->
+                match requiredText label node "activationId", requiredText label node "scope", requiredText label node "runtime", requiredTimestamp label node "activatedAt", requiredText label node "clockProvenance", requiredInt label node "lateAfterSeconds" with
+                | Ok activation, Ok scope, Ok runtime, Ok activatedAt, Ok clock, Ok lateAfter
+                    when scope = "explicit-future-dispatches" && validClock clock ->
+                    make [ "activationId"; "scope"; "runtime"; "activatedAt"; "clockProvenance"; "lateAfterSeconds" ] (OperationalActivation(activation,scope,runtime,activatedAt,clock,lateAfter))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} requires explicit-future-dispatches scope and supported clock provenance"
+                | values -> Error(sprintf "%A" values)
+            | "expected-dispatch" ->
+                match requiredText label node "dispatchId", requiredText label node "activationId", requiredText label node "relation", optionalText label node "parentDispatchId", requiredText label node "runtime", requiredTimestamp label node "expectedAt", requiredText label node "clockProvenance" with
+                | Ok dispatch, Ok activation, Ok relation, Ok parent, Ok runtime, Ok expectedAt, Ok clock
+                    when validClock clock && ((relation = "root" && parent.IsNone) || ((relation = "child" || relation = "follow-up") && parent.IsSome)) ->
+                    make [ "dispatchId"; "activationId"; "relation"; "parentDispatchId"; "runtime"; "expectedAt"; "clockProvenance" ] (ExpectedDispatch(dispatch,activation,relation,parent,runtime,expectedAt,clock))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has an invalid relation, parent dispatch, or clock provenance"
+                | values -> Error(sprintf "%A" values)
+            | "invocation-lineage" ->
+                match requiredText label node "dispatchId", requiredText label node "invocationId", requiredText label node "relation", optionalText label node "parentInvocationId", requiredText label node "rootInvocationId", requiredText label node "runtime" with
+                | Ok dispatch, Ok invocation, Ok relation, Ok parent, Ok root, Ok runtime
+                    when ((relation = "root" && parent.IsNone && root = invocation) || ((relation = "child" || relation = "follow-up") && parent.IsSome)) ->
+                    make [ "dispatchId"; "invocationId"; "relation"; "parentInvocationId"; "rootInvocationId"; "runtime" ] (InvocationLineage(dispatch,invocation,relation,parent,root,runtime))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has an invalid relation, parent invocation, or root identity"
+                | values -> Error(sprintf "%A" values)
+            | "event-time" ->
+                match requiredText label node "invocationId", requiredText label node "event", optionalTimestamp label node "occurredAt", optionalClock label node "occurredClockProvenance", optionalTimestamp label node "observedAt", optionalClock label node "observedClockProvenance" with
+                | Ok invocation, Ok event, Ok occurred, Ok occurredClock, Ok observed, Ok observedClock
+                    when event = "admission" || event = "start" || event = "terminal" ->
+                    make [ "invocationId"; "event"; "occurredAt"; "occurredClockProvenance"; "observedAt"; "observedClockProvenance" ] (EventTime(invocation,event,occurred,occurredClock,observed,observedClock))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.event must be admission, start, or terminal"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

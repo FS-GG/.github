@@ -46,6 +46,10 @@ module TelemetryStore =
         | BudgetAttribution of dimension: string * provider: string * accountingScope: string * numerator: int64 option * denominator: int64 option * coverage: string * attribution: string * sourceKind: string * sourceRef: string
         | BudgetInterval of dimension: string * classification: string * startNanoseconds: int64 * endNanoseconds: int64 * witnessed: bool * sourceKind: string * sourceRef: string
         | BudgetIntervention of interventionId: string * transition: string * sequence: int64 * result: string * coverage: string * sourceRef: string
+        | OperationalActivation of activationId: string * scope: string * runtime: string * activatedAt: string * clockProvenance: string * lateAfterSeconds: int64
+        | ExpectedDispatch of dispatchId: string * activationId: string * relation: string * parentDispatchId: string option * runtime: string * expectedAt: string * clockProvenance: string
+        | InvocationLineage of dispatchId: string * invocationId: string * relation: string * parentInvocationId: string option * rootInvocationId: string * runtime: string
+        | EventTime of invocationId: string * event: string * occurredAt: string option * occurredClockProvenance: string option * observedAt: string option * observedClockProvenance: string option
 
     type Fact =
         { Identity: string
