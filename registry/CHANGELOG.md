@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-08** — **coordination coherent set `github:0.87.0` promoted and published frontier reconciled**
+  (owner github; source [PR #3365](https://github.com/FS-GG/.github/pull/3365),
+  [promotion run 34278985733](https://github.com/FS-GG/.github/actions/runs/34278985733)):
+  advances `coord-engine.package-version` from 0.86.1 to 0.87.0 after immutable promotion from exact
+  source `bffc370933ec4f35af2af4acf5f72b5888844365`. Both feeds verified Coord.Cli, Drivers, and Kit;
+  exact-source recovery reused the prepared bytes after bounded nuget.org indexing delay.
+
 - **2026-09-08** — **coordination coherent set `github:0.87.0` source prepared**
   (owner github; UTEL source [PR #3360](https://github.com/FS-GG/.github/pull/3360) through
   [PR #3363](https://github.com/FS-GG/.github/pull/3363)): advances the source frontier from 0.86.1
