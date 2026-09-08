@@ -56,6 +56,9 @@ module Transport =
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
 
+    type ISinglePageGitHubTransport =
+        abstract SendSingle: request: Request -> IoResult<Response>
+
     [<Literal>]
     let private DefaultApiBase = "https://api.github.com"
 
@@ -226,6 +229,8 @@ module Transport =
     type HttpTransport(apiBase: string, token: string) =
 
         let client = new HttpClient()
+        let singlePageHandler = new HttpClientHandler(AllowAutoRedirect = false)
+        let singlePageClient = new HttpClient(singlePageHandler)
         let base' = apiBase.TrimEnd('/')
 
         do
@@ -233,6 +238,8 @@ module Transport =
             // GraphQL endpoint ignores it.
             client.DefaultRequestHeaders.UserAgent.ParseAdd "fsgg-coord"
             client.DefaultRequestHeaders.Accept.ParseAdd "application/vnd.github+json"
+            singlePageClient.DefaultRequestHeaders.UserAgent.ParseAdd "fsgg-coord"
+            singlePageClient.DefaultRequestHeaders.Accept.ParseAdd "application/vnd.github+json"
 
             // A REQUEST THAT NEVER RETURNS IS WORSE THAN ONE THAT FAILS. The client is invoked once per
             // scheduling call, on every worker, in a fan-out — and a worker blocked forever on a hung
@@ -240,14 +247,17 @@ module Transport =
             // does not look like a failure to anybody; it looks like slow work. A bounded timeout turns
             // that into a `Transport` error the caller can actually act on.
             client.Timeout <- TimeSpan.FromSeconds 30.0
+            singlePageClient.Timeout <- TimeSpan.FromSeconds 30.0
 
             if not (String.IsNullOrWhiteSpace token) then
                 client.DefaultRequestHeaders.Authorization <-
                     Headers.AuthenticationHeaderValue("Bearer", token)
+                singlePageClient.DefaultRequestHeaders.Authorization <-
+                    Headers.AuthenticationHeaderValue("Bearer", token)
 
         // Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
         // `Link` to follow rather than a path to rebuild.
-        let sendOne (request: Request) (url: string) : IoResult<Response> =
+        let sendOne (http: HttpClient) (request: Request) (url: string) (maximumBytes: int option) : IoResult<Response> =
             try
                 let method =
                     match request.Method.ToUpperInvariant() with
@@ -274,12 +284,28 @@ module Transport =
                     message.Content <-
                         new StringContent(graphQlPayload document variables, Encoding.UTF8, "application/json")
 
-                use response = client.Send message
+                use response = http.Send message
                 let status = int response.StatusCode
 
                 let body =
-                    use reader = new IO.StreamReader(response.Content.ReadAsStream())
-                    reader.ReadToEnd()
+                    match maximumBytes with
+                    | None ->
+                        use reader = new IO.StreamReader(response.Content.ReadAsStream())
+                        reader.ReadToEnd()
+                    | Some maximum ->
+                        match response.Content.Headers.ContentLength with
+                        | value when value.HasValue && value.Value > int64 maximum -> raise (IO.InvalidDataException "response exceeds 4 MiB")
+                        | _ -> ()
+                        use stream = response.Content.ReadAsStream()
+                        use memory = new IO.MemoryStream()
+                        let buffer = Array.zeroCreate<byte> 8192
+                        let mutable reading = true
+                        while reading do
+                            let count = stream.Read(buffer, 0, buffer.Length)
+                            if count = 0 then reading <- false
+                            elif memory.Length + int64 count > int64 maximum then raise (IO.InvalidDataException "response exceeds 4 MiB")
+                            else memory.Write(buffer, 0, count)
+                        Encoding.UTF8.GetString(memory.ToArray())
 
                 let headers =
                     response.Headers
@@ -348,12 +374,13 @@ module Transport =
                     | inner -> $"%s{x.Message} <- %s{chain inner}"
                 Error(Transport(chain e))
             | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
+            | :? IO.InvalidDataException as e -> Error(Malformed(request.Subject, e.Message))
 
         interface IGitHubTransport with
             member _.Send(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
 
-                match sendOne request url with
+                match sendOne client request url None with
                 | Error e -> Error e
                 | Ok first ->
 
@@ -366,7 +393,7 @@ module Transport =
                         // and reporting it as complete is the whole failure class this port exists to end.
                         Error(Malformed(request.Subject, "pagination did not terminate within 100 pages"))
                     | Some link ->
-                        match sendOne request link with
+                        match sendOne client request link None with
                         | Error e -> Error e
                         | Ok page ->
                             match mergePages acc.Body page.Body with
@@ -386,5 +413,10 @@ module Transport =
 
                 follow first first.NextLink 100
 
+        interface ISinglePageGitHubTransport with
+            member _.SendSingle(request: Request) : IoResult<Response> =
+                let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
+                sendOne singlePageClient request url (Some(4 * 1024 * 1024))
+
         interface IDisposable with
-            member _.Dispose() = client.Dispose()
+            member _.Dispose() = client.Dispose(); singlePageClient.Dispose()

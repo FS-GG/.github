@@ -1,0 +1,12 @@
+{
+  "schema": "fsgg.telemetry.ci-attribution/1",
+  "rules": [
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Run tests",
+      "classification": "useful-validation",
+      "rationale": "The step directly validates the selected coordination-engine source revision."
+    }
+  ]
+}

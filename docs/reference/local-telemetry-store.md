@@ -31,6 +31,13 @@ native turn identity, invocation-local turn sequence, `completed-turn` accountin
 `codex-exec-jsonl` provenance. No response or session count is inferred. Each versioned SQL migration has a
 stored checksum and runs under the same writer lock as ordinary mutation.
 
+Migration 3 adds `ci_bindings`, `ci_pages`, `ci_runs`, `ci_jobs`, `ci_steps`, and `ci_coverage`. A collection
+binds one item/attempt to an explicit repository, PR, 40-hex head and workflow. Pages are distinct recovery
+evidence; run identity is repository plus native run ID, while attempt, job and step extend that native key.
+The coverage row keeps inventory, attempts, job pages, terminal state, timestamps, lineage, classification and
+critical-path evidence independent. Older v1/v2 stores upgrade in place; migration SQL and checksum receipts
+are immutable.
+
 ## Identities, inbox, and drain
 
 Assignments use schema `fsgg.telemetry.codex-assignment/1` with only `featureId`, `itemId`, `attemptId`, optional
@@ -57,6 +64,28 @@ outcomes. It discards prompts, messages, reasoning, commands, tool I/O, diffs, p
 framing and queue loss are gaps, not delivery failures. `collaboration.spawn_agent` is currently unsupported;
 this command covers only future explicit launches through it.
 
+## Explicit CI collection
+
+```console
+fsgg-coord-engine telemetry ci collect --assignment /private/ci-attempt.json \
+  --repo FS-GG/.github --pr 1234 --head 0123456789abcdef0123456789abcdef01234567 \
+  --workflow coord-engine.yml --store-root /durable/private/fsgg-telemetry
+fsgg-coord-engine telemetry store drain --store-root /durable/private/fsgg-telemetry
+fsgg-coord-engine telemetry ci summary --item UTEL-04A --store-root /durable/private/fsgg-telemetry
+```
+
+The assignment schema is `fsgg.telemetry.ci-assignment/1` and carries only stable feature, item, attempt,
+optional parent-attempt and producer-stream IDs. The reader accepts at most 20 single-page GETs, 100 records
+per page, 4 MiB per response and 30 seconds total. It never retries, sleeps or follows a redirect, and follows
+only validated same-origin/same-repository continuations. Every declared run attempt uses GitHub's
+attempt-specific jobs endpoint; the latest-jobs endpoint is not historical evidence.
+
+The source-controlled `.fsgg/telemetry-ci-attribution.json` profile matches exact workflow/job/step identities
+and records rationale. Missing or drifted matches are unclassified and classification coverage stays unknown;
+`mixed` is not redistributed. Runner seconds sum valid job intervals, while wall seconds union them. Queue,
+avoidable-rerun and critical-path values require their own native witnesses; absent, reversed, pending or
+skipped timestamps never become zero. Monetary cost is not collected.
+
 ## Locking and crash recovery
 
 SQLite uses WAL, `synchronous=FULL`, foreign keys, a bounded busy timeout and short `BEGIN IMMEDIATE`
@@ -76,6 +105,11 @@ SELECT invocation_id, thread_id, turn_sequence, input_count, cached_input, outpu
 FROM runtime_turn_usage ORDER BY invocation_id, turn_sequence;
 SELECT a.invocation_id FROM runtime_admissions a
 WHERE NOT EXISTS (SELECT 1 FROM runtime_terminals t WHERE t.invocation_id = a.invocation_id);
+SELECT repository, run_id, attempt, status, conclusion FROM ci_runs ORDER BY repository, run_id, attempt;
+SELECT run_id, attempt, job_id, started_at, completed_at FROM ci_jobs
+WHERE item_id = 'UTEL-04A' ORDER BY run_id, attempt, job_id;
+SELECT inventory, attempts, job_pages, terminal, timestamps, lineage, classification, critical_path
+FROM ci_coverage WHERE item_id = 'UTEL-04A' ORDER BY rowid DESC LIMIT 1;
 ```
 
 Use `telemetry store summary --item ID` or bounded `export --public --output FILE` for allowlisted aggregates.

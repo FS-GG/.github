@@ -36,6 +36,12 @@ module TelemetryStore =
         | RuntimeTurnUsage of invocationId: string * threadId: string * turnId: string option * turnSequence: int64 * provider: string option * requestedModel: string option * observedModel: string option * requestedEffort: string option * observedEffort: string option * backend: string option * scope: string * provenance: string * input: int64 * cachedInput: int64 * output: int64 * reasoning: int64 option * total: int64
         | RuntimeTerminal of invocationId: string * threadId: string option * outcome: string * exitCode: int64
         | RuntimeGap of invocationId: string * code: string
+        | CiBinding of collectionId: string * repository: string * head: string * pullRequest: int64 * workflow: string * featureId: string * attemptId: string * parentAttemptId: string option * producerStream: string * binding: string
+        | CiPage of collectionId: string * resource: string * page: int64 * count: int64 * total: int64
+        | CiRun of repository: string * runId: int64 * attempt: int64 * workflow: string * event: string * head: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * updatedAt: string option
+        | CiJob of repository: string * runId: int64 * attempt: int64 * jobId: int64 * name: string * status: string * conclusion: string option * createdAt: string option * startedAt: string option * completedAt: string option
+        | CiStep of repository: string * runId: int64 * attempt: int64 * jobId: int64 * number: int64 * name: string * status: string * conclusion: string option * startedAt: string option * completedAt: string option * classification: string * rationale: string
+        | CiCoverage of collectionId: string * inventory: string * attempts: string * jobPages: string * terminal: string * timestamps: string * lineage: string * classification: string * criticalPath: string
 
     type Fact =
         { Identity: string

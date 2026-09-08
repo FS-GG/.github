@@ -133,10 +133,10 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 3
+        pragma path 4
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready")) |> ignore
-        pragma path 2
+        pragma path 3
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
         let output = Path.Combine(Path.GetTempPath(), "fsgg-utel02-public-" + Guid.NewGuid().ToString("N") + ".json")
         try
@@ -183,9 +183,43 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version=2; PRAGMA user_version=1;"
+        command.CommandText <- "DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":2", initialized)
+        Assert.Contains("\"schemaVersion\":3", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
+
+    [<Fact>]
+    let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        Assert.Contains("\"schemaVersion\":3", TelemetryStoreApplication.initialize path approved |> unwrap)
+        let ci = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ci-batch-1","sourceIdentity":"ci-worker","generation":"g1","cursor":"1","eventCount":4,"events":[{{"kind":"ci-binding","identity":"ci-binding-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":1,"workflow":"ci.yml","featureId":"UTEL","attemptId":"a1","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}},{{"kind":"ci-job","identity":"ci-job-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"name":"build","status":"completed","conclusion":"success","createdAt":"2026-01-01T00:00:00Z","startedAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:01:00Z"}},{{"kind":"ci-step","identity":"ci-step-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"number":1,"name":"test","status":"completed","conclusion":"success","startedAt":"2026-01-01T00:00:10Z","completedAt":"2026-01-01T00:00:50Z","classification":"useful-validation","rationale":"exact fixture"}},{{"kind":"ci-coverage","identity":"ci-coverage-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}]}}"""
+        TelemetryStoreApplication.ingest path approved ci |> unwrap |> ignore
+        let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-04A" |> unwrap
+        Assert.Contains("\"runnerSeconds\":60", summary)
+        Assert.Contains("\"usefulValidationSeconds\":40", summary)
+        Assert.Contains("\"criticalPathCoverage\":\"unknown\"", summary)
+        Assert.DoesNotContain("ci-worker", summary)
+        Assert.DoesNotContain("exact fixture", summary)
+
+    [<Fact>]
+    let ``UTEL-04A command shapes require explicit selected population arguments`` () =
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "collect"; "--assignment"; "/private/a.json"; "--repo"; "o/r"; "--pr"; "1"; "--head"; String.replicate 40 "a"; "--workflow"; "ci.yml"; "--store-root"; "/durable/store" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "summary"; "--item"; "UTEL-04A" ])
+
+    [<Fact>]
+    let ``UTEL-04A v2 upgrade preserves runtime observations`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
+        command.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("\"schemaVersion\":3", TelemetryStoreApplication.initialize path approved |> unwrap)
+        let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
+        Assert.Contains("\"admitted\":1", summary)

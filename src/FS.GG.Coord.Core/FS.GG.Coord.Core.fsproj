@@ -139,6 +139,8 @@
     <Compile Include="TelemetryStore.fs" />
     <Compile Include="TelemetryRuntime.fsi" />
     <Compile Include="TelemetryRuntime.fs" />
+    <Compile Include="TelemetryCi.fsi" />
+    <Compile Include="TelemetryCi.fs" />
     <Compile Include="Qualification.fsi" />
     <Compile Include="Qualification.fs" />
     <Compile Include="RoadmapWorkUnit.fsi" />

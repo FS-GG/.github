@@ -257,6 +257,8 @@ the standing safety advisories carry forward.
     <Compile Include="TelemetryStoreApplication.fs" />
     <Compile Include="TelemetryRuntimeApplication.fsi" />
     <Compile Include="TelemetryRuntimeApplication.fs" />
+    <Compile Include="TelemetryCiApplication.fsi" />
+    <Compile Include="TelemetryCiApplication.fs" />
     <Compile Include="TelemetryApplication.fsi" />
     <Compile Include="TelemetryApplication.fs" />
     <Compile Include="Program.fs" />
