@@ -24,6 +24,7 @@ module TelemetryStoreApplicationTests =
         command.CommandText <- $"PRAGMA user_version=%d{value};"
         command.ExecuteNonQuery() |> ignore
     let private dropBudgetSchema = "DROP TABLE budget_interventions; DROP TABLE budget_breaches; DROP TABLE budget_assessment_revisions; DROP TABLE budget_epoch_membership; DROP INDEX budget_one_open_epoch; DROP TABLE budget_epochs; DROP TABLE budget_dirty_items; DROP TABLE budget_shared_cost_refs; DROP TABLE budget_intervention_facts; DROP TABLE budget_interval_facts; DROP TABLE budget_attribution_facts; DROP TABLE budget_population_facts; DELETE FROM schema_migrations WHERE version=4;"
+    let private dropOperationalSchema = "DROP TABLE operational_event_times; DROP TABLE invocation_lineage; DROP TABLE expected_dispatches; DROP TABLE operational_activations; DELETE FROM schema_migrations WHERE version=5;"
     let private budgetBatch ingest cursor events =
         Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"budget-worker","generation":"g1","cursor":"{cursor}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
     let private population item revision state source =
@@ -31,6 +32,23 @@ module TelemetryStoreApplicationTests =
     let private attribution item revision numerator denominator coverage attribution sourceKind source =
         let number value = value |> Option.map string |> Option.defaultValue "null"
         $"""{{"kind":"budget-attribution","identity":"attribution-{item}","itemId":"{item}","revision":{revision},"dimension":"model-tokens","provider":"openai","accountingScope":"whole-item","numerator":{number numerator},"denominator":{number denominator},"coverage":"{coverage}","attribution":"{attribution}","sourceKind":"{sourceKind}","sourceRef":"{source}"}}"""
+    let private operationalBatch ingest item events =
+        Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"operational-observer","generation":"g1","cursor":"{ingest}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
+    let private activation item runtime delay =
+        $"""{{"kind":"operational-activation","identity":"activation-{item}","itemId":"{item}","revision":0,"activationId":"activation-{item}","scope":"explicit-future-dispatches","runtime":"{runtime}","activatedAt":"2026-09-08T10:00:00Z","clockProvenance":"host-wall","lateAfterSeconds":{delay}}}"""
+    let private dispatch item id relation parent runtime minute =
+        let parentValue = parent |> Option.map (fun value -> $"\"{value}\"") |> Option.defaultValue "null"
+        $"""{{"kind":"expected-dispatch","identity":"expected-{item}-{id}","itemId":"{item}","revision":0,"dispatchId":"{id}","activationId":"activation-{item}","relation":"{relation}","parentDispatchId":{parentValue},"runtime":"{runtime}","expectedAt":"2026-09-08T10:{minute}:00Z","clockProvenance":"host-wall"}}"""
+    let private lineage item identity dispatchId invocationId relation parentInvocation root runtime =
+        let parentValue = parentInvocation |> Option.map (fun value -> $"\"{value}\"") |> Option.defaultValue "null"
+        $"""{{"kind":"invocation-lineage","identity":"{identity}","itemId":"{item}","revision":0,"dispatchId":"{dispatchId}","invocationId":"{invocationId}","relation":"{relation}","parentInvocationId":{parentValue},"rootInvocationId":"{root}","runtime":"{runtime}"}}"""
+    let private eventTime item identity invocation event occurred occurredClock observed observedClock =
+        let timestamp value = value |> Option.map (fun text -> $"\"{text}\"") |> Option.defaultValue "null"
+        let clock value = value |> Option.map (fun text -> $"\"{text}\"") |> Option.defaultValue "null"
+        $"""{{"kind":"event-time","identity":"{identity}","itemId":"{item}","revision":0,"invocationId":"{invocation}","event":"{event}","occurredAt":{timestamp occurred},"occurredClockProvenance":{clock occurredClock},"observedAt":{timestamp observed},"observedClockProvenance":{clock observedClock}}}"""
+    let private completeTimes item prefix invocation minute observedSecond =
+        [ for event in [ "admission"; "start"; "terminal" ] do
+            yield eventTime item ($"time-{prefix}-{event}") invocation event (Some $"2026-09-08T10:{minute}:00Z") (Some "provider-native") (Some $"2026-09-08T10:{minute}:{observedSecond}Z") (Some "provider-native") ]
 
     [<Fact>]
     let ``UTEL-02 init publish drain reopen replay and public summary are durable`` () =
@@ -141,10 +159,10 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 5
+        pragma path 6
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready")) |> ignore
-        pragma path 4
+        pragma path 5
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
         let output = Path.Combine(Path.GetTempPath(), "fsgg-utel02-public-" + Guid.NewGuid().ToString("N") + ".json")
         try
@@ -191,18 +209,18 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
+        command.CommandText <- dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":4", initialized)
+        Assert.Contains("\"schemaVersion\":5", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
 
     [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":4", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
         let ci = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ci-batch-1","sourceIdentity":"ci-worker","generation":"g1","cursor":"1","eventCount":4,"events":[{{"kind":"ci-binding","identity":"ci-binding-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":1,"workflow":"ci.yml","featureId":"UTEL","attemptId":"a1","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}},{{"kind":"ci-job","identity":"ci-job-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"name":"build","status":"completed","conclusion":"success","createdAt":"2026-01-01T00:00:00Z","startedAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:01:00Z"}},{{"kind":"ci-step","identity":"ci-step-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"number":1,"name":"test","status":"completed","conclusion":"success","startedAt":"2026-01-01T00:00:10Z","completedAt":"2026-01-01T00:00:50Z","classification":"useful-validation","rationale":"exact fixture"}},{{"kind":"ci-coverage","identity":"ci-coverage-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}]}}"""
         TelemetryStoreApplication.ingest path approved ci |> unwrap |> ignore
         let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-04A" |> unwrap
@@ -225,10 +243,10 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
+        command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); " + dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":4", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
         let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
         Assert.Contains("\"admitted\":1", summary)
 
@@ -396,10 +414,10 @@ module TelemetryStoreApplicationTests =
         use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         connection.Open()
         use command = connection.CreateCommand()
-        command.CommandText <- "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); " + dropBudgetSchema + " PRAGMA user_version=3;"
+        command.CommandText <- "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); " + dropOperationalSchema + " " + dropBudgetSchema + " PRAGMA user_version=3;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":4", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use count = verify.CreateCommand()
@@ -472,6 +490,219 @@ module TelemetryStoreApplicationTests =
         connection.Open()
         use corrupt = connection.CreateCommand()
         corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=4;"
+        corrupt.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
+        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.initialize path approved))
+
+    [<Fact>]
+    let ``UTEL-06A root child and follow-up dispatch identities reconcile`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "operational-tree"
+        let facts =
+            [ activation item "codex-exec" 60L
+              dispatch item "dispatch-root" "root" None "codex-exec" "01"
+              lineage item "lineage-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "codex-exec"
+              yield! completeTimes item "root" "invoke-root" "01" "05"
+              dispatch item "dispatch-child" "child" (Some "dispatch-root") "codex-exec" "02"
+              lineage item "lineage-child" "dispatch-child" "invoke-child" "child" (Some "invoke-root") "invoke-root" "codex-exec"
+              yield! completeTimes item "child" "invoke-child" "02" "05"
+              dispatch item "dispatch-follow" "follow-up" (Some "dispatch-child") "codex-exec" "03"
+              lineage item "lineage-follow" "dispatch-follow" "invoke-follow" "follow-up" (Some "invoke-child") "invoke-root" "codex-exec"
+              yield! completeTimes item "follow" "invoke-follow" "03" "05" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-tree" item facts) |> unwrap |> ignore
+        let result = TelemetryStoreApplication.reconcile path approved item |> unwrap
+        Assert.Contains("\"expected\":3", result)
+        Assert.Contains("\"matched\":3", result)
+        Assert.Contains("\"complete\":3", result)
+        Assert.Contains("\"usageCoverage\":\"not-evaluated\"", result)
+        Assert.Contains("\"terminalOutcomeCoverage\":\"not-evaluated\"", result)
+        Assert.Contains("\"historicalSessionDiscovery\":false", result)
+
+    [<Fact>]
+    let ``UTEL-06A missing parent and conflicting identity remain explicit`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let missing = "operational-missing-parent"
+        let missingFacts =
+            [ activation missing "codex-exec" 60L
+              dispatch missing "dispatch-child" "child" (Some "dispatch-absent") "codex-exec" "01"
+              lineage missing "lineage-child" "dispatch-child" "invoke-child" "child" (Some "invoke-absent") "invoke-root" "codex-exec" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-missing" missing missingFacts) |> unwrap |> ignore
+        Assert.Contains("missing-parent", TelemetryStoreApplication.reconcile path approved missing |> unwrap)
+        let conflict = "operational-conflict"
+        let conflictFacts =
+            [ activation conflict "codex-exec" 60L
+              dispatch conflict "dispatch-root" "root" None "codex-exec" "01"
+              lineage conflict "lineage-root-a" "dispatch-root" "invoke-a" "root" None "invoke-a" "codex-exec"
+              lineage conflict "lineage-root-b" "dispatch-root" "invoke-b" "root" None "invoke-b" "codex-exec" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-conflict" conflict conflictFacts) |> unwrap |> ignore
+        Assert.Contains("conflicting-identity", TelemetryStoreApplication.reconcile path approved conflict |> unwrap)
+
+    [<Fact>]
+    let ``UTEL-06A cyclic lineage and unsupported runtimes cannot match`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let cycle = "operational-cycle"
+        let cycleFacts =
+            [ activation cycle "codex-exec" 60L
+              dispatch cycle "dispatch-a" "child" (Some "dispatch-b") "codex-exec" "01"
+              dispatch cycle "dispatch-b" "follow-up" (Some "dispatch-a") "codex-exec" "02"
+              lineage cycle "lineage-a" "dispatch-a" "invoke-a" "child" (Some "invoke-b") "invoke-a" "codex-exec"
+              lineage cycle "lineage-b" "dispatch-b" "invoke-b" "follow-up" (Some "invoke-a") "invoke-a" "codex-exec" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-cycle" cycle cycleFacts) |> unwrap |> ignore
+        Assert.Contains("cyclic-lineage", TelemetryStoreApplication.reconcile path approved cycle |> unwrap)
+        let unsupported = "operational-unsupported"
+        let unsupportedFacts =
+            [ activation unsupported "collaboration.spawn_agent" 60L
+              dispatch unsupported "dispatch-root" "root" None "collaboration.spawn_agent" "01"
+              lineage unsupported "lineage-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "collaboration.spawn_agent" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-unsupported" unsupported unsupportedFacts) |> unwrap |> ignore
+        let result = TelemetryStoreApplication.reconcile path approved unsupported |> unwrap
+        Assert.Contains("runtime-unsupported", result)
+        Assert.Contains("\"matched\":0", result)
+
+    [<Fact>]
+    let ``UTEL-06A missing timestamps and late observations stay non-qualifying`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let missing = "operational-missing-time"
+        let missingFacts =
+            [ activation missing "codex-exec" 5L
+              dispatch missing "dispatch-root" "root" None "codex-exec" "01"
+              lineage missing "lineage-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "codex-exec"
+              eventTime missing "time-missing-admission" "invoke-root" "admission" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime missing "time-missing-start" "invoke-root" "start" None None (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime missing "time-missing-terminal" "invoke-root" "terminal" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native") ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-missing-time" missing missingFacts) |> unwrap |> ignore
+        Assert.Contains("timestamps-missing", TelemetryStoreApplication.reconcile path approved missing |> unwrap)
+        let late = "operational-late"
+        let lateFacts =
+            [ activation late "codex-exec" 5L
+              dispatch late "dispatch-root" "root" None "codex-exec" "01"
+              lineage late "lineage-late-root" "dispatch-root" "invoke-late-root" "root" None "invoke-late-root" "codex-exec"
+              yield! completeTimes late "late-root" "invoke-late-root" "01" "06" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-late" late lateFacts) |> unwrap |> ignore
+        let result = TelemetryStoreApplication.reconcile path approved late |> unwrap
+        Assert.Contains("observation-late", result)
+        Assert.Contains("\"late\":1", result)
+
+    [<Fact>]
+    let ``UTEL-06A arbitrary and duplicate event witnesses are invalid`` () =
+        let arbitrary = "operational-arbitrary-event"
+        let arbitraryEvent = eventTime arbitrary "time-foo" "invoke-root" "foo" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+        match TelemetryStore.parseBatch (operationalBatch "operational-arbitrary" arbitrary [ arbitraryEvent ]) with
+        | Error errors -> Assert.Contains("admission, start, or terminal", String.concat ";" errors)
+        | Ok _ -> failwith "arbitrary event witness was accepted"
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let duplicate = "operational-duplicate-event"
+        let facts =
+            [ activation duplicate "codex-exec" 60L
+              dispatch duplicate "dispatch-root" "root" None "codex-exec" "01"
+              lineage duplicate "lineage-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "codex-exec"
+              yield! completeTimes duplicate "root" "invoke-root" "01" "01" ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-duplicate-base" duplicate facts) |> unwrap |> ignore
+        let conflicting = eventTime duplicate "time-conflicting-terminal" "invoke-root" "terminal" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:02Z") (Some "provider-native")
+        TelemetryStoreApplication.publish path approved (operationalBatch "operational-duplicate-conflict" duplicate [ conflicting ]) |> unwrap |> ignore
+        Assert.Contains("\"quarantined\":1", TelemetryStoreApplication.drain path approved |> unwrap)
+        Assert.Contains("\"complete\":1", TelemetryStoreApplication.reconcile path approved duplicate |> unwrap)
+
+    [<Fact>]
+    let ``UTEL-06A incomparable clock domains never produce latency`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "operational-clock-mismatch"
+        let facts =
+            [ activation item "codex-exec" 60L
+              dispatch item "dispatch-root" "root" None "codex-exec" "01"
+              lineage item "lineage-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "codex-exec"
+              eventTime item "time-admission" "invoke-root" "admission" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "host-wall")
+              eventTime item "time-start" "invoke-root" "start" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime item "time-terminal" "invoke-root" "terminal" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native") ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "operational-clock-mismatch" item facts) |> unwrap |> ignore
+        let result = TelemetryStoreApplication.reconcile path approved item |> unwrap
+        Assert.Contains("clock-domain-mismatch", result)
+        Assert.Contains("\"timingCoverage\":{\"complete\":0,\"invalid\":1", result)
+
+    [<Fact>]
+    let ``UTEL-06A lifecycle ordering and common clock are required for complete timing`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let observe item events =
+            let facts =
+                [ activation item "codex-exec" 60L
+                  dispatch item "dispatch-root" "root" None "codex-exec" "01"
+                  lineage item ($"lineage-{item}") "dispatch-root" ($"invoke-{item}") "root" None ($"invoke-{item}") "codex-exec"
+                  yield! events ]
+            TelemetryStoreApplication.ingest path approved (operationalBatch ($"batch-{item}") item facts) |> unwrap |> ignore
+            TelemetryStoreApplication.reconcile path approved item |> unwrap
+        let startBefore = "operational-start-before-admission"
+        let startBeforeInvocation = $"invoke-{startBefore}"
+        let startBeforeEvents =
+            [ eventTime startBefore "order-a-admission" startBeforeInvocation "admission" (Some "2026-09-08T10:01:01Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime startBefore "order-a-start" startBeforeInvocation "start" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:02Z") (Some "provider-native")
+              eventTime startBefore "order-a-terminal" startBeforeInvocation "terminal" (Some "2026-09-08T10:01:02Z") (Some "provider-native") (Some "2026-09-08T10:01:03Z") (Some "provider-native") ]
+        Assert.Contains("lifecycle-occurrence-order-invalid", observe startBefore startBeforeEvents)
+        let terminalBefore = "operational-terminal-before-start"
+        let terminalBeforeInvocation = $"invoke-{terminalBefore}"
+        let terminalBeforeEvents =
+            [ eventTime terminalBefore "order-b-admission" terminalBeforeInvocation "admission" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime terminalBefore "order-b-start" terminalBeforeInvocation "start" (Some "2026-09-08T10:01:01Z") (Some "provider-native") (Some "2026-09-08T10:01:03Z") (Some "provider-native")
+              eventTime terminalBefore "order-b-terminal" terminalBeforeInvocation "terminal" (Some "2026-09-08T10:01:02Z") (Some "provider-native") (Some "2026-09-08T10:01:02Z") (Some "provider-native") ]
+        Assert.Contains("lifecycle-observation-order-invalid", observe terminalBefore terminalBeforeEvents)
+        let mixedClock = "operational-cross-event-clock"
+        let mixedClockInvocation = $"invoke-{mixedClock}"
+        let mixedClockEvents =
+            [ eventTime mixedClock "clock-c-admission" mixedClockInvocation "admission" (Some "2026-09-08T10:01:00Z") (Some "provider-native") (Some "2026-09-08T10:01:01Z") (Some "provider-native")
+              eventTime mixedClock "clock-c-start" mixedClockInvocation "start" (Some "2026-09-08T10:01:01Z") (Some "host-wall") (Some "2026-09-08T10:01:02Z") (Some "host-wall")
+              eventTime mixedClock "clock-c-terminal" mixedClockInvocation "terminal" (Some "2026-09-08T10:01:02Z") (Some "provider-native") (Some "2026-09-08T10:01:03Z") (Some "provider-native") ]
+        Assert.Contains("lifecycle-clock-domain-mismatch", observe mixedClock mixedClockEvents)
+
+    [<Fact>]
+    let ``UTEL-06A v4 stores upgrade without changing historical facts`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO budget_population_facts VALUES('keep-population','UTEL-06A','UTEL-06A','completed','native-item','native:keep',0); " + dropOperationalSchema + " PRAGMA user_version=4;"
+        command.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("\"schemaVersion\":5", TelemetryStoreApplication.initialize path approved |> unwrap)
+        use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        verify.Open()
+        use count = verify.CreateCommand()
+        count.CommandText <- "SELECT count(*) FROM budget_population_facts WHERE identity='keep-population';"
+        Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
+
+    [<Fact>]
+    let ``UTEL-06A activation contract excludes historical session discovery`` () =
+        let item = "operational-history"
+        let historical = (activation item "codex-exec" 60L).Replace("explicit-future-dispatches", "historical-sessions")
+        match TelemetryStore.parseBatch (operationalBatch "operational-history" item [ historical ]) with
+        | Error errors -> Assert.Contains("explicit-future-dispatches", String.concat ";" errors)
+        | Ok _ -> failwith "historical discovery scope was accepted"
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "reconcile"; "--item"; item ])
+
+    [<Fact>]
+    let ``UTEL-06A migration checksum is verified`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use corrupt = connection.CreateCommand()
+        corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=5;"
         corrupt.ExecuteNonQuery() |> ignore
         connection.Close()
         Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
