@@ -1177,6 +1177,10 @@ immutable typed batches into private inboxes, while one orchestrator-owned drain
 Readers use read-only WAL snapshots; a stable host writer lock plus native-identity deduplication protects
 recovery and old/new process overlap. The batch is compatible with a future actor message contract, but no
 actor runtime, permanent daemon, network-shared database, collection hook, or publication path is introduced.
+Future explicit `codex exec --json --ephemeral` launches can pass through the source-only runtime adapter. Its
+closed private assignment and content-discarding JSONL projector publish admission/start/turn-usage/terminal
+facts to that same inbox; current collaboration launches and generated workspaces remain unwired. The maintained
+schema and operator contract is the [local telemetry store reference](reference/local-telemetry-store.md).
 
 Adoption is publish-before-use: release the compiled command family, verify a receiver against those exact
 package bytes, flip both item-process skills together, regenerate Claude projections from `.agents`, and

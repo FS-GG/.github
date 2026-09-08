@@ -21,6 +21,7 @@
     <Compile Include="PacketCliTests.fs" />
     <Compile Include="TelemetryCliTests.fs" />
     <Compile Include="TelemetryStoreApplicationTests.fs" />
+    <Compile Include="TelemetryRuntimeApplicationTests.fs" />
     <Compile Include="RoadmapWorkUnitCliTests.fs" />
     <Compile Include="SelfHostCliTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />

@@ -1,4 +1,4 @@
-# UTEL-02 — Durable local telemetry store
+# UTEL — Durable local telemetry store
 
 Backlink: [Unified Development Roadmap §9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 
@@ -52,3 +52,29 @@ The immutable worker batch is also a future Akka message-contract seam. A later 
 could own normal-path serialized drains and supervision, but UTEL-02 adds no Akka dependency and does not change
 roadmap sequencing. SQLite locking and deduplication remain the final recovery boundary across process death,
 upgrades and old/new overlap.
+
+## UTEL-03A — Explicit Codex exec observation
+
+- [x] Add `telemetry runtime codex-exec --assignment <private-file> -- <Codex args>` for future explicit
+  `codex exec --json --ephemeral` launches. The closed assignment contains stable feature, original-item,
+  attempt, optional parent-attempt and producer-stream identities, never task text.
+- [x] Publish admission before launch, then process/thread starts, completed-turn usage, typed gaps and the
+  terminal native exit through the UTEL-02 inbox. Native stdout bytes, inherited stdin/current directory,
+  permissions and exit status remain the child contract; telemetry failure never changes them.
+- [x] Project JSONL incrementally through a bounded nonblocking queue. Prompts, messages, reasoning text,
+  commands, tool I/O, diffs, paths and raw JSON are discarded. Oversized/malformed/lost framing becomes a
+  bounded gap; exit zero or a final message never fabricates usage.
+- [x] Add checksummed schema migration 2 for launcher admissions, process/thread starts, native-thread joins,
+  per-turn usage, terminals and gaps. Requested and observed model/effort/backend remain distinct and nullable;
+  token scope/provenance is explicit, and native turn identity or documented invocation-local sequence dedups.
+- [x] Report admitted, started, terminal, usage and missing-registration/start/terminal/usage populations
+  independently in read-only summaries. Add a source-only runtime capability status that reports installed
+  Codex, adapter support, configured/unconfigured store and `collaboration.spawn_agent` as unsupported.
+- [x] Maintain the operator and schema contract in the
+  [local telemetry store reference](../reference/local-telemetry-store.md).
+
+This window does not scan historical sessions, hook or wrap existing agent launches, claim current
+`collaboration.spawn_agent` coverage, publish packages, change generated workspaces, or enable collection by
+default. Current-host qualification is a separate post-merge future-only check. Publication and adoption remain
+pending. The immutable assignment plus observation batch remains compatible with a later telemetry-writer actor;
+SQLite locking and deduplication continue to protect recovery and mixed-version overlap.

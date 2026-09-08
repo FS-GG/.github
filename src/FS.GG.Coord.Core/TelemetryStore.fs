@@ -33,6 +33,11 @@ module TelemetryStore =
         | Coverage of Coverage
         | Diagnostic of code: string * severity: string
         | Correction of targetIdentity: string * reason: string
+        | RuntimeAdmission of invocationId: string * featureId: string * attemptId: string * parentAttemptId: string option * producerStream: string * requestedModel: string option * requestedEffort: string option * backend: string option
+        | RuntimeStart of invocationId: string * threadId: string option * turnId: string option * turnSequence: int64 option * processId: int64 * phase: string
+        | RuntimeTurnUsage of invocationId: string * threadId: string * turnId: string option * turnSequence: int64 * provider: string option * requestedModel: string option * observedModel: string option * requestedEffort: string option * observedEffort: string option * backend: string option * scope: string * provenance: string * input: int64 * cachedInput: int64 * output: int64 * reasoning: int64 option * total: int64
+        | RuntimeTerminal of invocationId: string * threadId: string option * outcome: string * exitCode: int64
+        | RuntimeGap of invocationId: string * code: string
     type Fact =
         { Identity: string; ItemId: string option; Revision: int64; Kind: string; Payload: Payload
           Canonical: string; ContentDigest: string }
@@ -41,6 +46,7 @@ module TelemetryStore =
     type Aggregate =
         { ItemId: string; FactCount: int64; UsageObservations: int64; DeliveryObservations: int64
           Input: int64; CachedInput: int64; CacheWriteInput: int64; Output: int64; Reasoning: int64 option; Total: int64
+          Admitted: int64; Started: int64; Terminal: int64; RuntimeUsage: int64; MissingAdmission: int64; MissingStart: int64; MissingTerminal: int64; MissingUsage: int64
           RecordValidity: string; JoinIntegrity: string; PopulationCoverage: string; Qualification: string }
     type DurabilityAssessment = ApprovedLocalDurable | Unsafe of reason: string | DurabilityUnverified of reason: string
 
@@ -148,6 +154,36 @@ module TelemetryStore =
                 match requiredText label node "targetIdentity", requiredText label node "reason" with
                 | Ok target, Ok reason -> make [ "targetIdentity"; "reason" ] (Correction(target, reason))
                 | values -> Error(sprintf "%A" values)
+            | "runtime-admission" ->
+                match requiredText label node "invocationId", requiredText label node "featureId", requiredText label node "attemptId", optionalText label node "parentAttemptId", requiredText label node "producerStream", optionalText label node "requestedModel", optionalText label node "requestedEffort", optionalText label node "backend" with
+                | Ok invocation, Ok feature, Ok attempt, Ok parent, Ok producer, Ok model, Ok effort, Ok backend ->
+                    make [ "invocationId"; "featureId"; "attemptId"; "parentAttemptId"; "producerStream"; "requestedModel"; "requestedEffort"; "backend" ] (RuntimeAdmission(invocation,feature,attempt,parent,producer,model,effort,backend))
+                | values -> Error(sprintf "%A" values)
+            | "runtime-start" ->
+                match requiredText label node "invocationId", optionalText label node "threadId", optionalText label node "turnId", optionalInt label node "turnSequence", requiredInt label node "processId", requiredText label node "phase" with
+                | Ok invocation, Ok threadId, Ok turnId, Ok turnSequence, Ok processId, Ok phase when phase = "process" || phase = "thread" || (phase = "turn" && threadId.IsSome && turnSequence.IsSome) -> make [ "invocationId"; "threadId"; "turnId"; "turnSequence"; "processId"; "phase" ] (RuntimeStart(invocation,threadId,turnId,turnSequence,processId,phase))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.phase must be process, thread, or a qualified turn"
+                | values -> Error(sprintf "%A" values)
+            | "runtime-turn-usage" ->
+                match requiredText label node "invocationId", requiredText label node "threadId", optionalText label node "turnId", requiredInt label node "turnSequence",
+                      optionalText label node "provider", optionalText label node "requestedModel", optionalText label node "observedModel", optionalText label node "requestedEffort", optionalText label node "observedEffort", optionalText label node "backend",
+                      requiredText label node "scope", requiredText label node "provenance", requiredInt label node "input", requiredInt label node "cachedInput", requiredInt label node "output", optionalInt label node "reasoning", requiredInt label node "total" with
+                | Ok invocation, Ok threadId, Ok turnId, Ok sequence, Ok provider, Ok requestedModel, Ok observedModel, Ok requestedEffort, Ok observedEffort, Ok backend, Ok scope, Ok provenance, Ok input, Ok cached, Ok output, Ok reasoning, Ok total ->
+                    match checkedAdd "runtime-turn-usage.total" input output with
+                    | Error reason -> Error reason
+                    | Ok expected when expected <> total -> Error $"%s{label}.total must equal input + output"
+                    | Ok _ when cached > input -> Error $"%s{label}.cachedInput exceeds input"
+                    | Ok _ when reasoning |> Option.exists (fun count -> count > output) -> Error $"%s{label}.reasoning exceeds output"
+                    | Ok _ -> make [ "invocationId"; "threadId"; "turnId"; "turnSequence"; "provider"; "requestedModel"; "observedModel"; "requestedEffort"; "observedEffort"; "backend"; "scope"; "provenance"; "input"; "cachedInput"; "output"; "reasoning"; "total" ] (RuntimeTurnUsage(invocation,threadId,turnId,sequence,provider,requestedModel,observedModel,requestedEffort,observedEffort,backend,scope,provenance,input,cached,output,reasoning,total))
+                | values -> Error(sprintf "%A" values)
+            | "runtime-terminal" ->
+                match requiredText label node "invocationId", optionalText label node "threadId", requiredText label node "outcome", requiredInt label node "exitCode" with
+                | Ok invocation, Ok threadId, Ok outcome, Ok exitCode -> make [ "invocationId"; "threadId"; "outcome"; "exitCode" ] (RuntimeTerminal(invocation,threadId,outcome,exitCode))
+                | values -> Error(sprintf "%A" values)
+            | "runtime-gap" ->
+                match requiredText label node "invocationId", requiredText label node "code" with
+                | Ok invocation, Ok code -> make [ "invocationId"; "code" ] (RuntimeGap(invocation,code))
+                | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)
 
@@ -198,6 +234,7 @@ module TelemetryStore =
             let value name getter = coverage |> Option.map getter |> Option.defaultValue name
             Ok { ItemId = itemId; FactCount = int64 selected.Length; UsageObservations = int64 usage.Length; DeliveryObservations = selected |> List.filter (fun fact -> match fact.Payload with Delivery _ -> true | _ -> false) |> List.length |> int64
                  Input = input; CachedInput = cached; CacheWriteInput = write; Output = output; Reasoning = reasoning; Total = total
+                 Admitted = 0L; Started = 0L; Terminal = 0L; RuntimeUsage = 0L; MissingAdmission = 0L; MissingStart = 0L; MissingTerminal = 0L; MissingUsage = 0L
                  RecordValidity = value "unknown" _.RecordValidity; JoinIntegrity = value "unknown" _.JoinIntegrity
                  PopulationCoverage = value "unknown" _.PopulationCoverage; Qualification = value "not-evaluated" _.Qualification }
         | values -> Error [ sprintf "%A" values ]
@@ -207,6 +244,7 @@ module TelemetryStore =
             {| schema = "fsgg.telemetry.public-summary/1"; item = aggregate.ItemId; factCount = aggregate.FactCount
                usageObservations = aggregate.UsageObservations; deliveryObservations = aggregate.DeliveryObservations
                usage = {| input = aggregate.Input; cachedInput = aggregate.CachedInput; cacheWriteInput = aggregate.CacheWriteInput; output = aggregate.Output; reasoning = aggregate.Reasoning; total = aggregate.Total |}
+               launcherPopulation = {| admitted = aggregate.Admitted; started = aggregate.Started; terminal = aggregate.Terminal; usage = aggregate.RuntimeUsage; missingAdmission = aggregate.MissingAdmission; missingStart = aggregate.MissingStart; missingTerminal = aggregate.MissingTerminal; missingUsage = aggregate.MissingUsage |}
                recordValidity = aggregate.RecordValidity; joinIntegrity = aggregate.JoinIntegrity
                populationCoverage = aggregate.PopulationCoverage; qualification = aggregate.Qualification |} + "\n"
 

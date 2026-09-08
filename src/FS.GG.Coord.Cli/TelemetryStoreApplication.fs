@@ -17,6 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
+    let private currentSchemaVersion = 2
 
     module private Native =
         [<Literal>]
@@ -53,7 +54,18 @@ CREATE TABLE corrections(sequence INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT N
 PRAGMA user_version=1;
 """
     let private migrationDigest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migrationSql)
-
+    let private migration2Sql = """
+CREATE TABLE runtime_admissions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL UNIQUE, feature_id TEXT NOT NULL, attempt_id TEXT NOT NULL, parent_attempt_id TEXT, producer_stream TEXT NOT NULL, requested_model TEXT, requested_effort TEXT, backend TEXT) STRICT;
+CREATE TABLE runtime_starts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, thread_id TEXT, turn_id TEXT, turn_sequence INTEGER CHECK(turn_sequence >= 0), process_id INTEGER NOT NULL CHECK(process_id >= 0), phase TEXT NOT NULL) STRICT;
+CREATE UNIQUE INDEX runtime_thread_start_identity ON runtime_starts(invocation_id,thread_id) WHERE phase='thread' AND thread_id IS NOT NULL;
+CREATE UNIQUE INDEX runtime_turn_start_identity ON runtime_starts(invocation_id,thread_id,turn_sequence) WHERE phase='turn';
+CREATE TABLE runtime_turn_usage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, thread_id TEXT NOT NULL, turn_id TEXT, turn_sequence INTEGER NOT NULL CHECK(turn_sequence >= 0), provider TEXT, requested_model TEXT, observed_model TEXT, requested_effort TEXT, observed_effort TEXT, backend TEXT, accounting_scope TEXT NOT NULL, provenance TEXT NOT NULL, input_count INTEGER NOT NULL CHECK(input_count >= 0), cached_input INTEGER NOT NULL CHECK(cached_input >= 0), output_count INTEGER NOT NULL CHECK(output_count >= 0), reasoning INTEGER, total INTEGER NOT NULL CHECK(total >= 0), UNIQUE(invocation_id,thread_id,turn_sequence)) STRICT;
+CREATE UNIQUE INDEX runtime_turn_native_identity ON runtime_turn_usage(invocation_id,thread_id,turn_id) WHERE turn_id IS NOT NULL;
+CREATE TABLE runtime_terminals(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL UNIQUE, thread_id TEXT, outcome TEXT NOT NULL, exit_code INTEGER NOT NULL CHECK(exit_code >= 0)) STRICT;
+CREATE TABLE runtime_gaps(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, code TEXT NOT NULL) STRICT;
+PRAGMA user_version=2;
+"""
+    let private migration2Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration2Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -178,7 +190,7 @@ PRAGMA user_version=1;
                       use connection = connection
                       try
                         let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
-                        if version > 1 then Error [ $"store schema version %d{version} is newer than supported version 1" ]
+                        if version > currentSchemaVersion then Error [ $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}" ]
                         else
                             if version = 0 then
                                 execute connection "PRAGMA journal_mode=WAL;"
@@ -191,9 +203,23 @@ PRAGMA user_version=1;
                                     migration.ExecuteNonQuery() |> ignore
                                     execute connection "COMMIT;"
                                 with error -> rollback connection; raise error
+                            let afterV1 = Int32.Parse(scalarText connection "PRAGMA user_version;")
                             let storedDigest = scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;"
                             if storedDigest <> migrationDigest then Error [ "migration checksum mismatch" ]
-                            else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = 1; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                            else
+                                if afterV1 = 1 then
+                                    beginImmediate connection
+                                    try
+                                        execute connection migration2Sql
+                                        use migration = connection.CreateCommand()
+                                        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(2,$digest,$utc);"
+                                        parameter migration "$digest" migration2Digest
+                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                        migration.ExecuteNonQuery() |> ignore
+                                        execute connection "COMMIT;"
+                                    with error -> rollback connection; raise error
+                                if scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
+                                else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -209,9 +235,10 @@ PRAGMA user_version=1;
                 use connection = connection
                 try
                     let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
-                    if version > 1 then Error [ $"store schema version %d{version} is newer than supported version 1" ]
-                    elif version <> 1 then Error [ "telemetry store schema is not initialized" ]
+                    if version > currentSchemaVersion then Error [ $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}" ]
+                    elif version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;" <> migrationDigest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;" <> migration2Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -219,7 +246,7 @@ PRAGMA user_version=1;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -246,6 +273,11 @@ PRAGMA user_version=1;
         | TelemetryStore.Coverage coverage -> run "INSERT INTO coverage_observations VALUES($identity,$item,$validity,$join,$coverage,$qualification,$eligible,$observed);" [ "$validity",box coverage.RecordValidity; "$join",box coverage.JoinIntegrity; "$coverage",box coverage.PopulationCoverage; "$qualification",box coverage.Qualification; "$eligible",optional coverage.Eligible; "$observed",optional coverage.Observed ]
         | TelemetryStore.Diagnostic(code,severity) -> run "INSERT INTO health_diagnostics VALUES($identity,$item,$code,$severity);" [ "$code",box code; "$severity",box severity ]
         | TelemetryStore.Correction(target,reason) -> run "INSERT INTO health_diagnostics VALUES($identity,$item,$code,'correction');" [ "$code", box $"target=%s{target}; %s{reason}" ]
+        | TelemetryStore.RuntimeAdmission(invocation,feature,attempt,parent,producer,model,effort,backend) -> run "INSERT INTO runtime_admissions VALUES($identity,$item,$invocation,$feature,$attempt,$parent,$producer,$model,$effort,$backend);" [ "$invocation",box invocation; "$feature",box feature; "$attempt",box attempt; "$parent",optional parent; "$producer",box producer; "$model",optional model; "$effort",optional effort; "$backend",optional backend ]
+        | TelemetryStore.RuntimeStart(invocation,threadId,turnId,turnSequence,processId,phase) -> run "INSERT INTO runtime_starts VALUES($identity,$item,$invocation,$thread,$turn,$sequence,$pid,$phase);" [ "$invocation",box invocation; "$thread",optional threadId; "$turn",optional turnId; "$sequence",optional turnSequence; "$pid",box processId; "$phase",box phase ]
+        | TelemetryStore.RuntimeTurnUsage(invocation,threadId,turnId,sequence,provider,requestedModel,observedModel,requestedEffort,observedEffort,backend,scope,provenance,input,cached,output,reasoning,total) -> run "INSERT INTO runtime_turn_usage VALUES($identity,$item,$invocation,$thread,$turn,$sequence,$provider,$requestedModel,$observedModel,$requestedEffort,$observedEffort,$backend,$scope,$provenance,$input,$cached,$output,$reasoning,$total);" [ "$invocation",box invocation; "$thread",box threadId; "$turn",optional turnId; "$sequence",box sequence; "$provider",optional provider; "$requestedModel",optional requestedModel; "$observedModel",optional observedModel; "$requestedEffort",optional requestedEffort; "$observedEffort",optional observedEffort; "$backend",optional backend; "$scope",box scope; "$provenance",box provenance; "$input",box input; "$cached",box cached; "$output",box output; "$reasoning",optional reasoning; "$total",box total ]
+        | TelemetryStore.RuntimeTerminal(invocation,threadId,outcome,exitCode) -> run "INSERT INTO runtime_terminals VALUES($identity,$item,$invocation,$thread,$outcome,$exit);" [ "$invocation",box invocation; "$thread",optional threadId; "$outcome",box outcome; "$exit",box exitCode ]
+        | TelemetryStore.RuntimeGap(invocation,code) -> run "INSERT INTO runtime_gaps VALUES($identity,$item,$invocation,$code);" [ "$invocation",box invocation; "$code",box code ]
 
     let private ingestBatchLocked root beforeCommit (batch: TelemetryStore.Batch) =
             if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ] else
@@ -255,8 +287,8 @@ PRAGMA user_version=1;
                 use connection = connection
                 try
                     let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
-                    if version > 1 then Error [ $"store schema version %d{version} is newer than supported version 1" ]
-                    elif version <> 1 then Error [ "telemetry store schema is not initialized" ]
+                    if version > currentSchemaVersion then Error [ $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}" ]
+                    elif version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
                     else
                         beginImmediate connection
                         try
@@ -446,21 +478,36 @@ PRAGMA user_version=1;
             command.CommandText <- $"SELECT coalesce(sum(%s{column}),0) FROM usage_observations WHERE item_id=$item;"
             parameter command "$item" itemId
             Convert.ToInt64(command.ExecuteScalar())
+        let runtimeScalar sql =
+            use command = connection.CreateCommand()
+            command.CommandText <- sql
+            parameter command "$item" itemId
+            Convert.ToInt64(command.ExecuteScalar())
+        let runtimeSum column = runtimeScalar $"SELECT coalesce(sum(%s{column}),0) FROM runtime_turn_usage WHERE item_id=$item;"
         let latestCoverage column fallback =
             use command = connection.CreateCommand()
             command.CommandText <- $"SELECT %s{column} FROM coverage_observations WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
             parameter command "$item" itemId
             let value = command.ExecuteScalar()
             if isNull value || value = box DBNull.Value then fallback else string value
-        let usageCount = count "usage_observations"
+        let runtimeTurns = runtimeScalar "SELECT count(*) FROM runtime_turn_usage WHERE item_id=$item;"
+        let usageCount = count "usage_observations" + runtimeTurns
         let reasoning =
             use command = connection.CreateCommand()
-            command.CommandText <- "SELECT CASE WHEN count(*)=count(reasoning) THEN coalesce(sum(reasoning),0) ELSE NULL END FROM usage_observations WHERE item_id=$item;"
+            command.CommandText <- "SELECT CASE WHEN count(*)=count(reasoning) THEN coalesce(sum(reasoning),0) ELSE NULL END FROM (SELECT reasoning FROM usage_observations WHERE item_id=$item UNION ALL SELECT reasoning FROM runtime_turn_usage WHERE item_id=$item);"
             parameter command "$item" itemId
             let value = command.ExecuteScalar()
             if isNull value || value = box DBNull.Value then None else Some(Convert.ToInt64 value)
         { ItemId = itemId; FactCount = count "ingest_facts"; UsageObservations = usageCount; DeliveryObservations = count "delivery_observations"
-          Input = sum "input_count"; CachedInput = sum "cached_input"; CacheWriteInput = sum "cache_write_input"; Output = sum "output_count"; Reasoning = reasoning; Total = sum "total"
+          Input = sum "input_count" + runtimeSum "input_count"; CachedInput = sum "cached_input" + runtimeSum "cached_input"; CacheWriteInput = sum "cache_write_input"; Output = sum "output_count" + runtimeSum "output_count"; Reasoning = reasoning; Total = sum "total" + runtimeSum "total"
+          Admitted = runtimeScalar "SELECT count(*) FROM runtime_admissions WHERE item_id=$item;"
+          Started = runtimeScalar "SELECT count(DISTINCT invocation_id) FROM runtime_starts WHERE item_id=$item AND phase='process';"
+          Terminal = runtimeScalar "SELECT count(*) FROM runtime_terminals WHERE item_id=$item;"
+          RuntimeUsage = runtimeScalar "SELECT count(DISTINCT invocation_id) FROM runtime_turn_usage WHERE item_id=$item;"
+          MissingAdmission = runtimeScalar "SELECT count(*) FROM (SELECT invocation_id FROM runtime_starts WHERE item_id=$item UNION SELECT invocation_id FROM runtime_terminals WHERE item_id=$item UNION SELECT invocation_id FROM runtime_turn_usage WHERE item_id=$item) x WHERE NOT EXISTS (SELECT 1 FROM runtime_admissions a WHERE a.invocation_id=x.invocation_id);"
+          MissingStart = runtimeScalar "SELECT count(*) FROM runtime_admissions a WHERE item_id=$item AND NOT EXISTS (SELECT 1 FROM runtime_starts s WHERE s.invocation_id=a.invocation_id AND s.phase='process');"
+          MissingTerminal = runtimeScalar "SELECT count(*) FROM runtime_admissions a WHERE item_id=$item AND NOT EXISTS (SELECT 1 FROM runtime_terminals t WHERE t.invocation_id=a.invocation_id);"
+          MissingUsage = runtimeScalar "SELECT count(*) FROM runtime_admissions a WHERE item_id=$item AND NOT EXISTS (SELECT 1 FROM runtime_turn_usage u WHERE u.invocation_id=a.invocation_id);"
           RecordValidity = latestCoverage "record_validity" "unknown"; JoinIntegrity = latestCoverage "join_integrity" "unknown"; PopulationCoverage = latestCoverage "population_coverage" "unknown"; Qualification = latestCoverage "qualification" "not-evaluated" }
 
     let summary path assessment itemId =

@@ -31,6 +31,11 @@ module TelemetryStore =
         | Coverage of Coverage
         | Diagnostic of code: string * severity: string
         | Correction of targetIdentity: string * reason: string
+        | RuntimeAdmission of invocationId: string * featureId: string * attemptId: string * parentAttemptId: string option * producerStream: string * requestedModel: string option * requestedEffort: string option * backend: string option
+        | RuntimeStart of invocationId: string * threadId: string option * turnId: string option * turnSequence: int64 option * processId: int64 * phase: string
+        | RuntimeTurnUsage of invocationId: string * threadId: string * turnId: string option * turnSequence: int64 * provider: string option * requestedModel: string option * observedModel: string option * requestedEffort: string option * observedEffort: string option * backend: string option * scope: string * provenance: string * input: int64 * cachedInput: int64 * output: int64 * reasoning: int64 option * total: int64
+        | RuntimeTerminal of invocationId: string * threadId: string option * outcome: string * exitCode: int64
+        | RuntimeGap of invocationId: string * code: string
 
     type Fact =
         { Identity: string
@@ -60,6 +65,14 @@ module TelemetryStore =
           Output: int64
           Reasoning: int64 option
           Total: int64
+          Admitted: int64
+          Started: int64
+          Terminal: int64
+          RuntimeUsage: int64
+          MissingAdmission: int64
+          MissingStart: int64
+          MissingTerminal: int64
+          MissingUsage: int64
           RecordValidity: string
           JoinIntegrity: string
           PopulationCoverage: string

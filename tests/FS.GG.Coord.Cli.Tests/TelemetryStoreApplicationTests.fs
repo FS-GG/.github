@@ -133,10 +133,10 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 2
+        pragma path 3
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready")) |> ignore
-        pragma path 1
+        pragma path 2
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
         let output = Path.Combine(Path.GetTempPath(), "fsgg-utel02-public-" + Guid.NewGuid().ToString("N") + ".json")
         try
@@ -174,3 +174,18 @@ module TelemetryStoreApplicationTests =
                 Assert.Contains("permissions", sprintf "%A" (TelemetryStoreApplication.publish path approved (batch "batch-1" "usage-1" 0L "c1" 10L)))
                 Assert.False(Directory.Exists(Path.Combine(path, "inbox")))
             finally File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+    [<Fact>]
+    let ``UTEL-03A v1 store migrates transactionally to runtime schema v2`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version=2; PRAGMA user_version=1;"
+        command.ExecuteNonQuery() |> ignore
+        connection.Close()
+        let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
+        Assert.Contains("\"schemaVersion\":2", initialized)
+        Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
