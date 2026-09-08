@@ -60,6 +60,8 @@ Kept current — the system as built, and the machinery that keeps it coherent.
   (which of the day's 127 closures were real progress, and the five loops that regenerate),
   and the [2026-07-20 cross-repo coordination overhead root-cause](reports/2026-07-20-cross-repo-coordination-overhead-root-cause.md)
   (why ~76% of the day's commits were coordination bookkeeping, and the one anti-pattern under the five friction engines).
+- [Xantham and Fable-bindings evaluation](reports/2026-09-08-105454-xantham-fable-bindings-evaluation.md)
+  — measured generator results and integration options for the existing bindings template.
 
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
