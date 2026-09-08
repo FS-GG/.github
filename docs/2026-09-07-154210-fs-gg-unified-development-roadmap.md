@@ -34,6 +34,9 @@ For the operating model, start with [process selection](#4-which-development-pro
 For sequencing, use the [unified roadmap](#9-unified-roadmap-from-the-current-v2-frontier) and
 [GS2 integration map](#10-exact-gs2-integration-and-contract-change-boundaries). Sections 1–2 establish
 the evidence; sections 14–15 account for every active source track and the wider proposal inventory.
+For Astra's planning boundaries and the available subroadmaps, use the
+[feature-part index](#98-feature-parts-and-subroadmap-index). For when progress reaches a newly created
+workspace, use the [workspace impact map](#99-when-new-workspaces-change).
 For the client orchestrator that connects to a project master and receives jobs, see
 [cooperative orchestrators](#85-cooperative-orchestrators-a-project-master-assigns-jobs-to-contributor-clients)
 and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
@@ -326,6 +329,12 @@ work, the relevant unified stages, original plans and targeted current primary s
 digestible feature subroadmap: a few ready milestones with acceptance examples and a later outcome
 outline. Do not detail the entire programme in advance. Resume valid active plans; expand the near-term
 window when needed, or replan when a material assumption, dependency or scope changes.
+
+The [feature-part index](#98-feature-parts-and-subroadmap-index) defines the default scope of those
+planning assignments. Stages describe dependency and operating boundaries; a named part describes the
+outcome Astra plans. Each subroadmap links back to its part and records its generated-workspace impact
+using [section 9.9](#99-when-new-workspaces-change). Add its actual document link to the index when it is
+created, preserving links to earlier bounded plans and their evidence.
 
 A **Sol medium** (`gpt-5.6-sol`, `medium`) worker executes that bounded subroadmap through the installed
 `work-roadmap` skill and the owning repository's actual route. Reuse the worker for routine milestones
@@ -1015,6 +1024,97 @@ The owning implementation selects remaining protocol/library versions, key custo
 and isolation through F0 rather than treating this prose as a published schema. Detailed requirements
 remain in [OR §8A](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md#8a-federated-cooperative-orchestrators--proposed-extension).
 That source supplies protocol depth; this unified roadmap owns the feature's place in the overall sequence.
+
+### 9.8 Feature parts and subroadmap index
+
+These are the default **parts for Astra planning**, named by deliverable. Select the next dependency-ready
+part when programme advancement is requested; use a fresh Astra-high planner when that part needs its
+first plan. A valid active subroadmap continues with its existing identity. Within a part, detail only
+the next useful window and retain later outcomes as an outline. Source changes, routine repairs and
+individual PRs do not create new parts or require fresh planning.
+
+A part can span stages where one outcome crosses an operating boundary, and one stage can contain
+independently useful parts. The entries below are planning scopes, not a second GS2 queue or completion
+ledger. Their order does not override native prerequisites. Split a part only when a separate outcome,
+owner or dependency makes it independently executable; record that narrower scope here. Existing bounded
+plans remain valid even when they cover only part of a row.
+Entry conditions constrain the dependent execution; earlier read-only planning may inspect missing prerequisites.
+
+| Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
+|---|---|---|---|
+| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | No V0 subroadmap linked yet; reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence |
+| **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
+| **Runtime operations qualification** | V1, GS2-07.8: qualify deployment, rollback, rotation, outage recovery and emergency disable for the runtime actually included | Coordination; accepted event/queue prerequisites; decide which runtime is included or explicitly disabled | No subroadmap linked yet |
+| **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; qualified epoch prerequisites | No subroadmap linked yet |
+| **Callable ordinary v2 execution** | V2: installed entry point joins observation, decision, provider effect and recovery, including routine delivery | Coordination; use existing adapter/runtime contracts and register only the actual missing wiring through its owner | No subroadmap linked yet |
+| **Migration tooling and representative rehearsal** | V2, GS2-09: discovery, transforms, manifests, migration, retry, rollback and omission proofs on representative receivers | Coordination, with receiver owners; native GS2-05–08 dependencies and applicable callable-path evidence | No subroadmap linked yet |
+| **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |
+| **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
+| **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: 0/7/14/30-day observations, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
+| **One residual execution experiment** | E0: one measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | No subroadmap linked yet; conditional |
+| **Shared bounded execution** | E1: one operation class with finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; E0 justifies the component and identifies its required failure cases | No subroadmap linked yet; conditional |
+| **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; demonstrated hosting need, or the foundations required by a selected cooperative feature | No subroadmap linked yet; conditional |
+| **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
+| **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
+| **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
+| **Cooperative canary and adoption** | F4–F5: one enrolled peer and work class reaches independently verified delivery, then a measured adoption decision | Coordination with project/receiver owners; F3 evidence, OperatingV2 under the existing default and separate canary authority | No subroadmap linked yet; conditional |
+
+Each selected part produces a subroadmap in its owning repository, normally
+`docs/roadmaps/<feature-slug>.md`. Link that document in the corresponding row, using a relative link for
+`.github` plans and a repository URL for other owners. A draft on an implementation branch can be linked
+as a draft; change the link to its durable location after delivery. Keep existing links when extending
+or succeeding a plan, and identify their actual scope. “No subroadmap linked yet” means the index has no
+plan to follow; check the owner for existing work before creating one. Do not create empty documents or
+broken future links for the remaining rows.
+
+The index is navigation. Native GS2 records and each ordinary subroadmap retain their own completion
+authority; verify those before reporting status. Link maintenance can accompany planning or an already
+needed implementation change and, across repositories, follow asynchronously. It does not become a
+second planning-only PR, a per-milestone status update or a delivery prerequisite. Each subroadmap also
+links back to this section and names its part so the relationship is navigable in both directions.
+
+### 9.9 When new workspaces change
+
+**New workspace contents change at the published scaffold/receiver boundary.** A roadmap stage or
+producer source merge alone does not change the bytes delivered by an installed tool. Generated files,
+available capabilities and enabled behavior can change at different times.
+
+The inspected [SDD materialization path](https://github.com/FS-GG/FS.GG.SDD/blob/1bd80882d78f40b8a3348db3592c3889e1640716/docs/reference/scaffold-driver-materialization.md)
+embeds pinned driver bytes when SDD is built and materializes them when the installed tool scaffolds a
+workspace. [Templates composition](https://github.com/FS-GG/FS.GG.Templates/blob/8f85300e829fb886adba45dd82d9b3c8f2fa4ef8/docs/design.md)
+combines versioned provider templates and overlays with the SDD-owned lifecycle. Thus a driver change
+needs its producer publication, SDD pin adoption and publication, and use of that SDD release; a template
+or overlay change needs publication and selection through its actual provider/template path. Other
+receiver families use their own declared materializer. Inspect exact identities at planning time rather
+than assuming every family updates together.
+
+| Roadmap part / stage | What a newly created workspace can receive | Point at which that change becomes effective |
+|---|---|---|
+| **Baseline binding — V0 and predecessor releases** | Revised routine skills, selected checks, policy/guidance and automatic observation where the receiver supports them | Published producer bytes are adopted into the selected scaffold tool/template and a clean creation proves the resulting behavior. Eligible current-v1 improvements can arrive before v2 cutover |
+| **Events and runtime qualification — V1** | Usually no new scaffold files; a later installed event/runtime service may improve reconciliation for enrolled workspaces | Qualification/replay alone has no installed effect. Any service activation or polling change needs its own supported receiver and operating authority |
+| **Bridge and receiver fencing — V1** | Updated tool pins, helper preconditions or bridge guidance for affected families; production still follows the current epoch | The bridge is published and adopted by the scaffold/receiver family. A newly generated receiver must obey the same fence as an upgraded one |
+| **Callable v2 and migration rehearsal — V2** | Published callable tools and additive preparation artifacts where included; sandbox/rehearsal capabilities can be available | The selected scaffold/receiver adopts those artifacts. Installed v2 capability remains distinct from permission to perform normal production writes |
+| **Candidate and new-workspace qualification — V3** | The exact intended combination of tool, provider/template, lifecycle, policy, skills and required checks | GS2-10 explicitly includes or defers each receiver profile and qualifies fresh creation plus upgrade. This is the decisive clean-workspace qualification checkpoint; it does not itself open v2 |
+| **Closed switch — V4** | Prepared receiver configuration and verified candidate bytes for the cutover scope | GS2-11–12 govern the closed-write window. Creating a workspace during that window does not escape its restrictions |
+| **Open and ordinary use — V5** | Prepared and admitted workspaces can use enabled normal v2 operations and the qualified routine journey | Authoritative OpenV2, effective receiver configuration and current operation permissions. Already prepared files may stay identical while the permitted runtime behavior changes |
+| **Carryover and retirement — V6** | Clean scaffolds omit retired v1 routes and obsolete ceremony for the adopted profile; upgrades preserve user-owned content under their supported contract | Published retirement changes reach the selected scaffold path and GS2-14 clean-install/old-client proofs pass. OperatingV2 and R5 efficiency remain separate claims |
+| **Residual experiment — E0** | No general scaffold/default change from research | A prototype result only informs whether to fund the selected E1 capability |
+| **Executor, host or scheduler — E1** | Optional tools, configuration or services for the specifically qualified work class | Each enabled capability's subroadmap includes publication, receiver qualification and a separate class/default decision; a source implementation or successful shadow run is insufficient |
+| **Cooperative work — F0–F5** | Optional client/master enrollment and contribution capabilities for selected workspace/project families | F0–F3 establish protocol, sessions and lab/shadow behavior; F4 enables the authorized canary population; F5 can support a measured receiver/default decision |
+
+For every subroadmap, state **which workspace families change, what the user sees before and after,
+and the first milestone that can deliver that change**. Name the producer and scaffold/receiver adoption
+steps, exact published identities once known, the default or explicit opt-in choice, and a clean-creation
+acceptance example. Treat existing-workspace upgrade separately: publishing new scaffold bytes does not
+rewrite existing files, and the inspected SDD backfill preserves already-present owner-sourced skills.
+If the part has no workspace effect, say so; if publication or adoption is pending, keep that explicit.
+Record this in the feature plan and existing evidence rather than a new fleet registry.
+
+Routine delivery does not silently change the omitted lifecycle from `sdd` to `typed-sdd` or `none`.
+The temporary `work-unified-roadmap` coordinator remains repository-owned; it is not automatically
+installed in product workspaces. Its eventual shared-driver successor must pass the same publication and
+materialization boundaries. The SVG/Fable product work retained in section 15 has its own provider and
+default decisions; progress through V0–V6 alone does not select a new product template or game runtime.
 
 ## 10. Exact GS2 integration and contract-change boundaries
 

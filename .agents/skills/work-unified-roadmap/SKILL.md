@@ -16,6 +16,7 @@ https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-
 
 Read that path in the current `FS-GG/.github` checkout, or retrieve its current default-branch version.
 Use section 9 for sequencing, section 4 for process selection, section 7.4 for bureaucracy accounting,
+section 9.8 for named feature parts and subroadmap links, section 9.9 for generated-workspace impact,
 and sections 8.5/9.7 for cooperative client/master orchestration. Original plans supply relevant detail.
 Do not treat the large unified document as an unchecked task list to exhaustively expand.
 
@@ -24,6 +25,11 @@ Resume it with its original identity and cost lineage. If multiple active featur
 ask which one to advance while continuing independent read-only inspection. Do not invent a new registry.
 Respect request scope: a named feature stays that feature; programme-wide advancement may select the next
 dependency-ready feature after completing the current one.
+
+Use section 9.8's named parts as the default Astra assignment boundaries, not one assignment per stage,
+PR or repair. Follow the linked plan before creating another; check the owner when no plan is linked.
+Preserve a valid narrower native-unit plan. Split a part only for an independently executable outcome,
+owner or dependency and record the narrower scope in that same index. Do not pre-plan unselected parts.
 
 Check the actual simplification handoff and operating epoch. This successor starts after the completed
 current-route handoff; R5's ordinary-v2 proof completes at its later receiver/observation boundaries.
@@ -45,8 +51,8 @@ report the capability gap; do not silently substitute models. The parent coordin
 it does not redo the planner's analysis or implement a parallel copy of the worker's task.
 
 For a new feature, read [feature-planning.md](references/feature-planning.md) and give the Astra planner
-the real request, relevant unified sections, current repository/evidence locations, original design links,
-constraints and existing authorization. Its job is read-only analysis and one proposed feature subroadmap,
+the real request, named part, relevant unified sections, current repository/evidence locations, original
+design links, constraints and existing authorization. Its job is read-only analysis and one proposed feature subroadmap,
 not starting implementation, publishing or changing policy. Online research answers concrete unknowns.
 
 For active, still-valid work, skip a new planning pass. Expand the near-term horizon only when its ready
@@ -87,6 +93,17 @@ Keep the subroadmap in the owning repository's existing roadmap location (otherw
 land with the implementation PR; do not require a separate planning or completion PR. Existing GS2 units
 are references to their native ledger, not duplicate mutable checkboxes. Cross-repository work follows the
 actual producer/receiver boundaries without a second copy of completion authority in every repository.
+
+Link each created subroadmap from its section 9.8 row and link back from the plan. Identify drafts and
+their actual branch location; retain earlier plan links and update to the durable location after delivery.
+Cross-repository link maintenance can follow asynchronously with existing work; it is not a delivery gate
+or a reason for a planning-only PR. Do not add empty plans, broken future links or duplicate status fields.
+
+Every plan states its section 9.9 workspace impact: affected families, before/after behavior, the first
+milestone that changes fresh creation or enabled runtime behavior, producer publication and receiver
+adoption, default/opt-in choice, clean-creation proof and separate upgrade handling. Say when there is no
+workspace effect or adoption remains pending. Source merge, installed capability and operating activation
+are distinct; inspect the actual scaffold path and preserve existing lifecycle/default decisions.
 
 The worker stops at the assigned window, an unresolved technical/authority boundary, or the feature exit.
 Distinguish **ready window completed**, **feature delivered**, **publication pending** and **blocked**.
