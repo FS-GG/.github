@@ -1319,9 +1319,27 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   failure recovery, and rollback in a low-volume isolated or representative repository before fleet enablement.
 - [ ] **GS2-07.7 — Measure event benefit.** Record latency, dropped-event repair, API cost, schedule count,
   and false/unknown outcomes; reduce polling only from evidence.
-- [ ] **GS2-07.8 — Qualify runtime operations.** Exercise deploy, rollback, secret rotation, outage,
-  replay/backlog recovery, regional/provider failure where applicable, log redaction, alert routing, and
-  emergency disable. A webhook host that cannot be operated safely does not enter the production plan.
+- [ ] **GS2-07.8 — Qualify runtime operations.** Qualify the runtime boundary actually included in this
+  candidate. Under the accepted GS2-00.9 decision, no App/webhook host, event listener, or continuously
+  running writer enters this cutover: scheduled complete audits remain the authority, and accepted narrow
+  reconciliation and audit-repair paths provide recovery at their implemented boundary. Prove host exclusion
+  from evaluated build and runtime inputs, not only from an `enabled=false` declaration, and exercise event
+  absence, provider unavailability, incomplete audit, backlog replay, and interruption without dropping a
+  subject or page, using stale authority, or inventing settlement.
+
+  Classify every original runtime-operations clause as exercised, inherited from exact accepted evidence, or
+  inapplicable through GS2-00.9. Host deployment, host rollback, host secret rotation, regional host failover,
+  host alert routing, and emergency host disable are inapplicable for this no-host candidate; they are not
+  successful exercises. Redaction and diagnostic claims require execution at a relevant implemented boundary
+  or remain explicit limitations. Enabling a host requires a new accepted amendment after `OperatingV2` and
+  the original deployment, rollback, rotation, outage, regional/provider failure, redaction, alerting, and
+  emergency-disable exercises before that host may enter a later candidate.
+
+  Acceptance binds the complete ordered GS2-07.1–GS2-07.8 child set and every accepted child receipt, retains
+  model identity and applicable formal gates, runs the declared GS2-07 parent closure comprehensively and
+  cold, and rejects an omitted child, altered command or input, false no-host disposition, or missing applicable
+  recovery. GS2-07.8 completion qualifies this cutover candidate only; it does not claim production v2, an
+  installed audit execution, GS2-08, reduced polling, or authority to deploy or enable a host or writer.
 
 ### GS2-08 — Ship the universal v1 bridge and protected epoch ledger
 
