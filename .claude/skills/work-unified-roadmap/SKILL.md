@@ -81,6 +81,11 @@ Keep normally bounded repairs and optional review within the installed route. Fo
 keep the existing ledger as substantive evidence and update its projection asynchronously; registration alone
 does not replace the routine process route.
 
+Apply the shared qualification-selection and optimistic coherent-validation behavior through `work-roadmap`;
+the canonical rule is ADR-0084 (`https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md`).
+Do not restate or weaken its four dispositions, exact-head reuse validation, pending/disputed distinction, or
+dependent-activation fence here.
+
 Routine is the default for all unified-roadmap work. Only a recorded explicit human instruction selecting
 heavyweight process for named scope changes that route; absence or ambiguity stays routine. Strict labels,
 GS2 registration, protected paths, policy changes, modeled work, protected operations and inherited strict

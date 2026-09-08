@@ -22,8 +22,11 @@ non-blocking and cannot certify routine efficiency.
   reconciliation and completeness using fixed diagnostic codes.
 - [x] Add 1 MiB input and 64 KiB output bounds, allowlisted public input fields/types, unsafe-path refusal before
   reads, symlink/alias-safe atomic output, a candidate/index-blob Git guard, forced-staging fixtures and CI wiring.
-- [ ] Observe one real matching merged PR with the producer, then run the observer without private usage and retain
-  delivered identity with insufficient qualification. This closes only after native merge/readback.
+- [x] Observe one real matching merged PR with the producer, then run the observer without private usage and retain
+  delivered identity with insufficient qualification. [PR #3347 observation](https://github.com/FS-GG/.github/issues/3347#issuecomment-5582965362)
+  binds source `857685615a068acbd3eccfd5236da106231a499d` to merge
+  `d26cab2412d08002090b12621b1dce8dd7ab817c`: delivery and the head join match, while usage is missing,
+  population coverage stays unknown, and qualification remains not evaluated.
 
 ## Boundaries and workspace impact
 

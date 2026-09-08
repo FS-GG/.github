@@ -44,8 +44,9 @@ agent_skill = (ROOT / ".agents/skills/work-roadmap/SKILL.md").read_bytes()
 claude_skill = (ROOT / ".claude/skills/work-roadmap/SKILL.md").read_bytes()
 require(agent_skill == claude_skill, "Claude/Codex work-roadmap twins differ")
 skill = agent_skill.decode()
-for phrase in ("one accountable owner", "Do **not** create or require an issue", "exact base/head", "recorded explicit human"):
-    require(phrase in skill, f"work-roadmap omitted {phrase!r}")
+for phrase in ("one accountable owner", "Do **not** create or require an issue", "exact base/head", "recorded explicit human",
+               "ADR-0084", "content/semantic classifier first", "dependent acceptance or activation"):
+    require(" ".join(phrase.split()) in " ".join(skill.split()), f"work-roadmap omitted {phrase!r}")
 
 constitution = (ROOT / ".fsgg/constitution.md").read_text()
 require("Routine Delivery Is the Default" in constitution, "constitution did not adopt routine-by-default doctrine")

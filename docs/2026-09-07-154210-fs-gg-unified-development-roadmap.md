@@ -256,6 +256,11 @@ critic, feedback/receipt cycle, metadata-`Done`, or projection PR is implied. Ca
 permissions and release/deploy/credential/destructive/cutover/external-acceptance safeguards remain
 independent and fail-closed; invalid or unknown authorization blocks the affected effect, not source delivery.
 
+[ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md) governs qualification selection
+inside that route. A validated exact-head semantic reuse may advance native delivery while the independent
+coherent run continues; current or unvalidated work waits, and a late failure disputes dependent acceptance
+without changing the rule that only explicit human-named scope selects heavyweight process.
+
 | Work class and examples | Where it occurs | Development process | Evidence needed before delivery | What is needed to enable it |
 |---|---|---|---|---|
 | Non-executable design, analysis, prose index | Any repository | Proportional prose route; one author/PR | Diff, links, applicable formatting and native required checks | Existing prose route; no policy/recipe/parser change hidden in prose |
@@ -448,6 +453,12 @@ Use the predecessor's decided obligation set. First remove duplicate invocations
 views. Then use accepted content-based reuse and shared setup. Only afterward consider a different
 selection guarantee, batching strategy or predictor. GS2-06.7 sound selection, unknown-impact handling,
 formal-input drift, and comprehensive closure retain their accepted meaning until amended.
+
+The accepted reuse optimization is the four-disposition contract in
+[ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md): `current`, `reused`, `deferred`, or
+`failed`. Classification runs first; an accepted classification starts the coherent run, and valid reuse starts
+delivery alongside it. Independent tests shard where safe, and coherent candidates may overlap. Valid reuse may leave coherent validation pending after merge; only a later
+pass closes it, while a late failure marks it disputed and blocks dependent acceptance or activation.
 
 One stable aggregate can expose many named predicate results. Missing required evidence must not become
 success, and an advisory result must not become blocking because a client indiscriminately treats every
@@ -902,6 +913,12 @@ critical defects and bounded read-only investigation, not simultaneous OR and PB
 a planning recommendation, not a change to current claim/parallel-work policy or a claim about available
 staff. Review and integration capacity limit useful concurrency.
 
+Candidate delivery uses [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md)'s cheap
+content/semantic classifier and bounded recovery. A `reused` exact-head receipt can overlap native delivery
+with coherent closure; `current` or missing reuse waits for that closure, and `deferred`/`failed` does not
+advance. Pending post-merge validation is carried into the stage; disputed validation blocks every dependent
+qualification, publication, or activation until repaired.
+
 ### 9.2 V0: bind the handoff without restarting it
 
 Inspect the completed predecessor's policy and installed behavior. Resolve the governance proposal's
@@ -1049,10 +1066,10 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
-| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | [UTEL-01 telemetry correctness](roadmaps/utel-01-telemetry-correctness.md) covers the bounded observer/public-evidence repair; the [UTEL local telemetry store](roadmaps/utel-local-telemetry-store.md) covers durable host-local ingestion/replay (UTEL-02) and future explicit Codex-exec observation (UTEL-03A); reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence for the remaining V0 scope |
+| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | [UTEL-01 telemetry correctness](roadmaps/utel-01-telemetry-correctness.md)'s real merged-PR observation and [UTEL local telemetry store](roadmaps/utel-local-telemetry-store.md) source windows UTEL-02/03A/04A/05A are delivered. Telemetry rollout is not complete: package publication/receiver adoption, future-host qualification, automatic ordinary parent/child and CI population selection, `collaboration.spawn_agent` coverage, and generated defaults remain pending. Reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence for the remaining V0 scope |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1, GS2-07.8: qualify deployment, rollback, rotation, outage recovery and emergency disable for the runtime actually included | Coordination; accepted event/queue prerequisites; decide which runtime is included or explicitly disabled | No subroadmap linked yet |
-| **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; qualified epoch prerequisites | [GS2-08 universal v1 bridge](roadmaps/gs2-08-universal-v1-bridge.md) |
+| **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; 08.1 is accepted by native receipt [`49c70359…`](https://github.com/FS-GG/FS.GG.Coordination/pull/334), and 08.2 source preparation is the pending frontier | [GS2-08 universal v1 bridge](roadmaps/gs2-08-universal-v1-bridge.md) |
 | **Callable ordinary v2 execution** | V2: installed entry point joins observation, decision, provider effect and recovery, including routine delivery | Coordination; use existing adapter/runtime contracts and register only the actual missing wiring through its owner | No subroadmap linked yet |
 | **Migration tooling and representative rehearsal** | V2, GS2-09: discovery, transforms, manifests, migration, retry, rollback and omission proofs on representative receivers | Coordination, with receiver owners; native GS2-05–08 dependencies and applicable callable-path evidence | No subroadmap linked yet |
 | **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |

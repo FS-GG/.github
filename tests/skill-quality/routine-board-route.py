@@ -43,6 +43,10 @@ for driver in ("work-board", "drive-board"):
         "applies only to human-named heavyweight scope",
         "never create a second PR",
         "Multiple or ambiguous open PRs refuse routine admission",
+        "ADR-0084",
+        "valid exact-head reuse",
+        "disputed",
+        "dependent acceptance or activation",
     ):
         require(" ".join(phrase.lower().split()) in folded, f"{driver} lost routine-route clause {phrase!r}")
     for omitted in (
@@ -59,6 +63,8 @@ for variant in ("work-board-normal", "work-board-best", "drive-board-normal", "d
     require("does not authorize a critic" in body, f"{variant} makes routine review ambiguous")
     require("strict item's three-round review chain" in body, f"{variant} does not scope repair dispatch to strict work")
     require("ordinary three-round chain" not in body, f"{variant} can route routine work into strict repair ceremony")
+    for phrase in ("ADR-0084", "selection/reuse", "coherent-pending", "late-dispute", "dependent-activation"):
+        require(phrase in body, f"{variant} does not explicitly inherit {phrase!r}")
 
 for driver in ("work-board", "drive-board"):
     triage = (AGENTS / driver / "references" / "backlog-triage.md").read_text(encoding="utf-8")

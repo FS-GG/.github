@@ -50,6 +50,14 @@ For routine delivery:
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
    model turn or PR merely to copy already-merged facts.
 
+Apply the permanent qualification-selection doctrine in
+ADR-0084 (`https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md`). Run the cheap
+content/semantic classifier first; after acceptance, start the coherent run, and only a validated exact-head
+`reused` receipt may start delivery concurrently with it. `current` or missing valid reuse waits for a
+pass, while `deferred`/`failed` refuses. Keep post-merge pending distinct from disputed, and block dependent
+acceptance or activation on a late failure. Use the shared `tools/routine-delivery.py` behavior rather than
+reimplementing these transitions in the skill.
+
 For source work associated with a protected operation, use the routine steps for the source PR and leave the
 operation pending until its independent authority and safeguards permit it. Invalid or unknown technical or
 operation authorization fails the affected effect; it does not reclassify delivery as heavyweight.

@@ -13,6 +13,8 @@ Inherit `work-board`'s routine route unchanged. A routine item may remain with t
 never requires a dispatch; if isolation or useful parallel capacity calls for one delegated routine
 owner, the table below selects that owner's model. It does not authorize a critic, confirmation worker,
 or any strict-route artifact.
+That inheritance explicitly includes canonical `work-board`'s ADR-0084 selection/reuse, coherent-pending,
+late-dispute, and dependent-activation behavior; this variant changes none of it.
 
 Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
 subagent spawn:

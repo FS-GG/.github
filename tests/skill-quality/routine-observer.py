@@ -53,6 +53,11 @@ with tempfile.TemporaryDirectory(prefix="fsgg-routine-observer-") as scratch:
     conflict = invoke(root, delivery(head=OTHER))
     assert conflict["recordValidity"]["code"] == "delivery-head-conflict" and conflict["joinIntegrity"]["status"] == "invalid"
     assert invoke(root, delivery(codeDelivery="unknown", outcome="indeterminate"))["delivery"]["status"] == "unknown"
+    disputed = delivery(outcome="delivered-disputed", validationDisposition="reused", coherentValidation="disputed")
+    disputed_report = invoke(root, disputed)
+    assert disputed_report["delivery"]["status"] == "delivered"
+    assert disputed_report["recordValidity"]["status"] == "valid"
+    assert invoke(root, delivery(validationDisposition="reused", coherentValidation="bogus"))["recordValidity"]["code"] == "delivery-validation-fields-invalid"
     cases = [
         (dict(USAGE, reasoningTokens=21), "usage-accounting-invalid"),
         (dict(USAGE, unit="other"), "usage-identity-invalid"),

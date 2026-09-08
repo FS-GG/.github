@@ -51,12 +51,21 @@ def delivery_assessments(value: dict[str, Any] | None, problem: str | None) -> t
         return ({"status": "invalid", "code": "delivery-schema-unsupported"},
                 {"status": "not-evaluated", "code": "delivery-invalid"})
     if (not isinstance(value.get("repo"), str) or type(value.get("pr")) is not int or value.get("pr") <= 0
-            or value.get("outcome") not in {"ready", "refused", "delivered", "delivered-after-readback", "indeterminate"}
+            or value.get("outcome") not in {"ready", "refused", "delivered", "delivered-after-readback", "delivered-disputed", "indeterminate"}
             or value.get("codeDelivery") not in {"delivered", "not-delivered", "unknown"}
             or value.get("publication") not in {"pending", "not-required"}
             or type(value.get("attempts")) is not int or value.get("attempts") < 0
             or not isinstance(value.get("reason"), (str, type(None)))):
         return ({"status": "invalid", "code": "delivery-fields-invalid"},
+                {"status": "not-evaluated", "code": "delivery-invalid"})
+    disposition = value.get("validationDisposition")
+    coherent = value.get("coherentValidation")
+    if ((disposition is not None and disposition not in {"current", "reused", "deferred", "failed", "invalid"})
+            or (coherent is not None and coherent not in {"not-required", "unobserved", "pending", "passed", "failed", "disputed"})):
+        return ({"status": "invalid", "code": "delivery-validation-fields-invalid"},
+                {"status": "not-evaluated", "code": "delivery-invalid"})
+    if value.get("outcome") == "delivered-disputed" and coherent != "disputed":
+        return ({"status": "invalid", "code": "delivery-dispute-state-invalid"},
                 {"status": "not-evaluated", "code": "delivery-invalid"})
     expected, observed, legacy = value.get("expectedHead"), value.get("observedHead"), value.get("head")
     if legacy is not None and observed is not None and legacy != observed:
