@@ -34,6 +34,7 @@ REVIEW_SCHEMA = "fsgg.telemetry.process-review-input/1"
 ACTIVITY_SCHEMA = "fsgg.telemetry.activity-span-input/1"
 ATTRIBUTION_SCHEMA = "fsgg.telemetry.activity-usage-attribution-input/1"
 COMPLICATION_SCHEMA = "fsgg.telemetry.complication-input/1"
+DASHBOARD_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 
 
 def now() -> str:
@@ -100,6 +101,24 @@ def read_state(config: HostConfig, token: str) -> dict[str, object]:
 
 def save_state(config: HostConfig, state: dict[str, object]) -> None:
     write_private_json(config.store_root / "orchestrator-dispatches", str(state["token"]), state)
+
+
+def refresh_dashboard(config: HostConfig) -> dict[str, object]:
+    dashboard = pathlib.Path(__file__).resolve().parents[4] / "tools" / "telemetry-dashboard.py"
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(dashboard), "publisher-event", "--config", str(config.path)],
+            text=True, capture_output=True, timeout=60, check=False,
+        )
+        if completed.returncode != 0 or len(completed.stdout.encode("utf-8")) > 8192:
+            return {"status": "advisory-failure", "reason": "publisher-event-subprocess-failed"}
+        value = json.loads(completed.stdout)
+        fields={"schema","status","reason","observedAt","publicRevision","commit"}
+        if not isinstance(value,dict) or set(value)!=fields or value.get("schema")!=DASHBOARD_HEALTH_SCHEMA:
+            return {"status": "advisory-failure", "reason": "publisher-event-result-invalid"}
+        return {"status":"observed","health":value}
+    except (OSError,subprocess.SubprocessError,UnicodeError,json.JSONDecodeError):
+        return {"status": "advisory-failure", "reason": "publisher-event-subprocess-failed"}
 
 
 def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
@@ -231,9 +250,12 @@ def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         [config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)],
         text=True, capture_output=True, timeout=30, check=False,
     )
-    return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "terminal", "token": args.token,
+    result={"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "terminal", "token": args.token,
             "outcome": args.outcome, "coverage": "native-collaboration-usage-unsupported",
             "drain": "complete" if drain.returncode == 0 else "pending"}
+    if drain.returncode==0 and args.outcome=="completed" and state.get("relation")=="root":
+        result["dashboardPublication"]=refresh_dashboard(config)
+    return result
 
 
 def read_contract(path: str, schema: str, fields: set[str]) -> dict[str, object]:
@@ -256,7 +278,10 @@ def record_event(config: HostConfig, state: dict[str, object], value: dict[str, 
                            text=True, capture_output=True, timeout=30, check=False)
     if drain.returncode != 0:
         raise ConfigurationError(drain.stderr.strip() or "telemetry observation drain failed")
-    return {"schema": "fsgg.telemetry.roadmap-observation/1", "status": "recorded", "kind": value["kind"]}
+    result={"schema": "fsgg.telemetry.roadmap-observation/1", "status": "recorded", "kind": value["kind"]}
+    if state.get("phase")=="terminal" and state.get("relation")=="root":
+        result["dashboardPublication"]=refresh_dashboard(config)
+    return result
 
 
 def review(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:

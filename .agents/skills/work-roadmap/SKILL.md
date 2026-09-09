@@ -85,6 +85,11 @@ attempt terminal, author one bounded private process review through `review`; au
 the expected population is terminal. Reviews are advisory, evidence-linked observations: missing evidence is
 unknown, and they never change delivery authority.
 
+When the private host has an explicit event-publication activation receipt, the canonical adapter requests one bounded
+dashboard refresh after a completed root attempt drains successfully and after each successful post-terminal root
+observation drain. Publication and its returned health are advisory: failure, missing credentials, contention or an
+unchanged snapshot never blocks delivery or changes the recorded terminal state. Do not assume or require a daemon.
+
 ## Human-selected heavyweight route
 
 Use the following route only when a recorded explicit human instruction selects it for named scope. A prior

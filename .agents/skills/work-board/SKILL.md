@@ -46,6 +46,11 @@ exact native usage, never elapsed time; preserve mixed/unclassified and unsuppor
 terminal, submit a bounded private process review, and submit an item review only after all expected work is
 terminal. Reviews are advisory and missing evidence remains unknown.
 
+When the private host has an explicit event-publication activation receipt, the canonical adapter requests one
+bounded dashboard refresh after a completed root terminal drains successfully and after each successful
+post-terminal root observation drain. Report its privacy-safe health as advisory: failure or unchanged content
+never blocks delivery or changes recorded status, and the event path assumes no daemon.
+
 The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
 A technical or operation refusal blocks its affected effect without entering that protocol.
 
