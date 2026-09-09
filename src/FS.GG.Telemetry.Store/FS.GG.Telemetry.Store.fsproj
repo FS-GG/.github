@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kept at its historical path so source-census identities remain stable. -->
+    <Compile Include="../FS.GG.Coord.Cli/TelemetryStoreApplication.fsi" Link="TelemetryStoreApplication.fsi" />
+    <Compile Include="../FS.GG.Coord.Cli/TelemetryStoreApplication.fs" Link="TelemetryStoreApplication.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+  </ItemGroup>
+</Project>

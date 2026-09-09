@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

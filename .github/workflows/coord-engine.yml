@@ -37,6 +37,7 @@ on:
       - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Telemetry.*/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/FS.GG.Coord.Cli.Lifecycle.Tests/**"
       # .github#2725 — the kernel suite. It is a SEPARATE assembly with its own 179 tests, and
@@ -45,6 +46,7 @@ on:
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
+      - "tests/FS.GG.Telemetry.Tests/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
       # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
@@ -156,6 +158,7 @@ jobs:
           dotnet restore tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
@@ -283,6 +286,12 @@ jobs:
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=cli.trx" --results-directory "$RUNNER_TEMP/coord-engine/cli"
+
+      - name: Test — standalone telemetry HTTPS contracts and host boundaries
+        run: dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore --logger "console;verbosity=normal" --logger "trx;LogFileName=telemetry-host.trx" --results-directory "$RUNNER_TEMP/coord-engine/telemetry-host"
+
+      - name: Non-vacuity — the standalone telemetry suite executed
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/telemetry-host/telemetry-host.trx" --minimum 5 --label "standalone telemetry" --summary-file "$GITHUB_STEP_SUMMARY"
 
       # Lifecycle is a separate production and test assembly (.github#2727). The residual CLI suite
       # cannot discover these tests, so the invocation and independent count guard are both required.

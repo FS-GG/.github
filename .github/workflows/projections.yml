@@ -20,6 +20,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
       # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the
@@ -45,6 +46,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
       # `src/FS.GG.Coord.Cli.Kernel/**` changes what this workflow builds. Without this entry the

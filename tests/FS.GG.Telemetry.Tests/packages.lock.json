@@ -8,6 +8,17 @@
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
       },
+      "Microsoft.Data.Sqlite": {
+        "type": "Direct",
+        "requested": "[10.0.11, )",
+        "resolved": "10.0.11",
+        "contentHash": "7je7UELzm131GiLYc4PpZvfKXIgIyzPM+v+tjcd/nbnuWRfgcONYKzDTqJlURxwVCFsVnlpmq6y6yn4qvR8QXQ==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.11",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.12",
+          "SQLitePCLRaw.core": "2.1.12"
+        }
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[18.8.1, )",
@@ -35,6 +46,27 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
+      "Akka.Analyzers": {
+        "type": "Transitive",
+        "resolved": "0.3.3",
+        "contentHash": "SaS6yojDwqmy8PFCML8hiXlnSOQpO7adzrosTLbDD9paVAJk4WufteGbPhbiXiu2m4JscNhSM5joFeR9IZpF8g=="
+      },
+      "FSharp.Quotations.Evaluator": {
+        "type": "Transitive",
+        "resolved": "2.1.0",
+        "contentHash": "UwmbcIw78pNI4h29H6Vk+45Xky7yqzpxOkHIciW/0VhCN95ANVaopD2wajn88hjabgelm7QmPrC41CKFDhHKIA==",
+        "dependencies": {
+          "FSharp.Core": "4.3.1"
+        }
+      },
+      "FsPickler": {
+        "type": "Transitive",
+        "resolved": "5.3.2",
+        "contentHash": "LFtxXpQNor8az1ez3rN9oz2cqf/06i9yTrPyJ9R83qLEpFAU7Of0WL2hoSXzLHer4lh+6mO1NV4VQFiBzNRtjw==",
+        "dependencies": {
+          "FSharp.Core": "4.3.2"
+        }
+      },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
         "resolved": "18.8.1",
@@ -48,6 +80,11 @@
           "SQLitePCLRaw.core": "2.1.12"
         }
       },
+      "Microsoft.Extensions.ObjectPool": {
+        "type": "Transitive",
+        "resolved": "6.0.36",
+        "contentHash": "WHwL2Src2pAiLGEmzq6htW+jeKIkrifT3Q6nZROY6EG8EbSGli//XpAh9WpITRsTda3VVUBegvc2QdBWyNn+zg=="
+      },
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
         "resolved": "18.8.1",
@@ -60,6 +97,16 @@
         "dependencies": {
           "Microsoft.TestPlatform.ObjectModel": "18.8.1"
         }
+      },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A=="
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.1",
+        "contentHash": "ppPFpBcvxdsfUonNcvITKqLl3bqxWbDCZIzDWHzjpdAHRFfZe0Dw9HmA0+za13IdyrgJwpkDTDA9fHaxOrt20A=="
       },
       "SQLite": {
         "type": "Transitive",
@@ -85,6 +132,44 @@
         "contentHash": "um8YSWduhhuskTG2bHfZrBqMNQOydfU8pcseT+cu5RivOGyoUbCrGXxgoRNTmRYw2VbMWnEZVVFcneZT/5dsBg==",
         "dependencies": {
           "SQLitePCLRaw.core": "3.0.5"
+        }
+      },
+      "System.Configuration.ConfigurationManager": {
+        "type": "Transitive",
+        "resolved": "6.0.1",
+        "contentHash": "jXw9MlUu/kRfEU0WyTptAVueupqIeE3/rl0EZDMlf8pcvJnitQ8HeVEp69rZdaStXwTV72boi/Bhw8lOeO+U2w==",
+        "dependencies": {
+          "System.Security.Cryptography.ProtectedData": "6.0.0",
+          "System.Security.Permissions": "6.0.0"
+        }
+      },
+      "System.Drawing.Common": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "NfuoKUiP2nUWwKZN6twGqXioIe1zVD0RIj2t976A+czLHr2nY454RwwXs6JU9Htc6mwqL6Dn/nEL3dpVf2jOhg==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "6.0.0"
+        }
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "rp1gMNEZpvx9vP0JW0oHLxlf8oSiQgtno77Y4PLUBjSiDYoD77Y8uXHr1Ea5XG4/pIKhqAdxZ8v8OTUtqo9PeQ=="
+      },
+      "System.Security.Permissions": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "T/uuc7AklkDoxmcJ7LGkyX1CcSviZuLCa4jg3PekfJ7SU0niF0IVTXwUiNVP9DSpzou2PpxJ+eNY2IfDM90ZCg==",
+        "dependencies": {
+          "System.Windows.Extensions": "6.0.0"
+        }
+      },
+      "System.Windows.Extensions": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "IXoJOXIqc39AIe+CIR7koBtRGMiCt/LPM3lI+PELtDIy9XdyeSrwXFdWV9dzJ2Awl0paLWUaknLxFQ5HpHZUog==",
+        "dependencies": {
+          "System.Drawing.Common": "6.0.0"
         }
       },
       "xunit.abstractions": {
@@ -127,55 +212,33 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "fs.gg.coord.cli": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Cli.BoardOps": "[1.0.0, )",
-          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
-          "FS.GG.Coord.Cli.Lifecycle": "[1.0.0, )",
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FS.GG.Telemetry.Store": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "fs.gg.coord.cli.boardops": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
-          "FS.GG.Coord.Cli.Lifecycle": "[1.0.0, )",
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "fs.gg.coord.cli.kernel": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "fs.gg.coord.cli.lifecycle": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
-          "FS.GG.Coord.Core": "[1.0.0, )",
-          "FS.GG.Coord.GitHub": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
       "fs.gg.coord.core": {
         "type": "Project",
         "dependencies": {
           "FSharp.Core": "[10.1.302, )"
         }
       },
-      "fs.gg.coord.github": {
+      "fs.gg.telemetry.client": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Telemetry.Contracts": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.telemetry.contracts": {
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.telemetry.host": {
+        "type": "Project",
+        "dependencies": {
+          "Akka": "[1.5.71, )",
+          "Akka.FSharp": "[1.5.71, )",
+          "FS.GG.Telemetry.Contracts": "[1.0.0, )",
+          "FS.GG.Telemetry.Store": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
@@ -188,15 +251,28 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
         }
       },
-      "Microsoft.Data.Sqlite": {
+      "Akka": {
         "type": "CentralTransitive",
-        "requested": "[10.0.11, )",
-        "resolved": "10.0.11",
-        "contentHash": "7je7UELzm131GiLYc4PpZvfKXIgIyzPM+v+tjcd/nbnuWRfgcONYKzDTqJlURxwVCFsVnlpmq6y6yn4qvR8QXQ==",
+        "requested": "[1.5.71, )",
+        "resolved": "1.5.71",
+        "contentHash": "HMeKCZeOYzv5sqRq0mNPFqaV3QAn3XbiwCMJbkFbqjT4TouuKPX6OPfv6TG55M8mXic8u330S9zwCtIaeJFzqQ==",
         "dependencies": {
-          "Microsoft.Data.Sqlite.Core": "10.0.11",
-          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.12",
-          "SQLitePCLRaw.core": "2.1.12"
+          "Akka.Analyzers": "0.3.3",
+          "Microsoft.Extensions.ObjectPool": "6.0.36",
+          "Newtonsoft.Json": "13.0.1",
+          "System.Configuration.ConfigurationManager": "6.0.1"
+        }
+      },
+      "Akka.FSharp": {
+        "type": "CentralTransitive",
+        "requested": "[1.5.71, )",
+        "resolved": "1.5.71",
+        "contentHash": "/X4H8BBLvedRJ+VODRzJOUhgRE99eNs6CVlM2az60zXEnqXe6+8louJZuVYsmmJyXs4+4IvmTEwpvnTJCUE+AA==",
+        "dependencies": {
+          "Akka": "1.5.71",
+          "FSharp.Core": "10.0.111",
+          "FSharp.Quotations.Evaluator": "2.1.0",
+          "FsPickler": "5.3.2"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {

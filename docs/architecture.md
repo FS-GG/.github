@@ -1172,11 +1172,17 @@ elect concurrent children. Roadmap closure derives heads and outcomes from conte
 then limits rendering and verification to one marker-bounded unit. Semantic critique, finding disposition,
 exceptions, and merge authorization remain independent judgment boundaries.
 
-Durable private telemetry is a per-host `FS.GG.Coord.Cli` boundary: workers atomically publish bounded,
-immutable typed batches into private inboxes, while one orchestrator-owned drain serializes SQLite writes.
+Durable private telemetry keeps its SQLite implementation in `FS.GG.Telemetry.Store`; the coordination CLI
+references that assembly and retains its existing command facade. `FS.GG.Telemetry.Contracts` and
+`FS.GG.Telemetry.Client` add the dependency-light HTTPS envelope, scoped receipt and bounded retry edge.
+The optional `FS.GG.Telemetry.Host` executable alone carries ASP.NET Core and the pinned Akka actor runtime.
+Workers atomically publish bounded, immutable typed batches into private inboxes, while one host drain
+serializes SQLite writes.
 Readers use read-only WAL snapshots; a stable host writer lock plus native-identity deduplication protects
-recovery and old/new process overlap. The batch is compatible with a future actor message contract, but no
-actor runtime, permanent daemon, network-shared database, collection hook, or publication path is introduced.
+recovery and old/new process overlap. The remote receiver uses authenticated, explicitly enrolled workspace
+stores, a fixed actor set, host-wide admission bounds, and an isolated blocking-I/O dispatcher; it never accepts
+producer-selected paths or treats an HTTP status without a verified receipt as acknowledgement. No actor
+remoting, network-shared database, collection hook, or publication path is introduced.
 Future explicit `codex exec --json --ephemeral` launches can pass through the source-only runtime adapter. Its
 closed private assignment and content-discarding JSONL projector publish admission/start/turn-usage/terminal
 facts to that same inbox; current collaboration launches and generated workspaces remain unwired. The maintained
