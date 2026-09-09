@@ -145,6 +145,18 @@ bind its exact observation digest, desired-policy digest, operation order, real 
 Any provider change after authorization invalidates that plan. Never change `ApplyAuthorized` in a fixture as a
 substitute for an authorization receipt.
 
+The canonical protected mechanism is `.github/workflows/gs2-ledger-protected-authorization.yml`. Dispatch it only
+after the merged Coordination source has produced the canonical initializer payload. Supply the exact merged
+Coordination revision, payload SHA-256, and a bounded non-secret operation id. The job targets `fleet-cutover`, so
+GitHub pauses it for an eligible reviewer and enforces self-review prevention. It has read-only permissions, receives
+no App or authorizer key, performs no provider write, and retains a one-day bounded receipt.
+
+After the run succeeds, download the artifact and use the merged Coordination operation command to reread the run
+head, conclusion, and native approval history. Only then may the distinct local authorizer key sign the exact
+initializer bytes. The receipt does not authorize changed input, another Coordination revision, or an operation
+after its 90-minute expiry. The workflow run's `.github` head and the separately bound Coordination source are both
+required; they are not interchangeable revisions.
+
 ## 5. Register the two GitHub Apps
 
 GitHub's organization owner opens **Organization settings → Developer settings → GitHub Apps → New GitHub App**.
@@ -507,3 +519,9 @@ known blockers are the two real App identities and installations, private-key cu
 administrative apply authority, fleet initialization, monitoring, post-install binding support in the capture and
 conformance path, and native acceptance. This manual removes ambiguity about the human operation; it does not
 claim those external actions have occurred.
+
+An ephemeral development container is not a durable monitor host merely because `/home/developer/.codex` is backed
+by persistent storage. The source-owned runner is scheduler-independent and can safely use that store, but acceptance
+still requires a named external scheduler/watchdog that survives container recreation and a configured alert
+destination whose delivery is exercised. A local one-shot run or a pending SQLite outbox row is useful diagnostic
+evidence, not `MonitoringReady`.

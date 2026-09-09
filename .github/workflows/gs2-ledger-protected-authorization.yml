@@ -1,0 +1,70 @@
+name: GS2 ledger protected authorization
+
+on:
+  workflow_dispatch:
+    inputs:
+      coordination_revision:
+        description: Exact merged FS.GG.Coordination source revision
+        required: true
+        type: string
+      initializer_input_sha256:
+        description: SHA-256 of the canonical initializer payload
+        required: true
+        type: string
+      operation_id:
+        description: Bounded private operation identity (no secret)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gs2-ledger-protected-authorization
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: gs2-ledger-protected-authorization
+    environment: fleet-cutover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact public bindings
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          INPUT_SHA256: ${{ inputs.initializer_input_sha256 }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          [[ "$COORDINATION_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$OPERATION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]]
+      - name: Materialize bounded authorization receipt
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          INPUT_SHA256: ${{ inputs.initializer_input_sha256 }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          approved_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          expires_at="$(date -u -d "$approved_at + 90 minutes" +%Y-%m-%dT%H:%M:%SZ)"
+          jq -cn \
+            --arg operationId "$OPERATION_ID" \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --arg dotgithubRevision "$GITHUB_SHA" \
+            --arg coordinationRevision "$COORDINATION_REVISION" \
+            --arg inputSha256 "$INPUT_SHA256" \
+            --arg approvedAt "$approved_at" \
+            --arg expiresAt "$expires_at" \
+            '{schema:"fsgg.github-ledger-protected-authorization/1",operationId:$operationId,repository:"FS-GG/.github",runId:$runId,dotgithubRevision:$dotgithubRevision,coordinationRevision:$coordinationRevision,environment:"fleet-cutover",inputSha256:$inputSha256,approvedAt:$approvedAt,expiresAt:$expiresAt,conclusion:"success"}' \
+            > protected-authorization.json
+          chmod 600 protected-authorization.json
+      - name: Retain reviewed receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-ledger-protected-authorization-${{ github.run_id }}
+          path: protected-authorization.json
+          retention-days: 1
+          if-no-files-found: error
