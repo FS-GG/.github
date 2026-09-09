@@ -399,8 +399,8 @@ PRAGMA user_version=8;
                         Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = version; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; pendingBatches = pending |} + "\n")
                 with error -> Error [ error.Message ]
 
-    let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "native_item_outcomes"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times"; "process_reviews"; "activity_spans"; "activity_usage_attributions"; "complication_events" ] do
+    let private deleteTyped (connection: SqliteConnection) identity preserveCiPopulationAdmission =
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "native_item_outcomes"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times"; "process_reviews"; "activity_spans"; "activity_usage_attributions"; "complication_events" ] |> List.filter (fun table -> not (preserveCiPopulationAdmission && table = "ci_population_admissions")) do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
@@ -444,7 +444,7 @@ PRAGMA user_version=8;
         | TelemetryStore.CiStep(repository,runId,attempt,jobId,number,name,status,conclusion,started,completed,classification,rationale) -> run "INSERT INTO ci_steps VALUES($identity,$item,$repository,$run,$attempt,$job,$number,$name,$status,$conclusion,$started,$completed,$classification,$rationale);" [ "$repository",box repository; "$run",box runId; "$attempt",box attempt; "$job",box jobId; "$number",box number; "$name",box name; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$classification",box classification; "$rationale",box rationale ]
         | TelemetryStore.CiCoverage(collection,inventory,attempts,jobPages,terminal,timestamps,lineage,classification,criticalPath) -> run "INSERT INTO ci_coverage VALUES($identity,$item,$collection,$inventory,$attempts,$jobPages,$terminal,$timestamps,$lineage,$classification,$criticalPath);" [ "$collection",box collection; "$inventory",box inventory; "$attempts",box attempts; "$jobPages",box jobPages; "$terminal",box terminal; "$timestamps",box timestamps; "$lineage",box lineage; "$classification",box classification; "$criticalPath",box criticalPath ]
         | TelemetryStore.CiPopulationAdmission(collection,repository,pr,baseRef,baseSha,head,witness) ->
-            run "INSERT INTO ci_population_admissions VALUES($identity,$item,$collection,$repository,$pr,$baseRef,$baseSha,$head,$witness,$revision);" [ "$collection",box collection; "$repository",box repository; "$pr",box pr; "$baseRef",box baseRef; "$baseSha",box baseSha; "$head",box head; "$witness",box witness; "$revision",box fact.Revision ]
+            run "INSERT INTO ci_population_admissions VALUES($identity,$item,$collection,$repository,$pr,$baseRef,$baseSha,$head,$witness,$revision) ON CONFLICT(identity) DO UPDATE SET item_id=excluded.item_id,collection_id=excluded.collection_id,repository=excluded.repository,pr_number=excluded.pr_number,base_ref=excluded.base_ref,base_sha=excluded.base_sha,head=excluded.head,witness=excluded.witness,fact_revision=excluded.fact_revision;" [ "$collection",box collection; "$repository",box repository; "$pr",box pr; "$baseRef",box baseRef; "$baseSha",box baseSha; "$head",box head; "$witness",box witness; "$revision",box fact.Revision ]
         | TelemetryStore.CiCheck(repository,checkId,name,app,status,conclusion,started,completed) ->
             run "INSERT INTO ci_check_runs VALUES($identity,$item,$repository,$check,$name,$app,$status,$conclusion,$started,$completed,$revision);" [ "$repository",box repository; "$check",box checkId; "$name",box name; "$app",optional app; "$status",box status; "$conclusion",optional conclusion; "$started",optional started; "$completed",optional completed; "$revision",box fact.Revision ]
         | TelemetryStore.CiPopulationCoverage(collection,actions,checks,attempts,jobs,terminal,timestamps,continuation,externalChecks,gaps) ->
@@ -815,19 +815,22 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                             let mutable replayed = 0L
                             for fact in batch.Facts do
                                 use existing = connection.CreateCommand()
-                                existing.CommandText <- "SELECT content_digest,revision FROM ingest_facts WHERE identity=$identity;"
+                                existing.CommandText <- "SELECT kind,content_digest,revision FROM ingest_facts WHERE identity=$identity;"
                                 parameter existing "$kind" fact.Kind; parameter existing "$identity" fact.Identity
                                 use reader = existing.ExecuteReader()
-                                let state = if reader.Read() then Some(reader.GetString(0), reader.GetInt64(1)) else None
+                                let state = if reader.Read() then Some(reader.GetString(0), reader.GetString(1), reader.GetInt64(2)) else None
                                 reader.Close()
                                 match state with
-                                | Some(digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
-                                | Some(_, revision) when fact.Revision <= revision -> invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
-                                | Some(oldDigest, revision) ->
+                                | Some(_, digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
+                                | Some(_, _, revision) when fact.Revision <= revision -> invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
+                                | Some(oldKind, oldDigest, revision) ->
                                     use correction = connection.CreateCommand()
                                     correction.CommandText <- "INSERT INTO corrections(kind,identity,old_revision,new_revision,old_digest,new_digest) VALUES($kind,$identity,$old,$new,$oldDigest,$newDigest); UPDATE ingest_facts SET kind=$kind,item_id=$item,revision=$new,content_digest=$newDigest,canonical=$canonical WHERE identity=$identity;"
                                     [ "$kind",box fact.Kind; "$identity",fact.Identity; "$old",revision; "$new",fact.Revision; "$oldDigest",oldDigest; "$newDigest",fact.ContentDigest; "$item",fact.ItemId |> Option.map box |> Option.defaultValue DBNull.Value; "$canonical",fact.Canonical ] |> List.iter (fun (name,value) -> parameter correction name value)
-                                    correction.ExecuteNonQuery() |> ignore; deleteTyped connection fact.Identity; insertTyped connection fact; accepted <- accepted + 1L
+                                    correction.ExecuteNonQuery() |> ignore
+                                    deleteTyped connection fact.Identity (oldKind = fact.Kind && fact.Kind = "ci-population-admission")
+                                    insertTyped connection fact
+                                    accepted <- accepted + 1L
                                 | None ->
                                     use insert = connection.CreateCommand()
                                     insert.CommandText <- "INSERT INTO ingest_facts(kind,identity,item_id,revision,content_digest,canonical) VALUES($kind,$identity,$item,$revision,$digest,$canonical);"
