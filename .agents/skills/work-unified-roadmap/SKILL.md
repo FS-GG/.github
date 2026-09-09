@@ -118,6 +118,21 @@ the whole programme can continue to the next feature; a request limited to one f
 
 ## Observe without creating another delivery ceremony
 
+Telemetry is prospectively on by default for repository-owned dispatches. At driver entry, use the installed
+`work-roadmap/scripts/roadmap-telemetry.py begin` adapter (exposed as `tools/roadmap-telemetry.py` in `.github`)
+with the feature, item, attempt, selected model and effort; bind the returned
+native agent id with `started` immediately after every `spawn_agent`. Before every child or `followup_task`, run
+another `begin` with the parent's token/attempt and the correct `child` or `follow-up` relation, then bind and
+close it the same way. After each child becomes terminal, run `finish` with its real outcome; close the driver's
+root observation before the driver itself returns. Pass feature/item/attempt identities to
+`tools/routine-delivery.py` so its CI assignment is discovered and created privately by default. Missing host
+configuration or publication remains advisory to delivery but must be reported once as an attributed coverage
+gap, never silently omitted.
+
+The native collaboration tool exposes no usage hook. These orchestrator observations establish expected
+population, parent-child lineage, requested model/effort, start and terminal outcome only. Preserve the emitted
+`native-collaboration-usage-unsupported` gap and never claim intercepted token usage or complete coverage.
+
 Use the existing runtime/provider usage and CI/operation collection. Preserve original item/attempt,
 feature, effective policy, model/effort, triggers, start/queue/end times, useful work/tests, administration,
 reruns/repair causes, native outcomes and coverage gaps. Keep raw private evidence in its existing

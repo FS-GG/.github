@@ -10,6 +10,7 @@ import sys
 import unittest
 from dataclasses import asdict
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -338,6 +339,43 @@ class RoutineDeliveryTests(unittest.TestCase):
             MODULE.GhApi, MODULE.observe_candidate = prior_api, prior_observe
         self.assertEqual(code, 2)
         self.assertEqual([(value.outcome, value.codeDelivery) for value in observations], [("refused", "not-delivered")])
+
+    def test_driver_discovers_host_config_and_creates_assignment_from_route_identities(self):
+        observations = []
+        created = []
+        defaults = SimpleNamespace(
+            CI_ASSIGNMENT_SCHEMA="ci-schema",
+            discover_config=lambda _: SimpleNamespace(engine="configured-engine", store_root=pathlib.Path("/private/store")),
+            create_assignment=lambda config, schema, **kwargs: created.append((config, schema, kwargs)) or pathlib.Path("/private/assignment.json"),
+        )
+        prior = MODULE.GhApi, MODULE.observe_candidate, MODULE._load_telemetry_defaults
+        try:
+            MODULE.GhApi = lambda: FakeApi([opened()])
+            MODULE.observe_candidate = lambda summary, **kwargs: observations.append((summary, kwargs)) or "complete"
+            MODULE._load_telemetry_defaults = lambda: defaults
+            code = MODULE.main([
+                "--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD,
+                "--telemetry-feature", "GS2-08", "--telemetry-item", "GS2-08.3",
+                "--telemetry-attempt", "attempt-1",
+            ])
+        finally:
+            MODULE.GhApi, MODULE.observe_candidate, MODULE._load_telemetry_defaults = prior
+        self.assertEqual(code, 0)
+        self.assertEqual(created[0][2]["item"], "GS2-08.3")
+        self.assertEqual(observations[0][1], {
+            "assignment": "/private/assignment.json", "store_root": "/private/store", "engine": "configured-engine",
+        })
+
+    def test_configured_host_without_route_identities_is_fail_visible(self):
+        defaults = SimpleNamespace(discover_config=lambda _: SimpleNamespace(engine="engine", store_root=pathlib.Path("/private/store")))
+        prior = MODULE.GhApi, MODULE._load_telemetry_defaults
+        try:
+            MODULE.GhApi = lambda: FakeApi([opened()])
+            MODULE._load_telemetry_defaults = lambda: defaults
+            code = MODULE.main(["--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD])
+        finally:
+            MODULE.GhApi, MODULE._load_telemetry_defaults = prior
+        self.assertEqual(code, 0)
 
     def test_exact_head_but_ineligible_pr_never_calls_population_observer(self):
         callbacks: list[object] = []

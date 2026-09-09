@@ -66,7 +66,7 @@
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
     {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"97d792bf5f89359d62af9b307b315b2199b6065edae9acac6e33e9530ad19e36"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"},
-    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"3af31b5d46fc41bdc017852a8fa623ebccf65abc4b698a415dc92c7a4d5ae69b"},
+    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"49d75c1148b7f3b123ad30216bedcd5c25f7d103bae9fd25cac10542dcbfd176"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"protected-admin-writer","sinkKinds":["graphql-mutation"],"sha256":"7a277a9307077d1cee86da7d939e268213c3d365ff1083f0431dbbf58571d7bc"},
     {"path":"scripts/check-claim-fence.py","disposition":"guard-only","sinkKinds":["dynamic-process"],"sha256":"bf5a7f5e078a3bf84b6635a8ff05474ccc60edf426fdc7dc0dc1bd77a976106e","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
     {"path":"scripts/check-claim-generation.py","disposition":"guard-only","sinkKinds":["dynamic-process","gh-pr-merge","rest-write"],"sha256":"7995b5331f2d9564313f6d317f733f53174781aeb3bd50ecfa28755c036553c2","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
@@ -97,6 +97,6 @@
     {"path":"tests/review-critic-succession-wire/run.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"72220f2c9d26c638d96485dd6232053248fe5f56eb0acbf6ba280186818c12e8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/skill-registry/run.sh","disposition":"test-only","sinkKinds":["git-push"],"sha256":"542ae5044fec3d5a940cacaf53a79d21b92c45a98bf48f11ceb37bd7c421528c","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"11aa3f00627dfa9fe10a2c5994659deb82f93a93abcc4c3a41a01ad389fac754","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
-    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"1c3025769e0fb4a9a2a90a5ac02e87d7943c3d24c3de2bf0985ec2c7d4e8cfd9"}
+    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"cecb3058a1a9cd934793ded98f3003232c012e843093c2944b82f68f0f37dab3"}
   ]
 }

@@ -15,6 +15,8 @@ owner, the table below selects that owner's model. It does not authorize a criti
 or any strict-route artifact.
 That inheritance explicitly includes canonical `work-board`'s ADR-0084 selection/reuse, coherent-pending,
 late-dispute, and dependent-activation behavior; this variant changes none of it.
+It also includes the canonical begin/started/finish telemetry around every native dispatch and follow-up; this
+model-routing variant may not omit or upgrade its explicit unsupported-usage coverage gap.
 
 Before every worker dispatch, identify the active host runtime. Pass this route explicitly to every
 subagent spawn:
