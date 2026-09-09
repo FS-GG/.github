@@ -46,6 +46,35 @@ function payload(host, observedAt = "2026-09-09T08:00:00Z") {
     host,
   };
 }
+function completedHost(keys = ["one", "two"]) {
+  const items = keys.map((key, index) => ({
+    key,
+    label: `Completed ${key}`,
+    url: `https://github.com/FS-GG/.github/pull/${index + 1}`,
+    deliveredAt: "2026-09-09T08:00:00Z",
+    deliveries: [],
+    runtime: {
+      invocations: 1,
+      duration: { rows: [{ role: "root", invocations: 1, known: 1, unknown: 0, summedSeconds: 30 }] },
+      tokens: { coverage: { invocationsWithUsage: 0, invocationsWithoutUsage: 1, runtimeGaps: 1 }, rows: [] },
+    },
+    ci: { counts: { runs: 0 }, seconds: {} },
+    budget: { assessments: [] },
+    complications: { observed: {}, notes: [] },
+  }));
+  return {
+    schema: "fsgg.telemetry.dashboard-host/2",
+    observedAt: "2026-09-09T08:00:00Z",
+    totals: { usageObservations: 0 },
+    usage: { input: 0, cachedInput: 0, cacheWriteInput: 0, output: 0, reasoning: null, total: 0 },
+    launcherPopulation: { admitted: 2, terminal: 2 },
+    quality: {}, operational: { expected: 2, lineage: {}, timing: {} },
+    localCi: { counts: { runs: 0, jobs: 0 }, seconds: {}, coverage: {} },
+    store: { status: "ready", schemaVersion: 8, journalMode: "wal", pendingBatches: 0 },
+    budget: { distinctBreaches: 0, intervention: "none", dirtyItems: 0, health: {}, dimensions: {}, assessments: [] },
+    completedItems: { coverage: { eligible: items.length, published: items.length, unmapped: 0, dirty: 0, incompatible: 0 }, items },
+  };
+}
 test("populated, keyboard, text equivalent, XSS and mobile layout", async ({
   page,
 }) => {
@@ -130,4 +159,110 @@ test("aggregate usage is labelled observed and warns when coverage may be partia
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:data})); await page.goto("/");
   await expect(page.getByRole("heading",{name:"Observed tokens"})).toBeVisible();
   await expect(page.getByText("coverage gaps can make this a partial total",{exact:false})).toBeVisible();
+});
+
+test("minute refresh replaces data while preserving interaction state", async ({ page }) => {
+  await page.clock.install();
+  let requests = 0;
+  await page.route("**/data/dashboard.json", async (route) => {
+    requests += 1;
+    const data = payload(requests < 4 ? completedHost() : { schema: "fsgg.telemetry.dashboard-host-unavailable/1", status: "unconfigured", reason: "missing" });
+    if (requests === 3) {
+      data.actions.runs = data.actions.runs.filter((run) => run.conclusion === "success");
+      data.actions.selection.returned = data.actions.runs.length;
+      data.sourceRevision = "b".repeat(40);
+    }
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/#item-one");
+  await expect(page.locator("#item-one")).toHaveAttribute("open", "");
+  await page.locator("#item-two summary").click();
+  await page.locator("#local-content details").first().locator("summary").click();
+  await page.evaluate(() => history.replaceState(null, "", "#item-one"));
+  await page.locator("#search").fill("coord");
+  await page.locator("#outcome-filter").selectOption("failure");
+  await page.locator("#search").focus();
+  await page.clock.runFor(60000);
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(2);
+  await expect(page.locator("#item-one")).toHaveAttribute("open", "");
+  await expect(page.locator("#item-two")).toHaveAttribute("open", "");
+  await expect(page.locator("#local-content details").first()).toHaveAttribute("open", "");
+  expect(await page.evaluate(() => location.hash)).toBe("#item-one");
+  await expect(page.locator("#search")).toBeFocused();
+  await expect(page.locator("#search")).toHaveValue("coord");
+  await expect(page.locator("#outcome-filter")).toHaveValue("failure");
+  await page.clock.runFor(60000);
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(3);
+  await expect(page.locator("#outcome-filter option:checked")).toContainText("(0)");
+  await page.clock.runFor(60000);
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(4);
+  await expect(page.locator("#local-content")).toBeEmpty();
+  await expect(page.locator(".item-card")).toHaveCount(0);
+  await expect(page.locator("#refresh-status")).toContainText("checking every minute");
+});
+
+test("malformed refresh retains last good data and a later success recovers", async ({ page }) => {
+  await page.clock.install();
+  let requests = 0;
+  await page.route("**/data/dashboard.json", async (route) => {
+    requests += 1;
+    const data = payload(completedHost(["stable"]));
+    if (requests === 2) data.host.localCi.seconds = { runnerSeconds: null };
+    if (requests >= 3) data.actions.runs[0].workflow = "Recovered workflow";
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/");
+  await expect(page.locator("#m-runs")).toHaveText("8");
+  await page.clock.runFor(60000);
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(2);
+  await expect(page.locator("#error")).toContainText("showing last good data");
+  await expect(page.locator("#m-runs")).toHaveText("8");
+  await expect(page.getByText("Completed stable", { exact: true })).toBeVisible();
+  await page.clock.runFor(60000);
+  await expect.poll(() => requests).toBeGreaterThanOrEqual(3);
+  await expect(page.locator("#error")).toBeHidden();
+  await expect(page.getByRole("link", { name: "Recovered workflow" })).toBeVisible();
+});
+
+test("first successful retry honors the original item deep link", async ({ page }) => {
+  await page.clock.install();
+  let requests=0;
+  await page.route("**/data/dashboard.json",(route)=>{
+    requests+=1;
+    if(requests===1) return route.fulfill({json:{schema:"bad"}});
+    return route.fulfill({json:payload(completedHost(["recovered"]))});
+  });
+  await page.goto("/#item-recovered");
+  await expect(page.locator("#health-label")).toHaveText("Data unavailable");
+  await page.clock.runFor(60000);
+  await expect(page.locator("#item-recovered")).toHaveAttribute("open","");
+});
+
+test("hidden pages pause checks, resume overdue, and requests never overlap", async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => {
+    const nativeFetch=window.fetch.bind(window);
+    window.__refreshProbe={requests:0,active:0,peak:0};
+    window.fetch=(...args)=>{
+      const probe=window.__refreshProbe;
+      probe.requests+=1;
+      if (probe.requests===1) return nativeFetch(...args);
+      probe.active+=1; probe.peak=Math.max(probe.peak,probe.active);
+      return new Promise((resolve,reject)=>args[1].signal.addEventListener("abort",()=>{probe.active-=1;reject(new DOMException("Aborted","AbortError"));},{once:true}));
+    };
+  });
+  await page.route("**/data/dashboard.json", (route) => route.fulfill({ json: payload({ schema: "fsgg.telemetry.dashboard-host-unavailable/1", status: "unconfigured", reason: "missing" }) }));
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.__dashboardHidden = true;
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => window.__dashboardHidden });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.clock.runFor(61000);
+  expect(await page.evaluate(()=>window.__refreshProbe.requests)).toBe(1);
+  await page.evaluate(() => { window.__dashboardHidden = false; document.dispatchEvent(new Event("visibilitychange")); });
+  await expect.poll(() => page.evaluate(()=>window.__refreshProbe.requests)).toBeGreaterThanOrEqual(2);
+  await page.clock.runFor(10000);
+  await expect(page.locator("#error")).toContainText("timed out");
+  expect(await page.evaluate(()=>window.__refreshProbe.peak)).toBe(1);
 });
