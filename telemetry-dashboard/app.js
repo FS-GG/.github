@@ -310,8 +310,14 @@
       details.addEventListener("toggle",()=>{if(details.open)history.replaceState(null,"",`#item-${item.key}`);});
       const summary=document.createElement("summary"), title=document.createElement("span"), name=document.createElement("strong"), meta=document.createElement("small");
       name.textContent=item.label; meta.textContent=`${item.runtime.invocations} invocations · ${item.ci.counts.runs} CI runs · delivery recorded ${date(item.deliveredAt)}`; title.append(name,meta);
-      const total=document.createElement("b"), tokenTotal=itemTokens(item); total.textContent=tokenTotal==null?"Observed tokens by compatible scope":`${fmt.format(tokenTotal)} complete tokens`; summary.append(title,total); details.append(summary);
-      const intro=document.createElement("p"), usageCoverage=item.runtime.tokens.coverage, coverageText=usageCoverage.status?`Token population ${usageCoverage.status}: ${usageCoverage.linkedInvocations}/${usageCoverage.expectedDispatches} expected invocation(s) linked, ${usageCoverage.invocationsWithUsage} with usage, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s). A complete total is shown only for one compatible accounting basis with no unknown remainder.`:`Legacy token coverage: ${usageCoverage.invocationsWithUsage} invocation(s) observed, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s); no complete total is asserted.`; intro.className="item-method"; intro.textContent=`Settled means current canonical population is completed and every grouped native delivery is delivered. Invocation spans may overlap; they are not human effort. CI time is separate. ${coverageText}`; details.append(intro);
+      const total=document.createElement("b"), tokenTotal=itemTokens(item), usageCoverage=item.runtime.tokens.coverage, fullRuntimeCoverage=usageCoverage.boundary==="canonical completed member items and all expected runtime dispatches";
+      total.textContent=fullRuntimeCoverage
+        ? tokenTotal==null
+          ? `Token coverage ${usageCoverage.status} · ${usageCoverage.invocationsWithUsage}/${usageCoverage.expectedDispatches} with usage`
+          : `${fmt.format(tokenTotal)} complete tokens · ${usageCoverage.invocationsWithUsage}/${usageCoverage.expectedDispatches} with usage`
+        : tokenTotal==null?"Observed tokens by compatible scope · legacy coverage":`${fmt.format(tokenTotal)} observed tokens · legacy coverage`;
+      summary.append(title,total); details.append(summary);
+      const intro=document.createElement("p"), coverageText=fullRuntimeCoverage?`Token coverage ${usageCoverage.status}: ${usageCoverage.invocationsWithUsage}/${usageCoverage.expectedDispatches} expected invocation(s) have usage; ${usageCoverage.linkedInvocations}/${usageCoverage.expectedDispatches} are linked, ${usageCoverage.invocationsWithoutUsage} have no usage, and ${usageCoverage.runtimeGaps} runtime gap(s) are recorded. A complete total is shown only for one compatible accounting basis with no unknown remainder.`:`Legacy token coverage: ${usageCoverage.invocationsWithUsage} invocation(s) observed, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s); this older contract is absent or limited to codex-exec and does not identify the full expected runtime population.`; intro.className="item-method"; intro.textContent=`Settled means current canonical population is completed and every grouped native delivery is delivered. Invocation spans may overlap; they are not human effort. CI time is separate. ${coverageText}`; details.append(intro);
       const links=document.createElement("div"); links.className="item-links"; const link=document.createElement("a"); link.href=item.url; link.target="_blank"; link.rel="noopener"; link.textContent="Open approved item evidence ↗"; links.append(link);
       item.deliveries.forEach((delivery)=>{const deliveryLink=document.createElement("a");deliveryLink.href=delivery.url;deliveryLink.target="_blank";deliveryLink.rel="noopener";deliveryLink.textContent=`${delivery.repository}#${delivery.number} ↗`;links.append(deliveryLink);});
       const permalink=document.createElement("a");permalink.href=`#item-${item.key}`;permalink.textContent="Permalink #";links.append(permalink);details.append(links);
@@ -376,9 +382,9 @@
         "Reasoning is shown separately when the source provides it.",
       ],
       [
-        "Total tokens",
+        "Observed tokens",
         known(host.usage.total),
-        "All-time aggregate; dashboard date filters do not apply.",
+        "All-time observed native usage; coverage gaps can make this a partial total, and dashboard date filters do not apply.",
       ],
       [
         "Admitted / terminal",

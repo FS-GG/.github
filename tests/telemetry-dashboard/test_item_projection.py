@@ -43,6 +43,54 @@ class ItemProjectionTests(unittest.TestCase):
         duplicate=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})
         self.assertEqual(duplicate["items"],[]); self.assertEqual(duplicate["coverage"]["incompatible"],1)
 
+    def test_all_runtime_types_remain_in_usage_coverage_without_inferred_tokens(self):
+        source=snapshot()
+        source["expectedDispatches"][1]["runtime"]="collaboration-spawn-agent"
+        source["lineage"][1]["runtime"]="collaboration-spawn-agent"
+        source["usage"]=source["usage"][:1]
+        tokens=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})["items"][0]["runtime"]["tokens"]
+        expected={"status":"partial","expectedDispatches":2,"linkedInvocations":2,"invocationsWithUsage":1,"invocationsWithoutUsage":1}
+        for key,value in expected.items(): self.assertEqual(tokens["coverage"][key],value)
+        self.assertEqual(tokens["total"]["status"],"not-proven"); self.assertIsNone(tokens["total"]["total"])
+
+        source["expectedDispatches"][0]["runtime"]="collaboration-spawn-agent"
+        source["lineage"][0]["runtime"]="collaboration-spawn-agent"
+        source["usage"]=[]
+        tokens=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})["items"][0]["runtime"]["tokens"]
+        self.assertEqual(tokens["coverage"]["status"],"unknown")
+        self.assertEqual(tokens["coverage"]["expectedDispatches"],2)
+        self.assertEqual(tokens["coverage"]["linkedInvocations"],2)
+        self.assertEqual(tokens["coverage"]["invocationsWithUsage"],0)
+        self.assertEqual(tokens["coverage"]["invocationsWithoutUsage"],2)
+        self.assertIsNone(tokens["total"]["input"]); self.assertIsNone(tokens["total"]["total"])
+
+    def test_runtime_and_lineage_ambiguity_never_proves_a_total(self):
+        source=snapshot()
+        source["lineage"][1]["runtime"]="collaboration-spawn-agent"
+        tokens=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})["items"][0]["runtime"]["tokens"]
+        self.assertEqual(tokens["coverage"]["status"],"partial")
+        self.assertIsNone(tokens["total"]["total"])
+        source=snapshot(); source["expectedDispatches"].append(dict(source["expectedDispatches"][0]))
+        value=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})
+        self.assertEqual(value["items"],[]); self.assertEqual(value["coverage"]["incompatible"],1)
+
+    def test_current_coverage_contract_rejects_false_complete_and_accepts_legacy_boundary(self):
+        source=snapshot(); source["usage"]=source["usage"][:1]
+        value=D.project_completed_items(source,{"epoch":"current"},labels(),{}, {})
+        item=value["items"][0]; D.validate_completed_items(value)
+        item["runtime"]["tokens"]["coverage"]["status"]="complete"
+        with self.assertRaises(ValueError): D.validate_completed_items(value)
+
+        value=D.project_completed_items(snapshot(),{"epoch":"current"},labels(),{}, {})
+        tokens=value["items"][0]["runtime"]["tokens"]
+        tokens["coverage"]["boundary"]="canonical completed member items and their codex-exec expected dispatches"
+        tokens["coverage"]["status"]="incomplete"
+        tokens["total"]["semantics"]="complete only when the exact expected native invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis"
+        tokens["total"]["status"]="not-proven"
+        for name in ("input","cachedInput","output","reasoning","total"): tokens["total"][name]=None
+        tokens["total"]["unknownRemainder"]=True
+        D.validate_completed_items(value)
+
     def test_dirty_or_reopened_item_is_not_published(self):
         source=snapshot(); source["dirtyItems"]=[{"item_id":"child"}]
         value=D.project_completed_items(source,{"epoch":"current"},labels(),{},{}); self.assertEqual(value["items"],[]); self.assertEqual(value["coverage"]["dirty"],1)
