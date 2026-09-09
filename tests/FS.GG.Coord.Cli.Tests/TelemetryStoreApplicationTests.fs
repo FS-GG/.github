@@ -248,6 +248,25 @@ module TelemetryStoreApplicationTests =
         Assert.DoesNotContain("exact fixture", summary)
 
     [<Fact>]
+    let ``UTEL-04A binding correction preserves collected child evidence`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let first = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ci-parent-first","sourceIdentity":"ci-worker","generation":"g1","cursor":"1","eventCount":3,"events":[{{"kind":"ci-binding","identity":"ci-parent-binding","itemId":"UTEL-04A","revision":0,"collectionId":"ci-parent-collection","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":1,"workflow":"ci.yml","featureId":"UTEL","attemptId":"a1","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}},{{"kind":"ci-page","identity":"ci-parent-page","itemId":"UTEL-04A","revision":0,"collectionId":"ci-parent-collection","resource":"runs","page":1,"count":1,"total":1}},{{"kind":"ci-coverage","identity":"ci-parent-coverage","itemId":"UTEL-04A","revision":0,"collectionId":"ci-parent-collection","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}]}}"""
+        Assert.Contains("\"accepted\":3", TelemetryStoreApplication.ingest path approved first |> unwrap)
+        let corrected = Encoding.UTF8.GetString(first).Replace("ci-parent-first", "ci-parent-corrected").Replace("\"cursor\":\"1\"", "\"cursor\":\"2\"").Replace("\"identity\":\"ci-parent-binding\",\"itemId\":\"UTEL-04A\",\"revision\":0", "\"identity\":\"ci-parent-binding\",\"itemId\":\"UTEL-04A\",\"revision\":1").Replace("\"producerStream\":\"ci-worker\"", "\"producerStream\":\"routine-delivery\"") |> Encoding.UTF8.GetBytes
+        Assert.Contains("\"accepted\":1", TelemetryStoreApplication.ingest path approved corrected |> unwrap)
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "SELECT (SELECT producer_stream FROM ci_bindings WHERE identity='ci-parent-binding'),(SELECT count(*) FROM ci_pages WHERE collection_id='ci-parent-collection'),(SELECT count(*) FROM ci_coverage WHERE collection_id='ci-parent-collection');"
+        use reader = command.ExecuteReader()
+        Assert.True(reader.Read())
+        Assert.Equal("routine-delivery", reader.GetString(0))
+        Assert.Equal(1L, reader.GetInt64(1))
+        Assert.Equal(1L, reader.GetInt64(2))
+
+    [<Fact>]
     let ``UTEL-04A command shapes require explicit selected population arguments`` () =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "collect"; "--assignment"; "/private/a.json"; "--repo"; "o/r"; "--pr"; "1"; "--head"; String.replicate 40 "a"; "--workflow"; "ci.yml"; "--store-root"; "/durable/store" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "ci"; "summary"; "--item"; "UTEL-04A" ])
