@@ -17,6 +17,7 @@ trap 'rm -rf "$WORK"' EXIT
 export DOTNET_CLI_HOME="$WORK/dotnet-home"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
+export PYTHONDONTWRITEBYTECODE=1
 export NUGET_PACKAGES="$WORK/nuget-packages"
 export NUGET_HTTP_CACHE_PATH="$WORK/nuget-http-cache"
 mkdir -p "$DOTNET_CLI_HOME" "$NUGET_PACKAGES" "$NUGET_HTTP_CACHE_PATH"
@@ -62,7 +63,7 @@ if printf '%s\n' "$PACKAGE_LIST" | grep -Eq '/FS\.GG\.Telemetry\.Host\.dll$|/Akk
 else
   ok "package excludes Host and Akka runtime"
 fi
-if printf '%s\n' "$PACKAGE_LIST" | grep -Eqi '\.(py|pyc|js|node)$|(^|/)python([^/]*)(/|$)|(^|/)node_modules/'; then
+if printf '%s\n' "$PACKAGE_LIST" | grep -Eqi '\.(py|pyc|node)$|(^|/)python([^/]*)(/|$)|(^|/)node_modules/|(^|/)node([^/]*)/bin/'; then
   bad "package adds no Python or Node runtime payload"
 else
   ok "package adds no Python or Node runtime payload"
@@ -93,8 +94,10 @@ INSTALLED_DELTA=$((INSTALLED_BYTES-BASELINE_INSTALLED_BYTES))
 WORKSPACE="$WORK/generated-workspace"
 PRIVATE="$WORK/private"
 CONFIG="$PRIVATE/telemetry.json"
-mkdir -p "$WORKSPACE" "$PRIVATE"
-chmod 700 "$WORKSPACE" "$PRIVATE"
+mkdir -p "$PRIVATE"
+chmod 700 "$PRIVATE"
+dotnet new console -lang F# --no-restore --output "$WORKSPACE" >/dev/null
+chmod 700 "$WORKSPACE"
 git -C "$WORKSPACE" init -q
 BEFORE="$(find "$WORKSPACE" "$PRIVATE" -mindepth 1 -printf '%P\t%y\n' | sort)"
 STATUS_OUT="$(cd "$WORKSPACE" && "$ENGINE" telemetry workspace status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/status.err")"; STATUS_RC=$?
@@ -104,7 +107,12 @@ if [ "$STATUS_RC" -eq 0 ] && printf '%s' "$STATUS_OUT" | grep -q '"status":"unco
 else
   bad "unconfigured status is read-only in a source-free workspace" "rc=$STATUS_RC out=$STATUS_OUT"
 fi
-[ ! -d "$WORKSPACE/src" ] && ! find "$WORKSPACE" -type f -name '*.fs' -print -quit | grep -q . && ok "generated workspace contains no runtime source checkout" || bad "generated workspace contains runtime source"
+if [ "$(find "$WORKSPACE" -maxdepth 1 -name '*.fsproj' | wc -l)" -eq 1 ] \
+   && ! grep -ERqi 'FS\.GG\.Telemetry|FS\.GG\.Telemetry\.Host|Akka' "$WORKSPACE" --include='*.fsproj'; then
+  ok "generated F# product project has no telemetry, Host, or Akka reference"
+else
+  bad "generated F# product project has no telemetry, Host, or Akka reference"
+fi
 
 FAKEBIN="$WORK/fakebin"
 mkdir -p "$FAKEBIN"
@@ -129,8 +137,15 @@ case "$DURABLE_PARENT" in
   /*) ;;
   *) echo "durable fixture parent must be absolute" >&2; exit 2;;
 esac
-mkdir -p "$DURABLE_PARENT"
-chmod 700 "$DURABLE_PARENT"
+if [ ! -e "$DURABLE_PARENT" ]; then
+  mkdir -m 700 "$DURABLE_PARENT"
+fi
+if [ ! -d "$DURABLE_PARENT" ] || [ -L "$DURABLE_PARENT" ] || [ ! -O "$DURABLE_PARENT" ] \
+   || [ "$(stat -c %a "$DURABLE_PARENT")" != 700 ] \
+   || [ "$(realpath -e "$DURABLE_PARENT")" != "$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$DURABLE_PARENT")" ]; then
+  echo "durable fixture parent must be an owned mode-0700 directory with no symlink ancestry" >&2
+  exit 2
+fi
 STORE="$DURABLE_PARENT/l1-package-${PACKAGE_SHA:0:16}-$$"
 mkdir "$STORE"
 chmod 700 "$STORE"
@@ -166,28 +181,38 @@ else
   fi
 fi
 
-STORE_BEFORE_UNINSTALL="$(cd "$STORE" && find . -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
+REMOTE_PROFILE="not-run"
+REMOTE_OBLIGATIONS=0
+REMOTE_RECEIVER="$(cd "$(dirname "$0")" && pwd)/receiver.py"
+# shellcheck source=remote.sh
+. "$(cd "$(dirname "$0")" && pwd)/remote.sh"
+qualify_remote
+
+STORE_BEFORE_UNINSTALL="$(find "$STORE" "$WORK/remote/private" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
 if dotnet tool uninstall "$PACKAGE_ID" --tool-path "$TOOLS" >"$WORK/uninstall.log" 2>&1; then
   ok "local tool uninstall succeeds"
 else
   bad "local tool uninstall succeeds" "$(tail -5 "$WORK/uninstall.log" | tr '\n' ' ')"
 fi
-STORE_AFTER_UNINSTALL="$(cd "$STORE" && find . -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
-[ "$STORE_BEFORE_UNINSTALL" = "$STORE_AFTER_UNINSTALL" ] && [ -d "$STORE" ] && ok "tool uninstall preserves telemetry data" || bad "tool uninstall altered telemetry data"
+STORE_AFTER_UNINSTALL="$(find "$STORE" "$WORK/remote/private" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
+[ "$STORE_BEFORE_UNINSTALL" = "$STORE_AFTER_UNINSTALL" ] && [ -d "$STORE" ] && ok "tool uninstall preserves acknowledged remote telemetry outcomes" || bad "tool uninstall altered telemetry data"
 
 mkdir -p "$(dirname "$EVIDENCE")"
-python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$INSTALLED_BYTES" "$PACKAGE_VERSION" "$PROFILE" "$PROFILE_REASON" "$PASS" "$FAIL" "$CHECKS" "$BASELINE_PACKAGE_SHA" "$BASELINE_PACKAGE_BYTES" "$BASELINE_INSTALLED_BYTES" "$PACKAGE_DELTA" "$INSTALLED_DELTA" <<'PY'
+DOTNET_VERSION="$(dotnet --version)"
+RUNTIME_ARCH="$(uname -m)"
+ACTUAL_FS="$(stat -f -c %T "$DURABLE_PARENT")"
+python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$INSTALLED_BYTES" "$PACKAGE_VERSION" "$PROFILE" "$PROFILE_REASON" "$PASS" "$FAIL" "$CHECKS" "$BASELINE_PACKAGE_SHA" "$BASELINE_PACKAGE_BYTES" "$BASELINE_INSTALLED_BYTES" "$PACKAGE_DELTA" "$INSTALLED_DELTA" "$REMOTE_PROFILE" "$REMOTE_OBLIGATIONS" "$DOTNET_VERSION" "$RUNTIME_ARCH" "$ACTUAL_FS" <<'PY'
 import json, pathlib, sys
-out, digest, packed, installed, version, profile, reason, passed, failed, checks, baseline_digest, baseline_packed, baseline_installed, packed_delta, installed_delta = sys.argv[1:]
+out, digest, packed, installed, version, profile, reason, passed, failed, checks, baseline_digest, baseline_packed, baseline_installed, packed_delta, installed_delta, remote_profile, remote_obligations, dotnet, arch, filesystem = sys.argv[1:]
 rows=[]
 for line in pathlib.Path(checks).read_text().splitlines():
     result,name=line.split('\t',1); rows.append({'name':name,'result':result})
-document={'schema':'fsgg.telemetry.package-fixture-evidence/1','package':{'id':'FS.GG.Coord.Cli','version':version,'sha256':digest,'compressedBytes':int(packed),'installedBytes':int(installed),'compressedDeltaBytes':int(packed_delta),'installedDeltaBytes':int(installed_delta)},'baseline':{'version':'0.87.0','sha256':baseline_digest,'compressedBytes':int(baseline_packed),'installedBytes':int(baseline_installed),'method':'public-source isolated tool install with fresh package cache and no-cache'},'profile':{'result':profile,'reason':reason},'limits':{'compressedIncreaseBytes':10485760,'installedIncreaseBytes':31457280,'responseBytes':4096,'clientAttempts':5},'checks':rows,'summary':{'passed':int(passed),'failed':int(failed)},'claims':{'sourceFreeInstall':True,'publishedRelease':False,'ssdOrPowerLossQualified':False,'mainInstalled':False,'remoteHttpsRehearsedHere':False}}
+document={'schema':'fsgg.telemetry.package-fixture-evidence/1','package':{'id':'FS.GG.Coord.Cli','version':version,'sha256':digest,'compressedBytes':int(packed),'installedBytes':int(installed),'compressedDeltaBytes':int(packed_delta),'installedDeltaBytes':int(installed_delta)},'baseline':{'version':'0.87.0','sha256':baseline_digest,'compressedBytes':int(baseline_packed),'installedBytes':int(baseline_installed),'method':'public-source isolated tool install with fresh package cache and no-cache'},'runtime':{'dotnetSdk':dotnet,'architecture':arch,'durableCandidateFilesystem':filesystem,'sourceIdentity':'FS-GG/package-fixture'},'profile':{'local':{'result':profile,'reason':reason},'remote':{'result':remote_profile,'receiverObligations':int(remote_obligations),'trust':'private test CA via SSL_CERT_FILE'}},'limits':{'compressedIncreaseBytes':10485760,'installedIncreaseBytes':31457280,'responseBytes':4096,'clientAttempts':5},'checks':rows,'summary':{'passed':int(passed),'failed':int(failed)},'claims':{'sourceFreeInstall':True,'publishedRelease':False,'ssdOrPowerLossQualified':False,'mainInstalled':False,'syntheticRemoteHttpsQualified':remote_profile=='synthetic-tls-qualified','mainRemoteRehearsed':False}}
 data=(json.dumps(document,separators=(',',':'),sort_keys=True)+'\n').encode()
 assert len(data)<=16384
 pathlib.Path(out).write_bytes(data)
 PY
 chmod 600 "$EVIDENCE"
 rm -rf "$STORE"
-printf 'standalone-telemetry-package fixture: %d passed, %d failed; profile=%s; evidence=%s\n' "$PASS" "$FAIL" "$PROFILE" "$EVIDENCE"
+printf 'standalone-telemetry-package fixture: %d passed, %d failed; local-profile=%s; remote-profile=%s; evidence=%s\n' "$PASS" "$FAIL" "$PROFILE" "$REMOTE_PROFILE" "$EVIDENCE"
 [ "$FAIL" -eq 0 ]
