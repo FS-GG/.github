@@ -15,6 +15,7 @@ on:
       - "tools/telemetry-dashboard.py"
       - "tests/telemetry-dashboard/**"
       - ".github/workflows/telemetry-dashboard.yml"
+      - "docs/roadmaps/utel-telemetry-dashboard.md"
   schedule:
     - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
