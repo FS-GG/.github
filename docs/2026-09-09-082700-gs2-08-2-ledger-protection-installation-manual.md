@@ -121,6 +121,7 @@ From a current `FS.GG.Coordination` checkout, take two fresh read-only captures.
 checkout; do not overwrite the historical qualification fixtures.
 
 ```bash
+umask 077
 operation_dir=$(mktemp -d)
 python3 eng/capture-github-ledger-protection.py \
   --output "$operation_dir/prestate-pass1.json"
@@ -220,21 +221,24 @@ Open each App's public page, select **Install**, choose `FS-GG`, select **Only s
 Record both installation ids. Read them back with an organization-owner session:
 
 ```bash
-gh api --paginate --slurp 'orgs/FS-GG/installations?per_page=100' \
-  --jq 'map(.installations // .) | flatten | map({id,app_id,app_slug,repository_selection,permissions})'
+gh api --paginate --slurp 'orgs/FS-GG/installations?per_page=100' |
+  jq 'map(.installations // .) | flatten | map({id,app_id,app_slug,repository_selection,permissions})'
 ```
 
 For each installation id, prove that the selected set is complete and exact:
 
 ```bash
 gh api --paginate --slurp \
-  'user/installations/INSTALLATION_ID/repositories?per_page=100' \
-  --jq 'map(.repositories // .) | flatten | map(.full_name) | sort'
+  'user/installations/INSTALLATION_ID/repositories?per_page=100' |
+  jq 'map(.repositories // .) | flatten | map(.full_name) | sort'
 ```
 
 The result must be exactly `["FS-GG/FS.GG.Coordination.Authority"]`. Stop if either installation says `all`, if a
 second repository appears, if pagination is incomplete, or if permissions contain any explicit permission other
-than `contents: write` (implicit `metadata: read` is allowed).
+than `contents: write` (implicit `metadata: read` is allowed). The user-installation endpoint requires a verifier
+credential with `read:user`; an organization installation listing that says `selected` does not independently
+prove the exact selected set. Treat HTTP 403 or a missing scope as an unresolved readback gap. Do not broaden a
+credential or substitute private App-key access without the operation's approved credential plan.
 
 ## 8. Create the protected `fleet-cutover` environment
 
