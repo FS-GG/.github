@@ -766,7 +766,10 @@ module TelemetryStoreApplicationTests =
         Assert.False(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "main" "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
         let corrected = TelemetryStoreApplication.ingest path approved (ciPopulationBatch "ci-corrected" "UTEL-06C" 2 "completed" "complete" "none") |> unwrap
         Assert.Contains("\"accepted\":2", corrected)
-        let replayed = TelemetryStoreApplication.ingest path approved (ciPopulationBatch "ci-replay" "UTEL-06C" 2 "completed" "complete" "none") |> unwrap
+        let admissionRevision = ciPopulationBatch "ci-admission-revision" "UTEL-06C" 2 "completed" "complete" "none" |> Encoding.UTF8.GetString |> fun value -> value.Replace("\"revision\":1,\"collectionId\"", "\"revision\":2,\"collectionId\"") |> Encoding.UTF8.GetBytes
+        Assert.Contains("\"accepted\":1", TelemetryStoreApplication.ingest path approved admissionRevision |> unwrap)
+        let replayedBatch = ciPopulationBatch "ci-replay" "UTEL-06C" 2 "completed" "complete" "none" |> Encoding.UTF8.GetString |> fun value -> value.Replace("\"revision\":1,\"collectionId\"", "\"revision\":2,\"collectionId\"") |> Encoding.UTF8.GetBytes
+        let replayed = TelemetryStoreApplication.ingest path approved replayedBatch |> unwrap
         Assert.Contains("\"replayed\":3", replayed)
         let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-06C" |> unwrap
         Assert.Contains("\"inventoryCoverage\":\"complete\"", summary)
