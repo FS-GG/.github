@@ -255,10 +255,15 @@ Private read-only views are bounded and never drain or mutate the store:
 ```console
 fsgg-coord-engine telemetry review summary --item UTEL-08A --store-root /durable/private/fsgg-telemetry
 fsgg-coord-engine telemetry item-detail --item UTEL-08A --store-root /durable/private/fsgg-telemetry
+fsgg-coord-engine telemetry item-detail --format-version 2 --all --store-root /durable/private/fsgg-telemetry
 ```
 
-`item-detail` is the versioned query boundary for dashboards. The store owns joins, latest-revision selection,
-and exact native/direct/mixed/unclassified/missing-attribution accounting; dashboards only consume that result.
+The default single-item command preserves `fsgg.telemetry.item-detail/1`. Explicit format version 2 supports one
+item/original group or the bounded bulk dashboard population. Its database inputs are read through one connection
+and explicit WAL transaction. The canonical private revision covers the selected content but excludes observation
+time; the separately labelled pending-inbox count is an operational observation outside that transaction. The
+engine owns joins, schema compatibility, bounds, completion/dirty evidence, timing/clock provenance, scoped exact
+usage, CI, budget and process inputs; dashboards only consume and privacy-filter that result.
 The public export continues to expose allowlisted aggregates and excludes review prose, evidence references,
 activity summaries, complications, and private invocation identities.
 

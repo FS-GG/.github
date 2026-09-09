@@ -91,7 +91,7 @@ module TelemetryApplication =
         | "telemetry" :: "budget" :: "status" :: args -> shape [ "--store-root" ] [] args
         | "telemetry" :: "budget" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "telemetry" :: "review" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
-        | "telemetry" :: "item-detail" :: args -> shape [ "--item"; "--store-root" ] [] args
+        | "telemetry" :: "item-detail" :: args -> shape [ "--item"; "--store-root"; "--format-version" ] [ "--all" ] args
         | "roadmap" :: "unit" :: "prepare" :: action :: args
             when action = "inspect" || action = "render" || action = "verify" ->
             shape [ "--input"; "--registry"; "--source-registry"; "--output" ] [] args
@@ -582,7 +582,7 @@ module TelemetryApplication =
         | "telemetry" :: "review" :: action :: args ->
             Some(validated "telemetry review" [ "--item"; "--store-root" ] [] args (TelemetryStoreApplication.runReview action))
         | "telemetry" :: "item-detail" :: args ->
-            Some(validated "telemetry item-detail" [ "--item"; "--store-root" ] [] args TelemetryStoreApplication.runItemDetail)
+            Some(validated "telemetry item-detail" [ "--item"; "--store-root"; "--format-version" ] [ "--all" ] args TelemetryStoreApplication.runItemDetail)
         | "telemetry" :: "runtime" :: "codex-exec" :: args -> Some(TelemetryRuntimeApplication.runCodexExec args)
         | "telemetry" :: "runtime" :: "status" :: args -> Some(validated "telemetry runtime status" [ "--store-root" ] [] args TelemetryRuntimeApplication.capabilityStatus)
         | "telemetry" :: "store" :: action :: args ->
