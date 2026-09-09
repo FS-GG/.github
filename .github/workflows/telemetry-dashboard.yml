@@ -1,0 +1,99 @@
+name: telemetry-dashboard
+
+on:
+  pull_request:
+    paths:
+      - "telemetry-dashboard/**"
+      - "tools/telemetry-dashboard.py"
+      - "tests/telemetry-dashboard/**"
+      - ".github/workflows/telemetry-dashboard.yml"
+      - "docs/roadmaps/utel-telemetry-dashboard.md"
+  push:
+    branches: [main]
+    paths:
+      - "telemetry-dashboard/**"
+      - "tools/telemetry-dashboard.py"
+      - "tests/telemetry-dashboard/**"
+      - ".github/workflows/telemetry-dashboard.yml"
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: telemetry-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Verify feed and dashboard behavior
+        env:
+          FSGG_DASHBOARD_SKIP_BROWSER: ${{ github.event_name == 'schedule' }}
+        run: bash tests/telemetry-dashboard/run.sh
+
+  build:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Collect bounded public Actions data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/telemetry-dashboard.py collect-actions --repo "$GITHUB_REPOSITORY" --cap 1000 --output actions.json
+      - name: Read optional safe host snapshot
+        id: host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          revision="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha 2>host-error.txt)" || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            gh api "repos/$GITHUB_REPOSITORY/contents/host.json?ref=$revision" --jq .content > host.base64
+            base64 --decode host.base64 > host.json
+            echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          elif grep -q 'HTTP 404' host-error.txt; then
+            echo "revision=" >> "$GITHUB_OUTPUT"
+          else
+            sed 's/^/host snapshot read: /' host-error.txt >&2
+            exit "$rc"
+          fi
+      - name: Compose exact-revision site data
+        run: |
+          args=(--actions actions.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
+          [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
+          python3 tools/telemetry-dashboard.py compose "${args[@]}"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: telemetry-dashboard
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy exact built artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

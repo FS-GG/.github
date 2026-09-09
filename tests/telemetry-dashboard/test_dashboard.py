@@ -1,0 +1,85 @@
+import importlib.util
+import json
+import pathlib
+import tempfile
+import unittest
+from unittest import mock
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location("telemetry_dashboard", ROOT / "tools/telemetry-dashboard.py")
+D = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(D)
+
+
+def public_item(**changes):
+    value={"schema":"fsgg.telemetry.public-summary/1","item":"PRIVATE-ITEM","factCount":1,"usageObservations":1,"deliveryObservations":1,
+      "usage":{"input":100,"cachedInput":20,"cacheWriteInput":0,"output":40,"reasoning":10,"total":140},
+      "launcherPopulation":{"admitted":1,"started":1,"terminal":1,"usage":1,"missingAdmission":0,"missingStart":0,"missingTerminal":0,"missingUsage":0},
+      "recordValidity":"valid","joinIntegrity":"matched","populationCoverage":"complete","qualification":"not-evaluated"}
+    value.update(changes); return value
+
+
+def host_fixture():
+    return D.aggregate_host({"schema":"fsgg.telemetry.public-export/1","items":[public_item()]},
+      [{"runs":1,"attempts":1,"jobs":2,"steps":3,"runnerSeconds":20,"wallSeconds":10,"queueSeconds":None,"usefulValidationSeconds":8,"administrativeSeconds":2,"necessarySetupSeconds":1,"mixedSeconds":0,"unclassifiedSeconds":0,
+        "inventoryCoverage":"complete","checkCoverage":"partial","attemptCoverage":"complete","jobPageCoverage":"complete","terminalCoverage":"complete","timestampCoverage":"complete","lineageCoverage":"complete","classificationCoverage":"partial","criticalPathCoverage":"unknown"}],
+      [{"dimensions":[{"dimension":"model-usage","verdict":"pass","severe":False,"epoch":"e1"},{"dimension":"owner-effort","verdict":"breach","severe":True,"epoch":"old"}]}],
+      {"epoch":"e1","distinctBreaches":14,"dirtyItems":1,"intervention":"open"},"2026-09-09T08:00:00Z",[],[],{"status":"ready","schemaVersion":7,"journalMode":"wal","pendingBatches":0})
+
+
+def actions_fixture():
+    return {"schema":"fsgg.telemetry.public-actions/1","observedAt":"2026-09-09T08:00:00Z","repository":"FS-GG/.github",
+      "selection":{"order":"created-descending","cap":1000,"pagesFetched":1,"returned":1,"repositoryTotalAtObservation":40000,"truncated":True,"newestCreatedAt":"2026-09-09T08:00:00Z","oldestCreatedAt":"2026-09-09T08:00:00Z","semantics":"bounded multi-page sample, deduplicated by run id; latest observed attempt; not an atomic inventory"},
+      "runs":[{"id":1,"workflow":"build","event":"push","status":"completed","conclusion":"success","createdAt":"2026-09-09T08:00:00Z","startedAt":"2026-09-09T08:00:01Z","updatedAt":"2026-09-09T08:00:03Z","durationSeconds":2,"attempt":1,"url":"https://github.com/FS-GG/.github/actions/runs/1"}]}
+
+
+class DashboardTests(unittest.TestCase):
+    def test_closed_host_aggregate_removes_private_identity_and_free_text(self):
+        value=host_fixture(); raw=json.dumps(value)
+        self.assertNotIn("PRIVATE-ITEM",raw); self.assertNotIn("secret free text",raw)
+        self.assertEqual(value["budget"]["severeItems"],0) # severe dimension belonged to another epoch
+        self.assertEqual(value["budget"]["intervention"],"open")
+        D.validate_host(value)
+
+    def test_unknown_is_distinct_from_zero_and_invalid_nested_fields_refuse(self):
+        value=host_fixture(); self.assertEqual(value["localCi"]["seconds"]["queueSeconds"],{"knownItems":0,"unknownItems":1,"totalItemSeconds":0})
+        value["usage"]["privatePrompt"]="sentinel"
+        with self.assertRaises(ValueError): D.validate_host(value)
+
+    def test_counts_enums_time_and_bytes_are_bounded(self):
+        for mutation in [lambda a:a["runs"][0].update(durationSeconds=-1),lambda a:a["runs"][0].update(status="mystery"),lambda a:a.update(observedAt="not-time")]:
+            value=actions_fixture(); mutation(value)
+            with self.assertRaises(ValueError): D.validate_actions(value)
+        with tempfile.TemporaryDirectory() as directory:
+            path=pathlib.Path(directory)/"large.json"; path.write_bytes(b"x"*(D.MAX_JSON+1))
+            with self.assertRaises(ValueError): D.load(path)
+
+    def test_budget_boundaries_are_renderer_inputs_not_frontend_reductions(self):
+        value=host_fixture(); value["budget"]["distinctBreaches"]=15; value["budget"]["intervention"]="open"; D.validate_host(value)
+        value["budget"]["intervention"]="verified"; D.validate_host(value)
+        value["budget"]["intervention"]="required"
+        with self.assertRaises(ValueError): D.validate_host(value)
+
+    def test_compose_recursively_validates_and_binds_both_revisions(self):
+        result=D.compose(actions_fixture(),host_fixture(),"a"*40,"b"*40)
+        self.assertEqual(result["hostRevision"],"b"*40)
+        bad=host_fixture(); bad["scope"]["rawItems"]=[]
+        with self.assertRaises(ValueError): D.compose(actions_fixture(),bad,"a"*40,"b"*40)
+
+    def test_concurrent_ref_conflict_never_forces_or_retries(self):
+        calls=[]
+        def api(*args,**kwargs):
+            calls.append((args,kwargs))
+            if len(calls)==6: raise D.RefConflict("race")
+            return answers.pop(0)
+        answers=[({"object":{"sha":"a"*40}},{}),({"tree":{"sha":"b"*40}},{}),({"sha":"c"*40},{}),({"sha":"d"*40},{}),({"sha":"e"*40},{})]
+        with mock.patch.object(D,"github",side_effect=api), self.assertRaises(D.RefConflict): D.publish("FS-GG/.github","telemetry-data","host.json","token",host_fixture())
+        self.assertEqual(len(calls),6); self.assertFalse(calls[-1][0][3]["force"])
+
+    def test_collection_deduplicates_page_drift_and_keeps_timestamp_rules(self):
+        raw={"id":9,"name":"build","event":"push","status":"completed","conclusion":"success","created_at":"2026-09-09T08:00:00Z","run_started_at":"2026-09-09T08:00:01Z","updated_at":"2026-09-09T08:00:03Z","run_attempt":2}
+        pages=[({"total_count":200,"workflow_runs":[raw]*100},{}),({"total_count":200,"workflow_runs":[raw]}, {})]
+        with mock.patch.object(D,"github",side_effect=pages): value=D.collect_actions("FS-GG/.github","token",200)
+        self.assertEqual(value["selection"]["returned"],1); self.assertEqual(value["runs"][0]["attempt"],2); self.assertEqual(value["runs"][0]["durationSeconds"],2)
+
+
+if __name__ == "__main__": unittest.main()
