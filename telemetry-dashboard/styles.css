@@ -171,9 +171,15 @@ nav a:focus {
     monospace;
   text-transform: uppercase;
 }
-.pulse time {
+.pulse time,
+.pulse small {
   grid-column: 2;
   color: var(--muted);
+}
+.pulse small {
+  max-width: 24rem;
+  text-transform: none;
+  line-height: 1.35;
 }
 .pulse-dot {
   width: 9px;

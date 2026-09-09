@@ -17,7 +17,7 @@ on:
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "2-57/5 * * * *"
   workflow_dispatch:
 
 permissions:
