@@ -176,6 +176,11 @@ explicit implementation gap, not an invented automated counter or a model-mainta
 Missing measurements cannot certify compliance. Substantive feature planning is design work; repeated
 administrative replanning is overhead. Technical and authority incidents keep their actual immediate response.
 
+Where the private event-publication receipt has been explicitly activated, successful completed-root and
+post-terminal root observation drains request a bounded dashboard refresh through the canonical roadmap adapter.
+Treat its health as advisory and report it without delaying delivery; a failed or unchanged refresh does not alter
+the recorded outcome. This event path makes no daemon or recurring-service assumption.
+
 ## Retire this temporary skill
 
 Retire it when the shared driver provides the same unified-roadmap resolution, feature-planning handoff,

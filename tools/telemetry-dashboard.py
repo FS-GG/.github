@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,6 +35,20 @@ DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
 PROCESS_SCHEMA = "fsgg.telemetry.item-process-detail/1"
 LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/1"
+EVENT_RECEIPT_SCHEMA = "fsgg.telemetry.dashboard-event-activation/1"
+EVENT_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
+EVENT_RECEIPT_NAME = "telemetry-dashboard-event-activation.json"
+EVENT_HEALTH_NAME = "telemetry-dashboard-event-health.json"
+EVENT_LOCK_NAME = "telemetry-dashboard-event.lock"
+EVENT_REASON_CODES={
+    "EVENT_ACTIVATION_RECEIPT_UNSAFE","EVENT_ACTIVATION_RECEIPT_INVALID","EVENT_LOCK_UNSAFE",
+    "EVENT_CONFIG_CHANGED","EVENT_ENGINE_CHANGED","EVENT_LABELS_CHANGED","EVENT_PRIVATE_INPUT_CHANGED",
+    "PUBLISHER_CREDENTIAL_SOURCE_UNAVAILABLE","PUBLISHER_TOKEN_UNAVAILABLE","HOST_ENGINE_UNAVAILABLE",
+    "HOST_ENGINE_PROJECTION_FAILED","HOST_ENGINE_OUTPUT_TOO_LARGE","HOST_ENGINE_INVALID_JSON",
+    "HOST_ENGINE_SNAPSHOT_INCOMPATIBLE","HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH","HOST_ENGINE_SNAPSHOT_INCOMPLETE",
+    "HOST_ENGINE_SNAPSHOT_MALFORMED","HOST_STORE_INCOMPATIBLE","HOST_LABELS_UNSAFE",
+    "EVENT_PUBLIC_PAYLOAD_INVALID","EVENT_PUBLICATION_VERIFICATION_FAILED","EVENT_REFRESH_FAILED",
+}
 ALLOWED_STATES = {"queued", "in_progress", "completed", "requested", "waiting", "pending"}
 ALLOWED_RESULTS = {"success", "failure", "cancelled", "skipped", "timed_out", "action_required", "neutral", "stale", "startup_failure", None}
 ACTIVITY_CATEGORIES={"planning","implementation","review","validation","delivery","repair","operations","other","unclassified"}
@@ -77,6 +92,44 @@ def atomic(path: pathlib.Path, value: Any) -> None:
         os.replace(name, path)
     finally:
         if os.path.exists(name): os.unlink(name)
+
+
+def validate_private_parent(path: pathlib.Path) -> None:
+    parent=path.parent.lstat()
+    if path.parent.is_symlink() or not stat.S_ISDIR(parent.st_mode) or stat.S_IMODE(parent.st_mode)&0o077:
+        raise HostSourceError("EVENT_PRIVATE_FILE_UNSAFE")
+
+
+def atomic_private(path: pathlib.Path, value: Any) -> None:
+    data=dump(value)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    validate_private_parent(path)
+    if path.is_symlink() or (path.exists() and not path.is_file()): raise HostSourceError("EVENT_PRIVATE_FILE_UNSAFE")
+    fd,name=tempfile.mkstemp(prefix=path.name+".",dir=path.parent)
+    try:
+        os.fchmod(fd,0o600)
+        with os.fdopen(fd,"wb") as stream: stream.write(data); stream.flush(); os.fsync(stream.fileno())
+        os.replace(name,path)
+    finally:
+        if os.path.exists(name): os.unlink(name)
+
+
+def read_private_bytes(path: pathlib.Path, maximum: int, error_code: str) -> bytes:
+    flags=os.O_RDONLY
+    if hasattr(os,"O_NOFOLLOW"): flags|=os.O_NOFOLLOW
+    try: fd=os.open(path,flags)
+    except OSError as error: raise HostSourceError(error_code) from error
+    try:
+        info=os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600 or info.st_size>maximum: raise HostSourceError(error_code)
+        chunks=[]; total=0
+        while True:
+            chunk=os.read(fd,min(65536,maximum+1-total))
+            if not chunk: break
+            chunks.append(chunk); total+=len(chunk)
+            if total>maximum: raise HostSourceError(error_code)
+        return b"".join(chunks)
+    finally: os.close(fd)
 
 
 def github(path: str, token: str, method: str = "GET", body: Any = None) -> tuple[Any, dict[str, str]]:
@@ -681,19 +734,30 @@ def install_units(directory: pathlib.Path, units: dict[str,bytes]) -> str:
 
 def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
     config_path,cfg=config(args.config)
+    config_bytes=read_private_bytes(config_path,8192,"HOST_CONFIG_UNSAFE")
     engine=shutil.which(cfg["engine"])
     if engine is None or not pathlib.Path(engine).is_absolute(): raise HostSourceError("HOST_ENGINE_UNAVAILABLE")
     if args.labels is None: raise HostSourceError("HOST_LABELS_REQUIRED")
     labels=load_labels(args.labels)
     labels_path=args.labels.resolve(strict=True)
-    label_bytes=labels_path.read_bytes()
+    label_bytes=read_private_bytes(labels_path,65536,"HOST_LABELS_UNSAFE")
     if not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",args.repo) or not re.fullmatch(r"[A-Za-z0-9._/-]{1,200}",args.branch) or args.branch.startswith("/") or ".." in args.branch.split("/"): raise ValueError("invalid publication destination")
     target=pathlib.PurePosixPath(args.path)
     if target.is_absolute() or ".." in target.parts or str(target) in {"","."}: raise ValueError("invalid publication path")
     resolved_engine=str(pathlib.Path(engine).resolve(strict=True))
     snapshot=build_host(labels_path,config_path,resolved_engine)
-    if labels_path.read_bytes()!=label_bytes: raise HostSourceError("HOST_LABELS_CHANGED_DURING_PREVIEW")
+    if read_private_bytes(labels_path,65536,"HOST_LABELS_CHANGED_DURING_PREVIEW")!=label_bytes: raise HostSourceError("HOST_LABELS_CHANGED_DURING_PREVIEW")
     label_digest=hashlib.sha256(label_bytes).hexdigest()
+    config_digest=hashlib.sha256(config_bytes).hexdigest()
+    receipt={"schema":EVENT_RECEIPT_SCHEMA,"configDigest":config_digest,"engine":resolved_engine,
+        "labelsPath":str(labels_path),"labelsDigest":label_digest,
+        "destination":{"repository":args.repo,"branch":args.branch,"path":args.path},
+        "credentialSource":"environment-or-gh-auth"}
+    receipt_path=config_path.parent/EVENT_RECEIPT_NAME
+    if getattr(args,"authorize_event_publication",False): validate_private_parent(receipt_path)
+    if getattr(args,"authorize_event_publication",False) and (receipt_path.exists() or receipt_path.is_symlink()):
+        if load_event_receipt(receipt_path)!=receipt: raise HostSourceError("EVENT_ACTIVATION_CHANGE_REFUSED")
+    if read_private_bytes(config_path,8192,"HOST_CONFIG_CHANGED_DURING_PREVIEW")!=config_bytes: raise HostSourceError("HOST_CONFIG_CHANGED_DURING_PREVIEW")
     units=publisher_units(engine,config_path,labels_path,args.repo,args.branch,args.path,args.output)
     report={"schema":"fsgg.telemetry.publisher-setup/1","mode":"preview","engine":resolved_engine,"config":str(config_path),"labelsDigest":label_digest,"counts":{"approved":len(labels["items"]),"eligible":snapshot["completedItems"]["coverage"]["eligible"],"published":snapshot["completedItems"]["coverage"]["published"]},"revision":snapshot["revision"],"destination":{"repository":args.repo,"branch":args.branch,"path":args.path},"actions":["validate-config","resolve-engine","validate-labels","build-preview"],"effects":[]}
     if args.activate and (args.approve_labels!=label_digest or not args.authorize_recurring_publication):
@@ -710,6 +774,9 @@ def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
         if not verification["verified"]:
             report["status"]="publication-verification-failed"; report["recurrence"]="inactive"
             return report
+        if getattr(args,"authorize_event_publication",False):
+            atomic_private(receipt_path,receipt); report["effects"].append("authorize-event-publication")
+            report["eventPublication"]="active"
         try:
             subprocess.run(["systemctl","--user","daemon-reload"],check=True)
             subprocess.run(["systemctl","--user","enable","--now","fsgg-telemetry-dashboard.timer"],check=True)
@@ -719,6 +786,122 @@ def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
             report["effects"].append("enable-recurrence")
             report["recurrence"]="active"
     return report
+
+
+def load_event_receipt(path: pathlib.Path) -> dict[str,Any]:
+    try: value=json.loads(read_private_bytes(path,8192,"EVENT_ACTIVATION_RECEIPT_UNSAFE"))
+    except (OSError,UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("EVENT_ACTIVATION_RECEIPT_INVALID") from error
+    exact(value,{"schema","configDigest","engine","labelsPath","labelsDigest","destination","credentialSource"},"event activation receipt")
+    if value["schema"]!=EVENT_RECEIPT_SCHEMA or not re.fullmatch(r"[0-9a-f]{64}",str(value["configDigest"])) or not re.fullmatch(r"[0-9a-f]{64}",str(value["labelsDigest"])):
+        raise HostSourceError("EVENT_ACTIVATION_RECEIPT_INVALID")
+    if not isinstance(value["engine"],str) or not pathlib.Path(value["engine"]).is_absolute() or not isinstance(value["labelsPath"],str) or not pathlib.Path(value["labelsPath"]).is_absolute():
+        raise HostSourceError("EVENT_ACTIVATION_RECEIPT_INVALID")
+    destination=exact(value["destination"],{"repository","branch","path"},"event activation destination")
+    target=pathlib.PurePosixPath(destination["path"]) if isinstance(destination["path"],str) else pathlib.PurePosixPath(".")
+    if (not isinstance(destination["repository"],str) or not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",destination["repository"])
+        or not isinstance(destination["branch"],str) or not re.fullmatch(r"[A-Za-z0-9._/-]{1,200}",destination["branch"])
+        or destination["branch"].startswith("/") or ".." in destination["branch"].split("/")
+        or target.is_absolute() or ".." in target.parts or str(target) in {"","."}
+        or value["credentialSource"]!="environment-or-gh-auth"):
+        raise HostSourceError("EVENT_ACTIVATION_RECEIPT_INVALID")
+    return value
+
+
+def event_health(status: str, reason: str, revision: str | None = None, commit: str | None = None) -> dict[str,Any]:
+    return {"schema":EVENT_HEALTH_SCHEMA,"status":status,"reason":reason,"observedAt":now(),"publicRevision":revision,"commit":commit}
+
+
+def write_event_health(config_path: pathlib.Path, value: dict[str,Any]) -> None:
+    exact(value,{"schema","status","reason","observedAt","publicRevision","commit"},"event health")
+    atomic_private(config_path.parent/EVENT_HEALTH_NAME,value)
+
+
+def acquire_event_lock(config_path: pathlib.Path) -> int | None:
+    import fcntl
+    path=config_path.parent/EVENT_LOCK_NAME
+    flags=os.O_RDWR|os.O_CREAT
+    if hasattr(os,"O_NOFOLLOW"): flags|=os.O_NOFOLLOW
+    try: fd=os.open(path,flags,0o600)
+    except OSError as error: raise HostSourceError("EVENT_LOCK_UNSAFE") from error
+    try:
+        info=os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600: raise HostSourceError("EVENT_LOCK_UNSAFE")
+        for _ in range(5):
+            try: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB); return fd
+            except BlockingIOError: time.sleep(0.02)
+        os.close(fd); return None
+    except Exception:
+        os.close(fd); raise
+
+
+def current_publication(repo: str, branch: str, path: str, token: str) -> tuple[dict[str,Any] | None,str | None]:
+    encoded=urllib.parse.quote(branch,safe="")
+    try: ref,_=github(f"repos/{repo}/git/ref/heads/{encoded}",token)
+    except RuntimeError as error:
+        if "404" in str(error): return None,None
+        raise
+    commit=ref.get("object",{}).get("sha") if isinstance(ref,dict) else None
+    if not isinstance(commit,str) or not re.fullmatch(r"[0-9a-f]{40}",commit): raise HostSourceError("EVENT_PUBLIC_PAYLOAD_INVALID")
+    value,_=github(f"repos/{repo}/contents/{urllib.parse.quote(path,safe='/')}?ref={commit}",token)
+    if not isinstance(value,dict) or value.get("encoding")!="base64": raise HostSourceError("EVENT_PUBLIC_PAYLOAD_INVALID")
+    raw=bounded_base64(value.get("content"),MAX_JSON,"EVENT_PUBLIC_PAYLOAD_INVALID")
+    try: payload=json.loads(raw)
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("EVENT_PUBLIC_PAYLOAD_INVALID") from error
+    if not isinstance(payload,dict) or payload.get("schema")!=HOST_SCHEMA: raise HostSourceError("EVENT_PUBLIC_PAYLOAD_INVALID")
+    try: validate_host(payload)
+    except ValueError as error: raise HostSourceError("EVENT_PUBLIC_PAYLOAD_INVALID") from error
+    return payload,commit
+
+
+def unchanged_with_preserved_observation(candidate: dict[str,Any], current: dict[str,Any]) -> bool:
+    preserved=dict(candidate); preserved["observedAt"]=current["observedAt"]; preserved.pop("revision",None)
+    preserved["revision"]=hashlib.sha256(json.dumps(preserved,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
+    return dump(preserved)==dump(current)
+
+
+def publisher_event(args: argparse.Namespace) -> dict[str,Any]:
+    try: config_path,cfg=config(args.config)
+    except (HostSourceError,OSError,ValueError,RuntimeError): return event_health("skipped","EVENT_CONFIG_UNAVAILABLE")
+    receipt_path=config_path.parent/EVENT_RECEIPT_NAME
+    if not receipt_path.exists() and not receipt_path.is_symlink(): return event_health("skipped","EVENT_ACTIVATION_RECEIPT_MISSING")
+    lock=None
+    try:
+        validate_private_parent(receipt_path)
+        receipt=load_event_receipt(receipt_path)
+        lock=acquire_event_lock(config_path)
+        if lock is None:
+            result=event_health("skipped","EVENT_LOCK_CONTENDED"); write_event_health(config_path,result); return result
+        receipt=load_event_receipt(receipt_path)
+        config_bytes=read_private_bytes(config_path,8192,"EVENT_CONFIG_CHANGED")
+        if hashlib.sha256(config_bytes).hexdigest()!=receipt["configDigest"]: raise HostSourceError("EVENT_CONFIG_CHANGED")
+        engine=shutil.which(cfg["engine"])
+        if engine is None or str(pathlib.Path(engine).resolve(strict=True))!=receipt["engine"]: raise HostSourceError("EVENT_ENGINE_CHANGED")
+        labels_path=pathlib.Path(receipt["labelsPath"]); label_bytes=read_private_bytes(labels_path,65536,"EVENT_LABELS_CHANGED"); load_labels(labels_path)
+        if hashlib.sha256(label_bytes).hexdigest()!=receipt["labelsDigest"]: raise HostSourceError("EVENT_LABELS_CHANGED")
+        token=publication_token(receipt["credentialSource"])
+        snapshot=build_host(labels_path,config_path,receipt["engine"])
+        if read_private_bytes(config_path,8192,"EVENT_PRIVATE_INPUT_CHANGED")!=config_bytes or read_private_bytes(labels_path,65536,"EVENT_PRIVATE_INPUT_CHANGED")!=label_bytes: raise HostSourceError("EVENT_PRIVATE_INPUT_CHANGED")
+        destination=receipt["destination"]
+        current,commit=current_publication(destination["repository"],destination["branch"],destination["path"],token)
+        if current is not None and unchanged_with_preserved_observation(snapshot,current):
+            result=event_health("unchanged","SEMANTIC_CONTENT_UNCHANGED",current["revision"],commit)
+        else:
+            commit=publish(destination["repository"],destination["branch"],destination["path"],token,snapshot)
+            verification=verify_publication(destination["repository"],destination["branch"],destination["path"],token,commit,snapshot)
+            result=(event_health("published","PUBLICATION_VERIFIED",snapshot["revision"],commit) if verification["verified"]
+                else event_health("failed","EVENT_PUBLICATION_VERIFICATION_FAILED",snapshot["revision"],commit))
+    except RefConflict:
+        result=event_health("failed","PUBLISH_REF_CONFLICT")
+    except HostSourceError as error:
+        code=str(error); result=event_health("failed",code if code in EVENT_REASON_CODES else "EVENT_REFRESH_FAILED")
+    except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):
+        result=event_health("failed","EVENT_REFRESH_FAILED")
+    try: write_event_health(config_path,result)
+    except (OSError,ValueError,HostSourceError):
+        return event_health("failed","EVENT_HEALTH_WRITE_FAILED",result.get("publicRevision"),result.get("commit"))
+    finally:
+        if lock is not None: os.close(lock)
+    return result
 
 
 def compose(actions: dict[str, Any], deliveries: dict[str,Any], host: dict[str, Any] | None, source_revision: str, host_revision: str | None = None) -> dict[str, Any]:
@@ -953,7 +1136,8 @@ def main() -> int:
     actions=subs.add_parser("collect-actions"); actions.add_argument("--repo",default="FS-GG/.github"); actions.add_argument("--cap",type=int,default=1000); actions.add_argument("--output",type=pathlib.Path,required=True)
     deliveries=subs.add_parser("collect-deliveries"); deliveries.add_argument("--repo",default="FS-GG/.github"); deliveries.add_argument("--cap",type=int,default=200); deliveries.add_argument("--output",type=pathlib.Path,required=True)
     host=subs.add_parser("host-snapshot"); host.add_argument("--output",type=pathlib.Path,required=True); host.add_argument("--config",type=pathlib.Path); host.add_argument("--producer-executable"); host.add_argument("--labels",type=pathlib.Path); host.add_argument("--credential-source",choices=["environment-or-gh-auth"],default="environment-or-gh-auth"); host.add_argument("--dry-run",action="store_true"); host.add_argument("--repo"); host.add_argument("--branch",default="telemetry-data"); host.add_argument("--path",default="host.json")
-    setup=subs.add_parser("publisher-setup"); setup.add_argument("--config",type=pathlib.Path); setup.add_argument("--labels",type=pathlib.Path,required=True); setup.add_argument("--repo",default="FS-GG/.github"); setup.add_argument("--branch",default="telemetry-data"); setup.add_argument("--path",default="host.json"); setup.add_argument("--output",type=pathlib.Path,default=pathlib.Path(os.environ.get("XDG_RUNTIME_DIR","/tmp"))/"fsgg-telemetry-dashboard-host.json"); setup.add_argument("--systemd-dir",type=pathlib.Path,default=pathlib.Path.home()/".config/systemd/user"); setup.add_argument("--install-only",action="store_true"); setup.add_argument("--activate",action="store_true"); setup.add_argument("--approve-labels"); setup.add_argument("--authorize-recurring-publication",action="store_true")
+    setup=subs.add_parser("publisher-setup"); setup.add_argument("--config",type=pathlib.Path); setup.add_argument("--labels",type=pathlib.Path,required=True); setup.add_argument("--repo",default="FS-GG/.github"); setup.add_argument("--branch",default="telemetry-data"); setup.add_argument("--path",default="host.json"); setup.add_argument("--output",type=pathlib.Path,default=pathlib.Path(os.environ.get("XDG_RUNTIME_DIR","/tmp"))/"fsgg-telemetry-dashboard-host.json"); setup.add_argument("--systemd-dir",type=pathlib.Path,default=pathlib.Path.home()/".config/systemd/user"); setup.add_argument("--install-only",action="store_true"); setup.add_argument("--activate",action="store_true"); setup.add_argument("--approve-labels"); setup.add_argument("--authorize-recurring-publication",action="store_true"); setup.add_argument("--authorize-event-publication",action="store_true")
+    event=subs.add_parser("publisher-event"); event.add_argument("--config",type=pathlib.Path)
     comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--deliveries",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
     args=parser.parse_args()
     if args.cmd=="collect-actions":
@@ -973,6 +1157,9 @@ def main() -> int:
     if args.cmd=="publisher-setup":
         if args.install_only and args.activate: raise ValueError("--install-only and --activate are mutually exclusive")
         print(json.dumps(publisher_setup(args),sort_keys=True,separators=(",",":")))
+        return 0
+    if args.cmd=="publisher-event":
+        print(json.dumps(publisher_event(args),sort_keys=True,separators=(",",":")))
         return 0
     host_value=load(args.host) if args.host and args.host.exists() else None
     atomic(args.output,compose(load(args.actions),load(args.deliveries),host_value,args.source_revision,args.host_revision)); return 0

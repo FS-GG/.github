@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -187,10 +188,30 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((review[0]["scope"], review[0]["attemptId"], review[0]["revision"]), ("attempt", "a1", 1))
             self.assertNotIn("schema", review[0])
             self.assertEqual(recorded["status"], "recorded")
+            self.assertIn("dashboardPublication", recorded)
 
             review_path.write_text(json.dumps({"schema": MODULE.REVIEW_SCHEMA, "revision": 1}), encoding="utf-8")
             with self.assertRaisesRegex(MODULE.ConfigurationError, "exact"):
                 MODULE.review(config, MODULE.parser().parse_args(["review", "--token", token, "--scope", "attempt", "--input", str(review_path)]))
+
+    def test_dashboard_hook_requires_successful_completed_root_drain(self):
+        base={"schema":MODULE.STATE_SCHEMA,"token":"a"*32,"phase":"started","sequence":0,"itemId":"I","invocationId":"v","nativeId":"agent","relation":"root"}
+        args=MODULE.parser().parse_args(["finish","--token","a"*32,"--outcome","completed"])
+        for relation,outcome,drain,expected in (("root","completed",0,True),("root","failed",0,False),("child","completed",0,False),("root","completed",1,False)):
+            state={**base,"relation":relation}
+            args.outcome=outcome
+            with mock.patch.object(MODULE,"read_state",return_value=state),mock.patch.object(MODULE,"publish"),mock.patch.object(MODULE,"save_state"),mock.patch.object(MODULE.subprocess,"run",return_value=subprocess.CompletedProcess([],drain,"","")),mock.patch.object(MODULE,"refresh_dashboard",return_value={"status":"observed"}) as refresh:
+                result=MODULE.finish(mock.Mock(),args)
+            self.assertEqual("dashboardPublication" in result,expected)
+            self.assertEqual(refresh.call_count,1 if expected else 0)
+
+    def test_post_terminal_root_correction_drain_hooks_but_preterminal_and_child_do_not(self):
+        config=mock.Mock(); value={"kind":"complication"}
+        with mock.patch.object(MODULE,"publish"),mock.patch.object(MODULE,"save_state"),mock.patch.object(MODULE.subprocess,"run",return_value=subprocess.CompletedProcess([],0,"","")),mock.patch.object(MODULE,"refresh_dashboard",return_value={"status":"observed"}) as refresh:
+            terminal=MODULE.record_event(config,{"phase":"terminal","relation":"root"},value)
+            started=MODULE.record_event(config,{"phase":"started","relation":"root"},value)
+            child=MODULE.record_event(config,{"phase":"terminal","relation":"child"},value)
+        self.assertIn("dashboardPublication",terminal); self.assertNotIn("dashboardPublication",started); self.assertNotIn("dashboardPublication",child); self.assertEqual(refresh.call_count,1)
 
 
 if __name__ == "__main__":

@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "d321f861cfdc9741f4e299870b42fc41608bdcbd613e7836efefc1ca12aee418",
-      "tree-sha256": "9e44746638c8f6067d528724b9bfd6607ccb532b36093212906d0a829c66d00b",
+      "sha256": "4ec457c4ad2c5b1c8c8a2b530700fc06edbb4c188cae55f9ae57f86245e03e4f",
+      "tree-sha256": "ebfa795260650d3b6b37cb7ffeac6f2beb11116c80147b5a952814e8ebb1de95",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "d321f861cfdc9741f4e299870b42fc41608bdcbd613e7836efefc1ca12aee418",
+          "sha256": "4ec457c4ad2c5b1c8c8a2b530700fc06edbb4c188cae55f9ae57f86245e03e4f",
           "executable": false
         },
         {
@@ -54,7 +54,7 @@
         },
         {
           "path": "scripts/roadmap-telemetry.py",
-          "sha256": "1b765b057358706e33ddad6d9fc54cc44d8b2bb383a3b6574a22a0d855be7711",
+          "sha256": "1e80615b2111589b9eaca84b60714b2049288e1dd8960007cf8ebbbe693b514e",
           "executable": false
         }
       ],
@@ -64,12 +64,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "e36ac69b47e9648031b778c1e2d460e57df665938bc2cea7f739664e03b91bac",
-      "tree-sha256": "6e944abb7c4d7d95dac9c12b4c9980a4c59fbf783a1fa1bb5a5e2dc6c4baa7f9",
+      "sha256": "80190128a21c5531048196edbb8ef132523c6e57b271542e3ac27db2ffdbb087",
+      "tree-sha256": "4778836413a72b764b2d492660bfb0211c733152d3a53862b8f33807334877b6",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "e36ac69b47e9648031b778c1e2d460e57df665938bc2cea7f739664e03b91bac",
+          "sha256": "80190128a21c5531048196edbb8ef132523c6e57b271542e3ac27db2ffdbb087",
           "executable": false
         },
         {
