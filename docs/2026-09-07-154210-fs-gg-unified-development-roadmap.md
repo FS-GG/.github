@@ -904,8 +904,9 @@ flowchart TD
 The GS2 roadmap retains exact prerequisite authority. This graph does not manufacture prerequisites for
 already authorized units: the V0→V2 join concerns the claimed simplified ordinary path, while unaffected
 migration work may continue. GS2-08's fence must include new writers introduced by simplification,
-including native helper and automation routes; the original frozen census alone is insufficient if the
-set of routes has changed.
+including native helper and automation routes. GS2-08.3 now carries a content-addressed producer and receiver
+source census across the registry-derived fleet, including legacy tool-source and delegated-callee correspondence;
+that source closure is not installed receiver behavior and does not implement the GS2-08.4 fence.
 
 Suggested initial capacity allocation is one primary remaining-v2 implementation lane and one independent
 bridge/receiver-preparation lane when contracts and touch sets permit. Use remaining capacity for actual

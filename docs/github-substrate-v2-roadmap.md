@@ -1365,7 +1365,10 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   coordination roots from candidate-built typed command metadata and separately binds tracked direct REST/GraphQL,
   routine merge, release/repair/dispatch/registry automation, protected-admin, build/declaration, and local-only
   telemetry source identities. Its structural leg is universal; candidate metadata is checked after build and
-  again before release. This is source coverage only: receiver fencing begins at GS2-08.4 and acceptance remains
+  again before release. The same producer contract derives all seven coordination-kit receivers from the registry,
+  binds each exact revision/tree and complete source manifest, retains deduplicated route/dependency bytes, and
+  distinguishes installed legacy tool sources, mutable workflow observations, delegated writer callees, and
+  read-only/local-only paths without executing receiver code. This is source coverage only: receiver fencing begins at GS2-08.4 and acceptance remains
   with the native Coordination qualification rather than this roadmap checkbox.
 - [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
   fresh ledger epoch before its first effect. Unreadable, contradictory, frozen, switched, or v2-open state

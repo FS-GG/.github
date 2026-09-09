@@ -49,6 +49,7 @@ for label in \
   'closing-keyword and commit-message contract' \
   'SDD ship-verdict provenance' \
   'v1 writer census structural closure' \
+  'v1 receiver source census offline closure' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
   'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \
@@ -59,15 +60,29 @@ done
 grep -Fq 'check-v1-writer-census.py" --structural' "$ROOT/scripts/change-completeness" \
   && ok 'cheap writer census runs on every change' \
   || bad 'writer census is not universal'
+grep -Fq 'check-v1-receiver-census.py' "$ROOT/scripts/change-completeness" \
+  && grep -Fq 'tests/v1-receiver-census/run.py' "$ROOT/scripts/change-completeness" \
+  && ok 'receiver source census runs offline on every change' \
+  || bad 'receiver source census is not universal'
 grep -Fq 'check-v1-writer-census.py --candidate' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'engine workflow checks candidate-built writer metadata' \
   || bad 'engine workflow omits candidate-built writer metadata'
+grep -Fq 'check-v1-receiver-census.py' "$ROOT/.github/workflows/coord-engine.yml" \
+  && grep -Fq 'tests/v1-receiver-census/run.py' "$ROOT/.github/workflows/coord-engine.yml" \
+  && ok 'engine workflow checks receiver source census offline' \
+  || bad 'engine workflow omits receiver source census'
 release_census_line="$(awk '/check-v1-writer-census.py --candidate/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
 release_push_line="$(awk '/dotnet nuget push/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
 if [ -n "$release_census_line" ] && [ -n "$release_push_line" ] && [ "$release_census_line" -lt "$release_push_line" ]; then
   ok 'release census gates pack and publish'
 else
   bad 'release can publish before writer census'
+fi
+release_receiver_line="$(awk '/check-v1-receiver-census.py/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
+if [ -n "$release_receiver_line" ] && [ -n "$release_push_line" ] && [ "$release_receiver_line" -lt "$release_push_line" ]; then
+  ok 'release receiver source census gates publish'
+else
+  bad 'release can publish before receiver source census'
 fi
 
 grep -Fq 'needs: change-completeness' "$ROOT/.github/workflows/coord-engine.yml" \

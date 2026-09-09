@@ -115,6 +115,18 @@ never regenerates the checked census. Mutation fixtures prove omitted, new, misc
 unwired variants red. This window changes no provider, live authority, package, fence, or receiver; GS2-08.4 owns
 the common epoch precondition, Coordination owns independent qualification, and native acceptance remains pending.
 
+The producer census also closes its source boundary across every coordination-kit receiver derived from
+`registry/repos.yml`: SDD, Rendering, Governance, Templates, Game, Audio, and Net. A bounded read-only collector
+binds each reviewed revision to its Git tree, complete tracked-source manifest, installed coordination-tool pin,
+writer/callsite conditions, credential boundary, callable workflow or local-action dependency, and the exact
+legacy 0.58.0/0.75.4 or current 0.87.0 tool source that can substantiate that receiver. Identical bytes are stored
+once while each receiver invocation remains distinct. Mutable `main` workflow references retain both their
+mutable spelling and an exact observed callee revision; the Rendering dispatch route retains its historical
+`5fed2838f9ed085ffca09f4cc18b4f7bc59c1294` callee. The offline validator never performs network access or
+regenerates expectations, and refuses incomplete trees, missing or reordered routes, unresolved callees, legacy
+metadata substitution, or a writer laundered as read-only. This is still a source snapshot: it neither proves
+installed behavior nor creates the GS2-08.4 fence.
+
 ## Workspace, authority, and observation boundaries
 
 GS2-08.1–08.3 change no generated workspace and enable no runtime behavior. The first possible new-workspace
