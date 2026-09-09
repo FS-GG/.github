@@ -7,8 +7,8 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
-import hashlib
 from dataclasses import dataclass
 
 
@@ -17,6 +17,7 @@ WORKSPACE_CONFIG_SCHEMA = "fsgg.telemetry.workspace-config/1"
 RUNTIME_ASSIGNMENT_SCHEMA = "fsgg.telemetry.codex-assignment/1"
 CI_ASSIGNMENT_SCHEMA = "fsgg.telemetry.ci-assignment/1"
 IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$")
+sys.dont_write_bytecode = True
 
 
 class ConfigurationError(RuntimeError):
@@ -59,7 +60,11 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
             raise ConfigurationError("telemetry config permissions must be 0600")
         if info.st_size > 65536:
             raise ConfigurationError("telemetry config exceeds 64 KiB")
-        value = json.loads(path.read_text(encoding="utf-8"))
+        def reject_duplicates(pairs):
+            if len(pairs) != len({name for name, _ in pairs}):
+                raise ConfigurationError("telemetry config contains duplicate properties")
+            return dict(pairs)
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
         if not isinstance(value, dict):
             raise ConfigurationError("telemetry config has an invalid closed shape")
         if value.get("schema") == WORKSPACE_CONFIG_SCHEMA:
@@ -68,34 +73,20 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
             repository = os.environ.get("FSGG_TELEMETRY_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY")
             if not repository:
                 raise ConfigurationError("telemetry workspace repository association is required")
-            matches = [association for association in value["associations"]
-                       if any(candidate.casefold() == repository.casefold()
-                              for candidate in association.get("repositories", []))]
-            if len(matches) != 1:
-                raise ConfigurationError("telemetry workspace repository association is missing or ambiguous")
-            destination = matches[0].get("destination", {})
-            if destination.get("kind") == "local":
-                state_root = pathlib.Path(destination.get("storeRoot", ""))
-            elif destination.get("kind") == "remote":
-                state_root = pathlib.Path(destination.get("spoolRoot", ""))
-            else:
-                raise ConfigurationError("telemetry workspace destination is unsupported")
-            if not state_root.is_absolute():
-                raise ConfigurationError("telemetry workspace private state root must be absolute")
             engine = value["engine"]
             if not isinstance(engine, str) or not engine or "/" in engine or "\\" in engine:
                 raise ConfigurationError("telemetry engine must be an executable name")
-            producer = matches[0].get("producerId")
-            if not isinstance(producer, str) or not producer:
-                raise ConfigurationError("telemetry workspace producer is invalid")
-            if destination["kind"] == "local":
-                destination_identity = "local\n" + str(state_root)
-            else:
-                destination_identity = "remote\n" + destination["endpoint"] + "\n" + destination["credentialReference"] + "\n" + str(state_root)
-            binding = "\n".join([matches[0]["workspaceId"], producer, matches[0]["streamId"],
-                                  destination_identity, *matches[0]["repositories"]])
-            return HostConfig(path.resolve(), state_root, engine, repository, True, producer,
-                              hashlib.sha256(binding.encode()).hexdigest())
+            completed = subprocess.run([engine, "telemetry", "workspace", "binding", "--config", str(path),
+                                        "--repository", repository], capture_output=True, text=True, timeout=20, check=False)
+            if completed.returncode != 0 or len(completed.stdout.encode()) > 4096:
+                raise ConfigurationError(completed.stderr.strip() or "telemetry workspace binding failed")
+            binding = json.loads(completed.stdout, object_pairs_hook=reject_duplicates)
+            fields = {"schema", "configPath", "repository", "producerId", "bindingDigest", "destination", "privateStateRoot"}
+            if not isinstance(binding, dict) or set(binding) != fields or binding.get("schema") != "fsgg.telemetry.workspace-binding/1":
+                raise ConfigurationError("telemetry workspace binding result is invalid")
+            state_root = pathlib.Path(binding["privateStateRoot"])
+            return HostConfig(path.resolve(), state_root, engine, binding["repository"], True,
+                              binding["producerId"], binding["bindingDigest"])
         if list(value) != ["schema", "storeRoot", "engine"]:
             raise ConfigurationError("telemetry config has an invalid closed shape")
         if value.get("schema") != CONFIG_SCHEMA:
@@ -107,7 +98,7 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
         if not isinstance(engine, str) or not engine or os.path.sep in engine:
             raise ConfigurationError("telemetry engine must be an executable name")
         return HostConfig(path.resolve(), store_root, engine)
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as error:
         if isinstance(error, ConfigurationError):
             raise
         raise ConfigurationError(f"telemetry config is unreadable: {error}") from error

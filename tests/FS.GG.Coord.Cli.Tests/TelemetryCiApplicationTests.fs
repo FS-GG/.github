@@ -65,3 +65,26 @@ module TelemetryCiApplicationTests =
         Assert.Equal(1, code)
         Assert.Equal(1, publications)
         Assert.Contains("first CI population admission requires ready", error)
+
+    [<Fact>]
+    let ``explicit missing environment config cannot fall back to legacy store`` () =
+        let cleanup, assignment, delivery = fixture "delivered" "delivered" (Some(String.replicate 40 "a"))
+        use cleanup = cleanup
+        let priorConfig,priorStore=Environment.GetEnvironmentVariable("FSGG_TELEMETRY_CONFIG"),Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE")
+        Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CONFIG","/missing/selected-workspace.json")
+        Environment.SetEnvironmentVariable("FSGG_TELEMETRY_STORE","/otherwise-valid-legacy")
+        let mutable resolved=0
+        try
+            let priorOut,priorError=Console.Out,Console.Error
+            use stdout=new StringWriter()
+            use stderr=new StringWriter()
+            try
+                Console.SetOut stdout
+                Console.SetError stderr
+                let code=TelemetryCiApplication.runWithWorkspaceForTesting (fun _ _ -> resolved<-resolved+1;Error ["unconfigured"]) (fun _ _->failwith "publish") (fun _->failwith "drain") (fun _->failwith "local") "reconcile" ["--assignment";assignment;"--delivery";delivery]
+                Assert.Equal(1,code)
+                Assert.Equal(1,resolved)
+            finally Console.SetOut priorOut;Console.SetError priorError
+        finally
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CONFIG",priorConfig)
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_STORE",priorStore)

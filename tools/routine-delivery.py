@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
 
+sys.dont_write_bytecode = True
 
 def _load_telemetry_defaults():
     try:

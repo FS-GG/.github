@@ -9,6 +9,7 @@ module WorkspaceTelemetryApplication =
     val tryPublish: configArg: string option -> repositoryArg: string option -> payload: byte array -> Result<string,string list>
     val tryPublishExpected: configArg: string option -> repositoryArg: string option -> expectedProducer: string option -> payload: byte array -> Result<string,string list>
     val tryDrain: configArg: string option -> repositoryArg: string option -> Result<string,string list>
+    val tryDrainExpected: configArg: string option -> repositoryArg: string option -> expectedBinding: string option -> Result<string,string list>
     val privateStateRoot: configArg: string option -> repositoryArg: string option -> Result<string,string list>
     val tryLocalStoreRoot: configArg: string option -> repositoryArg: string option -> Result<string option,string list>
     val isConfigured: configArg: string option -> bool

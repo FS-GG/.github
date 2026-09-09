@@ -171,4 +171,24 @@ module WorkspaceTelemetryApplicationTests =
                 File.CreateSymbolicLink(link,config) |> ignore
                 let linkedCode,_,_=invoke "status" ["--config";link;"--repository";"FS-GG/.github"]
                 Assert.NotEqual(0,linkedCode)
+                let ancestor=Path.Combine(root,"alias")
+                Directory.CreateSymbolicLink(ancestor,root) |> ignore
+                let ancestorCode,_,_=invoke "status" ["--config";Path.Combine(ancestor,"telemetry.json");"--repository";"FS-GG/.github"]
+                Assert.NotEqual(0,ancestorCode)
+            finally Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_MAIN", null)
+
+    [<Fact>]
+    let ``activation refuses duplicate producers and repository case aliases before serialization`` () =
+        if OperatingSystem.IsLinux() && Runtime.InteropServices.RuntimeInformation.ProcessArchitecture=Runtime.InteropServices.Architecture.X64 then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let config = Path.Combine(root,"telemetry.json")
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_MAIN", String('x', 32))
+            try
+                Assert.Equal(0, let code,_,_ = invoke "activate-remote" (remoteArgs config (Path.Combine(root,"spool-a")) "producer-a") in code)
+                let duplicateProducer=["--config";config;"--workspace";"workspace-b";"--producer";"producer-a";"--stream";"runtime";"--repository";"FS-GG/other";"--endpoint";"https://127.0.0.1:1/";"--credential-reference";"main";"--spool-root";Path.Combine(root,"spool-b")]
+                Assert.NotEqual(0, let code,_,_ = invoke "activate-remote" duplicateProducer in code)
+                let aliases=["--config";config;"--workspace";"workspace-c";"--producer";"producer-c";"--stream";"runtime";"--repository";"FS-GG/Third";"--repository";"fs-gg/third";"--endpoint";"https://127.0.0.1:1/";"--credential-reference";"main";"--spool-root";Path.Combine(root,"spool-c")]
+                Assert.NotEqual(0, let code,_,_ = invoke "activate-remote" aliases in code)
+                Assert.Equal(0, let code,_,_ = invoke "status" ["--config";config;"--repository";"FS-GG/.github"] in code)
             finally Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_MAIN", null)

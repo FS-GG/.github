@@ -187,6 +187,9 @@ REMOTE_RECEIVER="$(cd "$(dirname "$0")" && pwd)/receiver.py"
 # shellcheck source=remote.sh
 . "$(cd "$(dirname "$0")" && pwd)/remote.sh"
 qualify_remote
+# shellcheck source=crash.sh
+. "$(cd "$(dirname "$0")" && pwd)/crash.sh"
+qualify_remote_crash
 
 STORE_BEFORE_UNINSTALL="$(find "$STORE" "$WORK/remote/private" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
 if dotnet tool uninstall "$PACKAGE_ID" --tool-path "$TOOLS" >"$WORK/uninstall.log" 2>&1; then

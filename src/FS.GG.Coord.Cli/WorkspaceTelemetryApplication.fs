@@ -17,6 +17,30 @@ open FS.GG.Telemetry
 
 module WorkspaceTelemetryApplication =
     module private Native =
+        [<StructLayout(LayoutKind.Sequential)>]
+        type Stat =
+            struct
+                val mutable Device:uint64
+                val mutable Inode:uint64
+                val mutable Links:uint64
+                val mutable Mode:uint32
+                val mutable User:uint32
+                val mutable Group:uint32
+                val mutable Padding:int32
+                val mutable Rdev:uint64
+                val mutable Size:int64
+                val mutable BlockSize:int64
+                val mutable Blocks:int64
+                val mutable AccessSeconds:int64
+                val mutable AccessNanoseconds:int64
+                val mutable ModifySeconds:int64
+                val mutable ModifyNanoseconds:int64
+                val mutable ChangeSeconds:int64
+                val mutable ChangeNanoseconds:int64
+                val mutable Reserved1:int64
+                val mutable Reserved2:int64
+                val mutable Reserved3:int64
+            end
         [<Literal>]
         let LockExclusive = 2
         [<Literal>]
@@ -31,6 +55,10 @@ module WorkspaceTelemetryApplication =
         extern int openPrivateFile(string path, int flags, uint32 mode)
         [<DllImport("libc", SetLastError = true)>]
         extern int close(int descriptor)
+        [<DllImport("libc", EntryPoint = "stat", SetLastError = true)>]
+        extern int statPath(string path, Stat& value)
+        [<DllImport("libc")>]
+        extern uint32 geteuid()
     [<Literal>]
     let Schema = "fsgg.telemetry.workspace-config/1"
     let private green = ExitCode.toInt ExitCode.Green
@@ -50,6 +78,17 @@ module WorkspaceTelemetryApplication =
             | value -> Path.Combine(value,"fs-gg","telemetry.json")
         | value -> value
     let private configPath explicitPath = explicitPath |> Option.defaultWith defaultConfig |> Path.GetFullPath
+    let private safeAncestors path =
+        let rec loop (directory:DirectoryInfo) =
+            if isNull directory then true
+            elif directory.Exists && not(isNull directory.LinkTarget) then false
+            else loop directory.Parent
+        loop (DirectoryInfo path)
+    let private ownedByCaller path =
+        if not(OperatingSystem.IsLinux()) then true
+        else
+            let mutable value=Unchecked.defaultof<Native.Stat>
+            Native.statPath(path,&value)=0 && value.User=Native.geteuid()
     let private validRepo (value:string) =
         let pieces=value.Split('/')
         let validComponent (piece:string) =
@@ -62,7 +101,7 @@ module WorkspaceTelemetryApplication =
     let private checkPrivateFile path =
         let info=FileInfo path
         if not info.Exists then Error ["unconfigured"]
-        elif not (isNull info.LinkTarget) || info.Length>65536L then Error ["configuration-unsafe"]
+        elif not (safeAncestors path) || not (isNull info.LinkTarget) || not(ownedByCaller path) || info.Length>65536L then Error ["configuration-unsafe"]
         elif not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(path)<>(UnixFileMode.UserRead|||UnixFileMode.UserWrite) then Error ["configuration-unsafe"]
         else Ok()
     let private exactObject (node:JsonObject) names =
@@ -144,9 +183,15 @@ module WorkspaceTelemetryApplication =
         | Some repo -> match config.Associations |> List.filter(fun a->a.Repositories |> List.exists(fun value->String.Equals(value,repo,StringComparison.OrdinalIgnoreCase))) with [one]->Ok one | []->Error ["workspace-unassociated"] | _->Error ["workspace-ambiguous"]
     let private scope a : TelemetryReceipt.Scope={Workspace=a.Workspace;Producer=a.Producer;Stream=a.Stream}
     let private associationDigest association =
-        let destination = match association.Destination with Local root -> "local\n"+root | Remote(endpoint,reference,spool) -> "remote\n"+endpoint.AbsoluteUri+"\n"+reference+"\n"+spool
-        Encoding.UTF8.GetBytes(String.concat "\n" ([association.Workspace;association.Producer;association.Stream;destination]@association.Repositories))
-        |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+        let destination = match association.Destination with Local root -> ["local";root] | Remote(endpoint,reference,spool) -> ["remote";endpoint.AbsoluteUri;reference;spool]
+        use bytes = new MemoryStream()
+        use writer = new BinaryWriter(bytes,Encoding.UTF8,true)
+        for value in [association.Workspace;association.Producer;association.Stream]@destination@association.Repositories do
+            let encoded=Encoding.UTF8.GetBytes value
+            writer.Write(encoded.Length)
+            writer.Write encoded
+        writer.Flush()
+        bytes.ToArray() |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     let private envelope (a:Association) (payload:byte array) =
         try
             let payloadNode = JsonNode.Parse(payload).AsObject()
@@ -165,19 +210,13 @@ module WorkspaceTelemetryApplication =
         try
             if not(Path.IsPathFullyQualified path) then Error ["spool-path-invalid"] else
             let parent = DirectoryInfo(Path.GetDirectoryName path)
-            if not parent.Exists || not(isNull parent.LinkTarget) || (not(OperatingSystem.IsWindows()) && (File.GetUnixFileMode(parent.FullName) &&& (UnixFileMode.GroupRead|||UnixFileMode.GroupWrite|||UnixFileMode.GroupExecute|||UnixFileMode.OtherRead|||UnixFileMode.OtherWrite|||UnixFileMode.OtherExecute))<>enum 0) then Error ["spool-parent-unsafe"] else
+            if not parent.Exists || not(safeAncestors parent.FullName) || not(isNull parent.LinkTarget) || not(ownedByCaller parent.FullName) || (not(OperatingSystem.IsWindows()) && (File.GetUnixFileMode(parent.FullName) &&& (UnixFileMode.GroupRead|||UnixFileMode.GroupWrite|||UnixFileMode.GroupExecute|||UnixFileMode.OtherRead|||UnixFileMode.OtherWrite|||UnixFileMode.OtherExecute))<>enum 0) then Error ["spool-parent-unsafe"] else
             if not(Directory.Exists path) then
                 Directory.CreateDirectory path |> ignore
                 if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(path,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
             let info=DirectoryInfo path
-            if not(isNull info.LinkTarget) || (not(OperatingSystem.IsWindows()) && File.GetUnixFileMode(path)<>(UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)) then Error ["spool-path-unsafe"] else Ok path
+            if not(isNull info.LinkTarget) || not(ownedByCaller path) || (not(OperatingSystem.IsWindows()) && File.GetUnixFileMode(path)<>(UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)) then Error ["spool-path-unsafe"] else Ok path
         with _ -> Error ["spool-unavailable"]
-    let private safeAncestors path =
-        let rec loop (directory:DirectoryInfo) =
-            if isNull directory then true
-            elif directory.Exists && not(isNull directory.LinkTarget) then false
-            else loop directory.Parent
-        loop (DirectoryInfo path)
     let private flushDirectory path =
         if OperatingSystem.IsLinux() then
             let descriptor = Native.openDirectory(path, 0x10000 ||| 0x80000)
@@ -249,6 +288,7 @@ module WorkspaceTelemetryApplication =
                 use held=new FileStream(lockPath,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None)
                 action()
         with :? IOException -> Error ["configuration-busy"]
+           | error -> Error [error.Message]
     let isConfigured configArg =
         match load configArg with Ok _ -> true | _ -> false
     let configuredPath configArg = configPath configArg
@@ -347,6 +387,7 @@ module WorkspaceTelemetryApplication =
                             | None -> Ok $"{{\"schema\":\"fsgg.telemetry.workspace-drain/1\",\"processed\":{files.Length}}}\n")
         with _ -> Error ["drain-advisory-failure"]
     let tryDrain configArg repositoryArg = tryDrainBound configArg repositoryArg None
+    let tryDrainExpected configArg repositoryArg expectedBinding = tryDrainBound configArg repositoryArg expectedBinding
     let tryPublishBinding binding payload = tryPublishBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Producer) (Some binding.Digest) payload
     let tryDrainBinding binding = tryDrainBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Digest)
     let privateStateRoot configArg repositoryArg =
@@ -423,7 +464,7 @@ module WorkspaceTelemetryApplication =
                 | Some value -> Ok value
                 | None -> Error ($"{name} is required")
             match required "--workspace",required "--producer",required "--stream",options "--repository" args with
-            | Ok workspace,Ok producer,Ok stream,repositories when [workspace;producer;stream]|>List.forall TelemetryReceipt.validId && not repositories.IsEmpty && repositories|>List.forall validRepo ->
+            | Ok workspace,Ok producer,Ok stream,repositories when [workspace;producer;stream]|>List.forall TelemetryReceipt.validId && not repositories.IsEmpty && repositories|>List.forall validRepo && repositories.Length=(repositories|>List.map _.ToLowerInvariant()|>List.distinct|>List.length) ->
                 let destination=
                     match kind,option "--store-root" args,option "--endpoint" args,option "--credential-reference" args,option "--spool-root" args with
                     | "local",Some root,_,_,_ when Path.IsPathFullyQualified root->Some(Local(Path.GetFullPath root))
@@ -450,7 +491,9 @@ module WorkspaceTelemetryApplication =
                         if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(directory,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
                     withLock path (fun()->
                         let existing,retired=match load(Some path) with Ok c->c.Associations,c.Retired | Error ["unconfigured"]->[],[] | Error errors->raise(InvalidOperationException(String.concat ";" errors))
-                        if existing |> List.exists(fun a -> a.Workspace=association.Workspace || not (Set.isEmpty (Set.intersect (Set.ofList a.Repositories) (Set.ofList association.Repositories)))) then Error ["association-conflict"]
+                        let repositories = association.Repositories |> List.map _.ToLowerInvariant() |> Set.ofList
+                        if (existing@retired) |> List.exists(fun a -> a.Producer=association.Producer)
+                           || existing |> List.exists(fun a -> a.Workspace=association.Workspace || a.Repositories |> List.exists(fun repo -> Set.contains(repo.ToLowerInvariant()) repositories)) then Error ["association-conflict"]
                         else serialize path (existing@[association]) retired;Ok "activated"))
             | _->Error ["invalid activation"]
         with error->Error [error.Message]
@@ -471,6 +514,16 @@ module WorkspaceTelemetryApplication =
                         | Error _ -> "local", -1, false, "unavailable"
                     | Remote(_,_,spool) -> "remote", (if Directory.Exists spool then Directory.EnumerateFiles(spool,"*.ready") |> Seq.truncate 129 |> Seq.length else 0), true, "bounded-ready-files"
                 Ok(JsonSerializer.Serialize {|schema="fsgg.telemetry.workspace-status/1";status="configured";workspaceId=a.Workspace;producerId=a.Producer;streamId=a.Stream;destination=kind;pending=pending;pendingCensus=census;unacknowledgedLossy=lossy && pending>0|}+"\n")
+    let private bindingStatus args =
+        match load (option "--config" args) with
+        | Error errors -> Error errors
+        | Ok config ->
+            match select (option "--repository" args) config, repository (option "--repository" args) with
+            | Ok association, Some repo ->
+                let kind,stateRoot = match association.Destination with Local root -> "local",root | Remote(_,_,spool) -> "remote",spool
+                Ok(JsonSerializer.Serialize {|schema="fsgg.telemetry.workspace-binding/1";configPath=config.Path;repository=repo;producerId=association.Producer;bindingDigest=associationDigest association;destination=kind;privateStateRoot=stateRoot|}+"\n")
+            | Error errors,_ -> Error errors
+            | _ -> Error ["repository-required"]
     let private associate args =
         let path=configPath(option "--config" args)
         let workspace=option "--workspace" args
@@ -486,7 +539,7 @@ module WorkspaceTelemetryApplication =
                 | None->Error ["workspace-unassociated"]
                 | Some index ->
                     let current=config.Associations[index]
-                    let repositories=(current.Repositories |> List.filter(fun r->removals |> List.exists(fun x->String.Equals(x,r,StringComparison.OrdinalIgnoreCase)) |> not)) @ additions |> List.distinct
+                    let repositories=(current.Repositories |> List.filter(fun r->removals |> List.exists(fun x->String.Equals(x,r,StringComparison.OrdinalIgnoreCase)) |> not)) @ additions |> List.distinctBy _.ToLowerInvariant()
                     if repositories.IsEmpty then Error ["workspace-requires-repository"]
                     elif config.Associations |> List.mapi(fun i a->i,a) |> List.exists(fun (i,a)->i<>index && a.Repositories |> List.exists(fun r->repositories |> List.exists(fun x->String.Equals(x,r,StringComparison.OrdinalIgnoreCase)))) then Error ["association-conflict"]
                     else
@@ -537,11 +590,12 @@ module WorkspaceTelemetryApplication =
     let run action args =
         let result=match action with
                    | "status"->status args
+                   | "binding"->bindingStatus args
                    | "activate-local"->activate "local" args
                    | "activate-remote"->activate "remote" args
                    | "associate-repository"->associate args
                    | "cutover"->cutover args
                    | "submit"->match option "--input" args with Some path->tryPublishBound(option "--config" args)(option "--repository" args)(option "--producer" args)(option "--binding-digest" args)(File.ReadAllBytes path)|None->Error ["--input is required"]
-                   | "drain"->tryDrain(option "--config" args)(option "--repository" args)
+                   | "drain"->tryDrainExpected(option "--config" args)(option "--repository" args)(option "--binding-digest" args)
                    | _->Error ["unsupported workspace action"]
         match result with Ok value->Console.Out.Write value;green | Error errors->errors|>List.iter(fun e->Console.Error.WriteLine("fsgg-coord-engine: telemetry workspace: "+e));red

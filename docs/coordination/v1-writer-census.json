@@ -42,7 +42,7 @@
     {"path":".claude/skills/check-board/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["rest-write"],"sha256":"a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/skills/pnext-item/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["gh-pr-merge","rest-write"],"sha256":"5b3a4db7369741c6e4b90b244ecc78ba680210c90c2961b436a591ea526bdf3c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"5dba1846fa80e0f8a8797dc109f8f73fc2a75752878f3a9fcba787a9b11d807e","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
-    {"path":".github/workflows/coord-engine.yml","disposition":"build-only","sinkKinds":[],"sha256":"c1672eee235f1de1ac5c720936b12c84160421b33c56af711a29a98d8b95d5b6"},
+    {"path":".github/workflows/coord-engine.yml","disposition":"build-only","sinkKinds":[],"sha256":"acc36711f3e1b5657ae1d73b4dcb5b2bf6c0833e59946d16b937387dacb73d08"},
     {"path":".github/workflows/dispatch-sender.yml","disposition":"conditional-remote-writer","sinkKinds":["rest-write"],"sha256":"0874e00420ec87d22885860257ccc731e5c7b4b0dc2ef6ae94318ad80d32cbbe"},
     {"path":".github/workflows/feed-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push","rest-write"],"sha256":"f8aeb6384928f6791557dfe37ec6c2795c18e2cfed3ed896e99f1040e858f6c5"},
     {"path":".github/workflows/fsgg-dispatch-broker.yml","disposition":"conditional-remote-writer","sinkKinds":["dynamic-process"],"sha256":"6da0f197d97129fbb9b43f931879779d4a3b4b0af38b2ef7634eb945eaf6b05c"},
@@ -82,8 +82,8 @@
     {"path":"scripts/release-saga-promote-release.sh","disposition":"publish-writer","sinkKinds":["gh-release-write"],"sha256":"3d458d4eb3700be989c39f66ffc7b4a3dd0e5ac7d6369e4a829c1164ba40d440"},
     {"path":"src/FS.GG.Coord.Cli.Kernel/Options.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"de217efd8ed1a6dcc4617bf17f93ba525d6767fe7166063183adbdabdb3de8e8"},
     {"path":"src/FS.GG.Coord.Cli/Program.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"1843c737002153ef4e8004332ce47bc12fa81ed7153c41e30a6f754afca111bb"},
-    {"path":"src/FS.GG.Coord.Cli/TelemetryApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"3898750cec4ae37ccd27a067e28308edc4d343381946616f789d65bff8564831"},
-    {"path":"src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"abab3bbc5c0f2bec0ce6c6ea1683b437649ba8d7adca43e679e698bb9bcc8638"},
+    {"path":"src/FS.GG.Coord.Cli/TelemetryApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"040fb9c00128e5030a0a7095e6e4d7348ddba11e6f58f1d89d0e69eabcc96974"},
+    {"path":"src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"334f802ca0468b7bf386683c1316704b89e1678b779718586a42d53cf223a8b1"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"2b58df777e2c1d746c8928520fb2b43811ec658dc1851a4076c353526ff4bdba"},
     {"path":"src/FS.GG.Coord.GitHub/Transport.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"97046f07ee442939ed3942c17ca7754fb49cb9b999af36a35bfbbcc152a7dde2"},
     {"path":"src/FS.GG.Telemetry.Client/RemoteClient.fs","disposition":"remote-writer","sinkKinds":["http-write"],"sha256":"793b7f98d29a37a82bac0fd3f47786ba9fece07447f1951475d8fa70138b27d5"},
@@ -98,6 +98,6 @@
     {"path":"tests/review-critic-succession-wire/run.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"72220f2c9d26c638d96485dd6232053248fe5f56eb0acbf6ba280186818c12e8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/skill-registry/run.sh","disposition":"test-only","sinkKinds":["git-push"],"sha256":"542ae5044fec3d5a940cacaf53a79d21b92c45a98bf48f11ceb37bd7c421528c","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"11aa3f00627dfa9fe10a2c5994659deb82f93a93abcc4c3a41a01ad389fac754","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
-    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"cecb3058a1a9cd934793ded98f3003232c012e843093c2944b82f68f0f37dab3"}
+    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"f1dbd51d61b51028b07ea8130f28cfe13a2cfa11803c0d8eb3de9f4ed14faadf"}
   ]
 }

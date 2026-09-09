@@ -395,8 +395,12 @@ module TelemetryRuntimeApplication =
                 let expectedProducer = WorkspaceTelemetryApplication.selectedProducer workspaceConfig workspaceRepository
                 let configuredPath = WorkspaceTelemetryApplication.configuredPath workspaceConfig
                 let useWorkspace = workspaceConfig.IsSome || File.Exists configuredPath
+                let frozenDigest =
+                    inheritedDigest
+                    |> Option.orElseWith(fun () -> resolvedBinding |> Option.map(fun (_,_,digest) -> digest))
+                    |> Option.orElseWith(fun () -> if useWorkspace then Some "unresolved" else None)
                 let publish bytes =
-                    if useWorkspace then WorkspaceTelemetryApplication.tryPublishBound workspaceConfig workspaceRepository expectedProducer inheritedDigest bytes else
+                    if useWorkspace then WorkspaceTelemetryApplication.tryPublishBound workspaceConfig workspaceRepository expectedProducer frozenDigest bytes else
                     match storeRoot, assessment with
                     | Some path, Some approved -> TelemetryStoreApplication.publish path approved bytes
                     | _ -> Error [ "store root is unconfigured" ]
@@ -406,13 +410,13 @@ module TelemetryRuntimeApplication =
                         if useWorkspace then
                             workspaceRepository
                             |> Option.orElseWith(fun () -> Environment.GetEnvironmentVariable("GITHUB_REPOSITORY") |> Option.ofObj)
-                            |> Option.bind(fun repository -> inheritedDigest |> Option.map(fun digest -> configuredPath, repository, digest))
+                            |> Option.bind(fun repository -> frozenDigest |> Option.map(fun digest -> configuredPath, repository, digest))
                         else None)
                 let exitCode =
                     if conflicting then Console.Error.WriteLine("fsgg-coord-engine: inherited workspace association cannot be replaced"); 2
                     else runObservedCodexExecWith "codex" assignment parent relation storeRoot lateAfter binding codexArgs publish
                 if useWorkspace then
-                    match WorkspaceTelemetryApplication.tryDrain workspaceConfig workspaceRepository with
+                    match WorkspaceTelemetryApplication.tryDrainExpected workspaceConfig workspaceRepository frozenDigest with
                     | Ok _ -> ()
                     | Error errors -> errors |> List.iter (fun error -> Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime reconciliation pending: " + error))
                 else

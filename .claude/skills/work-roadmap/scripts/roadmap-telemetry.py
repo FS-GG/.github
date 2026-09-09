@@ -93,7 +93,7 @@ def state_path(config: HostConfig, token: str) -> pathlib.Path:
 def drain_command(config: HostConfig) -> list[str]:
     if config.workspace:
         return [config.engine, "telemetry", "workspace", "drain", "--config", str(config.path),
-                "--repository", str(config.repository)]
+                "--repository", str(config.repository), "--binding-digest", str(config.binding_digest)]
     return [config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)]
 
 
@@ -107,6 +107,8 @@ def read_state(config: HostConfig, token: str) -> dict[str, object]:
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict) or value.get("schema") != STATE_SCHEMA or value.get("token") != token:
             raise ConfigurationError("dispatch state is malformed")
+        if config.workspace and (value.get("associationProducer") != config.producer or value.get("associationDigest") != config.binding_digest):
+            raise ConfigurationError("dispatch state belongs to a retired workspace association")
         return value
     except (OSError, json.JSONDecodeError) as error:
         raise ConfigurationError(f"dispatch state is unreadable: {error}") from error

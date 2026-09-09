@@ -127,9 +127,9 @@ PY
      && [ "$(ready_count)" -eq 0 ] \
      && [ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$state")" -eq 2 ] \
      && grep -q '"kind":"lookup-hit","batch":"package-lost-response"' "$log"; then
-    ok "restart lookup recovers the lost response with one durable receiver obligation"
+    ok "restart lookup recovers the lost response with one simulated receiver record"
   else
-    bad "restart lookup recovers the lost response with one durable receiver obligation"
+    bad "restart lookup recovers the lost response with one simulated receiver record"
   fi
 
   stop_receiver

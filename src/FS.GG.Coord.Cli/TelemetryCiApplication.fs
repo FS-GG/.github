@@ -191,8 +191,11 @@ module TelemetryCiApplication =
         args =
         let config, repository = option "--config" args, option "--repository" args
         let selectedConfigExists = File.Exists(WorkspaceTelemetryApplication.configuredPath config)
-        match option "--store-root" args, config.IsSome || selectedConfigExists with
-        | Some root, _ -> Ok(Legacy(root, assess root))
+        let environmentConfigSelected = Environment.GetEnvironmentVariable("FSGG_TELEMETRY_CONFIG") |> Option.ofObj |> Option.exists(String.IsNullOrWhiteSpace >> not)
+        let workspaceSelected = config.IsSome || environmentConfigSelected || selectedConfigExists
+        match option "--store-root" args, workspaceSelected with
+        | Some _, true -> Error ["workspace config and legacy store root cannot both be selected"]
+        | Some root, false -> Ok(Legacy(root, assess root))
         | None, true ->
             resolve config repository
             |> Result.bind (fun binding -> localStoreRoot binding |> Result.map (fun root -> Workspace(binding, root)))

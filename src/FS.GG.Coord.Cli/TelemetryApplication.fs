@@ -77,8 +77,8 @@ module TelemetryApplication =
             shape [ "--store-root"; "--item" ] [] args
         | "telemetry" :: "store" :: "export" :: args ->
             shape [ "--store-root"; "--item"; "--output" ] [ "--public" ] args
-        | "telemetry" :: "workspace" :: action :: args when action = "status" || action = "drain" ->
-            shape [ "--config"; "--repository" ] [] args
+        | "telemetry" :: "workspace" :: action :: args when action = "status" || action = "binding" || action = "drain" ->
+            shape [ "--config"; "--repository"; "--binding-digest" ] [] args
         | "telemetry" :: "workspace" :: "submit" :: args ->
             shape [ "--config"; "--repository"; "--producer"; "--binding-digest"; "--input" ] [] args
         | "telemetry" :: "workspace" :: action :: args when action = "activate-local" || action = "activate-remote" ->
@@ -96,7 +96,7 @@ module TelemetryApplication =
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "reconcile" :: args ->
-            shape [ "--assignment"; "--delivery"; "--store-root" ] [] args
+            shape [ "--assignment"; "--delivery"; "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "telemetry" :: "budget" :: "status" :: args -> shape [ "--store-root" ] [] args
         | "telemetry" :: "budget" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
