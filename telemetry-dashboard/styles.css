@@ -581,7 +581,7 @@ td a {
 .item-detail-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; padding: 1.5rem; }
 .item-detail-grid section { min-width: 0; }
 .item-detail-grid h4 { margin: 0 0 .7rem; font-size: .8rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
-.compact-table { max-height: 18rem; overflow: auto; }
+.compact-table { overflow: auto; }
 .compact-table table { min-width: 0; table-layout: fixed; }
 .compact-table th, .compact-table td { padding: .65rem .75rem; font-size: .78rem; }
 .compact-table td { overflow-wrap: anywhere; }
