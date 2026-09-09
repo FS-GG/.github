@@ -5,6 +5,9 @@
   --line: #cccdc4;
   --card: #f8f8f3;
   --acid: #557900;
+  --surface: var(--card);
+  --acid-text: var(--acid);
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --red: #c92d1b;
   --blue: #315bd1;
   --amber: #8b5900;
@@ -581,6 +584,18 @@ td a {
 .item-detail-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; padding: 1.5rem; }
 .item-detail-grid section { min-width: 0; }
 .item-detail-grid h4 { margin: 0 0 .7rem; font-size: .8rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.process-span { grid-column: 1 / -1; border-block: 1px solid var(--line); padding-block: 1rem; }
+.process-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.2rem; }
+.process-grid section { border: 1px solid var(--line); padding: 1rem; background: color-mix(in srgb,var(--surface) 65%,transparent); }
+.process-grid h5 { margin: 0 0 .75rem; font: 700 .72rem var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.process-detail > .item-method { margin: 0 0 1rem; }
+.process-grid .compact-table { border: 1px solid var(--line); }
+.process-grid .wide-table table { min-width: 42rem; }
+.record-cards { display: grid; gap: .65rem; margin-top: .8rem; }
+.record-cards article { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem 1rem; padding: .85rem; border: 1px solid var(--line); }
+.record-cards p { margin: 0; min-width: 0; }
+.record-cards span { display: block; color: var(--muted); font: .64rem var(--mono); text-transform: uppercase; letter-spacing: .05em; }
+.record-cards strong { display: block; margin-top: .2rem; font-size: .78rem; overflow-wrap: anywhere; }
 .compact-table { overflow: auto; }
 .compact-table table { min-width: 0; table-layout: fixed; }
 .compact-table th, .compact-table td { padding: .65rem .75rem; font-size: .78rem; }
@@ -601,6 +616,9 @@ td a {
 
 @media (max-width: 760px) {
   .item-detail-grid { grid-template-columns: 1fr; padding: 1rem; }
+  .process-grid { grid-template-columns: 1fr; }
+  .process-grid section { padding: .75rem; }
+  .record-cards article { grid-template-columns: 1fr; }
   .item-card > summary { grid-template-columns: 1fr; }
   .item-controls { display: grid; grid-template-columns: 1fr; }
 }

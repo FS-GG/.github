@@ -100,11 +100,23 @@ test("completed item drilldown preserves unknowns, evidence links and mobile acc
   await page.goto("/#item-item-one");
   await expect(page.locator("#item-item-one")).toHaveAttribute("open","");
   await expect(page.getByText("Requested (Medium) → Observed (High)")).toBeVisible();
-  await expect(page.getByText("Cause, repair time, repair tokens")).toBeVisible();
+  await expect(page.getByText("Repair time and repair tokens remain unknown",{exact:false})).toBeVisible();
   await expect(page.getByRole("link",{name:"evidence ↗",exact:true})).toHaveAttribute("href","https://github.com/FS-GG/.github/pull/1");
   await expect(page.getByLabel("CI measurements; categories may overlap").getByRole("cell",{name:"Unknown"})).toBeVisible();
   await page.locator("#item-search").fill("no match");
   await expect(page.locator("#deliveries tr")).toHaveCount(0);
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+});
+test("schema-8 process detail shows activity, attribution, complications, reviews and truncation", async ({page}) => {
+  const data=payload({schema:"fsgg.telemetry.dashboard-host/3",observedAt:"2026-09-09T09:00:00Z",totals:{usageObservations:0},usage:{input:0,cachedInput:0,cacheWriteInput:0,output:0,reasoning:null,total:0},launcherPopulation:{admitted:1,terminal:1},quality:{},operational:{expected:1,lineage:{},timing:{}},localCi:{counts:{runs:0,jobs:0},seconds:{},coverage:{}},store:{status:"ready",schemaVersion:8,journalMode:"wal",pendingBatches:0},budget:{distinctBreaches:0,intervention:"none",dirtyItems:0,health:{},dimensions:{},assessments:[]},completedItems:{coverage:{eligible:1,published:1,unmapped:0,dirty:0,incompatible:0},items:[{key:"schema-eight",label:"Schema eight detail",url:"https://github.com/FS-GG/.github/issues/8",deliveredAt:"2026-09-09T08:30:00Z",deliveries:[],runtime:{invocations:1,duration:{rows:[]},tokens:{unmappedRows:0,coverage:{invocationsWithUsage:0,invocationsWithoutUsage:1,runtimeGaps:1},rows:[]}},ci:{counts:{runs:0},seconds:{}},budget:{assessments:[]},complications:{observed:{runtimeNonSuccess:0,failedOrCancelledCiRuns:0,repeatedCiRuns:0,followUpInvocations:0},notes:[]},process:{availability:"available",members:{requested:1,available:1},truncated:{activities:false,attributions:false,complications:true,reviews:false},activities:{summary:[{category:"repair",spans:1,open:0,knownDuration:1,summedSeconds:60}],rows:[{category:"repair",startedAt:"2026-09-09T08:00:00Z",endedAt:"2026-09-09T08:01:00Z",durationSeconds:60}]},attribution:{rows:[],accounting:{nativeTotal:0,direct:0,mixed:0,unclassified:0,missingAttribution:0},crossRead:"matched"},complications:{rows:[{trigger:"test-failure",cause:"product-defect",activityCategory:"repair",occurredAt:"2026-09-09T08:01:00Z"},{trigger:"review-finding",cause:"process-defect",activityCategory:null,occurredAt:"2026-09-09T08:02:00Z"}]},reviews:{rows:[{scope:"attempt",revision:2,confidence:"high",evidenceCoverage:"partial",populationCoverage:"complete",reviewerModel:"Observed",reviewerEffort:"High",reviewedAt:"2026-09-09T08:03:00Z",durationSeconds:30,counts:{wentWell:1,problems:1,avoidableDelayOrRework:0,processObservations:1,remainingRisks:0,concreteImprovements:1}}]}}}]}});
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:data})); await page.goto("/#item-schema-eight");
+  await expect(page.getByText("Repair · 1m 0s")).toBeVisible();
+  await expect(page.getByText("Truncated: complications")).toBeVisible();
+  await expect(page.getByText("Product Defect",{exact:true})).toBeVisible();
+  await expect(page.getByText("Attempt · r2",{exact:true})).toBeVisible();
+  await expect(page.getByText("High confidence does not prove item completeness")).toBeVisible();
+  await expect(page.getByText("1 native usage row(s) missing",{exact:false})).toHaveCount(0);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
 });

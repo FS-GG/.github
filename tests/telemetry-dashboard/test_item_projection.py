@@ -26,6 +26,16 @@ PRAGMA user_version=7;
 def labels():
     return {"schema":D.LABELS_SCHEMA,"items":{"ORIGINAL":{"key":"public-item","label":"Public item","url":"https://github.com/FS-GG/.github/issues/1","repositories":["FS-GG/.github"],"notes":[{"kind":"complication","text":"Documented complication.","evidenceUrl":"https://github.com/FS-GG/.github/pull/7"}]}},"models":{"model-r":"Requested","model-o":"Observed"},"efforts":{"medium":"Medium","high":"High"},"scopes":{"provider-a|scope-a":"Scope A","provider-b|scope-b":"Scope B"}}
 
+def item_detail(item="child"):
+    sentinel="PRIVATE prose digest path /secret/thread-id"
+    evidence=[{"kind":"test","digest":"a"*64}]
+    return {"schema":"fsgg.telemetry.item-detail/1","item":item,
+      "activities":[{"activityId":"private-activity","invocationId":"private-invocation","attemptId":"private-attempt","category":"repair","startedAt":"2026-09-09T07:00:00Z","endedAt":"2026-09-09T07:01:00Z","clockProvenance":"host-wall","evidence":evidence,"summary":sentinel,"revision":1}],"activityTruncated":False,
+      "usageAttributions":[{"usageIdentity":"private-usage","activityId":"private-activity","classification":"direct","input":100,"cachedInput":40,"output":20,"reasoning":None,"total":120,"revision":1}],"attributionTruncated":False,
+      "complications":[{"attemptId":"private-attempt","activityId":"private-activity","trigger":"test-failure","cause":"product-defect","occurredAt":"2026-09-09T07:00:30Z","synopsis":sentinel,"evidence":evidence,"revision":1}],"complicationTruncated":False,
+      "reviews":[{"scope":"attempt","attemptId":"private-attempt","revision":2,"outcomeSynopsis":sentinel,"wentWell":[sentinel],"problems":[sentinel],"avoidableDelayOrRework":[],"processObservations":[sentinel],"remainingRisks":[],"concreteImprovements":[sentinel],"evidence":evidence,"evidenceCoverage":"partial","populationCoverage":"complete","confidence":"high","reviewerModel":"model-o","reviewerEffort":"high","reviewedAt":"2026-09-09T07:02:00Z","durationSeconds":30}],"reviewTruncated":False,
+      "accounting":{"nativeTotal":120,"direct":120,"mixed":0,"unclassified":0,"missingAttribution":1,"allocation":"native-exact-only"}}
+
 class ItemProjectionTests(unittest.TestCase):
     def make_store(self,root):
         db=sqlite3.connect(root/"telemetry.sqlite3"); db.executescript(SCHEMA)
@@ -71,5 +81,35 @@ class ItemProjectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=pathlib.Path(directory); db=sqlite3.connect(root/"telemetry.sqlite3"); db.execute("PRAGMA journal_mode=WAL"); db.execute("PRAGMA user_version=6"); db.close()
             with self.assertRaises(D.HostSourceError): D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {})
+
+    def test_schema8_engine_detail_is_closed_namespaced_and_non_atomic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory); self.make_store(root)
+            db=sqlite3.connect(root/"telemetry.sqlite3"); db.execute("PRAGMA user_version=8"); db.commit(); db.close()
+            calls=[]
+            value=D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {},lambda item:(calls.append(item) or item_detail(item)))
+            D.validate_completed_items(value); process=value["items"][0]["process"]
+            self.assertEqual(calls,["child"]); self.assertEqual(process["activities"]["summary"][0]["summedSeconds"],60)
+            self.assertEqual(process["attribution"]["rows"][0]["activityCategory"],"repair")
+            self.assertEqual(process["reviews"]["rows"][0]["revision"],2)
+            self.assertEqual(process["complications"]["rows"][0]["cause"],"product-defect")
+            self.assertEqual(process["attribution"]["crossRead"],"partial")
+            public=json.dumps(value)
+            for private in ("private-activity","private-invocation","private-attempt","private-usage","PRIVATE prose","/secret/"):
+                self.assertNotIn(private,public)
+
+    def test_detail_truncation_and_invalid_or_mismatched_detail_refuse_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory); self.make_store(root)
+            db=sqlite3.connect(root/"telemetry.sqlite3"); db.execute("PRAGMA user_version=8"); db.commit(); db.close()
+            truncated=item_detail(); truncated.update(activityTruncated=True,attributionTruncated=True,complicationTruncated=True,reviewTruncated=True)
+            value=D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {},lambda _:truncated)
+            self.assertTrue(all(value["items"][0]["process"]["truncated"].values()))
+            bad=item_detail(); bad["reviews"][0]["privateField"]="sentinel"
+            with self.assertRaises(D.HostSourceError): D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {},lambda _:bad)
+            mismatch=item_detail(); mismatch["accounting"]["direct"]=119
+            with self.assertRaises(D.HostSourceError): D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {},lambda _:mismatch)
+            impossible=item_detail(); impossible["attributionTruncated"]=True; impossible["accounting"]["direct"]=119
+            with self.assertRaises(D.HostSourceError): D.project_completed_items(str(root),{"epoch":"current"},labels(),{}, {},lambda _:impossible)
 
 if __name__=="__main__": unittest.main()

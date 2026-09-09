@@ -24,11 +24,12 @@ from typing import Any
 
 MAX_JSON = 1_048_576
 MAX_API_JSON = 4 * 1_048_576
-HOST_SCHEMA = "fsgg.telemetry.dashboard-host/2"
-LEGACY_HOST_SCHEMA = "fsgg.telemetry.dashboard-host/1"
+HOST_SCHEMA = "fsgg.telemetry.dashboard-host/3"
+LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1", "fsgg.telemetry.dashboard-host/2"}
 DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
 DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
-ITEMS_SCHEMA = "fsgg.telemetry.completed-items/1"
+ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
+PROCESS_SCHEMA = "fsgg.telemetry.item-process-detail/1"
 LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/1"
 ALLOWED_STATES = {"queued", "in_progress", "completed", "requested", "waiting", "pending"}
 ALLOWED_RESULTS = {"success", "failure", "cancelled", "skipped", "timed_out", "action_required", "neutral", "stale", "startup_failure", None}
@@ -171,6 +172,7 @@ def engine_json(engine: str, args: list[str]) -> Any:
     try: done = subprocess.run([engine, *args], capture_output=True, text=True, timeout=45, check=False)
     except (OSError, subprocess.SubprocessError) as error: raise HostSourceError("HOST_ENGINE_UNAVAILABLE") from error
     if done.returncode: raise HostSourceError("HOST_ENGINE_PROJECTION_FAILED")
+    if len(done.stdout.encode("utf-8")) > MAX_JSON: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
     try: return json.loads(done.stdout)
     except json.JSONDecodeError as error: raise HostSourceError("HOST_ENGINE_INVALID_JSON") from error
 
@@ -213,11 +215,133 @@ def _latest_rows(connection: sqlite3.Connection, table: str, order: str) -> list
     return rows
 
 
-def project_completed_items(store_root: str, status: dict[str, Any], labels: dict[str, Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]]) -> dict[str, Any]:
+ACTIVITY_CATEGORIES={"planning","implementation","review","validation","delivery","repair","operations","other","unclassified"}
+ATTRIBUTION_CLASSES={"direct","mixed","unclassified"}
+COMPLICATION_TRIGGERS={"test-failure","review-finding","ci-failure","tooling","runtime","dependency","authority","operation","human-change","unknown","other"}
+COMPLICATION_CAUSES={"product-defect","test-defect","process-defect","infrastructure","tooling","dependency","requirements","authorization","external","unknown","other"}
+REVIEW_COVERAGE={"complete","partial","unknown"}
+
+
+def validate_private_evidence(value: Any) -> None:
+    if not isinstance(value,list) or len(value)>16: raise ValueError("invalid private evidence")
+    for row in value:
+        exact(row,{"kind","digest"},"private evidence")
+        enum(row["kind"],{"runtime","ci","delivery","test","other"},"evidence kind")
+        if not isinstance(row["digest"],str) or not re.fullmatch(r"[0-9a-f]{64}",row["digest"]): raise ValueError("invalid evidence digest")
+
+
+def validate_private_item_detail(value: Any, expected_item: str) -> None:
+    """Validate the engine-owned private contract before selecting any public fields."""
+    exact(value,{"schema","item","activities","activityTruncated","usageAttributions","attributionTruncated","complications","complicationTruncated","reviews","reviewTruncated","accounting"},"private item detail")
+    if value["schema"]!="fsgg.telemetry.item-detail/1" or value["item"]!=expected_item: raise ValueError("invalid private item detail identity")
+    limits=(("activities","activityTruncated",256),("usageAttributions","attributionTruncated",256),("complications","complicationTruncated",256),("reviews","reviewTruncated",128))
+    for rows,flag,limit in limits:
+        if not isinstance(value[rows],list) or len(value[rows])>limit or not isinstance(value[flag],bool): raise ValueError("invalid private item detail bound")
+    for row in value["activities"]:
+        exact(row,{"activityId","invocationId","attemptId","category","startedAt","endedAt","clockProvenance","evidence","summary","revision"},"private activity")
+        for key in ("activityId","invocationId","attemptId"):
+            if not isinstance(row[key],str) or not row[key]: raise ValueError("invalid private activity identity")
+        enum(row["category"],ACTIVITY_CATEGORIES,"activity category"); enum(row["clockProvenance"],{"host-wall","provider-native","github-native"},"activity clock")
+        start=parse_time(row["startedAt"]); end=parse_time(row["endedAt"]) if row["endedAt"] is not None else None
+        if start is None or (row["endedAt"] is not None and (end is None or end<start)): raise ValueError("invalid activity interval")
+        validate_private_evidence(row["evidence"])
+        if row["summary"] is not None and (not isinstance(row["summary"],str) or not 1<=len(row["summary"])<=256): raise ValueError("invalid activity summary")
+        checked_int(row["revision"],"activity revision")
+    for row in value["usageAttributions"]:
+        exact(row,{"usageIdentity","activityId","classification","input","cachedInput","output","reasoning","total","revision"},"private attribution")
+        if not isinstance(row["usageIdentity"],str) or not row["usageIdentity"]: raise ValueError("invalid attribution identity")
+        enum(row["classification"],ATTRIBUTION_CLASSES,"attribution classification")
+        if (row["classification"]=="direct") != isinstance(row["activityId"],str): raise ValueError("invalid attribution activity")
+        for key in ("input","cachedInput","output","total","revision"): checked_int(row[key],key)
+        if row["cachedInput"]>row["input"] or row["total"]!=row["input"]+row["output"]: raise ValueError("invalid attribution counters")
+        if row["reasoning"] is not None:
+            checked_int(row["reasoning"],"reasoning")
+            if row["reasoning"]>row["output"]: raise ValueError("invalid attribution reasoning")
+    for row in value["complications"]:
+        exact(row,{"attemptId","activityId","trigger","cause","occurredAt","synopsis","evidence","revision"},"private complication")
+        enum(row["trigger"],COMPLICATION_TRIGGERS,"complication trigger"); enum(row["cause"],COMPLICATION_CAUSES,"complication cause")
+        if parse_time(row["occurredAt"]) is None: raise ValueError("invalid complication time")
+        if not isinstance(row["synopsis"],str) or not 1<=len(row["synopsis"])<=512: raise ValueError("invalid complication synopsis")
+        validate_private_evidence(row["evidence"])
+        checked_int(row["revision"],"complication revision")
+    review_arrays=("wentWell","problems","avoidableDelayOrRework","processObservations","remainingRisks","concreteImprovements")
+    for row in value["reviews"]:
+        exact(row,{"scope","attemptId","revision","outcomeSynopsis",*review_arrays,"evidence","evidenceCoverage","populationCoverage","confidence","reviewerModel","reviewerEffort","reviewedAt","durationSeconds"},"private review")
+        enum(row["scope"],{"attempt","item"},"review scope")
+        if (row["scope"]=="attempt") != isinstance(row["attemptId"],str): raise ValueError("invalid review subject")
+        checked_int(row["revision"],"review revision"); checked_int(row["durationSeconds"],"review duration")
+        if row["revision"]<1 or row["durationSeconds"]>86400 or parse_time(row["reviewedAt"]) is None: raise ValueError("invalid review revision or time")
+        enum(row["evidenceCoverage"],REVIEW_COVERAGE,"evidence coverage"); enum(row["populationCoverage"],REVIEW_COVERAGE,"population coverage"); enum(row["confidence"],{"low","medium","high"},"confidence")
+        if not isinstance(row["reviewerModel"],str) or not isinstance(row["reviewerEffort"],str): raise ValueError("invalid reviewer categories")
+        if not isinstance(row["outcomeSynopsis"],str) or not 1<=len(row["outcomeSynopsis"])<=1024: raise ValueError("invalid review synopsis")
+        validate_private_evidence(row["evidence"])
+        for key in review_arrays:
+            if not isinstance(row[key],list) or len(row[key])>8 or any(not isinstance(entry,str) or not 1<=len(entry)<=512 for entry in row[key]): raise ValueError("invalid private review list")
+    accounting=exact(value["accounting"],{"nativeTotal","direct","mixed","unclassified","missingAttribution","allocation"},"private accounting")
+    for key in ("nativeTotal","direct","mixed","unclassified","missingAttribution"): checked_int(accounting[key],key)
+    if accounting["allocation"]!="native-exact-only" or accounting["direct"]+accounting["mixed"]+accounting["unclassified"]>accounting["nativeTotal"]: raise ValueError("invalid private accounting")
+
+
+def project_process_detail(details: list[tuple[str,dict[str,Any]]], labels: dict[str,Any]) -> dict[str,Any]:
+    base={"schema":PROCESS_SCHEMA,"availability":"unsupported","members":{"requested":0,"available":0},
+        "truncated":{"activities":False,"attributions":False,"complications":False,"reviews":False},
+        "activities":{"rows":[],"summary":[],"semantics":"activity spans may overlap; summed activity time is not owner effort or an elapsed-time partition"},
+        "attribution":{"rows":[],"accounting":{"nativeTotal":0,"direct":0,"mixed":0,"unclassified":0,"missingAttribution":0},"crossRead":"unavailable","semantics":"native and attributed totals are related, not additive; missing attribution counts usage rows; totals can span incompatible private accounting scopes"},
+        "complications":{"rows":[]},"reviews":{"rows":[],"semantics":"review counts omit private findings text; confidence and duration do not establish item, effort, or token completeness"},
+        "observation":"engine item-detail and store projections are independently read and are not one atomic snapshot"}
+    if not details: return base
+    base["availability"]="available"; base["members"]={"requested":len(details),"available":len(details)}
+    activity_lookup={}; activity_rows=[]; activity_summary={}; attribution={}; complication_rows=[]; review_rows=[]
+    accounting={"nativeTotal":0,"direct":0,"mixed":0,"unclassified":0,"missingAttribution":0}
+    list_names=("wentWell","problems","avoidableDelayOrRework","processObservations","remainingRisks","concreteImprovements")
+    for member,detail in details:
+        base["truncated"]["activities"] |= detail["activityTruncated"]
+        base["truncated"]["attributions"] |= detail["attributionTruncated"]
+        base["truncated"]["complications"] |= detail["complicationTruncated"]
+        base["truncated"]["reviews"] |= detail["reviewTruncated"]
+        for key in accounting: accounting[key]+=detail["accounting"][key]
+        member_sums={classification:sum(row["total"] for row in detail["usageAttributions"] if row["classification"]==classification) for classification in ATTRIBUTION_CLASSES}
+        for classification,total in member_sums.items():
+            expected=detail["accounting"][classification]
+            if total>expected or (not detail["attributionTruncated"] and total!=expected): raise ValueError("item detail attribution accounting mismatch")
+        for row in detail["activities"]:
+            activity_lookup[(member,row["activityId"])]=row["category"]
+            start=parse_time(row["startedAt"]); end=parse_time(row["endedAt"]) if row["endedAt"] is not None else None
+            seconds=int((end-start).total_seconds()) if start and end else None
+            activity_rows.append({"category":row["category"],"startedAt":row["startedAt"],"endedAt":row["endedAt"],"durationSeconds":seconds})
+            bucket=activity_summary.setdefault(row["category"],{"category":row["category"],"spans":0,"open":0,"knownDuration":0,"summedSeconds":0})
+            bucket["spans"]+=1; bucket["open"]+=int(end is None); bucket["knownDuration"]+=int(seconds is not None); bucket["summedSeconds"]+=seconds or 0
+        for row in detail["usageAttributions"]:
+            category=activity_lookup.get((member,row["activityId"])) if row["classification"]=="direct" else None
+            if row["classification"]=="direct" and category is None: category="unallocated"
+            key=(row["classification"],category)
+            bucket=attribution.setdefault(key,{"classification":row["classification"],"activityCategory":category,"records":0,"input":0,"cachedInput":0,"output":0,"reasoning":0,"reasoningKnown":True,"total":0})
+            bucket["records"]+=1
+            for source in ("input","cachedInput","output","total"): bucket[source]+=row[source]
+            if row["reasoning"] is None: bucket["reasoningKnown"]=False
+            else: bucket["reasoning"]+=row["reasoning"]
+        for row in detail["complications"]:
+            complication_rows.append({"trigger":row["trigger"],"cause":row["cause"],"occurredAt":row["occurredAt"],"activityCategory":activity_lookup.get((member,row["activityId"])) if row["activityId"] is not None else None})
+        for row in detail["reviews"]:
+            counts={key:len(row[key]) for key in list_names}
+            review_rows.append({"scope":row["scope"],"revision":row["revision"],"evidenceCoverage":row["evidenceCoverage"],"populationCoverage":row["populationCoverage"],"confidence":row["confidence"],"reviewerModel":labels["models"].get(row["reviewerModel"],"unknown"),"reviewerEffort":labels["efforts"].get(row["reviewerEffort"],"unknown"),"reviewedAt":row["reviewedAt"],"durationSeconds":row["durationSeconds"],"counts":counts})
+    attribution_rows=[]
+    for row in attribution.values():
+        if not row.pop("reasoningKnown"): row["reasoning"]=None
+        attribution_rows.append(row)
+    base["activities"]={**base["activities"],"rows":sorted(activity_rows,key=lambda r:r["startedAt"]),"summary":sorted(activity_summary.values(),key=lambda r:r["category"])}
+    base["attribution"]={**base["attribution"],"rows":sorted(attribution_rows,key=lambda r:(r["classification"],r["activityCategory"] or "")),"accounting":accounting}
+    base["complications"]={"rows":sorted(complication_rows,key=lambda r:r["occurredAt"])}
+    base["reviews"]={**base["reviews"],"rows":sorted(review_rows,key=lambda r:(r["scope"],-r["revision"]))}
+    if len(activity_rows)>512 or len(attribution_rows)>768 or len(complication_rows)>512 or len(review_rows)>256: raise ValueError("grouped item detail exceeds public bound")
+    return base
+
+
+def project_completed_items(store_root: str, status: dict[str, Any], labels: dict[str, Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]], detail_loader: Any = None) -> dict[str, Any]:
     database=pathlib.Path(store_root)/"telemetry.sqlite3"
     if database.is_symlink() or not database.is_file(): raise HostSourceError("HOST_STORE_UNAVAILABLE")
     uri=f"file:{urllib.parse.quote(str(database))}?mode=ro"
-    connection=None
+    connection=None; selected_details=[]; store_schema=None
     try:
         connection=sqlite3.connect(uri,uri=True,timeout=5); connection.row_factory=sqlite3.Row
         deadline=time.monotonic()+10; progress=[0]
@@ -226,7 +350,8 @@ def project_completed_items(store_root: str, status: dict[str, Any], labels: dic
             return int(progress[0]>2000 or time.monotonic()>deadline)
         connection.set_progress_handler(bounded_progress,1000)
         connection.execute("PRAGMA query_only=ON"); connection.execute("BEGIN")
-        if connection.execute("PRAGMA user_version").fetchone()[0] != 7: raise HostSourceError("HOST_SCHEMA_INCOMPATIBLE")
+        store_schema=connection.execute("PRAGMA user_version").fetchone()[0]
+        if store_schema not in {7,8}: raise HostSourceError("HOST_SCHEMA_INCOMPATIBLE")
         if connection.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal": raise HostSourceError("HOST_JOURNAL_INCOMPATIBLE")
         native=tuple(int(part) for part in connection.execute("SELECT sqlite_version()").fetchone()[0].split(".")[:3])
         # STRICT tables arrived in 3.37; the read-only queries use no later SQL feature.
@@ -253,13 +378,32 @@ def project_completed_items(store_root: str, status: dict[str, Any], labels: dic
             eligible+=1
             approval=approved.get(original)
             if approval is None: unmapped+=1; continue
-            try: result.append(project_one_item(connection,original,members,latest,approval,labels,ci_by_item,budgets_by_item,status.get("epoch")))
+            try:
+                result.append(project_one_item(connection,original,members,latest,approval,labels,ci_by_item,budgets_by_item,status.get("epoch")))
+                selected_details.append((len(result)-1,sorted(members)))
             except ValueError: incompatible+=1
         connection.rollback()
     except sqlite3.Error as error:
         raise HostSourceError("HOST_READ_PROJECTION_FAILED") from error
     finally:
         if connection is not None: connection.close()
+    # Engine item-detail reads happen only after the bounded SQLite transaction closes.
+    # They are intentionally described as independent observations in the public payload.
+    if store_schema == 8:
+        if detail_loader is None: raise HostSourceError("HOST_ITEM_DETAIL_UNAVAILABLE")
+        for index,members in selected_details:
+            details=[]
+            try:
+                for member in members:
+                    detail=detail_loader(member)
+                    validate_private_item_detail(detail,member)
+                    details.append((member,detail))
+                process=project_process_detail(details,labels)
+                native_observed=sum(row["total"] for row in result[index]["runtime"]["tokens"]["rows"])
+                process["attribution"]["crossRead"]="matched" if process["attribution"]["accounting"]["nativeTotal"]==native_observed else "partial"
+                result[index]["process"]=process
+            except (ValueError,KeyError,TypeError) as error:
+                raise HostSourceError("HOST_ITEM_DETAIL_INVALID") from error
     return {"schema":ITEMS_SCHEMA,"coverage":{"eligible":eligible,"published":len(result),"unmapped":unmapped,"dirty":dirty_count,"incompatible":incompatible},"items":result}
 
 
@@ -348,11 +492,13 @@ def project_one_item(connection: sqlite3.Connection, original: str, members: lis
                 budget.append({"epoch":"current" if dimension.get("epoch")==epoch else "historical","dimension":dimension["dimension"],"verdict":dimension["verdict"],"numerator":dimension.get("numerator"),"denominator":dimension.get("denominator"),"severe":dimension.get("severe") is True})
     invocations_with_usage=len({row["invocation_id"] for row in usage})
     runtime_gaps=connection.execute(f"SELECT count(*) FROM runtime_gaps WHERE item_id IN ({placeholders})",members).fetchone()[0] if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='runtime_gaps'").fetchone() else 0
+    process=project_process_detail([],labels)
     return {"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"settled","deliveredAt":delivered.isoformat().replace("+00:00","Z") if delivered else None,"deliveries":deliveries,
         "runtime":{"invocations":len(complete_invocations),"terminalOutcomes":terminal_counts,"duration":{"rows":duration_rows,"semantics":"same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time"},"tokens":{"scope":"completed native turns; input includes cached input","rows":token_rows,"unmappedRows":unmapped_rows,"coverage":{"invocationsWithUsage":invocations_with_usage,"invocationsWithoutUsage":len(complete_invocations)-invocations_with_usage,"runtimeGaps":runtime_gaps}}},
         "ci":{"counts":ci_counts,"seconds":ci_seconds,"semantics":"runner seconds sum jobs; wall, queue, and category values are per-item unions and may overlap"},
         "budget":{"scope":"canonical reducer assessments; epoch identities removed","assessments":budget},
-        "complications":{"observed":{"runtimeNonSuccess":sum(v for k,v in terminal_counts.items() if k!="completed"),"failedOrCancelledCiRuns":ci_fail,"repeatedCiRuns":repeated,"followUpInvocations":sum(1 for v in lineage.values() if v=="follow-up")},"notes":approval["notes"],"semantics":"observed events and approved notes; no inferred cause or repair cost; development phases and repair attribution unavailable"}}
+        "complications":{"observed":{"runtimeNonSuccess":sum(v for k,v in terminal_counts.items() if k!="completed"),"failedOrCancelledCiRuns":ci_fail,"repeatedCiRuns":repeated,"followUpInvocations":sum(1 for v in lineage.values() if v=="follow-up")},"notes":approval["notes"],"semantics":"observed runtime and CI signals plus separately approved public notes; no inferred cause or repair cost"},
+        "process":process}
 
 
 def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None) -> dict[str, Any]:
@@ -443,12 +589,13 @@ def build_host(labels_path: pathlib.Path | None = None) -> dict[str, Any]:
         health.append(engine_json(engine,["telemetry","budget","health","--item",item,"--store-root",store]))
     status = engine_json(engine,["telemetry","budget","status","--store-root",store])
     store_status=engine_json(engine,["telemetry","store","status","--store-root",store])
-    if not isinstance(store_status,dict) or store_status.get("status")!="ready" or store_status.get("schemaVersion")!=7 or store_status.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_status,dict) or store_status.get("status")!="ready" or store_status.get("schemaVersion") not in {7,8} or store_status.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     try: engine_version=tuple(int(part) for part in store_status["nativeEngine"].split(".")[:3])
     except (KeyError,AttributeError,ValueError): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     if engine_version<(3,51,3): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     labels=load_labels(labels_path)
-    completed=project_completed_items(store,status,labels,dict(zip(ids,ci)),dict(zip(ids,budgets)))
+    detail_loader=(lambda item: engine_json(engine,["telemetry","item-detail","--item",item,"--store-root",store])) if store_status["schemaVersion"]==8 else None
+    completed=project_completed_items(store,status,labels,dict(zip(ids,ci)),dict(zip(ids,budgets)),detail_loader)
     return aggregate_host(public,ci,budgets,status,now(),reconciliations,health,store_status,completed)
 
 
@@ -529,13 +676,14 @@ def validate_deliveries(value: Any) -> None:
 
 
 def validate_host(value: Any) -> None:
-    legacy=isinstance(value,dict) and value.get("schema")==LEGACY_HOST_SCHEMA
+    schema=value.get("schema") if isinstance(value,dict) else None
+    aggregate_only=schema=="fsgg.telemetry.dashboard-host/1"
     fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
-    if not legacy: fields.add("completedItems")
+    if not aggregate_only: fields.add("completedItems")
     exact(value,fields,"host feed")
-    if value["schema"] not in {HOST_SCHEMA,LEGACY_HOST_SCHEMA} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
+    if value["schema"] not in {HOST_SCHEMA,*LEGACY_HOST_SCHEMAS} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
     exact(value["source"],{"kind","publicExportSchema"},"host source"); exact(value["scope"],{"items","identities","freeText"},"host scope")
-    identity="aggregated-and-removed" if legacy else "aggregated-or-explicitly-aliased"; free="removed" if legacy else "removed-except-approved-notes"
+    identity="aggregated-and-removed" if aggregate_only else "aggregated-or-explicitly-aliased"; free="removed" if aggregate_only else "removed-except-approved-notes"
     if value["source"]!={"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"} or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
@@ -572,7 +720,7 @@ def validate_host(value: Any) -> None:
         if not isinstance(assessment["severe"],bool): raise ValueError("invalid severe")
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
-    if not legacy: validate_completed_items(value["completedItems"])
+    if not aggregate_only: validate_completed_items(value["completedItems"])
 
 
 def public_text(value: Any, maximum: int, name: str) -> str:
@@ -582,12 +730,15 @@ def public_text(value: Any, maximum: int, name: str) -> str:
 
 def validate_completed_items(value: Any) -> None:
     exact(value,{"schema","coverage","items"},"completed items")
-    if value["schema"]!=ITEMS_SCHEMA or not isinstance(value["items"],list) or len(value["items"])>200: raise ValueError("invalid completed items")
+    legacy=value["schema"]=="fsgg.telemetry.completed-items/1"
+    if value["schema"] not in {ITEMS_SCHEMA,"fsgg.telemetry.completed-items/1"} or not isinstance(value["items"],list) or len(value["items"])>200: raise ValueError("invalid completed items")
     validate_count_map(value["coverage"],{"eligible","published","unmapped","dirty","incompatible"},"completed item coverage")
     if value["coverage"]["published"]!=len(value["items"]): raise ValueError("invalid completed item count")
     seen=set()
     for item in value["items"]:
-        exact(item,{"key","label","url","state","deliveredAt","deliveries","runtime","ci","budget","complications"},"completed item")
+        fields={"key","label","url","state","deliveredAt","deliveries","runtime","ci","budget","complications"}
+        if not legacy: fields.add("process")
+        exact(item,fields,"completed item")
         key=public_text(item["key"],64,"item key")
         if key in seen or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",key): raise ValueError("invalid item key")
         seen.add(key); public_text(item["label"],120,"item label"); enum(item["state"],{"settled"},"item state")
@@ -625,10 +776,59 @@ def validate_completed_items(value: Any) -> None:
             for name in ("numerator","denominator"):
                 if assessment[name] is not None: checked_int(assessment[name],name)
         complications=exact(item["complications"],{"observed","notes","semantics"},"complications"); validate_count_map(complications["observed"],{"runtimeNonSuccess","failedOrCancelledCiRuns","repeatedCiRuns","followUpInvocations"},"observed complications")
-        if complications["semantics"]!="observed events and approved notes; no inferred cause or repair cost; development phases and repair attribution unavailable" or not isinstance(complications["notes"],list) or len(complications["notes"])>8: raise ValueError("invalid complications")
+        semantics={"observed events and approved notes; no inferred cause or repair cost; development phases and repair attribution unavailable"} if legacy else {"observed runtime and CI signals plus separately approved public notes; no inferred cause or repair cost"}
+        if complications["semantics"] not in semantics or not isinstance(complications["notes"],list) or len(complications["notes"])>8: raise ValueError("invalid complications")
         for note in complications["notes"]:
             exact(note,{"kind","text","evidenceUrl"},"note"); enum(note["kind"],{"repair","complication"},"note kind"); public_text(note["text"],240,"note")
             if not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*",note["evidenceUrl"]): raise ValueError("invalid note evidence")
+        if not legacy: validate_process_detail(item["process"])
+
+
+def validate_process_detail(value: Any) -> None:
+    exact(value,{"schema","availability","members","truncated","activities","attribution","complications","reviews","observation"},"process detail")
+    if value["schema"]!=PROCESS_SCHEMA: raise ValueError("invalid process detail schema")
+    enum(value["availability"],{"available","unsupported"},"process availability")
+    members=exact(value["members"],{"requested","available"},"process members")
+    for count in members.values(): checked_int(count,"process members")
+    if members["available"]>members["requested"]: raise ValueError("invalid process coverage")
+    trunc=exact(value["truncated"],{"activities","attributions","complications","reviews"},"process truncation")
+    if any(not isinstance(flag,bool) for flag in trunc.values()): raise ValueError("invalid process truncation")
+    if value["observation"]!="engine item-detail and store projections are independently read and are not one atomic snapshot": raise ValueError("invalid process observation")
+    activities=exact(value["activities"],{"rows","summary","semantics"},"activities")
+    if not isinstance(activities["rows"],list) or not isinstance(activities["summary"],list) or activities["semantics"]!="activity spans may overlap; summed activity time is not owner effort or an elapsed-time partition" or len(activities["rows"])>512 or len(activities["summary"])>10: raise ValueError("invalid activities")
+    for row in activities["rows"]:
+        exact(row,{"category","startedAt","endedAt","durationSeconds"},"activity row"); enum(row["category"],ACTIVITY_CATEGORIES,"activity category")
+        start=parse_time(row["startedAt"]); end=parse_time(row["endedAt"]) if row["endedAt"] is not None else None
+        if start is None or (row["endedAt"] is not None and (end is None or end<start)): raise ValueError("invalid activity interval")
+        if row["durationSeconds"] is not None: checked_int(row["durationSeconds"],"activity duration")
+    for row in activities["summary"]:
+        exact(row,{"category","spans","open","knownDuration","summedSeconds"},"activity summary"); enum(row["category"],ACTIVITY_CATEGORIES,"activity category")
+        for key in ("spans","open","knownDuration","summedSeconds"): checked_int(row[key],key)
+    attribution=exact(value["attribution"],{"rows","accounting","crossRead","semantics"},"activity attribution")
+    if not isinstance(attribution["rows"],list) or attribution["semantics"]!="native and attributed totals are related, not additive; missing attribution counts usage rows; totals can span incompatible private accounting scopes" or len(attribution["rows"])>768: raise ValueError("invalid activity attribution")
+    enum(attribution["crossRead"],{"matched","partial","unavailable"},"cross-read consistency")
+    for row in attribution["rows"]:
+        exact(row,{"classification","activityCategory","records","input","cachedInput","output","reasoning","total"},"attribution row"); enum(row["classification"],ATTRIBUTION_CLASSES,"classification")
+        if row["activityCategory"] is not None: enum(row["activityCategory"],ACTIVITY_CATEGORIES|{"unallocated"},"attributed category")
+        for key in ("records","input","cachedInput","output","total"): checked_int(row[key],key)
+        if row["reasoning"] is not None: checked_int(row["reasoning"],"reasoning")
+    accounting=exact(attribution["accounting"],{"nativeTotal","direct","mixed","unclassified","missingAttribution"},"public accounting")
+    for count in accounting.values(): checked_int(count,"accounting")
+    complications=exact(value["complications"],{"rows"},"recorded complications")
+    if not isinstance(complications["rows"],list) or len(complications["rows"])>512: raise ValueError("too many complications")
+    for row in complications["rows"]:
+        exact(row,{"trigger","cause","occurredAt","activityCategory"},"complication row"); enum(row["trigger"],COMPLICATION_TRIGGERS,"trigger"); enum(row["cause"],COMPLICATION_CAUSES,"cause")
+        if parse_time(row["occurredAt"]) is None: raise ValueError("invalid complication time")
+        if row["activityCategory"] is not None: enum(row["activityCategory"],ACTIVITY_CATEGORIES,"complication activity")
+    reviews=exact(value["reviews"],{"rows","semantics"},"reviews")
+    if not isinstance(reviews["rows"],list) or reviews["semantics"]!="review counts omit private findings text; confidence and duration do not establish item, effort, or token completeness" or len(reviews["rows"])>256: raise ValueError("invalid reviews")
+    count_keys={"wentWell","problems","avoidableDelayOrRework","processObservations","remainingRisks","concreteImprovements"}
+    for row in reviews["rows"]:
+        exact(row,{"scope","revision","evidenceCoverage","populationCoverage","confidence","reviewerModel","reviewerEffort","reviewedAt","durationSeconds","counts"},"review row")
+        enum(row["scope"],{"attempt","item"},"review scope"); enum(row["evidenceCoverage"],REVIEW_COVERAGE,"review evidence"); enum(row["populationCoverage"],REVIEW_COVERAGE,"review population"); enum(row["confidence"],{"low","medium","high"},"review confidence")
+        checked_int(row["revision"],"review revision"); checked_int(row["durationSeconds"],"review duration")
+        if row["revision"]<1 or parse_time(row["reviewedAt"]) is None: raise ValueError("invalid review revision")
+        public_text(row["reviewerModel"],48,"reviewer model"); public_text(row["reviewerEffort"],48,"reviewer effort"); validate_count_map(row["counts"],count_keys,"review counts")
 
 
 def main() -> int:
