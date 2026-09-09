@@ -21,6 +21,21 @@ module TelemetryStore =
     type Coverage =
         { RecordValidity: string; JoinIntegrity: string; PopulationCoverage: string; Qualification: string
           Eligible: int64 option; Observed: int64 option }
+    type ProcessReview =
+        { Scope: string; AttemptId: string option; OutcomeSynopsis: string
+          WentWell: string; Problems: string; AvoidableDelayOrRework: string; ProcessObservations: string
+          RemainingRisks: string; ConcreteImprovements: string; Evidence: string
+          EvidenceCoverage: string; PopulationCoverage: string; Confidence: string
+          ReviewerModel: string; ReviewerEffort: string; ReviewedAt: string; DurationSeconds: int64 }
+    type ActivitySpan =
+        { ActivityId: string; InvocationId: string; AttemptId: string; Category: string
+          StartedAt: string; EndedAt: string option; ClockProvenance: string; Evidence: string; Summary: string option }
+    type ActivityUsageAttribution =
+        { UsageIdentity: string; ActivityId: string option; Classification: string
+          Input: int64; CachedInput: int64; Output: int64; Reasoning: int64 option; Total: int64 }
+    type Complication =
+        { AttemptId: string option; ActivityId: string option; Trigger: string; Cause: string
+          OccurredAt: string; Synopsis: string; Evidence: string }
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -57,6 +72,10 @@ module TelemetryStore =
         | ExpectedDispatch of dispatchId: string * activationId: string * relation: string * parentDispatchId: string option * runtime: string * expectedAt: string * clockProvenance: string
         | InvocationLineage of dispatchId: string * invocationId: string * relation: string * parentInvocationId: string option * rootInvocationId: string * runtime: string
         | EventTime of invocationId: string * event: string * occurredAt: string option * occurredClockProvenance: string option * observedAt: string option * observedClockProvenance: string option
+        | ProcessReview of ProcessReview
+        | ActivitySpan of ActivitySpan
+        | ActivityUsageAttribution of ActivityUsageAttribution
+        | Complication of Complication
     type Fact =
         { Identity: string; ItemId: string option; Revision: int64; Kind: string; Payload: Payload
           Canonical: string; ContentDigest: string }
@@ -121,6 +140,44 @@ module TelemetryStore =
         if errors.IsEmpty then Ok(results |> List.choose (function Ok value -> Some value | _ -> None)) else Error errors
     let private checkedAdd label left right =
         try Ok(Checked.(+) left right) with :? OverflowException -> Error $"%s{label} overflows int64"
+    let private boundedText (label: string) (maximum: int) (value: string) =
+        if value.Length > maximum then Error $"%s{label} exceeds %d{maximum} characters"
+        elif value |> Seq.exists Char.IsControl then Error $"%s{label} contains control characters"
+        else Ok value
+    let private requiredBoundedText (label: string) (maximum: int) (node: JsonElement) (name: string) =
+        requiredText label node name |> Result.bind (boundedText $"%s{label}.%s{name}" maximum)
+    let private requiredTextArray (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() <= 8 ->
+            let validations =
+                value.EnumerateArray()
+                |> Seq.mapi (fun index item ->
+                    if item.ValueKind <> JsonValueKind.String then Error $"%s{label}.%s{name}[%d{index}] must be a string"
+                    else nonEmpty $"%s{label}.%s{name}[%d{index}]" (item.GetString()) |> Result.bind (boundedText $"%s{label}.%s{name}[%d{index}]" 512))
+                |> Seq.toList
+            match validations |> List.tryPick (function Error reason -> Some reason | _ -> None) with
+            | Some reason -> Error reason
+            | None -> CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(value.GetRawText()))
+        | true, value when value.ValueKind = JsonValueKind.Array -> Error $"%s{label}.%s{name} exceeds 8 entries"
+        | _ -> Error $"%s{label}.%s{name} must be an array"
+    let private requiredEvidence (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() <= 16 ->
+            let validations =
+                value.EnumerateArray()
+                |> Seq.mapi (fun index item ->
+                    let itemLabel = $"%s{label}.%s{name}[%d{index}]"
+                    if item.ValueKind <> JsonValueKind.Object then Error $"%s{itemLabel} must be an object" else
+                    match closed itemLabel (Set [ "kind"; "digest" ]) item, requiredText itemLabel item "kind", requiredText itemLabel item "digest" with
+                    | Ok (), Ok kind, Ok digest when Set.contains kind (Set [ "runtime"; "ci"; "delivery"; "test"; "other" ]) && Regex.IsMatch(digest, "^[0-9a-f]{64}$") -> Ok ()
+                    | Ok (), Ok _, Ok _ -> Error $"%s{itemLabel} has unsupported kind or digest"
+                    | values -> Error(sprintf "%A" values))
+                |> Seq.toList
+            match validations |> List.tryPick (function Error reason -> Some reason | _ -> None) with
+            | Some reason -> Error reason
+            | None -> CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(value.GetRawText()))
+        | true, value when value.ValueKind = JsonValueKind.Array -> Error $"%s{label}.%s{name} exceeds 16 entries"
+        | _ -> Error $"%s{label}.%s{name} must be an array"
 
     let private parseEvent index (node: JsonElement) =
         let label = $"events[%d{index}]"
@@ -337,6 +394,63 @@ module TelemetryStore =
                     when event = "admission" || event = "start" || event = "terminal" ->
                     make [ "invocationId"; "event"; "occurredAt"; "occurredClockProvenance"; "observedAt"; "observedClockProvenance" ] (EventTime(invocation,event,occurred,occurredClock,observed,observedClock))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.event must be admission, start, or terminal"
+                | values -> Error(sprintf "%A" values)
+            | "process-review" ->
+                match requiredText label node "scope", optionalText label node "attemptId",
+                      requiredBoundedText label 1024 node "outcomeSynopsis", requiredTextArray label node "wentWell",
+                      requiredTextArray label node "problems", requiredTextArray label node "avoidableDelayOrRework",
+                      requiredTextArray label node "processObservations", requiredTextArray label node "remainingRisks",
+                      requiredTextArray label node "concreteImprovements", requiredEvidence label node "evidence",
+                      requiredText label node "evidenceCoverage", requiredText label node "populationCoverage",
+                      requiredText label node "confidence", requiredBoundedText label 128 node "reviewerModel",
+                      requiredBoundedText label 64 node "reviewerEffort", requiredTimestamp label node "reviewedAt",
+                      requiredInt label node "durationSeconds" with
+                | Ok scope, Ok attempt, Ok synopsis, Ok wentWell, Ok problems, Ok delay, Ok observations, Ok risks,
+                  Ok improvements, Ok evidence, Ok evidenceCoverage, Ok populationCoverage, Ok confidence,
+                  Ok model, Ok effort, Ok reviewedAt, Ok duration
+                    when ((scope = "attempt" && attempt.IsSome) || (scope = "item" && attempt.IsNone))
+                         && revision > 0L
+                         && Set.contains evidenceCoverage (Set [ "complete"; "partial"; "unknown" ])
+                         && Set.contains populationCoverage (Set [ "complete"; "partial"; "unknown" ])
+                         && Set.contains confidence (Set [ "low"; "medium"; "high" ]) && duration <= 86400L ->
+                    make [ "scope"; "attemptId"; "outcomeSynopsis"; "wentWell"; "problems"; "avoidableDelayOrRework"; "processObservations"; "remainingRisks"; "concreteImprovements"; "evidence"; "evidenceCoverage"; "populationCoverage"; "confidence"; "reviewerModel"; "reviewerEffort"; "reviewedAt"; "durationSeconds" ]
+                        (ProcessReview { Scope=scope; AttemptId=attempt; OutcomeSynopsis=synopsis; WentWell=wentWell; Problems=problems; AvoidableDelayOrRework=delay; ProcessObservations=observations; RemainingRisks=risks; ConcreteImprovements=improvements; Evidence=evidence; EvidenceCoverage=evidenceCoverage; PopulationCoverage=populationCoverage; Confidence=confidence; ReviewerModel=model; ReviewerEffort=effort; ReviewedAt=reviewedAt; DurationSeconds=duration })
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid review scope, coverage, confidence, or duration"
+                | values -> Error(sprintf "%A" values)
+            | "activity-span" ->
+                match requiredText label node "activityId", requiredText label node "invocationId", requiredText label node "attemptId",
+                      requiredText label node "category", requiredTimestamp label node "startedAt", optionalTimestamp label node "endedAt",
+                      requiredText label node "clockProvenance", requiredEvidence label node "evidence", optionalText label node "summary" with
+                | Ok activity, Ok invocation, Ok attempt, Ok category, Ok started, Ok ended, Ok clock, Ok evidence, Ok summary
+                    when Set.contains category (Set [ "planning"; "implementation"; "review"; "validation"; "delivery"; "repair"; "operations"; "other"; "unclassified" ])
+                         && validClock clock && (ended |> Option.forall (fun finish -> DateTimeOffset.Parse(finish, CultureInfo.InvariantCulture) >= DateTimeOffset.Parse(started, CultureInfo.InvariantCulture)))
+                         && (summary |> Option.forall (fun value -> value.Length <= 256 && not (value |> Seq.exists Char.IsControl))) ->
+                    make [ "activityId"; "invocationId"; "attemptId"; "category"; "startedAt"; "endedAt"; "clockProvenance"; "evidence"; "summary" ]
+                        (ActivitySpan { ActivityId=activity; InvocationId=invocation; AttemptId=attempt; Category=category; StartedAt=started; EndedAt=ended; ClockProvenance=clock; Evidence=evidence; Summary=summary })
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid activity category, interval, clock, or summary"
+                | values -> Error(sprintf "%A" values)
+            | "activity-usage-attribution" ->
+                match requiredText label node "usageIdentity", optionalText label node "activityId", requiredText label node "classification",
+                      requiredInt label node "input", requiredInt label node "cachedInput", requiredInt label node "output", optionalInt label node "reasoning", requiredInt label node "total" with
+                | Ok usageIdentity, Ok activity, Ok classification, Ok input, Ok cached, Ok output, Ok reasoning, Ok total
+                    when ((classification = "direct" && activity.IsSome) || ((classification = "mixed" || classification = "unclassified") && activity.IsNone))
+                         && cached <= input && reasoning |> Option.forall (fun value -> value <= output) ->
+                    match checkedAdd "activity-usage-attribution.total" input output with
+                    | Ok expected when expected = total ->
+                        make [ "usageIdentity"; "activityId"; "classification"; "input"; "cachedInput"; "output"; "reasoning"; "total" ]
+                            (ActivityUsageAttribution { UsageIdentity=usageIdentity; ActivityId=activity; Classification=classification; Input=input; CachedInput=cached; Output=output; Reasoning=reasoning; Total=total })
+                    | _ -> Error $"%s{label}.total must equal input + output"
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid attribution classification or counters"
+                | values -> Error(sprintf "%A" values)
+            | "complication" ->
+                match optionalText label node "attemptId", optionalText label node "activityId", requiredText label node "trigger",
+                      requiredText label node "cause", requiredTimestamp label node "occurredAt", requiredBoundedText label 512 node "synopsis", requiredEvidence label node "evidence" with
+                | Ok attempt, Ok activity, Ok trigger, Ok cause, Ok occurred, Ok synopsis, Ok evidence
+                    when Set.contains trigger (Set [ "test-failure"; "review-finding"; "ci-failure"; "tooling"; "runtime"; "dependency"; "authority"; "operation"; "human-change"; "unknown"; "other" ])
+                         && Set.contains cause (Set [ "product-defect"; "test-defect"; "process-defect"; "infrastructure"; "tooling"; "dependency"; "requirements"; "authorization"; "external"; "unknown"; "other" ]) ->
+                    make [ "attemptId"; "activityId"; "trigger"; "cause"; "occurredAt"; "synopsis"; "evidence" ]
+                        (Complication { AttemptId=attempt; ActivityId=activity; Trigger=trigger; Cause=cause; OccurredAt=occurred; Synopsis=synopsis; Evidence=evidence })
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported trigger or cause"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

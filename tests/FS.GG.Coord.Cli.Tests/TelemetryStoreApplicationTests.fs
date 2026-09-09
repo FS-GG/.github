@@ -26,7 +26,8 @@ module TelemetryStoreApplicationTests =
     let private dropBudgetSchema = "DROP TABLE budget_interventions; DROP TABLE budget_breaches; DROP TABLE budget_assessment_revisions; DROP TABLE budget_epoch_membership; DROP INDEX budget_one_open_epoch; DROP TABLE budget_epochs; DROP TABLE budget_dirty_items; DROP TABLE budget_shared_cost_refs; DROP TABLE budget_intervention_facts; DROP TABLE budget_interval_facts; DROP TABLE budget_attribution_facts; DROP TABLE budget_population_facts; DELETE FROM schema_migrations WHERE version=4;"
     let private dropOperationalSchema = "DROP TABLE operational_event_times; DROP TABLE invocation_lineage; DROP TABLE expected_dispatches; DROP TABLE operational_activations; DELETE FROM schema_migrations WHERE version=5;"
     let private dropCiPopulationSchema = "DROP TABLE ci_population_coverage; DROP TABLE ci_check_runs; DROP TABLE ci_population_admissions; DELETE FROM schema_migrations WHERE version=6;"
-    let private dropNativeOutcomeSchema = "DROP INDEX native_item_outcomes_item_observed; DROP TABLE native_item_outcomes; DELETE FROM schema_migrations WHERE version=7;"
+    let private dropReviewSchema = "DROP INDEX process_review_attempt_subject; DROP INDEX process_review_item_subject; DROP INDEX activity_spans_item_attempt; DROP INDEX activity_usage_item; DROP INDEX complication_events_item; DROP TABLE complication_events; DROP TABLE activity_usage_attributions; DROP TABLE activity_spans; DROP TABLE process_reviews; DELETE FROM schema_migrations WHERE version=8;"
+    let private dropNativeOutcomeSchema = dropReviewSchema + " DROP INDEX native_item_outcomes_item_observed; DROP TABLE native_item_outcomes; DELETE FROM schema_migrations WHERE version=7;"
     let private budgetBatch ingest cursor events =
         Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"budget-worker","generation":"g1","cursor":"{cursor}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
     let private population item revision state source =
@@ -173,10 +174,10 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 8
+        pragma path 9
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready")) |> ignore
-        pragma path 7
+        pragma path 8
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
         let output = Path.Combine(Path.GetTempPath(), "fsgg-utel02-public-" + Guid.NewGuid().ToString("N") + ".json")
         try
@@ -202,6 +203,8 @@ module TelemetryStoreApplicationTests =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "publish"; "--input"; "batch.json" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "drain" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "export"; "--public"; "--output"; "public.json" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "review"; "summary"; "--item"; "UTEL-08" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--item"; "UTEL-08" ])
 
     [<Fact>]
     let ``UTEL-02 changed unsafe permissions refuse before worker publication`` () =
@@ -227,14 +230,14 @@ module TelemetryStoreApplicationTests =
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":7", initialized)
+        Assert.Contains("\"schemaVersion\":8", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
 
     [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         let ci = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ci-batch-1","sourceIdentity":"ci-worker","generation":"g1","cursor":"1","eventCount":4,"events":[{{"kind":"ci-binding","identity":"ci-binding-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":1,"workflow":"ci.yml","featureId":"UTEL","attemptId":"a1","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}},{{"kind":"ci-job","identity":"ci-job-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"name":"build","status":"completed","conclusion":"success","createdAt":"2026-01-01T00:00:00Z","startedAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:01:00Z"}},{{"kind":"ci-step","identity":"ci-step-1","itemId":"UTEL-04A","revision":0,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"number":1,"name":"test","status":"completed","conclusion":"success","startedAt":"2026-01-01T00:00:10Z","completedAt":"2026-01-01T00:00:50Z","classification":"useful-validation","rationale":"exact fixture"}},{{"kind":"ci-coverage","identity":"ci-coverage-1","itemId":"UTEL-04A","revision":0,"collectionId":"collection-1","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}]}}"""
         TelemetryStoreApplication.ingest path approved ci |> unwrap |> ignore
         let summary = TelemetryStoreApplication.ciSummary path approved "UTEL-04A" |> unwrap
@@ -270,7 +273,7 @@ module TelemetryStoreApplicationTests =
         command.CommandText <- "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); " + dropNativeOutcomeSchema + " " + dropCiPopulationSchema + " " + dropOperationalSchema + " " + dropBudgetSchema + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
         Assert.Contains("\"admitted\":1", summary)
 
@@ -441,7 +444,7 @@ module TelemetryStoreApplicationTests =
         command.CommandText <- "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); " + dropNativeOutcomeSchema + " " + dropCiPopulationSchema + " " + dropOperationalSchema + " " + dropBudgetSchema + " PRAGMA user_version=3;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use count = verify.CreateCommand()
@@ -702,7 +705,7 @@ module TelemetryStoreApplicationTests =
         command.CommandText <- "INSERT INTO budget_population_facts VALUES('keep-population','UTEL-06A','UTEL-06A','completed','native-item','native:keep',0); " + dropNativeOutcomeSchema + " " + dropCiPopulationSchema + " " + dropOperationalSchema + " PRAGMA user_version=4;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use count = verify.CreateCommand()
@@ -743,7 +746,7 @@ module TelemetryStoreApplicationTests =
         command.CommandText <- "INSERT INTO operational_activations VALUES('keep-activation','UTEL-06C','activation','explicit-future-dispatches','codex-exec','2026-09-08T10:00:00Z','host-wall',60,0); " + dropNativeOutcomeSchema + " " + dropCiPopulationSchema + " PRAGMA user_version=5;"
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         Assert.False(TelemetryStoreApplication.ciPopulationAdmissionExists path approved "UTEL-06C" "o/r" 7 "main" "dddddddddddddddddddddddddddddddddddddddd" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
@@ -946,11 +949,83 @@ module TelemetryStoreApplicationTests =
         downgrade.CommandText <- dropNativeOutcomeSchema + " PRAGMA user_version=6;"
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":7", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
         use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         verify.Open()
         use corrupt = verify.CreateCommand()
         corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=7;"
+        corrupt.ExecuteNonQuery() |> ignore
+        verify.Close()
+        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
+
+    [<Fact>]
+    let ``UTEL-08 terminal reviews activities exact attribution and complications produce private item detail`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
+        let item = "UTEL-08-detail"
+        let digest = String.replicate 64 "a"
+        let admission = $"""{{"kind":"runtime-admission","identity":"admission-review","itemId":"{item}","revision":0,"invocationId":"invoke-review","featureId":"UTEL","attemptId":"attempt-review","parentAttemptId":null,"producerStream":"review-worker","requestedModel":"gpt-5","requestedEffort":"medium","backend":"codex-collaboration"}}"""
+        let usage = $"""{{"kind":"runtime-turn-usage","identity":"usage-review","itemId":"{item}","revision":0,"invocationId":"invoke-review","threadId":"thread-review","turnId":"turn-review","turnSequence":1,"provider":"openai","requestedModel":"gpt-5","observedModel":"gpt-5","requestedEffort":"medium","observedEffort":"medium","backend":"codex-collaboration","scope":"completed-turn","provenance":"codex-exec-jsonl","input":10,"cachedInput":2,"output":5,"reasoning":1,"total":15}}"""
+        let baseFacts = [ activation item "collaboration-spawn-agent" 60L; dispatch item "dispatch-review" "root" None "collaboration-spawn-agent" "00"; lineage item "lineage-review" "dispatch-review" "invoke-review" "root" None "invoke-review" "collaboration-spawn-agent"; admission; runtimeTerminal item "terminal-review" "invoke-review" "completed" 0; usage ]
+        TelemetryStoreApplication.ingest path approved (operationalBatch "review-base" item baseFacts) |> unwrap |> ignore
+        let span = $"""{{"kind":"activity-span","identity":"span-review","itemId":"{item}","revision":0,"activityId":"implementation-review","invocationId":"invoke-review","attemptId":"attempt-review","category":"implementation","startedAt":"2026-09-08T10:00:00Z","endedAt":"2026-09-08T10:03:00Z","clockProvenance":"host-wall","evidence":[{{"kind":"test","digest":"{digest}"}}],"summary":"focused implementation"}}"""
+        let attribution = $"""{{"kind":"activity-usage-attribution","identity":"attribute-review","itemId":"{item}","revision":0,"usageIdentity":"usage-review","activityId":"implementation-review","classification":"direct","input":10,"cachedInput":2,"output":5,"reasoning":1,"total":15}}"""
+        let complication = $"""{{"kind":"complication","identity":"complication-review","itemId":"{item}","revision":0,"attemptId":"attempt-review","activityId":"implementation-review","trigger":"test-failure","cause":"product-defect","occurredAt":"2026-09-08T10:02:00Z","synopsis":"A focused test exposed the repair","evidence":[{{"kind":"test","digest":"{digest}"}}]}}"""
+        let review scope attempt revision synopsis =
+            $"""{{"kind":"process-review","identity":"review-{scope}-{item}","itemId":"{item}","revision":{revision},"scope":"{scope}","attemptId":{attempt},"outcomeSynopsis":"{synopsis}","wentWell":["Focused tests"],"problems":["One repair"],"avoidableDelayOrRework":[],"processObservations":["Routine route stayed bounded"],"remainingRisks":[],"concreteImprovements":["Keep exact attribution"],"evidence":[{{"kind":"test","digest":"{digest}"}}],"evidenceCoverage":"partial","populationCoverage":"complete","confidence":"high","reviewerModel":"gpt-5","reviewerEffort":"medium","reviewedAt":"2026-09-08T10:04:00Z","durationSeconds":30}}"""
+        TelemetryStoreApplication.ingest path approved (operationalBatch "review-observations" item [ span; attribution; complication; review "attempt" "\"attempt-review\"" 1 "Attempt completed"; review "item" "null" 1 "Item completed" ]) |> unwrap |> ignore
+        let summary = TelemetryStoreApplication.reviewSummary path approved item |> unwrap
+        Assert.Contains("Attempt completed", summary)
+        Assert.Contains("Item completed", summary)
+        let detail = TelemetryStoreApplication.itemDetail path approved item |> unwrap
+        Assert.Contains("\"schema\":\"fsgg.telemetry.item-detail/1\"", detail)
+        Assert.Contains("\"nativeTotal\":15", detail)
+        Assert.Contains("\"direct\":15", detail)
+        Assert.Contains("\"missingAttribution\":0", detail)
+        Assert.Contains("A focused test exposed the repair", detail)
+        let publicPath = path + "-public.json"
+        use publicCleanup = { new IDisposable with member _.Dispose() = if File.Exists publicPath then File.Delete publicPath }
+        TelemetryStoreApplication.exportPublic path approved (Some item) publicPath |> unwrap |> ignore
+        let publicJson = File.ReadAllText publicPath
+        Assert.DoesNotContain("Attempt completed", publicJson)
+        Assert.DoesNotContain("A focused test exposed the repair", publicJson)
+        let duplicate = attribution.Replace("attribute-review", "attribute-review-duplicate")
+        Assert.Contains("\"quarantined\":1", TelemetryStoreApplication.ingest path approved (operationalBatch "review-duplicate-attribution" item [ duplicate ]) |> unwrap)
+        Assert.Contains("\"direct\":15", TelemetryStoreApplication.itemDetail path approved item |> unwrap)
+        let corrected = TelemetryStoreApplication.ingest path approved (operationalBatch "review-correction" item [ review "attempt" "\"attempt-review\"" 2 "Attempt completed after correction" ]) |> unwrap
+        Assert.Contains("\"accepted\":1", corrected)
+        Assert.DoesNotContain("\"outcomeSynopsis\":\"Attempt completed\"", TelemetryStoreApplication.reviewSummary path approved item |> unwrap)
+
+    [<Fact>]
+    let ``UTEL-08 rejects premature reviews allocation and duplicate native attribution`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "UTEL-08-reject"
+        let admission = $"""{{"kind":"runtime-admission","identity":"admission-open","itemId":"{item}","revision":0,"invocationId":"invoke-open","featureId":"UTEL","attemptId":"attempt-open","parentAttemptId":null,"producerStream":"review-worker","requestedModel":"gpt-5","requestedEffort":"medium","backend":"codex-collaboration"}}"""
+        TelemetryStoreApplication.ingest path approved (operationalBatch "review-open" item [ activation item "collaboration-spawn-agent" 60L; dispatch item "dispatch-open" "root" None "collaboration-spawn-agent" "00"; lineage item "lineage-open" "dispatch-open" "invoke-open" "root" None "invoke-open" "collaboration-spawn-agent"; admission ]) |> unwrap |> ignore
+        let premature = $"""{{"kind":"process-review","identity":"review-open","itemId":"{item}","revision":1,"scope":"attempt","attemptId":"attempt-open","outcomeSynopsis":"Not terminal","wentWell":[],"problems":[],"avoidableDelayOrRework":[],"processObservations":[],"remainingRisks":[],"concreteImprovements":[],"evidence":[],"evidenceCoverage":"unknown","populationCoverage":"unknown","confidence":"low","reviewerModel":"gpt-5","reviewerEffort":"medium","reviewedAt":"2026-09-08T10:04:00Z","durationSeconds":1}}"""
+        Assert.Contains("terminal", sprintf "%A" (TelemetryStoreApplication.ingest path approved (operationalBatch "premature-review" item [ premature ])))
+        let allocated = $"""{{"kind":"activity-usage-attribution","identity":"allocated","itemId":"{item}","revision":0,"usageIdentity":"missing-usage","activityId":null,"classification":"unclassified","input":1,"cachedInput":0,"output":1,"reasoning":null,"total":2}}"""
+        Assert.Contains("matching native usage", sprintf "%A" (TelemetryStoreApplication.ingest path approved (operationalBatch "allocated-review" item [ allocated ])))
+
+    [<Fact>]
+    let ``UTEL-08 v7 store upgrades without changing earlier migration receipts`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use downgrade = connection.CreateCommand()
+        downgrade.CommandText <- dropReviewSchema + " PRAGMA user_version=7;"
+        downgrade.ExecuteNonQuery() |> ignore
+        connection.Close()
+        Assert.Contains("\"schemaVersion\":8", TelemetryStoreApplication.initialize path approved |> unwrap)
+        use verify = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        verify.Open()
+        use corrupt = verify.CreateCommand()
+        corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=8;"
         corrupt.ExecuteNonQuery() |> ignore
         verify.Close()
         Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))

@@ -78,6 +78,13 @@ terminal evidence is reported once as a coverage gap. Native `collaboration.spaw
 retain `native-collaboration-usage-unsupported`; expected population, lineage, requested model/effort and terminal
 outcome do not establish intercepted usage or complete coverage.
 
+Record typed activity spans for planning, implementation, review, validation, delivery, repair and operations;
+use other/unclassified when necessary, and record complications with evidence as they occur. Attribute usage only
+to an exact native usage observation—never by elapsed time—and keep mixed/unclassified explicit. After each
+attempt terminal, author one bounded private process review through `review`; author the item review only after
+the expected population is terminal. Reviews are advisory, evidence-linked observations: missing evidence is
+unknown, and they never change delivery authority.
+
 ## Human-selected heavyweight route
 
 Use the following route only when a recorded explicit human instruction selects it for named scope. A prior
