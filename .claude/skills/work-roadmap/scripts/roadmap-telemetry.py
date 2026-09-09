@@ -23,6 +23,7 @@ from fsgg_telemetry_defaults import (
     create_assignment,
     discover_config,
     validate_identity,
+    validate_workspace,
     write_private_json,
 )
 
@@ -51,6 +52,7 @@ def digest(prefix: str, *values: str) -> str:
 
 
 def publish(config: HostConfig, state: dict[str, object], events: list[dict[str, object]]) -> None:
+    validate_workspace(config)
     sequence = int(state["sequence"]) + 1
     state["sequence"] = sequence
     invocation = str(state["invocationId"])
@@ -65,8 +67,12 @@ def publish(config: HostConfig, state: dict[str, object], events: list[dict[str,
     }
     batch_path = write_private_json(config.store_root / "orchestrator-publish", f"batch-{invocation}-{sequence}", batch)
     try:
+        command = ([config.engine, "telemetry", "workspace", "submit", "--config", str(config.path),
+                    "--repository", str(config.repository), "--producer", str(state.get("associationProducer")),
+                    "--binding-digest", str(state.get("associationDigest")), "--input", str(batch_path)] if config.workspace else
+                   [config.engine, "telemetry", "store", "publish", "--store-root", str(config.store_root), "--input", str(batch_path)])
         completed = subprocess.run(
-            [config.engine, "telemetry", "store", "publish", "--store-root", str(config.store_root), "--input", str(batch_path)],
+            command,
             text=True,
             capture_output=True,
             timeout=20,
@@ -82,6 +88,13 @@ def state_path(config: HostConfig, token: str) -> pathlib.Path:
     if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{32}", token):
         raise ConfigurationError("token must be the opaque 32-hex dispatch token")
     return config.store_root / "orchestrator-dispatches" / f"{token}.json"
+
+
+def drain_command(config: HostConfig) -> list[str]:
+    if config.workspace:
+        return [config.engine, "telemetry", "workspace", "drain", "--config", str(config.path),
+                "--repository", str(config.repository)]
+    return [config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)]
 
 
 def read_state(config: HostConfig, token: str) -> dict[str, object]:
@@ -169,6 +182,8 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "parentInvocationId": parent_invocation,
         "relation": relation,
         "nativeId": None,
+        "associationProducer": config.producer,
+        "associationDigest": config.binding_digest,
     }
     events = []
     if relation == "root":
@@ -247,7 +262,7 @@ def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     state["phase"], state["outcome"] = "terminal", args.outcome
     save_state(config, state)
     drain = subprocess.run(
-        [config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)],
+        drain_command(config),
         text=True, capture_output=True, timeout=30, check=False,
     )
     result={"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "terminal", "token": args.token,
@@ -274,7 +289,7 @@ def read_contract(path: str, schema: str, fields: set[str]) -> dict[str, object]
 def record_event(config: HostConfig, state: dict[str, object], value: dict[str, object]) -> dict[str, object]:
     publish(config, state, [value])
     save_state(config, state)
-    drain = subprocess.run([config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)],
+    drain = subprocess.run(drain_command(config),
                            text=True, capture_output=True, timeout=30, check=False)
     if drain.returncode != 0:
         raise ConfigurationError(drain.stderr.strip() or "telemetry observation drain failed")
@@ -391,7 +406,10 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"schema": "fsgg.telemetry.host-status/1", "status": "not-configured"}, separators=(",", ":")))
             return 2
         if args.command == "status":
-            completed = subprocess.run([config.engine, "telemetry", "store", "status", "--store-root", str(config.store_root)],
+            command = ([config.engine, "telemetry", "workspace", "status", "--config", str(config.path),
+                        "--repository", str(config.repository)] if config.workspace else
+                       [config.engine, "telemetry", "store", "status", "--store-root", str(config.store_root)])
+            completed = subprocess.run(command,
                                        text=True, capture_output=True, timeout=20, check=False)
             print(json.dumps({"schema": "fsgg.telemetry.host-status/1",
                               "status": "ready" if completed.returncode == 0 else "unavailable"}, separators=(",", ":")))

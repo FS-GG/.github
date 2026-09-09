@@ -38,6 +38,40 @@ database through GitHub. Never commit, attach, or upload the store, its WAL file
 
 ## Configure and initialize
 
+The standalone workspace route is available on the first qualified product profile, Linux x64. Activation binds
+each private workspace and producer namespace to explicit `OWNER/REPO` names and exactly one destination. Local
+activation runs the production placement assessor; there is no unsafe override. Remote activation accepts only an
+HTTPS origin and a credential reference resolved at runtime, and keeps unresolved submissions in a bounded private
+lossy spool:
+
+```console
+fsgg-coord-engine telemetry workspace activate-local --workspace workspace-a --producer producer-a \
+  --stream runtime --repository FS-GG/.github --store-root /durable/private/workspace-a
+fsgg-coord-engine telemetry workspace activate-remote --workspace workspace-a --producer producer-a \
+  --stream runtime --repository FS-GG/.github --endpoint https://telemetry.example/ \
+  --credential-reference main --spool-root /private/ephemeral/workspace-a
+fsgg-coord-engine telemetry workspace status --repository FS-GG/.github
+```
+
+The closed mode-`0600` workspace configuration is discovered through the same explicit/environment/XDG order. A
+repository name must select exactly one active association; clones and renamed repositories require
+`associate-repository`. Legacy host configuration remains an explicit incumbent publisher input and is never
+silently reinterpreted as a workspace association. With no workspace configuration, status creates no file,
+directory, lock, or database.
+
+Workspace capture submits immutable receipt envelopes and opportunistically drains after native work. Remote
+`durably-received` means the receiver owns transport recovery; it does not mean the observation has been applied.
+Acknowledged outcomes remain inspectable in a bounded diagnostic cache, while the receiver's lifetime receipt is
+authoritative. Unresolved `.ready` inputs never expire. Status labels local counts as indexed-only because it does
+not recover a durable inbox; cutover does recover under the store lock before deciding that the old destination is
+settled.
+
+Destination changes are prospective. `telemetry workspace cutover` refuses any pending old input and requires a
+producer identity that has never appeared in active or retired association history, unless a future explicit
+identity-state import contract is implemented. Retired association history stays in the bounded configuration;
+when its 64 KiB capacity is exhausted, cutover refuses instead of deleting history. Workspace deletion and package
+uninstall do not delete the selected store or spool.
+
 Low-level engine commands accept `FSGG_TELEMETRY_STORE` or an explicit `--store-root`. Repository-owned roadmap
 and board routes instead discover a closed private host configuration in this order: explicit `--config`,
 `FSGG_TELEMETRY_CONFIG`, then `$XDG_CONFIG_HOME/fs-gg/telemetry.json` (or

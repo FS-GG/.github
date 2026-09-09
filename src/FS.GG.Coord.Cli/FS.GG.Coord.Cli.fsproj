@@ -130,7 +130,7 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.87.0 — add prospective operational telemetry over a private host-local SQLite store.
+    <PackageReleaseNotes>0.88.0 — add explicit standalone workspace telemetry association, local/HTTPS destinations, prospective cutover, and advisory workflow capture on qualified Linux x64.
 
 FS.GG.Coord.Cli adds durable local-store commands, repository-owned Codex root/child lifecycle
 observation, admitted exact-head CI reconciliation, native delivery outcomes, and machine-derived
@@ -254,6 +254,8 @@ the standing safety advisories carry forward.
     <Compile Include="SemanticDiffApplication.fs" />
     <Compile Include="QualificationApplication.fsi" />
     <Compile Include="QualificationApplication.fs" />
+    <Compile Include="WorkspaceTelemetryApplication.fsi" />
+    <Compile Include="WorkspaceTelemetryApplication.fs" />
     <Compile Include="TelemetryRuntimeApplication.fsi" />
     <Compile Include="TelemetryRuntimeApplication.fs" />
     <Compile Include="TelemetryCiApplication.fsi" />
@@ -267,6 +269,7 @@ the standing safety advisories carry forward.
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
+    <ProjectReference Include="../FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
     <!-- .github#2725 — the shared base every command family needs. `Json`, `Options`, `Identity`,
          `RefParsing` and `Render` moved there as whole files (their `<Compile Include>` lines are gone

@@ -117,6 +117,35 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 else:
                     os.environ["FSGG_TELEMETRY_CONFIG"] = previous
 
+    def test_workspace_association_uses_workspace_submit_and_private_spool_state(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            spool = root / "spool"
+            spool.mkdir(mode=0o700)
+            config_path = root / "telemetry.json"
+            config_path.write_text(json.dumps({
+                "schema": "fsgg.telemetry.workspace-config/1", "engine": "engine",
+                "associations": [{"workspaceId": "workspace-a", "producerId": "producer-a",
+                                  "streamId": "runtime", "repositories": ["FS-GG/.github"],
+                                  "destination": {"kind": "remote", "endpoint": "https://example.test/",
+                                                  "credentialReference": "main", "spoolRoot": str(spool)}}],
+                "retiredAssociations": [],
+            }), encoding="utf-8")
+            config_path.chmod(0o600)
+            with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CONFIG": str(config_path),
+                                              "FSGG_TELEMETRY_REPOSITORY": "FS-GG/.github"}, clear=False):
+                config = MODULE.discover_config()
+            self.assertTrue(config.workspace)
+            self.assertEqual((config.store_root, config.repository), (spool, "FS-GG/.github"))
+            commands = []
+            state = {"sequence": 0, "invocationId": "invocation-a", "producerStream": "roadmap"}
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=lambda command, **_: commands.append(command) or subprocess.CompletedProcess(command, 0, "{}", "")):
+                MODULE.publish(config, state, [])
+            self.assertEqual(commands[0][:4], ["engine", "telemetry", "workspace", "status"])
+            self.assertEqual(commands[1][:4], ["engine", "telemetry", "workspace", "submit"])
+            self.assertEqual(commands[1][commands[1].index("--repository") + 1], "FS-GG/.github")
+            self.assertEqual(commands[1][commands[1].index("--producer") + 1], "producer-a")
+
     def test_child_requires_and_records_parent_lineage(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

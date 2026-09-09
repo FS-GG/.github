@@ -75,7 +75,7 @@ module TelemetryRuntimeApplication =
         root["lateAfterSeconds"] <- context.LateAfterSeconds
         root.ToJsonString(JsonSerializerOptions(WriteIndented = false))
 
-    let runObservedCodexExecWith executable (assignment: TelemetryRuntime.Assignment) (parentContext: TelemetryRuntime.InvocationContext option) relation storeRoot lateAfterSeconds codexArgs (publish: byte array -> Result<string, string list>) =
+    let runObservedCodexExecWith executable (assignment: TelemetryRuntime.Assignment) (parentContext: TelemetryRuntime.InvocationContext option) relation storeRoot lateAfterSeconds workspaceBinding codexArgs (publish: byte array -> Result<string, string list>) =
         if not (List.contains "--json" codexArgs && List.contains "--ephemeral" codexArgs) then
             Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime codex-exec requires explicit --json and --ephemeral")
             2
@@ -156,6 +156,7 @@ module TelemetryRuntimeApplication =
             info.RedirectStandardOutput <- true
             info.WorkingDirectory <- Directory.GetCurrentDirectory()
             info.Environment[TelemetryRuntime.InvocationContextEnvironment] <- invocationContextJson context
+            workspaceBinding |> Option.iter(fun (config,repository,digest) -> info.Environment["FSGG_TELEMETRY_CONFIG"]<-config;info.Environment["FSGG_TELEMETRY_REPOSITORY"]<-repository;info.Environment["FSGG_TELEMETRY_BINDING_DIGEST"]<-digest)
             info.ArgumentList.Add "exec"
             codexArgs |> List.iter info.ArgumentList.Add
             try
@@ -308,7 +309,7 @@ module TelemetryRuntimeApplication =
                 127
 
     let runCodexExecWith executable (assignment: TelemetryRuntime.Assignment) codexArgs publish =
-        runObservedCodexExecWith executable assignment None TelemetryRuntime.Root None 60L codexArgs publish
+        runObservedCodexExecWith executable assignment None TelemetryRuntime.Root None 60L None codexArgs publish
 
     let private root args =
         option "--store-root" args
@@ -380,17 +381,47 @@ module TelemetryRuntimeApplication =
             | Error errors -> errors |> List.iter (fun error -> Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime assignment: " + error)); 2
             | Ok(assignment,parent,relation,storeRoot,lateAfter) ->
                 let assessment = storeRoot |> Option.map TelemetryStoreApplication.assessProductionRoot
+                let explicitConfig = option "--config" wrapperArgs
+                let explicitRepository = option "--repository" wrapperArgs
+                let inheritedConfig = Environment.GetEnvironmentVariable("FSGG_TELEMETRY_CONFIG") |> Option.ofObj
+                let inheritedRepository = Environment.GetEnvironmentVariable("FSGG_TELEMETRY_REPOSITORY") |> Option.ofObj
+                let inheritedDigest = Environment.GetEnvironmentVariable("FSGG_TELEMETRY_BINDING_DIGEST") |> Option.ofObj
+                let workspaceConfig = explicitConfig |> Option.orElse inheritedConfig
+                let workspaceRepository = explicitRepository |> Option.orElse inheritedRepository
+                let conflicting = parent.IsSome && (
+                    (explicitConfig.IsSome && inheritedConfig.IsSome && explicitConfig <> inheritedConfig)
+                    || (explicitRepository.IsSome && inheritedRepository.IsSome && explicitRepository <> inheritedRepository))
+                let resolvedBinding = WorkspaceTelemetryApplication.tryBinding workspaceConfig workspaceRepository
+                let expectedProducer = WorkspaceTelemetryApplication.selectedProducer workspaceConfig workspaceRepository
+                let configuredPath = WorkspaceTelemetryApplication.configuredPath workspaceConfig
+                let useWorkspace = workspaceConfig.IsSome || File.Exists configuredPath
                 let publish bytes =
+                    if useWorkspace then WorkspaceTelemetryApplication.tryPublishBound workspaceConfig workspaceRepository expectedProducer inheritedDigest bytes else
                     match storeRoot, assessment with
                     | Some path, Some approved -> TelemetryStoreApplication.publish path approved bytes
                     | _ -> Error [ "store root is unconfigured" ]
-                let exitCode = runObservedCodexExecWith "codex" assignment parent relation storeRoot lateAfter codexArgs publish
-                match storeRoot, assessment with
-                | Some path, Some approved ->
-                    match TelemetryStoreApplication.drain path approved with
+                let binding =
+                    resolvedBinding
+                    |> Option.orElseWith(fun () ->
+                        if useWorkspace then
+                            workspaceRepository
+                            |> Option.orElseWith(fun () -> Environment.GetEnvironmentVariable("GITHUB_REPOSITORY") |> Option.ofObj)
+                            |> Option.bind(fun repository -> inheritedDigest |> Option.map(fun digest -> configuredPath, repository, digest))
+                        else None)
+                let exitCode =
+                    if conflicting then Console.Error.WriteLine("fsgg-coord-engine: inherited workspace association cannot be replaced"); 2
+                    else runObservedCodexExecWith "codex" assignment parent relation storeRoot lateAfter binding codexArgs publish
+                if useWorkspace then
+                    match WorkspaceTelemetryApplication.tryDrain workspaceConfig workspaceRepository with
                     | Ok _ -> ()
                     | Error errors -> errors |> List.iter (fun error -> Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime reconciliation pending: " + error))
-                | _ -> ()
+                else
+                    match storeRoot, assessment with
+                    | Some path, Some approved ->
+                        match TelemetryStoreApplication.drain path approved with
+                        | Ok _ -> ()
+                        | Error errors -> errors |> List.iter (fun error -> Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime reconciliation pending: " + error))
+                    | _ -> ()
                 exitCode
         | _ -> Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime codex-exec requires -- before Codex arguments"); 2
 

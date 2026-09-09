@@ -10,6 +10,7 @@ module TelemetryRuntimeApplication =
         relation: TelemetryRuntime.InvocationRelation ->
         storeRoot: string option ->
         lateAfterSeconds: int64 ->
+        workspaceBinding: (string * string * string) option ->
         codexArgs: string list ->
         publish: (byte array -> Result<string, string list>) -> int
     val runCodexExecWith:

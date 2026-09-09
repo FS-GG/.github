@@ -77,12 +77,22 @@ module TelemetryApplication =
             shape [ "--store-root"; "--item" ] [] args
         | "telemetry" :: "store" :: "export" :: args ->
             shape [ "--store-root"; "--item"; "--output" ] [ "--public" ] args
+        | "telemetry" :: "workspace" :: action :: args when action = "status" || action = "drain" ->
+            shape [ "--config"; "--repository" ] [] args
+        | "telemetry" :: "workspace" :: "submit" :: args ->
+            shape [ "--config"; "--repository"; "--producer"; "--binding-digest"; "--input" ] [] args
+        | "telemetry" :: "workspace" :: action :: args when action = "activate-local" || action = "activate-remote" ->
+            shape [ "--config"; "--workspace"; "--producer"; "--stream"; "--repository"; "--store-root"; "--endpoint"; "--credential-reference"; "--spool-root" ] [] args
+        | "telemetry" :: "workspace" :: "associate-repository" :: args ->
+            shape [ "--config"; "--workspace"; "--repository"; "--remove-repository" ] [] args
+        | "telemetry" :: "workspace" :: "cutover" :: args ->
+            shape [ "--config"; "--workspace"; "--producer"; "--stream"; "--to"; "--store-root"; "--endpoint"; "--credential-reference"; "--spool-root" ] [] args
         | "telemetry" :: "runtime" :: "status" :: args ->
             shape [ "--store-root" ] [] args
         | "telemetry" :: "runtime" :: "codex-exec" :: args ->
             match List.tryFindIndex ((=) "--") args with
             | None -> Some(Error "telemetry runtime codex-exec requires -- before Codex arguments")
-            | Some delimiter -> validateArgs [ "--assignment"; "--store-root"; "--relation"; "--late-after-seconds" ] [] args[..delimiter - 1] |> Some
+            | Some delimiter -> validateArgs [ "--assignment"; "--store-root"; "--config"; "--repository"; "--relation"; "--late-after-seconds" ] [] args[..delimiter - 1] |> Some
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "reconcile" :: args ->
@@ -575,6 +585,7 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
+        | "telemetry" :: "workspace" :: action :: args -> Some(WorkspaceTelemetryApplication.run action args)
         | "telemetry" :: "ci" :: action :: args -> Some(TelemetryCiApplication.run action args)
         | "telemetry" :: "budget" :: action :: args ->
             let values = if action = "summary" then [ "--item"; "--store-root" ] else [ "--store-root" ]
