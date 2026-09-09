@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Bounded public telemetry for FS-GG engineering delivery."
+    />
+    <title>FS—GG / Signal</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to telemetry</a>
+    <header class="topbar">
+      <a class="brand" href="#overview" aria-label="FS-GG Signal home"
+        ><span>FS—GG</span><b>SIGNAL</b></a
+      >
+      <nav aria-label="Dashboard views">
+        <a href="#overview">Overview</a><a href="#actions">Actions</a
+        ><a href="#local">Local</a><a href="#method">Method</a>
+      </nav>
+      <button
+        class="icon-button"
+        id="theme"
+        type="button"
+        aria-label="Switch color theme"
+      >
+        <span aria-hidden="true">◐</span>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="overview" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">ENGINEERING OPERATIONS / LIVE PUBLIC VIEW</p>
+          <h1 id="hero-title">The shape of<br /><em>delivery.</em></h1>
+          <p class="lede">
+            A privacy-bounded view of workflow throughput, runtime coverage and
+            the cost of coordination.
+          </p>
+        </div>
+        <div class="pulse" aria-label="Data source health">
+          <span class="pulse-dot" id="pulse-dot"></span
+          ><span id="health-label">Loading signal</span>
+          <time id="observed-at">—</time>
+        </div>
+      </section>
+
+      <section class="marquee" aria-label="Current headline metrics">
+        <div><strong id="m-runs">—</strong><span>recent runs</span></div>
+        <div><strong id="m-success">—</strong><span>successful</span></div>
+        <div>
+          <strong id="m-duration">—</strong><span>median observed span</span>
+        </div>
+        <div>
+          <strong id="m-workflows">—</strong><span>workflows sampled</span>
+        </div>
+      </section>
+
+      <section
+        class="panel actions-panel"
+        id="actions"
+        aria-labelledby="actions-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PUBLIC GITHUB ACTIONS</p>
+            <h2 id="actions-title">Recent pressure</h2>
+          </div>
+          <p id="sample-note" class="context">
+            Bounded sample details loading.
+          </p>
+        </div>
+        <div class="chart-grid">
+          <figure class="chart-card">
+            <figcaption>
+              <span>Outcomes</span><small>completed and active runs</small>
+            </figcaption>
+            <div
+              id="outcome-chart"
+              class="outcomes"
+              role="img"
+              aria-label="Workflow outcomes"
+            ></div>
+            <ul
+              id="outcome-text"
+              class="chart-text"
+              aria-label="Workflow outcome values"
+            ></ul>
+          </figure>
+          <figure class="chart-card trend-card">
+            <figcaption>
+              <span>Run pulse</span
+              ><small id="trend-subtitle">within sampled timestamps</small>
+            </figcaption>
+            <svg
+              id="trend-chart"
+              viewBox="0 0 720 220"
+              role="img"
+              aria-labelledby="trend-title trend-desc"
+            >
+              <title id="trend-title">Runs over time</title>
+              <desc id="trend-desc">Loading workflow trend.</desc>
+            </svg>
+            <ol id="trend-text" class="sr-only"></ol>
+          </figure>
+        </div>
+
+        <div class="workflow-health">
+          <div class="subheading">
+            <h3>Workflow health</h3>
+            <span>minimum 1 sampled run</span>
+          </div>
+          <div id="workflow-list" class="workflow-list"></div>
+        </div>
+
+        <div class="runs-heading">
+          <div>
+            <h3>Run index</h3>
+            <span id="result-count">—</span>
+          </div>
+          <div class="controls">
+            <label
+              ><span>Search</span
+              ><input
+                id="search"
+                type="search"
+                placeholder="Workflow or event"
+                autocomplete="off"
+            /></label>
+            <label
+              ><span>Outcome</span
+              ><select id="outcome-filter">
+                <option value="all">All outcomes</option>
+              </select></label
+            >
+            <label
+              ><span>Order</span
+              ><select id="sort">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="slowest">Slowest</option>
+              </select></label
+            >
+          </div>
+        </div>
+        <div
+          class="table-wrap"
+          tabindex="0"
+          aria-label="Scrollable workflow runs"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Event</th>
+                <th>Outcome</th>
+                <th>Started</th>
+                <th>Observed span</th>
+                <th>Attempt</th>
+              </tr>
+            </thead>
+            <tbody id="runs"></tbody>
+          </table>
+        </div>
+        <button class="show-more" id="show-more" type="button" hidden>
+          Show 250 more runs
+        </button>
+      </section>
+
+      <section
+        class="panel local-panel"
+        id="local"
+        aria-labelledby="local-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PRIVATE HOST / SAFE AGGREGATES</p>
+            <h2 id="local-title">Local signal</h2>
+          </div>
+          <div id="local-state" class="state-chip">Checking feed</div>
+        </div>
+        <div id="local-content">
+          <div class="empty-state">
+            <span>◌</span>
+            <h3>Awaiting an approved host</h3>
+            <p>
+              The public Actions view remains live. Local usage and budget
+              fields stay unknown until a configured host publishes a safe
+              snapshot.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="method" id="method" aria-labelledby="method-title">
+        <div>
+          <p class="eyebrow">READING THE SIGNAL</p>
+          <h2 id="method-title">What this view can say</h2>
+        </div>
+        <div class="method-grid">
+          <article>
+            <span>01</span>
+            <h3>Bounded by design</h3>
+            <p>
+              Actions metrics describe the newest capped sample and show its
+              exact observed time span. Completed-run spans measure start to last
+              update, not runner time. They are not a full date-window total.
+            </p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Unknown stays unknown</h3>
+            <p>
+              Missing model, effort, price, human time or host evidence never
+              becomes zero, compliant or inferred.
+            </p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Budget authority stays local</h3>
+            <p>
+              The canonical reducer owns the 5% target, 10% ceiling, breach
+              count and verified intervention reset. This page only renders its
+              verdicts.
+            </p>
+          </article>
+        </div>
+        <p class="provenance" id="provenance">
+          Source revision — · data build —
+        </p>
+      </section>
+    </main>
+    <footer>
+      <span>FS—GG SIGNAL</span
+      ><span>Public aggregate telemetry · no raw logs or credentials</span>
+    </footer>
+    <div id="error" class="error-banner" role="alert" hidden></div>
+  </body>
+</html>

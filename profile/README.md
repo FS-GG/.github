@@ -37,6 +37,8 @@ for guides, architecture, design direction, coordination, and reference material
 
 Available today:
 
+- **[Telemetry dashboard](https://fs-gg.github.io/.github/)** — explore GitHub Actions
+  activity, with usage, coverage, and budget summaries from configured hosts.
 - **GitHub-native workspace setup** — an agent can create and secure a repository,
   create its GitHub Project, scaffold the selected product, and verify the result.
 - **Projects-based roadmaps** — boards carry backlog items, epics, sub-issues,
