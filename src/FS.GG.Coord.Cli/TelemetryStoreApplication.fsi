@@ -15,6 +15,12 @@ module TelemetryStoreApplication =
     val drain: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val drainWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> hooks: DrainHooks -> Result<string, string list>
     val ingest: path: string -> assessment: TelemetryStore.DurabilityAssessment -> bytes: byte array -> Result<string, string list>
+    val enrollReceiptProducer: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> Result<string, string list>
+    val submitReceiptWithHook: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> bytes: byte array -> hook: (string -> unit) -> Result<string, string list>
+    val submitReceipt: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> bytes: byte array -> Result<string, string list>
+    val lookupReceipt: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> batch: string -> Result<string, string list>
+    val drainReceiptsWithHook: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspace: string -> hook: (string -> unit) -> Result<string, string list>
+    val drainReceipts: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspace: string -> Result<string, string list>
     val summary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val reconcile: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val ciSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>

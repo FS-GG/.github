@@ -137,6 +137,8 @@
     <Compile Include="Telemetry.fs" />
     <Compile Include="TelemetryStore.fsi" />
     <Compile Include="TelemetryStore.fs" />
+    <Compile Include="TelemetryReceipt.fsi" />
+    <Compile Include="TelemetryReceipt.fs" />
     <Compile Include="TelemetryRuntime.fsi" />
     <Compile Include="TelemetryRuntime.fs" />
     <Compile Include="TelemetryCi.fsi" />

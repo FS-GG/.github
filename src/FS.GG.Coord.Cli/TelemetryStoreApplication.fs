@@ -20,7 +20,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 8
+    let private currentSchemaVersion = 9
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
         do
@@ -139,6 +139,13 @@ CREATE INDEX complication_events_item ON complication_events(item_id,occurred_at
 PRAGMA user_version=8;
 """
     let private migration8Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration8Sql)
+    let private migration9Sql = """
+CREATE TABLE receipt_producers(producer TEXT NOT NULL, stream TEXT NOT NULL, PRIMARY KEY(producer,stream)) STRICT;
+CREATE TABLE transport_receipts(producer TEXT NOT NULL, batch TEXT NOT NULL, stream TEXT NOT NULL, digest TEXT NOT NULL, payload_bytes INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('durably-received','applied','rejected')), code TEXT, terminal_utc TEXT, PRIMARY KEY(producer,batch)) STRICT;
+CREATE INDEX transport_pending ON transport_receipts(state,producer);
+PRAGMA user_version=9;
+"""
+    let private migration9Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration9Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -376,7 +383,23 @@ PRAGMA user_version=8;
                                                                 execute connection "COMMIT;"
                                                             with error -> rollback connection; raise error
                                                         if scalarText connection "SELECT digest FROM schema_migrations WHERE version=8;" <> migration8Digest then Error [ "migration checksum mismatch" ]
-                                                        else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                                        else
+                                                            if Int32.Parse(scalarText connection "PRAGMA user_version;") = 8 then
+                                                                beginImmediate connection
+                                                                try
+                                                                    execute connection migration9Sql
+                                                                    use migration = connection.CreateCommand()
+                                                                    migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(9,$digest,$utc);"
+                                                                    parameter migration "$digest" migration9Digest
+                                                                    parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                    migration.ExecuteNonQuery() |> ignore
+                                                                    execute connection "COMMIT;"
+                                                                with error -> rollback connection; raise error
+                                                            if scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "migration checksum mismatch" ]
+                                                            else
+                                                                fsyncDirectory root
+                                                                fsyncDirectory(Path.GetDirectoryName root)
+                                                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -402,9 +425,12 @@ PRAGMA user_version=8;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;" <> migration7Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=8;" <> migration8Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
-                        let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
+                        let pending =
+                            [inbox; Path.Combine(root,"receipt-inbox")]
+                            |> List.sumBy (fun directory -> if Directory.Exists directory then Directory.EnumerateFiles(directory,"*.ready",SearchOption.AllDirectories) |> Seq.truncate 1025 |> Seq.length else 0)
                         Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = version; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; pendingBatches = pending |} + "\n")
                 with error -> Error [ error.Message ]
 
@@ -802,7 +828,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 close.ExecuteNonQuery() |> ignore
             | _ -> ()
 
-    let private ingestBatchLocked root beforeCommit reevaluateBudget (batch: TelemetryStore.Batch) =
+    let private ingestBatchWithReceiptLocked root beforeCommit reevaluateBudget finishReceipt (batch: TelemetryStore.Batch) =
             if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ] else
             match connect root SqliteOpenMode.ReadWrite with
             | Error errors -> Error errors
@@ -860,6 +886,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                                 [ "$id",box batch.IngestId; "$digest",batch.ContentDigest; "$source",batch.SourceIdentity; "$generation",batch.Generation; "$cursor",batch.Cursor; "$accepted",accepted; "$replayed",replayed ] |> List.iter (fun (name,value) -> parameter insertBatch name value)
                                 insertBatch.ExecuteNonQuery() |> ignore
                             if reevaluateBudget then budgetReevaluate connection
+                            finishReceipt connection
                             beforeCommit ()
                             execute connection "COMMIT;"
                             Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ingest-result/1"; ingestId = batch.IngestId; digest = batch.ContentDigest; accepted = accepted; replayed = replayed; cursor = batch.Cursor; nativeEngine = engine |} + "\n")
@@ -867,6 +894,9 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 with
                 | :? SqliteException as error -> Error(failBusy error)
                 | error -> Error [ error.Message ]
+
+    let private ingestBatchLocked root beforeCommit reevaluateBudget batch =
+        ingestBatchWithReceiptLocked root beforeCommit reevaluateBudget ignore batch
 
     let publish path assessment bytes =
         match validateRoot path assessment, TelemetryStore.parseBatch bytes with
@@ -929,7 +959,8 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
 
     let private pendingCount root =
         let inbox = Path.Combine(root, "inbox")
-        if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
+        [inbox; Path.Combine(root,"receipt-inbox")]
+        |> List.sumBy (fun directory -> if Directory.Exists directory then Directory.EnumerateFiles(directory,"*.ready",SearchOption.AllDirectories) |> Seq.truncate 1025 |> Seq.length else 0)
 
     let private quarantine root (path: string) reasons =
         let producer = DirectoryInfo(Path.GetDirectoryName path).Name
@@ -1010,6 +1041,222 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
             | Ok drained -> Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ingest-disposition/1"; status = "drained"; publish = JsonDocument.Parse(queued).RootElement.Clone(); drain = JsonDocument.Parse(drained).RootElement.Clone() |} + "\n")
             | Error [ "writer-busy" ] -> Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ingest-disposition/1"; status = "queued"; reason = "writer-busy"; publish = JsonDocument.Parse(queued).RootElement.Clone() |} + "\n")
             | Error errors -> Error errors
+
+    // A scoped store has exactly one immutable workspace association. Legacy roots remain
+    // unassigned: enrollment never infers ownership of pre-existing observations.
+    let private receiptCommand (connection: SqliteConnection) sql (values: (string * obj) list) =
+        let command = connection.CreateCommand()
+        command.CommandText <- sql
+        values |> List.iter (fun (name,value) -> parameter command name value)
+        command
+    let private receiptScalar connection sql values =
+        use command = receiptCommand connection sql values
+        command.ExecuteScalar()
+    let private receiptExecute connection sql values =
+        use command = receiptCommand connection sql values
+        command.ExecuteNonQuery() |> ignore
+    let private receiptWorkspace connection =
+        string (receiptScalar connection "SELECT value FROM store_metadata WHERE key='receiptWorkspace';" [])
+    let private receiptAuthorized connection (scope: TelemetryReceipt.Scope) =
+        receiptWorkspace connection = scope.Workspace
+        && Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers WHERE producer=$p AND stream=$s;" ["$p",box scope.Producer; "$s",box scope.Stream]) = 1L
+    let private receiptParameters (envelope: TelemetryReceipt.Envelope) =
+        [ "$p",box envelope.Scope.Producer; "$b",box envelope.BatchId ]
+    let private receiptPath root producer batch = Path.Combine(root, "receipt-inbox", TelemetryReceipt.key producer batch + ".ready")
+    let private receiptLocked path assessment action =
+        match validateRoot path assessment with
+        | Error errors -> Error errors
+        | Ok root ->
+            try
+                match tryWriterLock root with
+                | Error _ -> Error [ "overload" ]
+                | Ok writer ->
+                    use writer = writer
+                    match connect root SqliteOpenMode.ReadWrite with
+                    | Error _ -> Error [ "storage-unavailable" ]
+                    | Ok(connection, _) ->
+                        use connection = connection
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then Error [ "unsupported-version" ]
+                        elif scalarText connection "PRAGMA journal_mode;" <> "wal" || scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "storage-unavailable" ]
+                        else action root connection
+            with _ -> Error [ "storage-unavailable" ]
+
+    let enrollReceiptProducer path assessment (scope: TelemetryReceipt.Scope) =
+        if [scope.Workspace; scope.Producer; scope.Stream] |> List.exists (TelemetryReceipt.validId >> not) then Error [ "invalid-request" ] else
+        receiptLocked path assessment (fun root connection ->
+            let workspace = receiptWorkspace connection
+            if workspace <> "" && workspace <> scope.Workspace then Error [ "unauthorized-scope" ]
+            elif workspace = "" && (Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM ingest_batches;" []) > 0L || pendingCount root > 0) then Error [ "legacy-unassigned; select a new prospective store" ]
+            else
+                let existing = Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers WHERE producer=$p;" ["$p",box scope.Producer])
+                let producers = Convert.ToInt64(receiptScalar connection "SELECT count(DISTINCT producer) FROM receipt_producers;" [])
+                let streams = Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers;" [])
+                if (existing = 0L && producers >= 128L) || (not (receiptAuthorized connection scope) && streams >= 1024L) then Error [ "overload" ] else
+                beginImmediate connection
+                try
+                    receiptExecute connection "INSERT OR IGNORE INTO store_metadata(key,value) VALUES('receiptWorkspace',$w);" ["$w",box scope.Workspace]
+                    receiptExecute connection "INSERT OR IGNORE INTO receipt_producers(producer,stream) VALUES($p,$s);" ["$p",box scope.Producer; "$s",box scope.Stream]
+                    execute connection "COMMIT;"
+                    Ok "{\"schema\":\"fsgg.telemetry.enrollment/1\",\"status\":\"enrolled\"}\n"
+                with error -> rollback connection; raise error)
+
+    let private receiptRead (root: string) connection (scope: TelemetryReceipt.Scope) batch now =
+        use command = receiptCommand connection "SELECT stream,digest,state,code,terminal_utc FROM transport_receipts WHERE producer=$p AND batch=$b;" ["$p",box scope.Producer; "$b",box batch]
+        use reader = command.ExecuteReader()
+        if not (reader.Read()) then Error [ "receipt-unavailable" ]
+        elif reader.GetString(0) <> scope.Stream then Error [ "unauthorized-scope" ]
+        else
+            let state = reader.GetString(2)
+            let recoverable =
+                if state <> "durably-received" then true else
+                let file = FileInfo(receiptPath root scope.Producer batch)
+                if not file.Exists || not (isNull file.LinkTarget) || file.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then false else
+                match TelemetryReceipt.parse(File.ReadAllBytes file.FullName) with
+                | Ok envelope -> envelope.Scope = scope && envelope.BatchId = batch && envelope.Digest = reader.GetString(1)
+                | Error _ -> false
+            if not recoverable then Error [ "storage-unavailable" ] else
+            let expired = not (reader.IsDBNull 4) && now - DateTimeOffset.Parse(reader.GetString(4), Globalization.CultureInfo.InvariantCulture) >= TimeSpan.FromDays 30.
+            let code = if expired || reader.IsDBNull 3 then None else Some(reader.GetString 3)
+            Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.receipt/1"; workspaceId = scope.Workspace; producerId = scope.Producer; streamId = scope.Stream; batchId = batch; digest = reader.GetString(1); status = (if expired then "expired" else state); code = code |} + "\n")
+
+    // Recovery scans only bounded, server-owned receipt artifacts. The index can never
+    // acknowledge a pending obligation without its recoverable immutable envelope.
+    let private recoverReceiptIndex root connection hook =
+        let inbox = Path.Combine(root, "receipt-inbox")
+        if Directory.Exists inbox then
+            for temporary in Directory.EnumerateFiles(inbox, ".*.tmp") do File.Delete temporary
+            fsyncDirectory inbox
+            let files = Directory.EnumerateFiles(inbox, "*.ready") |> Seq.truncate 1025 |> Seq.toArray
+            if files.Length > 1024 then invalidOp "receipt capacity inconsistent"
+            for file in files do
+                let info = FileInfo file
+                if not (isNull info.LinkTarget) || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then invalidOp "invalid receipt artifact"
+                let envelope = TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
+                if file <> receiptPath root envelope.Scope.Producer envelope.BatchId || not (receiptAuthorized connection envelope.Scope) then invalidOp "invalid receipt binding"
+                let parameters = receiptParameters envelope
+                let prior = receiptScalar connection "SELECT digest FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters
+                if not (isNull prior) && string prior <> envelope.Digest then invalidOp "receipt identity conflict"
+                if isNull prior then
+                    receiptExecute connection "INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($p,$b,$s,$d,$n,'durably-received');"
+                        (parameters @ ["$s",box envelope.Scope.Stream; "$d",box envelope.Digest; "$n",box info.Length])
+                    hook "index-committed"
+                let state = string (receiptScalar connection "SELECT state FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters)
+                if state <> "durably-received" then File.Delete file; fsyncDirectory inbox
+            use pending = receiptCommand connection "SELECT producer,batch FROM transport_receipts WHERE state='durably-received';" []
+            use reader = pending.ExecuteReader()
+            while reader.Read() do
+                if not (File.Exists(receiptPath root (reader.GetString 0) (reader.GetString 1))) then invalidOp "missing accepted obligation"
+        elif Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM transport_receipts WHERE state='durably-received';" []) <> 0L then invalidOp "missing accepted inbox"
+
+    let submitReceiptWithHook path assessment scope bytes hook =
+        match TelemetryReceipt.parse bytes with
+        | Error errors -> Error errors
+        | Ok envelope ->
+            match TelemetryReceipt.authorize scope envelope with
+            | Error errors -> Error errors
+            | Ok () ->
+                receiptLocked path assessment (fun root connection ->
+                    if not (receiptAuthorized connection scope) then Error [ "unauthorized-scope" ] else
+                    recoverReceiptIndex root connection hook
+                    let parameters = receiptParameters envelope
+                    let prior = receiptScalar connection "SELECT digest FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters
+                    if not (isNull prior) then
+                        if string prior <> envelope.Digest then Error [ "identity-conflict" ]
+                        else receiptRead root connection scope envelope.BatchId DateTimeOffset.UtcNow
+                    else
+                        let count sql values = Convert.ToInt64(receiptScalar connection sql values)
+                        let size = int64 (Encoding.UTF8.GetByteCount envelope.Canonical)
+                        let p = ["$p",box scope.Producer]
+                        if count "SELECT count(*) FROM transport_receipts;" [] >= 1000000L
+                           || count "SELECT count(*) FROM transport_receipts WHERE state='durably-received';" [] >= 1024L
+                           || count "SELECT coalesce(sum(payload_bytes),0) FROM transport_receipts WHERE state='durably-received';" [] + size > 64L*1024L*1024L
+                           || count "SELECT count(*) FROM transport_receipts WHERE producer=$p AND state='durably-received';" p >= 128L
+                           || count "SELECT coalesce(sum(payload_bytes),0) FROM transport_receipts WHERE producer=$p AND state='durably-received';" p + size > 8L*1024L*1024L then Error [ "overload" ]
+                        else
+                            let inbox = Path.Combine(root, "receipt-inbox")
+                            Directory.CreateDirectory inbox |> ignore
+                            File.SetUnixFileMode(inbox, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                            fsyncDirectory root
+                            let target = receiptPath root scope.Producer envelope.BatchId
+                            let temporary = Path.Combine(inbox, "." + Guid.NewGuid().ToString("N") + ".tmp")
+                            try
+                                use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)
+                                File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                                stream.Write(Encoding.UTF8.GetBytes envelope.Canonical)
+                                hook "before-file-sync"
+                                stream.Flush true
+                                hook "after-file-sync"
+                                stream.Close()
+                                File.Move(temporary,target,false)
+                                hook "after-rename"
+                                fsyncDirectory inbox
+                                hook "after-directory-sync"
+                                recoverReceiptIndex root connection hook
+                                receiptRead root connection scope envelope.BatchId DateTimeOffset.UtcNow
+                            finally
+                                if File.Exists temporary then File.Delete temporary)
+    let submitReceipt path assessment scope bytes = submitReceiptWithHook path assessment scope bytes ignore
+
+    let lookupReceipt path assessment (scope: TelemetryReceipt.Scope) batch =
+        if not (TelemetryReceipt.validId batch) then Error [ "invalid-request" ] else
+        match validateRoot path assessment with
+        | Error errors -> Error errors
+        | Ok root ->
+            try
+                match connect root SqliteOpenMode.ReadOnly with
+                | Error _ -> Error [ "storage-unavailable" ]
+                | Ok(connection,_) ->
+                    use connection = connection
+                    if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then Error [ "unsupported-version" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "storage-unavailable" ]
+                    elif not (receiptAuthorized connection scope) then Error [ "unauthorized-scope" ]
+                    else receiptRead root connection scope batch DateTimeOffset.UtcNow
+            with _ -> Error [ "storage-unavailable" ]
+
+    let drainReceiptsWithHook path assessment (workspace: string) hook =
+        receiptLocked path assessment (fun root connection ->
+            if receiptWorkspace connection <> workspace then Error [ "unauthorized-scope" ] else
+            recoverReceiptIndex root connection hook
+            let cursor = string (receiptScalar connection "SELECT value FROM store_metadata WHERE key='receiptDrainCursor';" [])
+            use command = receiptCommand connection "SELECT producer,batch FROM (SELECT producer,batch,row_number() OVER(PARTITION BY producer ORDER BY batch) AS ordinal FROM transport_receipts WHERE state='durably-received') ORDER BY ordinal,CASE WHEN producer>$cursor THEN 0 ELSE 1 END,producer LIMIT 128;" ["$cursor",box cursor]
+            use reader = command.ExecuteReader()
+            let selected = ResizeArray<string * string>()
+            while reader.Read() do selected.Add(reader.GetString 0,reader.GetString 1)
+            reader.Close()
+            let mutable bytes = 0L
+            let mutable applied = 0
+            let mutable rejected = 0
+            let mutable failure = false
+            for producer,batchId in selected do
+                let file = receiptPath root producer batchId
+                let size = FileInfo(file).Length
+                if bytes + size <= maxDrainBytes then
+                    bytes <- bytes + size
+                    let envelope = TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
+                    // Only transport identities are adapted. Native fact identities/revisions remain unchanged.
+                    let native =
+                        { envelope.Batch with IngestId = "receipt-" + envelope.Key
+                                              SourceIdentity = TelemetryReceipt.key producer (envelope.Scope.Stream + "\n" + envelope.Batch.SourceIdentity)
+                                              ContentDigest = envelope.Digest }
+                    let terminal (db: SqliteConnection) state code =
+                        receiptExecute db "UPDATE transport_receipts SET state=$state,code=$code,terminal_utc=$utc WHERE producer=$p AND batch=$b;"
+                            (["$p",box producer; "$b",box batchId; "$state",box state; "$code",code; "$utc",box (DateTimeOffset.UtcNow.ToString("O"))])
+                    let result = ingestBatchWithReceiptLocked root (fun () -> hook "before-application-commit") true (fun db -> terminal db "applied" DBNull.Value) native
+                    match result with
+                    | Ok _ -> applied <- applied + 1
+                    | Error errors when errors |> List.exists (fun error -> error.Contains("conflict",StringComparison.OrdinalIgnoreCase) || error.Contains("constraint",StringComparison.OrdinalIgnoreCase) || error = "invalid-request") ->
+                        terminal connection "rejected" (box "semantic-conflict")
+                        rejected <- rejected + 1
+                    | Error _ -> failure <- true
+                    if not failure then
+                        hook "after-application-commit"
+                        File.Delete file
+                        hook "after-cleanup"
+                        fsyncDirectory(Path.GetDirectoryName file)
+                        receiptExecute connection "INSERT INTO store_metadata(key,value) VALUES('receiptDrainCursor',$p) ON CONFLICT(key) DO UPDATE SET value=excluded.value;" ["$p",box producer]
+            if failure then Error [ "storage-unavailable" ]
+            else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.receipt-drain/1"; applied = applied; rejected = rejected |} + "\n"))
+    let drainReceipts path assessment workspace = drainReceiptsWithHook path assessment workspace ignore
 
     let private readSummary (connection: SqliteConnection) itemId : TelemetryStore.Aggregate =
         let count table =
