@@ -3,6 +3,39 @@
 The local telemetry store is private, host-local SQLite storage for bounded coordination observations. It is
 not a delivery authority, transcript archive, network database, or automatic collector.
 
+## Operational topology
+
+SQLite has no server process. Repository-owned runtime and delivery adapters publish immutable batches to the
+private inbox. Any process may publish concurrently, but exactly one short-lived writer drains batches at a time;
+the orchestrator normally performs that drain after native work. Read-only status, reconciliation, budget and
+export commands use WAL snapshots and may run while a writer is active. The database lock and fact identities are
+the final safety boundary, so correctness does not depend on every producer going through one live orchestrator.
+
+```text
+repository-owned workers ──atomic batches──> private inbox
+                                               │
+orchestrator / recovery command ──drain──> SQLite WAL store <── read-only queries
+```
+
+The store root must survive the container that runs the tools. A bind-mounted host directory is appropriate; an
+ephemeral container layer is not. Recreating a container then requires reinstalling/selecting the telemetry tool
+and reapplying receiver configuration, but it does not require importing raw runtime sessions or copying the
+database through GitHub. Never commit, attach, or upload the store, its WAL files, assignment files, or inbox.
+
+## Operator quick start
+
+1. Install the exact coherent `FS.GG.Coord.Cli` release selected by the receiver.
+2. Create a new uniquely named directory beneath the approved private host-backed root; do not probe or reuse an
+   unknown existing database.
+3. Set the directory to mode `0700`, initialize it, and confirm `ready`, the expected schema version, `wal`, and
+   zero or understood pending batches.
+4. Create mode-`0600` runtime or CI assignments containing only the documented stable identities.
+5. Route repository-owned launches through `telemetry runtime codex-exec` and routine delivery through the
+   telemetry options shown below. Native work remains authoritative if observation fails.
+6. Drain after work and after recovery, then inspect `store summary`, `ci summary`, `budget summary`, and the
+   prospective reconciliation for the original item.
+7. Export only with `export --public`; inspect its allowlisted aggregate shape before sharing it.
+
 ## Configure and initialize
 
 Set `FSGG_TELEMETRY_STORE` to an absolute durable host-backed directory, or pass `--store-root` explicitly.
@@ -17,6 +50,10 @@ fsgg-coord-engine telemetry store status --store-root /durable/private/fsgg-tele
 
 Use mode `0700` for the root and `0600` for private assignment files. Never place the database on a
 network-shared filesystem.
+
+`status` is the safe first command for a configured store. It does not discover other stores or scan runtime
+history. Do not point it at the parent directory that may contain unrelated stores; select the exact newly approved
+store root.
 
 ## Schema and relations
 
