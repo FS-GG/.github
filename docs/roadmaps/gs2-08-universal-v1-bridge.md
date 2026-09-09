@@ -95,9 +95,29 @@ cutover state. Provider readback and administrative application remain later sep
 Each later protected operation needs its own native authority. Source qualification in 08.1 is neither
 publication nor installation, and neither event authorizes a fleet transition.
 
+## Producer source window: GS2-08.3 writer census
+
+- [ ] Keep one executable, fail-closed producer census of every v1 write entry point and require it before
+  later fence implementation or release.
+
+The checked census derives all 54 coordination command roots from a freshly built
+`Options.commandCatalogue` through `Options.renderCommandContract`; it does not preserve a second ambient count.
+The current candidate reports 20 always-writing, 6 conditionally-writing, and 28 never-remotely-writing roots.
+It additionally inventories exact tracked source identities across Coord, scripts, tools, workflows/local actions,
+release and build declarations, executable skill/build wrappers, tests, and registries. Direct routine-delivery
+REST `PUT` merge, repair/dispatch/registry automations, REST/GraphQL sinks, protected administration, package
+publication, and explicitly local-only telemetry are distinct dispositions. An unknown source, a changed identity,
+an unresolved dynamic sink, a missing command, or a changed write classification refuses the build.
+
+The cheap structural census runs for every change through `change-completeness`. Typed parity runs only after the
+candidate engine exists, and the release workflow repeats it before its first package/publish path. Verification
+never regenerates the checked census. Mutation fixtures prove omitted, new, misclassified, dynamic, malformed, and
+unwired variants red. This window changes no provider, live authority, package, fence, or receiver; GS2-08.4 owns
+the common epoch precondition, Coordination owns independent qualification, and native acceptance remains pending.
+
 ## Workspace, authority, and observation boundaries
 
-GS2-08.1 changes no generated workspace and enables no runtime behavior. The first possible new-workspace
+GS2-08.1–08.3 change no generated workspace and enable no runtime behavior. The first possible new-workspace
 effect is receiver adoption in GS2-08.8 after the GS2-08.7 producer publication; each family must pin the exact
 artifact and prove a clean creation obeys the same fence as an upgrade. Adoption remains explicit rather than a
 default flip. Existing workspaces require their separately owned upgrade path; publication does not rewrite them.
