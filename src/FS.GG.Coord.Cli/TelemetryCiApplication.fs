@@ -15,7 +15,7 @@ module TelemetryCiApplication =
     let canCreateAdmission (outcome: string) (codeDelivery: string) (observedHead: string option) (expectedHead: string) =
         outcome = "ready" && codeDelivery = "not-delivered" && observedHead = Some expectedHead
     let private option name args = args |> List.indexed |> List.tryPick (fun (index,value) -> if value = name then List.tryItem (index + 1) args else None)
-    let private root args = option "--store-root" args |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE") |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not))
+    let private legacyRoot args = option "--store-root" args |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE") |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not))
     let private fail reasons = reasons |> List.iter (fun reason -> Console.Error.WriteLine("fsgg-coord-engine: telemetry ci: " + reason)); 1
     let private addOptional (node: JsonObject) (name: string) (value: string option) = node[name] <- match value with Some text -> JsonValue.Create text | None -> null
     let private identity (prefix: string) (parts: string list) = prefix + CanonicalJson.sha256(Encoding.UTF8.GetBytes(String.concat "\u001f" parts)).Substring(0, 40)
@@ -180,16 +180,82 @@ module TelemetryCiApplication =
         let collection = CanonicalJson.sha256(Encoding.UTF8.GetBytes(candidate + "\u001foutcome"))
         collection,event
 
-    let private runUsing assess action args =
+    type private Target<'binding> =
+        | Legacy of root:string * assessment:TelemetryStore.DurabilityAssessment
+        | Workspace of binding:'binding * localRoot:string option
+
+    let private target
+        (assess:string -> TelemetryStore.DurabilityAssessment)
+        (resolve:string option -> string option -> Result<'binding,string list>)
+        (localStoreRoot:'binding -> Result<string option,string list>)
+        args =
+        let config, repository = option "--config" args, option "--repository" args
+        let selectedConfigExists = File.Exists(WorkspaceTelemetryApplication.configuredPath config)
+        match option "--store-root" args, config.IsSome || selectedConfigExists with
+        | Some root, _ -> Ok(Legacy(root, assess root))
+        | None, true ->
+            resolve config repository
+            |> Result.bind (fun binding -> localStoreRoot binding |> Result.map (fun root -> Workspace(binding, root)))
+        | None, false ->
+            match Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE") |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not) with
+            | Some root -> Ok(Legacy(root, assess root))
+            | None -> resolve config repository |> Result.bind (fun binding -> localStoreRoot binding |> Result.map (fun root -> Workspace(binding, root)))
+
+    let private publish
+        (publishWorkspace:'binding -> byte array -> Result<string,string list>)
+        target bytes =
+        match target with
+        | Legacy(root, assessment) -> TelemetryStoreApplication.publish root assessment bytes |> Result.map (fun _ -> "queued")
+        | Workspace(binding, _) ->
+            match publishWorkspace binding bytes with
+            | Ok status -> Ok status
+            | Error [ "unacknowledged-lossy" ] -> Ok "queued"
+            | Error errors -> Error errors
+
+    let private drain
+        (drainWorkspace:'binding -> Result<string,string list>)
+        target =
+        match target with
+        | Legacy(root, assessment) -> TelemetryStoreApplication.drain root assessment |> Result.map ignore
+        | Workspace(binding, _) -> drainWorkspace binding |> Result.map ignore
+
+    let private admission target (assignment:TelemetryCi.Assignment) (delivery:DeliveryBinding) =
+        match target with
+        | Legacy(root, assessment) -> TelemetryStoreApplication.ciPopulationAdmissionExists root assessment assignment.ItemId delivery.Repository delivery.PullRequest delivery.BaseRef delivery.BaseSha delivery.Head |> Result.map Some
+        | Workspace(_, Some root) ->
+            let assessment = TelemetryStoreApplication.assessProductionRoot root
+            TelemetryStoreApplication.ciPopulationAdmissionExists root assessment assignment.ItemId delivery.Repository delivery.PullRequest delivery.BaseRef delivery.BaseSha delivery.Head |> Result.map Some
+        | Workspace(_, None) -> Ok None
+
+    let private health target (assignment:TelemetryCi.Assignment) =
+        match target with
+        | Legacy(root, assessment) ->
+            TelemetryStoreApplication.budgetHealth root assessment assignment.ItemId
+            |> Result.bind (fun json ->
+                try use document = JsonDocument.Parse json in Ok(document.RootElement.GetProperty("status").GetString())
+                with _ -> Error [ "health-unavailable" ])
+        | Workspace(_, Some root) ->
+            TelemetryStoreApplication.budgetHealth root (TelemetryStoreApplication.assessProductionRoot root) assignment.ItemId
+            |> Result.bind (fun json ->
+                try use document = JsonDocument.Parse json in Ok(document.RootElement.GetProperty("status").GetString())
+                with _ -> Error [ "health-unavailable" ])
+        | Workspace(_, None) -> Ok "pending"
+
+    let private remainsQueued target drainResult =
+        match target with
+        | Workspace(_, None) -> true
+        | _ -> Result.isError drainResult
+
+    let private runUsing assess resolve publishWorkspace drainWorkspace localStoreRoot action args =
         match action with
         | "summary" ->
-            match root args, option "--item" args with
+            match legacyRoot args, option "--item" args with
             | Some path, Some item -> TelemetryStoreApplication.ciSummary path (assess path) item |> function Ok json -> Console.Out.Write json; 0 | Error errors -> fail errors
             | None, _ -> fail [ "store root is unconfigured" ]
             | _, None -> fail [ "--item is required" ]
         | "collect" ->
-            match option "--assignment" args, option "--repo" args, option "--pr" args, option "--head" args, option "--workflow" args, root args with
-            | Some assignmentPath, Some repository, Some prText, Some head, Some workflow, Some storeRoot ->
+            match option "--assignment" args, option "--repo" args, option "--pr" args, option "--head" args, option "--workflow" args, target assess resolve localStoreRoot args with
+            | Some assignmentPath, Some repository, Some prText, Some head, Some workflow, Ok destination ->
                 match repository.Split('/') with
                 | [| owner; repo |] when Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") && Regex.IsMatch(head, "^[0-9a-f]{40}$") ->
                     match Int32.TryParse prText, readAssignment assignmentPath, readRules (Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")) with
@@ -206,7 +272,7 @@ module TelemetryCiApplication =
                                 match boundedBatches assignment collection events with
                                 | Error errors -> fail errors
                                 | Ok batches ->
-                                    let results = batches |> List.map (TelemetryStoreApplication.publish storeRoot (assess storeRoot))
+                                    let results = batches |> List.map (publish publishWorkspace destination)
                                     match results |> List.tryPick (function Error errors -> Some errors | _ -> None) with
                                     | Some errors -> fail errors
                                     | None -> Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-collect/1"; status = "queued"; batches = results.Length; observations = events.Length; coverage = snapshot.InventoryCoverage |}); 0
@@ -214,27 +280,30 @@ module TelemetryCiApplication =
                     | _, Error errors, _ | _, _, Error errors -> fail errors
                     | _ -> fail [ "--pr must be a positive integer" ]
                 | _ -> fail [ "--repo must be owner/name and --head must be 40 lowercase hexadecimal characters" ]
-            | _ -> fail [ "collect requires --assignment, --repo, --pr, --head, --workflow, and a configured store root" ]
+            | _, _, _, _, _, Error errors -> fail errors
+            | _ -> fail [ "collect requires --assignment, --repo, --pr, --head, --workflow, and an explicitly selected telemetry destination" ]
         | "reconcile" ->
-            match option "--assignment" args, option "--delivery" args, root args with
-            | Some assignmentPath, Some deliveryPath, Some storeRoot ->
+            match option "--assignment" args, option "--delivery" args, target assess resolve localStoreRoot args with
+            | Some assignmentPath, Some deliveryPath, Ok destination ->
                 match readAssignment assignmentPath, readDelivery deliveryPath with
                 | Ok assignment, Ok delivery ->
                     let values = delivery.Repository.Split('/')
-                    let assessment = assess storeRoot
                     let outcomeCollection,outcomeEvent = projectOutcome assignment delivery
                     let outcomeResult =
                         boundedBatches assignment outcomeCollection [outcomeEvent]
                         |> Result.bind (fun batches ->
                             batches
-                            |> List.map (TelemetryStoreApplication.publish storeRoot assessment)
+                            |> List.map (publish publishWorkspace destination)
                             |> List.tryPick (function Error errors -> Some(Error errors) | _ -> None)
                             |> Option.defaultValue (Ok())
-                            |> Result.bind (fun () -> TelemetryStoreApplication.drain storeRoot assessment |> Result.map ignore))
-                    match outcomeResult |> Result.bind (fun () -> TelemetryStoreApplication.ciPopulationAdmissionExists storeRoot assessment assignment.ItemId delivery.Repository delivery.PullRequest delivery.BaseRef delivery.BaseSha delivery.Head) with
+                            |> Result.bind (fun () -> drain drainWorkspace destination))
+                    match outcomeResult |> Result.bind (fun () -> admission destination assignment delivery) with
                     | Error errors -> fail errors
-                    | Ok false when not (canCreateAdmission delivery.Outcome delivery.CodeDelivery delivery.ObservedHead delivery.Head) -> fail [ "first CI population admission requires ready, not-delivered, and an explicit matching observed head" ]
-                    | Ok admitted ->
+                    | Ok None when delivery.CodeDelivery = "delivered" ->
+                        Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = "pending"; driverHealth = "pending"; binding = "remote-admission-unavailable"; queued = true; population = "unknown"; pending = [| "remote-admission-query-unavailable" |]; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                    | Ok admittedOption when admittedOption = Some false || admittedOption = None ->
+                        let admitted = false
+                        if not (canCreateAdmission delivery.Outcome delivery.CodeDelivery delivery.ObservedHead delivery.Head) then fail [ "first CI population admission requires ready, not-delivered, and an explicit matching observed head" ] else
                         match readRules (Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")) with
                         | Error errors -> fail errors
                         | Ok rules ->
@@ -252,21 +321,48 @@ module TelemetryCiApplication =
                                     match boundedBatches assignment collection events with
                                     | Error errors -> fail errors
                                     | Ok batches ->
-                                        let results = batches |> List.map (TelemetryStoreApplication.publish storeRoot assessment)
+                                        let results = batches |> List.map (publish publishWorkspace destination)
                                         match results |> List.tryPick (function Error errors -> Some errors | _ -> None) with
                                         | Some errors -> fail errors
                                         | None ->
-                                            let drainResult = TelemetryStoreApplication.drain storeRoot assessment
-                                            let health =
-                                                match drainResult |> Result.bind (fun _ -> TelemetryStoreApplication.budgetHealth storeRoot assessment assignment.ItemId) with
-                                                | Ok json -> use document = JsonDocument.Parse json in document.RootElement.GetProperty("status").GetString()
-                                                | Error _ -> "pending"
+                                            let drainResult = drain drainWorkspace destination
+                                            let health = match drainResult |> Result.bind (fun () -> health destination assignment) with Ok value -> value | Error _ -> "pending"
                                             let status = if population.Pending.IsEmpty && population.Gaps.IsEmpty && population.Snapshot.InventoryCoverage = "complete" && population.CheckCoverage = "complete" then "complete" else "partial"
                                             let workflows = population.Snapshot.Runs |> List.map _.Workflow |> List.distinct |> List.sort |> List.toArray
-                                            Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = status; driverHealth = health; binding = population.Snapshot.Binding; queued = drainResult |> Result.isError; batches = batches.Length; observations = events.Length; workflows = workflows; attempts = population.Snapshot.Runs.Length; checks = population.Checks.Length; externalChecks = population.ExternalChecks; pending = population.Pending |> List.toArray; gaps = population.Gaps |> List.toArray; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                                            Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = status; driverHealth = health; binding = population.Snapshot.Binding; queued = remainsQueued destination drainResult; batches = batches.Length; observations = events.Length; workflows = workflows; attempts = population.Snapshot.Runs.Length; checks = population.Checks.Length; externalChecks = population.ExternalChecks; pending = population.Pending |> List.toArray; gaps = population.Gaps |> List.toArray; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                    | Ok(Some true) ->
+                        match readRules (Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")) with
+                        | Error errors -> fail errors
+                        | Ok rules ->
+                            let token = Environment.GetEnvironmentVariable("GITHUB_TOKEN") |> Option.ofObj |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("GH_TOKEN") |> Option.ofObj)
+                            match token with
+                            | None -> fail [ "GITHUB_TOKEN or GH_TOKEN is required" ]
+                            | Some token ->
+                                use transport = new Transport.HttpTransport(Transport.apiBaseFromEnv(), token)
+                                match CiReads.discoverPopulation (transport :> Transport.ISinglePageGitHubTransport) (Transport.apiBaseFromEnv()) values[0] values[1] delivery.PullRequest delivery.Head delivery.BaseRef delivery.BaseSha true with
+                                | Error error -> fail [ string error ]
+                                | Ok population ->
+                                    let collection, events = projectPopulation assignment rules population
+                                    match boundedBatches assignment collection events with
+                                    | Error errors -> fail errors
+                                    | Ok batches ->
+                                        let results = batches |> List.map (publish publishWorkspace destination)
+                                        match results |> List.tryPick (function Error errors -> Some errors | _ -> None) with
+                                        | Some errors -> fail errors
+                                        | None ->
+                                            let drainResult = drain drainWorkspace destination
+                                            let driverHealth = match drainResult |> Result.bind (fun () -> health destination assignment) with Ok value -> value | Error _ -> "pending"
+                                            let status = if population.Pending.IsEmpty && population.Gaps.IsEmpty && population.Snapshot.InventoryCoverage = "complete" && population.CheckCoverage = "complete" then "complete" else "partial"
+                                            Console.Out.WriteLine(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-reconciliation/1"; status = status; driverHealth = driverHealth; binding = population.Snapshot.Binding; queued = remainsQueued destination drainResult; batches = batches.Length; observations = events.Length; workflows = population.Snapshot.Runs |> List.map _.Workflow |> List.distinct |> List.sort |> List.toArray; attempts = population.Snapshot.Runs.Length; checks = population.Checks.Length; externalChecks = population.ExternalChecks; pending = population.Pending |> List.toArray; gaps = population.Gaps |> List.toArray; unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |] |}); 0
+                    | Ok _ -> fail [ "CI population admission state is invalid" ]
                 | Error errors, _ | _, Error errors -> fail errors
-            | _ -> fail [ "reconcile requires --assignment, --delivery, and a configured store root" ]
+            | _, _, Error errors -> fail errors
+            | _ -> fail [ "reconcile requires --assignment, --delivery, and an explicitly selected telemetry destination" ]
         | _ -> fail [ "action must be collect, reconcile, or summary" ]
 
-    let runWithAssessment assessment action args = runUsing (fun _ -> assessment) action args
-    let run action args = runUsing TelemetryStoreApplication.assessProductionRoot action args
+    let runWithAssessment assessment action args =
+        runUsing (fun _ -> assessment) WorkspaceTelemetryApplication.resolveBinding WorkspaceTelemetryApplication.tryPublishBinding WorkspaceTelemetryApplication.tryDrainBinding WorkspaceTelemetryApplication.tryLocalStoreRootBound action args
+    let runWithWorkspaceForTesting resolve publish drain localStoreRoot action args =
+        runUsing TelemetryStoreApplication.assessProductionRoot resolve publish drain localStoreRoot action args
+    let run action args =
+        runUsing TelemetryStoreApplication.assessProductionRoot WorkspaceTelemetryApplication.resolveBinding WorkspaceTelemetryApplication.tryPublishBinding WorkspaceTelemetryApplication.tryDrainBinding WorkspaceTelemetryApplication.tryLocalStoreRootBound action args
