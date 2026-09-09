@@ -116,6 +116,14 @@ All current checkboxes being checked does not complete a feature that still has 
 or an unmet acceptance outcome. Observe native delivery before recording completion. A request to advance
 the whole programme can continue to the next feature; a request limited to one feature stops there.
 
+After every Unified Roadmap item reaches authoritative `Closed` or `Done`, update section 0, **Current progress
+report**, in the canonical Unified Roadmap. Include that projection in the same PR when the owning change is in
+`.github`. For a cross-repository merge, native acceptance or live operation, land the progress-only update as the
+immediate asynchronous follow-up after authoritative readback. It does not block the owning delivery, but do not
+select the next roadmap item until the closed item appears in the report. Record source delivery, native
+acceptance, installed operation and observed behavior separately. CI ticks, waiting and intermediate checkpoints
+do not require a roadmap edit.
+
 ## Observe without creating another delivery ceremony
 
 Telemetry is prospectively on by default for repository-owned dispatches. At driver entry, use the installed
