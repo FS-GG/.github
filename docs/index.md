@@ -38,6 +38,11 @@ The [Unity native shim and full Fable replacement-client design](2026-09-08-1448
 researches reusable engine integration, title admission, browser rendering and custom WASM control.
 Its seven-milestone roadmap separates a playable reference, external-title qualification and published Fable game adoption.
 
+Operators preparing the protected GitHub Substrate v2 ledger boundary should follow the timestamped
+[GS2-08.2 ledger-protection installation manual](2026-09-09-082700-gs2-08-2-ledger-protection-installation-manual.md).
+It fixes the two-App trust boundary, custody, rulesets, environment, initialization, monitoring, and acceptance
+procedure while preserving the separately authorized `ApplyAuthorized=false` safety boundary.
+
 The [4D grid tactics algorithm design and roadmap](2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md)
 proposes an original squad tactics foundation with four spatial coordinates, including movement, visibility,
 cover, combat, AI and readable slice views. Six milestones lead from exact grid queries to a validated playable encounter.
