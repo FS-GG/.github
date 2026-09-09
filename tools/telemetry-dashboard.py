@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import gzip
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -23,6 +25,7 @@ import urllib.request
 from typing import Any
 
 MAX_JSON = 1_048_576
+MAX_CANONICAL_SNAPSHOT = 4 * MAX_JSON
 MAX_API_JSON = 4 * 1_048_576
 HOST_SCHEMA = "fsgg.telemetry.dashboard-host/3"
 LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2"}
@@ -539,13 +542,16 @@ def enum(value: Any, values: set[str], name: str) -> str:
 def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None) -> dict[str, Any]:
     _, cfg = config(config_path); store, engine = cfg["storeRoot"], engine_path or cfg["engine"]
     envelope=engine_json(engine,["telemetry","item-detail","--format-version","2","--all","--store-root",store])
-    if not isinstance(envelope,dict) or set(envelope)!={"schema","observedAt","revision","canonicalSnapshot","snapshot","operational"} or envelope.get("schema")!="fsgg.telemetry.item-detail/2" or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
-    snapshot=envelope.get("snapshot")
-    if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
-    selected=bounded_base64(envelope["canonicalSnapshot"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
-    try: canonical_value=json.loads(selected)
+    if not isinstance(envelope,dict) or set(envelope)!={"schema","observedAt","revision","canonicalSnapshotGzip","operational"} or envelope.get("schema")!="fsgg.telemetry.item-detail/2" or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+    compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as stream: selected=stream.read(MAX_CANONICAL_SNAPSHOT+1)
+    except (OSError,EOFError) as error: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH") from error
+    if len(selected)>MAX_CANONICAL_SNAPSHOT: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
+    try: snapshot=json.loads(selected)
     except (UnicodeDecodeError,json.JSONDecodeError) as error: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH") from error
-    if canonical_value!=snapshot or hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
+    if hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
+    if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
     store_projection=snapshot.get("store")
     if not isinstance(store_projection,dict) or store_projection.get("schemaVersion")!=8 or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     public={"schema":"fsgg.telemetry.public-export/1","items":snapshot.get("summaries")}

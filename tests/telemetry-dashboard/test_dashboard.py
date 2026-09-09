@@ -109,9 +109,11 @@ class DashboardTests(unittest.TestCase):
 
     def test_engine_canonical_bytes_bind_non_ascii_escaping_and_numeric_shape(self):
         relations=("populations","dirtyItems","outcomes","admissions","starts","terminals","expectedDispatches","lineage","times","usage","runtimeGaps","ciRuns","ciJobs","ciSteps","ciCoverage","ciPopulationCoverage","budgetAssessments","budgetMembership","budgetEpochs","budgetBreaches","budgetInterventions","activities","activityUsageAttributions","complications","reviews")
-        snapshot={name:[] for name in relations}; snapshot.update({"selection":{"mode":"all","complete":True},"store":{"schemaVersion":8,"journalMode":"wal"},"items":[],"summaries":[],"encodingEdge":'café <tag> "quoted"',"numericEdge":1.0})
+        snapshot={name:[] for name in relations}; snapshot.update({"selection":{"mode":"all","complete":True},"store":{"schemaVersion":8,"journalMode":"wal"},"items":[],"summaries":[],"encodingEdge":'café <tag> "quoted"',"numericEdge":1.0,"realSizePadding":"x"*600_000})
         canonical=json.dumps(snapshot,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
-        envelope={"schema":"fsgg.telemetry.item-detail/2","observedAt":"2026-09-09T08:00:00Z","revision":hashlib.sha256(canonical).hexdigest(),"canonicalSnapshot":D.base64.b64encode(canonical).decode(),"snapshot":snapshot,"operational":{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}}
+        envelope={"schema":"fsgg.telemetry.item-detail/2","observedAt":"2026-09-09T08:00:00Z","revision":hashlib.sha256(canonical).hexdigest(),"canonicalSnapshotGzip":D.base64.b64encode(D.gzip.compress(canonical)).decode(),"operational":{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}}
+        self.assertLess(len(json.dumps(envelope).encode()),D.MAX_JSON)
+        self.assertGreater(len(json.dumps({**envelope,"canonicalSnapshot":D.base64.b64encode(canonical).decode(),"snapshot":snapshot}).encode()),D.MAX_JSON)
         with mock.patch.object(D,"config",return_value=(pathlib.Path("/config"),{"storeRoot":"/store","engine":"engine"})),mock.patch.object(D,"engine_json",return_value=envelope):
             value=D.build_host()
         self.assertEqual(value["store"]["schemaVersion"],8); self.assertNotIn("encodingEdge",json.dumps(value))
