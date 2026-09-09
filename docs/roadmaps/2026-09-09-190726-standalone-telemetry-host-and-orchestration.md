@@ -7,7 +7,7 @@ description: "Proposed implementation stages, receipt semantics, deferred runner
 
 # Standalone telemetry, durable host and optional orchestration roadmap
 
-Authored: **2026-09-09 19:07:26 UTC**. Status: **proposed; implementation has not started under this roadmap**.
+Authored: **2026-09-09 19:07:26 UTC**. Status: **execution started; R0 decisions recorded, later acceptance remains pending**.
 
 Deliver durable telemetry for mount-free development and lightweight standalone workspace tooling over the same evidence contracts. Add durable board orchestration later as an independently selected capability. Keep human effort concentrated in initial configuration and consequential changes; retries, receipts, routine authorization checks and recovery belong in software.
 
@@ -116,7 +116,7 @@ Public export remains separately selected, allowlisted and label-approval-bound.
 
 ## 4. Delivery roadmap and dependencies
 
-All stages below are **planned**, not accepted work. Stage IDs are navigation labels rather than a new coordination protocol. Each exit produces reviewable code and evidence through the existing route; routine stages do not gain additional sign-offs merely because this table exists.
+The checklist below is the execution ledger; unchecked stages are not accepted work. Stage IDs are navigation labels rather than a new coordination protocol. Each exit produces reviewable code and evidence through the existing route; routine stages do not gain additional sign-offs merely because this table exists.
 
 ```mermaid
 flowchart TD
@@ -135,6 +135,23 @@ flowchart TD
 ```
 
 For this environment, H3 establishes the independently managed Main deployment pattern used by O2; orchestration still has its own store and readiness and does not depend on telemetry availability. Standalone delivery and the receiver can progress independently after R1. Do not delay the container's durability repair until every standalone UI feature ships. Do not describe the overall standalone product experience as delivered until L2 passes.
+
+### Execution ledger
+
+- [x] R0 — Ownership and implementation inputs: [decision record](../coordination/standalone-telemetry-r0-decisions.md). Documentation-only delivery; no package or host activation claimed.
+- [ ] R1 — Shared receipt, identity and storage correctness.
+- [ ] L1 — Standalone activation and workflow integration.
+- [ ] L2 — Packaged dashboard and standalone release proof.
+- [ ] H1 — Remote adapter and minimal receiver.
+- [ ] H2 — Immutable host packaging and deployment rehearsal.
+- [ ] H3 — Main activation and container durability proof.
+- [ ] P1 — Optional publication migration (not selected; retain incumbent publisher).
+- [ ] O0 — Orchestration state and runner contract.
+- [ ] O1 — Observer and shadow evaluation.
+- [ ] O2 — Trusted bounded Main pilot.
+- [ ] O3 — Controlled adoption.
+
+Execution uses the routine route under the user's September 9 instruction to complete this roadmap and make necessary decisions. The proposal's earlier document-only authorization records its original scope; it does not undo that later execution instruction. Stronger runner credential isolation remains deferred. Existing upstream gates and independently checked operation boundaries remain in force.
 
 ### R0 — Establish ownership and implementation inputs
 
