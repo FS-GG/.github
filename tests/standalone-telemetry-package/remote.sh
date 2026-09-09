@@ -180,6 +180,7 @@ PY
   fi
   REMOTE_OBLIGATIONS="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$state")"
   REMOTE_PROFILE="synthetic-tls-qualified"
+  export REMOTE_OBLIGATIONS REMOTE_PROFILE
   stop_receiver
   trap 'rm -rf "$WORK"' EXIT
 }

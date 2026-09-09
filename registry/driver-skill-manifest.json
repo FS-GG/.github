@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "4ec457c4ad2c5b1c8c8a2b530700fc06edbb4c188cae55f9ae57f86245e03e4f",
-      "tree-sha256": "ebfa795260650d3b6b37cb7ffeac6f2beb11116c80147b5a952814e8ebb1de95",
+      "tree-sha256": "bd612b701c0e7fe0e4224fc779f31c690dcb0acb29a86f9db88f6584afa785a3",
       "files": [
         {
           "path": "SKILL.md",
@@ -49,12 +49,12 @@
         },
         {
           "path": "scripts/fsgg_telemetry_defaults.py",
-          "sha256": "0ccdf7da7f1f58b5dc40677908ca3479a47f0b66e541265611f4e93b585cb5f4",
+          "sha256": "15828fd867cf35a69a9e41369a15489927c2d25ae6bb1ceda5d7a007c1a2884d",
           "executable": false
         },
         {
           "path": "scripts/roadmap-telemetry.py",
-          "sha256": "1e80615b2111589b9eaca84b60714b2049288e1dd8960007cf8ebbbe693b514e",
+          "sha256": "87cbc21fccc1db0ee1d0cd08b22b7d78bc5b23743f4495cbbaef429cf30e40bd",
           "executable": false
         }
       ],

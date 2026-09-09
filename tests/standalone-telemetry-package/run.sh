@@ -56,14 +56,14 @@ PACKAGE_LIST="$(printf '%s\n' "${META[@]:2}")"
 [ "$PACKAGE_ID" = "FS.GG.Coord.Cli" ] && ok "candidate identity is FS.GG.Coord.Cli $PACKAGE_VERSION" || bad "candidate package identity is exact" "$PACKAGE_ID"
 
 for required in FS.GG.Telemetry.Contracts.dll FS.GG.Telemetry.Client.dll FS.GG.Telemetry.Store.dll; do
-  printf '%s\n' "$PACKAGE_LIST" | grep -q "/$required$" && ok "package carries $required" || bad "package carries $required"
+  grep -q "/$required$" <<<"$PACKAGE_LIST" && ok "package carries $required" || bad "package carries $required"
 done
-if printf '%s\n' "$PACKAGE_LIST" | grep -Eq '/FS\.GG\.Telemetry\.Host\.dll$|/Akka(\.FSharp)?\.dll$'; then
+if grep -Eq '/FS\.GG\.Telemetry\.Host\.dll$|/Akka(\.FSharp)?\.dll$' <<<"$PACKAGE_LIST"; then
   bad "package excludes Host and Akka runtime"
 else
   ok "package excludes Host and Akka runtime"
 fi
-if printf '%s\n' "$PACKAGE_LIST" | grep -Eqi '\.(py|pyc|node)$|(^|/)python([^/]*)(/|$)|(^|/)node_modules/|(^|/)node([^/]*)/bin/'; then
+if grep -Eqi '\.(py|pyc|node)$|(^|/)python([^/]*)(/|$)|(^|/)node_modules/|(^|/)node([^/]*)/bin/' <<<"$PACKAGE_LIST"; then
   bad "package adds no Python or Node runtime payload"
 else
   ok "package adds no Python or Node runtime payload"
@@ -102,7 +102,7 @@ git -C "$WORKSPACE" init -q
 BEFORE="$(find "$WORKSPACE" "$PRIVATE" -mindepth 1 -printf '%P\t%y\n' | sort)"
 STATUS_OUT="$(cd "$WORKSPACE" && "$ENGINE" telemetry workspace status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/status.err")"; STATUS_RC=$?
 AFTER="$(find "$WORKSPACE" "$PRIVATE" -mindepth 1 -printf '%P\t%y\n' | sort)"
-if [ "$STATUS_RC" -eq 0 ] && printf '%s' "$STATUS_OUT" | grep -q '"status":"unconfigured"' && [ "$BEFORE" = "$AFTER" ]; then
+if [ "$STATUS_RC" -eq 0 ] && grep -q '"status":"unconfigured"' <<<"$STATUS_OUT" && [ "$BEFORE" = "$AFTER" ]; then
   ok "unconfigured status is read-only in a source-free workspace"
 else
   bad "unconfigured status is read-only in a source-free workspace" "rc=$STATUS_RC out=$STATUS_OUT"
@@ -159,12 +159,12 @@ if (cd "$WORKSPACE" && "$ENGINE" telemetry workspace activate-local --config "$C
 
   (cd "$WORKSPACE" && PATH="$FAKEBIN:$PATH" "$ENGINE" telemetry runtime codex-exec --assignment "$ASSIGNMENT" --config "$CONFIG" --repository FS-GG/package-fixture -- --json --ephemeral synthetic >"$WORK/native-local.out" 2>"$WORK/native-local.err"); NATIVE_LOCAL_RC=$?
   [ "$NATIVE_LOCAL_RC" -eq 37 ] && ok "accepted telemetry path leaves native work exit 37 unchanged" || bad "accepted telemetry path changed native work exit" "rc=$NATIVE_LOCAL_RC"
-  DRAIN_OUT="$(cd "$WORKSPACE" && "$ENGINE" telemetry workspace drain --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/drain.err")"; DRAIN_RC=$?
+  (cd "$WORKSPACE" && "$ENGINE" telemetry workspace drain --config "$CONFIG" --repository FS-GG/package-fixture >"$WORK/drain.out" 2>"$WORK/drain.err"); DRAIN_RC=$?
   [ "$DRAIN_RC" -eq 0 ] && ok "packaged workspace drain succeeds" || bad "packaged workspace drain succeeds" "rc=$DRAIN_RC"
   LOCAL_STATUS="$(cd "$WORKSPACE" && "$ENGINE" telemetry workspace status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/local-status.err")"
-  printf '%s' "$LOCAL_STATUS" | grep -q '"pending":0' && ok "observed synthetic command drains with no pending batch" || bad "observed synthetic command drains with no pending batch" "$LOCAL_STATUS"
+  grep -q '"pending":0' <<<"$LOCAL_STATUS" && ok "observed synthetic command drains with no pending batch" || bad "observed synthetic command drains with no pending batch" "$LOCAL_STATUS"
   RECONCILE="$(cd "$WORKSPACE" && "$ENGINE" telemetry store reconcile --store-root "$STORE" --item L1-PACKAGE 2>"$WORK/reconcile.err")"; RECONCILE_RC=$?
-  [ "$RECONCILE_RC" -eq 0 ] && printf '%s' "$RECONCILE" | grep -q '"matched":1' && ok "native expected and terminal facts reconcile" || bad "native expected and terminal facts reconcile" "rc=$RECONCILE_RC out=$RECONCILE"
+  [ "$RECONCILE_RC" -eq 0 ] && grep -q '"matched":1' <<<"$RECONCILE" && ok "native expected and terminal facts reconcile" || bad "native expected and terminal facts reconcile" "rc=$RECONCILE_RC out=$RECONCILE"
   RECEIPT_COUNTS="$(python3 - "$STORE/telemetry.sqlite3" <<'PY'
 import sqlite3, sys
 with sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True) as db:
@@ -184,9 +184,12 @@ fi
 REMOTE_PROFILE="not-run"
 REMOTE_OBLIGATIONS=0
 REMOTE_RECEIVER="$(cd "$(dirname "$0")" && pwd)/receiver.py"
+export REMOTE_PROFILE REMOTE_OBLIGATIONS REMOTE_RECEIVER
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=remote.sh
 . "$(cd "$(dirname "$0")" && pwd)/remote.sh"
 qualify_remote
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=crash.sh
 . "$(cd "$(dirname "$0")" && pwd)/crash.sh"
 qualify_remote_crash
