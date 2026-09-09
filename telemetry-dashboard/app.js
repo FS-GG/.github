@@ -255,11 +255,46 @@
     rows.forEach((values) => { const row=document.createElement("tr"); values.forEach((value) => { const td=document.createElement("td"); td.textContent=value; row.append(td); }); body.append(row); });
     table.append(thead,body); wrap.append(table); return wrap;
   }
+  function recordCards(rows, labelText) {
+    const root=document.createElement("div"); root.className="record-cards"; root.setAttribute("aria-label",labelText);
+    rows.forEach((fields)=>{const article=document.createElement("article");fields.forEach(([name,value])=>{const p=document.createElement("p"),label=document.createElement("span"),content=document.createElement("strong");label.textContent=name;content.textContent=value;p.append(label,content);article.append(p);});root.append(article);});
+    return root;
+  }
   function tokenBreakdown(rows) {
     const root=document.createElement("div"); root.className="token-rows"; root.setAttribute("aria-label","Token usage by approved requested and observed category and scope");
     rows.forEach((row)=>{const article=document.createElement("article"),h=document.createElement("h5"),scope=document.createElement("small"),metrics=document.createElement("p");h.textContent=`${row.role} · ${row.requestedModel} (${row.requestedEffort}) → ${row.observedModel} (${row.observedEffort})`;scope.textContent=row.scope;metrics.textContent=`Input ${fmt.format(row.input)} · cached ${fmt.format(row.cachedInput)} · output ${fmt.format(row.output)} · reasoning ${row.reasoning==null?"unknown":fmt.format(row.reasoning)} · total ${fmt.format(row.total)}`;article.append(h,scope,metrics);root.append(article);});
     if (!rows.length) { const p=document.createElement("p"); p.textContent="No completed-turn token observation is available."; root.append(p); }
     return root;
+  }
+  const friendly = (value) => String(value).replaceAll("-", " ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
+  function processDetail(process, usageCoverage) {
+    const root=document.createElement("div"); root.className="process-detail";
+    if (!process || process.availability!=="available") {
+      const p=document.createElement("p"); p.className="gap-note"; p.textContent="Activity, typed complication, and process-review telemetry is unavailable in this host snapshot."; root.append(p); return root;
+    }
+    const coverage=document.createElement("p"); coverage.className="item-method";
+    const truncated=Object.entries(process.truncated).filter(([,flag])=>flag).map(([name])=>name);
+    coverage.textContent=`Engine detail available for ${process.members.available} member item(s). These records and the completion projection were read independently, not as one atomic snapshot.${truncated.length?` Truncated: ${truncated.join(", ")}; shown detail is incomplete.`:""}`;
+    root.append(coverage);
+    const grid=document.createElement("div"); grid.className="process-grid";
+    const block=(heading,node)=>{const section=document.createElement("section"),h=document.createElement("h5");h.textContent=heading;section.append(h,node);grid.append(section);};
+    const activity=document.createElement("div"), peak=Math.max(1,...process.activities.summary.map((row)=>row.summedSeconds));
+    const bars=document.createElement("div"); bars.className="time-bars activity-bars";
+    process.activities.summary.forEach((entry)=>{const row=document.createElement("div"),name=document.createElement("span"),track=document.createElement("i"),fill=document.createElement("b");name.textContent=`${friendly(entry.category)} · ${entry.knownDuration?duration(entry.summedSeconds):"Unknown"}${entry.open?` · ${entry.open} open`:""}`;fill.style.width=`${entry.knownDuration?(entry.summedSeconds/peak)*100:0}%`;track.append(fill);row.append(name,track);bars.append(row);});
+    if (!process.activities.summary.length) { const p=document.createElement("p"); p.textContent="No activity span was returned."; activity.append(p); }
+    activity.append(bars,metricTable(["Category","Spans / open","Known summed time"],process.activities.summary.map((row)=>[friendly(row.category),`${row.spans} / ${row.open}`,row.knownDuration?(row.open?`${duration(row.summedSeconds)} known portion`:duration(row.summedSeconds)):"Unknown"]),"Activity span time by category; spans may overlap"));
+    if (process.activities.rows.length) activity.append(recordCards(process.activities.rows.map((row)=>[["Activity",friendly(row.category)],["Started",date(row.startedAt)],["Ended",row.endedAt?date(row.endedAt):"Open"],["Observed span",row.durationSeconds==null?"Unknown":duration(row.durationSeconds)]]),"Recorded activity spans in observed order"));
+    block("Activity time and spans",activity);
+    const attributed=process.attribution.rows.length?metricTable(["Class / activity","Records","Input / cached","Output / reasoning","Total"],process.attribution.rows.map((row)=>[`${friendly(row.classification)}${row.activityCategory?` · ${friendly(row.activityCategory)}`:""}`,String(row.records),`${fmt.format(row.input)} / ${fmt.format(row.cachedInput)}`,`${fmt.format(row.output)} / ${row.reasoning==null?"unknown":fmt.format(row.reasoning)}`,fmt.format(row.total)]),"Direct, mixed and unclassified activity token attribution"):document.createElement("p");
+    if (process.attribution.rows.length) attributed.classList.add("wide-table"); else attributed.textContent="No attributed native usage records were returned.";
+    const accounting=process.attribution.accounting, noNative=usageCoverage&&usageCoverage.invocationsWithUsage===0, accountNote=document.createElement("p"); accountNote.className="gap-note"; accountNote.textContent=`Diagnostic cross-scope accounting: native ${fmt.format(accounting.nativeTotal)} · direct ${fmt.format(accounting.direct)} · mixed ${fmt.format(accounting.mixed)} · unclassified ${fmt.format(accounting.unclassified)} · ${accounting.missingAttribution} native usage row(s) missing attribution. Native and attributed totals are related views, not additive.${noNative?" No native usage was observed; zero does not establish zero cost or complete capture.":""}${process.attribution.crossRead==="partial"?" Independent reads did not match; coverage is partial.":""}`;
+    const attributionBox=document.createElement("div"); attributionBox.append(accountNote,attributed); block("Activity-attributed tokens",attributionBox);
+    const complications=process.complications.rows.length?recordCards(process.complications.rows.map((row)=>[["Trigger",friendly(row.trigger)],["Recorded cause",friendly(row.cause)],["Activity",row.activityCategory?friendly(row.activityCategory):"Unlinked"],["Observed",date(row.occurredAt)]]),"Typed recorded complications; private synopsis omitted"):document.createElement("p");
+    if (!process.complications.rows.length) complications.textContent="No typed complication event was returned."; block("Recorded complications",complications);
+    const countText=(counts)=>`well ${counts.wentWell} · problems ${counts.problems} · delay/rework ${counts.avoidableDelayOrRework} · observations ${counts.processObservations} · risks ${counts.remainingRisks} · improvements ${counts.concreteImprovements}`;
+    const reviews=process.reviews.rows.length?recordCards(process.reviews.rows.map((row)=>[["Scope / revision",`${friendly(row.scope)} · r${row.revision}`],["Confidence",row.confidence],["Declared coverage",`evidence ${row.evidenceCoverage} · population ${row.populationCoverage}`],["Reviewer",`${row.reviewerModel} · ${row.reviewerEffort}`],["Reviewed / duration",`${date(row.reviewedAt)} · ${duration(row.durationSeconds)}`],["Private-list counts",countText(row.counts)]]),"Process review metadata; private findings omitted"):document.createElement("p");
+    if (!process.reviews.rows.length) reviews.textContent="No process review was returned. An attempt review is distinct from an item review."; const reviewBox=document.createElement("div"),reviewNote=document.createElement("p");reviewNote.className="gap-note";reviewNote.textContent="Review prose stays private. High confidence does not prove item completeness or token coverage; review duration is not added to activity or runtime time.";reviewBox.append(reviewNote,reviews);block("Process reviews",reviewBox);
+    root.append(grid); return root;
   }
   function renderItems() {
     const query=$("item-search").value.trim().toLowerCase(), order=$("item-sort").value;
@@ -292,7 +327,10 @@
       const ciLabels={runnerSeconds:"Runner time",wallSeconds:"Union wall time",queueSeconds:"Queue time",usefulValidationSeconds:"Useful validation",administrativeSeconds:"Administration",necessarySetupSeconds:"Necessary setup",mixedSeconds:"Mixed classification",unclassifiedSeconds:"Unclassified"};
       section("CI time",metricTable(["Metric","Known / unknown","Item-seconds"],Object.entries(item.ci.seconds).map(([key,value])=>[ciLabels[key]||key,`${value.knownItems} / ${value.unknownItems}`,value.knownItems?(value.unknownItems?`${duration(value.totalItemSeconds)} known portion`:duration(value.totalItemSeconds)):"Unknown"]),"CI measurements; categories may overlap"));
       section("Canonical budgets",metricTable(["Dimension","Verdict","Numerator / denominator"],item.budget.assessments.map((a)=>[`${a.dimension} · ${a.epoch}`,`${a.verdict}${a.severe?" · severe":""}`,`${a.numerator??"unknown"} / ${a.denominator??"unknown"}`]),"Reducer-owned budget assessments"));
-      const complication=document.createElement("div"), gap=document.createElement("p"); gap.className="gap-note"; gap.textContent="Cause, repair time, repair tokens, and planning / implementation / repair phase allocation are not recorded. Failed invocation tokens are not repair tokens."; complication.append(gap);
+      section("Activity, attribution & reviews",processDetail(item.process,usageCoverage)); grid.lastElementChild.classList.add("process-span");
+      const complication=document.createElement("div"), gap=document.createElement("p"); gap.className="gap-note";
+      const process=item.process, repair=process?.availability==="available"?process.activities.summary.find((row)=>row.category==="repair"):null, repairTokens=process?.availability==="available"?process.attribution.rows.filter((row)=>row.classification==="direct"&&row.activityCategory==="repair").reduce((sum,row)=>sum+row.total,0):null;
+      gap.textContent=repair?`Recorded repair activity: ${repair.knownDuration?duration(repair.summedSeconds):"duration unknown"}${repair.open?" (open span)":""}; ${usageCoverage.invocationsWithUsage?`${fmt.format(repairTokens)} directly attributed tokens`:`repair tokens unknown because no native usage was observed`}. Activity category is separate from bureaucracy, and complication counts do not allocate all attempt cost to repair.`:"Repair time and repair tokens remain unknown without a recorded repair activity and direct attribution. Failed invocation tokens are not repair tokens."; complication.append(gap);
       const eventLabels={runtimeNonSuccess:"Non-success runtime terminals",failedOrCancelledCiRuns:"Failed / cancelled CI runs",repeatedCiRuns:"Repeated CI attempts",followUpInvocations:"Runtime follow-up invocations"};
       complication.append(metricTable(["Observed evidence","Count"],Object.entries(item.complications.observed).map(([key,value])=>[eventLabels[key]||key,String(value)]),"Observed complication signals"));
       item.complications.notes.forEach((note)=>{const p=document.createElement("p"),a=document.createElement("a");p.className="approved-note";p.append(`${note.kind}: ${note.text} `);a.href=note.evidenceUrl;a.target="_blank";a.rel="noopener";a.textContent="evidence ↗";p.append(a);complication.append(p);}); section("Complications and repairs",complication);
@@ -309,7 +347,7 @@
   }
 
   function renderLocal(host) {
-    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2"].includes(host.schema)) {
+    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(host.schema)) {
       text(
         "local-state",
         host.status === "unconfigured"
@@ -517,8 +555,9 @@
         throw new Error(`Data request failed (${response.status}).`);
       const data = validate(await response.json());
       state.runs = data.actions.runs;
-      state.items = data.host.schema === "fsgg.telemetry.dashboard-host/2" ? data.host.completedItems.items : [];
-      state.itemStatus = data.host.schema === "fsgg.telemetry.dashboard-host/2" ? (data.host.completedItems.coverage.incompatible ? "Some completed-item details were rejected as incompatible" : data.host.completedItems.coverage.unmapped ? "Completed items await approved public labels" : data.host.completedItems.coverage.dirty ? "Item completion is pending canonical reduction" : "No completed item is present in the observed host snapshot") : data.host.schema === "fsgg.telemetry.dashboard-host/1" ? "This older host snapshot has aggregate telemetry only" : "Item details await a configured host";
+      const itemCapable=["fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(data.host.schema);
+      state.items = itemCapable ? data.host.completedItems.items : [];
+      state.itemStatus = itemCapable ? (data.host.completedItems.coverage.incompatible ? "Some completed-item details were rejected as incompatible" : data.host.completedItems.coverage.unmapped ? "Completed items await approved public labels" : data.host.completedItems.coverage.dirty ? "Item completion is pending canonical reduction" : "No completed item is present in the observed host snapshot") : data.host.schema === "fsgg.telemetry.dashboard-host/1" ? "This older host snapshot has aggregate telemetry only" : "Item details await a configured host";
       renderItems();
       renderDeliveries(data.deliveries);
       const itemCoverage = data.host.completedItems?.coverage;

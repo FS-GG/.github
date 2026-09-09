@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("telemetry_dashboard", ROOT / "tools/telemetry-dashboard.py")
@@ -99,6 +100,12 @@ class DashboardTests(unittest.TestCase):
         with mock.patch.object(D,"github",return_value=([raw],{})):
             value=D.collect_deliveries("FS-GG/.github","token",100)
         self.assertIsNone(value["deliveries"][0]["elapsedSeconds"]); D.validate_deliveries(value)
+
+    def test_engine_detail_failure_and_oversized_output_use_fixed_diagnostics(self):
+        with mock.patch.object(D.subprocess,"run",return_value=SimpleNamespace(returncode=1,stdout="private",stderr="private")):
+            with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_PROJECTION_FAILED"): D.engine_json("engine",["telemetry","item-detail"])
+        with mock.patch.object(D.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout="x"*(D.MAX_JSON+1),stderr="")):
+            with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_OUTPUT_TOO_LARGE"): D.engine_json("engine",["telemetry","item-detail"])
 
 
 if __name__ == "__main__": unittest.main()
