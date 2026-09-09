@@ -17,7 +17,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 7
+    let private currentSchemaVersion = 8
 
     module private Native =
         [<Literal>]
@@ -117,6 +117,19 @@ CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,
 PRAGMA user_version=7;
 """
     let private migration7Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration7Sql)
+    let private migration8Sql = """
+CREATE TABLE process_reviews(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('attempt','item')), attempt_id TEXT, outcome_synopsis TEXT NOT NULL, went_well TEXT NOT NULL, problems TEXT NOT NULL, avoidable_delay_rework TEXT NOT NULL, process_observations TEXT NOT NULL, remaining_risks TEXT NOT NULL, concrete_improvements TEXT NOT NULL, evidence TEXT NOT NULL, evidence_coverage TEXT NOT NULL CHECK(evidence_coverage IN ('complete','partial','unknown')), population_coverage TEXT NOT NULL CHECK(population_coverage IN ('complete','partial','unknown')), confidence TEXT NOT NULL CHECK(confidence IN ('low','medium','high')), reviewer_model TEXT NOT NULL, reviewer_effort TEXT NOT NULL, reviewed_at TEXT NOT NULL, duration_seconds INTEGER NOT NULL CHECK(duration_seconds BETWEEN 0 AND 86400), fact_revision INTEGER NOT NULL CHECK(fact_revision > 0), CHECK((scope='attempt' AND attempt_id IS NOT NULL) OR (scope='item' AND attempt_id IS NULL))) STRICT;
+CREATE UNIQUE INDEX process_review_attempt_subject ON process_reviews(item_id,attempt_id) WHERE scope='attempt';
+CREATE UNIQUE INDEX process_review_item_subject ON process_reviews(item_id) WHERE scope='item';
+CREATE TABLE activity_spans(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, activity_id TEXT NOT NULL, invocation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, category TEXT NOT NULL CHECK(category IN ('planning','implementation','review','validation','delivery','repair','operations','other','unclassified')), started_at TEXT NOT NULL, ended_at TEXT, clock_provenance TEXT NOT NULL, evidence TEXT NOT NULL, summary TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,activity_id)) STRICT;
+CREATE INDEX activity_spans_item_attempt ON activity_spans(item_id,attempt_id);
+CREATE TABLE activity_usage_attributions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, usage_identity TEXT NOT NULL UNIQUE, activity_id TEXT, classification TEXT NOT NULL CHECK(classification IN ('direct','mixed','unclassified')), input_count INTEGER NOT NULL CHECK(input_count >= 0), cached_input INTEGER NOT NULL CHECK(cached_input >= 0), output_count INTEGER NOT NULL CHECK(output_count >= 0), reasoning INTEGER, total INTEGER NOT NULL CHECK(total >= 0), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), CHECK((classification='direct' AND activity_id IS NOT NULL) OR (classification IN ('mixed','unclassified') AND activity_id IS NULL))) STRICT;
+CREATE INDEX activity_usage_item ON activity_usage_attributions(item_id);
+CREATE TABLE complication_events(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, attempt_id TEXT, activity_id TEXT, trigger TEXT NOT NULL, cause TEXT NOT NULL, occurred_at TEXT NOT NULL, synopsis TEXT NOT NULL, evidence TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX complication_events_item ON complication_events(item_id,occurred_at);
+PRAGMA user_version=8;
+"""
+    let private migration8Digest = CanonicalJson.sha256(Encoding.UTF8.GetBytes migration8Sql)
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
         command.CommandText <- sql
@@ -340,7 +353,21 @@ PRAGMA user_version=7;
                                                             execute connection "COMMIT;"
                                                         with error -> rollback connection; raise error
                                                     if scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;" <> migration7Digest then Error [ "migration checksum mismatch" ]
-                                                    else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                                    else
+                                                        let afterV7 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                                                        if afterV7 = 7 then
+                                                            beginImmediate connection
+                                                            try
+                                                                execute connection migration8Sql
+                                                                use migration = connection.CreateCommand()
+                                                                migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(8,$digest,$utc);"
+                                                                parameter migration "$digest" migration8Digest
+                                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                migration.ExecuteNonQuery() |> ignore
+                                                                execute connection "COMMIT;"
+                                                            with error -> rollback connection; raise error
+                                                        if scalarText connection "SELECT digest FROM schema_migrations WHERE version=8;" <> migration8Digest then Error [ "migration checksum mismatch" ]
+                                                        else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -365,6 +392,7 @@ PRAGMA user_version=7;
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;" <> migration5Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;" <> migration6Digest then Error [ "migration checksum mismatch" ]
                     elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;" <> migration7Digest then Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=8;" <> migration8Digest then Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
                         let pending = if Directory.Exists inbox then Directory.EnumerateFiles(inbox, "*.ready", SearchOption.AllDirectories) |> Seq.truncate 129 |> Seq.length else 0
@@ -372,13 +400,18 @@ PRAGMA user_version=7;
                 with error -> Error [ error.Message ]
 
     let private deleteTyped (connection: SqliteConnection) identity =
-        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "native_item_outcomes"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times" ] do
+        for table in [ "items"; "features"; "attempts"; "parent_child"; "pr_heads"; "usage_observations"; "delivery_observations"; "evidence_observations"; "coverage_observations"; "health_diagnostics"; "runtime_admissions"; "runtime_starts"; "runtime_turn_usage"; "runtime_terminals"; "runtime_gaps"; "ci_bindings"; "ci_pages"; "ci_runs"; "ci_jobs"; "ci_steps"; "ci_coverage"; "ci_population_coverage"; "ci_check_runs"; "ci_population_admissions"; "native_item_outcomes"; "budget_population_facts"; "budget_attribution_facts"; "budget_interval_facts"; "budget_intervention_facts"; "budget_shared_cost_refs"; "operational_activations"; "expected_dispatches"; "invocation_lineage"; "operational_event_times"; "process_reviews"; "activity_spans"; "activity_usage_attributions"; "complication_events" ] do
             use command = connection.CreateCommand()
             command.CommandText <- $"DELETE FROM %s{table} WHERE identity=$identity;"
             parameter command "$identity" identity
             command.ExecuteNonQuery() |> ignore
     let private insertTyped (connection: SqliteConnection) (fact: TelemetryStore.Fact) =
         let optional value = value |> Option.map box |> Option.defaultValue DBNull.Value
+        let scalarCount sql values =
+            use command = connection.CreateCommand()
+            command.CommandText <- sql
+            values |> List.iter (fun (name, value) -> parameter command name value)
+            Convert.ToInt64(command.ExecuteScalar())
         let run sql (values: (string * obj) list) =
             use command = connection.CreateCommand()
             command.CommandText <- sql
@@ -434,13 +467,62 @@ PRAGMA user_version=7;
             run "INSERT INTO invocation_lineage VALUES($identity,$item,$dispatch,$invocation,$relation,$parent,$root,$runtime,$revision);" [ "$dispatch",box dispatch; "$invocation",box invocation; "$relation",box relation; "$parent",optional parent; "$root",box root; "$runtime",box runtime; "$revision",box fact.Revision ]
         | TelemetryStore.EventTime(invocation,event,occurred,occurredClock,observed,observedClock) ->
             run "INSERT INTO operational_event_times VALUES($identity,$item,$invocation,$event,$occurred,$occurredClock,$observed,$observedClock,$revision);" [ "$invocation",box invocation; "$event",box event; "$occurred",optional occurred; "$occurredClock",optional occurredClock; "$observed",optional observed; "$observedClock",optional observedClock; "$revision",box fact.Revision ]
+        | TelemetryStore.ProcessReview review ->
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "process-review requires itemId")
+            match review.Scope, review.AttemptId with
+            | "attempt", Some attempt ->
+                let admitted = scalarCount "SELECT count(*) FROM runtime_admissions WHERE item_id=$item AND attempt_id=$attempt;" [ "$item",box item; "$attempt",box attempt ]
+                let settled = scalarCount "SELECT count(*) FROM runtime_admissions a WHERE a.item_id=$item AND a.attempt_id=$attempt AND EXISTS(SELECT 1 FROM runtime_terminals t WHERE t.item_id=a.item_id AND t.invocation_id=a.invocation_id);" [ "$item",box item; "$attempt",box attempt ]
+                if admitted = 0L || admitted <> settled then invalidOp "attempt process review requires a fully terminal admitted attempt"
+            | "item", None ->
+                let expected = scalarCount "SELECT count(*) FROM expected_dispatches WHERE item_id=$item;" [ "$item",box item ]
+                let settled = scalarCount "SELECT count(*) FROM expected_dispatches d WHERE d.item_id=$item AND (SELECT count(*) FROM invocation_lineage l WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id)=1 AND EXISTS(SELECT 1 FROM invocation_lineage l JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id);" [ "$item",box item ]
+                if expected = 0L || expected <> settled then invalidOp "item process review requires the complete expected population to be terminal"
+            | _ -> invalidOp "process-review scope is inconsistent"
+            run "INSERT INTO process_reviews VALUES($identity,$item,$scope,$attempt,$synopsis,$well,$problems,$delay,$observations,$risks,$improvements,$evidence,$evidenceCoverage,$populationCoverage,$confidence,$model,$effort,$reviewed,$duration,$revision);"
+                [ "$scope",box review.Scope; "$attempt",optional review.AttemptId; "$synopsis",box review.OutcomeSynopsis; "$well",box review.WentWell; "$problems",box review.Problems; "$delay",box review.AvoidableDelayOrRework; "$observations",box review.ProcessObservations; "$risks",box review.RemainingRisks; "$improvements",box review.ConcreteImprovements; "$evidence",box review.Evidence; "$evidenceCoverage",box review.EvidenceCoverage; "$populationCoverage",box review.PopulationCoverage; "$confidence",box review.Confidence; "$model",box review.ReviewerModel; "$effort",box review.ReviewerEffort; "$reviewed",box review.ReviewedAt; "$duration",box review.DurationSeconds; "$revision",box fact.Revision ]
+        | TelemetryStore.ActivitySpan activity ->
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "activity-span requires itemId")
+            let bound = scalarCount "SELECT count(*) FROM runtime_admissions WHERE item_id=$item AND invocation_id=$invocation AND attempt_id=$attempt;" [ "$item",box item; "$invocation",box activity.InvocationId; "$attempt",box activity.AttemptId ]
+            if bound <> 1L then invalidOp "activity span requires one matching admitted invocation and attempt"
+            run "INSERT INTO activity_spans VALUES($identity,$item,$activity,$invocation,$attempt,$category,$started,$ended,$clock,$evidence,$summary,$revision);"
+                [ "$activity",box activity.ActivityId; "$invocation",box activity.InvocationId; "$attempt",box activity.AttemptId; "$category",box activity.Category; "$started",box activity.StartedAt; "$ended",optional activity.EndedAt; "$clock",box activity.ClockProvenance; "$evidence",box activity.Evidence; "$summary",optional activity.Summary; "$revision",box fact.Revision ]
+        | TelemetryStore.ActivityUsageAttribution attribution ->
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "activity-usage-attribution requires itemId")
+            use usage = connection.CreateCommand()
+            usage.CommandText <- "SELECT input_count,cached_input,output_count,reasoning,total,invocation_id FROM runtime_turn_usage WHERE identity=$usage AND item_id=$item;"
+            parameter usage "$usage" attribution.UsageIdentity; parameter usage "$item" item
+            use reader = usage.ExecuteReader()
+            if not (reader.Read()) then invalidOp "activity usage attribution requires matching native usage"
+            let nativeReasoning = if reader.IsDBNull 3 then None else Some(reader.GetInt64 3)
+            let invocation = reader.GetString 5
+            if reader.GetInt64 0 <> attribution.Input || reader.GetInt64 1 <> attribution.CachedInput || reader.GetInt64 2 <> attribution.Output || nativeReasoning <> attribution.Reasoning || reader.GetInt64 4 <> attribution.Total then invalidOp "activity usage attribution counters must exactly match native usage"
+            reader.Close()
+            match attribution.Classification, attribution.ActivityId with
+            | "direct", Some activity ->
+                if scalarCount "SELECT count(*) FROM activity_spans WHERE item_id=$item AND activity_id=$activity AND invocation_id=$invocation;" [ "$item",box item; "$activity",box activity; "$invocation",box invocation ] <> 1L then invalidOp "direct usage attribution requires an activity on the same invocation"
+            | ("mixed" | "unclassified"), None -> ()
+            | _ -> invalidOp "activity usage attribution classification is inconsistent"
+            run "INSERT INTO activity_usage_attributions VALUES($identity,$item,$usage,$activity,$classification,$input,$cached,$output,$reasoning,$total,$revision);"
+                [ "$usage",box attribution.UsageIdentity; "$activity",optional attribution.ActivityId; "$classification",box attribution.Classification; "$input",box attribution.Input; "$cached",box attribution.CachedInput; "$output",box attribution.Output; "$reasoning",optional attribution.Reasoning; "$total",box attribution.Total; "$revision",box fact.Revision ]
+        | TelemetryStore.Complication complication ->
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "complication requires itemId")
+            match complication.AttemptId with
+            | Some attempt when scalarCount "SELECT count(*) FROM runtime_admissions WHERE item_id=$item AND attempt_id=$attempt;" [ "$item",box item; "$attempt",box attempt ] = 0L -> invalidOp "complication attempt is not admitted for the item"
+            | _ -> ()
+            match complication.ActivityId with
+            | Some activity when scalarCount "SELECT count(*) FROM activity_spans WHERE item_id=$item AND activity_id=$activity;" [ "$item",box item; "$activity",box activity ] <> 1L -> invalidOp "complication activity is not recorded for the item"
+            | _ -> ()
+            run "INSERT INTO complication_events VALUES($identity,$item,$attempt,$activity,$trigger,$cause,$occurred,$synopsis,$evidence,$revision);"
+                [ "$attempt",optional complication.AttemptId; "$activity",optional complication.ActivityId; "$trigger",box complication.Trigger; "$cause",box complication.Cause; "$occurred",box complication.OccurredAt; "$synopsis",box complication.Synopsis; "$evidence",box complication.Evidence; "$revision",box fact.Revision ]
 
         match fact.ItemId, fact.Payload with
         | Some item, (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _
                     | TelemetryStore.RuntimeAdmission _ | TelemetryStore.RuntimeStart _ | TelemetryStore.RuntimeTurnUsage _ | TelemetryStore.RuntimeTerminal _ | TelemetryStore.RuntimeGap _
                     | TelemetryStore.CiBinding _ | TelemetryStore.CiPage _ | TelemetryStore.CiRun _ | TelemetryStore.CiJob _ | TelemetryStore.CiStep _ | TelemetryStore.CiCoverage _
                     | TelemetryStore.CiPopulationAdmission _ | TelemetryStore.CiCheck _ | TelemetryStore.CiPopulationCoverage _ | TelemetryStore.NativeItemOutcome _
-                    | TelemetryStore.OperationalActivation _ | TelemetryStore.ExpectedDispatch _ | TelemetryStore.InvocationLineage _ | TelemetryStore.EventTime _) ->
+                    | TelemetryStore.OperationalActivation _ | TelemetryStore.ExpectedDispatch _ | TelemetryStore.InvocationLineage _ | TelemetryStore.EventTime _
+                    | TelemetryStore.ProcessReview _ | TelemetryStore.ActivitySpan _ | TelemetryStore.ActivityUsageAttribution _ | TelemetryStore.Complication _) ->
             use dirty = connection.CreateCommand()
             dirty.CommandText <- "INSERT INTO budget_dirty_items(item_id) VALUES($item) ON CONFLICT(item_id) DO NOTHING;"
             parameter dirty "$item" item
@@ -871,7 +953,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                     | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
                     | Ok batch ->
                         match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
-                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_population_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_check_runs", StringComparison.Ordinal)) ->
+                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_population_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_check_runs", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: process_reviews", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_spans", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_usage_attributions", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: complication_events", StringComparison.Ordinal)) ->
                             quarantine root ready errors; quarantined <- quarantined + 1
                         | Error errors -> failures <- (String.concat "; " errors) :: failures
                         | Ok result ->
@@ -961,6 +1043,94 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         | Ok(connection, _) ->
             use connection = connection
             Ok(TelemetryStore.publicJson (readSummary connection itemId))
+
+    let private readReviews (connection: SqliteConnection) (itemId: string) limit =
+        use command = connection.CreateCommand()
+        command.CommandText <- "SELECT scope,attempt_id,fact_revision,outcome_synopsis,went_well,problems,avoidable_delay_rework,process_observations,remaining_risks,concrete_improvements,evidence,evidence_coverage,population_coverage,confidence,reviewer_model,reviewer_effort,reviewed_at,duration_seconds FROM process_reviews WHERE item_id=$item ORDER BY CASE scope WHEN 'attempt' THEN 0 ELSE 1 END,coalesce(attempt_id,''),fact_revision DESC LIMIT $limit;"
+        parameter command "$item" itemId; parameter command "$limit" limit
+        use reader = command.ExecuteReader()
+        let rows = ResizeArray<JsonElement>()
+        let optional index = if reader.IsDBNull index then None else Some(reader.GetString index)
+        let json index = use document = JsonDocument.Parse(reader.GetString index) in document.RootElement.Clone()
+        while reader.Read() do
+            rows.Add(JsonSerializer.SerializeToElement
+                {| scope=reader.GetString 0; attemptId=optional 1; revision=reader.GetInt64 2; outcomeSynopsis=reader.GetString 3
+                   wentWell=json 4; problems=json 5; avoidableDelayOrRework=json 6; processObservations=json 7
+                   remainingRisks=json 8; concreteImprovements=json 9; evidence=json 10; evidenceCoverage=reader.GetString 11
+                   populationCoverage=reader.GetString 12; confidence=reader.GetString 13; reviewerModel=reader.GetString 14
+                   reviewerEffort=reader.GetString 15; reviewedAt=reader.GetString 16; durationSeconds=reader.GetInt64 17 |})
+        rows.ToArray()
+
+    let reviewSummary path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                let reviews = readReviews connection itemId 129
+                let truncated = reviews.Length > 128
+                let bounded = if truncated then reviews[..127] else reviews
+                Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.process-review-summary/1"; item=itemId; reviews=bounded; truncated=truncated |} + "\n")
+            with error -> Error [ error.Message ]
+
+    let itemDetail path assessment (itemId: string) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                let optional (reader: SqliteDataReader) index = if reader.IsDBNull index then None else Some(reader.GetString index)
+                let json (reader: SqliteDataReader) index = use document = JsonDocument.Parse(reader.GetString index) in document.RootElement.Clone()
+                let activities = ResizeArray<JsonElement>()
+                use activity = connection.CreateCommand()
+                activity.CommandText <- "SELECT activity_id,invocation_id,attempt_id,category,started_at,ended_at,clock_provenance,evidence,summary,fact_revision FROM activity_spans WHERE item_id=$item ORDER BY started_at,activity_id LIMIT 257;"
+                parameter activity "$item" itemId
+                use activityReader = activity.ExecuteReader()
+                while activityReader.Read() do
+                    activities.Add(JsonSerializer.SerializeToElement {| activityId=activityReader.GetString 0; invocationId=activityReader.GetString 1; attemptId=activityReader.GetString 2; category=activityReader.GetString 3; startedAt=activityReader.GetString 4; endedAt=optional activityReader 5; clockProvenance=activityReader.GetString 6; evidence=json activityReader 7; summary=optional activityReader 8; revision=activityReader.GetInt64 9 |})
+                activityReader.Close()
+                let attributions = ResizeArray<JsonElement>()
+                use attribution = connection.CreateCommand()
+                attribution.CommandText <- "SELECT usage_identity,activity_id,classification,input_count,cached_input,output_count,reasoning,total,fact_revision FROM activity_usage_attributions WHERE item_id=$item ORDER BY usage_identity LIMIT 257;"
+                parameter attribution "$item" itemId
+                use attributionReader = attribution.ExecuteReader()
+                while attributionReader.Read() do
+                    attributions.Add(JsonSerializer.SerializeToElement {| usageIdentity=attributionReader.GetString 0; activityId=optional attributionReader 1; classification=attributionReader.GetString 2; input=attributionReader.GetInt64 3; cachedInput=attributionReader.GetInt64 4; output=attributionReader.GetInt64 5; reasoning=(if attributionReader.IsDBNull 6 then None else Some(attributionReader.GetInt64 6)); total=attributionReader.GetInt64 7; revision=attributionReader.GetInt64 8 |})
+                attributionReader.Close()
+                let complications = ResizeArray<JsonElement>()
+                use complication = connection.CreateCommand()
+                complication.CommandText <- "SELECT attempt_id,activity_id,trigger,cause,occurred_at,synopsis,evidence,fact_revision FROM complication_events WHERE item_id=$item ORDER BY occurred_at,identity LIMIT 257;"
+                parameter complication "$item" itemId
+                use complicationReader = complication.ExecuteReader()
+                while complicationReader.Read() do
+                    complications.Add(JsonSerializer.SerializeToElement {| attemptId=optional complicationReader 0; activityId=optional complicationReader 1; trigger=complicationReader.GetString 2; cause=complicationReader.GetString 3; occurredAt=complicationReader.GetString 4; synopsis=complicationReader.GetString 5; evidence=json complicationReader 6; revision=complicationReader.GetInt64 7 |})
+                complicationReader.Close()
+                let accounting classification =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT coalesce(sum(total),0) FROM activity_usage_attributions WHERE item_id=$item AND classification=$classification;"
+                    parameter command "$item" itemId; parameter command "$classification" classification
+                    Convert.ToInt64(command.ExecuteScalar())
+                let missing =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT count(*) FROM runtime_turn_usage u WHERE item_id=$item AND NOT EXISTS(SELECT 1 FROM activity_usage_attributions a WHERE a.item_id=u.item_id AND a.usage_identity=u.identity);"
+                    parameter command "$item" itemId
+                    Convert.ToInt64(command.ExecuteScalar())
+                let nativeTotal =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT coalesce(sum(total),0) FROM runtime_turn_usage WHERE item_id=$item;"
+                    parameter command "$item" itemId
+                    Convert.ToInt64(command.ExecuteScalar())
+                let reviews = readReviews connection itemId 129
+                let bounded (values: ResizeArray<JsonElement>) = if values.Count > 256 then (values.ToArray())[..255] else values.ToArray()
+                let result = JsonSerializer.Serialize(
+                    {| schema="fsgg.telemetry.item-detail/1"; item=itemId
+                       activities=bounded activities; activityTruncated=activities.Count > 256
+                       usageAttributions=bounded attributions; attributionTruncated=attributions.Count > 256
+                       complications=bounded complications; complicationTruncated=complications.Count > 256
+                       reviews=(if reviews.Length > 128 then reviews[..127] else reviews); reviewTruncated=reviews.Length > 128
+                       accounting={| nativeTotal=nativeTotal; direct=accounting "direct"; mixed=accounting "mixed"; unclassified=accounting "unclassified"; missingAttribution=missing; allocation="native-exact-only" |} |}) + "\n"
+                if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "item detail exceeds 1048576 bytes" ] else Ok result
+            with error -> Error [ error.Message ]
 
     type private ActivationRow =
         { Id: string; Runtime: string; ActivatedAt: DateTimeOffset; Clock: string; LateAfterSeconds: int64 }
@@ -1330,3 +1500,21 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
             | "status" -> budgetStatus path assessment |> output
             | "summary" -> match option "--item" args with Some item -> budgetSummary path assessment item |> output | None -> output(Error [ "--item is required" ])
             | _ -> output(Error [ "action must be status or summary" ])
+
+    let runReview action args =
+        match root args with
+        | None -> output(Error [ "store root is not configured; use --store-root or FSGG_TELEMETRY_STORE" ])
+        | Some path ->
+            let assessment = assessProductionRoot path
+            match action, option "--item" args with
+            | "summary", Some item -> reviewSummary path assessment item |> output
+            | "summary", None -> output(Error [ "--item is required" ])
+            | _ -> output(Error [ "action must be summary" ])
+
+    let runItemDetail args =
+        match root args with
+        | None -> output(Error [ "store root is not configured; use --store-root or FSGG_TELEMETRY_STORE" ])
+        | Some path ->
+            match option "--item" args with
+            | Some item -> itemDetail path (assessProductionRoot path) item |> output
+            | None -> output(Error [ "--item is required" ])

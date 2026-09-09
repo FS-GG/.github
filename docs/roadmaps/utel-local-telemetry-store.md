@@ -135,3 +135,23 @@ the retained host database. Publication, generated-workspace defaults and receiv
 This window adds no authoritative mutation command, automatic population selection, workflow, service,
 Coordination counter, private backfill or package publication. Generated workspaces and defaults remain
 unchanged; source publication and adoption remain pending.
+
+## UTEL-08A — Post-completion process observation
+
+- [x] Add checksummed migration 8 for immutable, revisioned attempt/item process reviews, typed activity spans,
+  exact native-usage attribution, and repair/complication events. All observations retain original item,
+  attempt, invocation, and activity identities where applicable.
+- [x] Gate attempt reviews on a terminal admitted invocation and item reviews on complete, exactly joined
+  expected population. Unknown or missing evidence stays explicit; reviews never become delivery authority.
+- [x] Bound review prose, arrays, evidence digests, durations, files, row counts, and output size. Retain reviews
+  privately by default and exclude their prose and private identities from public export.
+- [x] Support overlapping and open planning, implementation, review, validation, delivery, repair, operations,
+  other, and unclassified activity spans. Revisions close or correct observations without destructive updates.
+- [x] Link activity accounting only to exact native usage records. Direct, mixed, and unclassified attribution
+  are explicit, each native usage record is counted once, and elapsed time never allocates tokens.
+- [x] Add closed roadmap-helper hooks plus bounded private `review summary` and versioned `item-detail` reads.
+  The store owns latest-revision joins and accounting; dashboards remain presentation-only consumers.
+
+The orchestrating agent authors the review after terminal state; this adds no LLM service, daemon, transcript
+collection, or native-tool interception. SQLite remains the host-local WAL store with atomic inbox publication
+and one drainer. Source delivery and future host activation are separate operational steps.

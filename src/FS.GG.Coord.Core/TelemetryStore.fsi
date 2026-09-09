@@ -18,6 +18,37 @@ module TelemetryStore =
           Eligible: int64 option
           Observed: int64 option }
 
+    type ProcessReview =
+        { Scope: string
+          AttemptId: string option
+          OutcomeSynopsis: string
+          WentWell: string
+          Problems: string
+          AvoidableDelayOrRework: string
+          ProcessObservations: string
+          RemainingRisks: string
+          ConcreteImprovements: string
+          Evidence: string
+          EvidenceCoverage: string
+          PopulationCoverage: string
+          Confidence: string
+          ReviewerModel: string
+          ReviewerEffort: string
+          ReviewedAt: string
+          DurationSeconds: int64 }
+
+    type ActivitySpan =
+        { ActivityId: string; InvocationId: string; AttemptId: string; Category: string
+          StartedAt: string; EndedAt: string option; ClockProvenance: string; Evidence: string; Summary: string option }
+
+    type ActivityUsageAttribution =
+        { UsageIdentity: string; ActivityId: string option; Classification: string
+          Input: int64; CachedInput: int64; Output: int64; Reasoning: int64 option; Total: int64 }
+
+    type Complication =
+        { AttemptId: string option; ActivityId: string option; Trigger: string; Cause: string
+          OccurredAt: string; Synopsis: string; Evidence: string }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -54,6 +85,10 @@ module TelemetryStore =
         | ExpectedDispatch of dispatchId: string * activationId: string * relation: string * parentDispatchId: string option * runtime: string * expectedAt: string * clockProvenance: string
         | InvocationLineage of dispatchId: string * invocationId: string * relation: string * parentInvocationId: string option * rootInvocationId: string * runtime: string
         | EventTime of invocationId: string * event: string * occurredAt: string option * occurredClockProvenance: string option * observedAt: string option * observedClockProvenance: string option
+        | ProcessReview of ProcessReview
+        | ActivitySpan of ActivitySpan
+        | ActivityUsageAttribution of ActivityUsageAttribution
+        | Complication of Complication
 
     type Fact =
         { Identity: string

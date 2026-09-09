@@ -41,6 +41,11 @@ discovery. Missing configuration/publication is advisory but fail-visible. Since
 usage hook, preserve `native-collaboration-usage-unsupported`; never promote orchestrator attribution to complete
 token coverage.
 
+Use the same adapter to record typed activity spans and evidence-linked complications. Attribute tokens only to
+exact native usage, never elapsed time; preserve mixed/unclassified and unsupported coverage. After each attempt
+terminal, submit a bounded private process review, and submit an item review only after all expected work is
+terminal. Reviews are advisory and missing evidence remains unknown.
+
 The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
 A technical or operation refusal blocks its affected effect without entering that protocol.
 

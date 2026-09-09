@@ -126,6 +126,52 @@ class RoadmapTelemetryTests(unittest.TestCase):
             with self.assertRaises(MODULE.ConfigurationError):
                 MODULE.read_state(config, "../outside")
 
+    def test_private_post_terminal_review_and_activity_hooks_are_closed(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            config = self.config(root)
+            batches = []
+            original_run = MODULE.subprocess.run
+
+            def fake_run(command, **kwargs):
+                if "publish" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text(encoding="utf-8")))
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            review_path = root / "review.json"
+            review_path.write_text(json.dumps({
+                "schema": MODULE.REVIEW_SCHEMA, "revision": 1, "outcomeSynopsis": "Delivered",
+                "wentWell": ["Focused tests"], "problems": [], "avoidableDelayOrRework": [],
+                "processObservations": ["Routine route held"], "remainingRisks": [],
+                "concreteImprovements": ["Keep the focused gate"], "evidence": [],
+                "evidenceCoverage": "unknown", "populationCoverage": "complete", "confidence": "medium",
+                "reviewerModel": "gpt-5", "reviewerEffort": "medium", "reviewedAt": "2026-09-09T09:00:00Z",
+                "durationSeconds": 20,
+            }), encoding="utf-8")
+            review_path.chmod(0o600)
+            try:
+                MODULE.subprocess.run = fake_run
+                result = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "a1", "--model", "m", "--effort", "e",
+                ]))
+                token = result["token"]
+                MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", "agent-1"]))
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "terminal"):
+                    MODULE.review(config, MODULE.parser().parse_args(["review", "--token", token, "--scope", "attempt", "--input", str(review_path)]))
+                MODULE.finish(config, MODULE.parser().parse_args(["finish", "--token", token, "--outcome", "completed"]))
+                recorded = MODULE.review(config, MODULE.parser().parse_args(["review", "--token", token, "--scope", "attempt", "--input", str(review_path)]))
+            finally:
+                MODULE.subprocess.run = original_run
+            review = [event for batch in batches for event in batch["events"] if event["kind"] == "process-review"]
+            self.assertEqual(len(review), 1)
+            self.assertEqual((review[0]["scope"], review[0]["attemptId"], review[0]["revision"]), ("attempt", "a1", 1))
+            self.assertNotIn("schema", review[0])
+            self.assertEqual(recorded["status"], "recorded")
+
+            review_path.write_text(json.dumps({"schema": MODULE.REVIEW_SCHEMA, "revision": 1}), encoding="utf-8")
+            with self.assertRaisesRegex(MODULE.ConfigurationError, "exact"):
+                MODULE.review(config, MODULE.parser().parse_args(["review", "--token", token, "--scope", "attempt", "--input", str(review_path)]))
+
 
 if __name__ == "__main__":
     unittest.main()

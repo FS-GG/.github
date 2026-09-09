@@ -214,6 +214,54 @@ terminal. Every such invocation also records `native-collaboration-usage-unsuppo
 native timing, or complete usage coverage. Missing configuration or publication is reported once and remains
 advisory to native delivery.
 
+## Process reviews, activity, and complications
+
+Migration 8 adds private, revisioned observations that help an agent evaluate how completed work was carried
+out. They remain advisory: reviews do not alter native delivery, roadmap state, or budget authority. The
+orchestrating agent authors them after the relevant terminal observation through a closed JSON contract; no LLM
+service, transcript reader, or prompt archive is part of the store.
+
+An attempt review is accepted only after its admitted invocation is terminal. An item review is accepted only
+when every expected dispatch for the item is joined to exactly one terminal invocation. Missing or conflicting
+population therefore stays unknown rather than becoming a favorable review. Reviews carry a stable identity and
+increasing revision, bounded synopsis and arrays for what went well, problems, avoidable delay or rework, process
+observations, remaining risks, and concrete improvements. Evidence uses only typed content digests; reviewer
+model, effort, UTC time, evidence/population coverage, confidence, and bounded review duration are explicit.
+
+The roadmap helper accepts private files no larger than 32 KiB:
+
+```console
+python3 tools/roadmap-telemetry.py review --token <private-token> --scope attempt --input /private/review.json
+python3 tools/roadmap-telemetry.py activity --token <private-token> --input /private/activity.json
+python3 tools/roadmap-telemetry.py usage-attribution --token <private-token> --input /private/attribution.json
+python3 tools/roadmap-telemetry.py complication --token <private-token> --input /private/complication.json
+```
+
+The helper supplies the original item, attempt, and invocation identities from its private state. Activity spans
+use a stable `activityId`, a category of `planning`, `implementation`, `review`, `validation`, `delivery`,
+`repair`, `operations`, `other`, or `unclassified`, UTC start and optional end, clock provenance, optional
+summary, and evidence digests. Open and overlapping spans are valid; a later revision closes or corrects a span
+without rewriting history.
+
+Usage attribution references one exact native `runtime-turn-usage` identity and repeats its counters exactly.
+`direct` requires one activity; `mixed` and `unclassified` require no activity. A native usage identity can occur
+in only one latest attribution, preventing double counting. Tokens are never apportioned from elapsed time, and
+unsupported native collaboration usage remains an explicit gap rather than inferred usage. Complication events
+retain the original item and affected attempt/activity, a typed trigger and known cause (or `unknown`), UTC time,
+bounded synopsis, and evidence digests. Corrections use the same stable identity with a higher revision.
+
+Private read-only views are bounded and never drain or mutate the store:
+
+```console
+fsgg-coord-engine telemetry review summary --item UTEL-08A --store-root /durable/private/fsgg-telemetry
+fsgg-coord-engine telemetry item-detail --item UTEL-08A --store-root /durable/private/fsgg-telemetry
+```
+
+`item-detail` is the versioned query boundary for dashboards. The store owns joins, latest-revision selection,
+and exact native/direct/mixed/unclassified/missing-attribution accounting; dashboards only consume that result.
+The public export continues to expose allowlisted aggregates and excludes review prose, evidence references,
+activity summaries, complications, and private invocation identities.
+
 ## Explicit CI collection
 
 ```console

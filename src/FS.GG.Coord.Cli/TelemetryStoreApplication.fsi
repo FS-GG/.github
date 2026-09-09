@@ -21,6 +21,10 @@ module TelemetryStoreApplication =
     val budgetSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val budgetStatus: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val budgetHealth: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val reviewSummary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
+    val itemDetail: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
     val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
     val run: action: string -> args: string list -> int
     val runBudget: action: string -> args: string list -> int
+    val runReview: action: string -> args: string list -> int
+    val runItemDetail: args: string list -> int

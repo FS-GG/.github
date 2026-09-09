@@ -45,3 +45,16 @@ module TelemetryStoreTests =
             |> String.concat ","
         let payload = bytes $"""{{"schema":"%s{TelemetryStore.BatchSchema}","ingestId":"batch-1","sourceIdentity":"worker-a","generation":"g1","cursor":"c1","eventCount":65,"events":[%s{events}]}}"""
         Assert.Contains("64 events", sprintf "%A" (TelemetryStore.parseBatch payload))
+
+    [<Fact>]
+    let ``UTEL-08 review activity attribution and complication facts are closed and bounded`` () =
+        let digest = String.replicate 64 "a"
+        let review = $"""{{"kind":"process-review","identity":"review-1","itemId":"UTEL-08","revision":1,"scope":"attempt","attemptId":"attempt-1","outcomeSynopsis":"Delivered","wentWell":["Focused checks"],"problems":[],"avoidableDelayOrRework":[],"processObservations":["Routine route held"],"remainingRisks":[],"concreteImprovements":["Keep the focused gate"],"evidence":[{{"kind":"test","digest":"{digest}"}}],"evidenceCoverage":"partial","populationCoverage":"complete","confidence":"high","reviewerModel":"gpt-5","reviewerEffort":"medium","reviewedAt":"2026-09-09T09:00:00Z","durationSeconds":30}}"""
+        let activity = $"""{{"kind":"activity-span","identity":"span-1","itemId":"UTEL-08","revision":0,"activityId":"implementation-1","invocationId":"invoke-1","attemptId":"attempt-1","category":"implementation","startedAt":"2026-09-09T08:00:00Z","endedAt":null,"clockProvenance":"host-wall","evidence":[],"summary":"implementation"}}"""
+        let attribution = """{"kind":"activity-usage-attribution","identity":"attribute-1","itemId":"UTEL-08","revision":0,"usageIdentity":"usage-1","activityId":null,"classification":"unclassified","input":10,"cachedInput":2,"output":5,"reasoning":null,"total":15}"""
+        let complication = $"""{{"kind":"complication","identity":"complication-1","itemId":"UTEL-08","revision":0,"attemptId":"attempt-1","activityId":"implementation-1","trigger":"test-failure","cause":"product-defect","occurredAt":"2026-09-09T08:30:00Z","synopsis":"A focused test exposed a defect","evidence":[{{"kind":"test","digest":"{digest}"}}]}}"""
+        let payload events = bytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"review-batch","sourceIdentity":"reviewer","generation":"g1","cursor":"1","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
+        Assert.True(TelemetryStore.parseBatch (payload [ review; activity; attribution; complication ]) |> Result.isOk)
+        Assert.Contains("unknown field", sprintf "%A" (TelemetryStore.parseBatch (payload [ review.Replace("\"durationSeconds\":30", "\"durationSeconds\":30,\"prompt\":\"secret\"") ])))
+        Assert.Contains("exceeds 8 entries", sprintf "%A" (TelemetryStore.parseBatch (payload [ review.Replace("[\"Focused checks\"]", "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\"]") ])))
+        Assert.Contains("classification", sprintf "%A" (TelemetryStore.parseBatch (payload [ attribution.Replace("\"classification\":\"unclassified\"", "\"classification\":\"direct\"") ])))

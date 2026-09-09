@@ -30,6 +30,10 @@ from fsgg_telemetry_defaults import (
 BATCH_SCHEMA = "fsgg.telemetry.ingest/1"
 STATE_SCHEMA = "fsgg.telemetry.roadmap-dispatch-state/1"
 RUNTIME = "collaboration-spawn-agent"
+REVIEW_SCHEMA = "fsgg.telemetry.process-review-input/1"
+ACTIVITY_SCHEMA = "fsgg.telemetry.activity-span-input/1"
+ATTRIBUTION_SCHEMA = "fsgg.telemetry.activity-usage-attribution-input/1"
+COMPLICATION_SCHEMA = "fsgg.telemetry.complication-input/1"
 
 
 def now() -> str:
@@ -232,6 +236,86 @@ def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
             "drain": "complete" if drain.returncode == 0 else "pending"}
 
 
+def read_contract(path: str, schema: str, fields: set[str]) -> dict[str, object]:
+    source = pathlib.Path(path)
+    if source.is_symlink() or not source.is_file() or source.stat().st_size > 32768:
+        raise ConfigurationError("private observation input must be a regular file of at most 32768 bytes")
+    try:
+        value = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ConfigurationError(f"private observation input is unreadable: {error}") from error
+    if not isinstance(value, dict) or value.get("schema") != schema or set(value) != fields | {"schema"}:
+        raise ConfigurationError(f"private observation input must have the exact {schema} shape")
+    return value
+
+
+def record_event(config: HostConfig, state: dict[str, object], value: dict[str, object]) -> dict[str, object]:
+    publish(config, state, [value])
+    save_state(config, state)
+    drain = subprocess.run([config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)],
+                           text=True, capture_output=True, timeout=30, check=False)
+    if drain.returncode != 0:
+        raise ConfigurationError(drain.stderr.strip() or "telemetry observation drain failed")
+    return {"schema": "fsgg.telemetry.roadmap-observation/1", "status": "recorded", "kind": value["kind"]}
+
+
+def review(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    state = read_state(config, args.token)
+    if state.get("phase") != "terminal":
+        raise ConfigurationError("process review requires a terminal attempt")
+    if args.scope == "item" and state.get("relation") != "root":
+        raise ConfigurationError("item process review requires the root dispatch token")
+    fields = {"revision", "outcomeSynopsis", "wentWell", "problems", "avoidableDelayOrRework",
+              "processObservations", "remainingRisks", "concreteImprovements", "evidence",
+              "evidenceCoverage", "populationCoverage", "confidence", "reviewerModel", "reviewerEffort",
+              "reviewedAt", "durationSeconds"}
+    value = read_contract(args.input, REVIEW_SCHEMA, fields)
+    subject = str(state["attemptId"]) if args.scope == "attempt" else str(state["itemId"])
+    observation = {"kind": "process-review", "identity": digest("process-review-", args.scope, str(state["itemId"]), subject),
+                   "itemId": state["itemId"], "scope": args.scope,
+                   "attemptId": state["attemptId"] if args.scope == "attempt" else None,
+                   **{name: value[name] for name in fields}}
+    return record_event(config, state, observation)
+
+
+def activity(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    state = read_state(config, args.token)
+    if state.get("phase") not in {"started", "terminal"}:
+        raise ConfigurationError("activity span requires a started attempt")
+    fields = {"revision", "activityId", "category", "startedAt", "endedAt", "clockProvenance", "evidence", "summary"}
+    value = read_contract(args.input, ACTIVITY_SCHEMA, fields)
+    activity_id = validate_identity("activity", value["activityId"])
+    observation = {"kind": "activity-span", "identity": digest("activity-span-", str(state["itemId"]), activity_id),
+                   "itemId": state["itemId"], "invocationId": state["invocationId"], "attemptId": state["attemptId"],
+                   **{name: value[name] for name in fields}}
+    return record_event(config, state, observation)
+
+
+def attribution(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    state = read_state(config, args.token)
+    if state.get("phase") != "terminal":
+        raise ConfigurationError("usage attribution requires a terminal attempt")
+    fields = {"revision", "usageIdentity", "activityId", "classification", "input", "cachedInput", "output", "reasoning", "total"}
+    value = read_contract(args.input, ATTRIBUTION_SCHEMA, fields)
+    usage = validate_identity("usage identity", value["usageIdentity"])
+    observation = {"kind": "activity-usage-attribution", "identity": digest("activity-usage-", str(state["itemId"]), usage),
+                   "itemId": state["itemId"], **{name: value[name] for name in fields}}
+    return record_event(config, state, observation)
+
+
+def complication(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    state = read_state(config, args.token)
+    if state.get("phase") not in {"started", "terminal"}:
+        raise ConfigurationError("complication requires a started attempt")
+    fields = {"revision", "complicationId", "activityId", "trigger", "cause", "occurredAt", "synopsis", "evidence"}
+    value = read_contract(args.input, COMPLICATION_SCHEMA, fields)
+    complication_id = validate_identity("complication", value["complicationId"])
+    observation = {"kind": "complication", "identity": digest("complication-", str(state["itemId"]), complication_id),
+                   "itemId": state["itemId"], "attemptId": state["attemptId"],
+                   **{name: value[name] for name in fields if name != "complicationId"}}
+    return record_event(config, state, observation)
+
+
 def create_ci(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     path = create_assignment(config, CI_ASSIGNMENT_SCHEMA, feature=args.feature, item=args.item,
                              attempt=args.attempt, parent_attempt=args.parent_attempt, producer=args.producer)
@@ -262,6 +346,14 @@ def parser() -> argparse.ArgumentParser:
         ci_parser.add_argument(f"--{name}", required=True)
     ci_parser.add_argument("--parent-attempt")
     ci_parser.add_argument("--producer", default="routine-delivery")
+    review_parser = commands.add_parser("review")
+    review_parser.add_argument("--token", required=True)
+    review_parser.add_argument("--scope", choices=("attempt", "item"), required=True)
+    review_parser.add_argument("--input", required=True)
+    for command in ("activity", "usage-attribution", "complication"):
+        observation_parser = commands.add_parser(command)
+        observation_parser.add_argument("--token", required=True)
+        observation_parser.add_argument("--input", required=True)
     commands.add_parser("status")
     return result
 
@@ -279,7 +371,9 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"schema": "fsgg.telemetry.host-status/1",
                               "status": "ready" if completed.returncode == 0 else "unavailable"}, separators=(",", ":")))
             return 0 if completed.returncode == 0 else 1
-        value = begin(config, args) if args.command == "begin" else started(config, args) if args.command == "started" else finish(config, args) if args.command == "finish" else create_ci(config, args)
+        handlers = {"begin": begin, "started": started, "finish": finish, "ci-assignment": create_ci,
+                    "review": review, "activity": activity, "usage-attribution": attribution, "complication": complication}
+        value = handlers[args.command](config, args)
         print(json.dumps(value, separators=(",", ":")))
         return 0
     except (ConfigurationError, OSError, subprocess.SubprocessError) as error:
