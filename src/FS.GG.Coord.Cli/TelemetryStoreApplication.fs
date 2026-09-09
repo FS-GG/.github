@@ -396,7 +396,10 @@ PRAGMA user_version=9;
                                                                     execute connection "COMMIT;"
                                                                 with error -> rollback connection; raise error
                                                             if scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "migration checksum mismatch" ]
-                                                            else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                                                            else
+                                                                fsyncDirectory root
+                                                                fsyncDirectory(Path.GetDirectoryName root)
+                                                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.store-status/1"; status = "ready"; root = root; database = databaseFileName; schemaVersion = currentSchemaVersion; nativeEngine = engine; journalMode = scalarText connection "PRAGMA journal_mode;"; synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
                       with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
@@ -1204,7 +1207,9 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 | Error _ -> Error [ "storage-unavailable" ]
                 | Ok(connection,_) ->
                     use connection = connection
-                    if not (receiptAuthorized connection scope) then Error [ "unauthorized-scope" ]
+                    if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then Error [ "unsupported-version" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "storage-unavailable" ]
+                    elif not (receiptAuthorized connection scope) then Error [ "unauthorized-scope" ]
                     else receiptRead root connection scope batch DateTimeOffset.UtcNow
             with _ -> Error [ "storage-unavailable" ]
 

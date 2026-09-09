@@ -46,6 +46,8 @@ module TelemetryReceiptTests =
         Assert.Equal(Error ["unsupported-version"],TelemetryReceipt.parse(Encoding.UTF8.GetBytes(text.Replace("envelope/1","envelope/2"))))
         Assert.True(TelemetryReceipt.parse [|0xFFuy|] |> Result.isError)
         Assert.True(TelemetryReceipt.parse(Array.zeroCreate 73729) |> Result.isError)
+        for invalid in ["a\n"; "a\r\n"; "../a"; ""; String('a',129)] do
+            Assert.False(TelemetryReceipt.validId invalid)
 
     [<Fact>]
     let ``receipt acceptance replay conflict and applied expiry preserve identity`` () =
@@ -66,6 +68,14 @@ module TelemetryReceiptTests =
             // Re-enrollment/credential replacement preserves logical identity and all receipts.
             TelemetryStoreApplication.enrollReceiptProducer root approved scope |> unwrap |> ignore
             Assert.Equal("expired",status(TelemetryStoreApplication.lookupReceipt root approved scope "batch-a")))
+
+    [<Fact>]
+    let ``receipt lookup refuses an incompatible schema even for an applied batch`` () =
+        withStore (fun root ->
+            TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "batch-a" 0) |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+            sql root "PRAGMA user_version=10;"
+            Assert.Equal(Error ["unsupported-version"],TelemetryStoreApplication.lookupReceipt root approved scope "batch-a"))
 
     [<Theory>]
     [<InlineData("before-file-sync")>]

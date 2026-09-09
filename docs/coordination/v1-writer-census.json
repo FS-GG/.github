@@ -84,7 +84,7 @@
     {"path":"src/FS.GG.Coord.Cli/Program.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"1843c737002153ef4e8004332ce47bc12fa81ed7153c41e30a6f754afca111bb"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"946469176c046e08649412a38f578b420537efa839d5b9486b8e23be92242def"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"c90e282d490f2e28e4662589a9e37c6c7ef6b85b80da66ebeb2dc5b0b618f541"},
-    {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"7f32bd29968a25b9aa7910360d386dc8a3b26aeb93764ad6f8f83c1fa1009dd7"},
+    {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"5a6d164157c8c6c8c474f3e29e426bbe2ccc4838f2ab920e0cec676487b7d649"},
     {"path":"src/FS.GG.Coord.GitHub/Transport.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"97046f07ee442939ed3942c17ca7754fb49cb9b999af36a35bfbbcc152a7dde2"},
     {"path":"tests/change-completeness/run.sh","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"76e2938b0b8f742aa32bdb460cda72fc1014efcbecb274d43c296f7e99e23932","nonWriterJustification":"Structural wiring fixture reads workflow text and never executes a package publish."},
     {"path":"tests/coord-engine-e2e/writes.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"8aba3f500f2ef7351aa40478cd95fbdb9528422da0840cd87805132b6a6a6db0","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},

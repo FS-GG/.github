@@ -139,7 +139,7 @@ For this environment, H3 establishes the independently managed Main deployment p
 ### Execution ledger
 
 - [x] R0 — Ownership and implementation inputs: [decision record](../coordination/standalone-telemetry-r0-decisions.md). Documentation-only delivery; no package or host activation claimed.
-- [x] R1 — Shared receipt, identity and storage correctness: [contract and qualification](../reference/telemetry-receipts.md); additive schema 9, shared adapter API, 78 focused tests including eight real process-exit boundaries. Source delivery only; remote deployment remains pending.
+- [x] R1 — Shared receipt, identity and storage correctness: [contract and qualification](../reference/telemetry-receipts.md); additive schema 9, shared adapter API, 79 focused tests including eight real process-exit boundaries. Source delivery only; remote deployment remains pending.
 - [ ] L1 — Standalone activation and workflow integration.
 - [ ] L2 — Packaged dashboard and standalone release proof.
 - [ ] H1 — Remote adapter and minimal receiver.

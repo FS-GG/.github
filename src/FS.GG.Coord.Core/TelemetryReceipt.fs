@@ -15,7 +15,7 @@ module TelemetryReceipt =
     type Envelope =
         { Scope: Scope; BatchId: string; Batch: TelemetryStore.Batch
           Canonical: string; Digest: string; Key: string }
-    let validId value = not (isNull value) && Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    let validId value = not (isNull value) && Regex.IsMatch(value, @"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z")
     let key producer batch = CanonicalJson.sha256(Encoding.UTF8.GetBytes(producer + "\n" + batch))
 
     // Reject duplicate members at every depth before the legacy payload parser sees them.
@@ -44,7 +44,10 @@ module TelemetryReceipt =
             validateJson root
             let fields = Set [ "schema"; "workspaceId"; "producerId"; "streamId"; "batchId"; "payload" ]
             if root.ValueKind <> JsonValueKind.Object || (root.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> fields then invalidOp "invalid-request"
-            let text name = root.GetProperty(name: string).GetString()
+            let text name =
+                let value = root.GetProperty(name: string)
+                if value.ValueKind <> JsonValueKind.String then invalidOp "invalid-request"
+                value.GetString()
             if text "schema" <> Schema then Error [ "unsupported-version" ] else
             let scope = { Workspace = text "workspaceId"; Producer = text "producerId"; Stream = text "streamId" }
             let batchId = text "batchId"
