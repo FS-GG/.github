@@ -186,9 +186,12 @@ def engine_json(engine: str, args: list[str]) -> Any:
 
 
 def bounded_base64(value: Any, maximum: int, error_code: str) -> bytes:
-    if not isinstance(value,str) or len(value)>((maximum+2)//3)*4+4096: raise HostSourceError(error_code)
+    encoded_limit=((maximum+2)//3)*4
+    # GitHub may line-wrap base64 throughout the response. Permit one ASCII
+    # whitespace separator per encoded byte while keeping transport bounded.
+    if not isinstance(value,str) or len(value)>encoded_limit*2+4: raise HostSourceError(error_code)
     normalized=re.sub(r"[ \t\r\n]","",value)
-    if re.search(r"[^A-Za-z0-9+/=]",normalized): raise HostSourceError(error_code)
+    if len(normalized)>encoded_limit or re.search(r"[^A-Za-z0-9+/=]",normalized): raise HostSourceError(error_code)
     try: decoded=base64.b64decode(normalized,validate=True)
     except (ValueError,base64.binascii.Error) as error: raise HostSourceError(error_code) from error
     if len(decoded)>maximum: raise HostSourceError(error_code)
@@ -380,25 +383,38 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
     admissions=snapshot_rows(snapshot,"admissions",member_set)
     starts=snapshot_rows(snapshot,"starts",member_set)
     gaps=snapshot_rows(snapshot,"runtimeGaps",member_set)
-    expected_by_dispatch={row.get("dispatch_id"):row for row in expected_rows if row.get("runtime")=="codex-exec"}
-    native_lineage=[row for row in lineage_rows if row.get("runtime")=="codex-exec"]
+    expected_by_dispatch={}
+    for row in expected_rows:
+        dispatch=row.get("dispatch_id")
+        if dispatch in expected_by_dispatch: raise ValueError("ambiguous expected dispatch")
+        expected_by_dispatch[dispatch]=row
+    runtime_lineage=lineage_rows
     lineage_by_dispatch={}
-    for row in native_lineage: lineage_by_dispatch.setdefault(row.get("dispatch_id"),[]).append(row)
+    for row in runtime_lineage: lineage_by_dispatch.setdefault(row.get("dispatch_id"),[]).append(row)
     expected_invocations={rows[0].get("invocation_id") for dispatch,rows in lineage_by_dispatch.items() if dispatch in expected_by_dispatch and len(rows)==1}
-    admitted_invocations={row.get("invocation_id") for row in admissions}
-    started_invocations={row.get("invocation_id") for row in starts}
-    terminal_invocations={row.get("invocation_id") for row in terminals}
-    usage_invocations={row.get("invocation_id") for row in usage}
+    all_admitted_invocations={row.get("invocation_id") for row in admissions}
+    all_started_invocations={row.get("invocation_id") for row in starts}
+    all_terminal_invocations={row.get("invocation_id") for row in terminals}
+    all_usage_invocations={row.get("invocation_id") for row in usage}
+    admitted_invocations=expected_invocations & all_admitted_invocations
+    started_invocations=expected_invocations & all_started_invocations
+    terminal_invocations=expected_invocations & all_terminal_invocations
+    usage_invocations=expected_invocations & all_usage_invocations
     lineage_exact=(bool(expected_by_dispatch) and set(lineage_by_dispatch)==set(expected_by_dispatch)
         and len(expected_invocations)==len(expected_by_dispatch)
-        and all(len(rows)==1 and rows[0].get("relation")==expected_by_dispatch[dispatch].get("relation") for dispatch,rows in lineage_by_dispatch.items()))
-    root_invocations={row.get("invocation_id") for row in native_lineage if row.get("relation")=="root"}
+        and all(len(rows)==1
+            and rows[0].get("relation")==expected_by_dispatch[dispatch].get("relation")
+            and rows[0].get("runtime")==expected_by_dispatch[dispatch].get("runtime")
+            for dispatch,rows in lineage_by_dispatch.items()))
+    root_invocations={row.get("invocation_id") for row in runtime_lineage if row.get("relation")=="root"}
     ancestry_exact=(len(root_invocations)==1 and all(
         row.get("root_invocation_id") in root_invocations
         and (row.get("relation")=="root" or row.get("parent_invocation_id") in expected_invocations)
-        for row in native_lineage))
-    population_complete=(lineage_exact and ancestry_exact and expected_invocations==admitted_invocations==started_invocations==terminal_invocations)
-    usage_complete=population_complete and usage_invocations==expected_invocations and not gaps
+        for row in runtime_lineage))
+    population_complete=(lineage_exact and ancestry_exact
+        and expected_invocations==all_admitted_invocations==all_started_invocations==all_terminal_invocations)
+    usage_complete=population_complete and all_usage_invocations==expected_invocations and not gaps
+    coverage_status="complete" if usage_complete else "partial" if usage_invocations else "unknown"
     compatible={}
     for row in usage:
         raw=(row.get("provider"),row.get("accounting_scope"))
@@ -415,7 +431,7 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
     compatible_totals.sort(key=lambda row:(row["scope"],row["total"],row["turns"]))
     complete_total=usage_complete and len(compatible_totals)==1
     total_source=compatible_totals[0] if complete_total else None
-    token_total={"status":"complete" if complete_total else "not-proven","input":total_source["input"] if total_source else None,"cachedInput":total_source["cachedInput"] if total_source else None,"output":total_source["output"] if total_source else None,"reasoning":total_source["reasoning"] if total_source else None,"total":total_source["total"] if total_source else None,"unknownRemainder":not usage_complete,"semantics":"complete only when the exact expected native invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis"}
+    token_total={"status":"complete" if complete_total else "not-proven","input":total_source["input"] if total_source else None,"cachedInput":total_source["cachedInput"] if total_source else None,"output":total_source["output"] if total_source else None,"reasoning":total_source["reasoning"] if total_source else None,"total":total_source["total"] if total_source else None,"unknownRemainder":not usage_complete,"semantics":"complete only when the exact expected runtime invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis"}
     repos=set(approval["repositories"]); deliveries=[]
     outcome_rows=snapshot_rows(snapshot,"outcomes",member_set)
     if len(outcome_rows)>256: raise ValueError("item projection exceeds delivery bound")
@@ -457,7 +473,7 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
     runtime_gaps=len(gaps)
     process=project_process_detail(snapshot,member_set,labels,sum(row["total"] for row in token_rows))
     return {"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"settled","deliveredAt":delivered.isoformat().replace("+00:00","Z") if delivered else None,"deliveries":deliveries,
-        "runtime":{"invocations":len(complete_invocations),"terminalOutcomes":terminal_counts,"duration":{"rows":duration_rows,"semantics":"same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time"},"tokens":{"scope":"exact native turns grouped by compatible accounting basis; input includes cached input","rows":token_rows,"compatibleTotals":compatible_totals,"total":token_total,"unmappedRows":unmapped_rows,"coverage":{"boundary":"canonical completed member items and their codex-exec expected dispatches","status":"complete" if usage_complete else "incomplete","expectedDispatches":len(expected_by_dispatch),"linkedInvocations":len(expected_invocations),"admittedInvocations":len(admitted_invocations),"startedInvocations":len(started_invocations),"terminalInvocations":len(terminal_invocations),"invocationsWithUsage":invocations_with_usage,"invocationsWithoutUsage":max(0,len(expected_invocations)-invocations_with_usage),"runtimeGaps":runtime_gaps,"accountingCompatibility":"single" if len(compatible_totals)==1 else "none" if not compatible_totals else "multiple"}}},
+        "runtime":{"invocations":len(complete_invocations),"terminalOutcomes":terminal_counts,"duration":{"rows":duration_rows,"semantics":"same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time"},"tokens":{"scope":"exact native turns grouped by compatible accounting basis; input includes cached input","rows":token_rows,"compatibleTotals":compatible_totals,"total":token_total,"unmappedRows":unmapped_rows,"coverage":{"boundary":"canonical completed member items and all expected runtime dispatches","status":coverage_status,"expectedDispatches":len(expected_by_dispatch),"linkedInvocations":len(expected_invocations),"admittedInvocations":len(admitted_invocations),"startedInvocations":len(started_invocations),"terminalInvocations":len(terminal_invocations),"invocationsWithUsage":invocations_with_usage,"invocationsWithoutUsage":max(0,len(expected_by_dispatch)-invocations_with_usage),"runtimeGaps":runtime_gaps,"accountingCompatibility":"single" if len(compatible_totals)==1 else "none" if not compatible_totals else "multiple"}}},
         "ci":{"counts":ci_counts,"seconds":ci_seconds,"semantics":"runner seconds sum jobs; wall, queue, and category values are per-item unions and may overlap"},
         "budget":{"scope":"canonical reducer assessments; epoch identities removed","assessments":budget},
         "complications":{"observed":{"runtimeNonSuccess":sum(v for k,v in terminal_counts.items() if k!="completed"),"failedOrCancelledCiRuns":ci_fail,"repeatedCiRuns":repeated,"followUpInvocations":sum(1 for v in lineage.values() if v=="follow-up")},"notes":approval["notes"],"semantics":"observed runtime and CI signals plus separately approved public notes; no inferred cause or repair cost"},
@@ -854,9 +870,17 @@ def validate_completed_items(value: Any) -> None:
             valid_scope=tokens["scope"]=="completed native turns; input includes cached input"
         else:
             coverage=exact(tokens["coverage"],{"boundary","status","expectedDispatches","linkedInvocations","admittedInvocations","startedInvocations","terminalInvocations","invocationsWithUsage","invocationsWithoutUsage","runtimeGaps","accountingCompatibility"},"token coverage")
-            if coverage["boundary"]!="canonical completed member items and their codex-exec expected dispatches": raise ValueError("invalid token boundary")
-            enum(coverage["status"],{"complete","incomplete"},"token coverage status"); enum(coverage["accountingCompatibility"],{"none","single","multiple"},"accounting compatibility")
+            if coverage["boundary"] not in {"canonical completed member items and their codex-exec expected dispatches","canonical completed member items and all expected runtime dispatches"}: raise ValueError("invalid token boundary")
+            enum(coverage["status"],{"complete","partial","unknown","incomplete"},"token coverage status"); enum(coverage["accountingCompatibility"],{"none","single","multiple"},"accounting compatibility")
             for name in ("expectedDispatches","linkedInvocations","admittedInvocations","startedInvocations","terminalInvocations","invocationsWithUsage","invocationsWithoutUsage","runtimeGaps"): checked_int(coverage[name],name)
+            current_boundary=coverage["boundary"]=="canonical completed member items and all expected runtime dispatches"
+            if current_boundary:
+                expected=coverage["expectedDispatches"]
+                if any(coverage[name]>expected for name in ("linkedInvocations","admittedInvocations","startedInvocations","terminalInvocations","invocationsWithUsage","invocationsWithoutUsage")): raise ValueError("invalid token population counts")
+                if coverage["invocationsWithoutUsage"]!=expected-coverage["invocationsWithUsage"]: raise ValueError("invalid token usage remainder")
+                if coverage["status"]=="complete" and (any(coverage[name]!=expected for name in ("linkedInvocations","admittedInvocations","startedInvocations","terminalInvocations","invocationsWithUsage")) or coverage["invocationsWithoutUsage"] or coverage["runtimeGaps"]): raise ValueError("invalid complete token coverage")
+                if coverage["status"]=="partial" and not coverage["invocationsWithUsage"]: raise ValueError("invalid partial token coverage")
+                if coverage["status"]=="unknown" and coverage["invocationsWithUsage"]: raise ValueError("invalid unknown token coverage")
             if not isinstance(tokens["compatibleTotals"],list) or len(tokens["compatibleTotals"])>512: raise ValueError("invalid compatible totals")
             for aggregate in tokens["compatibleTotals"]:
                 exact(aggregate,{"scope","turns","invocations","input","cachedInput","output","reasoning","total"},"compatible total"); public_text(aggregate["scope"],48,"scope")
@@ -864,11 +888,12 @@ def validate_completed_items(value: Any) -> None:
                 if aggregate["reasoning"] is not None: checked_int(aggregate["reasoning"],"reasoning")
             total=exact(tokens["total"],{"status","input","cachedInput","output","reasoning","total","unknownRemainder","semantics"},"token total")
             enum(total["status"],{"complete","not-proven"},"token total status")
-            if not isinstance(total["unknownRemainder"],bool) or total["semantics"]!="complete only when the exact expected native invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis": raise ValueError("invalid token total")
+            if not isinstance(total["unknownRemainder"],bool) or total["semantics"] not in {"complete only when the exact expected native invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis","complete only when the exact expected runtime invocation population is linked, admitted, started, terminal, gap-free, usage-covered, and has one compatible accounting basis"}: raise ValueError("invalid token total")
             for name in ("input","cachedInput","output","reasoning","total"):
                 if total[name] is not None: checked_int(total[name],name)
             if total["status"]=="complete" and (total["total"] is None or coverage["status"]!="complete" or coverage["accountingCompatibility"]!="single" or total["unknownRemainder"]): raise ValueError("unproven complete token total")
             if total["status"]!="complete" and any(total[name] is not None for name in ("input","cachedInput","output","reasoning","total")): raise ValueError("partial token total must remain unknown")
+            if current_boundary and total["unknownRemainder"]!=(coverage["status"]!="complete"): raise ValueError("invalid token remainder status")
             valid_scope=tokens["scope"]=="exact native turns grouped by compatible accounting basis; input includes cached input"
         if not valid_scope or not isinstance(tokens["rows"],list) or len(tokens["rows"])>512: raise ValueError("invalid token rows")
         for row in tokens["rows"]:

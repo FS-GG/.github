@@ -3,6 +3,7 @@ import hashlib
 import json
 import pathlib
 import tempfile
+import textwrap
 import unittest
 from unittest import mock
 from types import SimpleNamespace
@@ -106,6 +107,19 @@ class DashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_PROJECTION_FAILED"): D.engine_json("engine",["telemetry","item-detail"])
         with mock.patch.object(D.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout="x"*(D.MAX_JSON+1),stderr="")):
             with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_OUTPUT_TOO_LARGE"): D.engine_json("engine",["telemetry","item-detail"])
+
+    def test_base64_accepts_fully_sized_wrapped_payload_and_refuses_invalid_or_oversized_input(self):
+        payload=b"x"*D.MAX_JSON
+        wrapped="\n".join(textwrap.wrap(D.base64.b64encode(payload).decode(),60))
+        self.assertEqual(D.bounded_base64(wrapped,D.MAX_JSON,"INVALID"),payload)
+        with self.assertRaisesRegex(D.HostSourceError,"INVALID"):
+            D.bounded_base64(wrapped+"!",D.MAX_JSON,"INVALID")
+        oversized=D.base64.b64encode(payload+b"x").decode()
+        with self.assertRaisesRegex(D.HostSourceError,"INVALID"):
+            D.bounded_base64(oversized,D.MAX_JSON,"INVALID")
+        transport_too_large=" \n".join(D.base64.b64encode(payload).decode())
+        with self.assertRaisesRegex(D.HostSourceError,"INVALID"):
+            D.bounded_base64(transport_too_large,D.MAX_JSON,"INVALID")
 
     def test_engine_canonical_bytes_bind_non_ascii_escaping_and_numeric_shape(self):
         relations=("populations","dirtyItems","outcomes","admissions","starts","terminals","expectedDispatches","lineage","times","usage","runtimeGaps","ciRuns","ciJobs","ciSteps","ciCoverage","ciPopulationCoverage","budgetAssessments","budgetMembership","budgetEpochs","budgetBreaches","budgetInterventions","activities","activityUsageAttributions","complications","reviews")
