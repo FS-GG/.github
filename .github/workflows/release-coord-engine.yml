@@ -181,6 +181,9 @@ jobs:
       - name: Census every v1 writer from candidate-built typed metadata
         run: python3 scripts/check-v1-writer-census.py --candidate src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 
+      - name: Qualify the retained receiver-source census offline
+        run: python3 scripts/check-v1-receiver-census.py
+
       # THE ENGINE IS NEVER PUBLISHED UNTESTED. Its whole claim is that it encodes rules the org has
       # already paid for once; a publish that skipped them would be shipping the claim without the
       # evidence. The core suite IS the incident log.

@@ -60,6 +60,10 @@ python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 stage "v1 writer census structural closure"
 python3 "$ROOT/scripts/check-v1-writer-census.py" --structural
 
+stage "v1 receiver source census offline closure"
+python3 "$ROOT/scripts/check-v1-receiver-census.py"
+python3 "$ROOT/tests/v1-receiver-census/run.py"
+
 if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"
   dotnet restore "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" --locked-mode

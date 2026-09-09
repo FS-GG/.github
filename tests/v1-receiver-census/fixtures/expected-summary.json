@@ -1,0 +1,14 @@
+{
+  "schema": "fsgg.v1-writer-receiver-census/1",
+  "receivers": 7,
+  "sources": 555,
+  "deduplicatedBlobs": 460,
+  "routes": 615,
+  "dependencies": 95,
+  "effects": {
+    "conditional": 197,
+    "inert": 353,
+    "protected-admin": 27,
+    "read-only": 38
+  }
+}
