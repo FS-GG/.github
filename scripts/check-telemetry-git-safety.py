@@ -51,7 +51,8 @@ def main() -> int:
             lowered = blob.lower()
             # The size cap is for checked-in evidence, not implementation source whose module name
             # happens to contain "Telemetry". Raw markers and unsafe suffixes still apply everywhere.
-            telemetry_evidence = not normalized.startswith(("/src/", "/tests/")) and any(
+            implementation_source = normalized.startswith(("/src/", "/tests/")) or normalized == "/tools/telemetry-dashboard.py"
+            telemetry_evidence = not implementation_source and any(
                 word in normalized for word in ("telemetry", "usage", "receipt"))
             if telemetry_evidence and len(blob) > MAX_PUBLIC_EVIDENCE:
                 raise ValueError("telemetry-evidence-too-large")

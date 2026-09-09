@@ -46,6 +46,15 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     subprocess.run(["git", "-C", str(repo), "add", "-f", "telemetry-evidence.json"], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
     subprocess.run(["git", "-C", str(repo), "reset", "-q", "telemetry-evidence.json"], check=True)
+    tools = repo / "tools"; tools.mkdir()
+    implementation = tools / "telemetry-dashboard.py"
+    implementation.write_text("# implementation source\n" + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(implementation)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 0
+    implementation.write_text('{"session_' + 'id":"private"}')
+    subprocess.run(["git", "-C", str(repo), "add", str(implementation)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(implementation)], check=True)
     # Binary fixtures exist only in this temporary repo. Extension and renamed-signature detection are
     # independent: neither a renamed database nor a private immutable spool batch may be forced in.
     (repo / "innocent.bin").write_bytes(b"SQLite format " + b"3\x00" + b"synthetic")
