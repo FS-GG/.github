@@ -52,6 +52,17 @@ class PublisherSetupTests(unittest.TestCase):
             with mock.patch.object(D,"config",return_value=(config,{"storeRoot":str(root),"engine":"engine"})),mock.patch.object(D.shutil,"which",return_value=D.sys.executable),mock.patch.object(D,"build_host",return_value=host()),mock.patch.object(D,"install_units") as install,mock.patch.object(D,"publish") as publish,self.assertRaises(D.HostSourceError): D.publisher_setup(args)
             install.assert_not_called(); publish.assert_not_called()
 
+    def test_verified_publication_reports_unavailable_recurrence_without_user_bus(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory); config,labels,args=self.fixture(root); args.activate=True; args.authorize_recurring_publication=True
+            args.approve_labels=D.hashlib.sha256(labels.read_bytes()).hexdigest()
+            verified={"commit":"a"*40,"immutableBytes":True,"payloadRevision":True,"branchCurrent":True,"verified":True}
+            unavailable=D.subprocess.CalledProcessError(1,["systemctl","--user","daemon-reload"])
+            with mock.patch.object(D,"config",return_value=(config,{"storeRoot":str(root),"engine":"engine"})),mock.patch.object(D.shutil,"which",return_value=D.sys.executable),mock.patch.object(D,"build_host",return_value=host()),mock.patch.object(D,"publication_token",return_value="token"),mock.patch.object(D,"publish",return_value="a"*40),mock.patch.object(D,"verify_publication",return_value=verified),mock.patch.object(D.subprocess,"run",side_effect=unavailable):
+                result=D.publisher_setup(args)
+            self.assertEqual(result["publication"],verified); self.assertEqual(result["recurrence"],"unavailable")
+            self.assertEqual(result["effects"],["write-inert-user-units","publish-once"])
+
     def test_immutable_verification_rejects_wrong_bytes_revision_and_advanced_branch(self):
         snapshot=host(); commit="a"*40
         good=base64.b64encode(D.dump(snapshot)).decode()
