@@ -229,7 +229,9 @@ def project_completed_items(store_root: str, status: dict[str, Any], labels: dic
         if connection.execute("PRAGMA user_version").fetchone()[0] != 7: raise HostSourceError("HOST_SCHEMA_INCOMPATIBLE")
         if connection.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal": raise HostSourceError("HOST_JOURNAL_INCOMPATIBLE")
         native=tuple(int(part) for part in connection.execute("SELECT sqlite_version()").fetchone()[0].split(".")[:3])
-        if native < (3,51,3): raise HostSourceError("HOST_READER_INCOMPATIBLE")
+        # STRICT tables arrived in 3.37; the read-only queries use no later SQL feature.
+        # The writer engine's stronger 3.51.3 minimum is checked separately in build_host.
+        if native < (3,37,0): raise HostSourceError("HOST_READER_INCOMPATIBLE")
 
         dirty={r[0] for r in connection.execute("SELECT item_id FROM budget_dirty_items LIMIT 10001")}
         if len(dirty)>10000: raise HostSourceError("HOST_QUERY_BOUND_EXCEEDED")
