@@ -173,6 +173,14 @@ jobs:
       - name: Restore (locked)
         run: dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
 
+      - name: Build the exact engine source before release gates
+        run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      # GS2-08.3: this must run before any pack/download/push path. It consumes the command contract
+      # emitted by this candidate build and refuses every unknown, omitted, or changed writer source.
+      - name: Census every v1 writer from candidate-built typed metadata
+        run: python3 scripts/check-v1-writer-census.py --candidate src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+
       # THE ENGINE IS NEVER PUBLISHED UNTESTED. Its whole claim is that it encodes rules the org has
       # already paid for once; a publish that skipped them would be shipping the claim without the
       # evidence. The core suite IS the incident log.

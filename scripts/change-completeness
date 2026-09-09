@@ -55,8 +55,14 @@ fi
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 
+# Cheap and universal: this does not build or execute candidate engine bytes. It inventories the
+# tracked executable/product population and refuses an omitted, changed, or unresolved writer source.
+stage "v1 writer census structural closure"
+python3 "$ROOT/scripts/check-v1-writer-census.py" --structural
+
 if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"
+  dotnet restore "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" --locked-mode
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" --locked-mode
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" --locked-mode
   dotnet restore "$ROOT/tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj" --locked-mode
@@ -65,6 +71,11 @@ if [ "$engine_changed" = true ]; then
   stage "command catalogue, parser, render, write-ness, contract, and help closure"
   dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" \
     -c Release --no-restore --filter FullyQualifiedName~CommandSurfaceTests
+
+  stage "v1 writer census candidate-built metadata"
+  engine="$("$ROOT/scripts/build-gate-engine")"
+  [ -n "$engine" ] || { echo "change-completeness: candidate-built engine is unavailable" >&2; exit 1; }
+  python3 "$ROOT/scripts/check-v1-writer-census.py" --candidate "$engine"
 
   stage "handler ownership and production registration"
   dotnet test "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" \

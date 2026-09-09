@@ -1361,7 +1361,12 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   a contents-only selected-repository journal App (or explicit security acceptance of the shared App),
   control issue, effective-rule readback, and tamper/rewind monitoring.
 - [ ] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
-  unknown or dynamically discovered write entry points fail the bridge build.
+  unknown or dynamically discovered write entry points fail the bridge build. The producer census derives the
+  coordination roots from candidate-built typed command metadata and separately binds tracked direct REST/GraphQL,
+  routine merge, release/repair/dispatch/registry automation, protected-admin, build/declaration, and local-only
+  telemetry source identities. Its structural leg is universal; candidate metadata is checked after build and
+  again before release. This is source coverage only: receiver fencing begins at GS2-08.4 and acceptance remains
+  with the native Coordination qualification rather than this roadmap checkbox.
 - [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
   fresh ledger epoch before its first effect. Unreadable, contradictory, frozen, switched, or v2-open state
   refuses before write.

@@ -48,11 +48,27 @@ fi
 for label in \
   'closing-keyword and commit-message contract' \
   'SDD ship-verdict provenance' \
+  'v1 writer census structural closure' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
+  'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \
   'delivery, review, declared-path, and focused production-route parity'; do
   grep -Fq "$label" "$ROOT/scripts/change-completeness" && ok "named stage: $label" || bad "missing named stage: $label"
 done
+
+grep -Fq 'check-v1-writer-census.py" --structural' "$ROOT/scripts/change-completeness" \
+  && ok 'cheap writer census runs on every change' \
+  || bad 'writer census is not universal'
+grep -Fq 'check-v1-writer-census.py --candidate' "$ROOT/.github/workflows/coord-engine.yml" \
+  && ok 'engine workflow checks candidate-built writer metadata' \
+  || bad 'engine workflow omits candidate-built writer metadata'
+release_census_line="$(awk '/check-v1-writer-census.py --candidate/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
+release_push_line="$(awk '/dotnet nuget push/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
+if [ -n "$release_census_line" ] && [ -n "$release_push_line" ] && [ "$release_census_line" -lt "$release_push_line" ]; then
+  ok 'release census gates pack and publish'
+else
+  bad 'release can publish before writer census'
+fi
 
 grep -Fq 'needs: change-completeness' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'expensive engine job depends on change-completeness' \
