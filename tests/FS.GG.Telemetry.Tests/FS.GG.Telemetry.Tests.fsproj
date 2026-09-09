@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <ItemGroup><Compile Include="RemoteTelemetryTests.fs" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
+    <PackageReference Include="FSharp.Core" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+</Project>

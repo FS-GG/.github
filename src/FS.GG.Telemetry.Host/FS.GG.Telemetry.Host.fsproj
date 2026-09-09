@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="HostRuntime.fsi" />
+    <Compile Include="HostRuntime.fs" />
+    <Compile Include="Program.fsi" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
+    <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
+    <PackageReference Include="Akka" />
+    <PackageReference Include="Akka.FSharp" />
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+</Project>

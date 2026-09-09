@@ -39,6 +39,7 @@ ALL_DISPOSITIONS = WRITER_DISPOSITIONS | NON_WRITER_DISPOSITIONS | {"typed-comma
 # a fixture that contains a real-looking sink must receive an explicit test-only census disposition.
 POPULATION_PREFIXES = (
     "src/FS.GG.Coord",
+    "src/FS.GG.Telemetry",
     "scripts/",
     "tools/",
     ".github/workflows/",

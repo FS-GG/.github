@@ -1213,6 +1213,30 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                     else receiptRead root connection scope batch DateTimeOffset.UtcNow
             with _ -> Error [ "storage-unavailable" ]
 
+    // Host-wide admission sums this read-only census across explicitly enrolled stores.
+    // Tuple fields are lifetime identities, pending batches and pending canonical bytes.
+    let receiptCapacity path assessment =
+        match validateRoot path assessment with
+        | Error errors -> Error errors
+        | Ok root ->
+            try
+                match connect root SqliteOpenMode.ReadOnly with
+                | Error _ -> Error [ "storage-unavailable" ]
+                | Ok(connection,_) ->
+                    use connection = connection
+                    if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then Error [ "unsupported-version" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "storage-unavailable" ]
+                    else
+                        let count sql = Convert.ToInt64(receiptScalar connection sql [])
+                        Ok(count "SELECT count(*) FROM transport_receipts;", count "SELECT count(*) FROM transport_receipts WHERE state='durably-received';", count "SELECT coalesce(sum(payload_bytes),0) FROM transport_receipts WHERE state='durably-received';")
+            with _ -> Error [ "storage-unavailable" ]
+
+    let recoverReceiptCapacity path assessment =
+        receiptLocked path assessment (fun _ connection ->
+            recoverReceiptIndex path connection ignore
+            let count sql = Convert.ToInt64(receiptScalar connection sql [])
+            Ok(count "SELECT count(*) FROM transport_receipts;", count "SELECT count(*) FROM transport_receipts WHERE state='durably-received';", count "SELECT coalesce(sum(payload_bytes),0) FROM transport_receipts WHERE state='durably-received';"))
+
     let drainReceiptsWithHook path assessment (workspace: string) hook =
         receiptLocked path assessment (fun root connection ->
             if receiptWorkspace connection <> workspace then Error [ "unauthorized-scope" ] else

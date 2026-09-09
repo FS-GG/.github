@@ -19,6 +19,8 @@ module TelemetryStoreApplication =
     val submitReceiptWithHook: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> bytes: byte array -> hook: (string -> unit) -> Result<string, string list>
     val submitReceipt: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> bytes: byte array -> Result<string, string list>
     val lookupReceipt: path: string -> assessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> batch: string -> Result<string, string list>
+    val receiptCapacity: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<int64 * int64 * int64, string list>
+    val recoverReceiptCapacity: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<int64 * int64 * int64, string list>
     val drainReceiptsWithHook: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspace: string -> hook: (string -> unit) -> Result<string, string list>
     val drainReceipts: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspace: string -> Result<string, string list>
     val summary: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>

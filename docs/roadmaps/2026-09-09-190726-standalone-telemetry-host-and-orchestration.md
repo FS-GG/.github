@@ -142,7 +142,7 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [x] R1 — Shared receipt, identity and storage correctness: [contract and qualification](../reference/telemetry-receipts.md); additive schema 9, shared adapter API, 79 focused tests including eight real process-exit boundaries. Source delivery only; remote deployment remains pending.
 - [ ] L1 — Standalone activation and workflow integration.
 - [ ] L2 — Packaged dashboard and standalone release proof.
-- [ ] H1 — Remote adapter and minimal receiver.
+- [x] H1 — Remote adapter and minimal receiver: [source contract and synthetic qualification](../reference/standalone-telemetry-receiver.md); shared R1 store implementation, closed HTTPS contracts/client, optional bounded Akka receiver and focused TLS/restart fixtures. Source delivery only; no package release, Main installation, production route or activation claimed.
 - [ ] H2 — Immutable host packaging and deployment rehearsal.
 - [ ] H3 — Main activation and container durability proof.
 - [ ] P1 — Optional publication migration (not selected; retain incumbent publisher).

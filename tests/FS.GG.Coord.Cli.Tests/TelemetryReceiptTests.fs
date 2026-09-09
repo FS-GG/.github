@@ -188,7 +188,7 @@ module TelemetryReceiptTests =
             if draining then TelemetryStoreApplication.submitReceipt root approved scope bytes |> unwrap |> ignore
             let script = Path.Combine(root,"crash.fsx")
             let references =
-                [ "SQLitePCLRaw.core.dll"; "SQLitePCLRaw.provider.e_sqlite3.dll"; "SQLitePCLRaw.batteries_v2.dll"; "Microsoft.Data.Sqlite.dll"; "FS.GG.Coord.Core.dll"; "fsgg-coord-engine.dll" ]
+                [ "SQLitePCLRaw.core.dll"; "SQLitePCLRaw.provider.e_sqlite3.dll"; "SQLitePCLRaw.batteries_v2.dll"; "Microsoft.Data.Sqlite.dll"; "FS.GG.Coord.Core.dll"; "FS.GG.Telemetry.Store.dll" ]
                 |> List.map (fun name -> "#r @\"" + Path.Combine(AppContext.BaseDirectory,name) + "\"")
             let call = if draining then "TelemetryStoreApplication.drainReceiptsWithHook root TelemetryStore.ApprovedLocalDurable scope.Workspace hook" else "TelemetryStoreApplication.submitReceiptWithHook root TelemetryStore.ApprovedLocalDurable scope (File.ReadAllBytes input) hook"
             File.WriteAllLines(script, references @ [
