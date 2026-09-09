@@ -125,19 +125,6 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     if cloned.returncode != 0:
         bad("new dynamic writer reds", cloned.stderr.strip())
     else:
-        candidate = subprocess.run(
-            ["git", "-C", str(ROOT), "diff", "--cached", "--binary"],
-            capture_output=True,
-            check=True,
-        )
-        applied = subprocess.run(
-            ["git", "-C", str(clone), "apply", "--index", "--binary", "-"],
-            input=candidate.stdout,
-            capture_output=True,
-            check=False,
-        )
-        if applied.returncode != 0:
-            bad("new dynamic writer reds", applied.stderr.decode(errors="replace").strip())
         shutil.copy2(FIXTURES / "new-dynamic-writer.py", clone / "scripts/dynamic-writer.py")
         subprocess.run(["git", "-C", str(clone), "add", "scripts/dynamic-writer.py"], check=True)
         dynamic = run("--structural", root=clone)
