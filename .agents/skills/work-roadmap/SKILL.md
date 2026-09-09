@@ -62,6 +62,22 @@ For source work associated with a protected operation, use the routine steps for
 operation pending until its independent authority and safeguards permit it. Invalid or unknown technical or
 operation authorization fails the affected effect; it does not reclassify delivery as heavyweight.
 
+## Record repository-owned dispatches by default
+
+At driver entry, start one root observation with this skill's `scripts/roadmap-telemetry.py begin` adapter
+(also exposed as `tools/roadmap-telemetry.py` in `.github`), supplying the roadmap
+feature/item/attempt and selected model/effort. Immediately after every `spawn_agent`, bind the returned native
+agent id with `started`. Before each child or `followup_task`, start another observation with its stable attempt,
+the parent's token and the `child` or `follow-up` relation. When an agent becomes terminal, call `finish` with its
+real outcome before accepting its handoff; finish the root observation before returning. Pass the same stable
+identities as `--telemetry-feature`, `--telemetry-item` and `--telemetry-attempt` to routine delivery so it
+discovers the private host configuration and creates its CI assignment automatically.
+
+Observation is asynchronous and never adds delivery ceremony. Missing configuration, publication, start or
+terminal evidence is reported once as a coverage gap. Native `collaboration.spawn_agent` has no usage hook, so
+retain `native-collaboration-usage-unsupported`; expected population, lineage, requested model/effort and terminal
+outcome do not establish intercepted usage or complete coverage.
+
 ## Human-selected heavyweight route
 
 Use the following route only when a recorded explicit human instruction selects it for named scope. A prior

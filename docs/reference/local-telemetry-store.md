@@ -38,8 +38,18 @@ database through GitHub. Never commit, attach, or upload the store, its WAL file
 
 ## Configure and initialize
 
-Set `FSGG_TELEMETRY_STORE` to an absolute durable host-backed directory, or pass `--store-root` explicitly.
-The explicit option wins. With neither, `status` reports `unconfigured` and creates nothing. Initialization
+Low-level engine commands accept `FSGG_TELEMETRY_STORE` or an explicit `--store-root`. Repository-owned roadmap
+and board routes instead discover a closed private host configuration in this order: explicit `--config`,
+`FSGG_TELEMETRY_CONFIG`, then `$XDG_CONFIG_HOME/fs-gg/telemetry.json` (or
+`~/.config/fs-gg/telemetry.json`). The mode-`0600`, non-symlink file uses this exact shape:
+
+```json
+{"schema":"fsgg.telemetry.host-config/1","storeRoot":"/durable/private/fsgg-telemetry","engine":"fsgg-coord-engine"}
+```
+
+The configuration points at one operator-selected store instance; source and skills never hardcode a host's
+generated instance name. With neither configuration nor a low-level option, status reports `unconfigured` and
+creates nothing. Initialization
 rejects temporary, repository/worktree, symlinked, network, memory, overlay and unverified placement, as well
 as unsafe ownership or permissions. Production has no allow-unsafe switch.
 
@@ -180,6 +190,30 @@ packaged entrypoint but deliberately reports host activation as `not-installed`.
 not claim receiver installation or default activation. `collaboration.spawn_agent` remains explicitly unsupported;
 coverage is limited to future repository-owned launches that use this entrypoint.
 
+## Native collaboration observations
+
+The repository-owned roadmap orchestrator cannot wrap or intercept the native `collaboration.spawn_agent` tool.
+It therefore records the population and attribution it does know around each native dispatch:
+
+```console
+python3 tools/roadmap-telemetry.py begin \
+  --feature GS2-08 --item GS2-08.3 --attempt gs2-08-3-worker-1 \
+  --model gpt-5.6-sol --effort medium
+# invoke collaboration.spawn_agent; bind the returned native id immediately
+python3 tools/roadmap-telemetry.py started --token <private-token> --native-id <agent-id>
+# after the child becomes terminal
+python3 tools/roadmap-telemetry.py finish --token <private-token> --outcome completed
+```
+
+For a child or follow-up, pass its parent's token with `--parent-token`, select `--relation child` or
+`--relation follow-up`, and retain both attempt identities. `begin` atomically publishes expected population;
+`started` records invocation lineage, requested model/effort and the returned native identity; `finish` records
+the terminal result and opportunistically drains. A crash between phases stays visible as missing start or
+terminal. Every such invocation also records `native-collaboration-usage-unsupported` and
+`native-process-id-unavailable`: these observations establish dispatch attribution, not token interception,
+native timing, or complete usage coverage. Missing configuration or publication is reported once and remains
+advisory to native delivery.
+
 ## Explicit CI collection
 
 ```console
@@ -206,9 +240,13 @@ Repository-owned routine delivery can invoke the same bounded observer advisory-
 
 ```console
 python3 tools/routine-delivery.py --repo FS-GG/.github --pr 1234 --head 0123456789abcdef0123456789abcdef01234567 \
-  --telemetry-engine fsgg-coord-engine --telemetry-assignment /private/ci-attempt.json \
-  --telemetry-store-root /durable/private/fsgg-telemetry
+  --telemetry-feature GS2-08 --telemetry-item GS2-08.3 --telemetry-attempt gs2-08-3-delivery-1
 ```
+
+With those stable identities, routine delivery discovers the host configuration and atomically creates its
+private CI assignment. Explicit `--telemetry-assignment` plus `--telemetry-store-root` remains available for
+recovery and testing. A configured host with missing route identities reports telemetry `unavailable`, rather
+than silently returning `not-configured`.
 
 The driver passes its exact generated public delivery JSON to `telemetry ci reconcile` before an eligible merge
 and again after the final native readback; assignment and store locations remain private command context. Each

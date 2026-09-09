@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
+import pathlib
 import re
 import subprocess
 import sys
@@ -15,6 +17,21 @@ import zipfile
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
+
+
+def _load_telemetry_defaults():
+    try:
+        import fsgg_telemetry_defaults as defaults
+        return defaults
+    except ModuleNotFoundError:
+        path = pathlib.Path(__file__).resolve().parents[1] / ".claude" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py"
+        spec = importlib.util.spec_from_file_location("fsgg_telemetry_defaults", path)
+        if spec is None or spec.loader is None:
+            raise
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -504,7 +521,12 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--coherent-workflow", help="candidate-scoped coherent workflow file or id")
     result.add_argument("--telemetry-assignment", help="private CI assignment for advisory automatic observation")
     result.add_argument("--telemetry-store-root", help="private durable telemetry store root")
-    result.add_argument("--telemetry-engine", default="fsgg-coord-engine", help="installed telemetry-capable coordination engine")
+    result.add_argument("--telemetry-config", help="private host telemetry configuration; otherwise use the canonical discovery order")
+    result.add_argument("--telemetry-feature", help="stable feature identity for a discovered telemetry assignment")
+    result.add_argument("--telemetry-item", help="stable item identity for a discovered telemetry assignment")
+    result.add_argument("--telemetry-attempt", help="stable attempt identity for a discovered telemetry assignment")
+    result.add_argument("--telemetry-parent-attempt", help="optional stable parent attempt identity")
+    result.add_argument("--telemetry-engine", help="installed telemetry-capable coordination engine; overrides host configuration")
     result.add_argument("--apply", action="store_true")
     return result
 
@@ -519,13 +541,38 @@ def main(argv: list[str]) -> int:
         parser().error("--head must be a lowercase 40-hex commit SHA")
     if bool(args.telemetry_assignment) != bool(args.telemetry_store_root):
         parser().error("--telemetry-assignment and --telemetry-store-root must be supplied together")
+    identity_values = [args.telemetry_feature, args.telemetry_item, args.telemetry_attempt]
+    if any(identity_values) and not all(identity_values):
+        parser().error("--telemetry-feature, --telemetry-item and --telemetry-attempt must be supplied together")
     observer = None
     observation_health: list[str] = []
-    if args.telemetry_assignment and args.telemetry_store_root:
+    assignment, store_root = args.telemetry_assignment, args.telemetry_store_root
+    engine = args.telemetry_engine or "fsgg-coord-engine"
+    if not assignment and not store_root:
+        try:
+            defaults = _load_telemetry_defaults()
+            config = defaults.discover_config(args.telemetry_config)
+            if config is not None:
+                engine = args.telemetry_engine or config.engine
+                if all(identity_values):
+                    assignment = str(defaults.create_assignment(
+                        config, defaults.CI_ASSIGNMENT_SCHEMA,
+                        feature=args.telemetry_feature, item=args.telemetry_item,
+                        attempt=args.telemetry_attempt, parent_attempt=args.telemetry_parent_attempt,
+                        producer="routine-delivery",
+                    ))
+                    store_root = str(config.store_root)
+                else:
+                    observation_health.append("unavailable")
+                    print("fsgg routine telemetry: host is configured but feature/item/attempt identities are missing", file=sys.stderr)
+        except (OSError, RuntimeError) as error:
+            observation_health.append("unavailable")
+            print(f"fsgg routine telemetry: host configuration unavailable: {error}", file=sys.stderr)
+    if assignment and store_root:
         def observer(summary: Summary) -> None:
             observation_health.append(observe_candidate(
-                summary, assignment=args.telemetry_assignment, store_root=args.telemetry_store_root,
-                engine=args.telemetry_engine,
+                summary, assignment=assignment, store_root=store_root,
+                engine=engine,
             ))
     try:
         code, result = summarize(
@@ -543,7 +590,7 @@ def main(argv: list[str]) -> int:
         )
     if observer is not None and result.outcome != "ready":
         observer(result)
-    if observer is not None:
+    if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     print(json.dumps(asdict(result), separators=(",", ":"), sort_keys=True))
     return code

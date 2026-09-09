@@ -31,6 +31,16 @@ through the shared delivery helper: classify first, then start coherent validati
 start delivery alongside it. Pending and disputed validation remain visible board facts, and disputed work
 blocks dependent acceptance or activation without selecting heavyweight process.
 
+Repository-owned dispatch telemetry is on by default. Start the driver's root observation with the installed
+`work-roadmap/scripts/roadmap-telemetry.py begin` adapter; immediately bind every returned native agent id with
+`started`. Before every
+worker/critic spawn or `followup_task`, create a child/follow-up observation carrying stable feature, item,
+attempt, parent, model and effort identities. Call `finish` with the real terminal outcome before accepting each
+handoff and before the driver returns. Pass the identities to routine delivery for automatic private CI assignment
+discovery. Missing configuration/publication is advisory but fail-visible. Since native collaboration supplies no
+usage hook, preserve `native-collaboration-usage-unsupported`; never promote orchestrator attribution to complete
+token coverage.
+
 The numbered claim/worker/critique/receipt protocol below applies only to human-named heavyweight scope.
 A technical or operation refusal blocks its affected effect without entering that protocol.
 
