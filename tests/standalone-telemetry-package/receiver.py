@@ -7,6 +7,7 @@ import json
 import os
 import pathlib
 import ssl
+import time
 
 
 def compact(value):
@@ -111,6 +112,11 @@ class Receiver(http.server.BaseHTTPRequestHandler):
         state[batch] = digest
         self.save(state)
         self.event("accepted", batch=batch, replay=prior is not None)
+        if mode == "hold":
+            self.server.state.with_name("held-" + batch).touch()
+            self.event("response-held", batch=batch)
+            time.sleep(60)
+            return
         marker = self.server.state.with_name("dropped-" + batch)
         if mode in ("drop-once", "drop-exit") and not marker.exists():
             marker.touch()
