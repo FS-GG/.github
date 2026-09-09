@@ -238,11 +238,8 @@
   const itemTime = (item) =>
     item.runtime.duration.rows.reduce((sum, row) => sum + row.summedSeconds, 0);
   const itemTokens = (item) => {
-    if (item.runtime.tokens.unmappedRows) return null;
-    const scopes = new Set(item.runtime.tokens.rows.map((row) => row.scope));
-    return scopes.size === 1
-      ? item.runtime.tokens.rows.reduce((sum, row) => sum + row.total, 0)
-      : null;
+    const total=item.runtime.tokens.total;
+    return total?.status==="complete" ? total.total : null;
   };
   function metricTable(headings, rows, labelText) {
     const wrap = document.createElement("div");
@@ -274,7 +271,7 @@
     }
     const coverage=document.createElement("p"); coverage.className="item-method";
     const truncated=Object.entries(process.truncated).filter(([,flag])=>flag).map(([name])=>name);
-    coverage.textContent=`Engine detail available for ${process.members.available} member item(s). These records and the completion projection were read independently, not as one atomic snapshot.${truncated.length?` Truncated: ${truncated.join(", ")}; shown detail is incomplete.`:""}`;
+    coverage.textContent=`Engine detail available for ${process.members.available} member item(s). These records and the completion projection share one engine-owned database snapshot.${truncated.length?` Truncated: ${truncated.join(", ")}; shown detail is incomplete.`:""}`;
     root.append(coverage);
     const grid=document.createElement("div"); grid.className="process-grid";
     const block=(heading,node)=>{const section=document.createElement("section"),h=document.createElement("h5");h.textContent=heading;section.append(h,node);grid.append(section);};
@@ -313,8 +310,8 @@
       details.addEventListener("toggle",()=>{if(details.open)history.replaceState(null,"",`#item-${item.key}`);});
       const summary=document.createElement("summary"), title=document.createElement("span"), name=document.createElement("strong"), meta=document.createElement("small");
       name.textContent=item.label; meta.textContent=`${item.runtime.invocations} invocations · ${item.ci.counts.runs} CI runs · delivery recorded ${date(item.deliveredAt)}`; title.append(name,meta);
-      const total=document.createElement("b"), tokenTotal=itemTokens(item), partial=item.runtime.tokens.coverage.invocationsWithoutUsage>0||item.runtime.tokens.coverage.runtimeGaps>0; total.textContent=tokenTotal==null?"Observed tokens by scope":`${fmt.format(tokenTotal)} observed tokens${partial?" · partial":""}`; summary.append(title,total); details.append(summary);
-      const intro=document.createElement("p"), usageCoverage=item.runtime.tokens.coverage; intro.className="item-method"; intro.textContent=`Settled means current canonical population is completed and every grouped native delivery is delivered. Invocation spans may overlap; they are not human effort. CI time is separate. Token coverage: ${usageCoverage.invocationsWithUsage} invocation(s) observed, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s).`; details.append(intro);
+      const total=document.createElement("b"), tokenTotal=itemTokens(item); total.textContent=tokenTotal==null?"Observed tokens by compatible scope":`${fmt.format(tokenTotal)} complete tokens`; summary.append(title,total); details.append(summary);
+      const intro=document.createElement("p"), usageCoverage=item.runtime.tokens.coverage, coverageText=usageCoverage.status?`Token population ${usageCoverage.status}: ${usageCoverage.linkedInvocations}/${usageCoverage.expectedDispatches} expected invocation(s) linked, ${usageCoverage.invocationsWithUsage} with usage, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s). A complete total is shown only for one compatible accounting basis with no unknown remainder.`:`Legacy token coverage: ${usageCoverage.invocationsWithUsage} invocation(s) observed, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s); no complete total is asserted.`; intro.className="item-method"; intro.textContent=`Settled means current canonical population is completed and every grouped native delivery is delivered. Invocation spans may overlap; they are not human effort. CI time is separate. ${coverageText}`; details.append(intro);
       const links=document.createElement("div"); links.className="item-links"; const link=document.createElement("a"); link.href=item.url; link.target="_blank"; link.rel="noopener"; link.textContent="Open approved item evidence ↗"; links.append(link);
       item.deliveries.forEach((delivery)=>{const deliveryLink=document.createElement("a");deliveryLink.href=delivery.url;deliveryLink.target="_blank";deliveryLink.rel="noopener";deliveryLink.textContent=`${delivery.repository}#${delivery.number} ↗`;links.append(deliveryLink);});
       const permalink=document.createElement("a");permalink.href=`#item-${item.key}`;permalink.textContent="Permalink #";links.append(permalink);details.append(links);
@@ -609,7 +606,7 @@
       );
       text(
         "provenance",
-        `Source revision ${data.sourceRevision} · data build ${date(data.builtAt)} · Actions observation ${date(data.actions.observedAt)}${data.host.observedAt ? ` · host observation ${date(data.host.observedAt)} · host data revision ${data.hostRevision}` : ""}`,
+        `Source revision ${data.sourceRevision} · data build ${date(data.builtAt)} · Actions observation ${date(data.actions.observedAt)}${data.host.observedAt ? ` · host observation ${date(data.host.observedAt)} · public payload ${data.host.revision || "legacy"} · host commit ${data.hostRevision}` : ""}`,
       );
       const outcomes = [...new Set(state.runs.map(label))].sort();
       const select = $("outcome-filter");

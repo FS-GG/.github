@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Text
+open System.Text.Json
 open Xunit
 open Microsoft.Data.Sqlite
 open FS.GG.Coord
@@ -101,6 +102,23 @@ module TelemetryStoreApplicationTests =
         Assert.Contains("\"quarantined\":1", result)
         Assert.Equal(before, TelemetryStoreApplication.summary path approved "UTEL-02" |> unwrap)
         Assert.Single(Directory.GetFiles(Path.Combine(path, "quarantine"), "*.rejected", SearchOption.AllDirectories)) |> ignore
+
+    [<Fact>]
+    let ``UTEL-DASH-08 coherent snapshot does not mix a concurrent correction`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.ingest path approved (batch "snapshot-first" "usage-1" 0L "s1" 10L) |> unwrap |> ignore
+        let hooks : TelemetryStoreApplication.DashboardSnapshotHooks =
+            { AfterFirstRead = fun () -> TelemetryStoreApplication.ingest path approved (batch "snapshot-correction" "usage-1" 1L "s2" 20L) |> unwrap |> ignore }
+        let during = TelemetryStoreApplication.dashboardSnapshotWithHooks path approved hooks None |> unwrap
+        use duringDocument = JsonDocument.Parse during
+        let duringSummary = duringDocument.RootElement.GetProperty("snapshot").GetProperty("summaries")[0]
+        Assert.Equal(15L, duringSummary.GetProperty("usage").GetProperty("total").GetInt64())
+        use afterDocument = JsonDocument.Parse(TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
+        let afterSummary = afterDocument.RootElement.GetProperty("snapshot").GetProperty("summaries")[0]
+        Assert.Equal(25L, afterSummary.GetProperty("usage").GetProperty("total").GetInt64())
+        Assert.False(duringDocument.RootElement.GetProperty("revision").GetString() = afterDocument.RootElement.GetProperty("revision").GetString())
 
     [<Fact>]
     let ``UTEL-02 live writer is never displaced and leaves ready batch queued`` () =
@@ -205,6 +223,7 @@ module TelemetryStoreApplicationTests =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "export"; "--public"; "--output"; "public.json" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "review"; "summary"; "--item"; "UTEL-08" ])
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--item"; "UTEL-08" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--format-version"; "2"; "--all" ])
 
     [<Fact>]
     let ``UTEL-02 changed unsafe permissions refuse before worker publication`` () =
@@ -1006,6 +1025,18 @@ module TelemetryStoreApplicationTests =
         Assert.Contains("\"direct\":15", detail)
         Assert.Contains("\"missingAttribution\":0", detail)
         Assert.Contains("A focused test exposed the repair", detail)
+        let snapshot1 = TelemetryStoreApplication.dashboardSnapshot path approved (Some item) |> unwrap
+        let snapshot2 = TelemetryStoreApplication.dashboardSnapshot path approved (Some item) |> unwrap
+        use snapshotDocument1 = JsonDocument.Parse snapshot1
+        use snapshotDocument2 = JsonDocument.Parse snapshot2
+        Assert.Equal("fsgg.telemetry.item-detail/2", snapshotDocument1.RootElement.GetProperty("schema").GetString())
+        Assert.Equal(8, snapshotDocument1.RootElement.GetProperty("snapshot").GetProperty("store").GetProperty("schemaVersion").GetInt32())
+        let canonical = Convert.FromBase64String(snapshotDocument1.RootElement.GetProperty("canonicalSnapshot").GetString())
+        use canonicalDocument = JsonDocument.Parse canonical
+        Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), CanonicalJson.sha256 canonical)
+        Assert.True(JsonElement.DeepEquals(snapshotDocument1.RootElement.GetProperty("snapshot"), canonicalDocument.RootElement))
+        Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), snapshotDocument2.RootElement.GetProperty("revision").GetString())
+        Assert.False(snapshotDocument1.RootElement.GetProperty("observedAt").GetString() = "")
         let publicPath = path + "-public.json"
         use publicCleanup = { new IDisposable with member _.Dispose() = if File.Exists publicPath then File.Delete publicPath }
         TelemetryStoreApplication.exportPublic path approved (Some item) publicPath |> unwrap |> ignore
@@ -1018,6 +1049,8 @@ module TelemetryStoreApplicationTests =
         let corrected = TelemetryStoreApplication.ingest path approved (operationalBatch "review-correction" item [ review "attempt" "\"attempt-review\"" 2 "Attempt completed after correction" ]) |> unwrap
         Assert.Contains("\"accepted\":1", corrected)
         Assert.DoesNotContain("\"outcomeSynopsis\":\"Attempt completed\"", TelemetryStoreApplication.reviewSummary path approved item |> unwrap)
+        use snapshotDocument3 = JsonDocument.Parse(TelemetryStoreApplication.dashboardSnapshot path approved (Some item) |> unwrap)
+        Assert.False(snapshotDocument1.RootElement.GetProperty("revision").GetString() = snapshotDocument3.RootElement.GetProperty("revision").GetString())
 
     [<Fact>]
     let ``UTEL-08 rejects premature reviews allocation and duplicate native attribution`` () =

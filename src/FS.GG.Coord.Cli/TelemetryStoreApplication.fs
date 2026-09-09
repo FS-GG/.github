@@ -5,12 +5,14 @@ open System.Diagnostics
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open System.Runtime.InteropServices
 open Microsoft.Data.Sqlite
 open FS.GG.Coord
 
 module TelemetryStoreApplication =
     type DrainHooks = { BeforeCommit: unit -> unit; AfterCommitBeforeDelete: unit -> unit }
+    type DashboardSnapshotHooks = { AfterFirstRead: unit -> unit }
     let databaseFileName = "telemetry.sqlite3"
     let private minimumEngine = Version(3, 51, 3)
     let private busyMilliseconds = 750
@@ -1140,6 +1142,119 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "item detail exceeds 1048576 bytes" ] else Ok result
             with error -> Error [ error.Message ]
 
+    // Dashboard snapshot /2 is intentionally a read model, not another persistence
+    // schema.  Every database value below is selected on this one connection while
+    // one explicit transaction is open.  Keeping the table vocabulary here makes
+    // the engine the sole owner of SQLite and migration knowledge.
+    let dashboardSnapshotWithHooks path assessment hooks (itemId: string option) =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly |> Result.map (fun value -> root, value)) with
+        | Error errors -> Error errors
+        | Ok(root, (connection, _)) ->
+            use connection = connection
+            try
+                use transaction = connection.BeginTransaction()
+                let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
+                let journal = scalarText connection "PRAGMA journal_mode;" |> _.ToLowerInvariant()
+                if version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                elif journal <> "wal" then Error [ "telemetry store journal mode must be WAL" ]
+                else
+                    let selectedItems =
+                        use command = connection.CreateCommand()
+                        command.Transaction <- transaction
+                        command.CommandText <-
+                            match itemId with
+                            | None -> "SELECT item_id FROM (SELECT item_id FROM ingest_facts WHERE item_id IS NOT NULL UNION SELECT item_id FROM budget_population_facts UNION SELECT item_id FROM native_item_outcomes) ORDER BY item_id LIMIT 202;"
+                            | Some _ -> "SELECT item_id FROM (SELECT item_id,original_item_id FROM budget_population_facts WHERE item_id=$item OR original_item_id=$item UNION SELECT item_id,item_id AS original_item_id FROM ingest_facts WHERE item_id=$item) ORDER BY item_id LIMIT 202;"
+                        itemId |> Option.iter (parameter command "$item")
+                        use reader = command.ExecuteReader()
+                        [| while reader.Read() do yield reader.GetString 0 |]
+                    hooks.AfterFirstRead()
+                    if selectedItems.Length > 200 then Error [ "dashboard snapshot exceeds 200 selected items" ]
+                    elif itemId.IsSome && selectedItems.Length = 0 then Error [ "unknown telemetry item" ]
+                    else
+                        let arrayOfStrings (values: seq<string>) = JsonArray(values |> Seq.map (fun value -> JsonValue.Create(value) :> JsonNode) |> Seq.toArray)
+                        let rows (sql: string) =
+                            use command = connection.CreateCommand()
+                            command.Transaction <- transaction
+                            command.CommandText <- sql
+                            itemId |> Option.iter (parameter command "$selected")
+                            use reader = command.ExecuteReader()
+                            let result = JsonArray()
+                            while reader.Read() do
+                                let row = JsonObject()
+                                for index in 0 .. reader.FieldCount - 1 do
+                                    let value : JsonNode =
+                                        if reader.IsDBNull index then null
+                                        else
+                                            match reader.GetValue index with
+                                            | :? int64 as value -> JsonValue.Create(value)
+                                            | :? int as value -> JsonValue.Create(value)
+                                            | :? double as value -> JsonValue.Create(value)
+                                            | :? (byte array) as value -> JsonValue.Create(Convert.ToBase64String value)
+                                            | value -> JsonValue.Create(string value)
+                                    row[reader.GetName index] <- value
+                                result.Add row
+                                if result.Count > 10000 then raise (InvalidOperationException("dashboard snapshot row bound exceeded"))
+                            result
+                        let whereItem column =
+                            match itemId with
+                            | None -> ""
+                            | Some _ -> $" WHERE %s{column} IN (SELECT item_id FROM budget_population_facts WHERE item_id=$selected OR original_item_id=$selected UNION SELECT $selected)"
+                        let itemFilter = whereItem "item_id"
+                        let table name order = rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
+                        let summaries = JsonArray()
+                        for selected in selectedItems do
+                            use document = JsonDocument.Parse(TelemetryStore.publicJson (readSummary connection selected))
+                            summaries.Add(JsonNode.Parse(document.RootElement.GetRawText()))
+                        let content = JsonObject()
+                        let selectionMode = if itemId.IsSome then "item" else "all"
+                        content["selection"] <- JsonSerializer.SerializeToNode {| mode = selectionMode; requestedItem = itemId; complete = true; maxItems = 200; maxRowsPerRelation = 10000 |}
+                        content["store"] <- JsonSerializer.SerializeToNode {| schemaVersion = version; journalMode = journal |}
+                        content["items"] <- arrayOfStrings selectedItems
+                        content["summaries"] <- summaries
+                        [ "populations", table "budget_population_facts" "item_id,fact_revision DESC,identity DESC"
+                          "dirtyItems", table "budget_dirty_items" "item_id"
+                          "outcomes", table "native_item_outcomes" "item_id,observed_at DESC,fact_revision DESC,identity DESC"
+                          "admissions", table "runtime_admissions" "item_id,invocation_id"
+                          "starts", table "runtime_starts" "item_id,invocation_id,phase"
+                          "terminals", table "runtime_terminals" "item_id,invocation_id"
+                          "expectedDispatches", table "expected_dispatches" "item_id,dispatch_id"
+                          "lineage", table "invocation_lineage" "item_id,fact_revision DESC,identity DESC"
+                          "times", table "operational_event_times" "item_id,invocation_id,event,fact_revision DESC,identity DESC"
+                          "usage", table "runtime_turn_usage" "item_id,identity"
+                          "runtimeGaps", table "runtime_gaps" "item_id,identity"
+                          "ciRuns", table "ci_runs" "item_id,repository,run_id,attempt"
+                          "ciJobs", table "ci_jobs" "item_id,repository,run_id,attempt,job_id"
+                          "ciSteps", table "ci_steps" "item_id,repository,run_id,attempt,job_id,number"
+                          "ciCoverage", table "ci_coverage" "item_id,rowid"
+                          "ciPopulationCoverage", table "ci_population_coverage" "item_id,fact_revision"
+                          "budgetAssessments", table "budget_assessment_revisions" "item_id,dimension,provider,accounting_scope,assessment_revision"
+                          "budgetMembership", table "budget_epoch_membership" "item_id"
+                          "budgetEpochs", rows "SELECT * FROM budget_epochs ORDER BY ordinal LIMIT 10001;"
+                          "budgetBreaches", rows "SELECT * FROM budget_breaches ORDER BY epoch_id,item_id LIMIT 10001;"
+                          "budgetInterventions", rows "SELECT * FROM budget_interventions ORDER BY epoch_id LIMIT 10001;"
+                          "activities", table "activity_spans" "item_id,started_at,activity_id"
+                          "activityUsageAttributions", table "activity_usage_attributions" "item_id,usage_identity"
+                          "complications", table "complication_events" "item_id,occurred_at,identity"
+                          "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision" ]
+                        |> List.iter (fun (name, value) -> content[name] <- value)
+                        let canonical = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(content.ToJsonString())) |> Result.defaultWith invalidOp
+                        let revision = CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical)
+                        let envelope = JsonObject()
+                        envelope["schema"] <- JsonValue.Create("fsgg.telemetry.item-detail/2")
+                        envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
+                        envelope["revision"] <- JsonValue.Create(revision)
+                        envelope["canonicalSnapshot"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes canonical))
+                        envelope["snapshot"] <- content
+                        envelope["operational"] <- JsonSerializer.SerializeToNode {| pendingBatches = pendingCount root; consistency = "observed-outside-database-transaction" |}
+                        let result = envelope.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n"
+                        transaction.Rollback()
+                        if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "dashboard snapshot exceeds 1048576 bytes" ] else Ok result
+            with error -> Error [ error.Message ]
+
+    let dashboardSnapshot path assessment itemId =
+        dashboardSnapshotWithHooks path assessment { AfterFirstRead = ignore } itemId
+
     type private ActivationRow =
         { Id: string; Runtime: string; ActivatedAt: DateTimeOffset; Clock: string; LateAfterSeconds: int64 }
     type private DispatchRow =
@@ -1523,6 +1638,11 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         match root args with
         | None -> output(Error [ "store root is not configured; use --store-root or FSGG_TELEMETRY_STORE" ])
         | Some path ->
-            match option "--item" args with
-            | Some item -> itemDetail path (assessProductionRoot path) item |> output
-            | None -> output(Error [ "--item is required" ])
+            match option "--format-version" args, List.contains "--all" args, option "--item" args with
+            | None, false, Some item -> itemDetail path (assessProductionRoot path) item |> output
+            | Some "1", false, Some item -> itemDetail path (assessProductionRoot path) item |> output
+            | Some "2", false, Some item -> dashboardSnapshot path (assessProductionRoot path) (Some item) |> output
+            | Some "2", true, None -> dashboardSnapshot path (assessProductionRoot path) None |> output
+            | Some version, _, _ when version <> "1" && version <> "2" -> output(Error [ "unsupported item detail format version" ])
+            | _, true, Some _ -> output(Error [ "--all and --item are mutually exclusive" ])
+            | _ -> output(Error [ "--item is required (or use --format-version 2 --all)" ])

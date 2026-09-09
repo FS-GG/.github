@@ -1,7 +1,7 @@
 import importlib.util
+import hashlib
 import json
 import pathlib
-import sqlite3
 import tempfile
 import unittest
 from unittest import mock
@@ -60,8 +60,8 @@ class DashboardTests(unittest.TestCase):
             with self.assertRaises(ValueError): D.load(path)
 
     def test_budget_boundaries_are_renderer_inputs_not_frontend_reductions(self):
-        value=host_fixture(); value["budget"]["distinctBreaches"]=15; value["budget"]["intervention"]="open"; D.validate_host(value)
-        value["budget"]["intervention"]="verified"; D.validate_host(value)
+        value=host_fixture(); value["budget"]["distinctBreaches"]=15; value["budget"]["intervention"]="open"; value.pop("revision"); value["revision"]=hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest(); D.validate_host(value)
+        value["budget"]["intervention"]="verified"; value.pop("revision"); value["revision"]=hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest(); D.validate_host(value)
         value["budget"]["intervention"]="required"
         with self.assertRaises(ValueError): D.validate_host(value)
 
@@ -106,6 +106,15 @@ class DashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_PROJECTION_FAILED"): D.engine_json("engine",["telemetry","item-detail"])
         with mock.patch.object(D.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout="x"*(D.MAX_JSON+1),stderr="")):
             with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_OUTPUT_TOO_LARGE"): D.engine_json("engine",["telemetry","item-detail"])
+
+    def test_engine_canonical_bytes_bind_non_ascii_escaping_and_numeric_shape(self):
+        relations=("populations","dirtyItems","outcomes","admissions","starts","terminals","expectedDispatches","lineage","times","usage","runtimeGaps","ciRuns","ciJobs","ciSteps","ciCoverage","ciPopulationCoverage","budgetAssessments","budgetMembership","budgetEpochs","budgetBreaches","budgetInterventions","activities","activityUsageAttributions","complications","reviews")
+        snapshot={name:[] for name in relations}; snapshot.update({"selection":{"mode":"all","complete":True},"store":{"schemaVersion":8,"journalMode":"wal"},"items":[],"summaries":[],"encodingEdge":'café <tag> "quoted"',"numericEdge":1.0})
+        canonical=json.dumps(snapshot,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+        envelope={"schema":"fsgg.telemetry.item-detail/2","observedAt":"2026-09-09T08:00:00Z","revision":hashlib.sha256(canonical).hexdigest(),"canonicalSnapshot":D.base64.b64encode(canonical).decode(),"snapshot":snapshot,"operational":{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}}
+        with mock.patch.object(D,"config",return_value=(pathlib.Path("/config"),{"storeRoot":"/store","engine":"engine"})),mock.patch.object(D,"engine_json",return_value=envelope):
+            value=D.build_host()
+        self.assertEqual(value["store"]["schemaVersion"],8); self.assertNotIn("encodingEdge",json.dumps(value))
 
 
 if __name__ == "__main__": unittest.main()
