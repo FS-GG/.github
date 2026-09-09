@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-09-08"
+updated: "2026-09-09"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -304,7 +304,7 @@ skills:
   # editing their `materializes-when` here — the producer's manifest is authoritative and check 6
   # would red on the divergence.
   # ------------------------------------------------------------------------------------------------
-  - { id: fable-bindings,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-bindings/SKILL.md, sha256: 1ca14e4e73a0ba29eff003b9f3428d9b4a745a298dcf77d3d1cc53ba325c8a0e, materializes-when: "template in [fable-bindings]" }
+  - { id: fable-bindings,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-bindings/SKILL.md, sha256: 4d38a9ee5fd59374c2bbb5a2fbb0c91613aebe2d407aecfb81d75be551f27904, materializes-when: "template in [fable-bindings]" }
   - { id: fable-interop,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-interop/SKILL.md, sha256: f24a1daa9fd9828f9299062413a1fcd9598527165b13b6a608ddd9d15dce55b0, materializes-when: "template in [fable-game, fable-bindings]" }
   - { id: fable-project,          scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-project/SKILL.md, sha256: 3513c6c6b9c754b8ff5063204d0d254a98533dba76439ff42b945e2c3bf67b91, materializes-when: "template in [fable-game, fable-bindings]" }
   - { id: fable-remoting,         scope: product, owner: fs-gg-templates, source: FS.GG.Templates/template/product-skills/fable-remoting/SKILL.md, sha256: 9b03e2cce0a9c3756d74100690aad5dcfe38cad65f77a31d2210a5f9cb0290e8, materializes-when: "template in [fable-game]" }
@@ -374,7 +374,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 47cbc08fc741a7734061b4fb882062f174e74456d06c91eb2381796ad957949a, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 5dba1846fa80e0f8a8797dc109f8f73fc2a75752878f3a9fcba787a9b11d807e, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
