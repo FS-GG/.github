@@ -165,6 +165,8 @@ jobs:
 
       - name: Prove the writer census can reject every required mutation
         run: python3 tests/v1-writer-census/run.py
+        env:
+          V1_WRITER_CENSUS_CANDIDATE: src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 
       - name: Prove compiled telemetry matches every frozen helper route
         run: python3 tests/telemetry-parity/run.py

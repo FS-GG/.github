@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -54,15 +55,21 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     else:
         bad("checked-in census covers the tracked executable population", structural.stderr.strip())
 
-    build = subprocess.run(
-        [str(ROOT / "scripts/build-gate-engine")],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    engine = Path(build.stdout.strip())
-    if build.returncode != 0 or not engine.is_file():
-        bad("candidate build supplies one typed command contract", build.stderr[-1000:])
+    supplied_candidate = os.environ.get("V1_WRITER_CENSUS_CANDIDATE")
+    if supplied_candidate:
+        engine = ROOT / supplied_candidate
+        build_error = "workflow-supplied candidate does not exist"
+    else:
+        build = subprocess.run(
+            [str(ROOT / "scripts/build-gate-engine")],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        engine = Path(build.stdout.strip())
+        build_error = build.stderr[-1000:]
+    if not engine.is_file():
+        bad("candidate build supplies one typed command contract", build_error)
         contract = {"schema": "invalid", "commands": []}
     else:
         emitted = subprocess.run([str(engine), "command-contract"], text=True, capture_output=True, check=False)
