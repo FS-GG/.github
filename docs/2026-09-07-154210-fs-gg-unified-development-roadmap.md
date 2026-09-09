@@ -43,7 +43,7 @@ and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
 ## 0. Current progress report
 
-Last reconciled: **2026-09-09 10:48 UTC**. Current frontier: **V0 and V1 in parallel**.
+Last reconciled: **2026-09-09 11:18 UTC**. Current frontier: **V0 and V1 in parallel**.
 
 This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
 installed operation and observed behavior separately because they have different completion authorities. A
@@ -63,7 +63,7 @@ Ordinary CI ticks, waiting and intermediate implementation checkpoints do not re
 | Stage | Indicator | Completed evidence | Remaining exit work |
 |---|---|---|---|
 | **V0 — Simplified baseline and v2 bindings** | **In progress** | Routine delivery is the canonical default for eligible work; protected operations retain explicit authority. The private telemetry engine/store, prospective runtime and CI observation, canonical budget reducer, and post-completion activity/review model are operational on the approved host. | Finish the R2/R4/R5 evidence denominators; deliver the coherent engine-owned dashboard snapshot and publisher setup; separately authorize and verify the public host feed. Close remaining automatic parent/child, CI-selection and unsupported native-usage coverage gaps without making telemetry block delivery. |
-| **V1 — Event/queue qualification and incumbent fencing** | **In progress; current GS frontier is GS2-08.2** | GS2-07.1–07.8 and GS2-08.1 have accepted native receipts. GS2-08.2 protection settings are installed. GS2-08.3 writer-census and GS2-08.4 common-precondition source boundaries are merged. | Merge and qualify GS2-08.2 operational source, then perform its separately authorized initialization and monitoring operation. Accept 08.2; qualify/accept 08.3–08.6; publish/adopt the bridge through 08.7–08.9 and prove old-client refusal. |
+| **V1 — Event/queue qualification and incumbent fencing** | **In progress; current GS frontier is GS2-08.2 live operation** | GS2-07.1–07.8 and GS2-08.1 have accepted native receipts. GS2-08.2 protection settings are installed and its operational source is merged. GS2-08.3 writer-census and GS2-08.4 common-precondition source boundaries are merged. | Perform GS2-08.2's separately authorized initialization and monitoring operation and obtain native acceptance. Qualify/accept 08.3–08.6; publish/adopt the bridge through 08.7–08.9 and prove old-client refusal. |
 | **V2 — Callable v2 and migration rehearsal** | **Not entered** | Existing pure adapters and qualification contracts are reusable inputs. | Deliver the installed ordinary entry point joining observation, decision, provider effects and recovery; complete GS2-09 representative migration, retry, rollback and omission proofs. |
 | **V3 — Coherent candidate and receivers** | **Not entered** | Receiver inventories and prior clean-install/upgrade evidence exist as inputs. | GS2-10 candidate freeze, exact tool/template/provider pins, comprehensive qualification and clean/upgrade receiver proof. |
 | **V4 — Closed switch** | **Not entered** | Cutover contracts and protected-operation boundaries exist. | GS2-11–12 freeze, drain, closed switch, verification and executable pre-open rollback. |
@@ -95,7 +95,7 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
 |---|---|---|---|
 | **GS2-07.1–07.8** | **Accepted** | All eight event, reconciliation, audit, security, merge-group, queue, measurement and selected no-host runtime-operation units have content-addressed accepted receipts. Scheduled complete audits remain authoritative; no webhook host was silently introduced. | Reuse these receipts at comprehensive closure. The bounded event-benefit result does not prove installed production savings or authorize reduced polling. |
 | **GS2-08.1 — Epoch wire** | **Accepted** | Native receipt `49c70359…` freezes the bridge/epoch semantics and accepted prerequisite. | Preserve exact correspondence through later initializer, writer and receiver work. |
-| **GS2-08.2 — Ledger protections** | **Installed settings; source completion active; not accepted** | Two dedicated Apps are installed only on `FS.GG.Coordination.Authority`; five rulesets and the protected `fleet-cutover` environment are installed; control issue `#2` is bound. Two-pass App-auth capture matched. Environment capture repair [Coordination PR #348](https://github.com/FS-GG/FS.GG.Coordination/pull/348) merged with 19 successful hosted checks and no failures. | Finish and merge the prospective initializer/monitor/evidence contract. Then obtain fresh prestate, reviewed manifest/trust inputs, protected cutover authorization, credential-custody evidence, durable monitor host/store and alert destination. Initialize the canonical `OperatingV1` ref/tag, activate the one-shot monitor schedule, verify both passes and accept the native unit. |
+| **GS2-08.2 — Ledger protections** | **Installed settings and operational source delivered; live operation/native acceptance pending** | Two dedicated Apps are installed only on `FS.GG.Coordination.Authority`; five rulesets and the protected `fleet-cutover` environment are installed; control issue `#2` is bound. Two-pass App-auth capture matched. Environment capture repair [Coordination PR #348](https://github.com/FS-GG/FS.GG.Coordination/pull/348) merged green. [Coordination PR #349](https://github.com/FS-GG/FS.GG.Coordination/pull/349) delivered the real Git-object genesis, independently authorized expected-absence initializer, exact partial/lost-response settlement, one-shot private-WAL monitor, signed operational evidence, CLI/recipes and prospective Q3/Q4/Q6 contract; its exact candidate passed 344 unit and 592 architecture tests plus all 19 hosted checks. | Install the exact merged source, obtain fresh prestate, reviewed manifest/trust inputs, protected cutover authorization, credential-custody evidence, durable monitor host/store and alert destination. Initialize the canonical `OperatingV1` ref/tag, activate the one-shot monitor schedule, verify both passes and accept the native unit. |
 | **GS2-08.3 — Writer census** | **Source delivered; acceptance pending** | Producer and independent receiver census source is merged. It inventories 54 command roots and cross-repository writer/callsite surfaces. | Establish the native accepted result and preserve the census against later executable writer changes. |
 | **GS2-08.4 — Common precondition** | **Source delivered; acceptance pending** | The common source boundary and retained Quint-validator isolation repair are merged. | Integrate every actual caller, qualify the live reader and installed fleet fencing, and obtain native acceptance. |
 | **GS2-08.5–08.6 — Incumbent behavior and attacks** | **Not registered/executed** | The accepted wire and current source boundaries provide prerequisites. | Prove allowed `OperatingV1`/`Preparing` behavior, refuse every stale generation/old-client/fence bypass and complete independent attacks. |
@@ -103,21 +103,16 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
 
 ### 0.4 Active work and immediate critical path
 
-1. **GS2-08.2 source qualification.** The active candidate implements a real Git-object genesis with
-   `ParentOid=None`, an independently authorized expected-absence initializer, exact lost-response/partial-state
-   settlement, a one-shot fail-closed monitor backed by private SQLite WAL, signed operational evidence, and
-   `plan`/`apply`/`verify` CLI modes. Focused initializer/evidence, monitor, architecture and Q3/Q4/Q6 checks are
-   green; full qualification and source delivery are in progress. This work performs no live initialization or
-   credential use.
+1. **GS2-08.2 live operation.** Install the exact source from Coordination PR #349, regenerate fresh two-pass
+   prestate and authorization, resolve the reviewed initial manifest/trust binding and credential custody, and
+   select a named durable monitor host/store and alert destination. Apply only the sealed canonical
+   `OperatingV1` initialization, verify branch/tag readback, install the one-shot schedule, exercise alert and
+   heartbeat evidence, then run native conformance and acceptance.
 2. **UTEL-DASH coherent source window.** Add a backward-compatible engine-owned bulk snapshot under one
    read-only WAL transaction, move all dashboard joins/accounting out of Python SQL, and add one inert-by-default
    publisher setup command. Source implementation can run in parallel with GS because it is in `.github` and does
    not touch the Authority repository.
-3. **GS2-08.2 live operation.** After the exact source is merged and installed, regenerate fresh two-pass prestate
-   and authorization. Apply only the sealed canonical initialization, verify branch/tag readback, install the
-   one-shot monitoring schedule on an approved durable host, exercise alert delivery/heartbeat and then run native
-   conformance and acceptance.
-4. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
+3. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
 
 ### 0.5 Known limits and decision state
