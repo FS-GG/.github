@@ -41,6 +41,100 @@ For the client orchestrator that connects to a project master and receives jobs,
 [cooperative orchestrators](#85-cooperative-orchestrators-a-project-master-assigns-jobs-to-contributor-clients)
 and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
+## 0. Current progress report
+
+Last reconciled: **2026-09-09 10:48 UTC**. Current frontier: **V0 and V1 in parallel**.
+
+This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
+installed operation and observed behavior separately because they have different completion authorities. A
+merged PR is not an installed capability, and an installed setting is not an accepted GS2 unit. The detailed
+subroadmaps and content-addressed native receipts remain the source of completion truth; this section is a dated
+human-readable projection over that evidence.
+
+**Mandatory closure update:** every Unified Roadmap item that reaches authoritative **Closed** or **Done** must
+update this progress report. When the owning change is in this repository, include the progress update in the same
+PR. When closure occurs in another repository or through a live operation, land the progress update immediately
+after authoritative readback. A progress-only follow-up is asynchronous and does not delay the owning delivery,
+but the programme driver must not select another roadmap item while the completed item is still absent here.
+Ordinary CI ticks, waiting and intermediate implementation checkpoints do not require a document revision.
+
+### 0.1 Stage progress
+
+| Stage | Indicator | Completed evidence | Remaining exit work |
+|---|---|---|---|
+| **V0 — Simplified baseline and v2 bindings** | **In progress** | Routine delivery is the canonical default for eligible work; protected operations retain explicit authority. The private telemetry engine/store, prospective runtime and CI observation, canonical budget reducer, and post-completion activity/review model are operational on the approved host. | Finish the R2/R4/R5 evidence denominators; deliver the coherent engine-owned dashboard snapshot and publisher setup; separately authorize and verify the public host feed. Close remaining automatic parent/child, CI-selection and unsupported native-usage coverage gaps without making telemetry block delivery. |
+| **V1 — Event/queue qualification and incumbent fencing** | **In progress; current GS frontier is GS2-08.2** | GS2-07.1–07.8 and GS2-08.1 have accepted native receipts. GS2-08.2 protection settings are installed. GS2-08.3 writer-census and GS2-08.4 common-precondition source boundaries are merged. | Merge and qualify GS2-08.2 operational source, then perform its separately authorized initialization and monitoring operation. Accept 08.2; qualify/accept 08.3–08.6; publish/adopt the bridge through 08.7–08.9 and prove old-client refusal. |
+| **V2 — Callable v2 and migration rehearsal** | **Not entered** | Existing pure adapters and qualification contracts are reusable inputs. | Deliver the installed ordinary entry point joining observation, decision, provider effects and recovery; complete GS2-09 representative migration, retry, rollback and omission proofs. |
+| **V3 — Coherent candidate and receivers** | **Not entered** | Receiver inventories and prior clean-install/upgrade evidence exist as inputs. | GS2-10 candidate freeze, exact tool/template/provider pins, comprehensive qualification and clean/upgrade receiver proof. |
+| **V4 — Closed switch** | **Not entered** | Cutover contracts and protected-operation boundaries exist. | GS2-11–12 freeze, drain, closed switch, verification and executable pre-open rollback. |
+| **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
+| **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 0/7/14/30-day observations, receiver carryover, contraction and old-client/clean-install proof. |
+| **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated** | Akka remains a later architectural candidate; concurrent SQLite writer/read coordination is a concrete datapoint in its favor, not an adoption decision. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
+
+No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
+receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
+effort percentage.
+
+### 0.2 Process and telemetry progress
+
+| Workstream | State | Evidence now available | Honest remaining gap |
+|---|---|---|---|
+| **Routine-process doctrine** | **Adopted for eligible work** | The work-roadmap, work-board, drive-board and single-item routes select routine delivery by default. Strict orchestration is reserved for work that actually needs protected authority, unresolved decisions or the heavier evidence contract. Cheap classification/reuse may admit work before nonblocking coherent confidence runs finish. | R4 still lacks its adequate routine cohort and 30-day follow-up; R5 still lacks an authorized ordinary-v2 journey and independent measured v2 cohort. |
+| **Private telemetry store** | **Operational** | `.github` PRs [#3376](https://github.com/FS-GG/.github/pull/3376), [#3378](https://github.com/FS-GG/.github/pull/3378) and [#3379](https://github.com/FS-GG/.github/pull/3379) delivered schema 8 and its live FK-safe revision repairs. The approved host store runs SQLite WAL with zero pending/quarantined batches after retained replay and a clean foreign-key check. | The database is private host state and must never be copied to Git/GitHub. Platform-native collaboration token capture remains unsupported and explicit. |
+| **Process observation** | **Operational for instrumented attempts** | Typed planning, implementation, review, validation, delivery, repair, operations and unclassified spans; exact usage attribution; complication events; revisioned attempt/item reviews; and `item-detail/1` are deployed. | Native usage is recorded only when the runtime supplies it. Missing population or attribution remains unknown; tokens are never divided by elapsed time. |
+| **Public dashboard source** | **Source delivered, host feed incomplete** | Bounded Actions/merged-delivery views, privacy filtering and an optional host publisher exist. | The current adapter rejects schema 8 and still owns direct SQLite reads. The next routine source window adds one engine-owned coherent `/2` dashboard snapshot, removes Python SQL and supplies one safe preview/install/verify command. |
+| **Public dashboard operation** | **Not activated** | The approved private host configuration and durable store are known. | No publication-label allowlist is approved, no recurring publisher is enabled and no immutable public host revision has been browser-verified. An empty template is not publication authority. |
+
+Current private topology is intentionally not embedded in the repository. The host config selects one durable
+store and installed engine; GitHub receives only an explicitly allowlisted, bounded public projection. Raw
+sessions, SQLite/WAL files, private identities and unrestricted review prose remain off GitHub.
+
+### 0.3 GS2 progress at the current frontier
+
+| Unit/window | State | Delivered or observed | Still required |
+|---|---|---|---|
+| **GS2-07.1–07.8** | **Accepted** | All eight event, reconciliation, audit, security, merge-group, queue, measurement and selected no-host runtime-operation units have content-addressed accepted receipts. Scheduled complete audits remain authoritative; no webhook host was silently introduced. | Reuse these receipts at comprehensive closure. The bounded event-benefit result does not prove installed production savings or authorize reduced polling. |
+| **GS2-08.1 — Epoch wire** | **Accepted** | Native receipt `49c70359…` freezes the bridge/epoch semantics and accepted prerequisite. | Preserve exact correspondence through later initializer, writer and receiver work. |
+| **GS2-08.2 — Ledger protections** | **Installed settings; source completion active; not accepted** | Two dedicated Apps are installed only on `FS.GG.Coordination.Authority`; five rulesets and the protected `fleet-cutover` environment are installed; control issue `#2` is bound. Two-pass App-auth capture matched. Environment capture repair [Coordination PR #348](https://github.com/FS-GG/FS.GG.Coordination/pull/348) merged with 19 successful hosted checks and no failures. | Finish and merge the prospective initializer/monitor/evidence contract. Then obtain fresh prestate, reviewed manifest/trust inputs, protected cutover authorization, credential-custody evidence, durable monitor host/store and alert destination. Initialize the canonical `OperatingV1` ref/tag, activate the one-shot monitor schedule, verify both passes and accept the native unit. |
+| **GS2-08.3 — Writer census** | **Source delivered; acceptance pending** | Producer and independent receiver census source is merged. It inventories 54 command roots and cross-repository writer/callsite surfaces. | Establish the native accepted result and preserve the census against later executable writer changes. |
+| **GS2-08.4 — Common precondition** | **Source delivered; acceptance pending** | The common source boundary and retained Quint-validator isolation repair are merged. | Integrate every actual caller, qualify the live reader and installed fleet fencing, and obtain native acceptance. |
+| **GS2-08.5–08.6 — Incumbent behavior and attacks** | **Not registered/executed** | The accepted wire and current source boundaries provide prerequisites. | Prove allowed `OperatingV1`/`Preparing` behavior, refuse every stale generation/old-client/fence bypass and complete independent attacks. |
+| **GS2-08.7–08.9 — Publish/adopt/disable** | **Not registered/executed** | Receiver inventory exists. | Publish one immutable bridge, adopt its exact identity across receiver families and disable/revoke clients that cannot honor the fence. |
+
+### 0.4 Active work and immediate critical path
+
+1. **GS2-08.2 source qualification.** The active candidate implements a real Git-object genesis with
+   `ParentOid=None`, an independently authorized expected-absence initializer, exact lost-response/partial-state
+   settlement, a one-shot fail-closed monitor backed by private SQLite WAL, signed operational evidence, and
+   `plan`/`apply`/`verify` CLI modes. Focused initializer/evidence, monitor, architecture and Q3/Q4/Q6 checks are
+   green; full qualification and source delivery are in progress. This work performs no live initialization or
+   credential use.
+2. **UTEL-DASH coherent source window.** Add a backward-compatible engine-owned bulk snapshot under one
+   read-only WAL transaction, move all dashboard joins/accounting out of Python SQL, and add one inert-by-default
+   publisher setup command. Source implementation can run in parallel with GS because it is in `.github` and does
+   not touch the Authority repository.
+3. **GS2-08.2 live operation.** After the exact source is merged and installed, regenerate fresh two-pass prestate
+   and authorization. Apply only the sealed canonical initialization, verify branch/tag readback, install the
+   one-shot monitoring schedule on an approved durable host, exercise alert delivery/heartbeat and then run native
+   conformance and acceptance.
+4. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
+   publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
+
+### 0.5 Known limits and decision state
+
+- **No current human product decision blocks source work.** Routine source delivery and proportional parallel
+  qualification are the canonical defaults.
+- **Protected live operations still need exact authority.** General permission to continue does not substitute for
+  fresh prestate, protected-environment authorization, credential custody or immutable readback.
+- **Telemetry completeness is scoped.** Store integrity and the instrumented prospective path are operational;
+  native collaboration usage and some automatic parent/child population discovery remain unsupported rather than
+  estimated.
+- **Dashboard publication is a privacy boundary.** Private-item aliases, categories, repositories, evidence links
+  and notes require an explicit closed allowlist. The database itself never moves to GitHub.
+- **The current roadmaps are navigation, not duplicate ledgers.** A checked subroadmap item requires its owning
+  source/native evidence. Every item closure must be projected here; ordinary CI ticks do not create progress
+  revisions.
+
 ## 1. Starting point and the simplification handoff
 
 ### 1.1 What “after simplification” means

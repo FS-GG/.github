@@ -24,6 +24,26 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RoadmapTelemetryTests(unittest.TestCase):
+    def test_every_closed_unified_item_updates_the_only_profile_roadmap(self):
+        agent_skill = (ROOT / ".agents/skills/work-unified-roadmap/SKILL.md").read_text(encoding="utf-8")
+        claude_skill = (ROOT / ".claude/skills/work-unified-roadmap/SKILL.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md").read_text(encoding="utf-8")
+        profile = (ROOT / "profile/README.md").read_text(encoding="utf-8")
+
+        self.assertEqual(agent_skill, claude_skill)
+        for text in (agent_skill, roadmap):
+            self.assertIn("every Unified Roadmap item", text)
+            self.assertIn("Closed", text)
+            self.assertIn("Done", text)
+        self.assertIn("do not\nselect the next roadmap item", agent_skill)
+        self.assertIn("## 0. Current progress report", roadmap)
+
+        current_note = profile.split("> [!NOTE]", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("FS-GG Unified Development Roadmap", current_note)
+        self.assertIn("#0-current-progress-report", current_note)
+        self.assertNotIn("development-master.md", current_note)
+        self.assertNotIn("github-substrate-v2-roadmap.md", current_note)
+
     def config(self, root: pathlib.Path) -> MODULE.HostConfig:
         config_path = root / "telemetry.json"
         config_path.write_text("{}", encoding="utf-8")
