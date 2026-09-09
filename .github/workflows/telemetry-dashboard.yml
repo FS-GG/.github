@@ -56,6 +56,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/telemetry-dashboard.py collect-actions --repo "$GITHUB_REPOSITORY" --cap 1000 --output actions.json
+      - name: Collect bounded public merged deliveries
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/telemetry-dashboard.py collect-deliveries --repo "$GITHUB_REPOSITORY" --cap 200 --output deliveries.json
       - name: Read optional safe host snapshot
         id: host
         env:
@@ -75,7 +79,7 @@ jobs:
           fi
       - name: Compose exact-revision site data
         run: |
-          args=(--actions actions.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
+          args=(--actions actions.json --deliveries deliveries.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
           [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
           python3 tools/telemetry-dashboard.py compose "${args[@]}"
       - uses: actions/configure-pages@v5

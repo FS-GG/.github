@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { runs: [], limit: 250 };
+  const state = { runs: [], items: [], deliveries: [], deliveryFeed: null, itemStatus: "Item details await a configured host", limit: 250 };
   const fmt = new Intl.NumberFormat("en", {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -235,8 +235,81 @@
     });
   }
 
+  const itemTime = (item) =>
+    item.runtime.duration.rows.reduce((sum, row) => sum + row.summedSeconds, 0);
+  const itemTokens = (item) => {
+    if (item.runtime.tokens.unmappedRows) return null;
+    const scopes = new Set(item.runtime.tokens.rows.map((row) => row.scope));
+    return scopes.size === 1
+      ? item.runtime.tokens.rows.reduce((sum, row) => sum + row.total, 0)
+      : null;
+  };
+  function metricTable(headings, rows, labelText) {
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap compact-table";
+    wrap.tabIndex = 0;
+    wrap.setAttribute("aria-label", labelText);
+    const table = document.createElement("table"), thead = document.createElement("thead"), tr = document.createElement("tr"), body = document.createElement("tbody");
+    headings.forEach((heading) => { const th=document.createElement("th"); th.textContent=heading; tr.append(th); });
+    thead.append(tr);
+    rows.forEach((values) => { const row=document.createElement("tr"); values.forEach((value) => { const td=document.createElement("td"); td.textContent=value; row.append(td); }); body.append(row); });
+    table.append(thead,body); wrap.append(table); return wrap;
+  }
+  function tokenBreakdown(rows) {
+    const root=document.createElement("div"); root.className="token-rows"; root.setAttribute("aria-label","Token usage by approved requested and observed category and scope");
+    rows.forEach((row)=>{const article=document.createElement("article"),h=document.createElement("h5"),scope=document.createElement("small"),metrics=document.createElement("p");h.textContent=`${row.role} · ${row.requestedModel} (${row.requestedEffort}) → ${row.observedModel} (${row.observedEffort})`;scope.textContent=row.scope;metrics.textContent=`Input ${fmt.format(row.input)} · cached ${fmt.format(row.cachedInput)} · output ${fmt.format(row.output)} · reasoning ${row.reasoning==null?"unknown":fmt.format(row.reasoning)} · total ${fmt.format(row.total)}`;article.append(h,scope,metrics);root.append(article);});
+    if (!rows.length) { const p=document.createElement("p"); p.textContent="No completed-turn token observation is available."; root.append(p); }
+    return root;
+  }
+  function renderItems() {
+    const query=$("item-search").value.trim().toLowerCase(), order=$("item-sort").value;
+    const rows=state.items.filter((item)=>!query || `${item.label} ${item.deliveries.map((d)=>d.repository+" "+d.number).join(" ")}`.toLowerCase().includes(query));
+    rows.sort((a,b)=>order==="time"?itemTime(b)-itemTime(a):order==="tokens"?(itemTokens(b)??-1)-(itemTokens(a)??-1):String(b.deliveredAt).localeCompare(String(a.deliveredAt)));
+    const root=$("completed-items"); root.replaceChildren();
+    if (!rows.length) {
+      const empty=document.createElement("div"); empty.className="empty-state item-empty";
+      const h=document.createElement("h3"); h.textContent=state.items.length?"No matching completed item":state.itemStatus;
+      const p=document.createElement("p"); p.textContent="Merged deliveries below remain independently available. Only current canonical completed population with delivered native outcomes appears here.";
+      empty.append(h,p); root.append(empty); return;
+    }
+    rows.forEach((item)=>{
+      const details=document.createElement("details"); details.className="item-card"; details.id=`item-${item.key}`;
+      if (location.hash===`#item-${item.key}`) { details.open=true; requestAnimationFrame(()=>details.scrollIntoView({block:"start"})); }
+      details.addEventListener("toggle",()=>{if(details.open)history.replaceState(null,"",`#item-${item.key}`);});
+      const summary=document.createElement("summary"), title=document.createElement("span"), name=document.createElement("strong"), meta=document.createElement("small");
+      name.textContent=item.label; meta.textContent=`${item.runtime.invocations} invocations · ${item.ci.counts.runs} CI runs · delivery recorded ${date(item.deliveredAt)}`; title.append(name,meta);
+      const total=document.createElement("b"), tokenTotal=itemTokens(item), partial=item.runtime.tokens.coverage.invocationsWithoutUsage>0||item.runtime.tokens.coverage.runtimeGaps>0; total.textContent=tokenTotal==null?"Observed tokens by scope":`${fmt.format(tokenTotal)} observed tokens${partial?" · partial":""}`; summary.append(title,total); details.append(summary);
+      const intro=document.createElement("p"), usageCoverage=item.runtime.tokens.coverage; intro.className="item-method"; intro.textContent=`Settled means current canonical population is completed and every grouped native delivery is delivered. Invocation spans may overlap; they are not human effort. CI time is separate. Token coverage: ${usageCoverage.invocationsWithUsage} invocation(s) observed, ${usageCoverage.invocationsWithoutUsage} without usage, ${usageCoverage.runtimeGaps} runtime gap(s).`; details.append(intro);
+      const links=document.createElement("div"); links.className="item-links"; const link=document.createElement("a"); link.href=item.url; link.target="_blank"; link.rel="noopener"; link.textContent="Open approved item evidence ↗"; links.append(link);
+      item.deliveries.forEach((delivery)=>{const deliveryLink=document.createElement("a");deliveryLink.href=delivery.url;deliveryLink.target="_blank";deliveryLink.rel="noopener";deliveryLink.textContent=`${delivery.repository}#${delivery.number} ↗`;links.append(deliveryLink);});
+      const permalink=document.createElement("a");permalink.href=`#item-${item.key}`;permalink.textContent="Permalink #";links.append(permalink);details.append(links);
+      const grid=document.createElement("div"); grid.className="item-detail-grid";
+      const section=(heading,node)=>{const box=document.createElement("section");const h=document.createElement("h4");h.textContent=heading;box.append(h,node);grid.append(box);};
+      const timeBox=document.createElement("div"), peak=Math.max(1,...item.runtime.duration.rows.map((r)=>r.summedSeconds)), bars=document.createElement("div"); bars.className="time-bars";
+      item.runtime.duration.rows.forEach((r)=>{const row=document.createElement("div"),name=document.createElement("span"),track=document.createElement("i"),fill=document.createElement("b");name.textContent=`${r.role} · ${r.known?r.unknown?`${duration(r.summedSeconds)} known portion`:duration(r.summedSeconds):"Unknown"}`;fill.style.width=`${r.known?(r.summedSeconds/peak)*100:0}%`;track.append(fill);row.append(name,track);bars.append(row);});
+      timeBox.append(bars,metricTable(["Role","Observed","Unknown","Summed invocation spans"],item.runtime.duration.rows.map((r)=>[r.role,String(r.known),String(r.unknown),r.known?(r.unknown?`${duration(r.summedSeconds)} known portion`:duration(r.summedSeconds)):"Unknown"]),"Invocation time by role")); section("Observed invocation time",timeBox);
+      section("Completed-turn tokens",tokenBreakdown(item.runtime.tokens.rows));
+      const ciLabels={runnerSeconds:"Runner time",wallSeconds:"Union wall time",queueSeconds:"Queue time",usefulValidationSeconds:"Useful validation",administrativeSeconds:"Administration",necessarySetupSeconds:"Necessary setup",mixedSeconds:"Mixed classification",unclassifiedSeconds:"Unclassified"};
+      section("CI time",metricTable(["Metric","Known / unknown","Item-seconds"],Object.entries(item.ci.seconds).map(([key,value])=>[ciLabels[key]||key,`${value.knownItems} / ${value.unknownItems}`,value.knownItems?(value.unknownItems?`${duration(value.totalItemSeconds)} known portion`:duration(value.totalItemSeconds)):"Unknown"]),"CI measurements; categories may overlap"));
+      section("Canonical budgets",metricTable(["Dimension","Verdict","Numerator / denominator"],item.budget.assessments.map((a)=>[`${a.dimension} · ${a.epoch}`,`${a.verdict}${a.severe?" · severe":""}`,`${a.numerator??"unknown"} / ${a.denominator??"unknown"}`]),"Reducer-owned budget assessments"));
+      const complication=document.createElement("div"), gap=document.createElement("p"); gap.className="gap-note"; gap.textContent="Cause, repair time, repair tokens, and planning / implementation / repair phase allocation are not recorded. Failed invocation tokens are not repair tokens."; complication.append(gap);
+      const eventLabels={runtimeNonSuccess:"Non-success runtime terminals",failedOrCancelledCiRuns:"Failed / cancelled CI runs",repeatedCiRuns:"Repeated CI attempts",followUpInvocations:"Runtime follow-up invocations"};
+      complication.append(metricTable(["Observed evidence","Count"],Object.entries(item.complications.observed).map(([key,value])=>[eventLabels[key]||key,String(value)]),"Observed complication signals"));
+      item.complications.notes.forEach((note)=>{const p=document.createElement("p"),a=document.createElement("a");p.className="approved-note";p.append(`${note.kind}: ${note.text} `);a.href=note.evidenceUrl;a.target="_blank";a.rel="noopener";a.textContent="evidence ↗";p.append(a);complication.append(p);}); section("Complications and repairs",complication);
+      details.append(grid); root.append(details);
+    });
+  }
+  function renderDeliveries(feed) {
+    state.deliveryFeed=feed; const query=$("item-search").value.trim().toLowerCase(), order=$("item-sort").value;
+    state.deliveries=feed.deliveries.filter((delivery)=>!query || `${delivery.title} ${delivery.number}`.toLowerCase().includes(query));
+    state.deliveries.sort((a,b)=>order==="time"?(b.elapsedSeconds??-1)-(a.elapsedSeconds??-1):String(b.mergedAt).localeCompare(String(a.mergedAt)));
+    text("delivery-count",`${state.deliveries.length} shown · ${feed.selection.returned} merged from ${feed.selection.closedScanned} closed PRs scanned`);
+    const body=$("deliveries"); body.replaceChildren();
+    state.deliveries.forEach((delivery)=>{const tr=document.createElement("tr"), first=document.createElement("td"), link=document.createElement("a");link.href=delivery.url;link.target="_blank";link.rel="noopener";link.textContent=`#${delivery.number} ${delivery.title}`;first.append(link);const merged=document.createElement("td");merged.textContent=date(delivery.mergedAt);const elapsed=document.createElement("td");elapsed.textContent=duration(delivery.elapsedSeconds);tr.append(first,merged,elapsed);body.append(tr);});
+  }
+
   function renderLocal(host) {
-    if (host.schema !== "fsgg.telemetry.dashboard-host/1") {
+    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2"].includes(host.schema)) {
       text(
         "local-state",
         host.status === "unconfigured"
@@ -406,11 +479,14 @@
   function validate(data) {
     if (
       !data ||
-      data.schema !== "fsgg.telemetry.dashboard/1" ||
+      data.schema !== "fsgg.telemetry.dashboard/2" ||
       !data.actions ||
       data.actions.schema !== "fsgg.telemetry.public-actions/1" ||
       !Array.isArray(data.actions.runs) ||
-      !data.actions.selection
+      !data.actions.selection ||
+      !data.deliveries ||
+      data.deliveries.schema !== "fsgg.telemetry.public-deliveries/1" ||
+      !Array.isArray(data.deliveries.deliveries)
     )
       throw new Error(
         "The published data does not match the dashboard contract.",
@@ -441,6 +517,12 @@
         throw new Error(`Data request failed (${response.status}).`);
       const data = validate(await response.json());
       state.runs = data.actions.runs;
+      state.items = data.host.schema === "fsgg.telemetry.dashboard-host/2" ? data.host.completedItems.items : [];
+      state.itemStatus = data.host.schema === "fsgg.telemetry.dashboard-host/2" ? (data.host.completedItems.coverage.incompatible ? "Some completed-item details were rejected as incompatible" : data.host.completedItems.coverage.unmapped ? "Completed items await approved public labels" : data.host.completedItems.coverage.dirty ? "Item completion is pending canonical reduction" : "No completed item is present in the observed host snapshot") : data.host.schema === "fsgg.telemetry.dashboard-host/1" ? "This older host snapshot has aggregate telemetry only" : "Item details await a configured host";
+      renderItems();
+      renderDeliveries(data.deliveries);
+      const itemCoverage = data.host.completedItems?.coverage;
+      text("items-note",itemCoverage ? `${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.` : "Host item projection unavailable. Showing independent public merged deliveries.");
       const counts = renderOutcomes(state.runs);
       renderTrend(state.runs);
       renderWorkflowHealth(state.runs);
@@ -510,6 +592,7 @@
       renderTable();
     }),
   );
+  ["item-search","item-sort"].forEach((id)=>$(id).addEventListener(id==="item-search"?"input":"change",()=>{renderItems();if(state.deliveryFeed)renderDeliveries(state.deliveryFeed);}));
   $("show-more").addEventListener("click", () => {
     state.limit += 250;
     renderTable();

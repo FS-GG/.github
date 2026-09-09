@@ -18,7 +18,7 @@
         ><span>FS—GG</span><b>SIGNAL</b></a
       >
       <nav aria-label="Dashboard views">
-        <a href="#overview">Overview</a><a href="#actions">Actions</a
+        <a href="#overview">Overview</a><a href="#items">Items</a><a href="#actions">Actions</a
         ><a href="#local">Local</a><a href="#method">Method</a>
       </nav>
       <button
@@ -56,6 +56,23 @@
         </div>
         <div>
           <strong id="m-workflows">—</strong><span>workflows sampled</span>
+        </div>
+      </section>
+
+      <section class="panel items-panel" id="items" aria-labelledby="items-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">DELIVERY / ITEM EVIDENCE</p><h2 id="items-title">Completed items</h2></div>
+          <p class="context" id="items-note">Checking item-level coverage.</p>
+        </div>
+        <div class="item-controls controls">
+          <label><span>Search</span><input id="item-search" type="search" placeholder="Item or delivery" autocomplete="off" /></label>
+          <label><span>Order</span><select id="item-sort"><option value="recent">Recently delivered</option><option value="tokens">Most tokens</option><option value="time">Most observed time</option></select></label>
+        </div>
+        <div id="completed-items" class="item-list"></div>
+        <div id="delivery-fallback">
+          <div class="subheading"><h3>Merged deliveries</h3><span id="delivery-count">—</span></div>
+          <p class="context">Public pull requests are delivery evidence only. They do not prove a whole original item is complete, and open-to-merge elapsed time is not effort.</p>
+          <div class="table-wrap" tabindex="0" aria-label="Merged pull request deliveries"><table><thead><tr><th>Delivery</th><th>Merged</th><th>Open → merge</th></tr></thead><tbody id="deliveries"></tbody></table></div>
         </div>
       </section>
 

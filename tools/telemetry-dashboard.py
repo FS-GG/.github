@@ -10,10 +10,13 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
+import sqlite3
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,8 +24,12 @@ from typing import Any
 
 MAX_JSON = 1_048_576
 MAX_API_JSON = 4 * 1_048_576
-HOST_SCHEMA = "fsgg.telemetry.dashboard-host/1"
-DASH_SCHEMA = "fsgg.telemetry.dashboard/1"
+HOST_SCHEMA = "fsgg.telemetry.dashboard-host/2"
+LEGACY_HOST_SCHEMA = "fsgg.telemetry.dashboard-host/1"
+DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
+DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
+ITEMS_SCHEMA = "fsgg.telemetry.completed-items/1"
+LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/1"
 ALLOWED_STATES = {"queued", "in_progress", "completed", "requested", "waiting", "pending"}
 ALLOWED_RESULTS = {"success", "failure", "cancelled", "skipped", "timed_out", "action_required", "neutral", "stale", "startup_failure", None}
 
@@ -80,7 +87,9 @@ def github(path: str, token: str, method: str = "GET", body: Any = None) -> tupl
 
 def parse_time(value: Any) -> dt.datetime | None:
     if not isinstance(value, str): return None
-    try: return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    try:
+        parsed=dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else None
     except ValueError: return None
 
 
@@ -121,6 +130,33 @@ def collect_actions(repo: str, token: str, cap: int) -> dict[str, Any]:
             "semantics":"bounded multi-page sample, deduplicated by run id; latest observed attempt; not an atomic inventory"}, "runs":runs}
 
 
+def collect_deliveries(repo: str, token: str, cap: int) -> dict[str, Any]:
+    if not 1 <= cap <= 500: raise ValueError("delivery cap must be between 1 and 500")
+    rows: list[dict[str, Any]] = []; seen: set[int] = set(); observation = now(); pages = 0; scanned=0
+    for page in range(1, (cap + 99) // 100 + 1):
+        result, _ = github(f"repos/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page={page}", token)
+        if not isinstance(result, list): raise ValueError("malformed pull request response")
+        pages += 1
+        for raw in result:
+            scanned += 1
+            if len(rows) >= cap: break
+            if not isinstance(raw, dict) or raw.get("merged_at") is None: continue
+            number = checked_int(raw.get("number"), "pull request number")
+            if number in seen: continue
+            seen.add(number)
+            merged = parse_time(raw.get("merged_at")); created = parse_time(raw.get("created_at"))
+            title = raw.get("title")
+            if merged is None or created is None or not isinstance(title, str): raise ValueError("malformed merged pull request")
+            elapsed=int((merged-created).total_seconds()) if merged>=created else None
+            rows.append({"number":number,"title":title[:180],"url":f"https://github.com/{repo}/pull/{number}",
+                "createdAt":created.isoformat().replace("+00:00","Z"),"mergedAt":merged.isoformat().replace("+00:00","Z"),
+                "elapsedSeconds":elapsed})
+        if len(result) < 100: break
+    return {"schema":DELIVERIES_SCHEMA,"observedAt":observation,"repository":repo,
+        "selection":{"order":"closed-updated-descending","cap":cap,"pagesFetched":pages,"closedScanned":scanned,"returned":len(rows),
+            "semantics":"merged pull requests found in a bounded updated-ordered closed-PR scan; public delivery evidence, not proof of a whole completed item or effort"},"deliveries":rows}
+
+
 def config() -> tuple[pathlib.Path, dict[str, str]]:
     helper = pathlib.Path(__file__).resolve().parents[1] / ".claude/skills/work-roadmap/scripts/fsgg_telemetry_defaults.py"
     spec = importlib.util.spec_from_file_location("dashboard_telemetry_defaults", helper)
@@ -139,7 +175,185 @@ def engine_json(engine: str, args: list[str]) -> Any:
     except json.JSONDecodeError as error: raise HostSourceError("HOST_ENGINE_INVALID_JSON") from error
 
 
-def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None) -> dict[str, Any]:
+def load_labels(path: pathlib.Path | None) -> dict[str, Any]:
+    if path is None: return {"schema":LABELS_SCHEMA,"items":{},"models":{},"efforts":{},"scopes":{}}
+    if path.is_symlink() or not path.is_file() or stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise HostSourceError("HOST_LABELS_UNSAFE")
+    value = load(path, 65536)
+    exact(value,{"schema","items","models","efforts","scopes"},"label approval")
+    if value["schema"] != LABELS_SCHEMA: raise ValueError("invalid label approval schema")
+    for category in ("models","efforts","scopes"):
+        if not isinstance(value[category],dict) or len(value[category])>64: raise ValueError("invalid approved category map")
+        for private,public in value[category].items():
+            if not isinstance(private,str) or not isinstance(public,str) or not 1<=len(public)<=48: raise ValueError("invalid approved category")
+        if category=="scopes" and len(set(value[category].values()))!=len(value[category]): raise ValueError("public scope aliases must be unique")
+    if not isinstance(value["items"],dict) or len(value["items"])>200: raise ValueError("invalid approved item map")
+    aliases=set()
+    for private,item in value["items"].items():
+        exact(item,{"key","label","url","repositories","notes"},"approved item")
+        if not isinstance(private,str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",item["key"]): raise ValueError("invalid public item key")
+        if item["key"] in aliases: raise ValueError("conflicting public item key")
+        aliases.add(item["key"])
+        if not isinstance(item["label"],str) or not 1<=len(item["label"])<=120: raise ValueError("invalid public item label")
+        if not isinstance(item["url"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+(?:/(?:issues|pull)/[1-9][0-9]*)?",item["url"]): raise ValueError("invalid public item URL")
+        if not isinstance(item["repositories"],list) or len(item["repositories"])>8 or any(not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",r) for r in item["repositories"]): raise ValueError("invalid approved repository")
+        if not isinstance(item["notes"],list) or len(item["notes"])>8: raise ValueError("invalid approved notes")
+        for note in item["notes"]:
+            exact(note,{"kind","text","evidenceUrl"},"approved note")
+            enum(note["kind"],{"repair","complication"},"note kind")
+            if not isinstance(note["text"],str) or not 1<=len(note["text"])<=240: raise ValueError("invalid approved note")
+            if not isinstance(note["evidenceUrl"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*",note["evidenceUrl"]): raise ValueError("invalid note evidence")
+    return value
+
+
+def _latest_rows(connection: sqlite3.Connection, table: str, order: str) -> list[sqlite3.Row]:
+    # Table and order are fixed call-site constants, never caller input.
+    rows=connection.execute(f"SELECT * FROM {table} ORDER BY {order} LIMIT 10001").fetchall()
+    if len(rows)>10000: raise HostSourceError("HOST_QUERY_BOUND_EXCEEDED")
+    return rows
+
+
+def project_completed_items(store_root: str, status: dict[str, Any], labels: dict[str, Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]]) -> dict[str, Any]:
+    database=pathlib.Path(store_root)/"telemetry.sqlite3"
+    if database.is_symlink() or not database.is_file(): raise HostSourceError("HOST_STORE_UNAVAILABLE")
+    uri=f"file:{urllib.parse.quote(str(database))}?mode=ro"
+    connection=None
+    try:
+        connection=sqlite3.connect(uri,uri=True,timeout=5); connection.row_factory=sqlite3.Row
+        deadline=time.monotonic()+10; progress=[0]
+        def bounded_progress() -> int:
+            progress[0]+=1
+            return int(progress[0]>2000 or time.monotonic()>deadline)
+        connection.set_progress_handler(bounded_progress,1000)
+        connection.execute("PRAGMA query_only=ON"); connection.execute("BEGIN")
+        if connection.execute("PRAGMA user_version").fetchone()[0] != 7: raise HostSourceError("HOST_SCHEMA_INCOMPATIBLE")
+        if connection.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal": raise HostSourceError("HOST_JOURNAL_INCOMPATIBLE")
+        native=tuple(int(part) for part in connection.execute("SELECT sqlite_version()").fetchone()[0].split(".")[:3])
+        if native < (3,51,3): raise HostSourceError("HOST_READER_INCOMPATIBLE")
+
+        dirty={r[0] for r in connection.execute("SELECT item_id FROM budget_dirty_items LIMIT 10001")}
+        if len(dirty)>10000: raise HostSourceError("HOST_QUERY_BOUND_EXCEEDED")
+        populations={}
+        for row in _latest_rows(connection,"budget_population_facts","item_id,CASE WHEN source_ref LIKE 'derived:%' THEN 0 ELSE 1 END,fact_revision DESC,identity DESC"):
+            populations.setdefault(row["item_id"],row)
+        outcomes={}
+        for row in _latest_rows(connection,"native_item_outcomes","item_id,observed_at DESC,fact_revision DESC,identity DESC"):
+            outcomes.setdefault(row["item_id"],row)
+        groups: dict[str,list[str]]={}
+        for item,row in populations.items(): groups.setdefault(row["original_item_id"],[]).append(item)
+        approved=labels["items"]; result=[]; eligible=unmapped=dirty_count=incompatible=0
+        for original,members in sorted(groups.items()):
+            population_rows=[populations[m] for m in members]
+            latest=[outcomes.get(m) for m in members]
+            if any(m in dirty for m in members): dirty_count+=1; continue
+            if any(r["state"]!="completed" for r in population_rows): continue
+            if any(r is None or r["outcome"] not in {"delivered","delivered-after-readback"} or r["code_delivery"]!="delivered" for r in latest): continue
+            eligible+=1
+            approval=approved.get(original)
+            if approval is None: unmapped+=1; continue
+            try: result.append(project_one_item(connection,original,members,latest,approval,labels,ci_by_item,budgets_by_item,status.get("epoch")))
+            except ValueError: incompatible+=1
+        connection.rollback()
+    except sqlite3.Error as error:
+        raise HostSourceError("HOST_READ_PROJECTION_FAILED") from error
+    finally:
+        if connection is not None: connection.close()
+    return {"schema":ITEMS_SCHEMA,"coverage":{"eligible":eligible,"published":len(result),"unmapped":unmapped,"dirty":dirty_count,"incompatible":incompatible},"items":result}
+
+
+def project_one_item(connection: sqlite3.Connection, original: str, members: list[str], outcomes: list[sqlite3.Row], approval: dict[str,Any], labels: dict[str,Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]], epoch: Any) -> dict[str,Any]:
+    placeholders=",".join("?" for _ in members)
+    terminals=connection.execute(f"SELECT item_id,invocation_id,outcome FROM runtime_terminals WHERE item_id IN ({placeholders}) LIMIT 4097",members).fetchall()
+    if len(terminals)>4096: raise ValueError("item projection exceeds runtime bound")
+    complete_invocations={r["invocation_id"] for r in terminals}
+    lineage={}
+    lineage_rows=connection.execute(f"SELECT invocation_id,relation FROM invocation_lineage WHERE item_id IN ({placeholders}) ORDER BY fact_revision DESC,identity DESC LIMIT 4097",members).fetchall()
+    if len(lineage_rows)>4096: raise ValueError("item projection exceeds lineage bound")
+    for row in lineage_rows:
+        if row["invocation_id"] in lineage and lineage[row["invocation_id"]]!=row["relation"]: raise ValueError("ambiguous lineage")
+        lineage.setdefault(row["invocation_id"],row["relation"])
+    times=connection.execute(f"SELECT invocation_id,event,occurred_at,occurred_clock_provenance FROM operational_event_times WHERE item_id IN ({placeholders}) ORDER BY fact_revision DESC,identity DESC LIMIT 8193",members).fetchall()
+    if len(times)>8192: raise ValueError("item projection exceeds timing bound")
+    events={}
+    for r in times: events.setdefault((r["invocation_id"],r["event"]),r)
+    durations=[]
+    for invocation in complete_invocations:
+        first,last=events.get((invocation,"start")),events.get((invocation,"terminal"))
+        if first and last and first["occurred_clock_provenance"] in {"host-wall","provider-native","github-native"} and first["occurred_clock_provenance"]==last["occurred_clock_provenance"]:
+            a,b=parse_time(first["occurred_at"]),parse_time(last["occurred_at"])
+            if a and b and b>=a: durations.append((lineage.get(invocation,"unknown"),int((b-a).total_seconds())))
+    usage=connection.execute(f"SELECT u.* FROM runtime_turn_usage u JOIN runtime_terminals t ON t.item_id=u.item_id AND t.invocation_id=u.invocation_id WHERE u.item_id IN ({placeholders}) ORDER BY u.identity LIMIT 8193",members).fetchall()
+    if len(usage)>8192: raise ValueError("item projection exceeds usage bound")
+    breakdown={}
+    for row in usage:
+        role=lineage.get(row["invocation_id"],"unknown"); role=role if role in {"root","child","follow-up"} else "unknown"
+        requested_model=labels["models"].get(row["requested_model"]); observed_model=labels["models"].get(row["observed_model"])
+        requested_effort=labels["efforts"].get(row["requested_effort"]); observed_effort=labels["efforts"].get(row["observed_effort"])
+        scope=labels["scopes"].get(f"{row['provider']}|{row['accounting_scope']}")
+        raw_key=(role,row["provider"],row["accounting_scope"],row["requested_model"],row["observed_model"],row["requested_effort"],row["observed_effort"])
+        public=(requested_model,observed_model,requested_effort,observed_effort,scope)
+        unmapped=any(v is None for v in public)
+        requested_model=requested_model or "unknown"; observed_model=observed_model or "unknown"; requested_effort=requested_effort or "unknown"; observed_effort=observed_effort or "unknown"; scope=scope or "unknown"
+        key=("mapped",raw_key)
+        bucket=breakdown.setdefault(key,{"role":role,"requestedModel":requested_model,"observedModel":observed_model,"requestedEffort":requested_effort,"observedEffort":observed_effort,"scope":scope,"turns":0,"input":0,"cachedInput":0,"output":0,"reasoning":0,"reasoningKnown":True,"total":0,"unmapped":unmapped})
+        bucket["turns"]+=1
+        for source,target in (("input_count","input"),("cached_input","cachedInput"),("output_count","output"),("total","total")): bucket[target]+=row[source]
+        if row["reasoning"] is None: bucket["reasoningKnown"]=False
+        else: bucket["reasoning"]+=row["reasoning"]
+    token_rows=[]
+    unmapped_rows=sum(1 for bucket in breakdown.values() if bucket["unmapped"])
+    for bucket in breakdown.values():
+        bucket.pop("unmapped")
+        if not bucket.pop("reasoningKnown"): bucket["reasoning"]=None
+        token_rows.append(bucket)
+    token_rows.sort(key=lambda r:(r["role"],r["observedModel"],r["observedEffort"],r["scope"]))
+    repos=set(approval["repositories"]); deliveries=[]
+    outcome_rows=connection.execute(f"SELECT repository,pr_number,outcome,code_delivery,occurred_at,observed_at FROM native_item_outcomes WHERE item_id IN ({placeholders}) ORDER BY observed_at DESC,fact_revision DESC,identity DESC LIMIT 257",members).fetchall()
+    if len(outcome_rows)>256: raise ValueError("item projection exceeds delivery bound")
+    seen_deliveries=set()
+    for row in outcome_rows:
+        identity=(row["repository"],row["pr_number"])
+        if identity in seen_deliveries: continue
+        seen_deliveries.add(identity)
+        if row["repository"] in repos and row["code_delivery"]=="delivered" and row["outcome"] in {"delivered","delivered-after-readback"}:
+            deliveries.append({"repository":row["repository"],"number":row["pr_number"],"url":f"https://github.com/{row['repository']}/pull/{row['pr_number']}","mergedAt":row["occurred_at"]})
+    ci_counts={k:0 for k in ("runs","attempts","jobs","steps")}; ci_seconds={k:{"knownItems":0,"unknownItems":0,"totalItemSeconds":0} for k in ("runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds")}
+    for member in members:
+        ci=ci_by_item.get(member)
+        if not ci:
+            for k in ci_seconds: ci_seconds[k]["unknownItems"]+=1
+            continue
+        for k in ci_counts: ci_counts[k]+=checked_int(ci.get(k),k)
+        for k in ci_seconds:
+            if ci.get(k) is None: ci_seconds[k]["unknownItems"]+=1
+            else: ci_seconds[k]["knownItems"]+=1; ci_seconds[k]["totalItemSeconds"]+=checked_int(ci[k],k)
+    terminal_counts={k:0 for k in ("completed","failed","cancelled","launch-failed","other")}
+    for row in terminals:
+        outcome=row["outcome"] if row["outcome"] in terminal_counts else "other"
+        terminal_counts[outcome]+=1
+    ci_fail=connection.execute(f"SELECT count(*) FROM ci_runs WHERE item_id IN ({placeholders}) AND conclusion IN ('failure','cancelled','timed_out')",members).fetchone()[0]
+    repeated=connection.execute(f"SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id IN ({placeholders}) GROUP BY repository,run_id HAVING max(attempt)>1)",members).fetchone()[0]
+    delivered=max((parse_time(r["occurred_at"]) for r in outcomes if parse_time(r["occurred_at"])),default=None)
+    duration_rows=[]
+    for role in ("root","child","follow-up","unknown"):
+        values=[seconds for item_role,seconds in durations if item_role==role]
+        count=sum(1 for invocation in complete_invocations if lineage.get(invocation,"unknown")==role)
+        if count: duration_rows.append({"role":role,"invocations":count,"known":len(values),"unknown":count-len(values),"summedSeconds":sum(values)})
+    budget=[]
+    for member in members:
+        for dimension in budgets_by_item.get(member,{}).get("dimensions",[]):
+            if isinstance(dimension,dict) and dimension.get("dimension") in {"model-usage","owner-effort","priced-cost","critical-path-delay","ci-runner-administration"} and dimension.get("verdict") in {"unknown","not-applicable","pass","breach"}:
+                budget.append({"epoch":"current" if dimension.get("epoch")==epoch else "historical","dimension":dimension["dimension"],"verdict":dimension["verdict"],"numerator":dimension.get("numerator"),"denominator":dimension.get("denominator"),"severe":dimension.get("severe") is True})
+    invocations_with_usage=len({row["invocation_id"] for row in usage})
+    runtime_gaps=connection.execute(f"SELECT count(*) FROM runtime_gaps WHERE item_id IN ({placeholders})",members).fetchone()[0] if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='runtime_gaps'").fetchone() else 0
+    return {"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"settled","deliveredAt":delivered.isoformat().replace("+00:00","Z") if delivered else None,"deliveries":deliveries,
+        "runtime":{"invocations":len(complete_invocations),"terminalOutcomes":terminal_counts,"duration":{"rows":duration_rows,"semantics":"same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time"},"tokens":{"scope":"completed native turns; input includes cached input","rows":token_rows,"unmappedRows":unmapped_rows,"coverage":{"invocationsWithUsage":invocations_with_usage,"invocationsWithoutUsage":len(complete_invocations)-invocations_with_usage,"runtimeGaps":runtime_gaps}}},
+        "ci":{"counts":ci_counts,"seconds":ci_seconds,"semantics":"runner seconds sum jobs; wall, queue, and category values are per-item unions and may overlap"},
+        "budget":{"scope":"canonical reducer assessments; epoch identities removed","assessments":budget},
+        "complications":{"observed":{"runtimeNonSuccess":sum(v for k,v in terminal_counts.items() if k!="completed"),"failedOrCancelledCiRuns":ci_fail,"repeatedCiRuns":repeated,"followUpInvocations":sum(1 for v in lineage.values() if v=="follow-up")},"notes":approval["notes"],"semantics":"observed events and approved notes; no inferred cause or repair cost; development phases and repair attribution unavailable"}}
+
+
+def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None) -> dict[str, Any]:
     if not isinstance(public, dict) or public.get("schema") != "fsgg.telemetry.public-export/1" or not isinstance(public.get("items"), list): raise ValueError("invalid public export")
     totals = {k:0 for k in ("factCount","usageObservations","deliveryObservations")}
     usage = {k:0 for k in ("input","cachedInput","cacheWriteInput","output","total")}; reasoning: int | None = 0
@@ -159,13 +373,12 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         for key in quality:
             raw=item.get(key); label = raw if raw in quality_allowed[key] else "unknown"; quality[key][label] = quality[key].get(label, 0) + 1
     usage["reasoning"] = reasoning
-    ci_totals = {k:0 for k in ("runs","attempts","jobs","steps")}; seconds = {k:0 for k in ("runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds")}; sec_known = {k:True for k in seconds}
+    ci_totals = {k:0 for k in ("runs","attempts","jobs","steps")}; seconds = {k:0 for k in ("runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds")}
     ci_coverage={k:{} for k in ("inventoryCoverage","checkCoverage","attemptCoverage","jobPageCoverage","terminalCoverage","timestampCoverage","lineageCoverage","classificationCoverage","criticalPathCoverage")}
     for item in ci:
         for key in ci_totals: ci_totals[key] += checked_int(item.get(key), key)
         for key in seconds:
-            if item.get(key) is None: sec_known[key] = False
-            elif sec_known[key]: seconds[key] += checked_int(item.get(key), key)
+            if item.get(key) is not None: seconds[key] += checked_int(item.get(key), key)
         for key in ci_coverage:
             raw=item.get(key); value=raw if raw in {"unknown","partial","complete","not-evaluated"} else "unknown"; ci_coverage[key][value]=ci_coverage[key].get(value,0)+1
     seconds={key:{"knownItems":sum(1 for item in ci if item.get(key) is not None),"unknownItems":sum(1 for item in ci if item.get(key) is None),"totalItemSeconds":value} for key,value in seconds.items()}
@@ -196,10 +409,11 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
             assessments.append({"dimension":name,"verdict":verdict,"numerator":numerator,"denominator":denominator,"severe":dimension.get("severe") is True})
         severe_items += int(item_severe)
     return {"schema":HOST_SCHEMA,"observedAt":observed,"source":{"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"},
-        "scope":{"items":len(public["items"]),"identities":"aggregated-and-removed","freeText":"removed"},"totals":totals,"usage":usage,"launcherPopulation":launcher,
+        "scope":{"items":len(public["items"]),"identities":"aggregated-or-explicitly-aliased","freeText":"removed-except-approved-notes"},"totals":totals,"usage":usage,"launcherPopulation":launcher,
         "quality":quality,"operational":operational,"store":{"status":enum((store_status or {}).get("status"),{"ready"},"store status"),"schemaVersion":checked_int((store_status or {}).get("schemaVersion"),"schemaVersion"),"journalMode":enum((store_status or {}).get("journalMode"),{"wal"},"journalMode"),"pendingBatches":checked_int((store_status or {}).get("pendingBatches"),"pendingBatches")},
         "localCi":{"counts":ci_totals,"seconds":seconds,"coverage":ci_coverage,"attribution":"repository-owned item attribution only; time values are summed per-item projections"},
-        "budget":{"scope":"current-canonical-epoch","dimensions":dims,"assessments":assessments,"health":budget_health_counts,"severeItems":severe_items,"distinctBreaches":checked_int(status.get("distinctBreaches"),"distinctBreaches"),"dirtyItems":checked_int(status.get("dirtyItems")," in dirtyItems"),"intervention":enum(status.get("intervention"), {"none","open","verified"}, "intervention")}}
+        "budget":{"scope":"current-canonical-epoch","dimensions":dims,"assessments":assessments,"health":budget_health_counts,"severeItems":severe_items,"distinctBreaches":checked_int(status.get("distinctBreaches"),"distinctBreaches"),"dirtyItems":checked_int(status.get("dirtyItems")," in dirtyItems"),"intervention":enum(status.get("intervention"), {"none","open","verified"}, "intervention")},
+        "completedItems":completed_items or {"schema":ITEMS_SCHEMA,"coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}}
 
 
 def checked_int(value: Any, name: str) -> int:
@@ -212,7 +426,7 @@ def enum(value: Any, values: set[str], name: str) -> str:
     return value
 
 
-def build_host() -> dict[str, Any]:
+def build_host(labels_path: pathlib.Path | None = None) -> dict[str, Any]:
     _, cfg = config(); store, engine = cfg["storeRoot"], cfg["engine"]
     with tempfile.TemporaryDirectory(prefix="fsgg-dashboard-") as directory:
         output = pathlib.Path(directory) / "public.json"
@@ -227,7 +441,13 @@ def build_host() -> dict[str, Any]:
         health.append(engine_json(engine,["telemetry","budget","health","--item",item,"--store-root",store]))
     status = engine_json(engine,["telemetry","budget","status","--store-root",store])
     store_status=engine_json(engine,["telemetry","store","status","--store-root",store])
-    return aggregate_host(public,ci,budgets,status,now(),reconciliations,health,store_status)
+    if not isinstance(store_status,dict) or store_status.get("status")!="ready" or store_status.get("schemaVersion")!=7 or store_status.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    try: engine_version=tuple(int(part) for part in store_status["nativeEngine"].split(".")[:3])
+    except (KeyError,AttributeError,ValueError): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if engine_version<(3,51,3): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    labels=load_labels(labels_path)
+    completed=project_completed_items(store,status,labels,dict(zip(ids,ci)),dict(zip(ids,budgets)))
+    return aggregate_host(public,ci,budgets,status,now(),reconciliations,health,store_status,completed)
 
 
 def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, Any]) -> str:
@@ -251,11 +471,12 @@ def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, A
     return created["sha"]
 
 
-def compose(actions: dict[str, Any], host: dict[str, Any] | None, source_revision: str, host_revision: str | None = None) -> dict[str, Any]:
+def compose(actions: dict[str, Any], deliveries: dict[str,Any], host: dict[str, Any] | None, source_revision: str, host_revision: str | None = None) -> dict[str, Any]:
     validate_actions(actions)
+    validate_deliveries(deliveries)
     if host is not None: validate_host(host)
     if host_revision is not None and (len(host_revision)!=40 or any(c not in "0123456789abcdef" for c in host_revision)): raise ValueError("invalid host revision")
-    return {"schema":DASH_SCHEMA,"builtAt":now(),"sourceRevision":source_revision,"hostRevision":host_revision,"actions":actions,
+    return {"schema":DASH_SCHEMA,"builtAt":now(),"sourceRevision":source_revision,"hostRevision":host_revision,"actions":actions,"deliveries":deliveries,
         "host":host if host is not None else {"schema":"fsgg.telemetry.dashboard-host-unavailable/1","status":"unconfigured","reason":"No approved host snapshot has been published."}}
 
 
@@ -288,11 +509,32 @@ def validate_actions(value: Any) -> None:
         if run["durationSeconds"] is not None: checked_int(run["durationSeconds"],"durationSeconds")
 
 
+def validate_deliveries(value: Any) -> None:
+    exact(value,{"schema","observedAt","repository","selection","deliveries"},"delivery feed")
+    if value["schema"]!=DELIVERIES_SCHEMA or value["repository"]!="FS-GG/.github" or parse_time(value["observedAt"]) is None: raise ValueError("invalid delivery identity")
+    selection=exact(value["selection"],{"order","cap","pagesFetched","closedScanned","returned","semantics"},"delivery selection")
+    for key in ("cap","pagesFetched","closedScanned","returned"): checked_int(selection[key],key)
+    if selection["order"]!="closed-updated-descending" or selection["cap"]>500 or selection["returned"]!=len(value["deliveries"]) or selection["returned"]>selection["closedScanned"] or selection["semantics"]!="merged pull requests found in a bounded updated-ordered closed-PR scan; public delivery evidence, not proof of a whole completed item or effort": raise ValueError("invalid delivery selection")
+    if not isinstance(value["deliveries"],list): raise ValueError("invalid deliveries")
+    seen=set()
+    for row in value["deliveries"]:
+        exact(row,{"number","title","url","createdAt","mergedAt","elapsedSeconds"},"delivery")
+        number=checked_int(row["number"],"delivery number")
+        if number in seen or not isinstance(row["title"],str) or len(row["title"])>180: raise ValueError("invalid delivery row")
+        seen.add(number)
+        if row["url"]!=f"https://github.com/FS-GG/.github/pull/{number}" or parse_time(row["createdAt"]) is None or parse_time(row["mergedAt"]) is None: raise ValueError("invalid delivery evidence")
+        if row["elapsedSeconds"] is not None: checked_int(row["elapsedSeconds"],"delivery elapsed")
+
+
 def validate_host(value: Any) -> None:
-    exact(value,{"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"},"host feed")
-    if value["schema"]!=HOST_SCHEMA or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
+    legacy=isinstance(value,dict) and value.get("schema")==LEGACY_HOST_SCHEMA
+    fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
+    if not legacy: fields.add("completedItems")
+    exact(value,fields,"host feed")
+    if value["schema"] not in {HOST_SCHEMA,LEGACY_HOST_SCHEMA} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
     exact(value["source"],{"kind","publicExportSchema"},"host source"); exact(value["scope"],{"items","identities","freeText"},"host scope")
-    if value["source"]!={"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"} or value["scope"]["identities"]!="aggregated-and-removed" or value["scope"]["freeText"]!="removed": raise ValueError("invalid host safety declaration")
+    identity="aggregated-and-removed" if legacy else "aggregated-or-explicitly-aliased"; free="removed" if legacy else "removed-except-approved-notes"
+    if value["source"]!={"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"} or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
     for key,count in value["usage"].items():
@@ -328,25 +570,87 @@ def validate_host(value: Any) -> None:
         if not isinstance(assessment["severe"],bool): raise ValueError("invalid severe")
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
+    if not legacy: validate_completed_items(value["completedItems"])
+
+
+def public_text(value: Any, maximum: int, name: str) -> str:
+    if not isinstance(value,str) or not 1<=len(value)<=maximum: raise ValueError(f"invalid {name}")
+    return value
+
+
+def validate_completed_items(value: Any) -> None:
+    exact(value,{"schema","coverage","items"},"completed items")
+    if value["schema"]!=ITEMS_SCHEMA or not isinstance(value["items"],list) or len(value["items"])>200: raise ValueError("invalid completed items")
+    validate_count_map(value["coverage"],{"eligible","published","unmapped","dirty","incompatible"},"completed item coverage")
+    if value["coverage"]["published"]!=len(value["items"]): raise ValueError("invalid completed item count")
+    seen=set()
+    for item in value["items"]:
+        exact(item,{"key","label","url","state","deliveredAt","deliveries","runtime","ci","budget","complications"},"completed item")
+        key=public_text(item["key"],64,"item key")
+        if key in seen or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",key): raise ValueError("invalid item key")
+        seen.add(key); public_text(item["label"],120,"item label"); enum(item["state"],{"settled"},"item state")
+        if not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+(?:/(?:issues|pull)/[1-9][0-9]*)?",item["url"]): raise ValueError("invalid item URL")
+        if item["deliveredAt"] is not None and parse_time(item["deliveredAt"]) is None: raise ValueError("invalid delivered time")
+        if not isinstance(item["deliveries"],list) or len(item["deliveries"])>32: raise ValueError("invalid item deliveries")
+        for delivery in item["deliveries"]:
+            exact(delivery,{"repository","number","url","mergedAt"},"item delivery"); public_text(delivery["repository"],100,"repository"); number=checked_int(delivery["number"],"PR")
+            if not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",delivery["repository"]) or delivery["url"]!=f"https://github.com/{delivery['repository']}/pull/{number}" or (delivery["mergedAt"] is not None and parse_time(delivery["mergedAt"]) is None): raise ValueError("invalid item delivery")
+        runtime=exact(item["runtime"],{"invocations","terminalOutcomes","duration","tokens"},"item runtime"); checked_int(runtime["invocations"],"invocations")
+        validate_count_map(runtime["terminalOutcomes"],{"completed","failed","cancelled","launch-failed","other"},"terminal outcomes")
+        duration_value=exact(runtime["duration"],{"rows","semantics"},"runtime duration")
+        if duration_value["semantics"]!="same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time" or not isinstance(duration_value["rows"],list): raise ValueError("invalid runtime duration")
+        for row in duration_value["rows"]:
+            exact(row,{"role","invocations","known","unknown","summedSeconds"},"duration row"); enum(row["role"],{"root","child","follow-up","unknown"},"role")
+            for field in ("invocations","known","unknown","summedSeconds"): checked_int(row[field],field)
+        tokens=exact(runtime["tokens"],{"scope","rows","unmappedRows","coverage"},"tokens"); checked_int(tokens["unmappedRows"],"unmapped rows"); validate_count_map(tokens["coverage"],{"invocationsWithUsage","invocationsWithoutUsage","runtimeGaps"},"token coverage")
+        if tokens["scope"]!="completed native turns; input includes cached input" or not isinstance(tokens["rows"],list) or len(tokens["rows"])>512: raise ValueError("invalid token rows")
+        for row in tokens["rows"]:
+            exact(row,{"role","requestedModel","observedModel","requestedEffort","observedEffort","scope","turns","input","cachedInput","output","reasoning","total"},"token row"); enum(row["role"],{"root","child","follow-up","unknown"},"role")
+            for name in ("requestedModel","observedModel","requestedEffort","observedEffort","scope"): public_text(row[name],48,name)
+            for name in ("turns","input","cachedInput","output","total"): checked_int(row[name],name)
+            if row["reasoning"] is not None: checked_int(row["reasoning"],"reasoning")
+        ci=exact(item["ci"],{"counts","seconds","semantics"},"item CI"); validate_count_map(ci["counts"],{"runs","attempts","jobs","steps"},"item CI counts")
+        exact(ci["seconds"],{"runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds"},"item CI seconds")
+        for metric in ci["seconds"].values():
+            exact(metric,{"knownItems","unknownItems","totalItemSeconds"},"item CI metric")
+            for count in metric.values(): checked_int(count,"item CI metric")
+        if ci["semantics"]!="runner seconds sum jobs; wall, queue, and category values are per-item unions and may overlap": raise ValueError("invalid item CI semantics")
+        item_budget=exact(item["budget"],{"scope","assessments"},"item budget")
+        if item_budget["scope"]!="canonical reducer assessments; epoch identities removed" or not isinstance(item_budget["assessments"],list) or len(item_budget["assessments"])>64: raise ValueError("invalid item budget")
+        for assessment in item_budget["assessments"]:
+            exact(assessment,{"epoch","dimension","verdict","numerator","denominator","severe"},"item assessment"); enum(assessment["epoch"],{"current","historical"},"epoch position"); enum(assessment["dimension"],{"model-usage","owner-effort","priced-cost","critical-path-delay","ci-runner-administration"},"dimension"); enum(assessment["verdict"],{"unknown","not-applicable","pass","breach"},"verdict")
+            if not isinstance(assessment["severe"],bool): raise ValueError("invalid severe")
+            for name in ("numerator","denominator"):
+                if assessment[name] is not None: checked_int(assessment[name],name)
+        complications=exact(item["complications"],{"observed","notes","semantics"},"complications"); validate_count_map(complications["observed"],{"runtimeNonSuccess","failedOrCancelledCiRuns","repeatedCiRuns","followUpInvocations"},"observed complications")
+        if complications["semantics"]!="observed events and approved notes; no inferred cause or repair cost; development phases and repair attribution unavailable" or not isinstance(complications["notes"],list) or len(complications["notes"])>8: raise ValueError("invalid complications")
+        for note in complications["notes"]:
+            exact(note,{"kind","text","evidenceUrl"},"note"); enum(note["kind"],{"repair","complication"},"note kind"); public_text(note["text"],240,"note")
+            if not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*",note["evidenceUrl"]): raise ValueError("invalid note evidence")
 
 
 def main() -> int:
     parser=argparse.ArgumentParser(); subs=parser.add_subparsers(dest="cmd",required=True)
     actions=subs.add_parser("collect-actions"); actions.add_argument("--repo",default="FS-GG/.github"); actions.add_argument("--cap",type=int,default=1000); actions.add_argument("--output",type=pathlib.Path,required=True)
-    host=subs.add_parser("host-snapshot"); host.add_argument("--output",type=pathlib.Path,required=True); host.add_argument("--dry-run",action="store_true"); host.add_argument("--repo"); host.add_argument("--branch",default="telemetry-data"); host.add_argument("--path",default="host.json")
-    comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
+    deliveries=subs.add_parser("collect-deliveries"); deliveries.add_argument("--repo",default="FS-GG/.github"); deliveries.add_argument("--cap",type=int,default=200); deliveries.add_argument("--output",type=pathlib.Path,required=True)
+    host=subs.add_parser("host-snapshot"); host.add_argument("--output",type=pathlib.Path,required=True); host.add_argument("--labels",type=pathlib.Path); host.add_argument("--dry-run",action="store_true"); host.add_argument("--repo"); host.add_argument("--branch",default="telemetry-data"); host.add_argument("--path",default="host.json")
+    comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--deliveries",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
     args=parser.parse_args(); token=os.environ.get("GITHUB_TOKEN","")
     if args.cmd=="collect-actions":
         if not token: raise ValueError("GITHUB_TOKEN is required")
         atomic(args.output,collect_actions(args.repo,token,args.cap)); return 0
+    if args.cmd=="collect-deliveries":
+        if not token: raise ValueError("GITHUB_TOKEN is required")
+        atomic(args.output,collect_deliveries(args.repo,token,args.cap)); return 0
     if args.cmd=="host-snapshot":
-        snap=build_host(); atomic(args.output,snap)
+        labels=args.labels or (pathlib.Path(os.environ["FSGG_TELEMETRY_DASHBOARD_LABELS"]) if os.environ.get("FSGG_TELEMETRY_DASHBOARD_LABELS") else None)
+        snap=build_host(labels); atomic(args.output,snap)
         if not args.dry_run:
             if not token or not args.repo: raise ValueError("GITHUB_TOKEN and --repo are required to publish")
             print(publish(args.repo,args.branch,args.path,token,snap))
         return 0
     host_value=load(args.host) if args.host and args.host.exists() else None
-    atomic(args.output,compose(load(args.actions),host_value,args.source_revision,args.host_revision)); return 0
+    atomic(args.output,compose(load(args.actions),load(args.deliveries),host_value,args.source_revision,args.host_revision)); return 0
 
 
 if __name__ == "__main__":
