@@ -694,9 +694,14 @@ def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
         if not verification["verified"]:
             report["status"]="publication-verification-failed"; report["recurrence"]="inactive"
             return report
-        subprocess.run(["systemctl","--user","daemon-reload"],check=True)
-        subprocess.run(["systemctl","--user","enable","--now","fsgg-telemetry-dashboard.timer"],check=True)
-        report["effects"].append("enable-recurrence")
+        try:
+            subprocess.run(["systemctl","--user","daemon-reload"],check=True)
+            subprocess.run(["systemctl","--user","enable","--now","fsgg-telemetry-dashboard.timer"],check=True)
+        except (OSError,subprocess.CalledProcessError):
+            report["recurrence"]="unavailable"
+        else:
+            report["effects"].append("enable-recurrence")
+            report["recurrence"]="active"
     return report
 
 
