@@ -11,17 +11,11 @@ spec-driven development lifecycle, optional governance, UI, game, audio, and
 networking components while keeping each component independently adoptable.
 
 > [!NOTE]
-> **Current development plan:** Start with the
-> **[development master](https://github.com/FS-GG/.github/blob/main/docs/development-master.md)**
-> for v2 migration, simplification, OR orchestration and performance-bounded flow.
-> The wider design inventory is kept separately there.
->
-> **Ongoing renovations:** FS-GG is preparing a typed GitHub Substrate v2 and a
-> coordinated fleet cutover. Follow the
-> [implementation and retirement roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md)
-> for current scope, qualification gates, cutover stages, and the retirement of
-> the existing coordination system. For a shorter status summary, see
-> [what is shipped and pending](https://github.com/FS-GG/.github/blob/main/docs/design-goals/implementation-status.md).
+> **Current development roadmap:** The
+> **[FS-GG Unified Development Roadmap](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md)**
+> is the only current roadmap presented by the organization profile. See its
+> **[current progress report](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)**
+> for the reconciled frontier, completed evidence, active work and remaining exits.
 
 Start with the **[documentation index](https://github.com/FS-GG/.github/blob/main/docs/design-goals/README.md)**
 for guides, architecture, design direction, coordination, and reference material.
