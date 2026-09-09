@@ -131,6 +131,16 @@ class DashboardTests(unittest.TestCase):
         with mock.patch.object(D,"config",return_value=(pathlib.Path("/config"),{"storeRoot":"/store","engine":"engine"})),mock.patch.object(D,"engine_json",return_value=envelope):
             value=D.build_host()
         self.assertEqual(value["store"]["schemaVersion"],8); self.assertNotIn("encodingEdge",json.dumps(value))
+        for version in (9,10,[]):
+            snapshot["store"]["schemaVersion"]=version
+            canonical=json.dumps(snapshot,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+            envelope["revision"]=hashlib.sha256(canonical).hexdigest()
+            envelope["canonicalSnapshotGzip"]=D.base64.b64encode(D.gzip.compress(canonical)).decode()
+            with mock.patch.object(D,"config",return_value=(pathlib.Path("/config"),{"storeRoot":"/store","engine":"engine"})),mock.patch.object(D,"engine_json",return_value=envelope):
+                if version==9: self.assertEqual(D.build_host()["store"]["schemaVersion"],9)
+                else:
+                    with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"): D.build_host()
+
 
 
 if __name__ == "__main__": unittest.main()

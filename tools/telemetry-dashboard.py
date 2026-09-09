@@ -622,7 +622,7 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     if hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
     if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
     store_projection=snapshot.get("store")
-    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion")!=8 or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     public={"schema":"fsgg.telemetry.public-export/1","items":snapshot.get("summaries")}
     if not isinstance(public["items"],list): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     ids=[item.get("item") for item in public["items"] if isinstance(item,dict) and isinstance(item.get("item"),str)]
@@ -640,7 +640,7 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
         health.append({"status":"pending" if dirty else "missing-outcome" if not delivered else "complete" if population=="completed" else "open"})
     operational=envelope.get("operational")
     if not isinstance(operational,dict) or operational.get("consistency")!="observed-outside-database-transaction": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
-    store_status={"status":"ready","schemaVersion":8,"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
+    store_status={"status":"ready","schemaVersion":store_projection["schemaVersion"],"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
     return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed)
