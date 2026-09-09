@@ -15,7 +15,7 @@ module TelemetryReceiptTests =
     let private scope : TelemetryReceipt.Scope = { Workspace = "workspace-a"; Producer = "producer-a"; Stream = "runtime" }
     let private unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
     let private envelope (who: TelemetryReceipt.Scope) batch revision =
-        Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{who.Workspace}","producerId":"{who.Producer}","streamId":"{who.Stream}","batchId":"{batch}","payload":{{"schema":"fsgg.telemetry.ingest/1","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":{revision}}}]}}}}"""
+        Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{who.Workspace}","producerId":"{who.Producer}","streamId":"{who.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":{revision}}}]}}}}"""
     let private withStore action =
         let root = Path.Combine(Path.GetTempPath(), "fsgg-receipt-test-" + Guid.NewGuid().ToString("N"))
         try
