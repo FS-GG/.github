@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli.Tests
 open System
 open System.Diagnostics
 open System.IO
+open System.IO.Compression
 open System.Text
 open System.Text.Json
 open Xunit
@@ -113,10 +114,17 @@ module TelemetryStoreApplicationTests =
             { AfterFirstRead = fun () -> TelemetryStoreApplication.ingest path approved (batch "snapshot-correction" "usage-1" 1L "s2" 20L) |> unwrap |> ignore }
         let during = TelemetryStoreApplication.dashboardSnapshotWithHooks path approved hooks None |> unwrap
         use duringDocument = JsonDocument.Parse during
-        let duringSummary = duringDocument.RootElement.GetProperty("snapshot").GetProperty("summaries")[0]
+        let decodeSnapshot (document: JsonDocument) =
+            let compressed = Convert.FromBase64String(document.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use compressedStream = new MemoryStream(compressed)
+            use decompressor = new GZipStream(compressedStream, CompressionMode.Decompress)
+            JsonDocument.Parse decompressor
+        use duringSnapshot = decodeSnapshot duringDocument
+        let duringSummary = duringSnapshot.RootElement.GetProperty("summaries")[0]
         Assert.Equal(15L, duringSummary.GetProperty("usage").GetProperty("total").GetInt64())
         use afterDocument = JsonDocument.Parse(TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
-        let afterSummary = afterDocument.RootElement.GetProperty("snapshot").GetProperty("summaries")[0]
+        use afterSnapshot = decodeSnapshot afterDocument
+        let afterSummary = afterSnapshot.RootElement.GetProperty("summaries")[0]
         Assert.Equal(25L, afterSummary.GetProperty("usage").GetProperty("total").GetInt64())
         Assert.False(duringDocument.RootElement.GetProperty("revision").GetString() = afterDocument.RootElement.GetProperty("revision").GetString())
 
@@ -1030,11 +1038,15 @@ module TelemetryStoreApplicationTests =
         use snapshotDocument1 = JsonDocument.Parse snapshot1
         use snapshotDocument2 = JsonDocument.Parse snapshot2
         Assert.Equal("fsgg.telemetry.item-detail/2", snapshotDocument1.RootElement.GetProperty("schema").GetString())
-        Assert.Equal(8, snapshotDocument1.RootElement.GetProperty("snapshot").GetProperty("store").GetProperty("schemaVersion").GetInt32())
-        let canonical = Convert.FromBase64String(snapshotDocument1.RootElement.GetProperty("canonicalSnapshot").GetString())
+        let compressed = Convert.FromBase64String(snapshotDocument1.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+        use compressedStream = new MemoryStream(compressed)
+        use decompressor = new GZipStream(compressedStream, CompressionMode.Decompress)
+        use canonicalStream = new MemoryStream()
+        decompressor.CopyTo canonicalStream
+        let canonical = canonicalStream.ToArray()
         use canonicalDocument = JsonDocument.Parse canonical
+        Assert.Equal(8, canonicalDocument.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
         Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), CanonicalJson.sha256 canonical)
-        Assert.True(JsonElement.DeepEquals(snapshotDocument1.RootElement.GetProperty("snapshot"), canonicalDocument.RootElement))
         Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), snapshotDocument2.RootElement.GetProperty("revision").GetString())
         Assert.False(snapshotDocument1.RootElement.GetProperty("observedAt").GetString() = "")
         let publicPath = path + "-public.json"

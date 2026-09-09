@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli
 open System
 open System.Diagnostics
 open System.IO
+open System.IO.Compression
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -20,6 +21,12 @@ module TelemetryStoreApplication =
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
     let private currentSchemaVersion = 8
+    let private gzip (bytes: byte array) =
+        use output = new MemoryStream()
+        do
+            use compressor = new GZipStream(output, CompressionLevel.SmallestSize, true)
+            compressor.Write(bytes, 0, bytes.Length)
+        output.ToArray()
 
     module private Native =
         [<Literal>]
@@ -1239,13 +1246,14 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                           "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision" ]
                         |> List.iter (fun (name, value) -> content[name] <- value)
                         let canonical = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(content.ToJsonString())) |> Result.defaultWith invalidOp
-                        let revision = CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical)
+                        let canonicalBytes = Encoding.UTF8.GetBytes canonical
+                        if canonicalBytes.Length > 4 * 1024 * 1024 then raise (InvalidOperationException("dashboard canonical snapshot exceeds 4194304 bytes"))
+                        let revision = CanonicalJson.sha256 canonicalBytes
                         let envelope = JsonObject()
                         envelope["schema"] <- JsonValue.Create("fsgg.telemetry.item-detail/2")
                         envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                         envelope["revision"] <- JsonValue.Create(revision)
-                        envelope["canonicalSnapshot"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes canonical))
-                        envelope["snapshot"] <- content
+                        envelope["canonicalSnapshotGzip"] <- JsonValue.Create(Convert.ToBase64String(gzip canonicalBytes))
                         envelope["operational"] <- JsonSerializer.SerializeToNode {| pendingBatches = pendingCount root; consistency = "observed-outside-database-transaction" |}
                         let result = envelope.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n"
                         transaction.Rollback()
