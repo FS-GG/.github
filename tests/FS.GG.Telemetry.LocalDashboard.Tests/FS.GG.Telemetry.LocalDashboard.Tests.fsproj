@@ -6,6 +6,7 @@
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <Compile Include="../../src/FS.GG.Coord.Cli/TelemetryDashboardServer.fsi" Link="TelemetryDashboardServer.fsi" />
     <Compile Include="../../src/FS.GG.Coord.Cli/TelemetryDashboardServer.fs" Link="TelemetryDashboardServer.fs" />
     <Compile Include="ServerTests.fs" />

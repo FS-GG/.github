@@ -20,6 +20,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
       - "src/FS.GG.Telemetry.Client/**"
       - "src/FS.GG.Telemetry.Contracts/**"
       - "src/FS.GG.Telemetry.Store/**"
@@ -48,6 +49,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
       - "src/FS.GG.Telemetry.Client/**"
       - "src/FS.GG.Telemetry.Contracts/**"
       - "src/FS.GG.Telemetry.Store/**"

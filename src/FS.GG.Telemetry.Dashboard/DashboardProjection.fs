@@ -218,3 +218,18 @@ module DashboardAssets =
                      "/private/dashboard/app.js", {ContentType="text/javascript; charset=utf-8";Bytes=read "app.js"}
                      "/private/dashboard/styles.css", {ContentType="text/css; charset=utf-8";Bytes=read "styles.css"} ]
     let tryGet route = assets |> Map.tryFind route |> Option.map(fun asset->{asset with Bytes=Array.copy asset.Bytes})
+    let private localIndex =
+        let html = read "index.html" |> Encoding.UTF8.GetString
+        html.Replace(
+                "<meta name=\"referrer\" content=\"no-referrer\">",
+                "<meta name=\"referrer\" content=\"no-referrer\"><meta name=\"fsgg-dashboard-mode\" content=\"local\">"
+            )
+            .Replace("/private/dashboard/styles.css", "/styles.css")
+            .Replace("/private/dashboard/app.js", "/app.js")
+        |> Encoding.UTF8.GetBytes
+    let private localAssets =
+        Map.ofList [ "/", {ContentType="text/html; charset=utf-8";Bytes=localIndex}
+                     "/index.html", {ContentType="text/html; charset=utf-8";Bytes=localIndex}
+                     "/app.js", {ContentType="text/javascript; charset=utf-8";Bytes=read "app.js"}
+                     "/styles.css", {ContentType="text/css; charset=utf-8";Bytes=read "styles.css"} ]
+    let tryGetLocal route = localAssets |> Map.tryFind route |> Option.map(fun asset->{asset with Bytes=Array.copy asset.Bytes})

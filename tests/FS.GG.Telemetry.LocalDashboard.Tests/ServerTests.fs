@@ -10,6 +10,7 @@ open System.Text
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coord.Cli
+open FS.GG.Telemetry.Dashboard
 open Xunit
 
 module ServerTests =
@@ -43,6 +44,13 @@ module ServerTests =
     let private immediateOptions () =
         baseOptions (fun selectedWorkspace _ ->
             Task.FromResult(Ok(Encoding.UTF8.GetBytes($"{{\"workspaceId\":\"{selectedWorkspace}\"}}"))))
+
+    let private sharedAssetOptions () =
+        let assets route =
+            DashboardAssets.tryGetLocal route
+            |> Option.map (fun asset -> { ContentType=asset.ContentType; Content=asset.Bytes })
+        let snapshot = """{"schema":"fsgg.telemetry.private-dashboard/1","workspaceId":"workspace-alpha","observedAt":null,"revision":1,"operational":{"pendingBatches":0,"appliedReceipts":1,"rejectedReceipts":0,"consistency":"complete"},"items":[{"id":"local-item","state":{"outcome":"complete","population":"complete"},"usage":{"total":1},"runtime":{"terminal":1,"admitted":1},"coverage":{"populationCoverage":"complete","ciInventory":"complete"}}]}"""
+        TelemetryDashboardServer.defaultOptions workspaceId assets (fun _ _ -> Task.FromResult(Ok(Encoding.UTF8.GetBytes snapshot)))
 
     let private start options =
         task {
@@ -84,6 +92,11 @@ module ServerTests =
 
         request
 
+    let private emptyPost (server: RunningTelemetryDashboardServer) (path:string) =
+        let request = new HttpRequestMessage(HttpMethod.Post, Uri(server.Origin, path))
+        request.Headers.Add("Origin", server.Origin.GetLeftPart(UriPartial.Authority))
+        request
+
     let private rawRequest (server: RunningTelemetryDashboardServer) (requestText: string) =
         task {
             use tcp = new TcpClient()
@@ -108,6 +121,12 @@ module ServerTests =
             Assert.Contains("HttpOnly", setCookie)
             Assert.Contains("SameSite=Strict", setCookie)
             Assert.DoesNotContain("workspace-alpha", server.BootstrapUrl.AbsoluteUri)
+
+            use sessionRequest = emptyPost server "/api/session"
+            use! sessionResponse = http.SendAsync sessionRequest
+            Assert.Equal(HttpStatusCode.OK, sessionResponse.StatusCode)
+            let! session = sessionResponse.Content.ReadAsStringAsync()
+            Assert.Equal("{\"schema\":\"fsgg.telemetry.browser-session/1\",\"workspaces\":[\"workspace-alpha\"]}", session)
 
             use! replay = http.GetAsync(server.BootstrapUrl)
             Assert.Equal(HttpStatusCode.NotFound, replay.StatusCode)
@@ -609,6 +628,57 @@ module ServerTests =
                 browserJourney.ExitCode = 0,
                 $"Chromium journey failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}"
             )
+        }
+
+    [<Fact>]
+    let ``shared local UI explains one-use logout without exposing the host login`` () =
+        task {
+            use! server = start (sharedAssetOptions ())
+            let projectDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+            let startInfo = ProcessStartInfo("node")
+            startInfo.WorkingDirectory <- projectDirectory
+            startInfo.RedirectStandardOutput <- true
+            startInfo.RedirectStandardError <- true
+            startInfo.ArgumentList.Add("browser-journey.mjs")
+            startInfo.ArgumentList.Add(server.BootstrapUrl.AbsoluteUri)
+            startInfo.ArgumentList.Add(workspaceId)
+            startInfo.ArgumentList.Add("local-item")
+            use browserJourney = new Process(StartInfo=startInfo)
+            Assert.True(browserJourney.Start())
+            let outputTask=browserJourney.StandardOutput.ReadToEndAsync()
+            let errorTask=browserJourney.StandardError.ReadToEndAsync()
+            do! browserJourney.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 20.)
+            let! output=outputTask
+            let! error=errorTask
+            Assert.True(browserJourney.ExitCode=0,$"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}")
+        }
+
+    [<Fact>]
+    let ``shared local UI explains session expiry without exposing the host login`` () =
+        task {
+            let options =
+                { sharedAssetOptions () with
+                    SessionIdleTimeout = TimeSpan.FromMilliseconds 150.0
+                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 300.0 }
+            use! server = start options
+            let projectDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+            let startInfo = ProcessStartInfo("node")
+            startInfo.WorkingDirectory <- projectDirectory
+            startInfo.RedirectStandardOutput <- true
+            startInfo.RedirectStandardError <- true
+            startInfo.ArgumentList.Add("browser-journey.mjs")
+            startInfo.ArgumentList.Add(server.BootstrapUrl.AbsoluteUri)
+            startInfo.ArgumentList.Add(workspaceId)
+            startInfo.ArgumentList.Add("local-item")
+            startInfo.ArgumentList.Add("expire")
+            use browserJourney = new Process(StartInfo=startInfo)
+            Assert.True(browserJourney.Start())
+            let outputTask=browserJourney.StandardOutput.ReadToEndAsync()
+            let errorTask=browserJourney.StandardError.ReadToEndAsync()
+            do! browserJourney.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 20.)
+            let! output=outputTask
+            let! error=errorTask
+            Assert.True(browserJourney.ExitCode=0,$"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}")
         }
 
     [<Fact>]

@@ -20,3 +20,4 @@ type Asset = { ContentType:string; Bytes:byte array }
 
 module DashboardAssets =
     val tryGet: route:string -> Asset option
+    val tryGetLocal: route:string -> Asset option

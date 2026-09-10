@@ -101,12 +101,13 @@ jobs:
           done
       - name: Bind and compare normalized producer payloads
         run: |
-          package_a=artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.0.1.0.nupkg
-          package_b=artifacts/telemetry-host-pack-b/FS.GG.Telemetry.Host.0.1.0.nupkg
+          version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
+          package_a="artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.$version.nupkg"
+          package_b="artifacts/telemetry-host-pack-b/FS.GG.Telemetry.Host.$version.nupkg"
           python3 scripts/telemetry-host-release.py prepare --package "$package_a" \
             --lock src/FS.GG.Telemetry.Host/packages.lock.json \
             --assets src/FS.GG.Telemetry.Dashboard/Assets --source-sha "$GITHUB_SHA" \
-            --version 0.1.0 --tag telemetry-host/v0.1.0 --output artifacts/telemetry-host-manifest.json
+            --version "$version" --tag "telemetry-host/v$version" --output artifacts/telemetry-host-manifest.json
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_a"
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only
           bash tests/standalone-telemetry-host-package/run.sh "$package_a" artifacts/telemetry-host-package-evidence.json
@@ -115,7 +116,7 @@ jobs:
         with:
           name: telemetry-host-candidate-${{ github.sha }}
           path: |
-            artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.0.1.0.nupkg
+            artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.*.nupkg
             artifacts/telemetry-host-manifest.json
             artifacts/telemetry-host-package-evidence.json
           if-no-files-found: error

@@ -466,6 +466,17 @@ module private DashboardServerInternals =
                 do! writeEmpty response 204 cancellationToken
             }
 
+        let routeSession (response: HttpListenerResponse) cancellationToken =
+            task {
+                let bytes =
+                    JsonSerializer.SerializeToUtf8Bytes(
+                        {| schema = "fsgg.telemetry.browser-session/1"
+                           workspaces = [| options.WorkspaceId |] |}
+                    )
+
+                do! writeBytes response 200 "application/json; charset=utf-8" bytes cancellationToken
+            }
+
         let processContext (context: HttpListenerContext) (requestLifetime: CancellationTokenSource) =
             task {
                 use requestLifetime = requestLifetime
@@ -517,6 +528,15 @@ module private DashboardServerInternals =
                                     do! writeEmpty response 403 cancellationToken
                                 else
                                     do! routeSnapshot request response cancellationToken
+                            | "POST", "/api/session" ->
+                                if not (tryAuthenticate request) then
+                                    do! writeEmpty response 401 cancellationToken
+                                elif not (exactOrigin request) then
+                                    do! writeEmpty response 403 cancellationToken
+                                elif request.HasEntityBody then
+                                    do! writeEmpty response 400 cancellationToken
+                                else
+                                    do! routeSession response cancellationToken
                             | "POST", "/api/logout" ->
                                 if not (tryAuthenticate request) then
                                     do! writeEmpty response 401 cancellationToken

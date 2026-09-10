@@ -96,6 +96,12 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.telemetry.dashboard": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.telemetry.store": {
         "type": "Project",
         "dependencies": {

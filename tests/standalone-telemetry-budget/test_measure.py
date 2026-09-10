@@ -26,6 +26,8 @@ class BudgetTests(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'archive digest'): budget.validate_candidate_provenance('a'*64,'b'*64,'smoke',None)
   with self.assertRaisesRegex(ValueError,'source SHA'): budget.validate_candidate_provenance('a'*64,'a'*64,'qualification',None)
   budget.validate_candidate_provenance('a'*64,'a'*64,'qualification','1'*40)
+  with self.assertRaisesRegex(ValueError,'release manifest'):
+   budget.validate_release_manifest(None,'FS.GG.Coord.Cli','1.0.0',pathlib.Path('/missing'),'1'*40,'qualification')
  def test_host_and_akka_closure_is_refused_by_name(self):
   self.assertEqual(['tools/FS.GG.Telemetry.Host.pdb','tools/Akka.dll'],budget.forbidden_names(['tools/FS.GG.Telemetry.Host.pdb','tools/Akka.dll','tools/FS.GG.Coord.Core.dll']))
  def test_acquired_archive_mismatch_is_refused(self):

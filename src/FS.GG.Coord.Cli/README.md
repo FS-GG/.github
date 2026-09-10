@@ -5,6 +5,14 @@ The schedulability model behind `fsgg-coord`, as **one total function**.
 This is not a user-facing tool. `scripts/fsgg-coord` is the client you run; this is the engine it
 shells out to. You will normally never invoke it by hand.
 
+One explicit exception is the optional local telemetry view. An installed tool
+can run `telemetry dashboard status` or the foreground `telemetry dashboard
+serve [--no-open]` command for the repository selected by its private workspace
+association. The server uses only packaged .NET assemblies and embedded assets,
+binds loopback, prints a one-use bootstrap URL, and never activates or migrates a
+store while opening the dashboard. See the
+[local telemetry store reference](../../docs/reference/local-telemetry-store.md).
+
 ## What it is for
 
 `scripts/fsgg-coord` was 4,000 lines of bash modelling a concurrent, transactional, budget-constrained

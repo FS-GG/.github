@@ -1164,6 +1164,16 @@ exact activation state, deferred stronger alternatives, and observed platform li
 
 ## Compiled telemetry and bounded roadmap projection
 
+The coherent `FS.GG.Coord.Cli` package also carries the host-neutral
+`FS.GG.Telemetry.Dashboard` projection and embedded UI. Its foreground local
+server uses framework-only `HttpListener`: it resolves one explicit
+workspace/repository association, reads only workspace-scoped Store snapshots,
+binds loopback, and exchanges a one-use URL capability for a bounded browser
+session. It adds no dependency from the CLI to the optional telemetry Host,
+Akka, ASP.NET, Python, or Node. The independently versioned Host consumes the
+same projection and assets behind its separate access-key and workspace
+authorization boundary.
+
 Runtime usage, lifecycle chains, critique/feedback structure, and roadmap acceptance projection are one
 compiled `FS.GG.Coord.Cli` authority. Provider adapters immediately reduce JSON/CSV into closed F# records;
 canonical output exposes content digests and aggregate counters, never source paths or conversation content.

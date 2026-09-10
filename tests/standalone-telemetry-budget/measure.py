@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure standalone CLI package size, installed closure, and cold tool restore."""
 from __future__ import annotations
-import argparse, hashlib, json, math, os, pathlib, platform, shutil, statistics, subprocess, tempfile, time, zipfile
+import argparse, hashlib, importlib.util, json, math, os, pathlib, platform, shutil, statistics, subprocess, tempfile, time, zipfile
 from xml.etree import ElementTree
 
 SCHEMA="fsgg.telemetry.standalone-package-budget/1"
@@ -38,6 +38,27 @@ def validate_candidate_provenance(actual:str,declared:str,mode:str,source_sha:st
     if declared!=actual: raise ValueError("candidate archive digest does not match the declared provenance")
     if mode=='qualification' and (source_sha is None or len(source_sha)!=40 or any(c not in '0123456789abcdef' for c in source_sha)):
         raise ValueError("qualification requires an exact lowercase source SHA")
+
+def validate_release_manifest(path:pathlib.Path|None,identity:str,version:str,candidate:pathlib.Path,source_sha:str|None,mode:str)->dict|None:
+    if path is None:
+        if mode=='qualification': raise ValueError("qualification requires a source-bound release manifest")
+        return None
+    data=json.loads(path.read_text()); descriptor=data.get('descriptor')
+    if data.get('schema')!='fsgg.release-saga/1' or not isinstance(descriptor,dict): raise ValueError("release manifest schema is invalid")
+    content='sha256:'+hashlib.sha256(json.dumps(descriptor,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    if data.get('contentId')!=content: raise ValueError("release manifest content binding is invalid")
+    if descriptor.get('sourceSha')!=source_sha or descriptor.get('version')!=version: raise ValueError("release manifest source/version binding differs")
+    rows=[row for row in descriptor.get('packages',[]) if row.get('id')==identity]
+    if len(rows)!=1: raise ValueError("release manifest package binding differs")
+    artifact=rows[0].get('artifact',{})
+    candidate_sha=sha256(candidate)
+    relationship='exact-archive'
+    if artifact.get('sha256')!=candidate_sha:
+        tool=pathlib.Path(__file__).resolve().parents[2]/'scripts'/'release-saga.py'
+        spec=importlib.util.spec_from_file_location('fsgg_release_saga',tool); release=importlib.util.module_from_spec(spec); spec.loader.exec_module(release)
+        if release.payload_id(candidate)!=artifact.get('payloadSha256'): raise ValueError("release manifest package payload binding differs")
+        relationship='repository-signed-normalized-payload'
+    return {"preparedArchiveSha256":artifact.get('sha256'),"candidateArchiveSha256":candidate_sha,"payloadSha256":artifact.get('payloadSha256'),"relationship":relationship}
 
 def forbidden_names(names:list[str])->list[str]:
     return [name for name in names if pathlib.PurePosixPath(name).name.startswith(FORBIDDEN_PREFIXES)]
@@ -124,6 +145,7 @@ def measure(args:argparse.Namespace)->dict:
     if provenance.get('package')!=bid or provenance.get('version')!=bver or provenance.get('packageSha256')!=sha256(baseline): raise ValueError("baseline provenance does not bind the input package")
     candidate_sha=sha256(candidate); baseline_sha=sha256(baseline)
     validate_candidate_provenance(candidate_sha,args.candidate_sha256,args.mode,args.candidate_source_sha)
+    manifest_bound=validate_release_manifest(args.candidate_manifest,cid,cver,candidate,args.candidate_source_sha,args.mode)
     if candidate_sha==baseline_sha: raise ValueError("candidate and baseline packages are identical")
     forbidden_entries=forbidden_names(cnames)
     if forbidden_entries: raise ValueError("candidate package contains forbidden Host/Akka closure")
@@ -142,12 +164,12 @@ def measure(args:argparse.Namespace)->dict:
     p95=round(percentile95(elapsed),3) if len(elapsed)==len(rows) else None
     timing_prefix='publicColdRestore' if args.source=='public-only' else 'preparedLocalInstall'
     summary={"compressedDeltaBytes":compressed,"installedDeltaBytes":installed,f"{timing_prefix}MedianMilliseconds":round(statistics.median(elapsed),3) if elapsed else None,f"{timing_prefix}P95Milliseconds":p95}
-    checks={"compressedDeltaBytes":compressed<=LIMITS['compressedDeltaBytes'],"installedDeltaBytes":installed is not None and installed<=LIMITS['installedDeltaBytes'],"publicColdRestoreP95Milliseconds":p95 is not None and p95<=LIMITS['coldRestoreP95Milliseconds'] if args.source=='public-only' else None}
+    checks={"compressedDeltaBytes":compressed<=LIMITS['compressedDeltaBytes'],"installedDeltaBytes":installed is not None and installed<=LIMITS['installedDeltaBytes'],"publicColdRestoreP95Milliseconds":p95 is not None and p95<=LIMITS['coldRestoreP95Milliseconds'] if args.source=='public-only' else None,"sourceManifestBinding":manifest_bound is not None if args.mode=='qualification' else None}
     passed,qualifies=outcome(args.mode,args.source,len(rows),failures,checks)
-    return {"schema":SCHEMA,"mode":args.mode,"acquisition":args.source,"passed":passed,"qualified":qualifies,"package":{"id":cid,"version":cver,"sha256":candidate_sha,"bytes":candidate.stat().st_size,"declaredSourceSha":args.candidate_source_sha,"label":args.candidate_label,"sourceBinding":"declared-only" if args.candidate_source_sha else "unavailable"},"baseline":{"id":bid,"version":bver,"sha256":baseline_sha,"bytes":baseline.stat().st_size,"provenance":provenance},"closure":{"forbiddenEntries":forbidden_entries,"candidateZipFiles":len(cnames),"baselineZipFiles":len(bnames)},"samples":rows,"referenceInstalls":{"baseline":baseline_row,"candidate":candidate_row},"summary":summary,"limits":LIMITS,"checks":checks,"failures":failures,"environment":{"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),"dotnetSdk":subprocess.check_output(['dotnet','--version'],text=True).strip(),"cachePolicy":"fresh generated NUGET_PACKAGES, HTTP cache, CLI home, and tool path per sample; --no-cache","sourcePolicy":"credential-free nuget.org only" if args.source=='public-only' else "nuget.org plus one private generated source containing only the digest-bound prepared nupkg","credentialPolicy":"NuGet and credential-provider environment variables removed"}}
+    return {"schema":SCHEMA,"mode":args.mode,"acquisition":args.source,"passed":passed,"qualified":qualifies,"package":{"id":cid,"version":cver,"sha256":candidate_sha,"bytes":candidate.stat().st_size,"declaredSourceSha":args.candidate_source_sha,"label":args.candidate_label,"sourceBinding":"verified-release-manifest" if manifest_bound else "unavailable","releaseBinding":manifest_bound},"baseline":{"id":bid,"version":bver,"sha256":baseline_sha,"bytes":baseline.stat().st_size,"provenance":provenance},"closure":{"forbiddenEntries":forbidden_entries,"candidateZipFiles":len(cnames),"baselineZipFiles":len(bnames)},"samples":rows,"referenceInstalls":{"baseline":baseline_row,"candidate":candidate_row},"summary":summary,"limits":LIMITS,"checks":checks,"failures":failures,"environment":{"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),"dotnetSdk":subprocess.check_output(['dotnet','--version'],text=True).strip(),"cachePolicy":"fresh generated NUGET_PACKAGES, HTTP cache, CLI home, and tool path per sample; --no-cache","sourcePolicy":"credential-free nuget.org only" if args.source=='public-only' else "nuget.org plus one private generated source containing only the digest-bound prepared nupkg","credentialPolicy":"NuGet and credential-provider environment variables removed"}}
 
 def main()->int:
-    p=argparse.ArgumentParser(); p.add_argument('--candidate',type=pathlib.Path,required=True); p.add_argument('--candidate-sha256',required=True); p.add_argument('--candidate-label',required=True); p.add_argument('--candidate-source-sha'); p.add_argument('--baseline',type=pathlib.Path,required=True); p.add_argument('--baseline-evidence',type=pathlib.Path,required=True); p.add_argument('--output',type=pathlib.Path,required=True); p.add_argument('--source',choices=('prepared-local','public-only'),required=True); p.add_argument('--mode',choices=('smoke','qualification'),default='qualification'); p.add_argument('--samples',type=int,default=20); p.add_argument('--work-root',type=pathlib.Path,default=pathlib.Path(tempfile.gettempdir())); args=p.parse_args()
+    p=argparse.ArgumentParser(); p.add_argument('--candidate',type=pathlib.Path,required=True); p.add_argument('--candidate-sha256',required=True); p.add_argument('--candidate-label',required=True); p.add_argument('--candidate-source-sha'); p.add_argument('--candidate-manifest',type=pathlib.Path); p.add_argument('--baseline',type=pathlib.Path,required=True); p.add_argument('--baseline-evidence',type=pathlib.Path,required=True); p.add_argument('--output',type=pathlib.Path,required=True); p.add_argument('--source',choices=('prepared-local','public-only'),required=True); p.add_argument('--mode',choices=('smoke','qualification'),default='qualification'); p.add_argument('--samples',type=int,default=20); p.add_argument('--work-root',type=pathlib.Path,default=pathlib.Path(tempfile.gettempdir())); args=p.parse_args()
     try:
         result=measure(args); args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(result,sort_keys=True,separators=(',',':'))+'\n'); print(json.dumps({"passed":result['passed'],"qualified":result['qualified'],"summary":result['summary'],"failures":len(result['failures'])},sort_keys=True,separators=(',',':'))); return 0 if result['passed'] else 1
     except (OSError,ValueError,subprocess.SubprocessError) as error: print(f"standalone-telemetry-budget: {error}",file=os.sys.stderr); return 2

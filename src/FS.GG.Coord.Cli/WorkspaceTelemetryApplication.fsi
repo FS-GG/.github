@@ -2,7 +2,14 @@ namespace FS.GG.Coord.Cli
 
 module WorkspaceTelemetryApplication =
     type Binding
+    type LocalDashboardBinding =
+        { ConfigPath: string
+          Repository: string
+          WorkspaceId: string
+          StoreRoot: string
+          AssociationDigest: string }
     val resolveBinding: configArg: string option -> repositoryArg: string option -> Result<Binding,string list>
+    val resolveLocalDashboard: configArg: string option -> repositoryArg: string option -> Result<LocalDashboardBinding,string list>
     val tryPublishBinding: binding: Binding -> payload: byte array -> Result<string,string list>
     val tryDrainBinding: binding: Binding -> Result<string,string list>
     val tryLocalStoreRootBound: binding: Binding -> Result<string option,string list>

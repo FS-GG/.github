@@ -58,6 +58,28 @@ def write_atomic(path: pathlib.Path, value: object) -> None:
             os.unlink(temporary)
 
 
+def validate_standalone_qualification(path: pathlib.Path, source_sha: str, package_sha: str) -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("standalone qualification evidence must be one object")
+    binding = data.get("binding")
+    claims = data.get("claims")
+    if (
+        data.get("schema") != "fsgg.telemetry.standalone-qualification/1"
+        or data.get("qualified") is not True
+        or not isinstance(binding, dict)
+        or binding.get("sourceSha") != source_sha
+        or binding.get("packageSha256") != package_sha
+        or binding.get("sourceBinding") != "prepared-for-release-manifest"
+        or not isinstance(claims, dict)
+        or claims.get("processCrashAndFilesystemApi") is not True
+        or claims.get("physicalPowerLoss") is not False
+        or claims.get("mainInstalled") is not False
+        or claims.get("publicRelease") is not False
+    ):
+        raise ValueError("standalone qualification evidence is not a passing prepared-package result")
+
+
 def nuspec(path: pathlib.Path) -> tuple[str, str, str, list[dict[str, str]]]:
     with zipfile.ZipFile(path) as archive:
         names = [name for name in archive.namelist() if name.lower().endswith(".nuspec")]
@@ -280,6 +302,30 @@ def command_prepare(args: argparse.Namespace) -> None:
         "feedOrder": list(FEEDS),
         "packages": rows,
     }
+    if args.dashboard_assets or args.standalone_qualification:
+        if not args.dashboard_assets or not args.standalone_qualification:
+            raise ValueError("dashboard assets and standalone qualification evidence must be bound together")
+        assets = pathlib.Path(args.dashboard_assets).resolve()
+        if not assets.is_dir():
+            raise ValueError("dashboard asset directory is missing")
+        asset_rows = []
+        for asset in sorted(path for path in assets.rglob("*") if path.is_file() and not path.is_symlink()):
+            asset_rows.append({"path": asset.relative_to(assets).as_posix(), "sha256": sha256(asset), "size": asset.stat().st_size})
+        if not asset_rows:
+            raise ValueError("dashboard asset directory is empty")
+        qualification = pathlib.Path(args.standalone_qualification).resolve()
+        if not qualification.is_file() or qualification.is_symlink():
+            raise ValueError("standalone qualification evidence is missing or unsafe")
+        coord_rows = [row for row in rows if row["id"] == "FS.GG.Coord.Cli"]
+        if len(coord_rows) != 1:
+            raise ValueError("standalone qualification requires FS.GG.Coord.Cli in the coherent set")
+        validate_standalone_qualification(qualification, args.source_sha, coord_rows[0]["artifact"]["sha256"])
+        descriptor["standaloneTelemetry"] = {
+            "dashboardAssetsSha256": hashlib.sha256(canonical(asset_rows)).hexdigest(),
+            "dashboardAssets": asset_rows,
+            "qualificationPath": qualification.name,
+            "qualificationSha256": sha256(qualification),
+        }
     content_id = "sha256:" + hashlib.sha256(canonical(descriptor)).hexdigest()
     state = {
         "phase": "prepared",
@@ -331,6 +377,24 @@ def command_assert(args: argparse.Namespace) -> None:
     print("manifest-bound artifact hashes verified")
 
 
+def command_verify_external(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data)
+    packages = package_map(data)
+    if args.package not in packages:
+        raise ValueError(f"package {args.package} is absent from the release manifest")
+    artifact = pathlib.Path(args.artifact).resolve()
+    package_id, version, _, _ = nuspec(artifact)
+    expected = packages[args.package]
+    if package_id != args.package or version != expected["version"]:
+        raise ValueError("external artifact package identity/version differs")
+    observed_payload = payload_id(artifact)
+    if observed_payload != expected["artifact"]["payloadSha256"]:
+        raise ValueError("external artifact normalized payload differs")
+    print(json.dumps({"packageId":package_id,"version":version,"sourceSha":data["descriptor"]["sourceSha"],"preparedArchiveSha256":expected["artifact"]["sha256"],"externalArchiveSha256":sha256(artifact),"payloadSha256":observed_payload},sort_keys=True,separators=(",",":")))
+
+
 def command_reusable(args: argparse.Namespace) -> None:
     """Decide whether an already-stored coherent set can be resumed against freshly packed inputs.
 
@@ -356,7 +420,32 @@ def command_reusable(args: argparse.Namespace) -> None:
     for key in ("releaseId", "version", "sourceSha", "policyVersion", "previousStableVersion", "previousStableContentId", "channel", "feedOrder"):
         if stored["descriptor"].get(key) != candidate["descriptor"].get(key):
             problems.append(f"descriptor.{key}: stored {stored['descriptor'].get(key)!r} != candidate {candidate['descriptor'].get(key)!r}")
+    stored_telemetry = stored["descriptor"].get("standaloneTelemetry")
+    candidate_telemetry = candidate["descriptor"].get("standaloneTelemetry")
     stored_packages, candidate_packages = package_map(stored), package_map(candidate)
+    for key in ("dashboardAssetsSha256", "dashboardAssets"):
+        left = stored_telemetry.get(key) if isinstance(stored_telemetry, dict) else None
+        right = candidate_telemetry.get(key) if isinstance(candidate_telemetry, dict) else None
+        if left != right:
+            problems.append(f"descriptor.standaloneTelemetry.{key}: stored {left!r} != candidate {right!r}")
+    if stored_telemetry is not None or candidate_telemetry is not None:
+        for label, manifest_path, manifest in (("stored", stored_path, stored), ("candidate", candidate_path, candidate)):
+            telemetry = manifest["descriptor"].get("standaloneTelemetry")
+            if not isinstance(telemetry, dict) or not isinstance(telemetry.get("qualificationPath"), str):
+                problems.append(f"{label} standalone qualification reference is absent")
+                continue
+            qualification = manifest_path.parent / telemetry["qualificationPath"]
+            if not qualification.is_file() or qualification.is_symlink() or sha256(qualification) != telemetry.get("qualificationSha256"):
+                problems.append(f"{label} standalone qualification artifact is absent or digest-mismatched")
+                continue
+            packages = stored_packages if label == "stored" else candidate_packages
+            coord = packages.get("FS.GG.Coord.Cli")
+            try:
+                if coord is None:
+                    raise ValueError("FS.GG.Coord.Cli is absent")
+                validate_standalone_qualification(qualification, manifest["descriptor"]["sourceSha"], coord["artifact"]["sha256"])
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                problems.append(f"{label} standalone qualification evidence is invalid: {error}")
     for label, ids in (("missing from the re-packed inputs", set(stored_packages) - set(candidate_packages)),
                        ("absent from the stored release", set(candidate_packages) - set(stored_packages))):
         if ids:
@@ -655,6 +744,7 @@ def parser() -> argparse.ArgumentParser:
     prepare.add_argument("--source-sha", required=True); prepare.add_argument("--policy-version", required=True)
     prepare.add_argument("--previous-channel", required=True)
     prepare.add_argument("--artifact-dir", required=True); prepare.add_argument("--expected-package", action="append", required=True)
+    prepare.add_argument("--dashboard-assets"); prepare.add_argument("--standalone-qualification")
     prepare.add_argument("--output", required=True); prepare.set_defaults(run=command_prepare)
     predecessor = commands.add_parser("predecessor")
     predecessor.add_argument("--channel", required=True); predecessor.add_argument("--release-tag", required=True)
@@ -665,6 +755,9 @@ def parser() -> argparse.ArgumentParser:
     preflight.add_argument("--max-release-notes-characters", type=int, default=35_000); preflight.set_defaults(run=command_preflight)
     assertion = commands.add_parser("assert-artifacts")
     assertion.add_argument("--manifest", required=True); assertion.add_argument("--package", action="append"); assertion.set_defaults(run=command_assert)
+    external = commands.add_parser("verify-external")
+    external.add_argument("--manifest", required=True); external.add_argument("--package", required=True)
+    external.add_argument("--artifact", required=True); external.set_defaults(run=command_verify_external)
     reusable = commands.add_parser("assert-reusable")
     reusable.add_argument("--stored", required=True); reusable.add_argument("--candidate", required=True)
     reusable.set_defaults(run=command_reusable)

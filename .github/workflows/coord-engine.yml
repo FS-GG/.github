@@ -47,6 +47,11 @@ on:
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
       - "tests/FS.GG.Telemetry.Tests/**"
+      - "tests/FS.GG.Telemetry.Dashboard.Tests/**"
+      - "tests/FS.GG.Telemetry.LocalDashboard.Tests/**"
+      - "tests/standalone-telemetry-package/**"
+      - "tests/standalone-telemetry-budget/**"
+      - "tests/standalone-telemetry-dashboard/**"
       - "tests/m6-decision-cutover/**"
       # THE SHARED CROSS-LANGUAGE CORPUS (.github#2563), and this entry is part of the gate
       # rather than bookkeeping. `tests/delivery-leading-line/corpus.json` is the one statement of
@@ -159,9 +164,19 @@ jobs:
           dotnet restore tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj --locked-mode
 
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Test the shared projection and real loopback browser
+        run: |
+          set -euo pipefail
+          (cd tests/FS.GG.Telemetry.LocalDashboard.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --no-restore -c Release
+          dotnet test tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj --no-restore -c Release
+          python3 -m unittest tests/standalone-telemetry-budget/test_measure.py tests/standalone-telemetry-dashboard/test_measure.py
 
       - name: Pack and qualify the standalone telemetry workspace
         run: |

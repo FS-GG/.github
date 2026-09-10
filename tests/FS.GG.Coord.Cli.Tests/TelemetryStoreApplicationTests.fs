@@ -875,6 +875,9 @@ module TelemetryStoreApplicationTests =
         | Error errors -> Assert.Contains("explicit-future-dispatches", String.concat ";" errors)
         | Ok _ -> failwith "historical discovery scope was accepted"
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "reconcile"; "--item"; item ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "dashboard"; "status"; "--repository"; "FS-GG/.github" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "dashboard"; "serve"; "--repository"; "FS-GG/.github"; "--no-open" ])
+        Assert.True(TelemetryApplication.validateInvocation [ "telemetry"; "dashboard"; "status"; "--no-open" ] |> Option.exists Result.isError)
 
     [<Fact>]
     let ``UTEL-06A migration checksum is verified`` () =

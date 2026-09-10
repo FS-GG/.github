@@ -218,10 +218,10 @@ module DashboardProjectionTests =
         let script=DashboardAssets.tryGet "/private/dashboard/app.js" |> Option.get
         Assert.Equal("text/html; charset=utf-8",index.ContentType)
         let scriptText=Encoding.UTF8.GetString script.Bytes
-        Assert.Contains("post(\"/private/dashboard/v1/snapshot\"",scriptText)
+        Assert.Contains("snapshot:\"/private/dashboard/v1/snapshot\"",scriptText)
         Assert.Contains("post(\"/private/dashboard/login\"",scriptText)
-        Assert.Contains("post(\"/private/dashboard/v1/session/refresh\"",scriptText)
-        Assert.Contains("post(\"/private/dashboard/v1/logout\"",scriptText)
+        Assert.Contains("session:\"/private/dashboard/v1/session/refresh\"",scriptText)
+        Assert.Contains("logout:\"/private/dashboard/v1/logout\"",scriptText)
         Assert.Contains("principalId",Encoding.UTF8.GetString index.Bytes)
         Assert.Contains("accessKey",Encoding.UTF8.GetString index.Bytes)
         Assert.Contains("applied receipts",scriptText)
@@ -233,3 +233,15 @@ module DashboardProjectionTests =
         index.Bytes[0]<-0uy
         Assert.NotEqual(0uy,(DashboardAssets.tryGet "/private/dashboard/" |> Option.get).Bytes[0])
         Assert.True(DashboardAssets.tryGet "/unknown" |> Option.isNone)
+
+    [<Fact>]
+    let ``local assets reuse the dashboard in explicit bootstrap mode`` () =
+        let index = DashboardAssets.tryGetLocal "/" |> Option.get |> _.Bytes |> Encoding.UTF8.GetString
+        let script = DashboardAssets.tryGetLocal "/app.js" |> Option.get |> _.Bytes |> Encoding.UTF8.GetString
+        Assert.Contains("fsgg-dashboard-mode\" content=\"local", index)
+        Assert.Contains("/styles.css", index)
+        Assert.Contains("/app.js", index)
+        Assert.Contains("session:\"/api/session\"", script)
+        Assert.Contains("snapshot:\"/api/snapshot\"", script)
+        Assert.Contains("logout:\"/api/logout\"", script)
+        Assert.True(DashboardAssets.tryGetLocal "/private/dashboard/" |> Option.isNone)

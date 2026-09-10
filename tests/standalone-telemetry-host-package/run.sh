@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
-  echo "usage: $0 <FS.GG.Telemetry.Host.0.1.0.nupkg> <evidence.json>" >&2
+  echo "usage: $0 <FS.GG.Telemetry.Host.VERSION.nupkg> <evidence.json>" >&2
   exit 2
 fi
 PACKAGE="$(realpath "$1")"
@@ -40,7 +40,7 @@ with zipfile.ZipFile(package) as archive:
 PY
 PACKAGE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$WORK/metadata.json")"
 PACKAGE_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/metadata.json")"
-[ "$PACKAGE_ID" = FS.GG.Telemetry.Host ] && [ "$PACKAGE_VERSION" = 0.1.0 ] && ok "candidate identity is independent Host 0.1.0" || bad "candidate identity is independent Host 0.1.0" "$PACKAGE_ID $PACKAGE_VERSION"
+[ "$PACKAGE_ID" = FS.GG.Telemetry.Host ] && [[ "$PACKAGE_VERSION" =~ ^0\.1\.[0-9]+$ ]] && ok "candidate identity is independently versioned Host $PACKAGE_VERSION" || bad "candidate identity is independently versioned Host 0.1.x" "$PACKAGE_ID $PACKAGE_VERSION"
 python3 - "$WORK/metadata.json" <<'PY' && ok "tool settings bind the one supported command and entry point" || bad "tool settings bind the one supported command and entry point"
 import json,sys
 m=json.load(open(sys.argv[1])); c=m['command']
@@ -103,10 +103,10 @@ qualify_installed_host
 
 if dotnet tool uninstall "$PACKAGE_ID" --tool-path "$WORK/tools" >"$WORK/uninstall.log" 2>&1; then ok "local tool uninstall succeeds"; else bad "local tool uninstall succeeds" "$(tail -5 "$WORK/uninstall.log" | tr '\n' ' ')"; fi
 
-python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" "$HOST_PRODUCTION_PROFILE" <<'PY'
+python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" "$HOST_PRODUCTION_PROFILE" "$PACKAGE_VERSION" <<'PY'
 import json,pathlib,platform,sys
-out,sha,size,passed,failed,profile=sys.argv[1:]
-pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':'0.1.0','archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':profile,'syntheticTls':profile=='eligible-linux-x64'},sort_keys=True,separators=(',',':'))+'\n')
+out,sha,size,passed,failed,profile,version=sys.argv[1:]
+pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':version,'archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':profile,'syntheticTls':profile=='eligible-linux-x64'},sort_keys=True,separators=(',',':'))+'\n')
 PY
 printf 'standalone-telemetry-host-package fixture: %d passed, %d failed; evidence=%s\n' "$PASS" "$FAIL" "$EVIDENCE"
 [ "$FAIL" -eq 0 ]
