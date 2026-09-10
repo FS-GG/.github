@@ -123,7 +123,8 @@ module DashboardProjection =
                 node["state"]<-state
                 let coverage=JsonObject()
                 for name in ["recordValidity";"joinIntegrity";"populationCoverage";"qualification"] do coverage[name]<-safeToken "unknown" (text name summary)
-                coverage["ciInventory"]<-safeToken "unknown" (ci |> Option.bind(text "inventory"))
+                coverage["ciInventory"]<-safeToken "unknown" (pci |> Option.bind(text "actions") |> Option.orElseWith(fun()->ci |> Option.bind(text "inventory")))
+                coverage["ciChecks"]<-safeToken "unknown" (pci |> Option.bind(text "checks"))
                 coverage["ciAttempts"]<-safeToken "unknown" (pci |> Option.bind(text "attempts") |> Option.orElseWith(fun()->ci |> Option.bind(text "attempts")))
                 coverage["ciJobs"]<-safeToken "unknown" (pci |> Option.bind(text "jobs") |> Option.orElseWith(fun()->ci |> Option.bind(text "job_pages")))
                 coverage["ciTerminal"]<-safeToken "unknown" (pci |> Option.bind(text "terminal") |> Option.orElseWith(fun()->ci |> Option.bind(text "terminal")))

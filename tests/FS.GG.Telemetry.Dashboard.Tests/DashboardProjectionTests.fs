@@ -9,6 +9,8 @@ open System.Text.Json
 open System.Text.Json.Nodes
 open Xunit
 open FS.GG.Telemetry.Dashboard
+open FS.GG.Coord
+open FS.GG.Coord.Cli
 
 module DashboardProjectionTests =
     let private summary (item:string) =
@@ -38,6 +40,25 @@ module DashboardProjectionTests =
         gzip.Write canonical; gzip.Close()
         JsonSerializer.SerializeToUtf8Bytes {| schema="fsgg.telemetry.item-detail/2"; observedAt="2026-09-10T09:00:00Z"; revision=Convert.ToHexString(SHA256.HashData canonical).ToLowerInvariant(); canonicalSnapshotGzip=Convert.ToBase64String(output.ToArray()); operational={|pendingBatches=2;consistency="observed-outside-database-transaction"|} |}
     let private unwrap = function Ok value->value|Error error->failwithf "%A" error
+
+    [<Fact>]
+    let ``real Store canonical snapshot projects without shape translation`` () =
+        let root=Path.Combine(Path.GetTempPath(),"fsgg-dashboard-real-"+Guid.NewGuid().ToString("N"))
+        use cleanup={new IDisposable with member _.Dispose()=if Directory.Exists root then Directory.Delete(root,true)}
+        let approved=TelemetryStore.ApprovedLocalDurable
+        TelemetryStoreApplication.initialize root approved |> function Ok _->()|Error errors->failwithf "%A" errors
+        let batch=Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"actual-shape","sourceIdentity":"fixture","generation":"g1","cursor":"1","eventCount":2,"events":[{{"kind":"item","identity":"actual-item","itemId":"actual-item","revision":0}},{{"kind":"usage","identity":"actual-usage","itemId":"actual-item","revision":0,"provider":"OpenAI","model":"sol","effort":"medium","input":4,"cachedInput":1,"cacheWriteInput":0,"output":2,"reasoning":null,"total":6,"responses":1,"sessions":1,"turns":1}}]}}"""
+        TelemetryStoreApplication.ingest root approved batch |> function Ok _->()|Error errors->failwithf "%A" errors
+        let snapshotJson=TelemetryStoreApplication.dashboardSnapshot root approved None |> function Ok value->value|Error errors->failwithf "%A" errors
+        let envelopeBytes=Encoding.UTF8.GetBytes snapshotJson
+        let projected=DashboardProjection.project "workspace-a" envelopeBytes |> unwrap
+        use document=JsonDocument.Parse projected
+        let item=document.RootElement.GetProperty("items").[0]
+        Assert.Equal("actual-item",item.GetProperty("id").GetString())
+        Assert.Equal(6L,item.GetProperty("usage").GetProperty("total").GetInt64())
+        Assert.Equal("observed",item.GetProperty("usage").GetProperty("nativeUsage").GetString())
+        Assert.Equal("unknown",item.GetProperty("coverage").GetProperty("populationCoverage").GetString())
+        Assert.Equal(JsonValueKind.Null,item.GetProperty("coverage").GetProperty("externalChecks").ValueKind)
 
     [<Fact>]
     let ``projects closed private status usage coverage and clock distinctions`` () =
@@ -93,6 +114,42 @@ module DashboardProjectionTests =
         malformedSummary["factCount"]<-"three"
         Assert.Equal(Error InvalidSnapshot,DashboardProjection.project "workspace" (envelope malformed))
         Assert.Equal(Error EnvelopeTooLarge,DashboardProjection.project "workspace" (Array.zeroCreate<byte>(1024*1024+1)))
+
+    [<Fact>]
+    let ``missing zero and stale remain distinct from unknown and incomplete`` () =
+        let value=snapshot "item"
+        let aggregate=value["summaries"].AsArray().[0].AsObject()
+        aggregate["usageObservations"]<-0
+        let usage=aggregate["usage"].AsObject()
+        usage["input"]<-0
+        usage["cachedInput"]<-0
+        usage["output"]<-0
+        usage["total"]<-0
+        value["runtimeGaps"]<-JsonArray()
+        value["outcomes"].AsArray().[0].AsObject()["outcome"]<-"stale"
+        value["ciPopulationCoverage"]<-JsonArray()
+        let projected=DashboardProjection.project "workspace" (envelope value) |> unwrap |> Encoding.UTF8.GetString
+        Assert.Contains("\"nativeUsage\":\"missing\"",projected)
+        Assert.Contains("\"input\":0",projected)
+        Assert.Contains("\"outcome\":\"stale\"",projected)
+        Assert.Contains("\"ciInventory\":\"partial\"",projected)
+        Assert.Contains("\"externalChecks\":null",projected)
+
+    [<Fact>]
+    let ``duplicate mixed and oversized relation selections fail closed`` () =
+        let duplicate=snapshot "item"
+        duplicate["items"]<-nodes [|JsonValue.Create("item");JsonValue.Create("item")|]
+        duplicate["summaries"]<-nodes [|summary "item";summary "item"|]
+        Assert.Equal(Error InvalidSnapshot,DashboardProjection.project "workspace" (envelope duplicate))
+        let mixed=snapshot "item"
+        mixed["items"]<-nodes [|JsonValue.Create("item");JsonValue.Create("other")|]
+        Assert.Equal(Error InvalidSnapshot,DashboardProjection.project "workspace" (envelope mixed))
+        let malformedArray=snapshot "item"
+        malformedArray["activities"]<-JsonObject()
+        Assert.Equal(Error InvalidSnapshot,DashboardProjection.project "workspace" (envelope malformedArray))
+        let oversized=snapshot "item"
+        oversized["activities"]<-JsonArray(Array.init 10001 (fun _->JsonObject():>JsonNode))
+        Assert.Equal(Error InvalidSnapshot,DashboardProjection.project "workspace" (envelope oversized))
 
     [<Fact>]
     let ``rejects gzip expansion beyond canonical bound`` () =

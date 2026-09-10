@@ -8,6 +8,8 @@
   <ItemGroup><Compile Include="DashboardProjectionTests.fs" /></ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />

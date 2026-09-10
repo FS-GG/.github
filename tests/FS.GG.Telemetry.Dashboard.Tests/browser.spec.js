@@ -5,7 +5,7 @@ const assets=path.resolve(__dirname,"../../src/FS.GG.Telemetry.Dashboard/Assets"
 const session={schema:"fsgg.telemetry.browser-session/1",workspaces:["workspace-a","workspace-b"]};
 const snapshot=(workspace)=>({schema:"fsgg.telemetry.private-dashboard/1",workspaceId:workspace,observedAt:"2026-09-10T09:00:00Z",revision:"a".repeat(64),operational:{pendingBatches:2,consistency:"observed-outside-database-transaction"},items:[{id:"<img src=x onerror=alert(1)>",factCount:1,usageObservations:0,deliveryObservations:0,usage:{input:0,cachedInput:0,cacheWriteInput:0,output:0,total:0,reasoning:null,nativeUsage:"missing"},runtime:{admitted:0,started:0,terminal:0,usage:0,missingAdmission:0,missingStart:0,missingTerminal:0,missingUsage:0,gapCodes:[]},state:{population:"missing",dirty:false,outcome:"missing",codeDelivery:"unknown",observedAt:null},coverage:{recordValidity:"unknown",joinIntegrity:"unknown",populationCoverage:"unknown",qualification:"not-evaluated",ciInventory:"unknown",ciAttempts:"unknown",ciJobs:"unknown",ciTerminal:"unknown",ciTimestamps:"unknown",ciContinuation:"none",externalChecks:null},clockProvenance:[]} ]});
 
-test("login, scoped workspace refresh, expiry and logout use the frozen private contract",async({page})=>{
+test("mocked transport UI journey covers login, scoped refresh, expiry and logout",async({page})=>{
   let authenticated=false, expired=false, loginBody=null, snapshots=[];
   await page.route("https://telemetry.test/private/dashboard/**",async route=>{
     const request=route.request(),url=new URL(request.url());
