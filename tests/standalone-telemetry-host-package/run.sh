@@ -7,6 +7,7 @@ if [ "$#" -ne 2 ]; then
 fi
 PACKAGE="$(realpath "$1")"
 EVIDENCE="$(realpath -m "$2")"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/telemetry-host-package.XXXXXX")"
 PASS=0
 FAIL=0
@@ -66,6 +67,13 @@ for n in names:
     assert not re.search(r'\.(fs|fsi|fsx|py|pyc|cs)$',lower), n
     assert not any(part in lower.split('/') for part in ('test','tests','fixture','fixtures','secret','secrets','config')), n
 PY
+python3 - "$WORK/metadata.json" "$ROOT/tests/standalone-telemetry-host-package/allowed-files.txt" <<'PY' \
+  && ok "package payload matches the reviewed runtime allowlist" || bad "package payload matches the reviewed runtime allowlist"
+import json,pathlib,sys
+actual=json.load(open(sys.argv[1]))['names']
+expected=pathlib.Path(sys.argv[2]).read_text().splitlines()
+assert actual==expected, {'missing':sorted(set(expected)-set(actual)),'extra':sorted(set(actual)-set(expected))}
+PY
 
 mkdir -p "$WORK/feed" "$WORK/tools"
 cp "$PACKAGE" "$WORK/feed/"
@@ -86,10 +94,19 @@ set -e
 AFTER="$(find "$WORK/private" -mindepth 1 -printf '%P\t%y\n' | sort)"
 [ "$STATUS_RC" -ne 0 ] && [ "$PREFLIGHT_RC" -ne 0 ] && [ "$BEFORE" = "$AFTER" ] && ok "installed status and preflight fail closed without provisioning" || bad "installed status and preflight fail closed without provisioning" "status=$STATUS_RC preflight=$PREFLIGHT_RC"
 
-python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" <<'PY'
+HOST_PRODUCTION_PROFILE="not-run"
+export HOST_PRODUCTION_PROFILE
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=production.sh
+. "$(cd "$(dirname "$0")" && pwd)/production.sh"
+qualify_installed_host
+
+if dotnet tool uninstall "$PACKAGE_ID" --tool-path "$WORK/tools" >"$WORK/uninstall.log" 2>&1; then ok "local tool uninstall succeeds"; else bad "local tool uninstall succeeds" "$(tail -5 "$WORK/uninstall.log" | tr '\n' ' ')"; fi
+
+python3 - "$EVIDENCE" "$PACKAGE_SHA" "$PACKAGE_BYTES" "$PASS" "$FAIL" "$HOST_PRODUCTION_PROFILE" <<'PY'
 import json,pathlib,platform,sys
-out,sha,size,passed,failed=sys.argv[1:]
-pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':'0.1.0','archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':'not-assessed-by-basic-package-fixture'},sort_keys=True,separators=(',',':'))+'\n')
+out,sha,size,passed,failed,profile=sys.argv[1:]
+pathlib.Path(out).write_text(json.dumps({'schema':'fsgg.telemetry-host-package-evidence/v1','packageId':'FS.GG.Telemetry.Host','version':'0.1.0','archiveSha256':sha,'archiveBytes':int(size),'passed':int(passed),'failed':int(failed),'runtime':platform.machine(),'productionStorage':profile,'syntheticTls':profile=='eligible-linux-x64'},sort_keys=True,separators=(',',':'))+'\n')
 PY
 printf 'standalone-telemetry-host-package fixture: %d passed, %d failed; evidence=%s\n' "$PASS" "$FAIL" "$EVIDENCE"
 [ "$FAIL" -eq 0 ]

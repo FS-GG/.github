@@ -163,6 +163,8 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
+      - name: Verify the declared writer census before any feed effect
+        run: python3 scripts/check-v1-writer-census.py --root . --structural
       - name: Inspect both feed versions before the first feed effect
         if: steps.release_state.outputs.complete != 'true'
         id: feeds

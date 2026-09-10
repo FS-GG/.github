@@ -232,12 +232,19 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.telemetry.dashboard": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.telemetry.host": {
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
           "Akka.FSharp": "[1.5.71, )",
           "FS.GG.Telemetry.Contracts": "[1.0.0, )",
+          "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
           "FS.GG.Telemetry.Store": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }

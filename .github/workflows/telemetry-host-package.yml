@@ -68,7 +68,13 @@ jobs:
           dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj --locked-mode
       - name: Test the host, projection, and browser boundaries
+        env:
+          FSGG_RUN_REAL_BROWSER: "1"
         run: |
+          cd tests/FS.GG.Telemetry.Browser.Tests
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          cd ../..
           dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
           dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
           dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore

@@ -19,14 +19,14 @@ root=pathlib.Path(sys.argv[1])
 nuspec='''<?xml version="1.0"?><package><metadata><id>FS.GG.Telemetry.Host</id><version>0.1.0</version></metadata></package>'''
 with zipfile.ZipFile(root/'host.nupkg','w') as z:
     z.writestr('FS.GG.Telemetry.Host.nuspec',nuspec)
-    z.writestr('tools/net10.0/any/FS.GG.Telemetry.Host.dll',b'host')
+    z.writestr('tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll',b'host')
 with zipfile.ZipFile(root/'signed.nupkg','w') as z:
     z.writestr('FS.GG.Telemetry.Host.nuspec',nuspec)
-    z.writestr('tools/net10.0/any/FS.GG.Telemetry.Host.dll',b'host')
+    z.writestr('tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll',b'host')
     z.writestr('.signature.p7s',b'registry-signature')
 with zipfile.ZipFile(root/'changed.nupkg','w') as z:
     z.writestr('FS.GG.Telemetry.Host.nuspec',nuspec)
-    z.writestr('tools/net10.0/any/FS.GG.Telemetry.Host.dll',b'changed')
+    z.writestr('tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll',b'changed')
 PY
 
 TOOL=(python3 "$ROOT/scripts/telemetry-host-release.py")
