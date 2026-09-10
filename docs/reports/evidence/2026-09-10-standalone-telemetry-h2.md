@@ -41,7 +41,7 @@ the operator or client must replay the retained post-backup acknowledged input.
 The root manifest contains a secret-free digest of logical configuration
 metadata; it cannot reconstruct configuration or credentials. Operational
 recovery therefore depends on the accepted
-[SystemAdmin companion](https://github.com/FS-GG/SystemAdmin/pull/6) backup of the canonical config
+[SystemAdmin companion](https://github.com/EHotwagner/SystemAdmin/pull/6) backup of the canonical config
 template, TLS material, producer secrets, and browser key-hash files.
 The restore rehearsal regenerates config with each `Store.Root` set to
 `<fresh-state-root>/<workspaceId>` and passes preflight before cutover. Access

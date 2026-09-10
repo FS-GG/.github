@@ -1183,6 +1183,13 @@ recovery and old/new process overlap. The remote receiver uses authenticated, ex
 stores, a fixed actor set, host-wide admission bounds, and an isolated blocking-I/O dispatcher; it never accepts
 producer-selected paths or treats an HTTP status without a verified receipt as acknowledgement. No actor
 remoting, network-shared database, collection hook, or publication path is introduced.
+The host ships as its own Linux x64 .NET tool and release line, outside the coordination CLI's three-package
+coherent set. Its private browser surface authenticates separately provisioned access keys, binds bounded
+sessions to explicit workspace allowlists, and projects only host-selected, provenance-verified snapshots.
+Offline host commands own initialization, producer enrollment, readiness checks, and atomic data-only
+backup/restore; configuration, TLS material, and credential recovery remain an operator-owned companion
+boundary. The [host release contract](coordination/telemetry-host-release.md) keeps source acceptance,
+publication, and deployment qualification as separate states.
 Future explicit `codex exec --json --ephemeral` launches can pass through the source-only runtime adapter. Its
 closed private assignment and content-discarding JSONL projector publish admission/start/turn-usage/terminal
 facts to that same inbox; current collaboration launches and generated workspaces remain unwired. The maintained
