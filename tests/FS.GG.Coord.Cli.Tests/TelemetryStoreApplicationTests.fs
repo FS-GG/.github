@@ -158,7 +158,15 @@ module TelemetryStoreApplicationTests =
         TelemetryReceipt.parse envelope |> unwrap |> ignore
         TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
         TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap |> ignore
-        Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> Result.isOk)
+        let rejectedEnvelope=Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-b","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"conflicting-native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"2","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-b","revision":0}}]}}}}"""
+        TelemetryStoreApplication.submitReceipt path approved scope rejectedEnvelope |> unwrap |> ignore
+        TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap |> ignore
+        use snapshot=JsonDocument.Parse(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> unwrap)
+        let operational=snapshot.RootElement.GetProperty("operational")
+        Assert.Equal(0L,operational.GetProperty("pendingBatches").GetInt64())
+        Assert.Equal(1L,operational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(1L,operational.GetProperty("rejectedReceipts").GetInt64())
+        Assert.Equal("database-transaction",operational.GetProperty("consistency").GetString())
 
     [<Fact>]
     let ``receipt backup restores pending obligation into fresh root`` () =
@@ -173,6 +181,8 @@ module TelemetryStoreApplicationTests =
             TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
             let envelope=Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-a","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":0}}]}}}}"""
             TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
+            use pendingSnapshot=JsonDocument.Parse(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> unwrap)
+            Assert.Equal(1L,pendingSnapshot.RootElement.GetProperty("operational").GetProperty("pendingBatches").GetInt64())
             TelemetryStoreApplication.backupReceiptStore path approved scope.Workspace backup |> unwrap |> ignore
             TelemetryStoreApplication.restoreReceiptStore backup restored approved scope.Workspace |> unwrap |> ignore
             let receipt=TelemetryStoreApplication.lookupReceipt restored approved scope "batch-a" |> unwrap

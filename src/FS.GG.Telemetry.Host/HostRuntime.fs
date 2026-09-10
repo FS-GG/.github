@@ -136,6 +136,13 @@ module Runtime =
                 if Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),2 ||| 4)<>0 then stream.Dispose(); Error "service already running"
                 else Ok(new ServiceLock(stream))
             with :? IOException -> Error "service lock unavailable"
+        static member Probe(path:string) =
+            try
+                if not(File.Exists path) then Ok false else
+                use stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite)
+                if Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),2 ||| 4)<>0 then Ok true
+                else Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),8) |> ignore; Ok false
+            with _ -> Error "service state unavailable"
     [<Sealed>]
     type HostState(config:HostConfig, assessmentFor:string->TelemetryStore.DurabilityAssessment) =
         let stores = config.Stores |> Array.map(fun s -> s.WorkspaceId,s.Root) |> Map.ofArray

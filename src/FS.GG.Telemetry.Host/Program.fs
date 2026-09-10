@@ -2,6 +2,9 @@ namespace FS.GG.Telemetry.Host
 
 open System
 open System.IO
+open System.Runtime.InteropServices
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
@@ -78,6 +81,33 @@ module Endpoints =
                     do! context.Response.Body.WriteAsync(reply.Body) })) |> ignore
 
 module Operations =
+    module private Native =
+        [<DllImport("libc",EntryPoint="open",SetLastError=true)>]
+        extern int openDirectory(string path,int flags)
+        [<DllImport("libc",SetLastError=true)>]
+        extern int fsync(int descriptor)
+        [<DllImport("libc",SetLastError=true)>]
+        extern int close(int descriptor)
+    let private syncDirectory path =
+        let descriptor=Native.openDirectory(path,0x10000 ||| 0x80000)
+        if descriptor<0 then raise(IOException "directory sync unavailable")
+        try if Native.fsync descriptor<>0 then raise(IOException "directory sync unavailable") finally Native.close descriptor |> ignore
+    let private digestBytes (bytes:byte array)=Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+    let private digestFile path=use stream=File.OpenRead path in Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
+    let private flushFile path=use stream=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.Read,4096,FileOptions.WriteThrough) in stream.Flush true
+    let private configMetadataDigest config =
+        JsonSerializer.SerializeToUtf8Bytes {|schema=config.Schema;listenUrl=config.ListenUrl;stores=config.Stores;credentials=config.Credentials |> Array.map(fun x->{|reference=x.Reference;workspaceId=x.WorkspaceId;producerId=x.ProducerId;streamId=x.StreamId;revoked=x.Revoked|});browserPrincipals=config.BrowserPrincipals |> Array.map(fun x->{|principalId=x.PrincipalId;workspaceIds=x.WorkspaceIds;revoked=x.Revoked|});browserSession=config.BrowserSession|} |> digestBytes
+    let private freeSpaceFor path =
+        try
+            let mutable candidate=Path.GetFullPath path
+            while not(Directory.Exists candidate) && not(String.IsNullOrEmpty candidate) do candidate<-Path.GetDirectoryName candidate
+            DriveInfo.GetDrives()
+            |> Array.filter(fun drive -> candidate.StartsWith(Path.GetFullPath drive.RootDirectory.FullName,StringComparison.Ordinal))
+            |> Array.sortByDescending(fun drive->drive.RootDirectory.FullName.Length)
+            |> Array.tryHead
+            |> Option.filter _.IsReady
+            |> Option.map _.AvailableFreeSpace
+        with _ -> None
     let private writeError code errors =
         let body=JsonSerializer.Serialize {| schema="fsgg.telemetry.host-error/1"; code=code; errors=errors |> List.map(fun _->code) |> List.toArray |}
         Console.Error.WriteLine body
@@ -102,10 +132,10 @@ module Operations =
                 |> Array.toList
                 |> List.collect(fun store ->
                     let assessment=assessmentFor store.Root
-                    let free = try DriveInfo(Path.GetPathRoot store.Root).AvailableFreeSpace with _ -> 0L
+                    let free = freeSpaceFor store.Root
                     [ match TelemetryStoreApplication.status store.Root assessment with Error errors -> yield! errors | Ok _ -> ()
                       match TelemetryStoreApplication.scopedDashboardSnapshot store.Root assessment store.WorkspaceId None with Error errors -> yield! errors | Ok _ -> ()
-                      if free<512L*1024L*1024L then yield "capacity-reserve-unavailable" ])
+                      if free |> Option.forall(fun bytes->bytes<512L*1024L*1024L) then yield "capacity-reserve-unavailable" ])
             if failures.IsEmpty then Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.host-preflight/1"; status="ready"; stores=config.Stores.Length; dashboardAuthentication="ready"; supportedStoreSchemaMin=9; supportedStoreSchemaMax=9 |}+"\n") else Error failures
         with _ -> Error ["invalid-configuration"]
     let private status config assessmentFor =
@@ -113,13 +143,10 @@ module Operations =
             config.Stores |> Array.map(fun store ->
                 let assessment=assessmentFor store.Root
                 let state=match TelemetryStoreApplication.status store.Root assessment with Ok _->"ready"|Error _->"unavailable"
-                let lifetime,pending,pendingBytes=match TelemetryStoreApplication.receiptCapacity store.Root assessment with Ok values->values|Error _->0L,0L,0L
-                {|workspaceId=store.WorkspaceId;status=state;lifetimeReceipts=lifetime;pendingReceipts=pending;pendingBytes=pendingBytes|})
-        let running=
-            match Runtime.ServiceLock.Acquire config.ServiceLockPath with
-            | Ok serviceLock -> (serviceLock:>IDisposable).Dispose(); false
-            | Error _ -> true
-        let processState=if running then "running" else "stopped"
+                match TelemetryStoreApplication.receiptCapacity store.Root assessment with
+                | Ok(lifetime,pending,pendingBytes) -> {|workspaceId=store.WorkspaceId;status=state;capacity="available";lifetimeReceipts=Some lifetime;pendingReceipts=Some pending;pendingBytes=Some pendingBytes|}
+                | Error _ -> {|workspaceId=store.WorkspaceId;status=state;capacity="unavailable";lifetimeReceipts=None;pendingReceipts=None;pendingBytes=None|})
+        let processState=match Runtime.ServiceLock.Probe config.ServiceLockPath with Ok true->"running"|Ok false->"stopped"|Error _->"unknown"
         let dashboardState=if config.BrowserPrincipals.Length>0 then "configured" else "unavailable"
         Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.host-status/1"; ``process`` = processState; recovery="unknown"; dashboardAuthentication=dashboardState; supportedStoreSchemaMin=9; supportedStoreSchemaMax=9; stores=stores |}+"\n")
     let runWithAssessment (argv:string array) assessmentFor =
@@ -132,14 +159,14 @@ module Operations =
         | ["enroll-producer";"--config";path;"--reference";reference;"--secret-file";secret;"--workspace";workspace;"--producer";producer;"--stream";stream;"--revoked"] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
-            | Ok config ->
+            | Ok config -> withLock config (fun () ->
                 let revoked=argv.Length=14
                 match config.Credentials |> Array.tryFind(fun entry->entry.Reference=reference && entry.SecretFile=secret && entry.WorkspaceId=workspace && entry.ProducerId=producer && entry.StreamId=stream && entry.Revoked=revoked),storeFor config workspace with
                 | Some _,Some store ->
                     match TelemetryStoreApplication.provisionReceiptWorkspace store.Root (assessmentFor store.Root) workspace with
                     | Error errors -> resultExit "storage-unavailable" (Error errors)
                     | Ok _ -> TelemetryStoreApplication.enrollReceiptProducer store.Root (assessmentFor store.Root) {Workspace=workspace;Producer=producer;Stream=stream} |> resultExit "storage-unavailable"
-                | _ -> resultExit "invalid-configuration" (Error ["enrollment is not declared by config"])
+                | _ -> resultExit "invalid-configuration" (Error ["enrollment is not declared by config"]))
         | ["preflight";"--config";path] ->
             match load path with Error errors->resultExit "invalid-configuration" (Error errors)|Ok config->withLock config (fun()->preflight config assessmentFor |> resultExit "preflight-failed")
         | ["status";"--config";path] -> match load path with Error errors->resultExit "invalid-configuration" (Error errors)|Ok config->status config assessmentFor |> resultExit "status-unavailable"
@@ -151,20 +178,43 @@ module Operations =
                 let temporary=output+".tmp-"+Guid.NewGuid().ToString("N")
                 try
                     Directory.CreateDirectory temporary |> ignore
+                    if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
                     let mutable failure=None
                     for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.backupReceiptStore store.Root (assessmentFor store.Root) store.WorkspaceId (Path.Combine(temporary,store.WorkspaceId)) with Ok _->()|Error errors->failure<-Some errors
                     match failure with
                     | Some errors -> resultExit "backup-integrity-failed" (Error errors)
-                    | None -> Directory.Move(temporary,output); Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";output=output;workspaces=config.Stores|}+"\n");0
+                    | None ->
+                        let workspaces=config.Stores |> Array.sortBy _.WorkspaceId |> Array.map(fun store->{|workspaceId=store.WorkspaceId;path=store.WorkspaceId;manifestSha256=digestFile(Path.Combine(temporary,store.WorkspaceId,"manifest.json"))|})
+                        let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.0";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
+                        let manifestPath=Path.Combine(temporary,"backup-manifest.json")
+                        File.WriteAllText(manifestPath,manifest,UTF8Encoding(false));flushFile manifestPath;syncDirectory temporary
+                        Directory.Move(temporary,output);syncDirectory(Path.GetDirectoryName output)
+                        Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-result/1";output=output;manifestSha256=digestFile(Path.Combine(output,"backup-manifest.json"))|}+"\n");0
                 finally if Directory.Exists temporary then Directory.Delete(temporary,true))
         | ["restore";"--config";path;"--input";input;"--state-root";stateRoot] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config -> withLock config (fun () ->
                 if not(Path.IsPathFullyQualified stateRoot) || Directory.Exists stateRoot || File.Exists stateRoot then resultExit "backup-integrity-failed" (Error ["restore target must not exist"]) else
-                let mutable failure=None
-                for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.restoreReceiptStore (Path.Combine(input,store.WorkspaceId)) (Path.Combine(stateRoot,store.WorkspaceId)) (assessmentFor stateRoot) store.WorkspaceId with Ok _->()|Error errors->failure<-Some errors
-                match failure with Some errors->resultExit "backup-integrity-failed" (Error errors)|None->Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-restore-set/1";root=stateRoot|}+"\n");0)
+                let temporary=stateRoot+".tmp-"+Guid.NewGuid().ToString("N")
+                try
+                    let manifestPath=Path.Combine(input,"backup-manifest.json")
+                    if not(File.Exists manifestPath) || FileInfo(manifestPath).Length>1024L*1024L then resultExit "backup-integrity-failed" (Error ["backup manifest unavailable"]) else
+                    use document=JsonDocument.Parse(File.ReadAllBytes manifestPath)
+                    let root=document.RootElement
+                    let names=root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    let declared=root.GetProperty("workspaces").EnumerateArray() |> Seq.map(fun entry->entry.GetProperty("workspaceId").GetString(),entry.GetProperty("path").GetString(),entry.GetProperty("manifestSha256").GetString()) |> Seq.toArray
+                    let expected=config.Stores |> Array.map _.WorkspaceId |> Array.sort
+                    let actual=declared |> Array.map(fun (workspace,_,_)->workspace) |> Array.sort
+                    if names.Length<>7 || Array.distinct names|>Array.length<>7 || Set.ofArray names<>set["schema";"hostVersion";"supportedStoreSchemaMin";"supportedStoreSchemaMax";"configMetadataSha256";"createdAt";"workspaces"] || root.GetProperty("schema").GetString()<>"fsgg.telemetry.host-backup-set/1" || root.GetProperty("supportedStoreSchemaMin").GetInt32()<>9 || root.GetProperty("supportedStoreSchemaMax").GetInt32()<>9 || root.GetProperty("configMetadataSha256").GetString()<>configMetadataDigest config || actual<>expected || declared |> Array.exists(fun (workspace,relative,digest)->relative<>workspace || digestFile(Path.Combine(input,relative,"manifest.json"))<>digest) then resultExit "backup-integrity-failed" (Error ["backup manifest invalid"]) else
+                    Directory.CreateDirectory temporary |> ignore
+                    if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                    let mutable failure=None
+                    for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.restoreReceiptStore (Path.Combine(input,store.WorkspaceId)) (Path.Combine(temporary,store.WorkspaceId)) (assessmentFor stateRoot) store.WorkspaceId with Ok _->()|Error errors->failure<-Some errors
+                    match failure with
+                    | Some errors -> resultExit "backup-integrity-failed" (Error errors)
+                    | None -> syncDirectory temporary;Directory.Move(temporary,stateRoot);syncDirectory(Path.GetDirectoryName stateRoot);Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-restore-set/1";root=stateRoot;sourceManifestSha256=digestFile manifestPath|}+"\n");0
+                finally if Directory.Exists temporary then Directory.Delete(temporary,true))
         | _ -> writeError "usage" ["invalid command"];2
     let run argv=runWithAssessment argv TelemetryStoreApplication.assessProductionRoot
 

@@ -28,6 +28,7 @@ module Runtime =
     type ServiceLock =
         interface IDisposable
         static member Acquire: string -> Result<ServiceLock,string>
+        static member Probe: string -> Result<bool,string>
     [<Sealed>]
     type HostState =
         interface IDisposable

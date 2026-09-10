@@ -1088,28 +1088,12 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         workspaceCommand.CommandText <- "SELECT value FROM store_metadata WHERE key='receiptWorkspace';"
         let enrolled = workspaceCommand.ExecuteScalar()
         if isNull enrolled || enrolled = box DBNull.Value || string enrolled <> workspace then Error [ "projection-unavailable" ] else
-        use receiptsCommand = connection.CreateCommand()
-        receiptsCommand.Transaction <- transaction
-        receiptsCommand.CommandText <- "SELECT producer,batch,digest FROM transport_receipts WHERE state='applied' ORDER BY producer,batch LIMIT 10001;"
-        use receiptsReader = receiptsCommand.ExecuteReader()
-        let receipts = Collections.Generic.HashSet<string * string>()
-        let mutable receiptCount = 0
-        while receiptsReader.Read() do
-            receiptCount <- receiptCount + 1
-            if receiptCount <= 10000 then receipts.Add("receipt-" + TelemetryReceipt.key (receiptsReader.GetString 0) (receiptsReader.GetString 1), receiptsReader.GetString 2) |> ignore
-        receiptsReader.Close()
-        if receiptCount > 10000 then Error [ "projection-unavailable" ] else
-        use batchesCommand = connection.CreateCommand()
-        batchesCommand.Transaction <- transaction
-        batchesCommand.CommandText <- "SELECT ingest_id,content_digest FROM ingest_batches ORDER BY ingest_id LIMIT 10001;"
-        use batchesReader = batchesCommand.ExecuteReader()
-        let mutable batchCount = 0
-        let mutable assigned = true
-        while batchesReader.Read() do
-            batchCount <- batchCount + 1
-            if batchCount > 10000 || not (receipts.Contains(batchesReader.GetString 0,batchesReader.GetString 1)) then assigned <- false
-        batchesReader.Close()
-        if assigned then Ok () else Error [ "projection-unavailable" ]
+        connection.CreateFunction<string,string,string>("fsgg_receipt_ingest_id",(fun producer batch -> "receipt-" + TelemetryReceipt.key producer batch),true) |> ignore
+        use provenanceCommand = connection.CreateCommand()
+        provenanceCommand.Transaction <- transaction
+        provenanceCommand.CommandTimeout <- 10
+        provenanceCommand.CommandText <- "SELECT count(*) FROM ingest_batches b WHERE NOT EXISTS(SELECT 1 FROM transport_receipts r WHERE r.state='applied' AND fsgg_receipt_ingest_id(r.producer,r.batch)=b.ingest_id AND r.digest=b.content_digest);"
+        if Convert.ToInt64(provenanceCommand.ExecuteScalar())=0L then Ok () else Error [ "projection-unavailable" ]
     let private receiptAuthorized connection (scope: TelemetryReceipt.Scope) =
         receiptWorkspace connection = scope.Workspace
         && Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers WHERE producer=$p AND stream=$s;" ["$p",box scope.Producer; "$s",box scope.Stream]) = 1L
@@ -1422,7 +1406,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                     if topNames.Length<>4 || Array.distinct topNames |> Array.length<>4 || Set.ofArray topNames<>set["schema";"storeSchemaVersion";"workspaceId";"files"] || top.GetProperty("schema").GetString()<>"fsgg.telemetry.host-backup/1" || top.GetProperty("storeSchemaVersion").GetInt32()<>currentSchemaVersion || top.GetProperty("workspaceId").GetString()<>workspace then Error [ "backup-incompatible" ] else
                     let files=top.GetProperty("files").EnumerateArray() |> Seq.toArray
                     if files.Length=0 || files.Length>1025 then Error [ "backup-integrity-failed" ] else
-                    let validated=ResizeArray<string*string>()
+                    let validated=ResizeArray<string*string*string*int64>()
                     let paths=Collections.Generic.HashSet<string>(StringComparer.Ordinal)
                     let mutable valid=true
                     let mutable totalBytes=0L
@@ -1436,22 +1420,28 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         let canonicalReceipt = not(isNull relative) && relative.StartsWith("receipt-inbox/",StringComparison.Ordinal) && relative.EndsWith(".ready",StringComparison.Ordinal) && relative.Length=14+64+6 && relative.Substring(14,64) |> Seq.forall(fun c->Char.IsAsciiHexDigit c && not(Char.IsLetter(c) && Char.IsUpper(c)))
                         let allowed = relative=databaseFileName || canonicalReceipt
                         if names.Length<>3 || Array.distinct names |> Array.length<>3 || Set.ofArray names<>set["path";"sha256";"bytes"] || not allowed || not(paths.Add relative) || bytes<0L || bytes>4L*1024L*1024L*1024L || source="" || not(source.StartsWith(prefix,StringComparison.Ordinal)) || not(File.Exists source) || not(isNull(FileInfo(source).LinkTarget)) || FileInfo(source).Length<>bytes || fileDigest source<>expected then valid<-false
-                        else totalBytes<-totalBytes+bytes; validated.Add(relative,source)
-                    let actualFiles=Directory.EnumerateFiles(inputPath,"*",SearchOption.AllDirectories) |> Seq.map(fun file->Path.GetRelativePath(inputPath,file).Replace(Path.DirectorySeparatorChar,'/')) |> Set.ofSeq
+                        else totalBytes<-totalBytes+bytes; validated.Add(relative,source,expected,bytes)
+                    let topEntries=Directory.EnumerateFileSystemEntries(inputPath,"*",SearchOption.TopDirectoryOnly) |> Seq.truncate 4 |> Seq.toArray
+                    let linkTarget entry=if Directory.Exists entry then DirectoryInfo(entry).LinkTarget else FileInfo(entry).LinkTarget
+                    if topEntries.Length>3 || topEntries |> Array.exists(fun entry->not(isNull(linkTarget entry)) || (Path.GetFileName entry<>"manifest.json" && Path.GetFileName entry<>databaseFileName && Path.GetFileName entry<>"receipt-inbox")) then valid<-false
+                    let inboxPath=Path.Combine(inputPath,"receipt-inbox")
+                    let inboxEntries=if Directory.Exists inboxPath then Directory.EnumerateFileSystemEntries(inboxPath,"*",SearchOption.TopDirectoryOnly) |> Seq.truncate 1026 |> Seq.toArray else [||]
+                    if inboxEntries.Length>1025 || inboxEntries |> Array.exists(fun entry->Directory.Exists entry || not(isNull(FileInfo(entry).LinkTarget))) then valid<-false
+                    let actualFiles=Seq.append (topEntries |> Seq.filter File.Exists) inboxEntries |> Seq.map(fun file->Path.GetRelativePath(inputPath,file).Replace(Path.DirectorySeparatorChar,'/')) |> Set.ofSeq
                     let expectedFiles=Set.add "manifest.json" (paths |> Set.ofSeq)
-                    if not valid || totalBytes>4L*1024L*1024L*1024L || actualFiles<>expectedFiles || validated |> Seq.filter(fun (relative,_)->relative=databaseFileName) |> Seq.length <> 1 then Error [ "backup-integrity-failed" ] else
+                    if not valid || totalBytes>4L*1024L*1024L*1024L || actualFiles<>expectedFiles || validated |> Seq.filter(fun (relative,_,_,_)->relative=databaseFileName) |> Seq.length <> 1 then Error [ "backup-integrity-failed" ] else
                     let parent=Path.GetDirectoryName root
                     Directory.CreateDirectory parent |> ignore
                     let temporary=Path.Combine(parent,"."+Path.GetFileName(root)+"."+Guid.NewGuid().ToString("N")+".restore")
                     Directory.CreateDirectory temporary |> ignore
                     if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
                     try
-                        for relative,source in validated do
+                        for relative,source,expected,bytes in validated do
                             let target=Path.Combine(temporary,relative)
                             Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
                             File.Copy(source,target,false)
                             flushFile target
-                            if fileDigest target<>fileDigest source then invalidOp "copied backup changed"
+                            if FileInfo(target).Length<>bytes || fileDigest target<>expected then invalidOp "copied backup changed"
                         if Directory.Exists(Path.Combine(temporary,"receipt-inbox")) then fsyncDirectory(Path.Combine(temporary,"receipt-inbox"))
                         fsyncDirectory temporary
                         match status temporary assessment with
@@ -1726,7 +1716,17 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                         envelope["revision"] <- JsonValue.Create(revision)
                         envelope["canonicalSnapshotGzip"] <- JsonValue.Create(Convert.ToBase64String(gzip canonicalBytes))
-                        envelope["operational"] <- JsonSerializer.SerializeToNode {| pendingBatches = pendingCount root; consistency = "observed-outside-database-transaction" |}
+                        envelope["operational"] <-
+                            match workspaceId with
+                            | None -> JsonSerializer.SerializeToNode {| pendingBatches = pendingCount root; consistency = "observed-outside-database-transaction" |}
+                            | Some _ ->
+                                let count state =
+                                    use command=connection.CreateCommand()
+                                    command.Transaction<-transaction
+                                    command.CommandText<-"SELECT count(*) FROM transport_receipts WHERE state=$state;"
+                                    parameter command "$state" state
+                                    Convert.ToInt64(command.ExecuteScalar())
+                                JsonSerializer.SerializeToNode {| pendingBatches=count "durably-received";appliedReceipts=count "applied";rejectedReceipts=count "rejected";consistency="database-transaction" |}
                         let result = envelope.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n"
                         transaction.Rollback()
                         if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "dashboard snapshot exceeds 1048576 bytes" ] else Ok result
