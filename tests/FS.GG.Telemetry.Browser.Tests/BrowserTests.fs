@@ -66,6 +66,12 @@ module BrowserTests =
             let absolute=match service.Login("reader",access,DateTimeOffset.UnixEpoch.AddMinutes 17.) with LoginAccepted(value,_)->value|result->failwithf "%A" result
             for minute in 27..10..477 do Assert.True(service.Validate(absolute,DateTimeOffset.UnixEpoch.AddMinutes(float minute)).IsSome)
             Assert.True(service.Validate(absolute,DateTimeOffset.UnixEpoch.AddMinutes 498.).IsNone)
+            for cycle in 1..100 do
+                let created=DateTimeOffset.UnixEpoch.AddDays(float cycle)
+                let value=match service.Login("reader",access,created) with LoginAccepted(id,_)->id|result->failwithf "%A" result
+                let rotated,_=service.Rotate(value,created.AddMinutes 1.) |> Option.get
+                Assert.True(service.Validate(rotated,created.AddMinutes 17.).IsNone)
+            Assert.Equal(0,service.AliasCount)
         finally Directory.Delete(root,true)
 
     [<Fact>]
@@ -106,6 +112,8 @@ module BrowserTests =
             File.SetUnixFileMode(zeroPath,UnixFileMode.UserRead|||UnixFileMode.UserWrite)
             use zeroService=new BrowserSecurity.Service(options "https://localhost:9443" 2 4 1,[|{PrincipalId="zero";KeyHashFile=zeroPath;WorkspaceIds=[|"workspace-a"|];Revoked=false}|])
             Assert.Equal(LoginDenied,zeroService.Login("zero","!",DateTimeOffset.UnixEpoch))
+            File.WriteAllText(zeroPath,$"{{\"schema\":\"fsgg.telemetry.browser-key/1\",\"algorithm\":\"sha256\",\"keyHash\":\"{String('0',64)}\\n\"}}")
+            Assert.True(BrowserSecurity.validatePrincipals [|{PrincipalId="zero";KeyHashFile=zeroPath;WorkspaceIds=[|"workspace-a"|];Revoked=false}|] |> Result.isError)
         finally Directory.Delete(root,true)
 
     let private certificate () =

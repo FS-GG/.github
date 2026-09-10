@@ -43,5 +43,6 @@ module BrowserSecurity =
         member Rotate: sessionId:string * now:DateTimeOffset -> (string * BrowserIdentity) option
         member Logout: sessionId:string -> unit
         member SessionCount: int
+        member internal AliasCount: int
         member TryAcquireQuery: unit -> bool
         member ReleaseQuery: unit -> unit

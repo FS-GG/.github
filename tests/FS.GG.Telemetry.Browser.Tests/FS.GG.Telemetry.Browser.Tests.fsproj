@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
   <ItemGroup>
-    <Compile Include="DashboardStub.fs" />
     <Compile Include="../../src/FS.GG.Telemetry.Host/BrowserSecurity.fsi" Link="BrowserSecurity.fsi" />
     <Compile Include="../../src/FS.GG.Telemetry.Host/BrowserSecurity.fs" Link="BrowserSecurity.fs" />
     <Compile Include="../../src/FS.GG.Telemetry.Host/BrowserEndpoints.fsi" Link="BrowserEndpoints.fsi" />
@@ -10,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="FSharp.Core" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>

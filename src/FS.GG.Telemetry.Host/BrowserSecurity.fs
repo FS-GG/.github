@@ -70,11 +70,12 @@ module BrowserSecurity =
             if names.Length<>3 || names|>Array.distinct|>Array.length<>3 || Set.ofArray names<>set["schema";"algorithm";"keyHash"] then Error "browser key hash file is invalid" else
             let scalar (name:string) = match root.TryGetProperty name with true,value when value.ValueKind=JsonValueKind.String->value.GetString() | _->""
             let digest=scalar "keyHash"
-            if scalar "schema"<>"fsgg.telemetry.browser-key/1" || scalar "algorithm"<>"sha256" || not(Regex.IsMatch(digest,"^[0-9a-f]{64}$",RegexOptions.CultureInvariant)) then Error "browser key hash file is invalid"
+            if scalar "schema"<>"fsgg.telemetry.browser-key/1" || scalar "algorithm"<>"sha256" || digest.Length<>64 || not(Regex.IsMatch(digest,"\A[0-9a-f]{64}\z",RegexOptions.CultureInvariant)) then Error "browser key hash file is invalid"
             else Ok(Convert.FromHexString digest)
         with :? IOException -> Error "browser key hash file is unavailable"
            | :? UnauthorizedAccessException -> Error "browser key hash file is unavailable"
            | :? JsonException -> Error "browser key hash file is invalid"
+           | :? FormatException -> Error "browser key hash file is invalid"
 
     let validatePrincipals (principals:BrowserPrincipalConfig array) =
         let errors=ResizeArray<string>()
@@ -123,6 +124,12 @@ module BrowserSecurity =
                 Some digest
             with :? FormatException -> None
         let active now (session:Session) = now-session.LastSeen<=options.IdleLifetime && now-session.Created<=options.AbsoluteLifetime
+        let removeSessionLocked key =
+            sessions.Remove key |> ignore
+            aliases
+            |> Seq.choose(fun pair->if pair.Key=key || pair.Value=key then Some pair.Key else None)
+            |> Seq.toArray
+            |> Array.iter(fun alias->aliases.Remove alias|>ignore)
         let rateAdmitted now = lock rateGate (fun () ->
             while attempts.Count>0 && now-attempts.Peek()>=TimeSpan.FromMinutes 1. do attempts.Dequeue() |> ignore
             if attempts.Count>=options.LoginAttemptsPerMinute then false else attempts.Enqueue now;true)
@@ -133,7 +140,7 @@ module BrowserSecurity =
             | true,session when active now session ->
                 if touch then session.LastSeen<-now
                 Some session
-            | true,_ -> sessions.Remove key |> ignore;None
+            | true,_ -> removeSessionLocked key;None
             | _ -> None
         member _.LoginAcquired(principalId,accessKey,now) =
                 if not(rateAdmitted now) then LoginOverloaded else
@@ -147,8 +154,7 @@ module BrowserSecurity =
                 | Some value when parsed.IsSome && matches && not value.Revoked ->
                     lock sessionGate (fun () ->
                         let expired=sessions |> Seq.choose(fun pair->if active now pair.Value then None else Some pair.Key) |> Seq.toArray
-                        expired |> Array.iter(fun key->sessions.Remove key|>ignore)
-                        aliases |> Seq.choose(fun pair->if expired|>Array.contains pair.Value then Some pair.Key else None) |> Seq.toArray |> Array.iter(fun key->aliases.Remove key|>ignore)
+                        expired |> Array.iter removeSessionLocked
                         if sessions.Count>=options.MaximumSessions then LoginOverloaded else
                         let id=freshId()
                         sessions.Add(sessionKey id,{Identity=value.Identity;Created=now;LastSeen=now})
@@ -181,6 +187,7 @@ module BrowserSecurity =
                 sessions.Remove target |> ignore
                 aliases |> Seq.choose(fun pair->if pair.Key=key || pair.Value=target then Some pair.Key else None) |> Seq.toArray |> Array.iter(fun alias->aliases.Remove alias|>ignore))
         member _.SessionCount=lock sessionGate (fun()->sessions.Count)
+        member internal _.AliasCount=lock sessionGate (fun()->aliases.Count)
         member _.TryAcquireQuery()=queryAdmission.Wait 0
         member _.ReleaseQuery()=queryAdmission.Release() |> ignore
         interface IDisposable with member _.Dispose()=loginAdmission.Dispose();queryAdmission.Dispose();sessions.Clear();aliases.Clear()
