@@ -1,12 +1,12 @@
 # Standalone telemetry H3 Main evidence
 
-Date: 2026-09-10. Status: partial Main evidence; H3 remains open.
+Date: 2026-09-10. Status: accepted Main evidence; H3 complete.
 
 This report records accepted Main results for the H3 receiver, producer, recovery,
-browser-scope, credential-rotation, missing-ingestion, fact-replay, and updater
-work. It contains no credential, private key, authorization header, or raw
-private telemetry. It does not change the H3 exit criteria or any operator
-procedure.
+browser-scope, credential-rotation, missing-ingestion, fact-replay, updater, and
+stopped-development-container independence work. It contains no credential,
+private key, authorization header, or raw private telemetry. It does not change
+the H3 exit criteria or any operator procedure.
 
 ## Main deployment and accepted history
 
@@ -165,6 +165,39 @@ The incumbent publisher timer also remained enabled and active. Root-private
 native installation evidence is retained at
 `/root/fs-gg-telemetry-updater-install.lmMKD5`.
 
+## Stopped-development-container independence
+
+The Main operator completed the remaining H3 acceptance action with a
+hash-bound recovery guard and the UID-954 telemetry maintenance lock. Before
+the stop, all twelve project roots and the worker mailbox were clean including
+untracked files. The only running development container was `fsharp-dev`, exact
+container ID
+`8e28412c46970d087c84c88197b27ab0ce40b74241559fd02e5ff989c77dc1f0`.
+The other development containers retained their prior non-running states.
+
+Main stopped `fsharp-dev` at `2026-09-10T17:30:38Z`. While it was stopped,
+strict-TLS reads made entirely from Main reported Host readiness and recovered
+the exact applied receipt `h3-client-activation-proof-v1`, digest
+`61ac7f3101aa7f32e9f0fd98361dd135658060370c54979977c7caf77a1e2399`,
+bound to workspace `main-fsharp-dev`, producer `fsharp-dev-main`, and stream
+`coordination`. Private history revision
+`e56281e0d1758a644dfc751b67916c5254d1086e41480287230e8c2983279a7e`
+contained 22 applied receipts, zero pending batches, and exactly one fact for
+`h3-client-activation-proof`.
+
+The operator restarted the same container ID at `2026-09-10T17:30:38Z`. The
+container client and Main Host both returned ready, and the receipt, digest,
+history revision, applied and pending counts, and fact count were unchanged.
+The telemetry Host retained its original process lifetime, and the incumbent
+publisher timer remained enabled and active. Normal recovery succeeded, after
+which the transient recovery guard and maintenance-lock units were disarmed.
+The separate orchestration PostgreSQL service was not touched.
+
+The private Main report is
+`/home/eugen/.local/share/fs-gg/telemetry-main/h3-stop-proof-8e28412c-20260910T1717Z/report.md`,
+SHA-256
+`b7d8bdac1de9c342579f38be6a5c821b8208f98e93e743838ab9018390c30ae6`.
+
 ## H3 exit assessment
 
 The evidence supports these parts of the H3 exit:
@@ -186,16 +219,19 @@ The evidence supports these parts of the H3 exit:
   unchanged;
 - the installed updater reports the current immutable version, preserves the
   retained receipt, and waits on its configured recurring timer without
-  restarting the Host or development container; and
+  restarting the Host or development container;
+- stopping every running development container leaves Main ready with the exact
+  applied receipt and unchanged private-history counts, after which restarting
+  the same container restores client health without duplication; and
 - the tested operator guide and source corrections are delivered in SystemAdmin.
 
-H3 remains unchecked. The roadmap explicitly requires stopping all development
-containers and confirming that Main still serves durable history; that
-independent check is deferred until active source workers have saved their work.
-That is the remaining H3 acceptance action. The current record also does not
-demonstrate Main OS reboot, physical power-loss recovery, or measured RPO/RTO.
-The roadmap phrase “host restart” is therefore supported only for a telemetry
-Host service/container restart; it must not be read as an OS reboot claim.
+H3 is accepted. Main served the retained receipt and history independently while
+all development containers were stopped, and the same development container
+then recovered without changing the receipt or counts. The current record does
+not demonstrate Main OS reboot, physical power-loss recovery, cross-version
+rollback, or measured RPO/RTO. The roadmap phrase “host restart” is supported
+only for a telemetry Host service/container restart; it must not be read as an
+OS reboot claim.
 
 Publisher preparation and cutover are separate P1 work. The private-repository
 publisher input failure and its correction do not weaken the H3 receiver evidence
