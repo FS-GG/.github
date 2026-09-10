@@ -1,0 +1,243 @@
+name: release-telemetry-host
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact accepted commit on main
+        required: true
+        type: string
+      version:
+        description: Independent telemetry host version
+        required: true
+        type: string
+      confirm:
+        description: Type publish-telemetry-host-<version>
+        required: true
+        type: string
+      prepared_run_id:
+        description: Prior partial run whose prepared artifact must be resumed; blank only for a fresh version
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-telemetry-host-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ inputs.version }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      TAG: telemetry-host/v${{ inputs.version }}
+      PACKAGE: artifacts/telemetry-host/FS.GG.Telemetry.Host.${{ inputs.version }}.nupkg
+      MANIFEST: artifacts/telemetry-host/manifest.json
+      JOURNAL: artifacts/telemetry-host/publication-journal.json
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Refuse an unaccepted source, version, or confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [ "$CONFIRM" = "publish-telemetry-host-$VERSION" ]
+          [ "$(git rev-parse HEAD)" = "$SOURCE_SHA" ]
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          declared="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -nologo -getProperty:Version | tail -1)"
+          [ "$declared" = "$VERSION" ]
+          [ "$TAG" = "telemetry-host/v$VERSION" ]
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >tag.txt 2>/dev/null; then
+            remote="$(cut -f1 tag.txt)"
+            [ "$(git rev-parse "$remote^{commit}")" = "$SOURCE_SHA" ] || { echo "existing tag names another source" >&2; exit 2; }
+          fi
+      - name: Verify an already-complete immutable release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "complete=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p artifacts/telemetry-host
+          gh release download "$TAG" --pattern "FS.GG.Telemetry.Host.$VERSION.nupkg" --pattern manifest.json --pattern publication-journal.json --dir artifacts/telemetry-host
+          python3 - "$MANIFEST" "$JOURNAL" "$SOURCE_SHA" "$VERSION" "$TAG" <<'PY'
+          import json,sys
+          manifest,journal,source,version,tag=sys.argv[1:]
+          m=json.load(open(manifest)); j=json.load(open(journal))
+          assert m['schema']=='fsgg.telemetry.host-release/1'
+          assert (m['sourceSha'],m['version'],m['tag'])==(source,version,tag)
+          assert set(j['observations'])=={'github','nuget'}
+          assert all(row['producerPayloadEqual'] for row in j['observations'].values())
+          PY
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$PACKAGE"
+          echo "complete=true" >>"$GITHUB_OUTPUT"
+      - name: Refuse repacking an existing or partially published version
+        if: steps.release_state.outputs.complete != 'true' && inputs.prepared_run_id == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          lower="fs.gg.telemetry.host"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag already exists; a fresh preparation is forbidden" >&2
+            exit 2
+          fi
+          nuget_code="$(curl --silent --location --output /dev/null --write-out '%{http_code}' "https://api.nuget.org/v3-flatcontainer/$lower/$VERSION/$lower.$VERSION.nupkg")"
+          [ "$nuget_code" = 404 ] || { echo "nuget.org returned $nuget_code; fresh preparation requires an exact absence" >&2; exit 2; }
+          github_code="$(curl --silent --location --output /dev/null --write-out '%{http_code}' -u "$GITHUB_ACTOR:$GITHUB_TOKEN" "https://nuget.pkg.github.com/FS-GG/download/$lower/$VERSION/$lower.$VERSION.nupkg")"
+          [ "$github_code" = 404 ] || { echo "GitHub Packages returned $github_code; fresh preparation requires an exact absence" >&2; exit 2; }
+      - name: Recover the exact prepared artifact for a partial release
+        if: steps.release_state.outputs.complete != 'true' && inputs.prepared_run_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREPARED_RUN_ID: ${{ inputs.prepared_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$PREPARED_RUN_ID" =~ ^[0-9]+$ ]]
+          mkdir -p artifacts/telemetry-host
+          gh run download "$PREPARED_RUN_ID" --name "telemetry-host-prepared-$VERSION-$SOURCE_SHA" --dir artifacts/telemetry-host
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$PACKAGE"
+          python3 - "$MANIFEST" "$SOURCE_SHA" "$VERSION" "$TAG" <<'PY'
+          import json,sys
+          manifest,source,version,tag=sys.argv[1:]
+          data=json.load(open(manifest))
+          assert (data['sourceSha'],data['version'],data['tag'])==(source,version,tag)
+          PY
+      - name: Restore, test, and pack once for a fresh version
+        if: steps.release_state.outputs.complete != 'true' && inputs.prepared_run_id == ''
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore
+          mkdir -p artifacts/telemetry-host
+          dotnet pack src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -c Release --no-restore -o artifacts/telemetry-host
+          python3 scripts/telemetry-host-release.py prepare --package "$PACKAGE" \
+            --lock src/FS.GG.Telemetry.Host/packages.lock.json --assets src/FS.GG.Telemetry.Dashboard/Assets \
+            --source-sha "$SOURCE_SHA" --version "$VERSION" --tag "$TAG" --output "$MANIFEST"
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$PACKAGE"
+          bash tests/standalone-telemetry-host-package/run.sh "$PACKAGE" artifacts/telemetry-host/package-evidence.json
+      - uses: actions/upload-artifact@v4
+        if: steps.release_state.outputs.complete != 'true'
+        with:
+          name: telemetry-host-prepared-${{ inputs.version }}-${{ inputs.source_sha }}
+          path: artifacts/telemetry-host
+          if-no-files-found: error
+          retention-days: 30
+
+      # This is deliberately before either feed effect. A missing or mismatched new-package Trusted
+      # Publishing policy fails here and leaves GitHub Packages untouched.
+      - name: NuGet authority preflight (OIDC to short-lived key)
+        if: steps.release_state.outputs.complete != 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Inspect both feed versions before the first feed effect
+        if: steps.release_state.outputs.complete != 'true'
+        id: feeds
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          lower="fs.gg.telemetry.host"
+          github_url="https://nuget.pkg.github.com/FS-GG/download/$lower/$VERSION/$lower.$VERSION.nupkg"
+          nuget_url="https://api.nuget.org/v3-flatcontainer/$lower/$VERSION/$lower.$VERSION.nupkg"
+          github_code="$(curl --silent --show-error --location --connect-timeout 10 --max-time 30 --output artifacts/telemetry-host/github.nupkg --write-out '%{http_code}' -u "$GITHUB_ACTOR:$GITHUB_TOKEN" "$github_url")"
+          case "$github_code" in
+          200)
+            served="artifacts/telemetry-host/github.nupkg"
+            python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$served" --feed github --journal "$JOURNAL"
+            echo "github=matching" >>"$GITHUB_OUTPUT" ;;
+          404) echo "github=absent" >>"$GITHUB_OUTPUT" ;;
+          *) echo "GitHub Packages version state is unknown (HTTP $github_code)" >&2; exit 2 ;;
+          esac
+          nuget_code="$(curl --silent --show-error --location --connect-timeout 10 --max-time 30 --output artifacts/telemetry-host/nuget.nupkg --write-out '%{http_code}' "$nuget_url")"
+          case "$nuget_code" in
+          200)
+            served="artifacts/telemetry-host/nuget.nupkg"
+            python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$served" --feed nuget --journal "$JOURNAL"
+            echo "nuget=matching" >>"$GITHUB_OUTPUT" ;;
+          404) echo "nuget=absent" >>"$GITHUB_OUTPUT" ;;
+          *) echo "nuget.org version state is unknown (HTTP $nuget_code)" >&2; exit 2 ;;
+          esac
+      - name: Publish the exact package to GitHub Packages when absent
+        if: steps.release_state.outputs.complete != 'true' && steps.feeds.outputs.github == 'absent'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          lower="fs.gg.telemetry.host"
+          served="artifacts/telemetry-host/github.nupkg"
+          url="https://nuget.pkg.github.com/FS-GG/download/$lower/$VERSION/$lower.$VERSION.nupkg"
+          dotnet nuget push "$PACKAGE" --source "https://nuget.pkg.github.com/FS-GG/index.json" --api-key "$GITHUB_TOKEN"
+          for attempt in {1..18}; do
+            curl --fail --silent --show-error --location -u "$GITHUB_ACTOR:$GITHUB_TOKEN" "$url" -o "$served" && break
+            [ "$attempt" -lt 18 ] || { echo "GitHub Packages did not serve the pushed version" >&2; exit 2; }
+            sleep 10
+          done
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$served" --feed github --journal "$JOURNAL"
+      - name: Publish the exact package to nuget.org when absent
+        if: steps.release_state.outputs.complete != 'true' && steps.feeds.outputs.nuget == 'absent'
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          lower="fs.gg.telemetry.host"
+          served="artifacts/telemetry-host/nuget.nupkg"
+          url="https://api.nuget.org/v3-flatcontainer/$lower/$VERSION/$lower.$VERSION.nupkg"
+          dotnet nuget push "$PACKAGE" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+          for attempt in {1..18}; do
+            curl --fail --silent --show-error --location "$url" -o "$served" && break
+            [ "$attempt" -lt 18 ] || { echo "nuget.org did not serve the pushed version" >&2; exit 2; }
+            sleep 10
+          done
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$served" --feed nuget --journal "$JOURNAL"
+      - name: Preserve resumable publication state
+        if: always() && steps.release_state.outputs.complete != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-host-publication-state-${{ inputs.version }}-${{ github.run_attempt }}
+          path: |
+            artifacts/telemetry-host/FS.GG.Telemetry.Host.${{ inputs.version }}.nupkg
+            artifacts/telemetry-host/manifest.json
+            artifacts/telemetry-host/publication-journal.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Seal the immutable release after both feeds verify
+        if: steps.release_state.outputs.complete != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - "$JOURNAL" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          assert set(data['observations']) == {'github','nuget'}
+          assert all(row['producerPayloadEqual'] for row in data['observations'].values())
+          PY
+          gh release create "$TAG" "$PACKAGE" "$MANIFEST" "$JOURNAL" \
+            --target "$SOURCE_SHA" --title "FS.GG.Telemetry.Host $VERSION" \
+            --notes "Independent optional telemetry host release. The manifest binds producer payload; the journal records actual external archive and payload hashes from both feeds."

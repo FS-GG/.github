@@ -19,6 +19,13 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-10** — **optional telemetry host `0.1.0` source contract prepared**
+  (owner github; standalone telemetry H2): registers the independently versioned
+  `FS.GG.Telemetry.Host` source surface without claiming publication. The optional Linux x64 service
+  is outside the Kit/Drivers/Coord.Cli coherent set and has no repository consumer. `package-version`
+  and `package-tag` remain absent until the protected release verifies both feeds and the immutable
+  release receipt.
+
 - **2026-09-08** — **coordination coherent set `github:0.87.0` promoted and published frontier reconciled**
   (owner github; source [PR #3365](https://github.com/FS-GG/.github/pull/3365),
   [promotion run 34278985733](https://github.com/FS-GG/.github/actions/runs/34278985733)):
