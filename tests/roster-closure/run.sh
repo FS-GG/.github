@@ -141,7 +141,7 @@ META_PARTIAL="$WORK/meta-partial-emit.json"
 printf '{"public_repos":2,"total_private_repos":1}\n' > "$META_PARTIAL"
 rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
   --org-repos-json "$LIVE" --org-meta-json "$META_PARTIAL" --emit-complete-org-repos 2>&1)" || rc=$?
-{ [ "$rc" -eq 3 ] && grep -qF 'cannot see the whole org' <<<"$out"; } \
+{ [ "$rc" -eq 3 ] && grep -qF 'observations disagree' <<<"$out"; } \
   && ok "partial org visibility refuses dynamic policy enumeration" \
   || bad "partial org enumeration must be no-verdict" "$out"
 
@@ -391,7 +391,7 @@ fi
 # --- 8. org-visibility: the whole org, not just the rostered part (#1154) --------------------------
 # The old trust check proved only that the token could see the ROSTERED repos, so a token blind to an
 # unrostered PRIVATE repo reported a vacuously-closed world — a false green. Closure now also requires
-# the listing to be at least as large as the org's OWN repo total (public + private), read from
+# the listing to equal the org's OWN repo total (public + private), read from
 # GET /orgs/{org}. These tests inject that meta so it disagrees with the listing on purpose.
 
 # THE ACCEPTANCE CASE: a token that cannot list an existing unrostered repo (an invisible private one)
@@ -399,7 +399,7 @@ fi
 META_PRIV="$WORK/meta-invisible-private.json"
 printf '{"public_repos": 2, "total_private_repos": 1}\n' > "$META_PRIV"
 expect_noverdict "an invisible unrostered private repo yields no verdict, not a vacuous green (#1154)" \
-  "cannot see the whole org" "$ROSTER" "$DEPS" "$LIVE" "$META_PRIV"
+  "observations disagree" "$ROSTER" "$DEPS" "$LIVE" "$META_PRIV"
 
 # A run-scoped token cannot READ the org's private-repo count at all (GET /orgs/{org} omits
 # total_private_repos), so it cannot rule out an invisible private repo — also no verdict.
@@ -408,7 +408,7 @@ printf '{"public_repos": 2}\n' > "$META_NOPRIV"
 expect_noverdict "a token that cannot read total_private_repos yields no verdict" \
   "did not report \`total_private_repos\`" "$ROSTER" "$DEPS" "$LIVE" "$META_NOPRIV"
 
-# The listing is trusted and closure holds ONLY when the count is at least the org total: a green must
+# The listing is trusted and closure holds ONLY when the count equals the org total: a green must
 # survive a meta that agrees with the listing (two public, no private).
 META_OK="$WORK/meta-all-visible.json"
 printf '{"public_repos": 2, "total_private_repos": 0}\n' > "$META_OK"
@@ -427,6 +427,111 @@ rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG --ski
 META_BADSHAPE="$WORK/meta-bad-shape.json"; printf '[1, 2, 3]\n' > "$META_BADSHAPE"
 expect_noverdict "a mis-shaped org meta (array, not object) is a clean no-verdict, not a traceback" \
   "could not read org metadata" "$ROSTER" "$DEPS" "$LIVE" "$META_BADSHAPE"
+
+# The live audit composes two credentials: the all-repositories PAT lists repositories, while the
+# existing App supplies the independent org total. Exercise the real URL-fetch path under a fake
+# transport so token routing cannot be hidden by --org-*-json fixture injection. Successful machine
+# emit keeps stdout to repository records only; every credential defect exits 3 with empty stdout.
+if python3 - "$TOOL" "$ROSTER" "$DEPS" <<'PY'
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import sys
+import urllib.error
+from unittest import mock
+
+tool, roster, deps = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("roster_closure", tool)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class Response:
+    def __init__(self, value):
+        self.value = json.dumps(value).encode()
+        self.headers = {}
+    def __enter__(self): return self
+    def __exit__(self, *_): return False
+    def read(self): return self.value
+
+def exercise(metadata_token, metadata_body=None, metadata_error=False):
+    calls = []
+    def urlopen(req, timeout=0):
+        auth = req.get_header("Authorization")
+        calls.append((req.full_url, auth))
+        if "/repos?" in req.full_url:
+            assert auth == "Bearer repository-token"
+            return Response([{"full_name": "FS-GG/.github"},
+                             {"full_name": "FS-GG/FS.GG.SDD"}])
+        assert req.full_url == "https://api.github.com/orgs/FS-GG"
+        expected = f"Bearer {metadata_token}" if metadata_token else None
+        assert auth == expected
+        if metadata_error:
+            raise urllib.error.HTTPError(req.full_url, 401, "bad credential", {}, None)
+        return Response(metadata_body if metadata_body is not None else
+                        {"public_repos": 2, "total_private_repos": 0})
+
+    env = {"GITHUB_TOKEN": "repository-token", "GH_TOKEN": "fallback-token",
+           "FSGG_ORG_METADATA_TOKEN": metadata_token}
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with mock.patch.dict(os.environ, env, clear=True), \
+         mock.patch.object(module.urllib.request, "urlopen", urlopen), \
+         contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        rc = module.main(["--roster", roster, "--deps", deps, "--org", "FS-GG",
+                          "--emit-complete-org-repos"])
+    return rc, stdout.getvalue(), stderr.getvalue(), calls
+
+rc, stdout, stderr, calls = exercise("metadata-token")
+assert rc == 0, (rc, stdout, stderr)
+assert stdout == "FS-GG/.github\nFS-GG/FS.GG.SDD\n", repr(stdout)
+assert len(calls) == 2
+assert calls[0][1] == "Bearer repository-token" and "/repos?" in calls[0][0]
+assert calls[1] == ("https://api.github.com/orgs/FS-GG", "Bearer metadata-token")
+
+# Explicitly configured empty is rejected before HTTP, never retried anonymously or with a listing token.
+rc, stdout, stderr, calls = exercise("", {"public_repos": 2})
+assert rc == 3 and stdout == "", (rc, stdout, stderr)
+assert "explicitly configured but empty" in stderr
+assert len(calls) == 1
+
+# An invalid dedicated token is one failed metadata read. It must not retry with GITHUB_TOKEN/GH_TOKEN.
+rc, stdout, stderr, calls = exercise("invalid-metadata-token", metadata_error=True)
+assert rc == 3 and stdout == "", (rc, stdout, stderr)
+assert "could not read org metadata" in stderr
+assert len(calls) == 2 and calls[1][1] == "Bearer invalid-metadata-token"
+
+# A partial repository listing cannot equal the independent total and must produce no machine records.
+rc, stdout, stderr, calls = exercise("metadata-token",
+                                     {"public_repos": 2, "total_private_repos": 1})
+assert rc == 3 and stdout == "", (rc, stdout, stderr)
+assert "observations disagree" in stderr
+PY
+then
+  ok "distinct live credentials route only to listing and metadata endpoints and fail closed"
+else
+  bad "two-credential live routing, fail-closed behavior, and machine-clean stdout"
+fi
+
+# Count fields are authority data, not coercion inputs. Strings, booleans, fractions and negatives
+# must not become plausible totals through int(...), in either live or injected metadata paths.
+for bad_meta in \
+  '{"public_repos":"2","total_private_repos":0}' \
+  '{"public_repos":true,"total_private_repos":0}' \
+  '{"public_repos":2,"total_private_repos":0.5}' \
+  '{"public_repos":2,"total_private_repos":-1}'
+do
+  printf '%s\n' "$bad_meta" > "$WORK/meta-invalid-count.json"
+  expect_noverdict "invalid organization counts fail closed instead of being coerced" \
+    "non-negative integer" "$ROSTER" "$DEPS" "$LIVE" "$WORK/meta-invalid-count.json"
+done
+
+# A listing larger than the independent total is also incoherent (for example, observations across a
+# concurrent create/delete). Equality is the proof; one direction of inequality cannot establish it.
+META_TOO_SMALL="$WORK/meta-too-small.json"
+printf '{"public_repos": 1, "total_private_repos": 0}\n' > "$META_TOO_SMALL"
+expect_noverdict "a listing larger than the org total is a concurrent-observation no-verdict" \
+  "observations disagree" "$ROSTER" "$DEPS" "$LIVE" "$META_TOO_SMALL"
 
 # --- 9. a rostered repo the ORG DOES NOT OWN (.github#2245) ---------------------------------------
 # `GET /orgs/{org}/repos` enumerates the org's own repositories and nothing else. Before this item the

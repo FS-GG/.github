@@ -10,7 +10,8 @@
 # committed skill roots, on a trigger that fires when any of them changes (#1504 — a bare `uses:` cannot
 # tell that call from one aimed at a generated product). A declared-but-unwired repo fails the audit.
 # Complements the per-receiver pull coherence gate: this is .github auditing the whole roster centrally.
-# Reads the (public) FS-GG repos with the run-scoped token.
+# Reads the complete FS-GG repository set with the dedicated all-repositories metadata PAT, and
+# proves that listing complete against an independent organization total from the existing App.
 #
 # The script distinguishes four outcomes, and this workflow must not collapse them (#327, #335):
 #   0  every declared receiver is wired, and every coordination-kit receiver pins the published kit
@@ -169,6 +170,22 @@ jobs:
             FS.GG.Net
           permission-administration: read
 
+      # THE COUNT AUTHORITY IS DISTINCT FROM THE LISTING AUTHORITY. Measured on 2026-09-10: this
+      # existing App grant exposes `total_private_repos` on GET /orgs/FS-GG, while the App
+      # installation's own repository listing is narrower than that total. The all-repositories
+      # metadata PAT below supplies the listing; this token supplies only the independent count.
+      - name: Mint the App token for the independent organization repository total
+        id: org-metadata-token
+        # Keep the broad audit alive long enough to build its typed policy reader and report the
+        # independent sweeps. The bounded preflight below treats an empty output as a genuine red.
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-administration: read
+
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -183,9 +200,14 @@ jobs:
         timeout-minutes: 3
         env:
           INTAKE_TOKEN: ${{ secrets.FSGG_BOARD_INTAKE_AUDIT_TOKEN }}
+          ORG_METADATA_TOKEN: ${{ steps.org-metadata-token.outputs.token }}
         run: |
           if [ -z "$INTAKE_TOKEN" ]; then
             echo "::error title=issue-intake perimeter inconclusive::FSGG_BOARD_INTAKE_AUDIT_TOKEN is not configured; complete private-repository visibility cannot be proved."
+            exit 1
+          fi
+          if [ -z "$ORG_METADATA_TOKEN" ]; then
+            echo "::error title=issue-intake perimeter inconclusive::The independent organization-metadata App token was not minted; complete private-repository visibility cannot be proved."
             exit 1
           fi
 
@@ -202,23 +224,24 @@ jobs:
           done <<<"$repos"
           [ "$count" -gt 0 ] || { echo "::error title=issue-intake perimeter inconclusive::Visible enumeration returned no repositories."; exit 1; }
           echo "issue-intake perimeter: visible repository count=$count; every visible enabled issue tracker is COLLABORATORS_ONLY"
-          complete_repos="$(GITHUB_TOKEN="$INTAKE_TOKEN" GH_TOKEN="$INTAKE_TOKEN" python3 scripts/check-roster-closure.py --org FS-GG --emit-complete-org-repos)"
+          complete_repos="$(FSGG_ORG_METADATA_TOKEN="$ORG_METADATA_TOKEN" GITHUB_TOKEN="$INTAKE_TOKEN" GH_TOKEN="$INTAKE_TOKEN" python3 scripts/check-roster-closure.py --org FS-GG --emit-complete-org-repos)"
           [ "$complete_repos" = "$repos" ] || { echo "::error title=issue-intake perimeter changed during verification::The complete repository set differs from the policy-checked visible set; refusing a mixed observation."; exit 1; }
-          echo "issue-intake perimeter: the same credential also proved the org listing complete"
+          echo "issue-intake perimeter: the independent App total proved the PAT listing complete"
 
       - name: Audit roster participation
         id: audit
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
-          # Dedicated read-only perimeter credential. Configure this repository Actions secret with
-          # access to every FS-GG repository plus the organization read permission needed to observe private-repo
-          # totals. It is used only for complete enumeration and typed issue-policy reads. Missing or
-          # partial access yields a visible no-verdict while independent audit sweeps still report.
-          # Validate without printing it: set GITHUB_TOKEN from the secret locally, run
-          # `python scripts/check-roster-closure.py --org FS-GG --emit-complete-org-repos` (11 repos
-          # today), then set GH_TOKEN and run `scripts/fsgg-coord graphql repository-policy FS-GG <repo>`.
+          # Dedicated read-only perimeter credential: resource owner FS-GG, All repositories,
+          # Metadata read. It supplies repository enumeration and typed issue-policy reads. It does
+          # not need organization permission: the separately minted App token below supplies the
+          # independent public/private total. Missing or partial access yields a visible no-verdict
+          # while independent audit sweeps still report.
           INTAKE_TOKEN: ${{ secrets.FSGG_BOARD_INTAKE_AUDIT_TOKEN }}
+          # Used by check-roster-closure.py only for GET /orgs/FS-GG. Repository enumeration stays on
+          # INTAKE_TOKEN, so neither credential is trusted to attest its own visibility boundary.
+          FSGG_ORG_METADATA_TOKEN: ${{ steps.org-metadata-token.outputs.token }}
           # Handed to the historical absence-cover sweep ALONE. Every other read this script makes is a
           # public-repo read the run-scoped token makes correctly, and a repo-scoped installation
           # token would 404 the authority itself — so the two are not interchangeable and the script

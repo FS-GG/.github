@@ -1347,6 +1347,7 @@ bad = []
 # must also fit inside the job instead of being killed by timeout before a second pass can classify it.
 preflight = [s for s in steps if s.get("name") == "Verify the issue-intake perimeter credential"]
 reader_build = [s for s in steps if s.get("name") == "Build the typed repository-policy reader"]
+metadata_mint = [s for s in steps if s.get("id") == "org-metadata-token"]
 if len(reader_build) != 1 or "--locked-mode" not in reader_build[0].get("run", "") or "--no-restore" not in reader_build[0].get("run", ""):
     bad.append("typed repository-policy reader is not restored locked and built once before the probe")
 ancestry = [s for s in steps if s.get("name") == "Establish default-branch ancestry for the typed client"]
@@ -1370,8 +1371,23 @@ else:
         bad.append("issue-intake preflight does not reuse complete enumeration and typed policy reads")
     if "FSGG_BOARD_INTAKE_AUDIT_TOKEN" not in str(preflight[0].get("env", {})):
         bad.append("issue-intake preflight is not bound to its dedicated credential")
+    if "steps.org-metadata-token.outputs.token" not in str(preflight[0].get("env", {})):
+        bad.append("issue-intake preflight is not bound to the independent App metadata credential")
+    if "FSGG_ORG_METADATA_TOKEN" not in source:
+        bad.append("complete enumeration does not route the App token through the metadata-only environment boundary")
     if probe.get("continue-on-error") is True or int(probe.get("timeout-minutes", 0)) > 3:
         bad.append("issue-intake preflight is not a bounded genuine gate")
+if len(metadata_mint) != 1:
+    bad.append(f"organization-metadata App mint count is {len(metadata_mint)}, want exactly 1")
+else:
+    mint = metadata_mint[0]
+    inputs = mint.get("with", {})
+    if mint.get("continue-on-error") is not True:
+        bad.append("organization-metadata App mint can skip the independent audit before its typed reader is built")
+    if inputs.get("owner") != "FS-GG" or inputs.get("permission-organization-administration") != "read":
+        bad.append("organization-metadata App mint is not narrowed to owner FS-GG + organization-administration read")
+    if "repositories" in inputs:
+        bad.append("organization-metadata App mint unexpectedly declares a repository selection")
 retry_seconds = int(wf.get("env", {}).get("REPOS_AUDIT_RETRY_AFTER_S", "0"))
 timeout_seconds = int(wf["jobs"]["audit"].get("timeout-minutes", 0)) * 60
 if timeout_seconds <= retry_seconds:
@@ -1392,6 +1408,8 @@ if not audit:
     bad.append("no step with `id: audit` — nothing captures the audit's exit code")
 elif not runs(audit[0], r'>>\s*"\$GITHUB_OUTPUT"'):
     bad.append("the audit step does not publish its rc to $GITHUB_OUTPUT; the raw exit code decides the job")
+if audit and "steps.org-metadata-token.outputs.token" not in str(audit[0].get("env", {})):
+    bad.append("full audit is not bound to the independent App metadata credential")
 if audit and str(audit[0].get("if", "")) not in ("${{ !cancelled() }}", "!cancelled()"):
     bad.append("independent audit sweeps do not continue after a failed issue-intake preflight")
 

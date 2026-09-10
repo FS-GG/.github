@@ -18,7 +18,7 @@ This script asserts the roster is closed, from three directions:
      row in `repos.yml`. Audio sat in one and not the other for weeks; this is the cheap, strictly-
      implied invariant that would have caught it.
 
-  B. ORG closure (one REST call).  Every repo that actually exists in the GitHub org has a row in
+  B. ORG closure (two REST reads). Every repo that actually exists in the GitHub org has a row in
      `repos.yml`, or an explicit row in its `outside-fabric:` opt-out list. This compares against
      REALITY rather than against a second record of it.
 
@@ -81,11 +81,13 @@ split three ways:
     `outside-fabric:` entry (the `.github#2206` shape).
   * exit 3 — NO VERDICT, the gate could not look: an unreachable/errored/empty org listing; a
     rostered repo missing from the listing; an unreachable/errored/empty/malformed board read; or —
-    the #1154 gap — a token that cannot prove it sees the WHOLE org. Org closure needs the listing to
-    be at least as large as the org's own repo total (`public_repos + total_private_repos`); a
-    run-scoped token cannot read the private count, so it can prove the PUBLIC world closed but not
-    the private one, and says so rather than guessing 0. A definite violation outranks a no-verdict
-    when both are present.
+    the #1154 gap — credentials that cannot prove the listing covers the WHOLE org. Org closure needs
+    the listing to equal the org's own repo total (`public_repos +
+    total_private_repos`). A repository-scoped credential may enumerate its selected private repos
+    while lacking the independent organization total; an organization-administration App token may
+    expose that total while still enumerating only its installation's repository selection. The live
+    audit deliberately composes those two read-only authorities and says no-verdict if either half is
+    missing or they disagree. A definite violation outranks a no-verdict when both are present.
 
 Nothing here auto-exempts archived or forked repos: "archived" would be a one-click hole in the
 gate. Exemption is always an explicit, reviewed row.
@@ -241,16 +243,41 @@ def _next_link(link_header: str) -> str:
     return ""
 
 
+def _validate_org_meta(raw: object) -> tuple[int, int | None]:
+    """Validate the organization counts used to prove a repository listing complete."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"expected a JSON object, got {type(raw).__name__}")
+
+    def count(name: str, *, optional: bool = False) -> int | None:
+        if optional and name not in raw:
+            return None
+        value = raw.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"`{name}` must be a non-negative integer")
+        return value
+
+    return int(count("public_repos")), count("total_private_repos", optional=True)
+
+
 def _fetch_org_meta(org: str) -> tuple[int, int | None]:
     """`(public_repos, total_private_repos)` from GET /orgs/{org}; the private count may be None.
 
     `public_repos` is on the org's public profile, so every caller — anonymous included — gets it.
-    `total_private_repos` is returned ONLY to a token with organization visibility (an org
-    owner/member, or an app with org-administration read); a run-scoped `GITHUB_TOKEN` sees it
-    OMITTED, which is exactly why its absence is a no-verdict and not a zero (see
-    `org_visibility_noverdicts`). Raises on any non-200 or malformed body, like `_fetch_org_repos`.
+    `total_private_repos` is absent from the public response. The live FS-GG probe measured that its
+    existing App installation token with organization-administration read exposes the field while
+    that App's repository listing remains narrower than the org total. When
+    `FSGG_ORG_METADATA_TOKEN` is present, it must be non-empty and this one request uses exactly that
+    value. An explicitly empty value is rejected before the metadata request and never falls back to
+    the repository-listing credential. When the variable is absent, existing callers retain the
+    historical GITHUB_TOKEN/GH_TOKEN behavior.
+    Raises on any non-200 or malformed body, like `_fetch_org_repos`.
     """
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    if "FSGG_ORG_METADATA_TOKEN" in os.environ:
+        token = os.environ["FSGG_ORG_METADATA_TOKEN"]
+        if not token:
+            raise ValueError("FSGG_ORG_METADATA_TOKEN is explicitly configured but empty")
+    else:
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
     req = urllib.request.Request(f"{API}/orgs/{org}", headers={
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -259,11 +286,10 @@ def _fetch_org_meta(org: str) -> tuple[int, int | None]:
     })
     with urllib.request.urlopen(req, timeout=30) as resp:
         obj = json.loads(resp.read().decode("utf-8"))
-    if not isinstance(obj, dict):
-        raise ValueError(f"expected a JSON object from GET /orgs/{org}, got {type(obj).__name__}")
-    public = int(obj["public_repos"])  # KeyError -> caught by the caller as an unreadable subject
-    private = obj.get("total_private_repos")
-    return public, (int(private) if private is not None else None)
+    try:
+        return _validate_org_meta(obj)
+    except ValueError as exc:
+        raise ValueError(f"{exc} (from GET /orgs/{org})") from exc
 
 
 def _fetch_board_items(owner: str, title: str) -> list[dict]:
@@ -409,7 +435,7 @@ def org_visibility_noverdicts(rostered: set[str], org: str, live_set: set[str],
 
       * ROSTER leg — every repo we KNOW exists came back. Cheap, needs no org metadata. Catches a
         token too narrow to see a *rostered* repo.
-      * COUNT leg — the listing is at least as large as the org's OWN repo total. This is the leg
+      * COUNT leg — the listing equals the org's OWN repo total. This is the leg
         the roster leg cannot supply: an unrostered PRIVATE repo is invisible to the roster (it is
         not in it) AND to a run-scoped token (it cannot read it), so the roster leg passes while the
         world is open. Only the org's own count reveals the gap. When the token cannot even read
@@ -439,16 +465,17 @@ def org_visibility_noverdicts(rostered: set[str], org: str, live_set: set[str],
         return nv
 
     if total_private is None:
-        return [f"GET /orgs/{org} did not report `total_private_repos`: the run's token cannot read "
+        return [f"GET /orgs/{org} did not report `total_private_repos`: the metadata credential cannot read "
                 f"the org's private-repo count, so an unrostered PRIVATE repo cannot be ruled out. "
                 f"The listing proves the PUBLIC world is closed, not the whole org. No verdict — "
-                f"give the org-closure step a token with organization read, or accept no-verdict."]
+                f"supply the independent organization-metadata credential, or accept no-verdict."]
 
     expected = public_repos + total_private
-    if len(live_set) < expected:
-        return [f"the org owns {expected} repo(s) (public {public_repos} + private {total_private}) "
-                f"but this token enumerated only {len(live_set)} from GET /orgs/{org}/repos, so it "
-                f"cannot see the whole org and closure would be vacuous. No verdict."]
+    if len(live_set) != expected:
+        return [f"the org reports {expected} repo(s) (public {public_repos} + private {total_private}) "
+                f"but the repository credential enumerated {len(live_set)} from GET "
+                f"/orgs/{org}/repos. The two observations disagree, so absence cannot be proved "
+                f"against a coherent org snapshot. No verdict."]
 
     return nv
 
@@ -601,11 +628,7 @@ def main(argv: list[str]) -> int:
             try:
                 if args.org_meta_json:
                     meta = json.load(open(args.org_meta_json, encoding="utf-8"))
-                    if not isinstance(meta, dict):
-                        raise ValueError(f"expected a JSON object, got {type(meta).__name__}")
-                    tp = meta.get("total_private_repos")
-                    public_repos = int(meta["public_repos"])
-                    total_private = int(tp) if tp is not None else None
+                    public_repos, total_private = _validate_org_meta(meta)
                 else:
                     public_repos, total_private = _fetch_org_meta(args.org)
             except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, KeyError) as exc:
