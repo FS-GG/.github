@@ -946,7 +946,7 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: telemetry-host
-    version: "0.1.0"     # SOURCE version prepared by standalone telemetry H2. Publication is a later protected operation from exact accepted source; package-version and package-tag stay absent until both feeds and the immutable release are verified.
+    version: "0.1.1"     # SOURCE patch prepared by standalone telemetry L2 because the shared Dashboard assembly/assets changed after the accepted 0.1.0 source. Publication remains a separate protected operation; package-version and package-tag record only verified feed/release state.
     owner: github
     surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion and private dashboard, independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.

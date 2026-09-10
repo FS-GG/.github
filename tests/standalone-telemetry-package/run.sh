@@ -189,7 +189,7 @@ if (cd "$WORKSPACE" && "$ENGINE" telemetry workspace activate-local --config "$C
   RECONCILE="$(cd "$WORKSPACE" && "$ENGINE" telemetry store reconcile --store-root "$STORE" --item L1-PACKAGE 2>"$WORK/reconcile.err")"; RECONCILE_RC=$?
   [ "$RECONCILE_RC" -eq 0 ] && grep -q '"matched":1' <<<"$RECONCILE" && ok "native expected and terminal facts reconcile" || bad "native expected and terminal facts reconcile" "rc=$RECONCILE_RC out=$RECONCILE"
   DASHBOARD_BEFORE="$(find "$STORE" "$PRIVATE" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
-  DASHBOARD_STATUS="$(cd "$WORKSPACE" && HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY= "$ENGINE" telemetry dashboard status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/dashboard-status.err")"; DASHBOARD_STATUS_RC=$?
+  DASHBOARD_STATUS="$(cd "$WORKSPACE" && HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY='' "$ENGINE" telemetry dashboard status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/dashboard-status.err")"; DASHBOARD_STATUS_RC=$?
   DASHBOARD_AFTER="$(find "$STORE" "$PRIVATE" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
   if [ "$DASHBOARD_STATUS_RC" -eq 0 ] && grep -q '"status":"ready"' <<<"$DASHBOARD_STATUS" && [ "$DASHBOARD_BEFORE" = "$DASHBOARD_AFTER" ]; then
     ok "installed dashboard status is scoped read-only and offline"
