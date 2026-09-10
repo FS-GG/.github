@@ -73,7 +73,7 @@ The command does not copy configuration, TLS keys, producer secrets, browser
 access keys, or browser key-hash files.
 
 Recovering after configuration loss therefore depends on the companion
-SystemAdmin procedure. Before activation, the operator must place the canonical
+[SystemAdmin procedure](https://github.com/FS-GG/SystemAdmin/pull/6). Before activation, the operator must place the canonical
 config template and all referenced private files in a separately selected,
 encrypted or equivalently access-controlled backup, and verify its digest and
 permissions. Restore first recovers or reprovisions those files, renders a

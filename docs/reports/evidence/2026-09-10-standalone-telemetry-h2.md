@@ -40,8 +40,9 @@ the operator or client must replay the retained post-backup acknowledged input.
 
 The root manifest contains a secret-free digest of logical configuration
 metadata; it cannot reconstruct configuration or credentials. Operational
-recovery therefore depends on the companion SystemAdmin backup of the canonical
-config template, TLS material, producer secrets, and browser key-hash files.
+recovery therefore depends on the accepted
+[SystemAdmin companion](https://github.com/FS-GG/SystemAdmin/pull/6) backup of the canonical config
+template, TLS material, producer secrets, and browser key-hash files.
 The restore rehearsal regenerates config with each `Store.Root` set to
 `<fresh-state-root>/<workspaceId>` and passes preflight before cutover. Access
 keys themselves must be retained through the private operator channel or
@@ -67,6 +68,10 @@ reprovisioned because hashes are one-way.
 - Independent release-manifest fixture: 9 passed, including the shared
   `release-saga.py` producer-payload vector, signed-archive distinction, changed
   payload refusal, tag isolation, and foreign-journal refusal.
+- SystemAdmin companion: merged as
+  `2f884241d23602a47c70a39cf780a0cf453f96aa`; 18 product-candidate interop and
+  operator checks passed, including staged config/credential verification before
+  publication. No Main mutation or service activation occurred.
 
 The packaging lane also prepared a prerelease helper candidate from source
 `bcabcac90847ffc3132f0270aeed00a17ae4bbdc` with archive SHA-256
