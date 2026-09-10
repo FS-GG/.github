@@ -37,7 +37,34 @@ class HandoffPublisherTests(unittest.TestCase):
         return temporary,root,outgoing,state,labels,digest,stage
 
     def stage(self, args, snapshot=None):
+        args.config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/1","storeRoot":str(args.config.parent/"store"),"engine":"fsgg-coord-engine"})+"\n")
         with mock.patch.object(D,"build_host",return_value=snapshot or F.host()): return D.handoff_stage(args)
+
+    def test_explicit_producer_config_is_self_contained_outside_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); copied=root/"telemetry-dashboard.py"
+            copied.write_bytes((ROOT/"tools"/"telemetry-dashboard.py").read_bytes())
+            spec=importlib.util.spec_from_file_location("isolated_handoff_dashboard",copied)
+            isolated=importlib.util.module_from_spec(spec); spec.loader.exec_module(isolated)
+            config=root/"telemetry.json"
+            config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/1","storeRoot":str(root/"store"),"engine":"fsgg-coord-engine"})+"\n")
+            config.chmod(0o600)
+            path,value=isolated._explicit_producer_config(config)
+            self.assertEqual(path,config)
+            self.assertEqual(value,{"storeRoot":str(root/"store"),"engine":"fsgg-coord-engine"})
+            self.assertFalse((root/".claude").exists())
+
+    def test_explicit_producer_config_rejects_workspace_and_unsafe_shapes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); config=root/"telemetry.json"
+            for value in (
+                {"schema":"fsgg.telemetry.workspace-config/1","engine":"fsgg-coord-engine","associations":[],"retiredAssociations":[]},
+                {"schema":"fsgg.telemetry.host-config/1","storeRoot":"relative","engine":"fsgg-coord-engine"},
+                {"schema":"fsgg.telemetry.host-config/1","storeRoot":str(root/"store"),"engine":"/tmp/engine"},
+            ):
+                config.write_text(json.dumps(value)+"\n"); config.chmod(0o600)
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CONFIG_INVALID"):
+                    D._explicit_producer_config(config)
 
     def test_checked_in_two_uid_proof_is_bound_to_current_tool_and_provider(self):
         result=json.loads(pathlib.Path(__file__).with_name("two_uid_handoff_proof.result.json").read_text())
