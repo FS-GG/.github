@@ -10,7 +10,7 @@ const [base,principal,key,workspace,item,spki]=process.argv.slice(3);
     await page.locator('[name="principalId"]').fill(principal);
     await page.locator('[name="accessKey"]').fill(key);
     await page.getByRole("button",{name:"Sign in"}).click();
-    await page.locator(`#workspace option[value="${workspace}"]`).waitFor();
+    await page.locator(`#workspace option[value="${workspace}"]`).waitFor({state:"attached"});
     await page.getByRole("listitem").filter({hasText:item}).waitFor();
     const body=await page.locator("body").innerText();
     if(!body.includes("1 applied receipts")||body.includes("1 rejected receipts"))throw new Error("receipt health was not applied");
