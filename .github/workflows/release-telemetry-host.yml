@@ -69,6 +69,7 @@ jobs:
         id: release_state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
@@ -87,6 +88,13 @@ jobs:
           assert all(row['producerPayloadEqual'] for row in j['observations'].values())
           PY
           python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$PACKAGE"
+          lower="fs.gg.telemetry.host"
+          curl --fail --silent --show-error --location -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
+            "https://nuget.pkg.github.com/FS-GG/download/$lower/$VERSION/$lower.$VERSION.nupkg" -o artifacts/telemetry-host/github.nupkg
+          curl --fail --silent --show-error --location \
+            "https://api.nuget.org/v3-flatcontainer/$lower/$VERSION/$lower.$VERSION.nupkg" -o artifacts/telemetry-host/nuget.nupkg
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package artifacts/telemetry-host/github.nupkg --feed github --journal "$JOURNAL"
+          python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package artifacts/telemetry-host/nuget.nupkg --feed nuget --journal "$JOURNAL"
           echo "complete=true" >>"$GITHUB_OUTPUT"
       - name: Refuse repacking an existing or partially published version
         if: steps.release_state.outputs.complete != 'true' && inputs.prepared_run_id == ''

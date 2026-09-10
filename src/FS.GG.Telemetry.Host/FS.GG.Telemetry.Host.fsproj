@@ -29,8 +29,12 @@
     <PackageReleaseNotes>0.1.0 — Initial optional Linux x64 host with authenticated workspace-scoped ingestion and private dashboard delivery. Public release and Main activation remain separate protected operations.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="BrowserSecurity.fsi" />
+    <Compile Include="BrowserSecurity.fs" />
     <Compile Include="HostRuntime.fsi" />
     <Compile Include="HostRuntime.fs" />
+    <Compile Include="BrowserEndpoints.fsi" />
+    <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="Program.fsi" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />

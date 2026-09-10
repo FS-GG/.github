@@ -37,6 +37,8 @@ import json,sys
 vector,manifest=(json.load(open(path)) for path in sys.argv[1:])
 assert manifest['producerPayloadSha256']==vector['expectedProducerPayloadSha256']
 PY
+must_fail "a second archive is not mistaken for the prepared archive" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg"
+must_pass "a clean second pack may compare producer payload without a feed journal" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg" --payload-only
 must_pass "registry signature may alter archive while preserving producer payload" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg" --feed nuget --journal "$WORK/journal.json"
 must_fail "changed producer payload is refused" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/changed.nupkg" --feed github --journal "$WORK/journal.json"
 must_fail "wrong independent tag is refused" "${TOOL[@]}" prepare --package "$WORK/host.nupkg" --lock "$WORK/packages.lock.json" --assets "$WORK/assets" --source-sha 0123456789abcdef0123456789abcdef01234567 --version 0.1.0 --tag coord-engine/v0.1.0 --output "$WORK/wrong.json"
