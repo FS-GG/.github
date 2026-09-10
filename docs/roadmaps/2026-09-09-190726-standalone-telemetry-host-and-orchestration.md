@@ -143,7 +143,7 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [x] L1 — Standalone activation and workflow integration: [activation and storage contract](../reference/local-telemetry-store.md) and [source/package evidence](../reports/evidence/2026-09-10-standalone-telemetry-l1.md). Linux x64 source/package qualification covers explicit local assessment or refusal, remote lossy recovery, repository association and advisory workflow capture. Source delivery only; L2 owns the exact public release and complete dashboard proof.
 - [ ] L2 — Packaged dashboard and standalone release proof.
 - [x] H1 — Remote adapter and minimal receiver: [source contract and synthetic qualification](../reference/standalone-telemetry-receiver.md); shared R1 store implementation, closed HTTPS contracts/client, optional bounded Akka receiver and focused TLS/restart fixtures. Source delivery only; no package release, Main installation, production route or activation claimed.
-- [ ] H2 — Immutable host packaging and deployment rehearsal.
+- [ ] H2 — Immutable host packaging and deployment rehearsal. [Source/package candidate evidence](../reports/evidence/2026-09-10-standalone-telemetry-h2.md) is prepared; protected release and qualified Main rehearsal remain pending.
 - [ ] H3 — Main activation and container durability proof.
 - [ ] P1 — Optional publication migration (not selected; retain incumbent publisher).
 - [ ] O0 — Orchestration state and runner contract.

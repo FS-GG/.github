@@ -62,3 +62,25 @@ omits `package-version` and `package-tag`. Those fields are added only after the
 protected release verifies both feeds. Main installation, storage qualification,
 private identity provisioning, listener activation, backup/restore rehearsal,
 restart, and rollback are separate SystemAdmin acceptance facts.
+
+## Backup boundary
+
+`fsgg-telemetry-host backup` creates a new data-only backup set atomically. Its
+closed root manifest binds the supported store schema range, logical workspace
+set, each workspace manifest, and a secret-free logical configuration digest.
+Each workspace manifest binds the SQLite backup and every pending receipt file.
+The command does not copy configuration, TLS keys, producer secrets, browser
+access keys, or browser key-hash files.
+
+Recovering after configuration loss therefore depends on the companion
+SystemAdmin procedure. Before activation, the operator must place the canonical
+config template and all referenced private files in a separately selected,
+encrypted or equivalently access-controlled backup, and verify its digest and
+permissions. Restore first recovers or reprovisions those files, renders a
+reviewed config whose store roots are `<fresh-state-root>/<workspaceId>`, runs
+the product restore into that non-existing root, and runs preflight before any
+cutover. The logical digest excludes machine-specific store paths so this fresh
+root is possible, while retaining workspace enrollment, producer scope,
+browser authorization, session policy, and listener identity. A browser access
+key cannot be recovered from its hash and must be retained separately or
+reprovisioned and distributed through the selected private channel.
