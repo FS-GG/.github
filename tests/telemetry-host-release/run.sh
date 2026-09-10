@@ -45,6 +45,10 @@ must_fail "wrong independent tag is refused" "${TOOL[@]}" prepare --package "$WO
 # Seed an incompatible journal and prove the helper refuses it before replacement.
 printf '%s\n' '{"schema":"fsgg.telemetry-host-release-journal/v1","manifestSha256":"sha256:foreign","observations":{}}' >"$WORK/foreign.json"
 must_fail "foreign journal is refused" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/signed.nupkg" --feed github --journal "$WORK/foreign.json"
+printf '%s\t%s\n' 1111111111111111111111111111111111111111 refs/tags/telemetry-host/v0.1.0 >"$WORK/lightweight.txt"
+printf '%s\t%s\n%s\t%s\n' 2222222222222222222222222222222222222222 refs/tags/telemetry-host/v0.1.0 3333333333333333333333333333333333333333 'refs/tags/telemetry-host/v0.1.0^{}' >"$WORK/annotated.txt"
+[ "$("${TOOL[@]}" resolve-tag --tag telemetry-host/v0.1.0 --input "$WORK/lightweight.txt")" = 1111111111111111111111111111111111111111 ] && ok "lightweight remote tag resolves directly" || bad "lightweight remote tag resolves directly"
+[ "$("${TOOL[@]}" resolve-tag --tag telemetry-host/v0.1.0 --input "$WORK/annotated.txt")" = 3333333333333333333333333333333333333333 ] && ok "annotated remote tag resolves through its peeled commit" || bad "annotated remote tag resolves through its peeled commit"
 
 printf 'telemetry-host-release fixture: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

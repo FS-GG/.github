@@ -176,6 +176,20 @@ def journal_record(path: pathlib.Path, manifest: dict, feed: str, observation: d
     temporary.replace(path)
 
 
+def resolve_remote_tag(tag: str, path: pathlib.Path) -> str:
+    direct = f"refs/tags/{tag}"
+    peeled = direct + "^{}"
+    found: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        sha, separator, reference = line.partition("\t")
+        if not separator or reference not in (direct, peeled) or reference in found or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise ValueError("invalid remote tag observation")
+        found[reference] = sha
+    if direct not in found:
+        raise ValueError("remote tag observation omitted the direct ref")
+    return found.get(peeled, found[direct])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -193,11 +207,17 @@ def main() -> int:
     verify.add_argument("--feed", choices=("prepared", "github", "nuget"), default="prepared")
     verify.add_argument("--journal")
     verify.add_argument("--payload-only", action="store_true", help="compare producer payload while allowing pack metadata/archive differences")
+    tag = sub.add_parser("resolve-tag")
+    tag.add_argument("--tag", required=True)
+    tag.add_argument("--input", required=True)
     args = parser.parse_args()
     try:
         if args.command == "prepare":
             output = pathlib.Path(args.output)
             output.write_bytes(canonical(build_manifest(args)) + b"\n")
+            return 0
+        if args.command == "resolve-tag":
+            print(resolve_remote_tag(args.tag, pathlib.Path(args.input)))
             return 0
         manifest_path, artifact = pathlib.Path(args.manifest), pathlib.Path(args.package)
         data = load_manifest(manifest_path)

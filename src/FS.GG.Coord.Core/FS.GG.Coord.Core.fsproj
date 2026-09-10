@@ -32,9 +32,6 @@
          levers that do NOT work live in src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj beside the same
          property. -->
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
-    <!-- F# quotations retain source ranges in the assembly itself. Map the checkout root
-         explicitly so a referenced build is byte-stable across independent source roots. -->
-    <PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))=/_/</PathMap>
   </PropertyGroup>
 
   <ItemGroup>

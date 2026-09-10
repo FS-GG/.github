@@ -67,17 +67,7 @@ jobs:
           set -e
           case "$tag_rc" in
             0)
-              remote="$(python3 - "$TAG" tag.txt <<'PY'
-          import re,sys
-          tag,path=sys.argv[1:]; direct=f"refs/tags/{tag}"; peeled=direct+"^{{}}"; found={}
-          for line in open(path):
-              sha,ref=line.rstrip("\n").split("\t")
-              if ref not in (direct,peeled) or ref in found or not re.fullmatch(r"[0-9a-f]{40}",sha): raise SystemExit("invalid remote tag observation")
-              found[ref]=sha
-          if direct not in found: raise SystemExit("remote tag observation omitted the direct ref")
-          print(found.get(peeled,found[direct]))
-          PY
-              )"
+              remote="$(python3 scripts/telemetry-host-release.py resolve-tag --tag "$TAG" --input tag.txt)"
               [ "$remote" = "$SOURCE_SHA" ] || { echo "existing tag names another source" >&2; exit 2; }
               ;;
             2) ;;
