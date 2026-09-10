@@ -227,7 +227,7 @@ PY
     if [[ "${FSGG_PACKAGE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
       findmnt -J -T "$STORE" > "$WORK/filesystem-evidence.json"
       RUNTIME_ARGS=(
-        --engine "$ENGINE" --config "$CONFIG" --repository FS-GG/package-fixture
+        --cli-path "$ENGINE" --config "$CONFIG" --repository FS-GG/package-fixture
         --package "$PACKAGE" --source-sha "$FSGG_PACKAGE_SOURCE_SHA"
         --filesystem-evidence "$WORK/filesystem-evidence.json" --output "$RUNTIME_EVIDENCE"
       )

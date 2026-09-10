@@ -136,7 +136,8 @@ jobs:
             --dashboard-assets src/FS.GG.Telemetry.Dashboard/Assets \
             --standalone-qualification "$runtime_evidence" --output artifacts/packages/release-manifest.json
           python3 scripts/release-saga.py preflight --manifest artifacts/packages/release-manifest.json --feed both
-          python3 -m unittest tests/standalone-telemetry-budget/test_measure.py tests/standalone-telemetry-dashboard/test_measure.py
+          python3 tests/standalone-telemetry-budget/test_measure.py
+          python3 tests/standalone-telemetry-dashboard/test_measure.py
       - name: Revalidate predecessor before draft mutation
         env:
           GH_TOKEN: ${{ github.token }}

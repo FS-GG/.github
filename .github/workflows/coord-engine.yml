@@ -176,7 +176,8 @@ jobs:
           (cd tests/FS.GG.Telemetry.LocalDashboard.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
           dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --no-restore -c Release
           dotnet test tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj --no-restore -c Release
-          python3 -m unittest tests/standalone-telemetry-budget/test_measure.py tests/standalone-telemetry-dashboard/test_measure.py
+          python3 tests/standalone-telemetry-budget/test_measure.py
+          python3 tests/standalone-telemetry-dashboard/test_measure.py
 
       - name: Pack and qualify the standalone telemetry workspace
         run: |
