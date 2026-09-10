@@ -157,7 +157,7 @@ jobs:
             --source-sha "$SOURCE_SHA" --version "$VERSION" --tag "$TAG" --output "$MANIFEST"
           python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$PACKAGE"
           bash tests/standalone-telemetry-host-package/run.sh "$PACKAGE" artifacts/telemetry-host/package-evidence.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.release_state.outputs.complete != 'true'
         with:
           name: telemetry-host-prepared-${{ inputs.version }}-${{ inputs.source_sha }}
@@ -238,7 +238,7 @@ jobs:
           python3 scripts/telemetry-host-release.py verify --manifest "$MANIFEST" --package "$served" --feed nuget --journal "$JOURNAL"
       - name: Preserve resumable publication state
         if: always() && steps.release_state.outputs.complete != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: telemetry-host-publication-state-${{ inputs.version }}-${{ github.run_attempt }}
           path: |

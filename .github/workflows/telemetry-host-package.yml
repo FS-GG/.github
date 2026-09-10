@@ -112,7 +112,7 @@ jobs:
           python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only
           bash tests/standalone-telemetry-host-package/run.sh "$package_a" artifacts/telemetry-host-package-evidence.json
           bash tests/telemetry-host-release/run.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: telemetry-host-candidate-${{ github.sha }}
           path: |
