@@ -508,6 +508,10 @@ esac
 STUB
 chmod +x "$STUB/gh"
 export FSGG_COORD_BIN="$STUB/gh"
+ORG_REPOS="$WORK/org-repos.json"; printf '["FS-GG/.github","FS-GG/.allstar","FS-GG/FS.GG.SDD","FS-GG/FS.GG.Rendering","FS-GG/FS.GG.Governance"]\n' > "$ORG_REPOS"
+ORG_META="$WORK/org-meta.json"; printf '{"public_repos":5,"total_private_repos":0}\n' > "$ORG_META"
+export FSGG_REPOS_AUDIT_FIXTURE_ORG_REPOS_JSON="$ORG_REPOS"
+export FSGG_REPOS_AUDIT_FIXTURE_ORG_META_JSON="$ORG_META"
 
 # Helpers to shape a repo's workflows in the stub. Each clears any injected failure first, so a
 # fixture step never inherits the previous step's outage.
@@ -1339,6 +1343,40 @@ st = yaml.safe_load((root / ".github/workflows/repos-audit-selftest.yml").read_t
 steps = wf["jobs"]["audit"]["steps"]
 bad = []
 
+# The perimeter credential gets an early, bounded proof before the broad fleet sweep. The retry wait
+# must also fit inside the job instead of being killed by timeout before a second pass can classify it.
+preflight = [s for s in steps if s.get("name") == "Verify the issue-intake perimeter credential"]
+reader_build = [s for s in steps if s.get("name") == "Build the typed repository-policy reader"]
+if len(reader_build) != 1 or "--locked-mode" not in reader_build[0].get("run", "") or "--no-restore" not in reader_build[0].get("run", ""):
+    bad.append("typed repository-policy reader is not restored locked and built once before the probe")
+ancestry = [s for s in steps if s.get("name") == "Establish default-branch ancestry for the typed client"]
+checkout = [s for s in steps if s.get("uses") == "actions/checkout@v7"]
+if len(checkout) != 1 or checkout[0].get("with", {}).get("fetch-depth") != 0:
+    bad.append("repos-audit checkout does not fetch full candidate/default-branch ancestry")
+if len(ancestry) != 1:
+    bad.append(f"default-branch ancestry step count is {len(ancestry)}, want exactly 1")
+else:
+    source = ancestry[0].get("run", "")
+    if "refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH" not in source or "show-ref --verify" not in source or "merge-base HEAD" not in source:
+        bad.append("typed client ancestry step does not fetch and verify the real remote default-branch ancestry")
+    if "FSGG_" in source and "BYPASS" in source:
+        bad.append("typed client ancestry step uses a stale-check bypass instead of real git authority")
+if len(preflight) != 1:
+    bad.append(f"issue-intake credential preflight count is {len(preflight)}, want exactly 1")
+else:
+    probe = preflight[0]
+    source = probe.get("run", "")
+    if "--emit-complete-org-repos" not in source or "graphql repository-policy" not in source:
+        bad.append("issue-intake preflight does not reuse complete enumeration and typed policy reads")
+    if "FSGG_BOARD_INTAKE_AUDIT_TOKEN" not in str(preflight[0].get("env", {})):
+        bad.append("issue-intake preflight is not bound to its dedicated credential")
+    if probe.get("continue-on-error") is True or int(probe.get("timeout-minutes", 0)) > 3:
+        bad.append("issue-intake preflight is not a bounded genuine gate")
+retry_seconds = int(wf.get("env", {}).get("REPOS_AUDIT_RETRY_AFTER_S", "0"))
+timeout_seconds = int(wf["jobs"]["audit"].get("timeout-minutes", 0)) * 60
+if timeout_seconds <= retry_seconds:
+    bad.append("repos-audit job timeout cannot reach its promised retry after the configured wait")
+
 # Match COMMANDS, not text. A plain `"exit 1" in run` also matches the words in a comment or inside
 # an echoed summary line, so it would keep passing over a step someone had quietly changed to exit 0
 # — a gate that reports green about a subject it never looked at, which is the bug this file exists
@@ -1354,6 +1392,8 @@ if not audit:
     bad.append("no step with `id: audit` — nothing captures the audit's exit code")
 elif not runs(audit[0], r'>>\s*"\$GITHUB_OUTPUT"'):
     bad.append("the audit step does not publish its rc to $GITHUB_OUTPUT; the raw exit code decides the job")
+if audit and str(audit[0].get("if", "")) not in ("${{ !cancelled() }}", "!cancelled()"):
+    bad.append("independent audit sweeps do not continue after a failed issue-intake preflight")
 
 # One classifying step per outcome the script can produce, each keyed on that rc.
 def classifier(rc):
@@ -1364,6 +1404,8 @@ for rc, must_fail in ((0, False), (1, True), (2, True), (3, True)):
     if len(got) != 1:
         bad.append(f"exit {rc} is classified by {len(got)} step(s), want exactly 1")
         continue
+    if "!cancelled()" not in str(got[0].get("if", "")):
+        bad.append(f"exit {rc}'s classifier is skipped after an earlier probe failure")
     fails = runs(got[0], r"^\s*exit 1\s*$")
     if must_fail and not fails:
         bad.append(f"exit {rc}'s step does not fail the job — 'could not check'/'is broken' must not go green")
@@ -1397,8 +1439,8 @@ if audit:
 
 # The `if:` set is a scoping predicate. An rc it does not enumerate must still be caught, or a crashed
 # audit matches no classifier and the job goes green having audited nothing.
-catchall = [s for s in steps if "cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
-            and runs(s, r"^\s*exit 1\s*$")]
+catchall = [s for s in steps if "cancelled()" in str(s.get("if", "")) and "!contains(" in str(s.get("if", ""))
+            and "audit.outputs.rc" in str(s.get("if", "")) and runs(s, r"^\s*exit 1\s*$")]
 if not catchall:
     bad.append("no catch-all step: an exit code no `if:` enumerates would leave the job green")
 else:
@@ -1517,7 +1559,7 @@ SBOX="$WORK/sbox"; mkdir -p "$SBOX/scripts"
 # Sets STEP_OUT / STEP_RC / PASSES. It must not be called inside `$(…)`: that is a subshell, and the
 # variables would never reach the assertion.
 step() { # $1..= per-pass "<rc>:<output>"
-  local i=1 spec; : > "$SBOX/passes"; : > "$SBOX/gh_out"
+  local i=1 spec; : > "$SBOX/passes"; : > "$SBOX/gh_out"; : > "$SBOX/step_summary"
   for spec in "$@"; do printf '%s\n' "${spec#*:}" > "$SBOX/out.$i"; echo "${spec%%:*}" > "$SBOX/rc.$i"; i=$((i+1)); done
   cat > "$SBOX/scripts/repos-audit.sh" <<'STUBSH'
 n=$(( $(wc -l < "$SBOX/passes") + 1 )); echo x >> "$SBOX/passes"
@@ -1534,7 +1576,7 @@ STUBSH
   # fixture before the later assertions (including the engine-pin subject inversion) execute.
   # The workflow's published rc below remains the assertion subject; this conditional merely keeps
   # the fixture control flow alive long enough to read it.
-  if ( cd "$SBOX" && env SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
+  if ( cd "$SBOX" && env SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" GITHUB_STEP_SUMMARY="$SBOX/step_summary" REPOS_AUDIT_RETRY_AFTER_S=0 REPOS_AUDIT_RETRY_TRANSIENT="${STEP_RETRY_TRANSIENT:-true}" \
         bash -eo pipefail "$STEP" ) > "$SBOX/stdout" 2>&1; then
     :
   else
@@ -1571,6 +1613,13 @@ step '2:::error::repos-audit: could not determine wiring for 1 receiver-capabili
             '2:::error::repos-audit: could not determine wiring for 1 receiver-capability pair(s)'
 { [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 2 ] && printf '%s' "$STEP_OUT" | grep -q 'could not determine'; } \
   && ok "step: a persistent no-verdict publishes rc=2" || bad "persistent no-verdict" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+STEP_RETRY_TRANSIENT=false
+step '2:::error::repos-audit: prompt diagnostic no-verdict'
+unset STEP_RETRY_TRANSIENT
+{ [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 1 ] && grep -q 'prompt diagnostic' <<<"$STEP_OUT"; } \
+  && ok "step: manual prompt diagnostics preserve red rc=2 without waiting for retry" \
+  || bad "manual no-retry diagnostic" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
 
 # (14) the permanent no-verdict is exit 3, and is NOT retried. Its causes — a roster that will not
 #      parse, a roster naming no receiver — are deterministic reads of a file in this checkout. A
@@ -3969,6 +4018,12 @@ out="$(FSGG_FIX_ISSUE_POLICY=unreadable run_reg "$REG" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'issue-creation policy no-verdict' && printf '%s' "$out" | grep -q 'Nothing was proven about public issue intake'; } \
   && ok "issue intake: unread policy is a retryable no-verdict" \
   || bad "unread issue policy must not render as compliant" "rc=$rc: $out"
+
+ORG_META_PARTIAL="$WORK/org-meta-partial.json"; printf '{"public_repos":5}\n' > "$ORG_META_PARTIAL"
+out="$(FSGG_REPOS_AUDIT_FIXTURE_ORG_META_JSON="$ORG_META_PARTIAL" run_reg "$REG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -ne 0 ] && grep -q 'cannot prove the org repository listing complete' <<<"$out" && grep -q 'kit-pin' <<<"$out"; } \
+  && ok "issue intake: incomplete org visibility is no-verdict while independent sweeps continue" \
+  || bad "incomplete perimeter discovery must not abort unrelated audit findings" "rc=$rc: $out"
 
 # === A ROSTERED REPO THE ORG DOES NOT OWN (.github#2245) =========================================
 #

@@ -891,7 +891,8 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let facts = guardedLandingFacts "claim-generation-a"
         let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
         let policy : OperationalGraphQl.RepositoryPolicy =
-            { IssueCreationPolicy = "COLLABORATORS_ONLY"
+            { RepositoryId = "R_fixture"
+              IssueCreationPolicy = "COLLABORATORS_ONLY"
               HasIssuesEnabled = true
               MergeCommitAllowed = false
               SquashMergeAllowed = false
@@ -921,7 +922,8 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let facts = guardedLandingFacts "claim-generation-a"
         let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
         let policy : OperationalGraphQl.RepositoryPolicy =
-            { IssueCreationPolicy = "COLLABORATORS_ONLY"
+            { RepositoryId = "R_fixture"
+              IssueCreationPolicy = "COLLABORATORS_ONLY"
               HasIssuesEnabled = true
               MergeCommitAllowed = false
               SquashMergeAllowed = true

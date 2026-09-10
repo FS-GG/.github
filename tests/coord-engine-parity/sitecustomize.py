@@ -145,10 +145,45 @@ def wrap_do_post(cls):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return original(self)
 
+            owner = variables.get("owner")
+            repository = variables.get("name")
+            if "issueCreationPolicy" in query and isinstance(owner, str) and isinstance(repository, str):
+                repository_id = "R_" + hashlib.sha256(f"{owner}/{repository}".encode()).hexdigest()[:24]
+                return self._send(200, {
+                    "data": {"repository": {
+                        "id": repository_id,
+                        "issueCreationPolicy": "COLLABORATORS_ONLY",
+                        "hasIssuesEnabled": True,
+                        "mergeCommitAllowed": True,
+                        "squashMergeAllowed": True,
+                        "rebaseMergeAllowed": True,
+                    }},
+                    "rateLimit": {"cost": 1, "remaining": 4977},
+                })
+
+            if "IntakeIdentity" in query and isinstance(owner, str) and isinstance(repository, str):
+                number = variables.get("number")
+                if number is None:
+                    return original(self)
+                number = int(number)
+                # The parity servers expose existing issue identities through several distinct
+                # fixture stores; some intentionally have no body store because their subject is
+                # only the claim CAS. A positive ref driven by the corpus is their existence proof.
+                if number <= 0:
+                    return original(self)
+                return self._send(200, {
+                    "data": {"repository": {"issue": {
+                        "id": f"ISSUE_{number}",
+                        "updatedAt": "2026-09-10T00:00:00Z",
+                        "author": {"id": "U_parity_maintainer", "login": "parity-maintainer"},
+                    }}},
+                    "rateLimit": {"cost": 1, "remaining": 4977},
+                })
+
             if "comments(last:" not in query:
                 return original(self)
 
-            owner, repo = variables.get("owner"), variables.get("repo")
+            repo = variables.get("repo")
             number, last = variables.get("number"), variables.get("last")
             if not isinstance(owner, str) or not isinstance(repo, str) or number is None or last is None:
                 # A `comments(last:` query this hook cannot fully address — NOT a synthesized empty
@@ -182,6 +217,24 @@ def wrap_do_post(cls):
     cls.do_POST = do_post
 
 
+def wrap_do_get(cls):
+    original = cls.__dict__.get("do_GET")
+    if original is None or getattr(original, "_fsgg_intake_wrapped", False):
+        return
+
+    def do_get(self):
+        path = self.path.split("?", 1)[0]
+        if re.match(r"^/repos/[^/]+/[^/]+/collaborators/parity-maintainer/permission$", path):
+            return self._send(200, {
+                "permission": "write",
+                "user": {"node_id": "U_parity_maintainer"},
+            })
+        return original(self)
+
+    do_get._fsgg_intake_wrapped = True
+    cls.do_GET = do_get
+
+
 original_init_subclass = BaseHTTPRequestHandler.__init_subclass__
 
 
@@ -189,6 +242,7 @@ def init_subclass(cls, **kwargs):
     original_init_subclass(**kwargs)
     wrap_handler(cls)
     wrap_do_post(cls)
+    wrap_do_get(cls)
 
 
 BaseHTTPRequestHandler.__init_subclass__ = classmethod(init_subclass)

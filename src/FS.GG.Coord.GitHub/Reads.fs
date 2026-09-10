@@ -55,6 +55,28 @@ module Reads =
                 // why this is an error and not an empty list.
                 Error(Malformed(subject, $"the response is not JSON: %s{e.Message}"))
 
+    let collaboratorPermission (transport: IGitHubTransport) owner repo login expectedAuthorId =
+        let subject = $"%s{owner}/%s{repo} permission for %s{login}"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/collaborators/%s{Uri.EscapeDataString login}/permission"; Query = []
+              Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            match parse subject response.Body with
+            | Error error -> Error error
+            | Ok document ->
+                use document = document
+                try
+                    let root = document.RootElement
+                    let permission = root.GetProperty("permission").GetString()
+                    let observedAuthorId = root.GetProperty("user").GetProperty("node_id").GetString()
+                    if String.IsNullOrWhiteSpace permission || not(String.Equals(observedAuthorId,expectedAuthorId,StringComparison.Ordinal)) then
+                        Error(Malformed(subject, "permission or immutable author identity was missing/mismatched"))
+                    else Ok permission
+                with _ -> Error(Malformed(subject, "permission or immutable author identity was missing"))
+
+
     // The envelope itself is owned by `GraphQl`; consumers never see raw `data`/`errors`.
     // announced its own incompleteness.
     //

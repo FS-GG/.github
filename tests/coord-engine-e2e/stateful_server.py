@@ -312,6 +312,39 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    # Board intake is a mandatory precondition for scheduling and claim writes. Model the
+    # provider's repository-global policy and the current issue/author identity so every
+    # existing write journey crosses that boundary rather than failing before its subject.
+    if "issueCreationPolicy" in query:
+        return {
+            "data": {
+                "repository": {
+                    "id": "R_fixture",
+                    "issueCreationPolicy": "COLLABORATORS_ONLY",
+                    "hasIssuesEnabled": True,
+                    "mergeCommitAllowed": True,
+                    "squashMergeAllowed": True,
+                    "rebaseMergeAllowed": True,
+                },
+                "rateLimit": RATE_LIMIT,
+            }
+        }
+    if "IntakeIdentity" in query:
+        n = int(variables.get("number", 0))
+        if n not in ISSUES:
+            return {"data": {"repository": {"issue": None}, "rateLimit": RATE_LIMIT}}
+        return {
+            "data": {
+                "repository": {
+                    "issue": {
+                        "id": f"ISSUE_{n}",
+                        "updatedAt": "2026-09-10T00:00:00Z",
+                        "author": {"id": "U_fixture", "login": "maintainer"},
+                    }
+                },
+                "rateLimit": RATE_LIMIT,
+            }
+        }
     if re.search(r"\bn\d+: node\(id: \$id\d+\)", query):
         # Scan's canonical typed freshness boundary batches stable board node ids, then re-reads body and
         # exact comment count. Return every requested alias; omission would correctly fail the whole read.
@@ -782,6 +815,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._meter()
         path = self.path.split("?", 1)[0]
+
+        if re.match(r"^/repos/[^/]+/[^/]+/collaborators/maintainer/permission$", path):
+            return self._send(200, {"permission": "write", "user": {"node_id": "U_fixture"}})
 
         # THE FIXTURE'S OWN INSTRUMENTATION, not a GitHub route — hence the `_fixture/` prefix, which no
         # real endpoint can collide with. It reports what the engine SPENT, so a leg can assert a read that

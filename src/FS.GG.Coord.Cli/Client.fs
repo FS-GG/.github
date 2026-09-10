@@ -359,6 +359,26 @@ module Client =
     // that one fail-closed collector instead of acquiring a second, weaker list of generated paths.
     let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
 
+    // One bounded process view over BoardIntake's private checked-through cache. Policy is
+    // repository-global and author permission is shared across that author's issues. Every item still
+    // gets a current identity/revision read. Failed, corrupt and expired observations never authorize.
+    let mutable private boardIntakeGate: (IGitHubTransport * BoardIntake.Gate) option = None
+    let private intakeGate transport =
+        match boardIntakeGate with
+        | Some(existing,gate) when obj.ReferenceEquals(existing,transport) -> gate
+        | _ ->
+            let gate = BoardIntake.Gate transport
+            boardIntakeGate <- Some(transport,gate)
+            gate
+
+    let private authorizeBoardIntake (ctx: Context) (itemRef: Ref) =
+        (intakeGate ctx.Transport).Authorize(itemRef.Owner,itemRef.Repo,itemRef.Number)
+        |> Result.map ignore
+
+    let private authorizeChosenIntake (ctx: Context) (items: Item list) =
+        items
+        |> List.fold (fun state item -> state |> Result.bind (fun () -> authorizeBoardIntake ctx item.Ref)) (Ok())
+
     // Bound beside the authoritative generated-path and delivery-route readers below. The live
     // delivery adapter occurs earlier in this module, so this forward binding is the single seam that
     // lets it and `verifyPaths` consume the identical classifier and authority derivation.
@@ -401,7 +421,10 @@ module Client =
                     request.InFlight
                     (request.Candidates |> List.map (fun c -> c.Item))
             with
-            | Green result -> Ok result
+            | Green result ->
+                match authorizeChosenIntake ctx result.Chosen with
+                | Ok () -> Ok result
+                | Error error -> fail error |> Error
             | Red reasons ->
                 eprint "REFUSED — the batch cannot be scheduled:"
 
@@ -4582,12 +4605,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // including --force and idempotent renewal.  A scheduler snapshot is advisory once
                     // a CAS/post/status mutation is about to occur; this is the mutation boundary that
                     // closes the scan-to-claim race and prevents an implicit route after scope changes.
-                    match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute ctx ref with
-                    | Ok _ ->
+                    match authorizeBoardIntake ctx ref with
+                    | Error error -> Error error
+                    | Ok () ->
+                      match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute ctx ref with
+                      | Ok _ ->
                         // The bounded existing claim scan is the first real-resource observation for a
                         // fresh session.  Check admission only after it, still before the claim CAS/post.
-                        if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
-                    | Error error -> Error error
+                          if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                      | Error error -> Error error
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e

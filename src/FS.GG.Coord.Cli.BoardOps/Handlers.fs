@@ -2343,6 +2343,19 @@ module Handlers =
     // from a later board result.
     let intakeCmd (ctx: Context) (opts: Options) : int =
         match opts.Args with
+        | "authorize" :: refArgs when not(List.isEmpty refArgs) ->
+            let gate = BoardIntake.Gate(ctx.Transport)
+            let rec authorize acc = function
+                | [] -> Ok(List.rev acc)
+                | refArg :: rest ->
+                    match parseRef ctx refArg with
+                    | Error reason -> Error(Errors.Malformed(refArg,reason))
+                    | Ok itemRef -> gate.Authorize(itemRef.Owner,itemRef.Repo,itemRef.Number) |> Result.bind (fun admission -> authorize ((itemRef,admission)::acc) rest)
+            match authorize [] refArgs with
+            | Error error -> fail error
+            | Ok admissions ->
+                printfn "%s" (JsonSerializer.Serialize(admissions |> List.map (fun (itemRef,admission) -> {| schema = "fsgg.coord.board-intake-admission/1"; issue = itemRef.Canonical; repositoryId = admission.RepositoryId; issueId = admission.IssueId; updatedAt = admission.UpdatedAt; authorId = admission.AuthorId; authorLogin = admission.AuthorLogin; permission = admission.Permission |})))
+                ExitGreen
         | [ "validate"; _ ] ->
             // Keep the pure, token-free production route behind the registered family handler.
             // `programHandlers` supplies a no-I/O context and this arm delegates to the existing

@@ -385,7 +385,7 @@ module ApplicationServiceTests =
                 boardItemIn (statusFor n) n $"item %d{n}" blocker state)
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             let issueNumber (suffix: string) =
@@ -686,7 +686,7 @@ module ApplicationServiceTests =
                 |> JsonSerializer.Serialize
 
             let transport =
-                Fake.Recorder(fun (req: Request) ->
+                Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
                     let path = req.Path.Trim '/'
 
                     match req.Method, path with
@@ -939,7 +939,7 @@ module ApplicationServiceTests =
             else
                 $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
         let transport =
-            Fake.Recorder(fun (req: Request) ->
+            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "POST", "graphql" ->
                     match req.Body with
@@ -2407,7 +2407,7 @@ module ApplicationServiceTests =
                 $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -2535,7 +2535,7 @@ module ApplicationServiceTests =
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -2608,7 +2608,7 @@ module ApplicationServiceTests =
               boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -2679,7 +2679,7 @@ module ApplicationServiceTests =
             let boardClass = if classWritten then "{\"name\":\"defect\"}" else "null"
             $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":%s{boardClass},"content":{{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -2752,7 +2752,7 @@ module ApplicationServiceTests =
         let items () =
             [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" body ] |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -2928,7 +2928,7 @@ module ApplicationServiceTests =
 
             String.concat "," [ external; blocker ]
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -3068,7 +3068,7 @@ module ApplicationServiceTests =
                 $"""{{"status":{{"name":"Done"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"settled item %d{n}","body":"Class: hardening","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -3370,7 +3370,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             |> String.concat ","
 
         let transport =
-            Fake.Recorder(fun (req: Request) ->
+            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                 | "POST", "graphql" ->
@@ -4940,7 +4940,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             |> String.concat ","
             |> fun rows -> $"[%s{rows}]"
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
@@ -5130,7 +5130,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let items () =
             [ boardItemInWithBody status 47 "a standing register" None "OPEN" body ] |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->

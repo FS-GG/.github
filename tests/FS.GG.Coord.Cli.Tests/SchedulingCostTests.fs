@@ -120,7 +120,7 @@ module SchedulingCostTests =
             |> List.map (fun r -> boardItemIn r.Status r.Number r.BlockedBy r.State r.Body r.IsPullRequest)
             |> String.concat ","
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             let issueNumber (suffix: string) =

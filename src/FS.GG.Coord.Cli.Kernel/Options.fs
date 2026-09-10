@@ -355,6 +355,7 @@ DECISION (pure — no board, no network):
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
   intake <validate|apply> <draft.json> [--json]
+  intake authorize <issue-ref>...          batch-verify collaborator-only intake and current author write authority
                                              validate or atomically project one receipt-bound filing draft
   packet validate <packet.json> [--json]     validate one fsgg.coord.finding-packet/v1 document before
                                              posting it (.github#2737). PURE: it reads a file and decides;

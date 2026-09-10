@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-10** — BOARD INTAKE AUTHORIZATION (`work-board`, `drive-board`; owner `.github`; security hardening): refreshed both driver digests after requiring a fail-closed batched intake authorization before issue content reaches dispatch.
+
 - **2026-09-10** — RECONCILE (`work-roadmap`, `work-board`; owner `.github`; producer PR #3390,
   observed after PR #3400): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0
   materializes-when value(s); homed 0 and appended 0 row(s) from the current `.github` driver

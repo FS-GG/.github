@@ -506,6 +506,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--skip-org", action="store_true",
                     help="Run only the offline registry-closure check (A). Loud, and never the CI "
                          "default: it leaves the org-closure question unanswered.")
+    emit = ap.add_mutually_exclusive_group()
+    emit.add_argument("--emit-complete-org-repos", action="store_true",
+                    help="Print the sorted org repository set only after the existing visibility/count "
+                         "checks prove this token's listing complete; implies --skip-board.")
+    emit.add_argument("--emit-visible-org-repos", action="store_true",
+                    help="Print the validated repository set visible to this credential without claiming "
+                         "completeness; intended for explicit diagnostic policy sampling.")
     ap.add_argument("--board-owner", default=DEFAULT_BOARD_OWNER,
                     help="The login that owns the Coordination Projects v2 board (default: "
                          f"{DEFAULT_BOARD_OWNER!r}).")
@@ -534,7 +541,8 @@ def main(argv: list[str]) -> int:
     # NAMED, NEVER SILENTLY SKIPPED (.github#2245). Direction B's subject is `GET /orgs/{org}/repos`,
     # so a roster row naming a repository the org does not own is outside what this gate can settle.
     # Dropping it quietly would be the #266 shape — a row excused by an unstated rule — so every such
-    # row is printed with the reason it is not graded here, on stdout, whatever this run exits with.
+    # row is printed with the reason it is not graded here. Machine emit modes reserve stdout for
+    # owner/repository records, so their diagnostic goes to stderr.
     # This is a REPORT, not a verdict: it neither passes nor fails those rows, and it is deliberately
     # not routed through `findings`/`noverdicts`, which are answers about closure.
     _rostered_all = {str(r.get("full", "")).strip() for r in (roster.get("repos") or [])}
@@ -547,8 +555,10 @@ def main(argv: list[str]) -> int:
               f"verified; their existence and their fabric participation are asserted elsewhere "
               f"(repos-audit reads them off the roster with the run's own credentials). Registry "
               f"closure (direction A) is owner-blind and unchanged: a dependencies.yml participant "
-              f"still needs a roster row whoever owns it.")
+              f"still needs a roster row whoever owns it.",
+              file=sys.stderr if (args.emit_complete_org_repos or args.emit_visible_org_repos) else sys.stdout)
 
+    complete_org_repos: set[str] | None = None
     if args.skip_org:
         print(f"WARNING: org closure NOT checked (--skip-org). Only registry closure was verified; "
               f"a repo present in org {args.org!r} but absent from the roster would go unreported.",
@@ -581,6 +591,10 @@ def main(argv: list[str]) -> int:
             noverdicts.append(f"GET /orgs/{args.org}/repos returned ZERO repos. An empty listing "
                               f"cannot distinguish 'the org is empty' from 'this token sees "
                               f"nothing'.")
+        elif live is not None and args.emit_visible_org_repos:
+            for value in sorted(set(live), key=str.casefold):
+                print(value)
+            return 0
         elif live is not None:
             live_set = set(live)
             rostered = {str(r.get("full", "")).strip() for r in (roster.get("repos") or [])}
@@ -603,7 +617,17 @@ def main(argv: list[str]) -> int:
                 if nv:
                     noverdicts += nv
                 else:
+                    complete_org_repos = live_set
                     findings += org_closure_findings(roster, args.org, live_set)
+
+    if args.emit_complete_org_repos:
+        if noverdicts or complete_org_repos is None:
+            for value in noverdicts:
+                print(f"NO-VERDICT: {value}", file=sys.stderr)
+            return 3
+        for value in sorted(complete_org_repos, key=str.casefold):
+            print(value)
+        return 0
 
     # Direction C (BOARD closure, `.github#2206`). Independent of the org-closure block above: it
     # reads its own subject (the board's item set) and shares only the `findings`/`noverdicts`

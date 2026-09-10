@@ -129,6 +129,34 @@ expect_noverdict() {
 # --- 1. the closed world passes -------------------------------------------------------------------
 out="$(run "$ROSTER" "$DEPS" "$LIVE")" && ok "a closed world passes" || bad "closed world" "$out"
 
+EMIT_LIVE="$WORK/emit-live.json"; printf '["FS-GG/.github","FS-GG/FS.GG.SDD","FS-GG/Private.Unrostered"]\n' > "$EMIT_LIVE"
+EMIT_META="$WORK/emit-meta.json"; printf '{"public_repos":2,"total_private_repos":1}\n' > "$EMIT_META"
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
+  --org-repos-json "$EMIT_LIVE" --org-meta-json "$EMIT_META" --emit-complete-org-repos 2>&1)" || rc=$?
+{ [ "$rc" -eq 0 ] && grep -qFx 'FS-GG/.github' <<<"$out" && grep -qFx 'FS-GG/Private.Unrostered' <<<"$out"; } \
+  && ok "complete org enumeration emits rostered and dynamically discovered repositories" \
+  || bad "complete org enumeration" "$out"
+
+META_PARTIAL="$WORK/meta-partial-emit.json"
+printf '{"public_repos":2,"total_private_repos":1}\n' > "$META_PARTIAL"
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
+  --org-repos-json "$LIVE" --org-meta-json "$META_PARTIAL" --emit-complete-org-repos 2>&1)" || rc=$?
+{ [ "$rc" -eq 3 ] && grep -qF 'cannot see the whole org' <<<"$out"; } \
+  && ok "partial org visibility refuses dynamic policy enumeration" \
+  || bad "partial org enumeration must be no-verdict" "$out"
+
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
+  --org-repos-json "$LIVE" --org-meta-json "$META_PARTIAL" --emit-visible-org-repos 2>"$WORK/visible.err")" || rc=$?
+{ [ "$rc" -eq 0 ] && [ "$(grep -c '^FS-GG/' <<<"$out")" -eq 2 ] && ! grep -qv '^FS-GG/' <<<"$out" \
+    && ! grep -q 'Private.Unrostered\|roster-closure:' <<<"$out"; } \
+  && ok "partial visibility can emit its validated visible set without claiming completeness" \
+  || bad "visible diagnostic enumeration" "$out"
+
+rc=0; out="$(python3 "$TOOL" --emit-visible-org-repos --emit-complete-org-repos 2>&1)" || rc=$?
+{ [ "$rc" -eq 2 ] && grep -q 'not allowed with argument' <<<"$out"; } \
+  && ok "visible diagnostic and complete enumeration modes are mutually exclusive" \
+  || bad "enumeration modes must be mutually exclusive" "$out"
+
 # --- 2. the FS.GG.Audio defect, both directions ----------------------------------------------------
 # (A) registry closure: a dependencies.yml participant with no roster row.
 DEPS_AUDIO="$WORK/deps-audio.yml"
