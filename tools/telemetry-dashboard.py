@@ -45,6 +45,7 @@ EVENT_LOCK_NAME = "telemetry-dashboard-event.lock"
 HANDOFF_SCHEMA = "fsgg.telemetry.publication-handoff/1"
 HANDOFF_ACTIVATION_SCHEMA = "fsgg.telemetry.handoff-activation/1"
 HANDOFF_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/1"
+HANDOFF_RETRY_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/2"
 HANDOFF_INTENT_SCHEMA = "fsgg.telemetry.publisher-intent/1"
 HANDOFF_SUCCESS_SCHEMA = "fsgg.telemetry.publisher-success/1"
 HANDOFF_CURRENT_NAME = "current.json"
@@ -1097,12 +1098,16 @@ def _candidate_digest() -> str:
     return hashlib.sha256(pathlib.Path(__file__).resolve().read_bytes()).hexdigest()
 
 
-def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: str) -> dict[str,Any]:
+def _validate_initial_cutover_proof(value: Any, config_digest: str | None = None, candidate_digest: str | None = None) -> dict[str,Any]:
     proof=exact(value,{"schema","configDigest","candidateDigest","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState",
         "timerActiveState","serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState",
         "eventActivationReceiptDigest","eventActivationState","observedAt","evidenceDigest"},"cutover proof")
     unsigned={key:value for key,value in proof.items() if key!="evidenceDigest"}
-    if (proof.get("schema")!=HANDOFF_CUTOVER_SCHEMA or proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
+    if (proof.get("schema")!=HANDOFF_CUTOVER_SCHEMA
+        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("configDigest")))
+        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("candidateDigest")))
+        or (config_digest is not None and proof.get("configDigest")!=config_digest)
+        or (candidate_digest is not None and proof.get("candidateDigest")!=candidate_digest)
         or not isinstance(proof.get("incumbentAccountUid"),int) or isinstance(proof.get("incumbentAccountUid"),bool) or proof["incumbentAccountUid"]<0
         or not re.fullmatch(r"user@[0-9]+\.service",str(proof.get("managerIdentity")))
         or proof["managerIdentity"]!="user@"+str(proof["incumbentAccountUid"])+".service"
@@ -1119,12 +1124,81 @@ def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: st
     return proof
 
 
+def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: str) -> dict[str,Any]:
+    if not isinstance(value,dict): raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+    if value.get("schema")==HANDOFF_CUTOVER_SCHEMA:
+        return _validate_initial_cutover_proof(value,config_digest,candidate_digest)
+    proof=exact(value,{"schema","generation","configDigest","candidateDigest","labelsDigest","coordinatorDigest","publisherUnitDigest",
+        "remoteBaseline","priorAttempt","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState","timerActiveState",
+        "serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState","eventActivationReceiptDigest",
+        "eventActivationState","observedAt","evidenceDigest"},"retry cutover proof")
+    baseline=exact(proof.get("remoteBaseline"),{"commit","snapshotDigest"},"retry remote baseline")
+    prior=exact(proof.get("priorAttempt"),{"generation","proofDirectory","proofDigest","terminalState","failureCode",
+        "replacementGitHubMutation","ambiguousIntent","archivedActivationDigest","restoredIncumbentActivationDigest",
+        "incumbentActivationBeforeDigest","incumbentActivationRestored","incumbentTimerEnabledState","incumbentTimerActiveState",
+        "incumbentServiceActiveState"},"prior cutover attempt")
+    unsigned={key:value for key,value in proof.items() if key!="evidenceDigest"}
+    if (proof.get("schema")!=HANDOFF_RETRY_CUTOVER_SCHEMA
+        or not isinstance(proof.get("generation"),int) or isinstance(proof.get("generation"),bool) or proof["generation"]<2
+        or not isinstance(prior.get("generation"),int) or isinstance(prior.get("generation"),bool) or prior["generation"]!=proof["generation"]-1
+        or proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
+        or not all(re.fullmatch(r"[0-9a-f]{64}",str(proof.get(key))) for key in ("labelsDigest","coordinatorDigest","publisherUnitDigest"))
+        or not re.fullmatch(r"[0-9a-f]{40}",str(baseline.get("commit")))
+        or not re.fullmatch(r"[0-9a-f]{64}",str(baseline.get("snapshotDigest")))
+        or not isinstance(prior.get("proofDirectory"),str) or not pathlib.Path(prior["proofDirectory"]).is_absolute()
+        or not all(re.fullmatch(r"[0-9a-f]{64}",str(prior.get(key))) for key in
+            ("proofDigest","archivedActivationDigest","incumbentActivationBeforeDigest","restoredIncumbentActivationDigest"))
+        or prior.get("incumbentActivationBeforeDigest")!=prior.get("restoredIncumbentActivationDigest")
+        or prior.get("terminalState")!="rolled-back" or not re.fullmatch(r"HANDOFF_[A-Z0-9_]{1,120}",str(prior.get("failureCode")))
+        or prior.get("replacementGitHubMutation")!="absent" or prior.get("ambiguousIntent")!="absent"
+        or prior.get("incumbentActivationRestored")!="byte-identical"
+        or prior.get("incumbentTimerEnabledState")!="enabled" or prior.get("incumbentTimerActiveState")!="active"
+        or prior.get("incumbentServiceActiveState")!="inactive"
+        or not isinstance(proof.get("incumbentAccountUid"),int) or isinstance(proof.get("incumbentAccountUid"),bool) or proof["incumbentAccountUid"]<0
+        or not re.fullmatch(r"user@[0-9]+\.service",str(proof.get("managerIdentity")))
+        or proof["managerIdentity"]!="user@"+str(proof["incumbentAccountUid"])+".service"
+        or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.timer",str(proof.get("timerUnit")))
+        or proof.get("timerEnabledState")!="disabled" or proof.get("timerActiveState")!="inactive"
+        or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(proof.get("serviceUnit")))
+        or proof.get("serviceActiveState")!="inactive" or proof.get("eventActivationState")!="absent"
+        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationPathDigest")))
+        or proof.get("eventActivationPriorState") not in {"removed-by-cutover","already-absent"}
+        or (proof.get("eventActivationPriorState")=="removed-by-cutover" and not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationReceiptDigest"))))
+        or (proof.get("eventActivationPriorState")=="already-absent" and proof.get("eventActivationReceiptDigest") is not None)
+        or parse_time(proof.get("observedAt")) is None or proof.get("evidenceDigest")!=hashlib.sha256(dump(unsigned)).hexdigest()):
+        raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+    return proof
+
+
+def _verify_prior_cutover_proof(proof: dict[str,Any], operator_uid: int, cutover_gid: int) -> None:
+    if proof.get("schema")!=HANDOFF_RETRY_CUTOVER_SCHEMA: return
+    prior=proof["priorAttempt"]
+    try: directory=pathlib.Path(prior["proofDirectory"]).resolve(strict=True)
+    except OSError as error: raise HostSourceError("HANDOFF_PRIOR_CUTOVER_PROOF_UNSAFE") from error
+    _validate_owned_directory(directory,0o2750,operator_uid,cutover_gid,"HANDOFF_PRIOR_CUTOVER_PROOF_UNSAFE")
+    try: value=json.loads(_read_owned_bytes(directory/"cutover.json",16384,0o640,operator_uid,cutover_gid,"HANDOFF_PRIOR_CUTOVER_PROOF_UNSAFE"))
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_PRIOR_CUTOVER_PROOF_INVALID") from error
+    try:
+        if prior["generation"]==1:
+            validated=_validate_initial_cutover_proof(value)
+        else:
+            if not isinstance(value,dict) or value.get("schema")!=HANDOFF_RETRY_CUTOVER_SCHEMA or value.get("generation")!=prior["generation"]:
+                raise HostSourceError("HANDOFF_PRIOR_CUTOVER_PROOF_INVALID")
+            validated=_validate_cutover_proof(value,value["configDigest"],value["candidateDigest"])
+            _verify_prior_cutover_proof(validated,operator_uid,cutover_gid)
+    except (KeyError,HostSourceError) as error: raise HostSourceError("HANDOFF_PRIOR_CUTOVER_PROOF_INVALID") from error
+    if validated.get("evidenceDigest")!=prior["proofDigest"]:
+        raise HostSourceError("HANDOFF_PRIOR_CUTOVER_PROOF_INVALID")
+
+
 def _load_cutover_proof(directory: pathlib.Path, operator_uid: int, cutover_gid: int, producer_uid: int, config_digest: str, candidate_digest: str) -> dict[str,Any]:
     if operator_uid in {os.getuid(),producer_uid}: raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
     _validate_owned_directory(directory,0o2750,operator_uid,cutover_gid,"HANDOFF_CUTOVER_PROOF_UNSAFE")
     try: value=json.loads(_read_owned_bytes(directory/"cutover.json",16384,0o640,operator_uid,cutover_gid,"HANDOFF_CUTOVER_PROOF_UNSAFE"))
     except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID") from error
-    return _validate_cutover_proof(value,config_digest,candidate_digest)
+    proof=_validate_cutover_proof(value,config_digest,candidate_digest)
+    _verify_prior_cutover_proof(proof,operator_uid,cutover_gid)
+    return proof
 
 
 def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
@@ -1145,6 +1219,8 @@ def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
         if args.cutover_proof_dir is None or args.operator_uid is None or args.cutover_gid is None: raise HostSourceError("HANDOFF_CUTOVER_PROOF_REQUIRED")
         proof_dir=args.cutover_proof_dir.resolve(strict=True)
         proof=_load_cutover_proof(proof_dir,args.operator_uid,args.cutover_gid,args.producer_uid,config_digest,actual_candidate)
+        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=manifest["labelsDigest"]:
+            raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
         authority={"directory":str(proof_dir),"operatorUid":args.operator_uid,"cutoverGid":args.cutover_gid,"proofDigest":proof["evidenceDigest"]}
         receipt={"schema":HANDOFF_ACTIVATION_SCHEMA,"config":config,"configDigest":config_digest,"candidateDigest":actual_candidate,"cutoverAuthority":authority,"cutoverProof":proof}
         target=state/HANDOFF_ACTIVATION_NAME
@@ -1178,6 +1254,9 @@ def _load_handoff_activation(state: pathlib.Path) -> dict[str,Any]:
     try:
         proof=_validate_cutover_proof(value.get("cutoverProof"),value["configDigest"],value["candidateDigest"])
         if authority.get("proofDigest")!=proof["evidenceDigest"]: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=config["labelsDigest"]:
+            raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+        _verify_prior_cutover_proof(proof,authority["operatorUid"],authority["cutoverGid"])
     except (ValueError,HostSourceError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
     return value
 
