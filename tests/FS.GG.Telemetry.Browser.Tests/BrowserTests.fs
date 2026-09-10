@@ -156,7 +156,7 @@ module BrowserTests =
             start.UseShellExecute<-false
             start.RedirectStandardOutput<-true
             start.RedirectStandardError<-true
-            ["FSGG_BROWSER_BASE_URL",origin;"FSGG_BROWSER_PRINCIPAL_ID","reader";"FSGG_BROWSER_ACCESS_KEY",access;"FSGG_BROWSER_KNOWN_WORKSPACE","workspace-a";"FSGG_BROWSER_UNAVAILABLE_WORKSPACE","workspace-b";"FSGG_BROWSER_CERTIFICATE_SPKI",spki]
+            ["FSGG_BROWSER_BASE_URL",origin;"FSGG_BROWSER_PRINCIPAL_ID","reader";"FSGG_BROWSER_ACCESS_KEY",access;"FSGG_BROWSER_KNOWN_WORKSPACE","workspace-a";"FSGG_BROWSER_UNAVAILABLE_WORKSPACE","workspace-b";"FSGG_BROWSER_CERTIFICATE_SPKI",spki;"FSGG_BROWSER_ASSERT_UNKNOWN_COUNTS","1"]
             |> List.iter(fun (name,value)->start.Environment[name]<-value)
             use child=Process.Start start
             let output=child.StandardOutput.ReadToEnd()
