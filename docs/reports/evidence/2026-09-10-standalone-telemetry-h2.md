@@ -65,9 +65,10 @@ reprovisioned because hashes are one-way.
   `fsgg-telemetry-host`, matched the reviewed package allowlist, ran without a
   source checkout, and refused the unqualified overlay filesystem without state
   writes.
-- Independent release-manifest fixture: 9 passed, including the shared
+- Independent release-manifest fixture: 11 passed, including the shared
   `release-saga.py` producer-payload vector, signed-archive distinction, changed
-  payload refusal, tag isolation, and foreign-journal refusal.
+  payload refusal, tag isolation, foreign-journal refusal, and exact resolution
+  of both lightweight and annotated remote tags.
 - SystemAdmin companion: merged as
   `2f884241d23602a47c70a39cf780a0cf453f96aa`; 18 product-candidate interop and
   operator checks passed, including staged config/credential verification before
@@ -86,8 +87,7 @@ candidate.
 ## Separate completion states
 
 - **Source:** candidate implementation and the checks listed above are complete;
-  acceptance waits for the exact-head routine PR, deterministic two-root package
-  proof, and its required CI checks.
+  acceptance waits for the exact-head routine PR and its required CI checks.
 - **Release:** pending. The protected `release-telemetry-host.yml` workflow must
   build from accepted `main`, pass Trusted Publishing authority, publish the
   verified producer payload to both feeds, and create
