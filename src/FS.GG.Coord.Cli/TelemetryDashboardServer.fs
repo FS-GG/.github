@@ -24,6 +24,7 @@ type TelemetryDashboardServerOptions =
       BootstrapLifetime: TimeSpan
       SessionIdleTimeout: TimeSpan
       SessionAbsoluteTimeout: TimeSpan
+      RequestTimeout: TimeSpan
       SnapshotTimeout: TimeSpan
       ShutdownTimeout: TimeSpan
       MaxSessions: int
@@ -69,7 +70,13 @@ module private DashboardServerInternals =
         for name, value in securityHeaders do
             response.Headers.[name] <- value
 
-    let writeBytes (response: HttpListenerResponse) status contentType (content: byte array) =
+    let writeBytes
+        (response: HttpListenerResponse)
+        status
+        contentType
+        (content: byte array)
+        (cancellationToken: CancellationToken)
+        =
         task {
             response.StatusCode <- status
             response.ContentType <- contentType
@@ -77,11 +84,11 @@ module private DashboardServerInternals =
             addSecurityHeaders response
 
             if content.Length > 0 then
-                do! response.OutputStream.WriteAsync(content.AsMemory()).AsTask()
+                do! response.OutputStream.WriteAsync(content.AsMemory(), cancellationToken).AsTask()
         }
 
-    let writeEmpty response status =
-        writeBytes response status "text/plain; charset=utf-8" Array.empty
+    let writeEmpty response status cancellationToken =
+        writeBytes response status "text/plain; charset=utf-8" Array.empty cancellationToken
 
     let tryChoosePort () =
         use probe = new TcpListener(IPAddress.Loopback, 0)
@@ -146,7 +153,7 @@ module private DashboardServerInternals =
         || target.Contains("://", StringComparison.Ordinal)
         || not (String.IsNullOrEmpty request.Url.Query)
 
-    let readBoundedBody limit (request: HttpListenerRequest) =
+    let readBoundedBody limit (request: HttpListenerRequest) (cancellationToken: CancellationToken) =
         task {
             if request.ContentLength64 > int64 limit then
                 return Error "request body is too large"
@@ -158,12 +165,14 @@ module private DashboardServerInternals =
 
                 while not finished && total <= limit do
                     let! count =
-                        request.InputStream.ReadAsync(chunk.AsMemory(0, min chunk.Length (limit + 1 - total))).AsTask()
+                        request.InputStream
+                            .ReadAsync(chunk.AsMemory(0, min chunk.Length (limit + 1 - total)), cancellationToken)
+                            .AsTask()
 
                     if count = 0 then
                         finished <- true
                     else
-                        do! buffer.WriteAsync(chunk.AsMemory(0, count)).AsTask()
+                        do! buffer.WriteAsync(chunk.AsMemory(0, count), cancellationToken).AsTask()
                         total <- total + count
 
                 if total > limit then
@@ -226,6 +235,7 @@ module private DashboardServerInternals =
         positiveDuration "BootstrapLifetime" (TimeSpan.FromMinutes 10.0) options.BootstrapLifetime
         positiveDuration "SessionIdleTimeout" (TimeSpan.FromHours 1.0) options.SessionIdleTimeout
         positiveDuration "SessionAbsoluteTimeout" (TimeSpan.FromHours 8.0) options.SessionAbsoluteTimeout
+        positiveDuration "RequestTimeout" (TimeSpan.FromMinutes 2.0) options.RequestTimeout
         positiveDuration "SnapshotTimeout" (TimeSpan.FromMinutes 2.0) options.SnapshotTimeout
         positiveDuration "ShutdownTimeout" (TimeSpan.FromSeconds 30.0) options.ShutdownTimeout
         positiveBound "MaxSessions" 1024 options.MaxSessions
@@ -280,6 +290,8 @@ module private DashboardServerInternals =
         let mutable bootstrapAvailable = 1
         let mutable stopStarted = 0
         let mutable completion: Task = Task.CompletedTask
+        let registrationGate = obj ()
+        let mutable externalRegistration: CancellationTokenRegistration option = None
 
         let closeResponse (response: HttpListenerResponse) =
             try
@@ -315,7 +327,13 @@ module private DashboardServerInternals =
         let exactOrigin (request: HttpListenerRequest) =
             String.Equals(request.Headers.["Origin"], originText, StringComparison.Ordinal)
 
-        let routeBootstrap (request: HttpListenerRequest) (response: HttpListenerResponse) token =
+        let abortResponse (response: HttpListenerResponse) =
+            try
+                response.Abort()
+            with _ ->
+                ()
+
+        let routeBootstrap (request: HttpListenerRequest) (response: HttpListenerResponse) token cancellationToken =
             task {
                 let now = Stopwatch.GetTimestamp()
                 expireSessions now
@@ -325,11 +343,11 @@ module private DashboardServerInternals =
                     || Volatile.Read(&bootstrapAvailable) <> 1
                     || not (fixedTimeEquals token bootstrapSecret)
                 then
-                    do! writeEmpty response 404
+                    do! writeEmpty response 404 cancellationToken
                 elif sessions.Count >= options.MaxSessions then
-                    do! writeEmpty response 503
+                    do! writeEmpty response 503 cancellationToken
                 elif Interlocked.CompareExchange(&bootstrapAvailable, 0, 1) <> 1 then
-                    do! writeEmpty response 404
+                    do! writeEmpty response 404 cancellationToken
                 else
                     bootstrapSecret <- newSecret ()
                     let sessionToken = newSecret ()
@@ -337,10 +355,10 @@ module private DashboardServerInternals =
                     let maxAge = options.SessionAbsoluteTimeout.TotalSeconds |> Math.Ceiling |> int
                     response.Headers.["Set-Cookie"] <- sessionCookie sessionToken maxAge
                     response.RedirectLocation <- "/"
-                    do! writeEmpty response 303
+                    do! writeEmpty response 303 cancellationToken
             }
 
-        let routeAsset (response: HttpListenerResponse) path =
+        let routeAsset (response: HttpListenerResponse) path cancellationToken =
             task {
                 match options.AssetProvider path with
                 | Some asset when
@@ -348,11 +366,15 @@ module private DashboardServerInternals =
                     && asset.Content.Length <= options.MaxResponseBodyBytes
                     && not (String.IsNullOrWhiteSpace asset.ContentType)
                     ->
-                    do! writeBytes response 200 asset.ContentType asset.Content
-                | _ -> do! writeEmpty response 404
+                    do! writeBytes response 200 asset.ContentType asset.Content cancellationToken
+                | _ -> do! writeEmpty response 404 cancellationToken
             }
 
-        let routeSnapshot (request: HttpListenerRequest) (response: HttpListenerResponse) =
+        let routeSnapshot
+            (request: HttpListenerRequest)
+            (response: HttpListenerResponse)
+            (cancellationToken: CancellationToken)
+            =
             task {
                 let mediaType =
                     request.ContentType
@@ -366,29 +388,41 @@ module private DashboardServerInternals =
                             String.Equals(value, "application/json", StringComparison.OrdinalIgnoreCase))
                     )
                 then
-                    do! writeEmpty response 415
+                    do! writeEmpty response 415 cancellationToken
                 else
-                    let! body = readBoundedBody options.MaxRequestBodyBytes request
+                    let! body = readBoundedBody options.MaxRequestBodyBytes request cancellationToken
 
                     match body with
-                    | Error _ -> do! writeEmpty response 413
+                    | Error _ -> do! writeEmpty response 413 cancellationToken
                     | Ok bytes ->
                         match tryReadWorkspaceId bytes with
                         | Some workspaceId when fixedTimeEquals workspaceId options.WorkspaceId ->
                             if not (queries.Wait(0)) then
-                                do! writeEmpty response 429
+                                do! writeEmpty response 429 cancellationToken
                             else
-                                let providerTask =
-                                    try
-                                        options.SnapshotProvider options.WorkspaceId shutdown.Token
-                                        |> Option.ofObj
-                                        |> Option.defaultValue (
-                                            Task.FromResult(Error [ "Snapshot provider returned no task." ])
-                                        )
-                                    with _ ->
-                                        Task.FromResult(Error [ "Snapshot provider failed before starting." ])
+                                let providerWork: Task<Result<byte array, string list>> =
+                                    Task.Factory
+                                        .StartNew(
+                                            Func<Task<Result<byte array, string list>>>(fun () ->
+                                                task {
+                                                    try
+                                                        let providerTask =
+                                                            options.SnapshotProvider options.WorkspaceId shutdown.Token
 
-                                providerTask.ContinueWith(
+                                                        if isNull providerTask then
+                                                            return Error [ "Snapshot provider returned no task." ]
+                                                        else
+                                                            return! providerTask
+                                                    with _ ->
+                                                        return Error [ "Snapshot provider failed." ]
+                                                }),
+                                            CancellationToken.None,
+                                            TaskCreationOptions.DenyChildAttach,
+                                            TaskScheduler.Default
+                                        )
+                                        .Unwrap()
+
+                                providerWork.ContinueWith(
                                     (fun (_: Task<Result<byte array, string list>>) -> queries.Release() |> ignore),
                                     CancellationToken.None,
                                     TaskContinuationOptions.ExecuteSynchronously,
@@ -397,25 +431,31 @@ module private DashboardServerInternals =
                                 |> ignore
 
                                 try
-                                    let! result = providerTask.WaitAsync(options.SnapshotTimeout, shutdown.Token)
+                                    let! result = providerWork.WaitAsync(options.SnapshotTimeout, cancellationToken)
 
                                     match result with
                                     | Ok snapshot when
                                         not (isNull snapshot) && snapshot.Length <= options.MaxResponseBodyBytes
                                         ->
                                         if isJsonObject snapshot then
-                                            do! writeBytes response 200 "application/json; charset=utf-8" snapshot
+                                            do!
+                                                writeBytes
+                                                    response
+                                                    200
+                                                    "application/json; charset=utf-8"
+                                                    snapshot
+                                                    cancellationToken
                                         else
-                                            do! writeEmpty response 503
-                                    | _ -> do! writeEmpty response 503
+                                            do! writeEmpty response 503 cancellationToken
+                                    | _ -> do! writeEmpty response 503 cancellationToken
                                 with
-                                | :? TimeoutException -> do! writeEmpty response 504
-                                | :? OperationCanceledException -> do! writeEmpty response 503
-                                | _ -> do! writeEmpty response 503
-                        | _ -> do! writeEmpty response 403
+                                | :? TimeoutException -> do! writeEmpty response 504 cancellationToken
+                                | :? OperationCanceledException when cancellationToken.IsCancellationRequested -> ()
+                                | _ -> do! writeEmpty response 503 cancellationToken
+                        | _ -> do! writeEmpty response 403 cancellationToken
             }
 
-        let routeLogout (request: HttpListenerRequest) (response: HttpListenerResponse) =
+        let routeLogout (request: HttpListenerRequest) (response: HttpListenerResponse) cancellationToken =
             task {
                 let cookie = request.Cookies.["fsgg_dashboard_session"]
 
@@ -423,12 +463,18 @@ module private DashboardServerInternals =
                     sessions.TryRemove cookie.Value |> ignore
 
                 response.Headers.["Set-Cookie"] <- sessionCookie "expired" 0
-                do! writeEmpty response 204
+                do! writeEmpty response 204 cancellationToken
             }
 
-        let processContext (context: HttpListenerContext) =
+        let processContext (context: HttpListenerContext) (requestLifetime: CancellationTokenSource) =
             task {
+                use requestLifetime = requestLifetime
+                let cancellationToken = requestLifetime.Token
                 let response = context.Response
+                response.StatusCode <- 503
+
+                use timeoutAbort =
+                    cancellationToken.Register(fun () -> abortResponse response)
 
                 try
                     try
@@ -437,13 +483,13 @@ module private DashboardServerInternals =
                         let expectedHost = $"127.0.0.1:{port}"
 
                         if isNull remote || not (IPAddress.IsLoopback remote.Address) then
-                            do! writeEmpty response 403
+                            do! writeEmpty response 403 cancellationToken
                         elif headerSize request > options.MaxHeaderBytes || hasAmbiguousHeaders request then
-                            do! writeEmpty response 400
+                            do! writeEmpty response 400 cancellationToken
                         elif not (String.Equals(request.Headers.["Host"], expectedHost, StringComparison.Ordinal)) then
-                            do! writeEmpty response 400
+                            do! writeEmpty response 400 cancellationToken
                         elif hasUnsafeTarget request then
-                            do! writeEmpty response 400
+                            do! writeEmpty response 400 cancellationToken
                         else
                             let path = request.Url.AbsolutePath
 
@@ -452,47 +498,51 @@ module private DashboardServerInternals =
                                 let token = value.Substring("/bootstrap/".Length)
 
                                 if request.HasEntityBody then
-                                    do! writeEmpty response 400
+                                    do! writeEmpty response 400 cancellationToken
                                 elif token.Length = 0 || token.Contains('/') then
-                                    do! writeEmpty response 404
+                                    do! writeEmpty response 404 cancellationToken
                                 else
-                                    do! routeBootstrap request response token
+                                    do! routeBootstrap request response token cancellationToken
                             | "GET", ("/" | "/index.html" | "/app.js" | "/styles.css") ->
                                 if request.HasEntityBody then
-                                    do! writeEmpty response 400
+                                    do! writeEmpty response 400 cancellationToken
                                 elif tryAuthenticate request then
-                                    do! routeAsset response path
+                                    do! routeAsset response path cancellationToken
                                 else
-                                    do! writeEmpty response 401
+                                    do! writeEmpty response 401 cancellationToken
                             | "POST", "/api/snapshot" ->
                                 if not (tryAuthenticate request) then
-                                    do! writeEmpty response 401
+                                    do! writeEmpty response 401 cancellationToken
                                 elif not (exactOrigin request) then
-                                    do! writeEmpty response 403
+                                    do! writeEmpty response 403 cancellationToken
                                 else
-                                    do! routeSnapshot request response
+                                    do! routeSnapshot request response cancellationToken
                             | "POST", "/api/logout" ->
                                 if not (tryAuthenticate request) then
-                                    do! writeEmpty response 401
+                                    do! writeEmpty response 401 cancellationToken
                                 elif not (exactOrigin request) then
-                                    do! writeEmpty response 403
+                                    do! writeEmpty response 403 cancellationToken
                                 elif request.HasEntityBody then
-                                    do! writeEmpty response 400
+                                    do! writeEmpty response 400 cancellationToken
                                 else
-                                    do! routeLogout request response
-                            | ("GET" | "POST"), _ -> do! writeEmpty response 404
-                            | _ -> do! writeEmpty response 405
+                                    do! routeLogout request response cancellationToken
+                            | ("GET" | "POST"), _ -> do! writeEmpty response 404 cancellationToken
+                            | _ -> do! writeEmpty response 405 cancellationToken
                     with
+                    | :? OperationCanceledException when cancellationToken.IsCancellationRequested -> ()
                     | :? HttpListenerException -> ()
                     | :? IOException -> ()
                     | :? ObjectDisposedException -> ()
                     | _ ->
                         try
-                            do! writeEmpty response 500
+                            do! writeEmpty response 500 cancellationToken
                         with _ ->
                             ()
                 finally
-                    closeResponse response
+                    if cancellationToken.IsCancellationRequested then
+                        abortResponse response
+                    else
+                        closeResponse response
             }
 
         let acceptLoop () =
@@ -502,7 +552,13 @@ module private DashboardServerInternals =
                         let! context = listener.GetContextAsync().WaitAsync(shutdown.Token)
 
                         if requests.Wait(0) then
-                            let handling = processContext context
+                            let requestLifetime =
+                                CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token)
+
+                            requestLifetime.CancelAfter(options.RequestTimeout)
+
+                            let handling =
+                                Task.Run(Func<Task>(fun () -> processContext context requestLifetime))
 
                             handling.ContinueWith(
                                 (fun (_: Task) -> requests.Release() |> ignore),
@@ -513,7 +569,9 @@ module private DashboardServerInternals =
                             |> ignore
                         else
                             try
-                                do! writeEmpty context.Response 503
+                                context.Response.StatusCode <- 503
+                                context.Response.ContentLength64 <- 0L
+                                addSecurityHeaders context.Response
                             finally
                                 closeResponse context.Response
                 with
@@ -525,6 +583,16 @@ module private DashboardServerInternals =
         let stop () =
             task {
                 if Interlocked.CompareExchange(&stopStarted, 1, 0) = 0 then
+                    let registration =
+                        lock registrationGate (fun () ->
+                            let current = externalRegistration
+                            externalRegistration <- None
+                            current)
+
+                    match registration with
+                    | Some value -> value.Dispose()
+                    | None -> ()
+
                     sessions.Clear()
                     shutdown.Cancel()
 
@@ -542,6 +610,25 @@ module private DashboardServerInternals =
             }
 
         member _.Start() = completion <- acceptLoop ()
+
+        member this.AttachCancellation(cancellationToken: CancellationToken) =
+            if cancellationToken.CanBeCanceled then
+                let registration =
+                    cancellationToken.Register(fun () ->
+                        ThreadPool.QueueUserWorkItem(WaitCallback(fun _ -> this.StopAsync() |> ignore))
+                        |> ignore)
+
+                let disposeImmediately =
+                    lock registrationGate (fun () ->
+                        if Volatile.Read(&stopStarted) <> 0 then
+                            true
+                        else
+                            externalRegistration <- Some registration
+                            false)
+
+                if disposeImmediately then
+                    registration.Dispose()
+
         member _.BootstrapUrl = bootstrapUrl
         member _.Origin = origin
         member _.Completion = completion
@@ -571,6 +658,7 @@ module TelemetryDashboardServer =
           BootstrapLifetime = TimeSpan.FromMinutes 2.0
           SessionIdleTimeout = TimeSpan.FromMinutes 10.0
           SessionAbsoluteTimeout = TimeSpan.FromMinutes 30.0
+          RequestTimeout = TimeSpan.FromSeconds 15.0
           SnapshotTimeout = TimeSpan.FromSeconds 10.0
           ShutdownTimeout = TimeSpan.FromSeconds 5.0
           MaxSessions = 8
@@ -625,8 +713,7 @@ module TelemetryDashboardServer =
                         let state = new ServerState(options, listener, port, newSecret ())
                         state.Start()
 
-                        if cancellationToken.CanBeCanceled then
-                            cancellationToken.Register(fun () -> state.StopAsync() |> ignore) |> ignore
+                        state.AttachCancellation(cancellationToken)
 
                         return Ok(state :> RunningTelemetryDashboardServer)
         }

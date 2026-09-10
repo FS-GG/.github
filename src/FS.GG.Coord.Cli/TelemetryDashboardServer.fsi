@@ -15,6 +15,7 @@ type TelemetryDashboardServerOptions =
       BootstrapLifetime: TimeSpan
       SessionIdleTimeout: TimeSpan
       SessionAbsoluteTimeout: TimeSpan
+      RequestTimeout: TimeSpan
       SnapshotTimeout: TimeSpan
       ShutdownTimeout: TimeSpan
       MaxSessions: int

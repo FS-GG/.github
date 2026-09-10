@@ -402,6 +402,55 @@ module ServerTests =
         }
 
     [<Fact>]
+    let ``synchronously blocked provider cannot stall accept and keeps query lease`` () =
+        task {
+            let providerStarted =
+                TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+
+            use providerRelease = new ManualResetEventSlim(false)
+
+            let options =
+                { baseOptions (fun _ _ ->
+                      providerStarted.TrySetResult() |> ignore
+                      providerRelease.Wait()
+                      Task.FromResult(Ok(Encoding.UTF8.GetBytes "{}"))) with
+                    MaxConcurrentQueries = 1
+                    SnapshotTimeout = TimeSpan.FromMilliseconds 100.0
+                    RequestTimeout = TimeSpan.FromSeconds 1.0 }
+
+            use! server = start options
+            let http, handler = client ()
+            use http = http
+            use handler = handler
+            let! _ = bootstrap http server
+            let origin = Some(server.Origin.GetLeftPart(UriPartial.Authority))
+
+            use first = snapshotRequest server workspaceId origin
+            let firstResponseTask = http.SendAsync(first)
+            do! providerStarted.Task.WaitAsync(TimeSpan.FromSeconds 2.0)
+
+            use! assetWhileBlocked = http.GetAsync(Uri(server.Origin, "/styles.css"))
+            Assert.Equal(HttpStatusCode.OK, assetWhileBlocked.StatusCode)
+
+            use second = snapshotRequest server workspaceId origin
+            use! secondResponse = http.SendAsync(second)
+            Assert.Equal(enum<HttpStatusCode> 429, secondResponse.StatusCode)
+
+            use! firstResponse = firstResponseTask
+            Assert.Equal(HttpStatusCode.GatewayTimeout, firstResponse.StatusCode)
+
+            use third = snapshotRequest server workspaceId origin
+            use! thirdResponse = http.SendAsync(third)
+            Assert.Equal(enum<HttpStatusCode> 429, thirdResponse.StatusCode)
+
+            providerRelease.Set()
+            do! Task.Delay 30
+            use fourth = snapshotRequest server workspaceId origin
+            use! fourthResponse = http.SendAsync(fourth)
+            Assert.Equal(HttpStatusCode.OK, fourthResponse.StatusCode)
+        }
+
+    [<Fact>]
     let ``shutdown is bounded while provider ignores cancellation`` () =
         task {
             let providerStarted =
@@ -443,6 +492,76 @@ module ServerTests =
                 Assert.True(int response.StatusCode >= 500)
             with :? HttpRequestException ->
                 ()
+        }
+
+    [<Fact>]
+    let ``partial request body times out and shutdown closes held socket`` () =
+        task {
+            let options =
+                { immediateOptions () with
+                    MaxConcurrentRequests = 1
+                    RequestTimeout = TimeSpan.FromMilliseconds 250.0 }
+
+            use! server = start options
+            let http, handler = client ()
+            use http = http
+            use handler = handler
+            let! setCookie = bootstrap http server
+            let sessionCookie = setCookie.Split(';').[0]
+            let host = $"127.0.0.1:{server.Origin.Port}"
+
+            use partial = new TcpClient()
+            do! partial.ConnectAsync(IPAddress.Loopback, server.Origin.Port)
+            use partialStream = partial.GetStream()
+
+            let partialHeaders =
+                $"POST /api/snapshot HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\nCookie: {sessionCookie}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{{"
+                |> Encoding.ASCII.GetBytes
+
+            do! partialStream.WriteAsync(partialHeaders.AsMemory()).AsTask()
+            do! partialStream.FlushAsync()
+            do! Task.Delay 50
+
+            use! refusedWhileHeld = http.GetAsync(Uri(server.Origin, "/styles.css"))
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, refusedWhileHeld.StatusCode)
+
+            do! Task.Delay 300
+            use! afterDeadline = http.GetAsync(Uri(server.Origin, "/styles.css"))
+            Assert.Equal(HttpStatusCode.OK, afterDeadline.StatusCode)
+
+            let shutdownOptions =
+                { immediateOptions () with
+                    MaxConcurrentRequests = 1
+                    RequestTimeout = TimeSpan.FromSeconds 5.0
+                    ShutdownTimeout = TimeSpan.FromMilliseconds 200.0 }
+
+            use! shutdownServer = start shutdownOptions
+            let shutdownHttp, shutdownHandler = client ()
+            use shutdownHttp = shutdownHttp
+            use shutdownHandler = shutdownHandler
+            let! shutdownCookieHeader = bootstrap shutdownHttp shutdownServer
+            let shutdownCookie = shutdownCookieHeader.Split(';').[0]
+            let shutdownHost = $"127.0.0.1:{shutdownServer.Origin.Port}"
+            use held = new TcpClient()
+            do! held.ConnectAsync(IPAddress.Loopback, shutdownServer.Origin.Port)
+            use heldStream = held.GetStream()
+
+            let heldHeaders =
+                $"POST /api/snapshot HTTP/1.1\r\nHost: {shutdownHost}\r\nOrigin: http://{shutdownHost}\r\nCookie: {shutdownCookie}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{{"
+                |> Encoding.ASCII.GetBytes
+
+            do! heldStream.WriteAsync(heldHeaders.AsMemory()).AsTask()
+            do! heldStream.FlushAsync()
+            do! Task.Delay 50
+            do! shutdownServer.StopAsync()
+
+            try
+                use heldReader = new StreamReader(heldStream, Encoding.ASCII, leaveOpen = true)
+                let! _ = heldReader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds 1.0)
+                ()
+            with
+            | :? IOException -> ()
+            | :? ObjectDisposedException -> ()
         }
 
     [<Fact>]
