@@ -84,7 +84,7 @@ jobs:
             --output artifacts/policy/evidence-manifest.json
       - name: Retain content-addressed policy evidence outside Git
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: policy-evidence-${{ github.run_id }}
           path: artifacts/policy/
