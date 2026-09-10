@@ -92,6 +92,15 @@ def recent_comments(number: int, last: int):
 
 
 def graphql(query: str, variables: dict):
+    if "issueCreationPolicy" in query:
+        return {"data": {"repository": {"id": "R_fixture", "issueCreationPolicy": "COLLABORATORS_ONLY", "hasIssuesEnabled": True,
+                                         "mergeCommitAllowed": True, "squashMergeAllowed": True, "rebaseMergeAllowed": True}, "rateLimit": RATE_LIMIT}}
+    if "IntakeIdentity" in query:
+        number = int(variables.get("number", 0))
+        if number not in ISSUE_BODIES:
+            return {"data": {"repository": {"issue": None}, "rateLimit": RATE_LIMIT}}
+        return {"data": {"repository": {"issue": {"id": f"I_fixture_{number}", "updatedAt": "2026-09-10T00:00:00Z",
+                                                     "author": {"id": "U_fixture", "login": "maintainer"}}}, "rateLimit": RATE_LIMIT}}
     if "comments(last:" in query:
         number = variables.get("number")
         last = variables.get("last")
@@ -189,6 +198,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+
+        if re.match(r"^/repos/[^/]+/[^/]+/collaborators/maintainer/permission$", path):
+            return self._send(200, {"permission": "write", "user": {"node_id": "U_fixture"}})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:

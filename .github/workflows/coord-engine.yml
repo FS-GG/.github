@@ -135,7 +135,9 @@ jobs:
     needs: change-completeness
     if: github.event_name != 'pull_request' || needs.change-completeness.outputs.engine_changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The full board-intake qualification reached BoardOps after 25m13s on ubuntu-latest; retain
+    # every parity/replay/HTTP/write suite and leave bounded headroom for the remaining tests.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
 

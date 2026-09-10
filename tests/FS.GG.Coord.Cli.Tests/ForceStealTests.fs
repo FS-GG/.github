@@ -134,7 +134,7 @@ module ForceStealTests =
             currentRouteComment () :: claims
 
     let private world (thread: Thread) =
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with

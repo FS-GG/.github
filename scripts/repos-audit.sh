@@ -2914,6 +2914,29 @@ audit_org="${AUTHORITY%%/*}"
 # Lowercased on both sides, for the reason SPARSE_ROSTER is: GitHub resolves an owner login
 # case-insensitively, so a roster spelling `fs-gg/X` names an org repo and must not read as foreign.
 audit_org_lc="$(printf '%s' "$audit_org" | tr '[:upper:]' '[:lower:]')"
+# The roster describes coordination participation, not the organization's security perimeter. Discover
+# every org-owned repository independently, then union those names with rostered external workspaces.
+# A failed or empty discovery refuses the audit; otherwise a newly-created, not-yet-rostered repository
+# is graded on its first run instead of waiting for somebody to remember the registry.
+org_discovery_args=()
+if [ -n "${FSGG_REPOS_AUDIT_FIXTURE_ORG_REPOS_JSON:-}" ] || [ -n "${FSGG_REPOS_AUDIT_FIXTURE_ORG_META_JSON:-}" ]; then
+  [ -n "${FSGG_REPOS_AUDIT_FIXTURE_ORG_REPOS_JSON:-}" ] && [ -n "${FSGG_REPOS_AUDIT_FIXTURE_ORG_META_JSON:-}" ] \
+    || die "fixture org discovery requires both repository and metadata JSON inputs."
+  echo "repos-audit: fixture org discovery is injected; this run is not live perimeter evidence."
+  org_discovery_args=(--org-repos-json "$FSGG_REPOS_AUDIT_FIXTURE_ORG_REPOS_JSON" --org-meta-json "$FSGG_REPOS_AUDIT_FIXTURE_ORG_META_JSON")
+fi
+policy_roster="${REGISTRY:-$HERE/../registry/repos.yml}"
+intake_token="${INTAKE_TOKEN:-${GH_TOKEN:-}}"
+issue_policy_perimeter_noverdict=0
+if ! org_issue_policy_repos="$(GITHUB_TOKEN="$intake_token" GH_TOKEN="$intake_token" python3 scripts/check-roster-closure.py --roster "$policy_roster" --deps "$DEPENDENCIES" --org "$audit_org" --emit-complete-org-repos "${org_discovery_args[@]}" 2>"$GH_ERR_FILE")"; then
+  echo "::error::repos-audit: cannot prove the org repository listing complete for issue-intake policy: $(gh_last_err)" >&2
+  issue_policy_perimeter_noverdict=1
+  org_issue_policy_repos=""
+elif [ -z "$org_issue_policy_repos" ]; then
+  echo "::error::repos-audit: org repository discovery returned no repositories; refusing to certify an empty issue-intake perimeter." >&2
+  issue_policy_perimeter_noverdict=1
+fi
+issue_policy_repos="$(printf '%s\n%s\n' "$all_repos" "$org_issue_policy_repos" | sed '/^$/d' | sort -fu)"
 outside_org_repos=""
 while IFS= read -r own_repo; do
   [ -n "$own_repo" ] || continue
@@ -2930,12 +2953,14 @@ fi
 # Repository issue intake is an org-wide ingress boundary, not a per-repository convention.
 # Read the typed GraphQL enum directly: `hasIssuesEnabled` alone would certify a repository that
 # accepts public issue creation, and a failed read is explicitly not treated as compliant.
-issue_policy_findings=0; issue_policy_undetermined=0; issue_policy_graded=0
+issue_policy_findings=0; issue_policy_undetermined=$issue_policy_perimeter_noverdict; issue_policy_graded=0
 while IFS= read -r policy_repo; do
   [ -n "$policy_repo" ] || continue
   policy_owner=${policy_repo%%/*}; policy_name=${policy_repo#*/}
   coord_bin=${FSGG_COORD_BIN:-"$(dirname "$0")/fsgg-coord"}
-  policy_json="$("$coord_bin" graphql repository-policy "$policy_owner" "$policy_name" 2>"$GH_ERR_FILE")" || {
+  policy_token="${GH_TOKEN:-}"
+  [ "$(printf '%s' "$policy_owner" | tr '[:upper:]' '[:lower:]')" != "$audit_org_lc" ] || policy_token="$intake_token"
+  policy_json="$(GH_TOKEN="$policy_token" "$coord_bin" graphql repository-policy "$policy_owner" "$policy_name" 2>"$GH_ERR_FILE")" || {
     echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: $(gh_last_err)" >&2
     issue_policy_undetermined=$((issue_policy_undetermined + 1)); continue
   }
@@ -2965,7 +2990,7 @@ while IFS= read -r policy_repo; do
     fi
     issue_policy_findings=$((issue_policy_findings + 1))
   fi
-done <<< "$all_repos"
+done <<< "$issue_policy_repos"
 echo "repos-audit: collaborator-only issue intake — $issue_policy_graded verified, $issue_policy_findings noncompliant, $issue_policy_undetermined no-verdict."
 
 audited=0; wired=0; gaps=0; drift=0; undetermined=0; build_config_materialized=0; build_config_graded=0
@@ -3720,7 +3745,7 @@ if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdic
    || [ "$absentok_undet" -ne 0 ] || [ "$issue_policy_undetermined" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
-  [ "$issue_policy_undetermined" -eq 0 ] || echo "::error::repos-audit: could not read collaborator-only issue policy for $issue_policy_undetermined rostered repository/repositories. Nothing was proven about public issue intake for those resources." >&2
+  [ "$issue_policy_undetermined" -eq 0 ] || echo "::error::repos-audit: could not read collaborator-only issue policy for $issue_policy_undetermined org-owned or rostered external repository/repositories. Nothing was proven about public issue intake for those resources." >&2
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
   # receiver project is not a wiring question, and folding it into `$undetermined` would print
   # "could not determine WIRING" about a file that answers a different question (#327/#335).
@@ -3873,7 +3898,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$engman_drift" -eq 0 ] || echo "::error::repos-audit: $engman_drift coordination-kit receiver(s) pin fs.gg.coord.cli at a version different from registry/dependencies.yml's declared coord-engine $ENGINE_DECLARED_VERSION. A proposed Renovate bump is not delivery: each receiver must merge the declared pin before it can run the fleet's typed delivery contract (.github#2249)." >&2
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
-  [ "$issue_policy_findings" -eq 0 ] || echo "::error::repos-audit: $issue_policy_findings rostered repository/repositories allow issue creation beyond collaborators." >&2
+  [ "$issue_policy_findings" -eq 0 ] || echo "::error::repos-audit: $issue_policy_findings org-owned or rostered external repository/repositories allow issue creation beyond collaborators." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   [ "$engoffer_actionable" -eq 0 ] || echo "::error::repos-audit: $engoffer_actionable coordination-kit receiver(s) are behind fs.gg.coord.cli and need a proposal-step action — $engoffer_none have NO engine bump, $engoffer_superseded only a superseded one, $engoffer_ratelimited a held branch (#1803)." >&2
   exit 1

@@ -16,11 +16,15 @@ module OperationalGraphQl =
         | NoAllowedMethod
 
     type RepositoryPolicy =
-        { IssueCreationPolicy: string
+        { RepositoryId: string
+          IssueCreationPolicy: string
           HasIssuesEnabled: bool
           MergeCommitAllowed: bool
           SquashMergeAllowed: bool
           RebaseMergeAllowed: bool }
+
+    type IssueIntakeIdentity =
+        { IssueId: string; UpdatedAt: string; AuthorId: string; AuthorLogin: string }
 
     type ArchiveRow =
         { ItemId: string
@@ -45,6 +49,7 @@ module OperationalGraphQl =
     val projectVisibility: IGitHubTransport -> owner: string -> title: string -> IoResult<bool option>
     val projectId: IGitHubTransport -> owner: string -> number: int -> IoResult<string>
     val repositoryPolicy: IGitHubTransport -> owner: string -> name: string -> IoResult<RepositoryPolicy>
+    val issueIntakeIdentity: IGitHubTransport -> owner: string -> name: string -> number: int -> IoResult<IssueIntakeIdentity>
     val selectMergeMethod: RepositoryPolicy -> MergeMethodDecision
     val meterRemaining: IGitHubTransport -> IoResult<int>
     val archiveScan: IGitHubTransport -> projectId: string -> IoResult<ArchiveScan>

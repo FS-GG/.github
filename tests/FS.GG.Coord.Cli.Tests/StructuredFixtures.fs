@@ -2,8 +2,22 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System.Text.Json
 open FS.GG.Coord
+open FS.GG.Coord.GitHub.Transport
 
 module StructuredFixtures =
+    let intakeResponse (request: Request) =
+        let ok body = Some(Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None })
+        match request.Body with
+        | Query(document,_) when document.Contains "issueCreationPolicy" ->
+            ok """{"data":{"repository":{"id":"R_fixture","issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":true},"rateLimit":{"cost":1,"remaining":99}}}"""
+        | Query(document,_) when document.Contains "IntakeIdentity" ->
+            ok """{"data":{"repository":{"issue":{"id":"I_fixture","updatedAt":"2026-09-10T00:00:00Z","author":{"id":"U_fixture","login":"maintainer"}}},"rateLimit":{"cost":1,"remaining":98}}}"""
+        | _ when request.Path.Contains "/collaborators/" -> ok """{"permission":"write","user":{"node_id":"U_fixture"}}"""
+        | _ -> None
+
+    let withIntake fallback request =
+        match intakeResponse request with Some response -> response | None -> fallback request
+
     let routeJson subject route agent workId =
         let specHome, gates =
             match route, workId with

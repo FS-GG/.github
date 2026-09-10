@@ -449,7 +449,7 @@ module TakeFallthroughTests =
     /// gone by — everything before that is the scan, and the scan must see every lane FREE or there is no
     /// race to lose.
     let private world (behaviour: Map<int, Rival>) (threads: Dictionary<int, Lane>) =
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with

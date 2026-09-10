@@ -228,7 +228,7 @@ module ClaimLifecycleDestinationTests =
                 Error(Errors.NotFound $"the fixture serves no GraphQL document: %s{document}")
 
         let transport =
-            Fake.Recorder(fun (req: Request) ->
+            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
                 let path = req.Path.Trim '/'
 
                 match req.Method, path with
@@ -529,8 +529,8 @@ module ClaimLifecycleDestinationTests =
         Assert.Equal(1, fixture.Transport.Count "pulls-list FS-GG/FS.GG.SDD")
         Assert.Equal(1, fixture.Transport.Count "git/matching-refs/heads/item/42-")
         Assert.Equal(1, fixture.Transport.Count "graphql FS-GG/FS.GG.SDD#42 Blocked by")
-        Assert.Equal(12, fixture.Transport.RestCalls)
-        Assert.Equal(8, fixture.Transport.GraphQlCalls)
+        Assert.Equal(13, fixture.Transport.RestCalls)
+        Assert.Equal(10, fixture.Transport.GraphQlCalls)
 
     // ---- GATE-INVERSION EVIDENCE (.github#2645, recorded by hand against the mutated binary) -----------
     //

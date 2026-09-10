@@ -70,6 +70,12 @@ on:
   schedule:
     - cron: "17 8 * * *"   # daily, 08:17 UTC
   workflow_dispatch:
+    inputs:
+      retry_transient:
+        description: Wait and retry one transient no-verdict (disable for a prompt diagnostic run)
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -95,13 +101,31 @@ env:
   # backoff) deliberately does not try to outlast that, so the waiting belongs here. A wiring gap is
   # not transient, and is never retried.
   REPOS_AUDIT_RETRY_AFTER_S: "900"
+  # Schedules always retry. A manual diagnostic run may return the same red no-verdict promptly.
+  REPOS_AUDIT_RETRY_TRANSIENT: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_transient }}
 
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # One retry waits through the API's rate-limit window. Leave enough room for both bounded
+    # sweeps; a 15-minute job could expire during its own 900-second wait and never classify retry.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # `scripts/fsgg-coord` rejects a checkout with no fetched default-branch authority. Scheduled
+      # and manually-dispatched runs start from a shallow detached ref, so establish the real remote
+      # ancestry before building or invoking the canonical client; no stale-check bypass is used.
+      - name: Establish default-branch ancestry for the typed client
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          [[ "$DEFAULT_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::invalid default branch name"; exit 1; }
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git show-ref --verify "refs/remotes/origin/$DEFAULT_BRANCH"
+          git merge-base HEAD "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null
 
       # Gathers the exit code; decides nothing. The classification is the named steps below, so the
       # step that goes red is the one that says what happened.
@@ -145,10 +169,56 @@ jobs:
             FS.GG.Net
           permission-administration: read
 
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build the typed repository-policy reader
+        run: |
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Verify the issue-intake perimeter credential
+        id: intake-perimeter
+        timeout-minutes: 3
+        env:
+          INTAKE_TOKEN: ${{ secrets.FSGG_BOARD_INTAKE_AUDIT_TOKEN }}
+        run: |
+          if [ -z "$INTAKE_TOKEN" ]; then
+            echo "::error title=issue-intake perimeter inconclusive::FSGG_BOARD_INTAKE_AUDIT_TOKEN is not configured; complete private-repository visibility cannot be proved."
+            exit 1
+          fi
+
+          repos="$(GITHUB_TOKEN="$INTAKE_TOKEN" GH_TOKEN="$INTAKE_TOKEN" python3 scripts/check-roster-closure.py --org FS-GG --emit-visible-org-repos)"
+          count=0
+          while IFS=/ read -r owner repo; do
+            [ -n "$owner" ] && [ -n "$repo" ] || continue
+            policy="$(GH_TOKEN="$INTAKE_TOKEN" scripts/fsgg-coord graphql repository-policy "$owner" "$repo")"
+            jq -e '.hasIssuesEnabled == false or .issueCreationPolicy == "COLLABORATORS_ONLY"' <<<"$policy" >/dev/null || {
+              echo "::error title=issue-intake policy drift::$owner/$repo permits issue creation beyond collaborators."
+              exit 1
+            }
+            count=$((count + 1))
+          done <<<"$repos"
+          [ "$count" -gt 0 ] || { echo "::error title=issue-intake perimeter inconclusive::Visible enumeration returned no repositories."; exit 1; }
+          echo "issue-intake perimeter: visible repository count=$count; every visible enabled issue tracker is COLLABORATORS_ONLY"
+          complete_repos="$(GITHUB_TOKEN="$INTAKE_TOKEN" GH_TOKEN="$INTAKE_TOKEN" python3 scripts/check-roster-closure.py --org FS-GG --emit-complete-org-repos)"
+          [ "$complete_repos" = "$repos" ] || { echo "::error title=issue-intake perimeter changed during verification::The complete repository set differs from the policy-checked visible set; refusing a mixed observation."; exit 1; }
+          echo "issue-intake perimeter: the same credential also proved the org listing complete"
+
       - name: Audit roster participation
         id: audit
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          # Dedicated read-only perimeter credential. Configure this repository Actions secret with
+          # access to every FS-GG repository plus the organization read permission needed to observe private-repo
+          # totals. It is used only for complete enumeration and typed issue-policy reads. Missing or
+          # partial access yields a visible no-verdict while independent audit sweeps still report.
+          # Validate without printing it: set GITHUB_TOKEN from the secret locally, run
+          # `python scripts/check-roster-closure.py --org FS-GG --emit-complete-org-repos` (11 repos
+          # today), then set GH_TOKEN and run `scripts/fsgg-coord graphql repository-policy FS-GG <repo>`.
+          INTAKE_TOKEN: ${{ secrets.FSGG_BOARD_INTAKE_AUDIT_TOKEN }}
           # Handed to the historical absence-cover sweep ALONE. Every other read this script makes is a
           # public-repo read the run-scoped token makes correctly, and a repo-scoped installation
           # token would 404 the authority itself — so the two are not interchangeable and the script
@@ -157,13 +227,31 @@ jobs:
         run: |
           audit() { rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?; }
 
+          summarize_first() {
+            local line shown=0
+            {
+              echo "### Superseded first-pass no-verdict (retry follows)"
+              while IFS= read -r line && [ "$shown" -lt 20 ]; do
+                case "$line" in
+                  *INCONCLUSIVE*|*REFUSED*|::error::*)
+                    # Step-summary text cannot create stale workflow annotations.
+                    echo "- ${line#::error::}"
+                    shown=$((shown + 1))
+                    ;;
+                esac
+              done <<<"$out"
+              [ "$shown" -gt 0 ] || echo "- exit 2: transient external read failure; no detailed diagnostic line was emitted"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
           audit
           # Exit 2 is the retryable no-verdict: an API failure — a rate limit, an outage — and worth
           # waiting out. Exit 3 is the permanent one — a roster that will not parse, or that names no
           # receiver — a deterministic read of a file in this checkout, so a second identical pass
           # returns an identical answer. Retrying 3 would hold a runner for 15 minutes and still go
           # red. Ask by exit code: the reason string is a diagnostic, not an interface (#335).
-          if [ "$rc" -eq 2 ]; then
+          if [ "$rc" -eq 2 ] && [ "${REPOS_AUDIT_RETRY_TRANSIENT:-true}" = true ]; then
+            summarize_first
             echo "::notice::repos-audit: no verdict on the first pass — re-auditing once in ${REPOS_AUDIT_RETRY_AFTER_S}s, in case that was a rate limit. The first pass's output is superseded and not reported."
             sleep "$REPOS_AUDIT_RETRY_AFTER_S"
             audit
@@ -172,7 +260,7 @@ jobs:
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
       - name: Every declared receiver is wired and current
-        if: steps.audit.outputs.rc == '0'
+        if: ${{ !cancelled() && steps.audit.outputs.rc == '0' }}
         run: |
           echo "### ✅ repos-audit: every declared receiver is wired, and every coordination-kit receiver pins the published FS.GG.Kit" >> "$GITHUB_STEP_SUMMARY"
 
@@ -182,7 +270,7 @@ jobs:
       # actually found was an unrostered adopter, which is a red step that names the wrong subject:
       # the defect this workflow's own comments exist to prevent, re-created in the step that reports.
       - name: 'FINDING: the roster and the real wiring disagree'
-        if: steps.audit.outputs.rc == '1'
+        if: ${{ !cancelled() && steps.audit.outputs.rc == '1' }}
         run: |
           {
             echo "### ❌ repos-audit: the roster does not describe the org"
@@ -204,7 +292,7 @@ jobs:
           exit 1
 
       - name: 'INCONCLUSIVE: a required external read failed (transient — re-run)'
-        if: steps.audit.outputs.rc == '2'
+        if: ${{ !cancelled() && steps.audit.outputs.rc == '2' }}
         run: |
           {
             echo "### ⚠️ repos-audit: inconclusive — nothing was proven"
@@ -235,7 +323,7 @@ jobs:
       # across a completed sweep. What the two causes share is the verdict — nothing was proven, and
       # a re-run reproduces it — so that is what this says.
       - name: 'INCONCLUSIVE: the audit reached no verdict (permanent — a re-run will not help)'
-        if: steps.audit.outputs.rc == '3'
+        if: ${{ !cancelled() && steps.audit.outputs.rc == '3' }}
         run: |
           {
             echo "### ⚠️ repos-audit: inconclusive — the audit reached no verdict"

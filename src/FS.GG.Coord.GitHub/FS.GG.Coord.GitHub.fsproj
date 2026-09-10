@@ -61,6 +61,8 @@
     <Compile Include="QualificationEvidence.fs" />
     <Compile Include="Reads.fsi" />
     <Compile Include="Reads.fs" />
+    <Compile Include="BoardIntake.fsi" />
+    <Compile Include="BoardIntake.fs" />
     <Compile Include="CiReads.fsi" />
     <Compile Include="CiReads.fs" />
     <Compile Include="Writes.fsi" />

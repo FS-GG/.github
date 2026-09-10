@@ -137,7 +137,7 @@ module DeliveryRouteCliTests =
         member _.Bodies = comments |> Seq.map snd |> List.ofSeq
 
     let private world (thread: Thread) =
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with
@@ -471,13 +471,16 @@ module DeliveryRouteCliTests =
     ///
     /// M4 makes the ROUTE READ a complete REST ledger read because a digest chain cannot safely be
     /// decided from a bounded tail. What the property needs is still the ORDERING fact itself, stated
-    /// directly: the EXACT call sequence a refusal makes is `issueBody` then `comment-list`, and NOTHING
+    /// directly: the EXACT call sequence first authorizes intake, then reads `comment-list`, and NOTHING
     /// ELSE — no board bootstrap, no comment-post, no third call of any
     /// kind. `transport.Log` is ordered and complete, so asserting it against the exact expected sequence
     /// is a stronger, more literal restatement of "refusal happens before the board bootstrap" than a
     /// bare count ever was: it catches a bootstrap call appearing ANYWHERE, in ANY position, of ANY kind.
     let private refusedBeforeBootstrap: string list =
-        [ "comment-list FS-GG/FS.GG.SDD 42" ]
+        [ "graphql FS-GG/FS.GG.SDD repository policy"
+          "graphql FS-GG/FS.GG.SDD#42 intake identity"
+          "get FS-GG/FS.GG.SDD collaborators/maintainer/permission"
+          "comment-list FS-GG/FS.GG.SDD 42" ]
 
     [<Fact>]
     let ``#2298 claim refuses with zero writes when NO delivery-route receipt exists`` () =
@@ -537,7 +540,7 @@ module DeliveryRouteCliTests =
     // reads the body from a mutable cell instead.
 
     let private worldWithBody (body: string ref) (thread: Thread) =
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with

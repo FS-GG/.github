@@ -358,7 +358,7 @@ module ClaimOverlapTests =
 
             $"""[{{"id":8070,"body":"<!-- fsgg:claim worker=%s{holder} lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}]"""
 
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with
@@ -552,7 +552,7 @@ module ClaimOverlapTests =
         | _ -> ""
 
     let private waitWorld (thread: WaitThread) =
-        Fake.Recorder(fun (req: Request) ->
+        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
             let path = req.Path.Trim '/'
             match req.Method, path with
             | "POST", "graphql" ->

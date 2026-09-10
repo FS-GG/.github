@@ -16,11 +16,15 @@ module OperationalGraphQl =
         | NoAllowedMethod
 
     type RepositoryPolicy =
-        { IssueCreationPolicy: string
+        { RepositoryId: string
+          IssueCreationPolicy: string
           HasIssuesEnabled: bool
           MergeCommitAllowed: bool
           SquashMergeAllowed: bool
           RebaseMergeAllowed: bool }
+
+    type IssueIntakeIdentity =
+        { IssueId: string; UpdatedAt: string; AuthorId: string; AuthorLogin: string }
 
     type ArchiveRow =
         { ItemId: string
@@ -101,14 +105,15 @@ module OperationalGraphQl =
 
     let repositoryPolicy (transport: IGitHubTransport) (owner: string) (name: string) =
         let subject = $"%s{owner}/%s{name} repository policy"
-        let document = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issueCreationPolicy hasIssuesEnabled mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed} rateLimit{cost remaining}}"
+        let document = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){id issueCreationPolicy hasIssuesEnabled mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed} rateLimit{cost remaining}}"
         GraphQl.read transport (request subject document [ "owner", VString owner; "name", VString name ]) (fun data ->
             match requiredObject subject "repository" data with
             | Error error -> Error error
             | Ok repo ->
                 try
                     Ok
-                        { IssueCreationPolicy = repo.GetProperty("issueCreationPolicy").GetString()
+                        { RepositoryId = repo.GetProperty("id").GetString()
+                          IssueCreationPolicy = repo.GetProperty("issueCreationPolicy").GetString()
                           HasIssuesEnabled = repo.GetProperty("hasIssuesEnabled").GetBoolean()
                           MergeCommitAllowed = repo.GetProperty("mergeCommitAllowed").GetBoolean()
                           SquashMergeAllowed = repo.GetProperty("squashMergeAllowed").GetBoolean()
@@ -120,6 +125,17 @@ module OperationalGraphQl =
         elif policy.RebaseMergeAllowed then Selected Rebase
         elif policy.MergeCommitAllowed then Selected Merge
         else NoAllowedMethod
+
+    let issueIntakeIdentity (transport: IGitHubTransport) owner name number =
+        let subject = $"%s{owner}/%s{name}#%d{number} intake identity"
+        let document = "query IntakeIdentity($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){id updatedAt author{login ... on Node{id}}}} rateLimit{cost remaining}}"
+        GraphQl.read transport (request subject document ["owner",VString owner;"name",VString name;"number",VNumber(float number)]) (fun data ->
+            try
+                let issue = data.GetProperty("repository").GetProperty("issue")
+                let author = issue.GetProperty("author")
+                let value = { IssueId=issue.GetProperty("id").GetString(); UpdatedAt=issue.GetProperty("updatedAt").GetString(); AuthorId=author.GetProperty("id").GetString(); AuthorLogin=author.GetProperty("login").GetString() }
+                if [value.IssueId;value.UpdatedAt;value.AuthorId;value.AuthorLogin] |> List.exists String.IsNullOrWhiteSpace then malformed subject "issue identity, revision, or author was missing" else Ok value
+            with _ -> malformed subject "issue identity, revision, or author was incomplete")
 
     let meterRemaining (transport: IGitHubTransport) =
         let subject = "GraphQL rate meter"
