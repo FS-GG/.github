@@ -39,6 +39,13 @@ class HandoffPublisherTests(unittest.TestCase):
     def stage(self, args, snapshot=None):
         with mock.patch.object(D,"build_host",return_value=snapshot or F.host()): return D.handoff_stage(args)
 
+    def test_checked_in_two_uid_proof_is_bound_to_current_tool_and_provider(self):
+        result=json.loads(pathlib.Path(__file__).with_name("two_uid_handoff_proof.result.json").read_text())
+        script=pathlib.Path(__file__).with_name("two_uid_handoff_proof.py")
+        self.assertEqual(result["status"],"pass")
+        self.assertEqual(result["candidateToolDigest"],hashlib.sha256((ROOT/"tools"/"telemetry-dashboard.py").read_bytes()).hexdigest())
+        self.assertEqual(result["proofScriptDigest"],hashlib.sha256(script.read_bytes()).hexdigest())
+
     def activate(self,outgoing,state,digest):
         args=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
             repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
