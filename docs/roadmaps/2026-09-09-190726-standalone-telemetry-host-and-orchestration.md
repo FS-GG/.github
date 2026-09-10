@@ -126,7 +126,7 @@ flowchart TD
     B --> E[H1: remote adapter and minimal receiver]
     E --> F[H2: host package and deployment rehearsal]
     F --> G[H3: Main activation and container recreation proof]
-    G --> P[P1: optional publication migration]
+    G --> P[P1: selected publication migration]
     A --> O[O0: orchestration contract and persistence design]
     O --> Q[O1: observer and shadow implementation]
     Q --> R[O2: trusted bounded pilot]
@@ -141,15 +141,18 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [x] R0 — Ownership and implementation inputs: [decision record](../coordination/standalone-telemetry-r0-decisions.md). Documentation-only delivery; no package or host activation claimed.
 - [x] R1 — Shared receipt, identity and storage correctness: [contract and qualification](../reference/telemetry-receipts.md); additive schema 9, shared adapter API, 79 focused tests including eight real process-exit boundaries. Source delivery only; remote deployment remains pending.
 - [x] L1 — Standalone activation and workflow integration: [activation and storage contract](../reference/local-telemetry-store.md) and [source/package evidence](../reports/evidence/2026-09-10-standalone-telemetry-l1.md). Linux x64 source/package qualification covers explicit local assessment or refusal, remote lossy recovery, repository association and advisory workflow capture. Source delivery only; L2 owns the exact public release and complete dashboard proof.
-- [ ] L2 — Packaged dashboard and standalone release proof. [Source and release-path evidence](../reports/evidence/2026-09-10-standalone-telemetry-l2.md) is prepared; exact coherent 0.88.0 publication and the qualified public-package journey remain pending.
+- [x] L2 — Packaged dashboard and standalone release proof. [Source and release evidence](../reports/evidence/2026-09-10-standalone-telemetry-l2.md) binds coherent 0.88.0, both verified feeds, the qualified public-only installed journey, retained history and measured runtime/restore budgets on eligible ext4.
 - [x] H1 — Remote adapter and minimal receiver: [source contract and synthetic qualification](../reference/standalone-telemetry-receiver.md); shared R1 store implementation, closed HTTPS contracts/client, optional bounded Akka receiver and focused TLS/restart fixtures. Source delivery only; no package release, Main installation, production route or activation claimed.
-- [ ] H2 — Immutable host packaging and deployment rehearsal. [Source/package candidate evidence](../reports/evidence/2026-09-10-standalone-telemetry-h2.md) is prepared; protected release and qualified Main rehearsal remain pending.
+- [x] H2 — Immutable host packaging and deployment rehearsal: [release and deployment evidence](../reports/evidence/2026-09-10-standalone-telemetry-h2.md). Host 0.1.1 is immutable and verified on both feeds; the accepted SystemAdmin consumer ran the real rootless Podman installation, authentication, crash/restart, backup/restore and refusal journey on isolated eligible storage. Main activation, cross-version rollback and physical power-loss qualification remain H3 work.
 - [ ] H3 — Main activation and container durability proof.
-- [ ] P1 — Optional publication migration (not selected; retain incumbent publisher).
+- [ ] P1 — Selected publication migration. The [atomic aggregate handoff and handoff-only publisher source](https://github.com/FS-GG/.github/pull/3407) was accepted at head `d00c64d2784489e8b673a51584daaadfffe3ca9d`, merge `5d036dc3ef307a72d8f7410719f5aaf75ea267ff`; all 17 post-merge checks passed, and an independent numerical two-UID proof passed. Its [SystemAdmin consumer](https://github.com/EHotwagner/SystemAdmin/pull/9) was accepted at head `5ed2dc07e50026c0b5b193ac40e4467314c68720`, merge `5c6c20894f9435e6ba8a9da14fce57ddc5a3dd84`; native run `34457259899` and post-merge run `34457405977` passed. Retain the incumbent publisher until the replacement path is independently qualified on Main, the exact cutover is authorized, prior state is reconciled and recurrence is disabled; the accepted source has not changed the live publisher.
 - [x] O0 — Orchestration state and runner contract: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/355), merge `616207d56fedb600f71dc860fbf7603497502f75`. Sixteen tests on PostgreSQL 18.6 exercised the real containerized database and the post-merge suite passed; Main pilot and upstream acceptance remain owned by O1–O3.
 - [x] O1 — Read-only observer and shadow evaluation: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/356), merge `64acf326a3bdada6680a1f2c8b571220fc71a695`. The accepted source and all post-merge checks passed; candidate dispatch remains absent and Main pilot authority remains owned by O2.
-- [ ] O2 — Trusted bounded Main pilot.
+- [ ] O2 — Trusted bounded Main pilot. The [typed adapter and pilot source](https://github.com/FS-GG/FS.GG.Coordination/pull/357) was accepted at merge `ea356adfcfdb13fab6e71989e3aed310d094af6d`, and all three post-merge workflows passed. The actual Main pilot, its selected scope and native delivery readback remain pending.
 - [ ] O3 — Controlled adoption.
+
+Eight of the twelve selected milestones are complete (about 67%). P1 is now
+selected and pending; it was previously outside the selected milestone count.
 
 Execution uses the routine route under the user's September 9 instruction to complete this roadmap and make necessary decisions. The proposal's earlier document-only authorization records its original scope; it does not undo that later execution instruction. Stronger runner credential isolation remains deferred. Existing upstream gates and independently checked operation boundaries remain in force.
 
@@ -205,11 +208,11 @@ Use a disposable producer/container fixture to submit a prospective observation,
 
 Exit: host restart, producer recreation and credential rotation preserve accepted history and identity. Missing ingestion is visible independently of service/timer health. The tested operator guide is delivered with the release.
 
-### P1 — Optional publication migration
+### P1 — Selected publication migration
 
-Only if publication is selected, move to the separate publisher account/process after validating aggregate handoff, labels, approval digest, fixed destination credentials, last-good retention and exact remote readback. Reconcile prior publisher state and deactivate its recurrence before enabling a replacement. Test ambiguous pushes and restart without duplicate publication.
+Publication migration is selected. Move to the separate publisher account/process only after validating aggregate handoff, labels, approval digest, fixed destination credentials, last-good retention and exact remote readback. Reconcile prior publisher state and deactivate its recurrence before enabling a replacement. Test ambiguous pushes and restart without duplicate publication.
 
-Exit: a single authorized publisher operates; private dashboards still need no publication credential. Skipping P1 does not block H3 or L2.
+Exit: a single authorized publisher operates; private dashboards still need no publication credential. Selection alone does not authorize cutover or deactivate the incumbent.
 
 ### O0 — Orchestration state and runner contract
 
@@ -376,7 +379,7 @@ For removal, stop relevant dispatch/admission/publication, reconcile pending obl
 
 ## 8. Completion and deferred follow-up
 
-The initial telemetry outcome is complete when R0/R1, L1/L2 and H1/H2/H3 have their respective accepted evidence and the selected Main integration is verified. P1 is optional. Orchestration is independently complete only to the explicitly selected O-stage; no telemetry milestone requires it.
+The initial telemetry outcome is complete when R0/R1, L1/L2, H1/H2/H3 and the selected P1 migration have their respective accepted evidence and the selected Main integration is verified. Orchestration is independently complete only to the explicitly selected O-stage; no telemetry milestone requires it.
 
 Before execution, resolve exact package/source ownership, audience-accessible feed, supported runtime matrix, measurable budgets, workspace mapping, retention defaults, host route/TLS and backup objectives. Before orchestration pilot, resolve operational persistence, durable candidate storage, existing upstream gates, trust scope and startup policy. Implementers should propose concrete defaults and bundle human decisions instead of repeatedly seeking approval for routine details.
 

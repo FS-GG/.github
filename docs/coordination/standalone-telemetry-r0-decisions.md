@@ -70,7 +70,15 @@ receipt recovery cost grows with the outstanding backlog.
 
 ## Operational decisions and remaining evidence
 
-Retain the incumbent public publisher; P1 is not selected. Select private local dashboards and, for Main, separately authenticated workspace-scoped browser access. No producer credential grants browsing. Choose paused startup for the initial trusted orchestration pilot, one runner, no untrusted contributors and no automatic budget renewal. O0/O2 must bind actual item scope and finite inference budget to existing upstream authority before dispatch.
+P1 publication migration is selected as of 2026-09-10. Retain the incumbent
+public publisher until the replacement is independently qualified, its exact
+cutover is authorized, prior state is reconciled, and recurrence is disabled;
+selection alone changes no live publisher. Select private local dashboards and,
+for Main, separately authenticated workspace-scoped browser access. No producer
+credential grants browsing. Choose paused startup for the initial trusted
+orchestration pilot, one runner, no untrusted contributors and no automatic
+budget renewal. O0/O2 must bind actual item scope and finite inference budget
+to existing upstream authority before dispatch.
 
 SystemAdmin prerequisites are independent: safe replacement/reuse, actual container-to-Main route and TLS, narrowly scoped credential provisioning, privileged service management and an isolated recovery/browser test environment. H2 must inspect available host configuration and produce exact addresses/accounts/paths and artifact digests; these cannot be fabricated from a design. H3 uses disposable producer fixtures and never deletes the user's working container. No host mount, D-Bus or Podman socket is restored.
 
