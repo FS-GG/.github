@@ -25,6 +25,10 @@ test("real Host browser journey uses scoped secure session",async({page,context}
   await expect(page.locator('[name="accessKey"]')).toHaveValue("");
   expect(page.url()).not.toContain(accessKey);
   await expect(page.locator(`#workspace option[value="${knownWorkspace}"]`)).toHaveCount(1);
+  const unknown=page.getByRole("listitem").filter({hasText:"unknown-item"});
+  const zero=page.getByRole("listitem").filter({hasText:"zero-item"});
+  await expect(unknown.locator(".metric")).toHaveText("unknown tokens · unknown/unknown terminal");
+  await expect(zero.locator(".metric")).toHaveText("0 tokens · 0/0 terminal");
   const cookies=await context.cookies(baseURL);
   const session=cookies.find(cookie=>cookie.name==="__Host-fsgg_session");
   expect(session).toMatchObject({secure:true,httpOnly:true,sameSite:"Strict",path:"/"});

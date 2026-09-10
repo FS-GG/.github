@@ -4,7 +4,7 @@
   const post = (path, body = {}) => fetch(path, {method:"POST",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json"},cache:"no-store",body:JSON.stringify(body)});
   const text = (node, value) => { node.textContent = value; };
   const element = (name, value, className) => { const node=document.createElement(name); if(className)node.className=className; text(node,value); return node; };
-  const count = (value) => new Intl.NumberFormat().format(value);
+  const count = (value) => value == null ? "unknown" : new Intl.NumberFormat().format(value);
   let workspaces = [];
   function showLogin(failed = false) { $("dashboard").hidden=true; $("logout").hidden=true; $("login").hidden=false; $("login-error").hidden=!failed; }
   function startSession(session) {
