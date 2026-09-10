@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify the audit fixture
         run: bash tests/projects-audit/run.sh
       # The Coordination board is org-owned and private. A repository GITHUB_TOKEN cannot read it;
