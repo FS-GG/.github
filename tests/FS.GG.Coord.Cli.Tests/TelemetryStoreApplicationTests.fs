@@ -129,6 +129,115 @@ module TelemetryStoreApplicationTests =
         Assert.False(duringDocument.RootElement.GetProperty("revision").GetString() = afterDocument.RootElement.GetProperty("revision").GetString())
 
     [<Fact>]
+    let ``scoped dashboard binds workspace and refuses unprovenanced batches`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> Result.isOk)
+        Assert.Equal(Error ["projection-unavailable"], TelemetryStoreApplication.scopedDashboardSnapshot path approved "workspace-b" None)
+        match TelemetryStoreApplication.publish path approved (batch "legacy-after-enrollment" "usage-legacy" 0L "legacy" 10L) with
+        | Error ["scoped-store-requires-receipt-ingestion"] -> ()
+        | other -> failwithf "unexpected scoped publish result: %A" other
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO ingest_batches(ingest_id,content_digest,source_identity,generation,cursor,accepted_count,replay_count) VALUES('legacy-unassigned','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','legacy','g1','c1',0,0);"
+        command.ExecuteNonQuery() |> ignore
+        Assert.Equal(Error ["projection-unavailable"], TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None)
+
+    [<Fact>]
+    let ``scoped dashboard accepts only applied receipt batch provenance`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        let envelope = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-a","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":0}}]}}}}"""
+        TelemetryReceipt.parse envelope |> unwrap |> ignore
+        TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
+        TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap |> ignore
+        let rejectedEnvelope=Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-b","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"conflicting-native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"2","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-b","revision":0}}]}}}}"""
+        TelemetryStoreApplication.submitReceipt path approved scope rejectedEnvelope |> unwrap |> ignore
+        TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap |> ignore
+        use snapshot=JsonDocument.Parse(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> unwrap)
+        let operational=snapshot.RootElement.GetProperty("operational")
+        Assert.Equal(0L,operational.GetProperty("pendingBatches").GetInt64())
+        Assert.Equal(1L,operational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(1L,operational.GetProperty("rejectedReceipts").GetInt64())
+        Assert.Equal("database-transaction",operational.GetProperty("consistency").GetString())
+
+    [<Fact>]
+    let ``scoped provenance proof remains receipt-linear across pages`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        do
+            use populated=new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+            populated.Open()
+            use transaction=populated.BeginTransaction()
+            for revision in 0..299 do
+                let batchId=$"batch-{revision:D3}"
+                let digest=String(char(int 'a' + revision % 6),64)
+                use receipt=populated.CreateCommand()
+                receipt.Transaction<-transaction
+                receipt.CommandText<-"INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state,code,terminal_utc) VALUES($producer,$batch,'runtime',$digest,1,'applied','applied','2026-09-10T00:00:00Z');"
+                receipt.Parameters.AddWithValue("$producer",scope.Producer) |> ignore
+                receipt.Parameters.AddWithValue("$batch",batchId) |> ignore
+                receipt.Parameters.AddWithValue("$digest",digest) |> ignore
+                receipt.ExecuteNonQuery() |> ignore
+                use ingest=populated.CreateCommand()
+                ingest.Transaction<-transaction
+                ingest.CommandText<-"INSERT INTO ingest_batches(ingest_id,content_digest,source_identity,generation,cursor,accepted_count,replay_count) VALUES($id,$digest,'native-source','g1',$cursor,1,0);"
+                ingest.Parameters.AddWithValue("$id","receipt-"+TelemetryReceipt.key scope.Producer batchId) |> ignore
+                ingest.Parameters.AddWithValue("$digest",digest) |> ignore
+                ingest.Parameters.AddWithValue("$cursor",string revision) |> ignore
+                ingest.ExecuteNonQuery() |> ignore
+            transaction.Commit()
+        let mutable keyComputations=0
+        let hooks:TelemetryStoreApplication.ScopedDashboardSnapshotHooks =
+            { AfterFirstRead=ignore; ReceiptKeyComputed=fun ()->keyComputations<-keyComputations+1 }
+        TelemetryStoreApplication.scopedDashboardSnapshotWithHooks path approved scope.Workspace hooks None |> unwrap |> ignore
+        Assert.Equal(300,keyComputations)
+        use connection=new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use plan=connection.CreateCommand()
+        plan.CommandText <- "EXPLAIN QUERY PLAN SELECT rowid,producer,batch,digest FROM transport_receipts NOT INDEXED WHERE rowid>$cursor AND state='applied' ORDER BY rowid LIMIT 256;"
+        plan.Parameters.AddWithValue("$cursor",0L) |> ignore
+        use reader=plan.ExecuteReader()
+        let details=[|while reader.Read() do yield reader.GetString 3|]
+        Assert.Contains(details,fun detail->detail.Contains("INTEGER PRIMARY KEY",StringComparison.Ordinal))
+        Assert.DoesNotContain(details,fun detail->detail.Contains("TEMP B-TREE",StringComparison.Ordinal))
+
+    [<Fact>]
+    let ``receipt backup restores pending obligation into fresh root`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        let backup=path+"-backup"
+        let restored=path+"-restored"
+        try
+            TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+            let scope:TelemetryReceipt.Scope={Workspace="workspace-a";Producer="producer-a";Stream="runtime"}
+            TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+            let envelope=Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-a","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":0}}]}}}}"""
+            TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
+            use pendingSnapshot=JsonDocument.Parse(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> unwrap)
+            Assert.Equal(1L,pendingSnapshot.RootElement.GetProperty("operational").GetProperty("pendingBatches").GetInt64())
+            TelemetryStoreApplication.backupReceiptStore path approved scope.Workspace backup |> unwrap |> ignore
+            TelemetryStoreApplication.restoreReceiptStore backup restored approved scope.Workspace |> unwrap |> ignore
+            let receipt=TelemetryStoreApplication.lookupReceipt restored approved scope "batch-a" |> unwrap
+            Assert.Contains("\"status\":\"durably-received\"",receipt)
+            TelemetryStoreApplication.drainReceipts restored approved scope.Workspace |> unwrap |> ignore
+            Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot restored approved scope.Workspace None |> Result.isOk)
+        finally
+            if Directory.Exists backup then Directory.Delete(backup,true)
+            if Directory.Exists restored then Directory.Delete(restored,true)
+
+    [<Fact>]
     let ``UTEL-02 live writer is never displaced and leaves ready batch queued`` () =
         if OperatingSystem.IsLinux() then
             let cleanup, path = root ()

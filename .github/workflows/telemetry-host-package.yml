@@ -1,0 +1,122 @@
+name: telemetry-host-package
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Telemetry.Host/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs"
+      - "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fsi"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "tests/FS.GG.Telemetry.Tests/**"
+      - "tests/FS.GG.Telemetry.Dashboard.Tests/**"
+      - "tests/FS.GG.Telemetry.Browser.Tests/**"
+      - "tests/standalone-telemetry-host-package/**"
+      - "tests/telemetry-host-release/**"
+      - "scripts/telemetry-host-release.py"
+      - ".github/workflows/telemetry-host-package.yml"
+      - ".github/workflows/release-telemetry-host.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Telemetry.Host/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs"
+      - "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fsi"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "tests/FS.GG.Telemetry.Tests/**"
+      - "tests/FS.GG.Telemetry.Dashboard.Tests/**"
+      - "tests/FS.GG.Telemetry.Browser.Tests/**"
+      - "tests/standalone-telemetry-host-package/**"
+      - "tests/telemetry-host-release/**"
+      - "scripts/telemetry-host-release.py"
+      - ".github/workflows/telemetry-host-package.yml"
+      - ".github/workflows/release-telemetry-host.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-host-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore the locked host closure
+        run: |
+          dotnet restore src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj --locked-mode
+      - name: Test the host, projection, and browser boundaries
+        env:
+          FSGG_RUN_REAL_BROWSER: "1"
+        run: |
+          cd tests/FS.GG.Telemetry.Browser.Tests || exit 2
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          cd ../.. || exit 2
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore
+      - name: Pack twice from independent clean source roots
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/telemetry-host-pack-a" "$GITHUB_SHA"
+          git worktree add --detach "$RUNNER_TEMP/telemetry-host-pack-b" "$GITHUB_SHA"
+          for root in "$RUNNER_TEMP/telemetry-host-pack-a" "$RUNNER_TEMP/telemetry-host-pack-b"; do
+            dotnet restore "$root/src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj" --locked-mode
+            output="artifacts/$(basename "$root")"
+            mkdir -p "$output"
+            dotnet pack "$root/src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj" -c Release --no-restore -o "$GITHUB_WORKSPACE/$output"
+          done
+      - name: Bind and compare normalized producer payloads
+        run: |
+          package_a=artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.0.1.0.nupkg
+          package_b=artifacts/telemetry-host-pack-b/FS.GG.Telemetry.Host.0.1.0.nupkg
+          python3 scripts/telemetry-host-release.py prepare --package "$package_a" \
+            --lock src/FS.GG.Telemetry.Host/packages.lock.json \
+            --assets src/FS.GG.Telemetry.Dashboard/Assets --source-sha "$GITHUB_SHA" \
+            --version 0.1.0 --tag telemetry-host/v0.1.0 --output artifacts/telemetry-host-manifest.json
+          python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_a"
+          python3 scripts/telemetry-host-release.py verify --manifest artifacts/telemetry-host-manifest.json --package "$package_b" --payload-only
+          bash tests/standalone-telemetry-host-package/run.sh "$package_a" artifacts/telemetry-host-package-evidence.json
+          bash tests/telemetry-host-release/run.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-host-candidate-${{ github.sha }}
+          path: |
+            artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.0.1.0.nupkg
+            artifacts/telemetry-host-manifest.json
+            artifacts/telemetry-host-package-evidence.json
+          if-no-files-found: error
+          retention-days: 14

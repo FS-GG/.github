@@ -58,6 +58,7 @@ type private SlowContent(started:TaskCompletionSource<unit>) =
 
 module RemoteTelemetryTests =
     let scope:TelemetryReceipt.Scope={Workspace="workspace-a";Producer="producer-a";Stream="runtime"}
+    let browserSession={IdleSeconds=300;AbsoluteSeconds=3600;MaximumSessions=32;LoginAttemptsPerMinute=16;LoginAdmission=4;QueryAdmission=4;QueryTimeoutSeconds=10}
     let makeEnvelope (who:TelemetryReceipt.Scope) batch revision = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{who.Workspace}","producerId":"{who.Producer}","streamId":"{who.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":{revision}}}]}}}}"""
     let envelope batch = makeEnvelope scope batch 0
     let receipt batch status =
@@ -145,7 +146,7 @@ module RemoteTelemetryTests =
     [<Fact>]
     let ``host config rejects multiple or non-origin listeners`` () =
         for listen in ["https://127.0.0.1:5001/;http://127.0.0.1:5002";"https://user@127.0.0.1:5001";"https://127.0.0.1:5001/path"] do
-            let candidate={ListenUrl=listen;CertificatePath="/missing";CertificatePasswordFile="/missing";ServiceLockPath="/tmp/fsgg.lock";Stores=[||];Credentials=[||]}
+            let candidate={Schema="fsgg.telemetry.host-config/1";ListenUrl=listen;CertificatePath="/missing";CertificatePasswordFile="/missing";ServiceLockPath="/tmp/fsgg.lock";Stores=[||];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             let errors=match Configuration.validate candidate with Error values->values|Ok _->failwith "invalid listener accepted"
             Assert.Contains("listenUrl must be one HTTPS origin",errors)
 
@@ -158,7 +159,7 @@ module RemoteTelemetryTests =
             let link=Path.Combine(root,"link")
             File.WriteAllText(secret,String('s',32)); File.SetUnixFileMode(secret,UnixFileMode.UserRead ||| UnixFileMode.GroupRead)
             File.CreateSymbolicLink(link,secret) |> ignore
-            let candidate={ListenUrl="https://127.0.0.1:1";CertificatePath=secret;CertificatePasswordFile=secret;ServiceLockPath=Path.Combine(root,"lock");Stores=[|{WorkspaceId="workspace-a";Root=Path.Combine(root,"store")}|];Credentials=[|{Reference="producer";SecretFile=link;WorkspaceId="workspace-a";ProducerId="producer-a";StreamId="runtime";Revoked=false}|]}
+            let candidate={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath=secret;CertificatePasswordFile=secret;ServiceLockPath=Path.Combine(root,"lock");Stores=[|{WorkspaceId="workspace-a";Root=Path.Combine(root,"store")}|];Credentials=[|{Reference="producer";SecretFile=link;WorkspaceId="workspace-a";ProducerId="producer-a";StreamId="runtime";Revoked=false}|];BrowserPrincipals=[||];BrowserSession=browserSession}
             let errors=match Configuration.validate candidate with Error values->values|Ok _->failwith "invalid config accepted"
             Assert.Contains<string>(errors,fun e->e.Contains("symbolic link"))
             Assert.Contains<string>(errors,fun e->e.Contains("permissions"))
@@ -183,7 +184,7 @@ module RemoteTelemetryTests =
                     command.Parameters.AddWithValue("$p",enrolled.Producer)|>ignore;command.Parameters.AddWithValue("$b",string batch)|>ignore;command.Parameters.AddWithValue("$d",String('a',64))|>ignore
                     command.ExecuteNonQuery()|>ignore
                 transaction.Commit()
-            let config={ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=stores[0]};{WorkspaceId="workspace-1";Root=stores[1]}|];Credentials=[||]}
+            let config={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=stores[0]};{WorkspaceId="workspace-1";Root=stores[1]}|];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             use state=new Runtime.HostState(config,fun _->TelemetryStore.ApprovedLocalDurable)
             let incoming={scope with Workspace="workspace-0";Producer="producer-0"}
             let bytes=envelope "overload" |> fun value->Encoding.UTF8.GetString(value).Replace("workspace-a","workspace-0").Replace("producer-a","producer-0") |> Encoding.UTF8.GetBytes
@@ -227,7 +228,7 @@ module RemoteTelemetryTests =
                         command.ExecuteNonQuery()|>ignore
                         if storeIndex=0 && producerIndex=0 && batchIndex=0 then replayScope<-enrolled;replayBytes<-bytes
                 transaction.Commit()
-            let config={ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=roots[0]};{WorkspaceId="workspace-1";Root=roots[1]}|];Credentials=[||]}
+            let config={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=roots[0]};{WorkspaceId="workspace-1";Root=roots[1]}|];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             use state=new Runtime.HostState(config,fun _->TelemetryStore.ApprovedLocalDurable)
             let newBytes=makeEnvelope replayScope "new-batch" 0
             let! overloaded=Runtime.submit state replayScope newBytes CancellationToken.None
@@ -277,6 +278,7 @@ module RemoteTelemetryTests =
             let rotatedTokenPath=Path.Combine(root,"producer-token-rotated")
             let revokedTokenPath=Path.Combine(root,"producer-token-revoked")
             let otherTokenPath=Path.Combine(root,"other-token")
+            let browserKeyPath=Path.Combine(root,"browser-key.json")
             let configPath=Path.Combine(root,"host.json")
             let lockPath=Path.Combine(root,"host.lock")
             File.WriteAllBytes(certificatePath,certificate.Export(X509ContentType.Pfx,password))
@@ -285,16 +287,23 @@ module RemoteTelemetryTests =
             let rotatedToken=String('r',48)
             let revokedToken=String('v',48)
             let otherToken=String('o',48)
+            let browserAccessKey=Convert.ToBase64String(RandomNumberGenerator.GetBytes 32).TrimEnd('=').Replace('+','-').Replace('/','_')
             File.WriteAllText(tokenPath,token)
             File.WriteAllText(rotatedTokenPath,rotatedToken)
             File.WriteAllText(revokedTokenPath,revokedToken)
             File.WriteAllText(otherTokenPath,otherToken)
-            for path in [certificatePath;passwordPath;tokenPath;rotatedTokenPath;revokedTokenPath;otherTokenPath] do File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-            let json=$"""{{"ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}]}}"""
+            let browserHash=Convert.ToHexString(SHA256.HashData(Convert.FromBase64String(browserAccessKey.Replace('-','+').Replace('_','/')+"="))).ToLowerInvariant()
+            File.WriteAllText(browserKeyPath,$"""{{"schema":"fsgg.telemetry.browser-key/1","algorithm":"sha256","keyHash":"{browserHash}"}}""")
+            for path in [certificatePath;passwordPath;tokenPath;rotatedTokenPath;revokedTokenPath;otherTokenPath;browserKeyPath] do File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let json=$"""{{"Schema":"fsgg.telemetry.host-config/1","ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}],"BrowserPrincipals":[{{"PrincipalId":"operator-a","KeyHashFile":"{browserKeyPath}","WorkspaceIds":["{scope.Workspace}"],"Revoked":false}}],"BrowserSession":{{"IdleSeconds":300,"AbsoluteSeconds":3600,"MaximumSessions":32,"LoginAttemptsPerMinute":16,"LoginAdmission":4,"QueryAdmission":4,"QueryTimeoutSeconds":10}}}}"""
             File.WriteAllText(configPath,json)
             File.SetUnixFileMode(configPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             match Configuration.load configPath with Ok _->()|Error errors->Assert.Fail(sprintf "config rejected: %A" errors)
             let loaded=Configuration.load configPath |> Result.defaultWith(fun e->failwithf "%A" e)
+            Assert.False(File.Exists lockPath)
+            Assert.Equal(0,Operations.runWithAssessment [|"status";"--config";configPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.False(File.Exists lockPath)
+            Assert.Equal(0,Operations.runWithAssessment [|"preflight";"--config";configPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
             let credentials=Configuration.credentials loaded
             let start () = task {
                 let state=new Runtime.HostState(loaded,fun _->TelemetryStore.ApprovedLocalDurable)
@@ -400,6 +409,32 @@ module RemoteTelemetryTests =
             do! secondApp.StopAsync()
             do! secondApp.DisposeAsync().AsTask()
             (secondState:>IDisposable).Dispose()
+            let backupPath=Path.Combine(root,"backup")
+            let restoredRoot=Path.Combine(root,"restored")
+            Assert.Equal(0,Operations.runWithAssessment [|"backup";"--config";configPath;"--output";backupPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            TelemetryStoreApplication.submitReceipt store TelemetryStore.ApprovedLocalDurable scope (envelope "after-backup") |> Result.defaultWith(fun e->failwithf "%A" e) |> ignore
+            TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace |> Result.defaultWith(fun e->failwithf "%A" e) |> ignore
+            let restoredStore=Path.Combine(restoredRoot,scope.Workspace)
+            let restoreConfigPath=Path.Combine(root,"host.restore.json")
+            File.WriteAllText(restoreConfigPath,json.Replace(store,restoredStore))
+            File.SetUnixFileMode(restoreConfigPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            Assert.Equal(0,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";restoredRoot|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.Equal(0,Operations.runWithAssessment [|"preflight";"--config";restoreConfigPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.True(TelemetryStoreApplication.lookupReceipt restoredStore TelemetryStore.ApprovedLocalDurable scope "batch-tls" |> Result.isOk)
+            Assert.Equal(Error ["receipt-unavailable"],TelemetryStoreApplication.lookupReceipt restoredStore TelemetryStore.ApprovedLocalDurable scope "after-backup")
+            let setManifest=Path.Combine(backupPath,"backup-manifest.json")
+            let validSetManifest=File.ReadAllText setManifest
+            for name,invalid in
+                [ "malformed","{"
+                  "wrong-type",validSetManifest.Replace("\"workspaces\":[","\"workspaces\":{")
+                  "open-workspace-entry",validSetManifest.Replace("\"workspaceId\":","\"unexpected\":true,\"workspaceId\":" ) ] do
+                File.WriteAllText(setManifest,invalid)
+                let target=Path.Combine(root,name+"-restore")
+                Assert.Equal(5,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";target|] (fun _->TelemetryStore.ApprovedLocalDurable))
+                Assert.False(Directory.Exists target)
+            File.WriteAllText(setManifest,validSetManifest)
+            File.AppendAllText(Path.Combine(backupPath,scope.Workspace,TelemetryStoreApplication.databaseFileName),"corrupt")
+            Assert.Equal(5,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";Path.Combine(root,"corrupt-restore")|] (fun _->TelemetryStore.ApprovedLocalDurable))
         finally
             Environment.SetEnvironmentVariable("Kestrel__Endpoints__ambient__Url",ambientEndpoint)
             if Directory.Exists root then Directory.Delete(root,true) }

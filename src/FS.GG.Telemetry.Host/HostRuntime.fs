@@ -16,7 +16,8 @@ open FS.GG.Coord.Cli
 
 type StoreConfig = { WorkspaceId:string; Root:string }
 type CredentialConfig = { Reference:string; SecretFile:string; WorkspaceId:string; ProducerId:string; StreamId:string; Revoked:bool }
-type HostConfig = { ListenUrl:string; CertificatePath:string; CertificatePasswordFile:string; ServiceLockPath:string; Stores:StoreConfig array; Credentials:CredentialConfig array }
+type BrowserSessionConfig = { IdleSeconds:int; AbsoluteSeconds:int; MaximumSessions:int; LoginAttemptsPerMinute:int; LoginAdmission:int; QueryAdmission:int; QueryTimeoutSeconds:int }
+type HostConfig = { Schema:string; ListenUrl:string; CertificatePath:string; CertificatePasswordFile:string; ServiceLockPath:string; Stores:StoreConfig array; Credentials:CredentialConfig array; BrowserPrincipals:BrowserPrincipalConfig array; BrowserSession:BrowserSessionConfig }
 type AuthEntry = { Scope:TelemetryReceipt.Scope; TokenHash:byte array; Revoked:bool }
 
 module Configuration =
@@ -32,6 +33,7 @@ module Configuration =
                 if (mode &&& forbidden) <> enum 0 then Error "credential file permissions must be private" else Ok ()
     let validate config =
         let errors = ResizeArray<string>()
+        if config.Schema <> "fsgg.telemetry.host-config/1" then errors.Add "host configuration schema is invalid"
         if not (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) || RuntimeInformation.ProcessArchitecture<>Architecture.X64 then errors.Add "host supports Linux x64 only"
         match Uri.TryCreate(config.ListenUrl,UriKind.Absolute) with
         | true,u when u.Scheme=Uri.UriSchemeHttps && String.IsNullOrEmpty u.UserInfo && u.AbsolutePath="/" && String.IsNullOrEmpty u.Query && String.IsNullOrEmpty u.Fragment && not(config.ListenUrl.Contains ';') && config.ListenUrl=u.GetLeftPart(UriPartial.Authority) -> ()
@@ -41,6 +43,7 @@ module Configuration =
         match privateRegularFile config.CertificatePasswordFile with Error e->errors.Add e|Ok()->()
         if not (Path.IsPathFullyQualified config.ServiceLockPath) then errors.Add "serviceLockPath must be absolute"
         if config.Stores.Length=0 then errors.Add "at least one enrolled store is required"
+        elif config.Stores.Length>128 then errors.Add "host workspace capacity exceeds 128"
         let roots = HashSet<string>(StringComparer.Ordinal)
         let workspaces = HashSet<string>(StringComparer.Ordinal)
         for store in config.Stores do
@@ -62,6 +65,23 @@ module Configuration =
                 let scope:TelemetryReceipt.Scope={Workspace=credential.WorkspaceId;Producer=credential.ProducerId;Stream=credential.StreamId}
                 match tokens.TryGetValue token with | true,prior when prior<>scope -> errors.Add "credential secret is assigned to incompatible scopes" | false,_ -> tokens[token]<-scope | _ -> ()
         if producers.Count > 128 then errors.Add "host producer capacity exceeds 128"
+        let principals = HashSet<string>(StringComparer.Ordinal)
+        for principal in config.BrowserPrincipals do
+            if not (TelemetryReceipt.validId principal.PrincipalId) || not (principals.Add principal.PrincipalId) then errors.Add "invalid browser principal"
+            if principal.WorkspaceIds.Length=0 || principal.WorkspaceIds.Length>128 || principal.WorkspaceIds |> Array.distinct |> Array.length <> principal.WorkspaceIds.Length || principal.WorkspaceIds |> Array.exists (fun workspace -> not (workspaces.Contains workspace)) then errors.Add "invalid browser workspace allowlist"
+            match privateRegularFile principal.KeyHashFile with
+            | Error error -> errors.Add error
+            | Ok () ->
+                try
+                    let bytes=File.ReadAllBytes principal.KeyHashFile
+                    if bytes.Length>1024 then errors.Add "browser key file is oversized" else
+                    use document=JsonDocument.Parse bytes
+                    let propertyNames=document.RootElement.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    let hash=document.RootElement.GetProperty("keyHash").GetString()
+                    if propertyNames.Length<>3 || Array.distinct propertyNames |> Array.length<>3 || Set.ofArray propertyNames<>set["schema";"algorithm";"keyHash"] || document.RootElement.GetProperty("schema").GetString()<>"fsgg.telemetry.browser-key/1" || document.RootElement.GetProperty("algorithm").GetString()<>"sha256" || isNull hash || hash.Length<>64 || hash |> Seq.exists(fun c -> not(Char.IsAsciiHexDigit c) || Char.IsLetter(c) && Char.IsUpper(c)) then errors.Add "browser key file schema is invalid"
+                with _ -> errors.Add "browser key file schema is invalid"
+        let session=config.BrowserSession
+        if session.IdleSeconds<60 || session.IdleSeconds>3600 || session.AbsoluteSeconds<session.IdleSeconds || session.AbsoluteSeconds>43200 || session.MaximumSessions<1 || session.MaximumSessions>1024 || session.LoginAttemptsPerMinute<1 || session.LoginAttemptsPerMinute>256 || session.LoginAdmission<1 || session.LoginAdmission>32 || session.QueryAdmission<1 || session.QueryAdmission>32 || session.QueryTimeoutSeconds<1 || session.QueryTimeoutSeconds>30 then errors.Add "invalid browser session bounds"
         if errors.Count=0 then Ok config else Error(List.ofSeq errors)
     let load (path:string) =
         try
@@ -75,10 +95,12 @@ module Configuration =
                 let closed (element:JsonElement) expected =
                     let names=element.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
                     names.Length=Set.count expected && Array.distinct names |> Array.length = names.Length && Set.ofArray names=expected
-                let top=set["ListenUrl";"CertificatePath";"CertificatePasswordFile";"ServiceLockPath";"Stores";"Credentials"]
+                let top=set["Schema";"ListenUrl";"CertificatePath";"CertificatePasswordFile";"ServiceLockPath";"Stores";"Credentials";"BrowserPrincipals";"BrowserSession"]
                 let store=set["WorkspaceId";"Root"]
                 let credential=set["Reference";"SecretFile";"WorkspaceId";"ProducerId";"StreamId";"Revoked"]
-                if not(closed document.RootElement top) || document.RootElement.GetProperty("Stores").EnumerateArray() |> Seq.exists(fun x->not(closed x store)) || document.RootElement.GetProperty("Credentials").EnumerateArray() |> Seq.exists(fun x->not(closed x credential)) then Error ["host configuration schema is invalid"]
+                let principal=set["PrincipalId";"KeyHashFile";"WorkspaceIds";"Revoked"]
+                let session=set["IdleSeconds";"AbsoluteSeconds";"MaximumSessions";"LoginAttemptsPerMinute";"LoginAdmission";"QueryAdmission";"QueryTimeoutSeconds"]
+                if not(closed document.RootElement top) || document.RootElement.GetProperty("Stores").EnumerateArray() |> Seq.exists(fun x->not(closed x store)) || document.RootElement.GetProperty("Credentials").EnumerateArray() |> Seq.exists(fun x->not(closed x credential)) || document.RootElement.GetProperty("BrowserPrincipals").EnumerateArray() |> Seq.exists(fun x->not(closed x principal)) || not(closed (document.RootElement.GetProperty("BrowserSession")) session) then Error ["host configuration schema is invalid"]
                 else
                     let options = JsonSerializerOptions(PropertyNameCaseInsensitive=false,UnmappedMemberHandling=Serialization.JsonUnmappedMemberHandling.Disallow)
                     JsonSerializer.Deserialize<HostConfig>(bytes,options) |> validate
@@ -88,6 +110,12 @@ module Configuration =
             let token = File.ReadAllText(c.SecretFile).Trim()
             if token.Length < 32 || token.Length > 4096 then invalidOp "credential secret length is invalid"
             c.Reference,{ Scope={Workspace=c.WorkspaceId;Producer=c.ProducerId;Stream=c.StreamId}; TokenHash=SHA256.HashData(System.Text.Encoding.UTF8.GetBytes token); Revoked=c.Revoked }) |> Map.ofArray
+    let browserKeyHashes config =
+        config.BrowserPrincipals
+        |> Array.map(fun principal ->
+            use document=JsonDocument.Parse(File.ReadAllBytes principal.KeyHashFile)
+            principal.PrincipalId,(Convert.FromHexString(document.RootElement.GetProperty("keyHash").GetString()),Set.ofArray principal.WorkspaceIds,principal.Revoked))
+        |> Map.ofArray
 
 type private Command = Submit of TelemetryReceipt.Scope * byte array | Lookup of TelemetryReceipt.Scope * string | Drain
 type Reply = { Status:int; Body:byte array }
@@ -108,6 +136,13 @@ module Runtime =
                 if Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),2 ||| 4)<>0 then stream.Dispose(); Error "service already running"
                 else Ok(new ServiceLock(stream))
             with :? IOException -> Error "service lock unavailable"
+        static member Probe(path:string) =
+            try
+                if not(File.Exists path) then Ok false else
+                use stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite)
+                if Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),2 ||| 4)<>0 then Ok true
+                else Native.flock(stream.SafeFileHandle.DangerousGetHandle().ToInt32(),8) |> ignore; Ok false
+            with _ -> Error "service state unavailable"
     [<Sealed>]
     type HostState(config:HostConfig, assessmentFor:string->TelemetryStore.DurabilityAssessment) =
         let stores = config.Stores |> Array.map(fun s -> s.WorkspaceId,s.Root) |> Map.ofArray

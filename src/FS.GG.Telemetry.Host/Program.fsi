@@ -10,5 +10,9 @@ module Hosting =
 module Endpoints =
     val configure: app:WebApplication -> state:Runtime.HostState -> credentials:Map<string,AuthEntry> -> unit
 
+module Operations =
+    val runWithAssessment: argv:string array -> assessmentFor:(string -> FS.GG.Coord.TelemetryStore.DurabilityAssessment) -> int
+    val run: argv:string array -> int
+
 module Program =
     val main: argv:string array -> int

@@ -7,13 +7,15 @@ open FS.GG.Coord
 
 type StoreConfig = { WorkspaceId:string; Root:string }
 type CredentialConfig = { Reference:string; SecretFile:string; WorkspaceId:string; ProducerId:string; StreamId:string; Revoked:bool }
-type HostConfig = { ListenUrl:string; CertificatePath:string; CertificatePasswordFile:string; ServiceLockPath:string; Stores:StoreConfig array; Credentials:CredentialConfig array }
+type BrowserSessionConfig = { IdleSeconds:int; AbsoluteSeconds:int; MaximumSessions:int; LoginAttemptsPerMinute:int; LoginAdmission:int; QueryAdmission:int; QueryTimeoutSeconds:int }
+type HostConfig = { Schema:string; ListenUrl:string; CertificatePath:string; CertificatePasswordFile:string; ServiceLockPath:string; Stores:StoreConfig array; Credentials:CredentialConfig array; BrowserPrincipals:BrowserPrincipalConfig array; BrowserSession:BrowserSessionConfig }
 type AuthEntry = { Scope:TelemetryReceipt.Scope; TokenHash:byte array; Revoked:bool }
 
 module Configuration =
     val validate: HostConfig -> Result<HostConfig,string list>
     val load: string -> Result<HostConfig,string list>
     val credentials: HostConfig -> Map<string,AuthEntry>
+    val browserKeyHashes: HostConfig -> Map<string,byte array * Set<string> * bool>
 
 type Reply = { Status:int; Body:byte array }
 
@@ -25,6 +27,7 @@ module Runtime =
     type ServiceLock =
         interface IDisposable
         static member Acquire: string -> Result<ServiceLock,string>
+        static member Probe: string -> Result<bool,string>
     [<Sealed>]
     type HostState =
         interface IDisposable

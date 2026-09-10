@@ -2,18 +2,46 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <UseAppHost>false</UseAppHost>
+    <RollForward>Major</RollForward>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <IsPackable>false</IsPackable>
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+    <!-- Independent one-package release line. This literal deliberately does not resolve from
+         FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
+    <FsggCoherentSetVersion />
+    <Version>0.1.0</Version>
+    <PackageId>FS.GG.Telemetry.Host</PackageId>
+    <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fsgg-telemetry-host</ToolCommandName>
+    <Description>Optional authenticated FS-GG telemetry host for explicitly enrolled private workspaces.</Description>
+    <Authors>FS-GG</Authors>
+    <Company>FS-GG</Company>
+    <PackageTags>fsgg;telemetry;host;dotnet-tool;fsharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
+    <PackageReleaseNotes>0.1.0 — Initial optional Linux x64 host with authenticated workspace-scoped ingestion and private dashboard delivery. Public release and Main activation remain separate protected operations.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="BrowserSecurity.fsi" />
+    <Compile Include="BrowserSecurity.fs" />
     <Compile Include="HostRuntime.fsi" />
     <Compile Include="HostRuntime.fs" />
+    <Compile Include="BrowserEndpoints.fsi" />
+    <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="Program.fsi" />
     <Compile Include="Program.fs" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
+    <ProjectReference Include="../FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
     <PackageReference Include="Akka" />
     <PackageReference Include="Akka.FSharp" />
