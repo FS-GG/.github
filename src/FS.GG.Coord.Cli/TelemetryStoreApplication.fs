@@ -252,6 +252,25 @@ PRAGMA user_version=9;
         TelemetryStore.validateStoreRoot path assessment
         |> Result.bind (fun root -> validateExistingPermissions root |> Result.map (fun () -> root))
 
+    let private validateHistoricalRoot path assessment =
+        TelemetryStore.validateStoreRoot path assessment
+        |> Result.bind (fun root ->
+            try
+                let directory = DirectoryInfo root
+                let database = FileInfo(Path.Combine(root,databaseFileName))
+                if not directory.Exists || not(isNull directory.LinkTarget) || not database.Exists || not(isNull database.LinkTarget) then
+                    Error [ "historical store root must contain a real database" ]
+                elif not(OperatingSystem.IsWindows()) then
+                    let mode = File.GetUnixFileMode root
+                    if mode.HasFlag UnixFileMode.OtherWrite || mode.HasFlag UnixFileMode.GroupWrite then Error [ "store root permissions permit group/other writes" ]
+                    else
+                        match commandOutput "stat" [ "-c"; "%u"; root ], commandOutput "id" [ "-u" ] with
+                        | Some owner, Some current when owner=current || current="0" -> Ok root
+                        | Some _, Some _ -> Error [ "historical store root is not owned by the current user" ]
+                        | _ -> Error [ "historical store root ownership could not be verified" ]
+                else Ok root
+            with error -> Error [ "cannot validate historical store root: " + error.Message ])
+
     let private isReceiptScoped root =
         if not (File.Exists(Path.Combine(root, databaseFileName))) then Ok false else
         match connect root SqliteOpenMode.ReadOnly with
@@ -2122,6 +2141,295 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                     File.WriteAllText(temporary, content, UTF8Encoding(false)); File.Move(temporary, target, true)
                     fsyncDirectory parent
                     Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.export-result/1"; output = target; bytes = Encoding.UTF8.GetByteCount content |} + "\n")
+        with error -> Error [ error.Message ]
+
+    type private HistoricalSnapshot =
+        { Digest: string
+          Facts: TelemetryStore.Fact array
+          Counts: (string * int) array }
+
+    let private maxHistoricalFacts = 65536
+    let private maxHistoricalCanonicalBytes = 64L * 1024L * 1024L
+
+    let private historicalFact (reader: SqliteDataReader) =
+        let identity = reader.GetString 0
+        let kind = reader.GetString 1
+        let item = if reader.IsDBNull 2 then None else Some(reader.GetString 2)
+        let revision = reader.GetInt64 3
+        let digest = reader.GetString 4
+        let canonical = reader.GetString 5
+        let batch =
+            $"{{\"schema\":\"%s{TelemetryStore.BatchSchema}\",\"ingestId\":\"historical-validation\",\"sourceIdentity\":\"historical-export\",\"generation\":\"validation\",\"cursor\":\"0\",\"eventCount\":1,\"events\":[%s{canonical}]}}"
+            |> Encoding.UTF8.GetBytes
+        match TelemetryStore.parseBatch batch with
+        | Ok parsed when parsed.Facts.Length = 1 ->
+            let fact = parsed.Facts.Head
+            if fact.Identity <> identity || fact.Kind <> kind || fact.ItemId <> item || fact.Revision <> revision
+               || fact.ContentDigest <> digest || fact.Canonical <> canonical then
+                invalidOp "historical canonical fact disagrees with its indexed row"
+            fact
+        | _ -> invalidOp "historical canonical fact is invalid"
+
+    let private historicalSnapshot (connection: SqliteConnection) (transaction: SqliteTransaction) =
+        use command = connection.CreateCommand()
+        command.Transaction <- transaction
+        command.CommandText <- "SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts ORDER BY identity COLLATE BINARY;"
+        use reader = command.ExecuteReader()
+        let facts = ResizeArray<TelemetryStore.Fact>()
+        let mutable canonicalBytes = 0L
+        while reader.Read() do
+            if facts.Count >= maxHistoricalFacts then invalidOp $"historical inventory exceeds %d{maxHistoricalFacts} facts"
+            let fact=historicalFact reader
+            canonicalBytes <- canonicalBytes + int64(Encoding.UTF8.GetByteCount fact.Canonical)
+            if canonicalBytes > maxHistoricalCanonicalBytes then invalidOp $"historical inventory exceeds %d{maxHistoricalCanonicalBytes} canonical bytes"
+            facts.Add fact
+        reader.Close()
+        use inventory = new MemoryStream()
+        use writer = new BinaryWriter(inventory, UTF8Encoding(false), true)
+        let field (value: string) =
+            let bytes = Encoding.UTF8.GetBytes value
+            writer.Write bytes.Length
+            writer.Write bytes
+        for fact in facts do
+            field fact.Identity
+            field fact.Kind
+            match fact.ItemId with None -> writer.Write(-1) | Some value -> field value
+            writer.Write fact.Revision
+            field fact.ContentDigest
+            field fact.Canonical
+        writer.Flush()
+        { Digest = CanonicalJson.sha256(inventory.ToArray())
+          Facts = facts.ToArray()
+          Counts = facts |> Seq.countBy _.Kind |> Seq.sortBy fst |> Seq.toArray }
+
+    let private historicalRank (fact: TelemetryStore.Fact) =
+        match fact.Payload with
+        | TelemetryStore.Item _ -> 0
+        | TelemetryStore.Feature _ -> 1
+        | TelemetryStore.Attempt _ -> 1
+        | TelemetryStore.ParentChild _ -> 2
+        | TelemetryStore.OperationalActivation _ -> 2
+        | TelemetryStore.RuntimeAdmission _ -> 3
+        | TelemetryStore.CiBinding _ -> 3
+        | TelemetryStore.CiPopulationAdmission _ -> 3
+        | TelemetryStore.ExpectedDispatch(_,_,"root",_,_,_,_) -> 3
+        | TelemetryStore.ExpectedDispatch _ -> 4
+        | TelemetryStore.InvocationLineage(_,_,"root",_,_,_) -> 4
+        | TelemetryStore.InvocationLineage _ -> 5
+        | TelemetryStore.RuntimeStart _ -> 5
+        | TelemetryStore.CiRun _ -> 4
+        | TelemetryStore.CiPage _ -> 4
+        | TelemetryStore.CiPopulationCoverage _ -> 4
+        | TelemetryStore.CiJob _ -> 5
+        | TelemetryStore.CiStep _ -> 6
+        | TelemetryStore.CiCoverage _ -> 6
+        | TelemetryStore.ActivitySpan _ -> 7
+        | TelemetryStore.ActivityUsageAttribution _ -> 8
+        | TelemetryStore.ProcessReview _ -> 9
+        | _ -> 6
+
+    let private historicalOrder (facts: TelemetryStore.Fact array) =
+        let expected = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.ExpectedDispatch(dispatch,_,_,_,_,_,_) -> Some((item,dispatch),fact.Identity) | _ -> None) |> Map.ofArray
+        let lineage = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.InvocationLineage(_,invocation,_,_,_,_) -> Some((item,invocation),fact.Identity) | _ -> None) |> Map.ofArray
+        let admissions = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.RuntimeAdmission(invocation,_,_,_,_,_,_,_) -> Some((item,invocation),fact.Identity) | _ -> None) |> Map.ofArray
+        let activities = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.ActivitySpan activity -> Some((item,activity.ActivityId),fact.Identity) | _ -> None) |> Map.ofArray
+        let ciBindings = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.CiBinding(collection,_,_,_,_,_,_,_,_,_) -> Some((item,collection),fact.Identity) | _ -> None) |> Map.ofArray
+        let ciAdmissions = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.CiPopulationAdmission(collection,_,_,_,_,_,_) -> Some((item,collection),fact.Identity) | _ -> None) |> Map.ofArray
+        let ciRuns = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.CiRun(repository,run,attempt,_,_,_,_,_,_,_,_) -> Some((item,repository,run,attempt),fact.Identity) | _ -> None) |> Map.ofArray
+        let ciJobs = facts |> Array.choose(fun fact -> match fact.ItemId,fact.Payload with Some item,TelemetryStore.CiJob(repository,run,attempt,job,_,_,_,_,_,_) -> Some((item,repository,run,attempt,job),fact.Identity) | _ -> None) |> Map.ofArray
+        let present = facts |> Array.map _.Identity |> Set.ofArray
+        let dependencies (fact: TelemetryStore.Fact) =
+            [ match fact.Payload with
+              | TelemetryStore.ExpectedDispatch(_,_,_,Some parent,_,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,parent) expected) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.InvocationLineage(_,_,_,Some parent,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,parent) lineage) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.ActivitySpan activity -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,activity.InvocationId) admissions) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.ActivityUsageAttribution attribution -> match fact.ItemId |> Option.bind(fun item->attribution.ActivityId |> Option.bind(fun activity -> Map.tryFind (item,activity) activities)) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.Complication complication -> match fact.ItemId |> Option.bind(fun item->complication.ActivityId |> Option.bind(fun activity -> Map.tryFind (item,activity) activities)) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.CiPage(collection,_,_,_,_) | TelemetryStore.CiCoverage(collection,_,_,_,_,_,_,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,collection) ciBindings) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.CiPopulationCoverage(collection,_,_,_,_,_,_,_,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,collection) ciAdmissions) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.CiJob(repository,run,attempt,_,_,_,_,_,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,repository,run,attempt) ciRuns) with Some identity -> yield identity | None -> ()
+              | TelemetryStore.CiStep(repository,run,attempt,job,_,_,_,_,_,_,_,_) -> match fact.ItemId |> Option.bind(fun item->Map.tryFind (item,repository,run,attempt,job) ciJobs) with Some identity -> yield identity | None -> ()
+              | _ -> () ]
+            |> List.filter(fun identity -> Set.contains identity present)
+        let compareFacts (left: TelemetryStore.Fact) (right: TelemetryStore.Fact) =
+            let ranked=compare(historicalRank left)(historicalRank right)
+            if ranked<>0 then ranked else StringComparer.Ordinal.Compare(left.Identity,right.Identity)
+        let remaining = ResizeArray<TelemetryStore.Fact>(facts |> Array.sortWith compareFacts)
+        let ordered = ResizeArray<TelemetryStore.Fact>()
+        let completed = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        while remaining.Count > 0 do
+            let index = remaining |> Seq.tryFindIndex(fun fact -> dependencies fact |> List.forall completed.Contains)
+            match index with
+            | None -> invalidOp "historical fact dependencies contain a cycle"
+            | Some index ->
+                let fact=remaining[index]
+                remaining.RemoveAt index
+                ordered.Add fact
+                completed.Add fact.Identity |> ignore
+        ordered.ToArray()
+
+    let private historicalBatch (generation: string) (ordinal: int) (facts: TelemetryStore.Fact list) =
+        let ingestId = $"history-%s{generation.Substring(0, 32)}-%04d{ordinal}"
+        let events = facts |> List.map _.Canonical |> String.concat ","
+        let raw =
+            $"{{\"schema\":\"%s{TelemetryStore.BatchSchema}\",\"ingestId\":\"%s{ingestId}\",\"sourceIdentity\":\"historical-export\",\"generation\":\"%s{generation}\",\"cursor\":\"%d{ordinal}\",\"eventCount\":%d{facts.Length},\"events\":[%s{events}]}}"
+            |> Encoding.UTF8.GetBytes
+        match CanonicalJson.canonicalize raw with
+        | Error reason -> invalidOp reason
+        | Ok canonical ->
+            let bytes = Encoding.UTF8.GetBytes canonical
+            match TelemetryStore.parseBatch bytes with
+            | Ok parsed -> ingestId, bytes, parsed.ContentDigest
+            | Error errors -> invalidOp(String.concat "; " errors)
+
+    let private historicalEnvelopeDigest (scope: TelemetryReceipt.Scope) (ingestId: string) (payload: byte array) =
+        let payloadText = Encoding.UTF8.GetString payload
+        let raw =
+            $"{{\"schema\":\"%s{TelemetryReceipt.Schema}\",\"workspaceId\":%s{JsonSerializer.Serialize scope.Workspace},\"producerId\":%s{JsonSerializer.Serialize scope.Producer},\"streamId\":%s{JsonSerializer.Serialize scope.Stream},\"batchId\":%s{JsonSerializer.Serialize ingestId},\"payload\":%s{payloadText}}}"
+            |> Encoding.UTF8.GetBytes
+        match TelemetryReceipt.parse raw with
+        | Ok envelope -> envelope.Digest
+        | Error errors -> invalidOp(String.concat "; " errors)
+
+    let private historicalPack generation (facts: TelemetryStore.Fact array) =
+        let batches = ResizeArray<_>()
+        let mutable ordinal = 1
+        let mutable current = []
+        let flush () =
+            if not current.IsEmpty then
+                batches.Add(historicalBatch generation ordinal (List.rev current))
+                ordinal <- ordinal + 1
+                current <- []
+        for fact in facts do
+            let candidate = fact :: current |> List.rev
+            let fits =
+                candidate.Length <= TelemetryStore.MaxEvents
+                && try historicalBatch generation ordinal candidate |> ignore; true with _ -> false
+            if fits then current <- fact :: current
+            else
+                flush()
+                historicalBatch generation ordinal [ fact ] |> ignore
+                current <- [ fact ]
+        flush()
+        batches.ToArray()
+
+    let exportHistorical (sourcePath: string) sourceAssessment (targetPath: string) targetAssessment (scope: TelemetryReceipt.Scope) (outputPath: string) =
+        try
+            if not(TelemetryReceipt.validId scope.Workspace && TelemetryReceipt.validId scope.Producer && TelemetryReceipt.validId scope.Stream) then
+                Error [ "historical export scope is invalid" ]
+            else
+                match validateHistoricalRoot sourcePath sourceAssessment, validateHistoricalRoot targetPath targetAssessment with
+                | Error errors, _ | _, Error errors -> Error errors
+                | Ok sourceRoot, Ok targetRoot when sourceRoot = targetRoot -> Error [ "historical source and target must be different stores" ]
+                | Ok sourceRoot, Ok targetRoot ->
+                    let target = Path.GetFullPath outputPath
+                    let sourcePrefix = sourceRoot.TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
+                    let targetPrefix = targetRoot.TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
+                    let parent = Path.GetDirectoryName target
+                    if not(Path.IsPathFullyQualified outputPath) || isNull parent || not(Directory.Exists parent)
+                       || Directory.Exists target || File.Exists target || target.StartsWith(sourcePrefix,StringComparison.Ordinal)
+                       || target.StartsWith(targetPrefix,StringComparison.Ordinal) || existingAncestors target |> List.exists(fun entry -> not(isNull entry.LinkTarget)) then
+                        Error [ "historical export output must be a fresh child of an existing real directory outside both stores" ]
+                    elif not (OperatingSystem.IsWindows()) &&
+                         (File.GetUnixFileMode(parent) &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) <> enum 0 then
+                        Error [ "historical export parent permissions are unsafe" ]
+                    else
+                        match connect sourceRoot SqliteOpenMode.ReadOnly, connect targetRoot SqliteOpenMode.ReadOnly with
+                        | Error errors, _ | _, Error errors -> Error errors
+                        | Ok(sourceConnection,_), Ok(targetConnection,_) ->
+                            use sourceConnection = sourceConnection
+                            use targetConnection = targetConnection
+                            use sourceTransaction = sourceConnection.BeginTransaction()
+                            use targetTransaction = targetConnection.BeginTransaction()
+                            let version (connection: SqliteConnection) (transaction: SqliteTransaction) =
+                                use command = connection.CreateCommand()
+                                command.Transaction <- transaction
+                                command.CommandText <- "PRAGMA user_version;"
+                                Convert.ToInt32(command.ExecuteScalar())
+                            let migrationChecksums (connection: SqliteConnection) (transaction: SqliteTransaction) expected =
+                                use command = connection.CreateCommand()
+                                command.Transaction <- transaction
+                                command.CommandText <- "SELECT version,digest FROM schema_migrations ORDER BY version;"
+                                use reader = command.ExecuteReader()
+                                let actual = ResizeArray<int * string>()
+                                while reader.Read() do actual.Add(reader.GetInt32 0,reader.GetString 1)
+                                actual.ToArray() = expected
+                            let sourceVersion = version sourceConnection sourceTransaction
+                            let targetVersion = version targetConnection targetTransaction
+                            if (sourceVersion <> 8 && sourceVersion <> currentSchemaVersion) || targetVersion <> currentSchemaVersion then Error [ "historical export requires source schema 8 or 9 and target schema 9" ] else
+                            let expectedMigrations =
+                                [| 1,migrationDigest; 2,migration2Digest; 3,migration3Digest; 4,migration4Digest; 5,migration5Digest
+                                   6,migration6Digest; 7,migration7Digest; 8,migration8Digest; 9,migration9Digest |]
+                            if not(migrationChecksums sourceConnection sourceTransaction expectedMigrations[..sourceVersion-1])
+                               || not(migrationChecksums targetConnection targetTransaction expectedMigrations) then Error [ "historical export migration checksum mismatch" ] else
+                            let targetWorkspace =
+                                use command=targetConnection.CreateCommand()
+                                command.Transaction <- targetTransaction
+                                command.CommandText <- "SELECT value FROM store_metadata WHERE key='receiptWorkspace';"
+                                command.ExecuteScalar() |> Option.ofObj |> Option.map string
+                            let targetProducer =
+                                use command=targetConnection.CreateCommand()
+                                command.Transaction <- targetTransaction
+                                command.CommandText <- "SELECT count(*) FROM receipt_producers WHERE producer=$producer AND stream=$stream;"
+                                parameter command "$producer" scope.Producer
+                                parameter command "$stream" scope.Stream
+                                Convert.ToInt64(command.ExecuteScalar())
+                            if targetWorkspace <> Some scope.Workspace || targetProducer <> 1L then Error [ "historical export target is not enrolled for the supplied scope" ] else
+                            let source = historicalSnapshot sourceConnection sourceTransaction
+                            let targetSnapshot = historicalSnapshot targetConnection targetTransaction
+                            let targetByIdentity = targetSnapshot.Facts |> Seq.map(fun fact -> fact.Identity,fact) |> Map.ofSeq
+                            let emitted = ResizeArray<TelemetryStore.Fact>()
+                            let mutable identical = 0
+                            let mutable corrected = 0
+                            let mutable newer = 0
+                            let mutable conflicts = 0
+                            for fact in source.Facts do
+                                match Map.tryFind fact.Identity targetByIdentity with
+                                | None -> emitted.Add fact
+                                | Some existing when existing.Kind <> fact.Kind -> conflicts <- conflicts + 1
+                                | Some existing when existing.ContentDigest = fact.ContentDigest -> identical <- identical + 1
+                                | Some existing when fact.Revision > existing.Revision -> emitted.Add fact; corrected <- corrected + 1
+                                | Some existing when fact.Revision < existing.Revision -> newer <- newer + 1
+                                | Some _ -> conflicts <- conflicts + 1
+                            if conflicts > 0 then Error [ $"historical export found %d{conflicts} kind or equal-revision semantic conflicts" ] else
+                            let ordered = emitted.ToArray() |> historicalOrder
+                            let generationSeed = Encoding.UTF8.GetBytes(source.Digest + "\n" + targetSnapshot.Digest + "\n" + scope.Workspace + "\n" + scope.Producer + "\n" + scope.Stream)
+                            let generation = CanonicalJson.sha256 generationSeed
+                            let batches = historicalPack generation ordered
+                            let temporary = target + ".tmp-" + Guid.NewGuid().ToString("N")
+                            try
+                                Directory.CreateDirectory temporary |> ignore
+                                if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                                let entries =
+                                    batches
+                                    |> Array.mapi(fun index (ingestId,bytes,payloadDigest) ->
+                                        let name = $"batch-%04d{index + 1}.json"
+                                        let path = Path.Combine(temporary,name)
+                                        File.WriteAllBytes(path,bytes)
+                                        if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                                        flushFile path
+                                        {| file=name; ingestId=ingestId; eventCount=(TelemetryStore.parseBatch bytes |> Result.defaultWith(fun _->invalidOp "generated batch is invalid")).Facts.Length; bytes=bytes.Length; payloadSha256=CanonicalJson.sha256 bytes; payloadDigest=payloadDigest; envelopeDigest=historicalEnvelopeDigest scope ingestId bytes |})
+                                let countRows (rows: (string * int) array) = rows |> Array.map(fun (kind,count)->{|kind=kind;count=count|})
+                                let manifestObject =
+                                    {| schema="fsgg.telemetry.historical-export/1"; algorithm="canonical-current-facts-v1"; consistency="independent-per-store-read-transactions"; sourceStoreSchema=sourceVersion; targetStoreSchema=targetVersion
+                                       limits={|maxFactsPerStore=maxHistoricalFacts;maxCanonicalBytesPerStore=maxHistoricalCanonicalBytes;maxEventsPerBatch=TelemetryStore.MaxEvents;maxEventBytes=TelemetryStore.MaxEventBytes;maxBatchBytes=TelemetryStore.MaxBatchBytes|}
+                                       scope={|workspaceId=scope.Workspace;producerId=scope.Producer;streamId=scope.Stream|}
+                                       source={|inventorySha256=source.Digest;factCount=source.Facts.Length;factsByKind=countRows source.Counts|}
+                                       target={|inventorySha256=targetSnapshot.Digest;factCount=targetSnapshot.Facts.Length;factsByKind=countRows targetSnapshot.Counts|}
+                                       disposition={|emitted=ordered.Length;identical=identical;corrected=corrected;targetNewer=newer;conflicts=0|}
+                                       generation=generation; batches=entries |}
+                                let serialized = JsonSerializer.SerializeToUtf8Bytes manifestObject
+                                let manifest = CanonicalJson.canonicalize serialized |> Result.defaultWith invalidOp |> Encoding.UTF8.GetBytes
+                                let manifestPath = Path.Combine(temporary,"manifest.json")
+                                File.WriteAllBytes(manifestPath,manifest)
+                                if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(manifestPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                                flushFile manifestPath
+                                fsyncDirectory temporary
+                                Directory.Move(temporary,target)
+                                fsyncDirectory parent
+                                Ok(JsonSerializer.Serialize {|schema="fsgg.telemetry.historical-export-result/1";output=target;manifestSha256=CanonicalJson.sha256 manifest;batches=batches.Length;events=ordered.Length|}+"\n")
+                            finally
+                                if Directory.Exists temporary then Directory.Delete(temporary,true)
         with error -> Error [ error.Message ]
 
     let private option name args = args |> List.indexed |> List.tryPick (fun (index,value) -> if value = name then args |> List.tryItem(index+1) else None)

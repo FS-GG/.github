@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
-  <ItemGroup><Compile Include="RemoteTelemetryTests.fs" /></ItemGroup>
+  <ItemGroup><Compile Include="RemoteTelemetryTests.fs" /><Compile Include="HistoricalExportTests.fs" /></ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj" />

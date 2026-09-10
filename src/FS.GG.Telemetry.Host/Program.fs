@@ -187,6 +187,10 @@ module Operations =
         Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.host-status/1"; ``process`` = processState; recovery="unknown"; dashboardAuthentication=dashboardState; supportedStoreSchemaMin=9; supportedStoreSchemaMax=9; stores=stores |}+"\n")
     let runWithAssessment (argv:string array) assessmentFor =
         match List.ofArray argv with
+        | ["historical-export";"--source-root";source;"--target-root";target;"--workspace";workspace;"--producer";producer;"--stream";stream;"--output";output] ->
+            let scope:FS.GG.Coord.TelemetryReceipt.Scope={Workspace=workspace;Producer=producer;Stream=stream}
+            TelemetryStoreApplication.exportHistorical source (assessmentFor source) target (assessmentFor target) scope output
+            |> resultExit "historical-export-failed"
         | ["init";"--root";root;"--workspace";workspace] ->
             match TelemetryStoreApplication.initialize root (assessmentFor root) with
             | Error errors -> resultExit "storage-unavailable" (Error errors)
@@ -223,7 +227,7 @@ module Operations =
                         | Some errors -> resultExit "backup-integrity-failed" (Error errors)
                         | None ->
                             let workspaces=config.Stores |> Array.sortBy _.WorkspaceId |> Array.map(fun store->{|workspaceId=store.WorkspaceId;path=store.WorkspaceId;manifestSha256=digestFile(Path.Combine(temporary,store.WorkspaceId,"manifest.json"))|})
-                            let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.1";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
+                            let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.2";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
                             let manifestPath=Path.Combine(temporary,"backup-manifest.json")
                             File.WriteAllText(manifestPath,manifest,UTF8Encoding(false));flushFile manifestPath;syncDirectory temporary
                             Directory.Move(temporary,output);syncDirectory(Path.GetDirectoryName output)

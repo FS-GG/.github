@@ -1,7 +1,7 @@
 # Telemetry host package and release boundary
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. Its
-current released version is `0.1.1`, its command is `fsgg-telemetry-host`, and
+current source version is `0.1.2`, its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
@@ -100,3 +100,20 @@ root is possible, while retaining workspace enrollment, producer scope,
 browser authorization, session policy, and listener identity. A browser access
 key cannot be recovered from its hash and must be retained separately or
 reprovisioned and distributed through the selected private channel.
+
+## Historical continuity boundary
+
+Host 0.1.2 adds an offline, read-only historical export. It accepts a schema 8
+or 9 source and a schema 9 target, establishes one SQLite read transaction per
+store, validates the engine-owned canonical fact rows, and writes deterministic
+payloads within `TelemetryStore.MaxEvents`, `MaxEventBytes`, and
+`MaxBatchBytes`. There is no cross-database atomic snapshot claim.
+
+The export does not modify, copy, restore, or replace either store and does not
+read configuration or credentials. Its payloads are imported through the
+existing authenticated receipt endpoint. Existing receipt application owns
+replay, correction, and terminal `semantic-conflict` behavior if the target
+moves after preview. Operators retain the source store and pre-import Host
+backup and verify a final zero-payload preview; the resulting continuity claim
+covers current canonical facts, not superseded correction history or original
+batch grouping.
