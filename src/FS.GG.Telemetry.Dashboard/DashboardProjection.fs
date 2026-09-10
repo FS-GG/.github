@@ -149,11 +149,15 @@ module DashboardProjection =
                 elif text "schema" envelope<>Some "fsgg.telemetry.item-detail/2" then Error UnsupportedSchema
                 else
                     match text "revision" envelope,text "canonicalSnapshotGzip" envelope,property "operational" envelope with
-                    | Some revision,Some encoded,Some operational when Regex.IsMatch(revision,@"\A[0-9a-f]{64}\z") && exactNames operational (set["pendingBatches";"consistency"]) ->
+                    | Some revision,Some encoded,Some operational when Regex.IsMatch(revision,@"\A[0-9a-f]{64}\z") ->
                         let observedAt = text "observedAt" envelope |> safeTime
                         let pendingBatches = number "pendingBatches" operational
                         let consistency = text "consistency" operational
-                        if observedAt.IsNone || pendingBatches.IsNone || consistency <> Some "observed-outside-database-transaction" then Error InvalidEnvelope else
+                        let legacyOperational = exactNames operational (set["pendingBatches";"consistency"]) && consistency=Some "observed-outside-database-transaction"
+                        let scopedOperational = exactNames operational (set["pendingBatches";"appliedReceipts";"rejectedReceipts";"consistency"]) && consistency=Some "database-transaction"
+                        let appliedReceipts = if scopedOperational then number "appliedReceipts" operational else None
+                        let rejectedReceipts = if scopedOperational then number "rejectedReceipts" operational else None
+                        if observedAt.IsNone || pendingBatches.IsNone || not legacyOperational && (not scopedOperational || appliedReceipts.IsNone || rejectedReceipts.IsNone) then Error InvalidEnvelope else
                         let compressed = try Ok(Convert.FromBase64String encoded) with _ -> Error InvalidRevision
                         match compressed |> Result.bind readBoundedGzip with
                         | Error error -> Error error
@@ -187,6 +191,8 @@ module DashboardProjection =
                                             result["revision"]<-revision
                                             let op=JsonObject()
                                             op["pendingBatches"]<-pendingBatches.Value
+                                            op["appliedReceipts"]<-match appliedReceipts with Some value->JsonValue.Create value|None->null
+                                            op["rejectedReceipts"]<-match rejectedReceipts with Some value->JsonValue.Create value|None->null
                                             op["consistency"]<-consistency.Value
                                             result["operational"]<-op
                                             result["items"]<-JsonArray(projected |> Array.choose(function Ok n->Some n|_->None))

@@ -61,6 +61,39 @@ module DashboardProjectionTests =
         Assert.Equal(JsonValueKind.Null,item.GetProperty("coverage").GetProperty("externalChecks").ValueKind)
 
     [<Fact>]
+    let ``real scoped receipt snapshots preserve pending applied and rejected counts`` () =
+        let root=Path.Combine(Path.GetTempPath(),"fsgg-dashboard-receipts-"+Guid.NewGuid().ToString("N"))
+        use cleanup={new IDisposable with member _.Dispose()=if Directory.Exists root then Directory.Delete(root,true)}
+        let approved=TelemetryStore.ApprovedLocalDurable
+        let scope:TelemetryReceipt.Scope={Workspace="workspace-a";Producer="producer-a";Stream="runtime"}
+        let unwrapStore = function Ok value->value|Error errors->failwithf "%A" errors
+        let receipt batchId ingestId identity item =
+            Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"{batchId}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingestId}","sourceIdentity":"native-source","generation":"g1","cursor":"{batchId}","eventCount":1,"events":[{{"kind":"item","identity":"{identity}","itemId":"{item}","revision":0}}]}}}}"""
+        TelemetryStoreApplication.initialize root approved |> unwrapStore |> ignore
+        TelemetryStoreApplication.enrollReceiptProducer root approved scope |> unwrapStore |> ignore
+        TelemetryStoreApplication.submitReceipt root approved scope (receipt "batch-a" "native-a" "item-a" "item-a") |> unwrapStore |> ignore
+        let projectScoped () =
+            TelemetryStoreApplication.scopedDashboardSnapshot root approved scope.Workspace None
+            |> unwrapStore |> Encoding.UTF8.GetBytes |> DashboardProjection.project scope.Workspace |> unwrap
+        use pending=JsonDocument.Parse(projectScoped())
+        let pendingOperational=pending.RootElement.GetProperty("operational")
+        Assert.Equal(1L,pendingOperational.GetProperty("pendingBatches").GetInt64())
+        Assert.Equal(0L,pendingOperational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(0L,pendingOperational.GetProperty("rejectedReceipts").GetInt64())
+        Assert.Equal("database-transaction",pendingOperational.GetProperty("consistency").GetString())
+        TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrapStore |> ignore
+        use applied=JsonDocument.Parse(projectScoped())
+        Assert.Equal(0L,applied.RootElement.GetProperty("operational").GetProperty("pendingBatches").GetInt64())
+        Assert.Equal(1L,applied.RootElement.GetProperty("operational").GetProperty("appliedReceipts").GetInt64())
+        TelemetryStoreApplication.submitReceipt root approved scope (receipt "batch-b" "native-b" "item-a" "item-b") |> unwrapStore |> ignore
+        TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrapStore |> ignore
+        use rejected=JsonDocument.Parse(projectScoped())
+        let rejectedOperational=rejected.RootElement.GetProperty("operational")
+        Assert.Equal(1L,rejectedOperational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(1L,rejectedOperational.GetProperty("rejectedReceipts").GetInt64())
+        Assert.Single(rejected.RootElement.GetProperty("items").EnumerateArray()) |> ignore
+
+    [<Fact>]
     let ``projects closed private status usage coverage and clock distinctions`` () =
         let bytes=DashboardProjection.project "workspace-a" (envelope(snapshot "item-a")) |> unwrap
         let json=Encoding.UTF8.GetString bytes
@@ -72,6 +105,8 @@ module DashboardProjectionTests =
         Assert.Contains("native-usage-unsupported",json)
         Assert.Contains("\"nativeUsage\":\"unsupported\"",json)
         Assert.Contains("host-wall",json)
+        Assert.Contains("\"appliedReceipts\":null",json)
+        Assert.Contains("\"rejectedReceipts\":null",json)
         for secret in ["DO-NOT-LEAK";"/private/path";"PRIVATE"] do Assert.DoesNotContain(secret,json)
 
     [<Fact>]
@@ -106,6 +141,13 @@ module DashboardProjectionTests =
         let changed=JsonNode.Parse(doc.RootElement.GetRawText()).AsObject()
         changed["revision"]<-String.replicate 64 "0"
         Assert.Equal(Error InvalidRevision,DashboardProjection.project "workspace" (Encoding.UTF8.GetBytes(changed.ToJsonString())))
+
+    [<Fact>]
+    let ``operational envelope variants cannot be mixed`` () =
+        use document=JsonDocument.Parse(envelope(snapshot "item"))
+        let hybrid=JsonNode.Parse(document.RootElement.GetRawText()).AsObject()
+        hybrid["operational"]<-JsonNode.Parse("""{"pendingBatches":0,"appliedReceipts":0,"rejectedReceipts":0,"consistency":"observed-outside-database-transaction"}""")
+        Assert.Equal(Error InvalidEnvelope,DashboardProjection.project "workspace" (Encoding.UTF8.GetBytes(hybrid.ToJsonString())))
 
     [<Fact>]
     let ``malformed scalar types and envelope cap return closed errors`` () =
@@ -182,6 +224,8 @@ module DashboardProjectionTests =
         Assert.Contains("post(\"/private/dashboard/v1/logout\"",scriptText)
         Assert.Contains("principalId",Encoding.UTF8.GetString index.Bytes)
         Assert.Contains("accessKey",Encoding.UTF8.GetString index.Bytes)
+        Assert.Contains("applied receipts",scriptText)
+        Assert.Contains("rejected receipts",scriptText)
         for route in ["/private/dashboard/";"/private/dashboard/app.js";"/private/dashboard/styles.css"] do
             let content=DashboardAssets.tryGet route |> Option.get |> _.Bytes |> Encoding.UTF8.GetString
             Assert.DoesNotContain("http://",content)

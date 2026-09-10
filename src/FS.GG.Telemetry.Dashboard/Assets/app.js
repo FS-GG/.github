@@ -15,7 +15,8 @@
   }
   function render(data) {
     text($("freshness"),data.observedAt?`Snapshot observed ${new Date(data.observedAt).toLocaleString()}`:"Observation time unavailable");
-    text($("health"),`${data.operational.pendingBatches} pending batches · ${data.operational.consistency}`);
+    const receipts=data.operational.appliedReceipts==null||data.operational.rejectedReceipts==null?"receipt outcomes unavailable":`${data.operational.appliedReceipts} applied receipts · ${data.operational.rejectedReceipts} rejected receipts`;
+    text($("health"),`${data.operational.pendingBatches} pending receipts · ${receipts} · ${data.operational.consistency}`);
     const target=$("items");target.replaceChildren();
     data.items.forEach((item)=>{const card=document.createElement("article");card.setAttribute("role","listitem");card.append(element("h3",item.id));card.append(element("p",`${item.state.outcome} · ${item.state.population}`,"state"));card.append(element("p",`${count(item.usage.total)} tokens · ${count(item.runtime.terminal)}/${count(item.runtime.admitted)} terminal`,"metric"));card.append(element("p",`coverage ${item.coverage.populationCoverage} · CI ${item.coverage.ciInventory}`,"coverage"));target.append(card);});
     if(!data.items.length)target.append(element("p","No scoped observations are available."));
