@@ -900,13 +900,14 @@ module Delivery =
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (VerifyObligation name)
                 | CompletionDecision.AwaitPostMergeVerification reason ->
                     nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations (AwaitPostMergeVerification reason)
-                | (CompletionDecision.ProjectCompletion | CompletionDecision.CleanupCompletedDelivery)
-                    when not snapshot.ClosingLinkageCanonical ->
-                    NoVerdict "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
                 | CompletionDecision.ProjectCompletion ->
-                    nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
+                    if not snapshot.ClosingLinkageCanonical then
+                        NoVerdict "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                    else nextWithPostMergeVerification postMergeVerification snapshot MergedAwaitingObligations Complete
                 | CompletionDecision.CleanupCompletedDelivery ->
-                    nextWithPostMergeVerification postMergeVerification snapshot Done CleanupWorktree
+                    if not snapshot.ClosingLinkageCanonical then
+                        NoVerdict "terminal completion requires canonical closing linkage; a markerless two-phase implementation must complete through its later receipt pull request"
+                    else nextWithPostMergeVerification postMergeVerification snapshot Done CleanupWorktree
             | _ when Option.isNone snapshot.Freshness.PullRequest ->
                 next snapshot Implementation ContinueImplementation
             | _ ->

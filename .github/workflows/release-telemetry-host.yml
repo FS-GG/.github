@@ -61,10 +61,28 @@ jobs:
           declared="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -nologo -getProperty:Version | tail -1)"
           [ "$declared" = "$VERSION" ]
           [ "$TAG" = "telemetry-host/v$VERSION" ]
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >tag.txt 2>/dev/null; then
-            remote="$(cut -f1 tag.txt)"
-            [ "$(git rev-parse "$remote^{commit}")" = "$SOURCE_SHA" ] || { echo "existing tag names another source" >&2; exit 2; }
-          fi
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}" >tag.txt
+          tag_rc=$?
+          set -e
+          case "$tag_rc" in
+            0)
+              remote="$(python3 - "$TAG" tag.txt <<'PY'
+          import re,sys
+          tag,path=sys.argv[1:]; direct=f"refs/tags/{tag}"; peeled=direct+"^{{}}"; found={}
+          for line in open(path):
+              sha,ref=line.rstrip("\n").split("\t")
+              if ref not in (direct,peeled) or ref in found or not re.fullmatch(r"[0-9a-f]{40}",sha): raise SystemExit("invalid remote tag observation")
+              found[ref]=sha
+          if direct not in found: raise SystemExit("remote tag observation omitted the direct ref")
+          print(found.get(peeled,found[direct]))
+          PY
+              )"
+              [ "$remote" = "$SOURCE_SHA" ] || { echo "existing tag names another source" >&2; exit 2; }
+              ;;
+            2) ;;
+            *) echo "remote tag state is unknown" >&2; exit 2 ;;
+          esac
       - name: Verify an already-complete immutable release
         id: release_state
         env:

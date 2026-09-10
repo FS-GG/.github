@@ -54,7 +54,7 @@
     {"path":".github/workflows/release-drivers.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"159eba92c223ec6b0e5519c840383d76f061062c575585c04febd0314afd7adc"},
     {"path":".github/workflows/release-kit.yml","disposition":"publish-writer","sinkKinds":["git-push","package-publish"],"sha256":"4d9afe857dfe3a08c1e6e7bfbae54c655700fe5c8ee9992114184e264b4d2433"},
     {"path":".github/workflows/release-new-sdd-workspace.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"538b9923a2bcb2bf7a7dfe0a595bd8d243bc84cd20eedc2eb0d4d2615cf5073f"},
-    {"path":".github/workflows/release-telemetry-host.yml","disposition":"publish-writer","sinkKinds":["gh-release-write","package-publish"],"sha256":"a89ad773a0c82a1277b661b115dd7c6b15a8739451cbfe43fee36cb28737d966"},
+    {"path":".github/workflows/release-telemetry-host.yml","disposition":"publish-writer","sinkKinds":["gh-release-write","package-publish"],"sha256":"d77f1ad0def09123773a301acca572060264abf5e1bd23d6e04555c716a9f229"},
     {"path":".github/workflows/release-saga-prepare.yml","disposition":"publish-writer","sinkKinds":["gh-release-write"],"sha256":"72a5f0b9c6bf4ac6cd01638b3e904a3344df5e50f313c661953e44995d4e0eef"},
     {"path":".github/workflows/release-saga-start.yml","disposition":"publish-writer","sinkKinds":["git-push","rest-write","workflow-dispatch"],"sha256":"3bbe4278a08d8797faa5b600bd97cfef48fa26887f0889f6de781f719530880f"},
     {"path":".github/workflows/skill-registry-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["gh-pr-merge","git-push","rest-write"],"sha256":"32f9275322622d698ca711ce351e04c406fa6fb5d3b9cf49d6e382ccab0b6b97"},
