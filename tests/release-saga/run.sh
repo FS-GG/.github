@@ -97,7 +97,7 @@ mkdir -p "$WORK/dashboard-assets"
 printf '%s' '<!doctype html>' > "$WORK/dashboard-assets/index.html"
 coord_sha="$(sha256sum "$WORK/artifacts/FS.GG.Coord.Cli.9.8.7.nupkg" | cut -d' ' -f1)"
 jq -n --arg source 0123456789012345678901234567890123456789 --arg package "$coord_sha" \
-  '{schema:"fsgg.telemetry.standalone-qualification/1",qualified:true,binding:{sourceSha:$source,packageSha256:$package,sourceBinding:"prepared-for-release-manifest"},claims:{processCrashAndFilesystemApi:true,physicalPowerLoss:false,mainInstalled:false,publicRelease:false}}' \
+  '{schema:"fsgg.telemetry.standalone-qualification/2",qualified:true,binding:{sourceSha:$source,packageSha256:$package,sourceBinding:"prepared-for-release-manifest"},checks:{startupP95Milliseconds:true,idleRssPeakBytes:true,coldCliSubmissionP95Milliseconds:true,warmInProcessAdmissionP95Milliseconds:true},limits:{coldCliSubmissionP95Milliseconds:1000,warmInProcessAdmissionP95Milliseconds:100},packagedStore:{schema:"fsgg.telemetry.packaged-store-performance/1",qualified:true,assessment:"approved-local-durable"},claims:{processCrashAndFilesystemApi:true,physicalPowerLoss:false,mainInstalled:false,publicRelease:false}}' \
   > "$WORK/standalone-qualification.json"
 python3 "$TOOL" prepare \
   --release-id telemetry-fixture --version 9.8.7 \

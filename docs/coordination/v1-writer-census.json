@@ -85,7 +85,7 @@
     {"path":"src/FS.GG.Coord.Cli/Program.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"1843c737002153ef4e8004332ce47bc12fa81ed7153c41e30a6f754afca111bb"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"55e7e992e4a17b1da7078f26cea82a9973ad51a5a45ec0d29fdec4c890bae679"},
     {"path":"src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"334f802ca0468b7bf386683c1316704b89e1678b779718586a42d53cf223a8b1"},
-    {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"29fcc3dd579d2a1c5b5985c7fbaf98aa3c9e5ea9ed784e628eeb326cdf5c4f0b"},
+    {"path":"src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs","disposition":"local-only","sinkKinds":[],"sha256":"e9b038997df78e796a26d9ca8e50478e362cb950ce2df88b14cdcdb46652b89e"},
     {"path":"src/FS.GG.Coord.GitHub/Transport.fs","disposition":"typed-command-catalogue","sinkKinds":[],"sha256":"97046f07ee442939ed3942c17ca7754fb49cb9b999af36a35bfbbcc152a7dde2"},
     {"path":"src/FS.GG.Telemetry.Client/RemoteClient.fs","disposition":"remote-writer","sinkKinds":["http-write"],"sha256":"793b7f98d29a37a82bac0fd3f47786ba9fece07447f1951475d8fa70138b27d5"},
     {"path":"tests/change-completeness/run.sh","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"76e2938b0b8f742aa32bdb460cda72fc1014efcbecb274d43c296f7e99e23932","nonWriterJustification":"Structural wiring fixture reads workflow text and never executes a package publish."},

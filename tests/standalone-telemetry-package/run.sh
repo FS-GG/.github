@@ -226,19 +226,32 @@ PY
   if [ -n "$RUNTIME_EVIDENCE" ]; then
     if [[ "${FSGG_PACKAGE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
       findmnt -J -T "$STORE" > "$WORK/filesystem-evidence.json"
+      STORE_ASSEMBLY="$(find "$TOOLS" -type f -name FS.GG.Telemetry.Store.dll -print -quit)"
+      STORE_ASSEMBLY_DIR="$(dirname "$STORE_ASSEMBLY")"
+      STORE_PROBE_ROOT="$DURABLE_PARENT/store-probe-${PACKAGE_SHA:0:16}-$$"
+      STORE_PROBE_EVIDENCE="$WORK/packaged-store-performance.json"
+      STORE_ASSEMBLY_SHA="$(sha256sum "$STORE_ASSEMBLY" | cut -d' ' -f1)"
+      NATIVE_LIBRARY_DIR="$(find "$TOOLS" -type f -name 'libe_sqlite3.so' -printf '%h\n' -quit)"
+      LD_LIBRARY_PATH="$NATIVE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        dotnet fsi --quiet --lib:"$STORE_ASSEMBLY_DIR" \
+          "$(cd "$(dirname "$0")/../standalone-telemetry-dashboard" && pwd)/store-probe.fsx" -- \
+          "$STORE_PROBE_EVIDENCE" "$STORE_PROBE_ROOT" "$STORE_ASSEMBLY_SHA" 100 \
+          > "$WORK/store-probe.out" 2> "$WORK/store-probe.err"
       RUNTIME_ARGS=(
         --cli-path "$ENGINE" --config "$CONFIG" --repository FS-GG/package-fixture
         --package "$PACKAGE" --source-sha "$FSGG_PACKAGE_SOURCE_SHA"
-        --filesystem-evidence "$WORK/filesystem-evidence.json" --output "$RUNTIME_EVIDENCE"
+        --filesystem-evidence "$WORK/filesystem-evidence.json"
+        --store-probe-evidence "$STORE_PROBE_EVIDENCE" --store-assembly "$STORE_ASSEMBLY"
+        --output "$RUNTIME_EVIDENCE"
       )
       [ -z "${FSGG_RUNTIME_MANIFEST:-}" ] || RUNTIME_ARGS+=(--manifest "$FSGG_RUNTIME_MANIFEST")
       [ -z "${FSGG_RUNTIME_PUBLIC_READBACK:-}" ] || RUNTIME_ARGS+=(--public-readback-evidence "$FSGG_RUNTIME_PUBLIC_READBACK")
       [ -z "${FSGG_RUNTIME_PUBLIC_RELEASE:-}" ] || RUNTIME_ARGS+=(--public-release)
       if bash "$(cd "$(dirname "$0")/../standalone-telemetry-dashboard" && pwd)/run.sh" \
           "${RUNTIME_ARGS[@]}"; then
-        ok "qualified runtime budgets pass for startup RSS and 64 KiB durable submission"
+        ok "qualified runtime budgets pass for startup RSS cold CLI and packaged Store admission"
       else
-        bad "qualified runtime budgets pass for startup RSS and 64 KiB durable submission"
+        bad "qualified runtime budgets pass for startup RSS cold CLI and packaged Store admission"
       fi
     else
       bad "runtime qualification has an exact candidate source SHA"

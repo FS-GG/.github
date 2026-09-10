@@ -1204,24 +1204,54 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
             fsyncDirectory inbox
             let files = Directory.EnumerateFiles(inbox, "*.ready") |> Seq.truncate 1025 |> Seq.toArray
             if files.Length > 1024 then invalidOp "receipt capacity inconsistent"
+            // The common path is an already indexed pending obligation. Load that bounded index once
+            // instead of reparsing every retained 64 KiB envelope and issuing two queries per file on
+            // every one-shot CLI admission. The content digest still verifies every indexed artifact;
+            // only an orphan or an interrupted post-commit cleanup needs the full envelope parser.
+            let pending = Collections.Generic.Dictionary<string, string * string * string * string>()
+            use indexed = receiptCommand connection "SELECT r.producer,r.batch,r.stream,r.digest,p.producer FROM transport_receipts r LEFT JOIN receipt_producers p ON p.producer=r.producer AND p.stream=r.stream WHERE r.state='durably-received';" []
+            use indexedReader = indexed.ExecuteReader()
+            while indexedReader.Read() do
+                if indexedReader.IsDBNull 4 then invalidOp "invalid receipt binding"
+                let producer, batch, stream, digest = indexedReader.GetString(0), indexedReader.GetString(1), indexedReader.GetString(2), indexedReader.GetString(3)
+                pending.Add(TelemetryReceipt.key producer batch, (producer, batch, stream, digest))
+            indexedReader.Close()
+            let workspace = receiptWorkspace connection
+            if pending.Count > 0 && String.IsNullOrEmpty workspace then invalidOp "invalid receipt binding"
+            let seen = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
             for file in files do
                 let info = FileInfo file
                 if not (isNull info.LinkTarget) || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then invalidOp "invalid receipt artifact"
-                let envelope = TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
-                if file <> receiptPath root envelope.Scope.Producer envelope.BatchId || not (receiptAuthorized connection envelope.Scope) then invalidOp "invalid receipt binding"
-                let parameters = receiptParameters envelope
-                let prior = receiptScalar connection "SELECT digest FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters
-                if not (isNull prior) && string prior <> envelope.Digest then invalidOp "receipt identity conflict"
-                if isNull prior then
-                    receiptExecute connection "INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($p,$b,$s,$d,$n,'durably-received');"
-                        (parameters @ ["$s",box envelope.Scope.Stream; "$d",box envelope.Digest; "$n",box info.Length])
-                    hook "index-committed"
-                let state = string (receiptScalar connection "SELECT state FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters)
-                if state <> "durably-received" then File.Delete file; fsyncDirectory inbox
-            use pending = receiptCommand connection "SELECT producer,batch FROM transport_receipts WHERE state='durably-received';" []
-            use reader = pending.ExecuteReader()
-            while reader.Read() do
-                if not (File.Exists(receiptPath root (reader.GetString 0) (reader.GetString 1))) then invalidOp "missing accepted obligation"
+                let key = Path.GetFileNameWithoutExtension file
+                match pending.TryGetValue key with
+                | true, (producer, batch, stream, digest) ->
+                    if file <> receiptPath root producer batch then invalidOp "invalid receipt binding"
+                    let bytes = File.ReadAllBytes file
+                    let actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData bytes).ToLowerInvariant()
+                    if actual <> digest || not (seen.Add key) then invalidOp "invalid receipt artifact"
+                    use document = JsonDocument.Parse bytes
+                    let envelope = document.RootElement
+                    let fields = envelope.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    if envelope.ValueKind <> JsonValueKind.Object
+                       || fields.Length <> 6 || fields |> Array.distinct |> Array.length <> 6
+                       || envelope.GetProperty("schema").GetString() <> "fsgg.telemetry.envelope/1"
+                       || envelope.GetProperty("workspaceId").GetString() <> workspace
+                       || envelope.GetProperty("producerId").GetString() <> producer
+                       || envelope.GetProperty("streamId").GetString() <> stream
+                       || envelope.GetProperty("batchId").GetString() <> batch then invalidOp "invalid receipt binding"
+                | false, _ ->
+                    let envelope = TelemetryReceipt.parse(File.ReadAllBytes file) |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
+                    if file <> receiptPath root envelope.Scope.Producer envelope.BatchId || not (receiptAuthorized connection envelope.Scope) then invalidOp "invalid receipt binding"
+                    let parameters = receiptParameters envelope
+                    let prior = receiptScalar connection "SELECT digest FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters
+                    if not (isNull prior) && string prior <> envelope.Digest then invalidOp "receipt identity conflict"
+                    if isNull prior then
+                        receiptExecute connection "INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($p,$b,$s,$d,$n,'durably-received');"
+                            (parameters @ ["$s",box envelope.Scope.Stream; "$d",box envelope.Digest; "$n",box info.Length])
+                        hook "index-committed"
+                    let state = string (receiptScalar connection "SELECT state FROM transport_receipts WHERE producer=$p AND batch=$b;" parameters)
+                    if state <> "durably-received" then File.Delete file; fsyncDirectory inbox
+            if seen.Count <> pending.Count then invalidOp "missing accepted obligation"
         elif Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM transport_receipts WHERE state='durably-received';" []) <> 0L then invalidOp "missing accepted inbox"
 
     let submitReceiptWithHook path assessment scope bytes hook =

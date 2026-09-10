@@ -64,8 +64,11 @@ def validate_standalone_qualification(path: pathlib.Path, source_sha: str, packa
         raise ValueError("standalone qualification evidence must be one object")
     binding = data.get("binding")
     claims = data.get("claims")
+    checks = data.get("checks")
+    packaged_store = data.get("packagedStore")
+    limits = data.get("limits")
     if (
-        data.get("schema") != "fsgg.telemetry.standalone-qualification/1"
+        data.get("schema") != "fsgg.telemetry.standalone-qualification/2"
         or data.get("qualified") is not True
         or not isinstance(binding, dict)
         or binding.get("sourceSha") != source_sha
@@ -76,6 +79,21 @@ def validate_standalone_qualification(path: pathlib.Path, source_sha: str, packa
         or claims.get("physicalPowerLoss") is not False
         or claims.get("mainInstalled") is not False
         or claims.get("publicRelease") is not False
+        or not isinstance(checks, dict)
+        or set(checks) != {
+            "startupP95Milliseconds",
+            "idleRssPeakBytes",
+            "coldCliSubmissionP95Milliseconds",
+            "warmInProcessAdmissionP95Milliseconds",
+        }
+        or any(value is not True for value in checks.values())
+        or not isinstance(limits, dict)
+        or limits.get("coldCliSubmissionP95Milliseconds") != 1000
+        or limits.get("warmInProcessAdmissionP95Milliseconds") != 100
+        or not isinstance(packaged_store, dict)
+        or packaged_store.get("schema") != "fsgg.telemetry.packaged-store-performance/1"
+        or packaged_store.get("qualified") is not True
+        or packaged_store.get("assessment") != "approved-local-durable"
     ):
         raise ValueError("standalone qualification evidence is not a passing prepared-package result")
 
