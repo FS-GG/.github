@@ -73,11 +73,12 @@ reprovisioned because hashes are one-way.
   operator checks passed, including staged config/credential verification before
   publication. No Main mutation or service activation occurred.
 
-The packaging lane also prepared a prerelease helper candidate from source
-`bcabcac90847ffc3132f0270aeed00a17ae4bbdc` with archive SHA-256
-`f57603390fc87224f8071f2599a2b25e20c6b2ce9ac8d80742daaccbb0e1c0f6` and
+After the deterministic source-path repair, the packaging lane produced equal
+payloads from two independent clean roots and prepared a prerelease helper
+candidate from source `f66673c5a5babc3034becdf73602c904c96b2355` with archive SHA-256
+`8900f71d9cf6ff6a18a290383b492276e72fe29d8f5ac9c955fe0712f53ea5da` and
 producer payload SHA-256
-`e6f6098c9efd02d01a8cfd0b07bf8a912d52ca554619d5369372a1063647d3fd`.
+`593c8a71e4ed2bc4d84ac0d40e42739d2abbdc284bbd101d1d99d216990ee537`.
 Those bytes prove the package path during development; they are not the final PR
 artifact or a published release because their source binding predates the final
 candidate.
