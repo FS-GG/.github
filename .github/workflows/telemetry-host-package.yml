@@ -81,10 +81,10 @@ jobs:
         env:
           FSGG_RUN_REAL_BROWSER: "1"
         run: |
-          cd tests/FS.GG.Telemetry.Browser.Tests
+          cd tests/FS.GG.Telemetry.Browser.Tests || exit 2
           npm ci --ignore-scripts
           npx playwright install --with-deps chromium
-          cd ../..
+          cd ../.. || exit 2
           dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
           dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
           dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore
