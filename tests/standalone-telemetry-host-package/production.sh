@@ -81,7 +81,13 @@ envelope={'schema':'fsgg.telemetry.envelope/1','workspaceId':'package-workspace'
 pathlib.Path(sys.argv[1]).write_text(json.dumps(envelope,separators=(',',':'))+'\n')
 PY
   code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" -H 'Content-Type: application/json' --data-binary "@$WORK/envelope.json" --output "$WORK/receipt.json" --write-out '%{http_code}' "$base/v1/batches")"
-  [ "$code" = 202 ] && ok "installed host accepts one scoped receipt envelope" || bad "installed host accepts one scoped receipt envelope" "HTTP $code $(cat "$WORK/receipt.json")"
+  if [ "$code" = 202 ] && python3 - "$WORK/envelope.json" "$WORK/receipt.json" durably-received <<'PY'
+import hashlib,json,sys
+envelope=json.load(open(sys.argv[1])); receipt=json.load(open(sys.argv[2])); expected=sys.argv[3]
+canonical=json.dumps(envelope,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+assert receipt=={'schema':'fsgg.telemetry.receipt/1','workspaceId':'package-workspace','producerId':'package-producer','streamId':'runtime','batchId':'package-batch','digest':'sha256:'+hashlib.sha256(canonical).hexdigest(),'status':expected,'code':None}
+PY
+  then ok "installed host returns the complete identity-bound durable receipt"; else bad "installed host returns the complete identity-bound durable receipt" "HTTP $code $(cat "$WORK/receipt.json")"; fi
 
   kill -KILL "$pid"
   wait "$pid" 2>/dev/null || true
@@ -94,11 +100,24 @@ PY
     sleep 1
   done
   ok "installed host restarts after interruption"
+  for attempt in {1..50}; do
+    code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/applied-receipt.json" --write-out '%{http_code}' "$base/v1/receipts/package-batch")"
+    if [ "$code" = 200 ] && python3 - "$WORK/applied-receipt.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); assert r['schema']=='fsgg.telemetry.receipt/1' and r['workspaceId']=='package-workspace' and r['producerId']=='package-producer' and r['streamId']=='runtime' and r['batchId']=='package-batch' and r['status']=='applied' and r['code'] is None and r['digest'].startswith('sha256:')
+PY
+    then break; fi
+    [ "$attempt" -lt 50 ] || { bad "restarted host exposes the applied receipt" "HTTP $code"; kill "$pid" 2>/dev/null || true; return; }
+    sleep 0.1
+  done
+  ok "restarted host exposes the applied receipt"
 
   local browser_spki
   browser_spki="$(openssl x509 -in "$tls/server.crt" -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64)"
   (cd "$ROOT/tests/FS.GG.Telemetry.Browser.Tests" && FSGG_BROWSER_BASE_URL="$base" FSGG_BROWSER_PRINCIPAL_ID=package-browser FSGG_BROWSER_ACCESS_KEY="$browser_key" FSGG_BROWSER_KNOWN_WORKSPACE=package-workspace FSGG_BROWSER_UNAVAILABLE_WORKSPACE=outside-workspace FSGG_BROWSER_CERTIFICATE_SPKI="$browser_spki" npm run test:browser) >"$WORK/browser.out" 2>"$WORK/browser.err" \
     && ok "installed host passes the pinned-certificate HTTPS browser isolation journey" || bad "installed host passes the pinned-certificate HTTPS browser isolation journey" "$(tail -10 "$WORK/browser.err")"
+  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$base" package-browser "$browser_key" package-workspace package-item "$browser_spki" >"$WORK/installed-browser.out" 2>"$WORK/installed-browser.err" \
+    && ok "installed browser snapshot contains the applied native package item" || bad "installed browser snapshot contains the applied native package item" "$(tail -10 "$WORK/installed-browser.err")"
   kill -TERM "$pid"
   rc=0
   wait "$pid" || rc=$?
@@ -106,6 +125,27 @@ PY
 
   "$ENGINE" backup --config "$config" --output "$WORK/backup" >"$WORK/backup.out" 2>"$WORK/backup.err" \
     && ok "installed host creates a coherent offline backup" || bad "installed host creates a coherent offline backup" "$(cat "$WORK/backup.err")"
-  "$ENGINE" restore --config "$config" --input "$WORK/backup" --state-root "$durable_parent/restored-${PACKAGE_SHA:0:12}-$$" >"$WORK/restore.out" 2>"$WORK/restore.err" \
+  local restored_root restored_config restored_port restored_base
+  restored_root="$durable_parent/restored-${PACKAGE_SHA:0:12}-$$"
+  "$ENGINE" restore --config "$config" --input "$WORK/backup" --state-root "$restored_root" >"$WORK/restore.out" 2>"$WORK/restore.err" \
     && ok "installed host restores into a fresh qualified root" || bad "installed host restores into a fresh qualified root" "$(cat "$WORK/restore.err")"
+  restored_port="$((port + 1))"; restored_base="https://localhost:$restored_port"; restored_config="$secrets/restored-host.json"
+  python3 - "$config" "$restored_config" "$restored_base" "$restored_root/package-workspace" "$secrets/restored.lock" <<'PY'
+import json,pathlib,sys
+source,out,base,root,lock=sys.argv[1:]; data=json.load(open(source)); data['ListenUrl']=base; data['Stores'][0]['Root']=root; data['ServiceLockPath']=lock
+pathlib.Path(out).write_text(json.dumps(data,separators=(',',':'))+'\n')
+PY
+  chmod 600 "$restored_config"
+  (exec "$ENGINE" serve --config "$restored_config" >"$WORK/restored-serve.out" 2>"$WORK/restored-serve.err") & pid=$!
+  for attempt in {1..30}; do
+    curl --fail --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" "$restored_base/private/health" -o "$WORK/restored-health.json" && break
+    [ "$attempt" -lt 30 ] || { bad "restored installed host reaches readiness" "$(tail -5 "$WORK/restored-serve.err")"; kill "$pid" 2>/dev/null || true; return; }
+    sleep 1
+  done
+  code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/restored-receipt.json" --write-out '%{http_code}' "$restored_base/v1/receipts/package-batch")"
+  [ "$code" = 200 ] && cmp -s "$WORK/applied-receipt.json" "$WORK/restored-receipt.json" && ok "restored host retains the exact applied receipt" || bad "restored host retains the exact applied receipt" "HTTP $code"
+  node "$ROOT/tests/standalone-telemetry-host-package/installed-browser.js" "$ROOT/tests/FS.GG.Telemetry.Browser.Tests/node_modules/playwright" "$restored_base" package-browser "$browser_key" package-workspace package-item "$browser_spki" >"$WORK/restored-browser.out" 2>"$WORK/restored-browser.err" \
+    && ok "restored browser snapshot retains the native package item" || bad "restored browser snapshot retains the native package item" "$(tail -10 "$WORK/restored-browser.err")"
+  kill -TERM "$pid"; rc=0; wait "$pid" || rc=$?
+  [ "$rc" -eq 0 ] && ok "restored installed host shuts down cleanly" || bad "restored installed host shuts down cleanly" "rc=$rc"
 }
