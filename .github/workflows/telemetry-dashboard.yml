@@ -82,7 +82,7 @@ jobs:
           args=(--actions actions.json --deliveries deliveries.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
           [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
           python3 tools/telemetry-dashboard.py compose "${args[@]}"
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v4
         with:
           path: telemetry-dashboard
