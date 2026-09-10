@@ -85,7 +85,7 @@ PY
 import hashlib,json,sys
 envelope=json.load(open(sys.argv[1])); receipt=json.load(open(sys.argv[2])); expected=sys.argv[3]
 canonical=json.dumps(envelope,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
-assert receipt=={'schema':'fsgg.telemetry.receipt/1','workspaceId':'package-workspace','producerId':'package-producer','streamId':'runtime','batchId':'package-batch','digest':'sha256:'+hashlib.sha256(canonical).hexdigest(),'status':expected,'code':None}
+assert receipt=={'schema':'fsgg.telemetry.receipt/1','workspaceId':'package-workspace','producerId':'package-producer','streamId':'runtime','batchId':'package-batch','digest':hashlib.sha256(canonical).hexdigest(),'status':expected,'code':None}
 PY
   then ok "installed host returns the complete identity-bound durable receipt"; else bad "installed host returns the complete identity-bound durable receipt" "HTTP $code $(cat "$WORK/receipt.json")"; fi
 
@@ -104,7 +104,7 @@ PY
     code="$(curl --silent --show-error --cacert "$tls/server.crt" -H "Authorization: Bearer $producer_secret" --output "$WORK/applied-receipt.json" --write-out '%{http_code}' "$base/v1/receipts/package-batch")"
     if [ "$code" = 200 ] && python3 - "$WORK/applied-receipt.json" <<'PY'
 import json,sys
-r=json.load(open(sys.argv[1])); assert r['schema']=='fsgg.telemetry.receipt/1' and r['workspaceId']=='package-workspace' and r['producerId']=='package-producer' and r['streamId']=='runtime' and r['batchId']=='package-batch' and r['status']=='applied' and r['code'] is None and r['digest'].startswith('sha256:')
+r=json.load(open(sys.argv[1])); digest=r['digest']; assert r['schema']=='fsgg.telemetry.receipt/1' and r['workspaceId']=='package-workspace' and r['producerId']=='package-producer' and r['streamId']=='runtime' and r['batchId']=='package-batch' and r['status']=='applied' and r['code'] is None and len(digest)==64 and digest==digest.lower() and all(c in '0123456789abcdef' for c in digest)
 PY
     then break; fi
     [ "$attempt" -lt 50 ] || { bad "restarted host exposes the applied receipt" "HTTP $code"; kill "$pid" 2>/dev/null || true; return; }
