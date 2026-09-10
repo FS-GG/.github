@@ -25,6 +25,24 @@ def cutover(config_digest,candidate_digest):
     return value
 
 
+def retry_cutover(config_digest,candidate_digest,labels_digest="5"*64,proof_directory="/operator/p1-attempt-1"):
+    initial=cutover("a"*64,"b"*64)
+    value={"schema":D.HANDOFF_RETRY_CUTOVER_SCHEMA,"generation":2,"configDigest":config_digest,"candidateDigest":candidate_digest,
+        "labelsDigest":labels_digest,"coordinatorDigest":"6"*64,"publisherUnitDigest":"7"*64,
+        "remoteBaseline":{"commit":"8"*40,"snapshotDigest":"9"*64},
+        "priorAttempt":{"generation":1,"proofDirectory":proof_directory,"proofDigest":initial["evidenceDigest"],"terminalState":"rolled-back",
+            "failureCode":"HANDOFF_OUTGOING_UNSAFE","replacementGitHubMutation":"absent","ambiguousIntent":"absent",
+            "archivedActivationDigest":"c"*64,"incumbentActivationBeforeDigest":"d"*64,"restoredIncumbentActivationDigest":"d"*64,
+            "incumbentActivationRestored":"byte-identical",
+            "incumbentTimerEnabledState":"enabled","incumbentTimerActiveState":"active","incumbentServiceActiveState":"inactive"},
+        "incumbentAccountUid":1001,"managerIdentity":"user@1001.service","timerUnit":"fsgg-telemetry-dashboard.timer",
+        "timerEnabledState":"disabled","timerActiveState":"inactive","serviceUnit":"fsgg-telemetry-dashboard.service",
+        "serviceActiveState":"inactive","eventActivationPathDigest":"4"*64,"eventActivationPriorState":"removed-by-cutover",
+        "eventActivationReceiptDigest":"3"*64,"eventActivationState":"absent","observedAt":"2026-09-10T18:30:00Z"}
+    value["evidenceDigest"]=hashlib.sha256(D.dump(value)).hexdigest()
+    return value,initial
+
+
 class HandoffPublisherTests(unittest.TestCase):
     def fixture(self):
         temporary=tempfile.TemporaryDirectory(); root=pathlib.Path(temporary.name)
@@ -148,6 +166,42 @@ class HandoffPublisherTests(unittest.TestCase):
             path=pathlib.Path(directory); path.chmod(0o2750)
             with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"): D._load_cutover_proof(path,os.getuid(),os.getgid(),61001,digest,candidate)
             with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"): D._load_cutover_proof(path,61001,os.getgid(),61001,digest,candidate)
+
+    def test_retry_proof_chains_immutable_failure_and_recovery_before_new_activation(self):
+        config="1"*64; candidate="2"*64
+        with tempfile.TemporaryDirectory() as directory:
+            proof,initial=retry_cutover(config,candidate,proof_directory=directory)
+            self.assertEqual(D._validate_cutover_proof(proof,config,candidate),proof)
+            with mock.patch.object(D,"_validate_owned_directory"),mock.patch.object(D,"_read_owned_bytes",return_value=D.dump(initial)):
+                D._verify_prior_cutover_proof(proof,0,953)
+        for field,value in (("replacementGitHubMutation","present"),("ambiguousIntent","present"),
+            ("incumbentActivationBeforeDigest","e"*64),("incumbentActivationRestored","different"),
+            ("incumbentTimerActiveState","inactive")):
+            changed=json.loads(json.dumps(proof)); changed["priorAttempt"][field]=value; changed.pop("evidenceDigest")
+            changed["evidenceDigest"]=hashlib.sha256(D.dump(changed)).hexdigest()
+            with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"):
+                D._validate_cutover_proof(changed,config,candidate)
+
+    def test_retry_proof_requires_preserved_exact_prior_proof(self):
+        config="1"*64; candidate="2"*64
+        with tempfile.TemporaryDirectory() as directory:
+            proof,initial=retry_cutover(config,candidate,proof_directory=directory)
+            changed=dict(initial); changed["observedAt"]="2026-09-10T18:00:00Z"; changed.pop("evidenceDigest")
+            changed["evidenceDigest"]=hashlib.sha256(D.dump(changed)).hexdigest()
+            with mock.patch.object(D,"_validate_owned_directory"),mock.patch.object(D,"_read_owned_bytes",return_value=D.dump(changed)):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_PRIOR_CUTOVER_PROOF_INVALID"):
+                    D._verify_prior_cutover_proof(proof,0,953)
+
+    def test_retry_activation_requires_fresh_proof_label_binding(self):
+        temporary,_,outgoing,state,_,digest,args=self.fixture()
+        with temporary:
+            self.stage(args); proof,_=retry_cutover("1"*64,D._candidate_digest(),labels_digest="0"*64)
+            setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
+                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+                operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),record_activation=True,authorize_single_publisher_cutover=True)
+            with mock.patch.object(D,"_load_cutover_proof",return_value=proof):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"):
+                    D.handoff_setup(setup)
 
     def test_shared_stage_lock_contention_is_bounded_and_never_changes_mode(self):
         import fcntl
