@@ -278,6 +278,7 @@ module RemoteTelemetryTests =
             let rotatedTokenPath=Path.Combine(root,"producer-token-rotated")
             let revokedTokenPath=Path.Combine(root,"producer-token-revoked")
             let otherTokenPath=Path.Combine(root,"other-token")
+            let browserKeyPath=Path.Combine(root,"browser-key.json")
             let configPath=Path.Combine(root,"host.json")
             let lockPath=Path.Combine(root,"host.lock")
             File.WriteAllBytes(certificatePath,certificate.Export(X509ContentType.Pfx,password))
@@ -286,16 +287,23 @@ module RemoteTelemetryTests =
             let rotatedToken=String('r',48)
             let revokedToken=String('v',48)
             let otherToken=String('o',48)
+            let browserAccessKey=Convert.ToBase64String(RandomNumberGenerator.GetBytes 32).TrimEnd('=').Replace('+','-').Replace('/','_')
             File.WriteAllText(tokenPath,token)
             File.WriteAllText(rotatedTokenPath,rotatedToken)
             File.WriteAllText(revokedTokenPath,revokedToken)
             File.WriteAllText(otherTokenPath,otherToken)
-            for path in [certificatePath;passwordPath;tokenPath;rotatedTokenPath;revokedTokenPath;otherTokenPath] do File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-            let json=$"""{{"Schema":"fsgg.telemetry.host-config/1","ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}],"BrowserPrincipals":[],"BrowserSession":{{"IdleSeconds":300,"AbsoluteSeconds":3600,"MaximumSessions":32,"LoginAttemptsPerMinute":16,"LoginAdmission":4,"QueryAdmission":4,"QueryTimeoutSeconds":10}}}}"""
+            let browserHash=Convert.ToHexString(SHA256.HashData(Convert.FromBase64String(browserAccessKey.Replace('-','+').Replace('_','/')+"="))).ToLowerInvariant()
+            File.WriteAllText(browserKeyPath,$"""{{"schema":"fsgg.telemetry.browser-key/1","algorithm":"sha256","keyHash":"{browserHash}"}}""")
+            for path in [certificatePath;passwordPath;tokenPath;rotatedTokenPath;revokedTokenPath;otherTokenPath;browserKeyPath] do File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let json=$"""{{"Schema":"fsgg.telemetry.host-config/1","ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}],"BrowserPrincipals":[{{"PrincipalId":"operator-a","KeyHashFile":"{browserKeyPath}","WorkspaceIds":["{scope.Workspace}"],"Revoked":false}}],"BrowserSession":{{"IdleSeconds":300,"AbsoluteSeconds":3600,"MaximumSessions":32,"LoginAttemptsPerMinute":16,"LoginAdmission":4,"QueryAdmission":4,"QueryTimeoutSeconds":10}}}}"""
             File.WriteAllText(configPath,json)
             File.SetUnixFileMode(configPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             match Configuration.load configPath with Ok _->()|Error errors->Assert.Fail(sprintf "config rejected: %A" errors)
             let loaded=Configuration.load configPath |> Result.defaultWith(fun e->failwithf "%A" e)
+            Assert.False(File.Exists lockPath)
+            Assert.Equal(0,Operations.runWithAssessment [|"status";"--config";configPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.False(File.Exists lockPath)
+            Assert.Equal(0,Operations.runWithAssessment [|"preflight";"--config";configPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
             let credentials=Configuration.credentials loaded
             let start () = task {
                 let state=new Runtime.HostState(loaded,fun _->TelemetryStore.ApprovedLocalDurable)

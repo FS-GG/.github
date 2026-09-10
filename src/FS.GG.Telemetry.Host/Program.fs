@@ -14,6 +14,28 @@ open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
 open FS.GG.Coord.Cli
+open FS.GG.Telemetry.Dashboard
+
+module private BrowserComposition =
+    let options config =
+        { PublicOrigin=Uri config.ListenUrl
+          IdleLifetime=TimeSpan.FromSeconds(float config.BrowserSession.IdleSeconds)
+          AbsoluteLifetime=TimeSpan.FromSeconds(float config.BrowserSession.AbsoluteSeconds)
+          MaximumSessions=config.BrowserSession.MaximumSessions
+          LoginAttemptsPerMinute=config.BrowserSession.LoginAttemptsPerMinute
+          LoginAdmission=config.BrowserSession.LoginAdmission
+          QueryAdmission=config.BrowserSession.QueryAdmission
+          QueryTimeout=TimeSpan.FromSeconds(float config.BrowserSession.QueryTimeoutSeconds) }
+    let snapshot config workspace itemId =
+        match config.Stores |> Array.tryFind(fun store->store.WorkspaceId=workspace) with
+        | None -> Error ["projection-unavailable"]
+        | Some store ->
+            match TelemetryStoreApplication.scopedDashboardSnapshot store.Root (TelemetryStoreApplication.assessProductionRoot store.Root) workspace itemId with
+            | Error _ -> Error ["projection-unavailable"]
+            | Ok envelope ->
+                match DashboardProjection.project workspace (Encoding.UTF8.GetBytes envelope) with
+                | Ok bytes -> Ok bytes
+                | Error _ -> Error ["projection-unavailable"]
 
 module Hosting =
     let createBuilder (listenUrl:string) certificate =
@@ -126,6 +148,7 @@ module Operations =
             if config.BrowserPrincipals.Length=0 then Error ["dashboard-auth-unavailable"] else
             Configuration.credentials config |> ignore
             Configuration.browserKeyHashes config |> ignore
+            use _browser=new BrowserSecurity.Service(BrowserComposition.options config,config.BrowserPrincipals)
             use _certificate=System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(config.CertificatePath,File.ReadAllText(config.CertificatePasswordFile).Trim())
             let failures=
                 config.Stores
@@ -231,6 +254,7 @@ module Program =
         | Some path ->
         match Configuration.load path with
         | Error _ -> 2
+        | Ok config when config.BrowserPrincipals.Length=0 -> 2
         | Ok config ->
             try
                 match Runtime.ServiceLock.Acquire config.ServiceLockPath with
@@ -238,8 +262,11 @@ module Program =
                 | Ok serviceLock ->
                   use serviceLock=serviceLock
                   let credentials=Configuration.credentials config
+                  let browserOptions=BrowserComposition.options config
+                  use browserSecurity=new BrowserSecurity.Service(browserOptions,config.BrowserPrincipals)
                   match Runtime.recover config with
                   | Error _ -> 3
+                  | Ok () when config.Stores |> Array.exists(fun store->BrowserComposition.snapshot config store.WorkspaceId None |> Result.isError) -> 3
                   | Ok () ->
                     use state=new Runtime.HostState(config)
                     state.Ready<-true; state.StartDrain()
@@ -247,5 +274,6 @@ module Program =
                     let builder=Hosting.createBuilder config.ListenUrl certificate
                     let app=builder.Build()
                     Endpoints.configure app state credentials
+                    BrowserEndpoints.map app browserOptions browserSecurity (BrowserComposition.snapshot config)
                     app.Run(); 0
             with :? IOException -> 4

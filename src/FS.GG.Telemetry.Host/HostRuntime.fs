@@ -16,7 +16,6 @@ open FS.GG.Coord.Cli
 
 type StoreConfig = { WorkspaceId:string; Root:string }
 type CredentialConfig = { Reference:string; SecretFile:string; WorkspaceId:string; ProducerId:string; StreamId:string; Revoked:bool }
-type BrowserPrincipalConfig = { PrincipalId:string; KeyHashFile:string; WorkspaceIds:string array; Revoked:bool }
 type BrowserSessionConfig = { IdleSeconds:int; AbsoluteSeconds:int; MaximumSessions:int; LoginAttemptsPerMinute:int; LoginAdmission:int; QueryAdmission:int; QueryTimeoutSeconds:int }
 type HostConfig = { Schema:string; ListenUrl:string; CertificatePath:string; CertificatePasswordFile:string; ServiceLockPath:string; Stores:StoreConfig array; Credentials:CredentialConfig array; BrowserPrincipals:BrowserPrincipalConfig array; BrowserSession:BrowserSessionConfig }
 type AuthEntry = { Scope:TelemetryReceipt.Scope; TokenHash:byte array; Revoked:bool }
