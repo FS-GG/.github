@@ -169,6 +169,50 @@ module TelemetryStoreApplicationTests =
         Assert.Equal("database-transaction",operational.GetProperty("consistency").GetString())
 
     [<Fact>]
+    let ``scoped provenance proof remains receipt-linear across pages`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        do
+            use populated=new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+            populated.Open()
+            use transaction=populated.BeginTransaction()
+            for revision in 0..299 do
+                let batchId=$"batch-{revision:D3}"
+                let digest=String(char(int 'a' + revision % 6),64)
+                use receipt=populated.CreateCommand()
+                receipt.Transaction<-transaction
+                receipt.CommandText<-"INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state,code,terminal_utc) VALUES($producer,$batch,'runtime',$digest,1,'applied','applied','2026-09-10T00:00:00Z');"
+                receipt.Parameters.AddWithValue("$producer",scope.Producer) |> ignore
+                receipt.Parameters.AddWithValue("$batch",batchId) |> ignore
+                receipt.Parameters.AddWithValue("$digest",digest) |> ignore
+                receipt.ExecuteNonQuery() |> ignore
+                use ingest=populated.CreateCommand()
+                ingest.Transaction<-transaction
+                ingest.CommandText<-"INSERT INTO ingest_batches(ingest_id,content_digest,source_identity,generation,cursor,accepted_count,replay_count) VALUES($id,$digest,'native-source','g1',$cursor,1,0);"
+                ingest.Parameters.AddWithValue("$id","receipt-"+TelemetryReceipt.key scope.Producer batchId) |> ignore
+                ingest.Parameters.AddWithValue("$digest",digest) |> ignore
+                ingest.Parameters.AddWithValue("$cursor",string revision) |> ignore
+                ingest.ExecuteNonQuery() |> ignore
+            transaction.Commit()
+        let mutable keyComputations=0
+        let hooks:TelemetryStoreApplication.ScopedDashboardSnapshotHooks =
+            { AfterFirstRead=ignore; ReceiptKeyComputed=fun ()->keyComputations<-keyComputations+1 }
+        TelemetryStoreApplication.scopedDashboardSnapshotWithHooks path approved scope.Workspace hooks None |> unwrap |> ignore
+        Assert.Equal(300,keyComputations)
+        use connection=new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use plan=connection.CreateCommand()
+        plan.CommandText <- "EXPLAIN QUERY PLAN SELECT rowid,producer,batch,digest FROM transport_receipts NOT INDEXED WHERE rowid>$cursor AND state='applied' ORDER BY rowid LIMIT 256;"
+        plan.Parameters.AddWithValue("$cursor",0L) |> ignore
+        use reader=plan.ExecuteReader()
+        let details=[|while reader.Read() do yield reader.GetString 3|]
+        Assert.Contains(details,fun detail->detail.Contains("INTEGER PRIMARY KEY",StringComparison.Ordinal))
+        Assert.DoesNotContain(details,fun detail->detail.Contains("TEMP B-TREE",StringComparison.Ordinal))
+
+    [<Fact>]
     let ``receipt backup restores pending obligation into fresh root`` () =
         let cleanup, path = root ()
         use cleanup = cleanup

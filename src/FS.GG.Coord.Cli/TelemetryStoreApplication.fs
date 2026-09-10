@@ -14,6 +14,7 @@ open FS.GG.Coord
 module TelemetryStoreApplication =
     type DrainHooks = { BeforeCommit: unit -> unit; AfterCommitBeforeDelete: unit -> unit }
     type DashboardSnapshotHooks = { AfterFirstRead: unit -> unit }
+    type ScopedDashboardSnapshotHooks = { AfterFirstRead: unit -> unit; ReceiptKeyComputed: unit -> unit }
     let databaseFileName = "telemetry.sqlite3"
     let private minimumEngine = Version(3, 51, 3)
     let private busyMilliseconds = 750
@@ -1082,18 +1083,41 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         command.ExecuteNonQuery() |> ignore
     let private receiptWorkspace connection =
         string (receiptScalar connection "SELECT value FROM store_metadata WHERE key='receiptWorkspace';" [])
-    let private verifyScopedProvenance (connection:SqliteConnection) (transaction:SqliteTransaction) workspace =
+    let private verifyScopedProvenance (connection:SqliteConnection) (transaction:SqliteTransaction) workspace receiptKeyComputed =
         use workspaceCommand = connection.CreateCommand()
         workspaceCommand.Transaction <- transaction
         workspaceCommand.CommandText <- "SELECT value FROM store_metadata WHERE key='receiptWorkspace';"
         let enrolled = workspaceCommand.ExecuteScalar()
         if isNull enrolled || enrolled = box DBNull.Value || string enrolled <> workspace then Error [ "projection-unavailable" ] else
-        connection.CreateFunction<string,string,string>("fsgg_receipt_ingest_id",(fun producer batch -> "receipt-" + TelemetryReceipt.key producer batch),true) |> ignore
-        use provenanceCommand = connection.CreateCommand()
-        provenanceCommand.Transaction <- transaction
-        provenanceCommand.CommandTimeout <- 10
-        provenanceCommand.CommandText <- "SELECT count(*) FROM ingest_batches b WHERE NOT EXISTS(SELECT 1 FROM transport_receipts r WHERE r.state='applied' AND fsgg_receipt_ingest_id(r.producer,r.batch)=b.ingest_id AND r.digest=b.content_digest);"
-        if Convert.ToInt64(provenanceCommand.ExecuteScalar())=0L then Ok () else Error [ "projection-unavailable" ]
+        let count sql =
+            use command=connection.CreateCommand()
+            command.Transaction<-transaction;command.CommandText<-sql
+            Convert.ToInt64(command.ExecuteScalar())
+        let expected=count "SELECT count(*) FROM ingest_batches;"
+        let mutable covered=0L
+        let mutable cursor=0L
+        let mutable complete=false
+        let mutable valid=true
+        while valid && not complete do
+            use pageCommand=connection.CreateCommand()
+            pageCommand.Transaction<-transaction
+            // Force the rowid range scan. SQLite otherwise prefers transport_pending(state,producer)
+            // and builds a temporary ordering tree again for every page, making this proof quadratic.
+            pageCommand.CommandText<-"SELECT rowid,producer,batch,digest FROM transport_receipts NOT INDEXED WHERE rowid>$cursor AND state='applied' ORDER BY rowid LIMIT 256;"
+            parameter pageCommand "$cursor" cursor
+            use reader=pageCommand.ExecuteReader()
+            let page=ResizeArray<int64*string*string*string>()
+            while reader.Read() do page.Add(reader.GetInt64 0,reader.GetString 1,reader.GetString 2,reader.GetString 3)
+            reader.Close()
+            if page.Count=0 then complete<-true else
+            for rowId,producer,batch,digest in page do
+                cursor<-rowId;receiptKeyComputed()
+                use lookup=connection.CreateCommand()
+                lookup.Transaction<-transaction
+                lookup.CommandText<-"SELECT count(*) FROM ingest_batches WHERE ingest_id=$id AND content_digest=$digest;"
+                parameter lookup "$id" ("receipt-"+TelemetryReceipt.key producer batch);parameter lookup "$digest" digest
+                if Convert.ToInt64(lookup.ExecuteScalar())=1L then covered<-covered+1L else valid<-false
+        if valid && covered=expected then Ok () else Error [ "projection-unavailable" ]
     let private receiptAuthorized connection (scope: TelemetryReceipt.Scope) =
         receiptWorkspace connection = scope.Workspace
         && Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers WHERE producer=$p AND stream=$s;" ["$p",box scope.Producer; "$s",box scope.Stream]) = 1L
@@ -1349,7 +1373,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 if receiptWorkspace connection <> workspace then Error [ "unauthorized-scope" ] else
                 recoverReceiptIndex root connection ignore
                 use projectionTransaction=connection.BeginTransaction()
-                match verifyScopedProvenance connection projectionTransaction workspace with
+                match verifyScopedProvenance connection projectionTransaction workspace ignore with
                 | Error errors -> projectionTransaction.Rollback(); Error errors
                 | Ok () ->
                 projectionTransaction.Rollback()
@@ -1455,7 +1479,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                             | Ok(restored,_) ->
                                 use restored=restored
                                 use transaction=restored.BeginTransaction()
-                                match verifyScopedProvenance restored transaction workspace with
+                                match verifyScopedProvenance restored transaction workspace ignore with
                                 | Error errors -> transaction.Rollback(); Directory.Delete(temporary,true); Error errors
                                 | Ok () ->
                                     transaction.Rollback(); Directory.Move(temporary,root); fsyncDirectory parent
@@ -1607,7 +1631,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
     // schema.  Every database value below is selected on this one connection while
     // one explicit transaction is open.  Keeping the table vocabulary here makes
     // the engine the sole owner of SQLite and migration knowledge.
-    let private dashboardSnapshotBound path assessment (workspaceId: string option) hooks (itemId: string option) =
+    let private dashboardSnapshotBound path assessment (workspaceId: (string*(unit->unit)) option) afterFirstRead (itemId: string option) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly |> Result.map (fun value -> root, value)) with
         | Error errors -> Error errors
         | Ok(root, (connection, _)) ->
@@ -1622,8 +1646,8 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                     let projectionAuthorized =
                         match workspaceId with
                         | None -> Ok ()
-                        | Some workspace when not (TelemetryReceipt.validId workspace) -> Error [ "unauthorized-scope" ]
-                        | Some workspace -> verifyScopedProvenance connection transaction workspace
+                        | Some(workspace,_) when not (TelemetryReceipt.validId workspace) -> Error [ "unauthorized-scope" ]
+                        | Some(workspace,computed) -> verifyScopedProvenance connection transaction workspace computed
                     match projectionAuthorized with
                     | Error errors -> Error errors
                     | Ok () ->
@@ -1637,7 +1661,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         itemId |> Option.iter (parameter command "$item")
                         use reader = command.ExecuteReader()
                         [| while reader.Read() do yield reader.GetString 0 |]
-                    hooks.AfterFirstRead()
+                    afterFirstRead()
                     if selectedItems.Length > 200 then Error [ "dashboard snapshot exceeds 200 selected items" ]
                     elif itemId.IsSome && selectedItems.Length = 0 then Error [ "unknown telemetry item" ]
                     else
@@ -1732,17 +1756,17 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "dashboard snapshot exceeds 1048576 bytes" ] else Ok result
             with error -> Error [ error.Message ]
 
-    let dashboardSnapshotWithHooks path assessment hooks itemId =
-        dashboardSnapshotBound path assessment None hooks itemId
+    let dashboardSnapshotWithHooks path assessment (hooks: DashboardSnapshotHooks) itemId =
+        dashboardSnapshotBound path assessment None hooks.AfterFirstRead itemId
 
     let dashboardSnapshot path assessment itemId =
-        dashboardSnapshotWithHooks path assessment { AfterFirstRead = ignore } itemId
+        dashboardSnapshotWithHooks path assessment ({ AfterFirstRead = ignore }: DashboardSnapshotHooks) itemId
 
-    let scopedDashboardSnapshotWithHooks path assessment workspaceId hooks itemId =
-        dashboardSnapshotBound path assessment (Some workspaceId) hooks itemId
+    let scopedDashboardSnapshotWithHooks path assessment workspaceId (hooks: ScopedDashboardSnapshotHooks) itemId =
+        dashboardSnapshotBound path assessment (Some(workspaceId,hooks.ReceiptKeyComputed)) hooks.AfterFirstRead itemId
 
     let scopedDashboardSnapshot path assessment workspaceId itemId =
-        scopedDashboardSnapshotWithHooks path assessment workspaceId { AfterFirstRead = ignore } itemId
+        scopedDashboardSnapshotWithHooks path assessment workspaceId { AfterFirstRead = ignore;ReceiptKeyComputed=ignore } itemId
 
     type private ActivationRow =
         { Id: string; Runtime: string; ActivatedAt: DateTimeOffset; Clock: string; LateAfterSeconds: int64 }

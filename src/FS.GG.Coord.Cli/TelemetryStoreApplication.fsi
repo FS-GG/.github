@@ -7,6 +7,7 @@ module TelemetryStoreApplication =
         { BeforeCommit: unit -> unit
           AfterCommitBeforeDelete: unit -> unit }
     type DashboardSnapshotHooks = { AfterFirstRead: unit -> unit }
+    type ScopedDashboardSnapshotHooks = { AfterFirstRead: unit -> unit; ReceiptKeyComputed: unit -> unit }
     val databaseFileName: string
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
@@ -38,7 +39,7 @@ module TelemetryStoreApplication =
     val dashboardSnapshot: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> Result<string, string list>
     val dashboardSnapshotWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> hooks: DashboardSnapshotHooks -> itemId: string option -> Result<string, string list>
     val scopedDashboardSnapshot: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> itemId: string option -> Result<string, string list>
-    val scopedDashboardSnapshotWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> hooks: DashboardSnapshotHooks -> itemId: string option -> Result<string, string list>
+    val scopedDashboardSnapshotWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> hooks: ScopedDashboardSnapshotHooks -> itemId: string option -> Result<string, string list>
     val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
     val run: action: string -> args: string list -> int
     val runBudget: action: string -> args: string list -> int

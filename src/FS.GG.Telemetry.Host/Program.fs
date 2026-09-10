@@ -117,8 +117,21 @@ module Operations =
     let private digestBytes (bytes:byte array)=Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
     let private digestFile path=use stream=File.OpenRead path in Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
     let private flushFile path=use stream=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.Read,4096,FileOptions.WriteThrough) in stream.Flush true
+    let private isLowerSha256 (value:string) =
+        not(isNull value) && value.Length=64 && value |> Seq.forall(fun c->Char.IsAsciiHexDigit c && not(Char.IsLetter c && Char.IsUpper c))
+    let private hasSymlinkAncestor path =
+        let mutable current=Path.GetFullPath path
+        let mutable found=false
+        while not found && not(String.IsNullOrEmpty current) do
+            if Directory.Exists current then found <- not(isNull(DirectoryInfo(current).LinkTarget))
+            elif File.Exists current then found <- not(isNull(FileInfo(current).LinkTarget))
+            let parent=Path.GetDirectoryName current
+            current <- if parent=current then null else parent
+        found
     let private configMetadataDigest config =
-        JsonSerializer.SerializeToUtf8Bytes {|schema=config.Schema;listenUrl=config.ListenUrl;stores=config.Stores;credentials=config.Credentials |> Array.map(fun x->{|reference=x.Reference;workspaceId=x.WorkspaceId;producerId=x.ProducerId;streamId=x.StreamId;revoked=x.Revoked|});browserPrincipals=config.BrowserPrincipals |> Array.map(fun x->{|principalId=x.PrincipalId;workspaceIds=x.WorkspaceIds;revoked=x.Revoked|});browserSession=config.BrowserSession|} |> digestBytes
+        // Bind logical enrollment and authorization without binding machine-specific store paths.
+        // A restore is always published below a new state root and activated through a reviewed config.
+        JsonSerializer.SerializeToUtf8Bytes {|schema=config.Schema;listenUrl=config.ListenUrl;workspaces=config.Stores |> Array.map _.WorkspaceId;credentials=config.Credentials |> Array.map(fun x->{|reference=x.Reference;workspaceId=x.WorkspaceId;producerId=x.ProducerId;streamId=x.StreamId;revoked=x.Revoked|});browserPrincipals=config.BrowserPrincipals |> Array.map(fun x->{|principalId=x.PrincipalId;workspaceIds=x.WorkspaceIds;revoked=x.Revoked|});browserSession=config.BrowserSession|} |> digestBytes
     let private freeSpaceFor path =
         try
             let mutable candidate=Path.GetFullPath path
@@ -197,47 +210,74 @@ module Operations =
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config -> withLock config (fun () ->
-                if not(Path.IsPathFullyQualified output) || Directory.Exists output || File.Exists output then resultExit "backup-integrity-failed" (Error ["backup output must not exist"]) else
-                let temporary=output+".tmp-"+Guid.NewGuid().ToString("N")
                 try
-                    Directory.CreateDirectory temporary |> ignore
-                    if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-                    let mutable failure=None
-                    for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.backupReceiptStore store.Root (assessmentFor store.Root) store.WorkspaceId (Path.Combine(temporary,store.WorkspaceId)) with Ok _->()|Error errors->failure<-Some errors
-                    match failure with
-                    | Some errors -> resultExit "backup-integrity-failed" (Error errors)
-                    | None ->
-                        let workspaces=config.Stores |> Array.sortBy _.WorkspaceId |> Array.map(fun store->{|workspaceId=store.WorkspaceId;path=store.WorkspaceId;manifestSha256=digestFile(Path.Combine(temporary,store.WorkspaceId,"manifest.json"))|})
-                        let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.0";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
-                        let manifestPath=Path.Combine(temporary,"backup-manifest.json")
-                        File.WriteAllText(manifestPath,manifest,UTF8Encoding(false));flushFile manifestPath;syncDirectory temporary
-                        Directory.Move(temporary,output);syncDirectory(Path.GetDirectoryName output)
-                        Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-result/1";output=output;manifestSha256=digestFile(Path.Combine(output,"backup-manifest.json"))|}+"\n");0
-                finally if Directory.Exists temporary then Directory.Delete(temporary,true))
+                    let outputParent=if Path.IsPathFullyQualified output then Path.GetDirectoryName(Path.GetFullPath output) else null
+                    if not(Path.IsPathFullyQualified output) || isNull outputParent || not(Directory.Exists outputParent) || hasSymlinkAncestor output || Directory.Exists output || File.Exists output then resultExit "backup-integrity-failed" (Error ["backup output must be a fresh child of an existing real directory"]) else
+                    let temporary=output+".tmp-"+Guid.NewGuid().ToString("N")
+                    try
+                        Directory.CreateDirectory temporary |> ignore
+                        if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                        let mutable failure=None
+                        for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.backupReceiptStore store.Root (assessmentFor store.Root) store.WorkspaceId (Path.Combine(temporary,store.WorkspaceId)) with Ok _->()|Error errors->failure<-Some errors
+                        match failure with
+                        | Some errors -> resultExit "backup-integrity-failed" (Error errors)
+                        | None ->
+                            let workspaces=config.Stores |> Array.sortBy _.WorkspaceId |> Array.map(fun store->{|workspaceId=store.WorkspaceId;path=store.WorkspaceId;manifestSha256=digestFile(Path.Combine(temporary,store.WorkspaceId,"manifest.json"))|})
+                            let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.0";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
+                            let manifestPath=Path.Combine(temporary,"backup-manifest.json")
+                            File.WriteAllText(manifestPath,manifest,UTF8Encoding(false));flushFile manifestPath;syncDirectory temporary
+                            Directory.Move(temporary,output);syncDirectory(Path.GetDirectoryName output)
+                            Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-result/1";output=output;manifestSha256=digestFile(Path.Combine(output,"backup-manifest.json"))|}+"\n");0
+                    finally if Directory.Exists temporary then Directory.Delete(temporary,true)
+                with _ -> resultExit "backup-integrity-failed" (Error ["backup creation failed"]))
         | ["restore";"--config";path;"--input";input;"--state-root";stateRoot] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config -> withLock config (fun () ->
-                if not(Path.IsPathFullyQualified stateRoot) || Directory.Exists stateRoot || File.Exists stateRoot then resultExit "backup-integrity-failed" (Error ["restore target must not exist"]) else
-                let temporary=stateRoot+".tmp-"+Guid.NewGuid().ToString("N")
                 try
-                    let manifestPath=Path.Combine(input,"backup-manifest.json")
-                    if not(File.Exists manifestPath) || FileInfo(manifestPath).Length>1024L*1024L then resultExit "backup-integrity-failed" (Error ["backup manifest unavailable"]) else
-                    use document=JsonDocument.Parse(File.ReadAllBytes manifestPath)
-                    let root=document.RootElement
-                    let names=root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
-                    let declared=root.GetProperty("workspaces").EnumerateArray() |> Seq.map(fun entry->entry.GetProperty("workspaceId").GetString(),entry.GetProperty("path").GetString(),entry.GetProperty("manifestSha256").GetString()) |> Seq.toArray
-                    let expected=config.Stores |> Array.map _.WorkspaceId |> Array.sort
-                    let actual=declared |> Array.map(fun (workspace,_,_)->workspace) |> Array.sort
-                    if names.Length<>7 || Array.distinct names|>Array.length<>7 || Set.ofArray names<>set["schema";"hostVersion";"supportedStoreSchemaMin";"supportedStoreSchemaMax";"configMetadataSha256";"createdAt";"workspaces"] || root.GetProperty("schema").GetString()<>"fsgg.telemetry.host-backup-set/1" || root.GetProperty("supportedStoreSchemaMin").GetInt32()<>9 || root.GetProperty("supportedStoreSchemaMax").GetInt32()<>9 || root.GetProperty("configMetadataSha256").GetString()<>configMetadataDigest config || actual<>expected || declared |> Array.exists(fun (workspace,relative,digest)->relative<>workspace || digestFile(Path.Combine(input,relative,"manifest.json"))<>digest) then resultExit "backup-integrity-failed" (Error ["backup manifest invalid"]) else
-                    Directory.CreateDirectory temporary |> ignore
-                    if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-                    let mutable failure=None
-                    for store in config.Stores do if failure.IsNone then match TelemetryStoreApplication.restoreReceiptStore (Path.Combine(input,store.WorkspaceId)) (Path.Combine(temporary,store.WorkspaceId)) (assessmentFor stateRoot) store.WorkspaceId with Ok _->()|Error errors->failure<-Some errors
-                    match failure with
-                    | Some errors -> resultExit "backup-integrity-failed" (Error errors)
-                    | None -> syncDirectory temporary;Directory.Move(temporary,stateRoot);syncDirectory(Path.GetDirectoryName stateRoot);Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-restore-set/1";root=stateRoot;sourceManifestSha256=digestFile manifestPath|}+"\n");0
-                finally if Directory.Exists temporary then Directory.Delete(temporary,true))
+                    if not(Path.IsPathFullyQualified input) || not(Directory.Exists input) || hasSymlinkAncestor input || not(Path.IsPathFullyQualified stateRoot) || Directory.Exists stateRoot || File.Exists stateRoot || hasSymlinkAncestor stateRoot then resultExit "backup-integrity-failed" (Error ["restore paths are invalid"]) else
+                    let temporary=stateRoot+".tmp-"+Guid.NewGuid().ToString("N")
+                    try
+                        let manifestPath=Path.Combine(input,"backup-manifest.json")
+                        if not(File.Exists manifestPath) || FileInfo(manifestPath).Length>1024L*1024L then resultExit "backup-integrity-failed" (Error ["backup manifest unavailable"]) else
+                        use document=JsonDocument.Parse(File.ReadAllBytes manifestPath)
+                        let root=document.RootElement
+                        let names=root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                        let frozenManifestDigest=digestFile manifestPath
+                        let createdAt=root.GetProperty("createdAt").GetString()
+                        let mutable parsedCreatedAt=DateTimeOffset.MinValue
+                        let declared=root.GetProperty("workspaces").EnumerateArray() |> Seq.map(fun entry->
+                            let entryNames=entry.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                            if entryNames.Length<>3 || Array.distinct entryNames |> Array.length<>3 || Set.ofArray entryNames<>set["workspaceId";"path";"manifestSha256"] then invalidOp "invalid workspace manifest entry"
+                            entry.GetProperty("workspaceId").GetString(),entry.GetProperty("path").GetString(),entry.GetProperty("manifestSha256").GetString()) |> Seq.truncate 129 |> Seq.toArray
+                        let expected=config.Stores |> Array.map _.WorkspaceId |> Array.sort
+                        let actual=declared |> Array.map(fun (workspace,_,_)->workspace) |> Array.sort
+                        let actualEntries=Directory.EnumerateFileSystemEntries(input,"*",SearchOption.TopDirectoryOnly) |> Seq.truncate 131 |> Seq.toArray
+                        let actualNames=actualEntries |> Array.map Path.GetFileName |> Array.sort
+                        let expectedNames=Array.append [|"backup-manifest.json"|] expected |> Array.sort
+                        let schemaMin=root.GetProperty("supportedStoreSchemaMin").GetInt32()
+                        let schemaMax=root.GetProperty("supportedStoreSchemaMax").GetInt32()
+                        let invalidManifest = names.Length<>7 || Array.distinct names|>Array.length<>7 || Set.ofArray names<>set["schema";"hostVersion";"supportedStoreSchemaMin";"supportedStoreSchemaMax";"configMetadataSha256";"createdAt";"workspaces"] || root.GetProperty("schema").GetString()<>"fsgg.telemetry.host-backup-set/1" || String.IsNullOrWhiteSpace(root.GetProperty("hostVersion").GetString()) || root.GetProperty("configMetadataSha256").GetString()<>configMetadataDigest config || isNull createdAt || not(DateTimeOffset.TryParse(createdAt,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.RoundtripKind,&parsedCreatedAt)) || declared.Length<>expected.Length || actual<>expected || Array.distinct actual |> Array.length<>actual.Length || actualNames<>expectedNames || actualEntries |> Array.exists(fun entry->if Directory.Exists entry then not(isNull(DirectoryInfo(entry).LinkTarget)) else not(isNull(FileInfo(entry).LinkTarget))) || declared |> Array.exists(fun (workspace,relative,digest)->isNull workspace || not(FS.GG.Coord.TelemetryReceipt.validId workspace) || relative<>workspace || not(isLowerSha256 digest) || digestFile(Path.Combine(input,relative,"manifest.json"))<>digest)
+                        if invalidManifest then resultExit "backup-integrity-failed" (Error ["backup manifest invalid"])
+                        elif schemaMin>9 || schemaMax<9 then resultExit "restore-incompatible" (Error ["backup schema is incompatible"])
+                        else
+                            Directory.CreateDirectory temporary |> ignore
+                            if not(OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                            let mutable failure=None
+                            for store in config.Stores do
+                                if failure.IsNone then
+                                    match TelemetryStoreApplication.restoreReceiptStore (Path.Combine(input,store.WorkspaceId)) (Path.Combine(temporary,store.WorkspaceId)) (assessmentFor stateRoot) store.WorkspaceId with
+                                    | Ok _ ->
+                                        let _,_,declaredDigest=declared |> Array.find(fun (workspace,_,_)->workspace=store.WorkspaceId)
+                                        if digestFile(Path.Combine(input,store.WorkspaceId,"manifest.json"))<>declaredDigest then failure<-Some ["backup input changed during restore"]
+                                    | Error errors->failure<-Some errors
+                            match failure with
+                            | Some ["backup-incompatible"] -> resultExit "restore-incompatible" (Error ["backup schema is incompatible"])
+                            | Some errors -> resultExit "backup-integrity-failed" (Error errors)
+                            | None when digestFile manifestPath<>frozenManifestDigest -> resultExit "backup-integrity-failed" (Error ["backup input changed during restore"])
+                            | None -> syncDirectory temporary;Directory.Move(temporary,stateRoot);syncDirectory(Path.GetDirectoryName stateRoot);Console.Out.Write(JsonSerializer.Serialize {|schema="fsgg.telemetry.host-restore-set/1";root=stateRoot;sourceManifestSha256=frozenManifestDigest|}+"\n");0
+                    finally if Directory.Exists temporary then Directory.Delete(temporary,true)
+                with _ -> resultExit "backup-integrity-failed" (Error ["backup restore failed"]))
         | _ -> writeError "usage" ["invalid command"];2
     let run argv=runWithAssessment argv TelemetryStoreApplication.assessProductionRoot
 

@@ -43,6 +43,7 @@ module Configuration =
         match privateRegularFile config.CertificatePasswordFile with Error e->errors.Add e|Ok()->()
         if not (Path.IsPathFullyQualified config.ServiceLockPath) then errors.Add "serviceLockPath must be absolute"
         if config.Stores.Length=0 then errors.Add "at least one enrolled store is required"
+        elif config.Stores.Length>128 then errors.Add "host workspace capacity exceeds 128"
         let roots = HashSet<string>(StringComparer.Ordinal)
         let workspaces = HashSet<string>(StringComparer.Ordinal)
         for store in config.Stores do

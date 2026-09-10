@@ -414,12 +414,27 @@ module RemoteTelemetryTests =
             Assert.Equal(0,Operations.runWithAssessment [|"backup";"--config";configPath;"--output";backupPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
             TelemetryStoreApplication.submitReceipt store TelemetryStore.ApprovedLocalDurable scope (envelope "after-backup") |> Result.defaultWith(fun e->failwithf "%A" e) |> ignore
             TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace |> Result.defaultWith(fun e->failwithf "%A" e) |> ignore
-            Assert.Equal(0,Operations.runWithAssessment [|"restore";"--config";configPath;"--input";backupPath;"--state-root";restoredRoot|] (fun _->TelemetryStore.ApprovedLocalDurable))
             let restoredStore=Path.Combine(restoredRoot,scope.Workspace)
+            let restoreConfigPath=Path.Combine(root,"host.restore.json")
+            File.WriteAllText(restoreConfigPath,json.Replace(store,restoredStore))
+            File.SetUnixFileMode(restoreConfigPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            Assert.Equal(0,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";restoredRoot|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.Equal(0,Operations.runWithAssessment [|"preflight";"--config";restoreConfigPath|] (fun _->TelemetryStore.ApprovedLocalDurable))
             Assert.True(TelemetryStoreApplication.lookupReceipt restoredStore TelemetryStore.ApprovedLocalDurable scope "batch-tls" |> Result.isOk)
             Assert.Equal(Error ["receipt-unavailable"],TelemetryStoreApplication.lookupReceipt restoredStore TelemetryStore.ApprovedLocalDurable scope "after-backup")
+            let setManifest=Path.Combine(backupPath,"backup-manifest.json")
+            let validSetManifest=File.ReadAllText setManifest
+            for name,invalid in
+                [ "malformed","{"
+                  "wrong-type",validSetManifest.Replace("\"workspaces\":[","\"workspaces\":{")
+                  "open-workspace-entry",validSetManifest.Replace("\"workspaceId\":","\"unexpected\":true,\"workspaceId\":" ) ] do
+                File.WriteAllText(setManifest,invalid)
+                let target=Path.Combine(root,name+"-restore")
+                Assert.Equal(5,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";target|] (fun _->TelemetryStore.ApprovedLocalDurable))
+                Assert.False(Directory.Exists target)
+            File.WriteAllText(setManifest,validSetManifest)
             File.AppendAllText(Path.Combine(backupPath,scope.Workspace,TelemetryStoreApplication.databaseFileName),"corrupt")
-            Assert.Equal(5,Operations.runWithAssessment [|"restore";"--config";configPath;"--input";backupPath;"--state-root";Path.Combine(root,"corrupt-restore")|] (fun _->TelemetryStore.ApprovedLocalDurable))
+            Assert.Equal(5,Operations.runWithAssessment [|"restore";"--config";restoreConfigPath;"--input";backupPath;"--state-root";Path.Combine(root,"corrupt-restore")|] (fun _->TelemetryStore.ApprovedLocalDurable))
         finally
             Environment.SetEnvironmentVariable("Kestrel__Endpoints__ambient__Url",ambientEndpoint)
             if Directory.Exists root then Directory.Delete(root,true) }
