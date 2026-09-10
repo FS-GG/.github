@@ -42,6 +42,17 @@ EVENT_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 EVENT_RECEIPT_NAME = "telemetry-dashboard-event-activation.json"
 EVENT_HEALTH_NAME = "telemetry-dashboard-event-health.json"
 EVENT_LOCK_NAME = "telemetry-dashboard-event.lock"
+HANDOFF_SCHEMA = "fsgg.telemetry.publication-handoff/1"
+HANDOFF_ACTIVATION_SCHEMA = "fsgg.telemetry.handoff-activation/1"
+HANDOFF_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/1"
+HANDOFF_INTENT_SCHEMA = "fsgg.telemetry.publisher-intent/1"
+HANDOFF_SUCCESS_SCHEMA = "fsgg.telemetry.publisher-success/1"
+HANDOFF_CURRENT_NAME = "current.json"
+HANDOFF_ACTIVATION_NAME = "activation.json"
+HANDOFF_INTENT_NAME = "intent.json"
+HANDOFF_SUCCESS_NAME = "last-success.json"
+HANDOFF_LOCK_NAME = "publisher.lock"
+MAX_HANDOFF_BLOBS = 8
 EVENT_REASON_CODES={
     "EVENT_ACTIVATION_RECEIPT_UNSAFE","EVENT_ACTIVATION_RECEIPT_INVALID","EVENT_LOCK_UNSAFE",
     "EVENT_CONFIG_CHANGED","EVENT_ENGINE_CHANGED","EVENT_LABELS_CHANGED","EVENT_PRIVATE_INPUT_CHANGED",
@@ -111,7 +122,7 @@ def atomic_private(path: pathlib.Path, value: Any) -> None:
     try:
         os.fchmod(fd,0o600)
         with os.fdopen(fd,"wb") as stream: stream.write(data); stream.flush(); os.fsync(stream.fileno())
-        os.replace(name,path)
+        os.replace(name,path); _fsync_directory(path.parent)
     finally:
         if os.path.exists(name): os.unlink(name)
 
@@ -699,9 +710,10 @@ def publisher_units(engine: str, config_path: pathlib.Path, labels: pathlib.Path
 
 
 def publication_token(source: str = "environment-or-gh-auth") -> str:
-    if source!="environment-or-gh-auth": raise HostSourceError("PUBLISHER_CREDENTIAL_SOURCE_UNAVAILABLE")
+    if source not in {"environment-only","environment-or-gh-auth"}: raise HostSourceError("PUBLISHER_CREDENTIAL_SOURCE_UNAVAILABLE")
     token=os.environ.get("GITHUB_TOKEN","")
     if token: return token
+    if source=="environment-only": raise HostSourceError("PUBLISHER_TOKEN_UNAVAILABLE")
     gh=shutil.which("gh")
     if gh is None: raise HostSourceError("PUBLISHER_TOKEN_UNAVAILABLE")
     result=subprocess.run([gh,"auth","token"],capture_output=True,text=True,check=False)
@@ -904,6 +916,375 @@ def publisher_event(args: argparse.Namespace) -> dict[str,Any]:
     finally:
         if lock is not None: os.close(lock)
     return result
+
+
+def _fsync_directory(path: pathlib.Path) -> None:
+    flags=os.O_RDONLY
+    if hasattr(os,"O_DIRECTORY"): flags|=os.O_DIRECTORY
+    fd=os.open(path,flags)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+
+
+def _validate_destination(repository: Any, branch: Any, path: Any) -> dict[str,str]:
+    if (not isinstance(repository,str) or not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",repository)
+        or not isinstance(branch,str) or not re.fullmatch(r"[A-Za-z0-9._/-]{1,200}",branch)
+        or branch.startswith("/") or ".." in branch.split("/") or not isinstance(path,str)):
+        raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+    target=pathlib.PurePosixPath(path)
+    if target.is_absolute() or ".." in target.parts or str(target) in {"","."}:
+        raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+    return {"repository":repository,"branch":branch,"path":path}
+
+
+def _validate_owned_directory(path: pathlib.Path, mode: int, uid: int, gid: int, code: str) -> None:
+    try: info=path.lstat()
+    except OSError as error: raise HostSourceError(code) from error
+    if (path.is_symlink() or not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode)!=mode
+        or info.st_uid!=uid or info.st_gid!=gid):
+        raise HostSourceError(code)
+
+
+def _read_owned_bytes(path: pathlib.Path, maximum: int, mode: int, uid: int, gid: int, code: str) -> bytes:
+    flags=os.O_RDONLY
+    if hasattr(os,"O_NOFOLLOW"): flags|=os.O_NOFOLLOW
+    try: fd=os.open(path,flags)
+    except OSError as error: raise HostSourceError(code) from error
+    try:
+        info=os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=mode
+            or info.st_uid!=uid or info.st_gid!=gid or info.st_size>maximum):
+            raise HostSourceError(code)
+        chunks=[]; total=0
+        while True:
+            chunk=os.read(fd,min(65536,maximum+1-total))
+            if not chunk: break
+            chunks.append(chunk); total+=len(chunk)
+            if total>maximum: raise HostSourceError(code)
+        return b"".join(chunks)
+    finally: os.close(fd)
+
+
+def _atomic_owned(path: pathlib.Path, data: bytes, mode: int, expected_gid: int) -> None:
+    fd,name=tempfile.mkstemp(prefix=path.name+".",dir=path.parent)
+    try:
+        os.fchmod(fd,mode)
+        info=os.fstat(fd)
+        if info.st_uid!=os.getuid() or info.st_gid!=expected_gid: raise HostSourceError("HANDOFF_OUTGOING_UNSAFE")
+        with os.fdopen(fd,"wb") as stream:
+            fd=-1; stream.write(data); stream.flush(); os.fsync(stream.fileno())
+        os.replace(name,path); _fsync_directory(path.parent)
+    finally:
+        if fd>=0: os.close(fd)
+        if os.path.exists(name): os.unlink(name)
+
+
+def _acquire_owned_lock(directory: pathlib.Path, name: str, mode: int, uid: int, gid: int, code: str) -> int:
+    import fcntl
+    path=directory/name; flags=os.O_RDWR|os.O_CREAT
+    if hasattr(os,"O_NOFOLLOW"): flags|=os.O_NOFOLLOW
+    try: fd=os.open(path,flags,mode)
+    except OSError as error: raise HostSourceError(code) from error
+    try:
+        os.fchmod(fd,mode); info=os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=mode or info.st_uid!=uid or info.st_gid!=gid: raise HostSourceError(code)
+        for _ in range(5):
+            try: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB); return fd
+            except BlockingIOError: time.sleep(0.02)
+        raise HostSourceError("HANDOFF_LOCK_CONTENDED")
+    except Exception:
+        os.close(fd); raise
+
+
+def _acquire_shared_stage_lock(outgoing: pathlib.Path, producer_uid: int, handoff_gid: int) -> int:
+    import fcntl
+    path=outgoing/"stage.lock"; flags=os.O_RDONLY
+    if hasattr(os,"O_NOFOLLOW"): flags|=os.O_NOFOLLOW
+    try: fd=os.open(path,flags)
+    except OSError as error: raise HostSourceError("HANDOFF_STAGE_LOCK_UNSAFE") from error
+    try:
+        info=os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o640
+            or info.st_uid!=producer_uid or info.st_gid!=handoff_gid): raise HostSourceError("HANDOFF_STAGE_LOCK_UNSAFE")
+        for _ in range(5):
+            try: fcntl.flock(fd,fcntl.LOCK_SH|fcntl.LOCK_NB); return fd
+            except BlockingIOError: time.sleep(0.02)
+        raise HostSourceError("HANDOFF_LOCK_CONTENDED")
+    except Exception:
+        os.close(fd); raise
+
+
+def _load_handoff(outgoing: pathlib.Path, producer_uid: int, handoff_gid: int) -> tuple[dict[str,Any],dict[str,Any],bytes]:
+    _validate_owned_directory(outgoing,0o2750,producer_uid,handoff_gid,"HANDOFF_OUTGOING_UNSAFE")
+    lock=_acquire_shared_stage_lock(outgoing,producer_uid,handoff_gid)
+    try:
+        try: manifest=json.loads(_read_owned_bytes(outgoing/HANDOFF_CURRENT_NAME,8192,0o640,producer_uid,handoff_gid,"HANDOFF_POINTER_INVALID"))
+        except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_POINTER_INVALID") from error
+        exact(manifest,{"schema","blob","snapshotDigest","publicRevision","labelsDigest","stagedAt"},"publication handoff")
+        if (manifest.get("schema")!=HANDOFF_SCHEMA or not isinstance(manifest.get("blob"),str)
+            or not re.fullmatch(r"snapshot-[0-9a-f]{64}\.json",manifest["blob"])
+            or manifest["blob"]!="snapshot-"+str(manifest.get("snapshotDigest"))+".json"
+            or not re.fullmatch(r"[0-9a-f]{64}",str(manifest.get("publicRevision")))
+            or not re.fullmatch(r"[0-9a-f]{64}",str(manifest.get("labelsDigest")))
+            or parse_time(manifest.get("stagedAt")) is None):
+            raise HostSourceError("HANDOFF_POINTER_INVALID")
+        raw=_read_owned_bytes(outgoing/manifest["blob"],MAX_JSON,0o640,producer_uid,handoff_gid,"HANDOFF_BLOB_INVALID")
+        if hashlib.sha256(raw).hexdigest()!=manifest["snapshotDigest"]: raise HostSourceError("HANDOFF_BLOB_INVALID")
+        try: snapshot=json.loads(raw)
+        except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_BLOB_INVALID") from error
+        try: validate_host(snapshot)
+        except ValueError as error: raise HostSourceError("HANDOFF_BLOB_INVALID") from error
+        if dump(snapshot)!=raw or snapshot.get("revision")!=manifest["publicRevision"]: raise HostSourceError("HANDOFF_BLOB_INVALID")
+        return manifest,snapshot,raw
+    finally: os.close(lock)
+
+
+def handoff_stage(args: argparse.Namespace) -> dict[str,Any]:
+    outgoing=args.outgoing.resolve(strict=True); uid=os.getuid(); gid=args.handoff_gid
+    _validate_owned_directory(outgoing,0o2750,uid,gid,"HANDOFF_OUTGOING_UNSAFE")
+    lock=_acquire_owned_lock(outgoing,"stage.lock",0o640,uid,gid,"HANDOFF_STAGE_LOCK_UNSAFE")
+    try:
+        labels=args.labels.resolve(strict=True); label_bytes=read_private_bytes(labels,65536,"HOST_LABELS_UNSAFE")
+        label_digest=hashlib.sha256(label_bytes).hexdigest()
+        if args.approve_labels!=label_digest: raise HostSourceError("HANDOFF_LABEL_APPROVAL_MISMATCH")
+        snapshot=build_host(labels,args.config,args.producer_executable); validate_host(snapshot); raw=dump(snapshot)
+        if read_private_bytes(labels,65536,"EVENT_PRIVATE_INPUT_CHANGED")!=label_bytes: raise HostSourceError("EVENT_PRIVATE_INPUT_CHANGED")
+        digest=hashlib.sha256(raw).hexdigest(); blob="snapshot-"+digest+".json"; blob_path=outgoing/blob
+        if blob_path.exists() or blob_path.is_symlink():
+            if _read_owned_bytes(blob_path,MAX_JSON,0o640,uid,gid,"HANDOFF_BLOB_CONFLICT")!=raw: raise HostSourceError("HANDOFF_BLOB_CONFLICT")
+        else:
+            try: _atomic_owned(blob_path,raw,0o640,gid)
+            except OSError as error: raise HostSourceError("HANDOFF_DURABILITY_UNKNOWN") from error
+        manifest={"schema":HANDOFF_SCHEMA,"blob":blob,"snapshotDigest":digest,"publicRevision":snapshot["revision"],"labelsDigest":label_digest,"stagedAt":now()}
+        try: _atomic_owned(outgoing/HANDOFF_CURRENT_NAME,dump(manifest),0o640,gid)
+        except OSError as error: raise HostSourceError("HANDOFF_DURABILITY_UNKNOWN") from error
+        candidates=[]
+        for path in outgoing.glob("snapshot-*.json"):
+            try:
+                info=path.lstat()
+                if (not path.is_symlink() and stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode)==0o640
+                    and info.st_uid==uid and info.st_gid==gid and re.fullmatch(r"snapshot-[0-9a-f]{64}\.json",path.name)):
+                    candidates.append((info.st_mtime_ns,path))
+            except OSError: pass
+        keep={blob}|{path.name for _,path in sorted(candidates,reverse=True)[:MAX_HANDOFF_BLOBS]}
+        for _,path in candidates:
+            if path.name not in keep: path.unlink()
+        _fsync_directory(outgoing)
+        return {"schema":"fsgg.telemetry.handoff-stage-result/1","status":"staged","snapshotDigest":digest,"publicRevision":snapshot["revision"],"labelsDigest":label_digest,"retainedBlobs":len(keep)}
+    finally: os.close(lock)
+
+
+def _candidate_digest() -> str:
+    return hashlib.sha256(pathlib.Path(__file__).resolve().read_bytes()).hexdigest()
+
+
+def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: str) -> dict[str,Any]:
+    proof=exact(value,{"schema","configDigest","candidateDigest","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState",
+        "timerActiveState","serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState",
+        "eventActivationReceiptDigest","eventActivationState","observedAt","evidenceDigest"},"cutover proof")
+    unsigned={key:value for key,value in proof.items() if key!="evidenceDigest"}
+    if (proof.get("schema")!=HANDOFF_CUTOVER_SCHEMA or proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
+        or not isinstance(proof.get("incumbentAccountUid"),int) or isinstance(proof.get("incumbentAccountUid"),bool) or proof["incumbentAccountUid"]<0
+        or not re.fullmatch(r"user@[0-9]+\.service",str(proof.get("managerIdentity")))
+        or proof["managerIdentity"]!="user@"+str(proof["incumbentAccountUid"])+".service"
+        or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.timer",str(proof.get("timerUnit")))
+        or proof.get("timerEnabledState")!="disabled" or proof.get("timerActiveState")!="inactive"
+        or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(proof.get("serviceUnit")))
+        or proof.get("serviceActiveState")!="inactive" or proof.get("eventActivationState")!="absent"
+        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationPathDigest")))
+        or proof.get("eventActivationPriorState") not in {"removed-by-cutover","already-absent"}
+        or (proof.get("eventActivationPriorState")=="removed-by-cutover" and not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationReceiptDigest"))))
+        or (proof.get("eventActivationPriorState")=="already-absent" and proof.get("eventActivationReceiptDigest") is not None)
+        or parse_time(proof.get("observedAt")) is None or proof.get("evidenceDigest")!=hashlib.sha256(dump(unsigned)).hexdigest()):
+        raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+    return proof
+
+
+def _load_cutover_proof(directory: pathlib.Path, operator_uid: int, cutover_gid: int, producer_uid: int, config_digest: str, candidate_digest: str) -> dict[str,Any]:
+    if operator_uid in {os.getuid(),producer_uid}: raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+    _validate_owned_directory(directory,0o2750,operator_uid,cutover_gid,"HANDOFF_CUTOVER_PROOF_UNSAFE")
+    try: value=json.loads(_read_owned_bytes(directory/"cutover.json",16384,0o640,operator_uid,cutover_gid,"HANDOFF_CUTOVER_PROOF_UNSAFE"))
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID") from error
+    return _validate_cutover_proof(value,config_digest,candidate_digest)
+
+
+def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
+    outgoing=args.outgoing.resolve(strict=True); state=args.state_dir.resolve(strict=True)
+    _validate_owned_directory(state,0o700,os.getuid(),os.getgid(),"HANDOFF_STATE_UNSAFE")
+    manifest,_,_=_load_handoff(outgoing,args.producer_uid,args.handoff_gid)
+    if args.approve_labels!=manifest["labelsDigest"]: raise HostSourceError("HANDOFF_LABEL_APPROVAL_MISMATCH")
+    destination=_validate_destination(args.repo,args.branch,args.path)
+    actual_candidate=_candidate_digest()
+    if args.candidate_digest!=actual_candidate: raise HostSourceError("HANDOFF_CANDIDATE_MISMATCH")
+    config={"outgoingDir":str(outgoing),"producerUid":args.producer_uid,"handoffGid":args.handoff_gid,
+        "labelsDigest":args.approve_labels,"destination":destination,"credentialSource":"environment-only"}
+    config_digest=hashlib.sha256(dump(config)).hexdigest()
+    report={"schema":"fsgg.telemetry.handoff-setup-result/1","mode":"preview","configDigest":config_digest,"candidateDigest":actual_candidate,
+        "snapshotDigest":manifest["snapshotDigest"],"labelsDigest":manifest["labelsDigest"],"destination":destination,"readiness":"candidate-ready","effects":[]}
+    if args.record_activation:
+        if not args.authorize_single_publisher_cutover: raise HostSourceError("HANDOFF_ACTIVATION_NOT_AUTHORIZED")
+        if args.cutover_proof_dir is None or args.operator_uid is None or args.cutover_gid is None: raise HostSourceError("HANDOFF_CUTOVER_PROOF_REQUIRED")
+        proof_dir=args.cutover_proof_dir.resolve(strict=True)
+        proof=_load_cutover_proof(proof_dir,args.operator_uid,args.cutover_gid,args.producer_uid,config_digest,actual_candidate)
+        authority={"directory":str(proof_dir),"operatorUid":args.operator_uid,"cutoverGid":args.cutover_gid,"proofDigest":proof["evidenceDigest"]}
+        receipt={"schema":HANDOFF_ACTIVATION_SCHEMA,"config":config,"configDigest":config_digest,"candidateDigest":actual_candidate,"cutoverAuthority":authority,"cutoverProof":proof}
+        target=state/HANDOFF_ACTIVATION_NAME
+        if target.exists() or target.is_symlink():
+            try: existing=json.loads(read_private_bytes(target,16384,"HANDOFF_ACTIVATION_INVALID"))
+            except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
+            if existing!=receipt: raise HostSourceError("HANDOFF_ACTIVATION_CHANGE_REFUSED")
+        else: atomic_private(target,receipt)
+        report["mode"]="record-activation"; report["cutoverProofDigest"]=proof["evidenceDigest"]; report["effects"].append("record-digest-bound-cutover-activation")
+    return report
+
+
+def _load_handoff_activation(state: pathlib.Path) -> dict[str,Any]:
+    try: value=json.loads(read_private_bytes(state/HANDOFF_ACTIVATION_NAME,16384,"HANDOFF_ACTIVATION_INVALID"))
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
+    exact(value,{"schema","config","configDigest","candidateDigest","cutoverAuthority","cutoverProof"},"handoff activation")
+    config=exact(value.get("config"),{"outgoingDir","producerUid","handoffGid","labelsDigest","destination","credentialSource"},"handoff activation config")
+    authority=exact(value.get("cutoverAuthority"),{"directory","operatorUid","cutoverGid","proofDigest"},"cutover authority")
+    if (value.get("schema")!=HANDOFF_ACTIVATION_SCHEMA or value.get("candidateDigest")!=_candidate_digest()
+        or value.get("configDigest")!=hashlib.sha256(dump(config)).hexdigest()
+        or not isinstance(config.get("outgoingDir"),str) or not pathlib.Path(config["outgoingDir"]).is_absolute()
+        or not isinstance(config.get("producerUid"),int) or isinstance(config.get("producerUid"),bool) or config["producerUid"]<0
+        or not isinstance(config.get("handoffGid"),int) or isinstance(config.get("handoffGid"),bool) or config["handoffGid"]<0
+        or not re.fullmatch(r"[0-9a-f]{64}",str(config.get("labelsDigest"))) or config.get("credentialSource")!="environment-only"
+        or not isinstance(authority.get("directory"),str) or not pathlib.Path(authority["directory"]).is_absolute()
+        or not isinstance(authority.get("operatorUid"),int) or isinstance(authority.get("operatorUid"),bool)
+        or authority["operatorUid"]<0 or authority["operatorUid"] in {os.getuid(),config.get("producerUid")}
+        or not isinstance(authority.get("cutoverGid"),int) or isinstance(authority.get("cutoverGid"),bool) or authority["cutoverGid"]<0):
+        raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+    _validate_destination(**config["destination"])
+    try:
+        proof=_validate_cutover_proof(value.get("cutoverProof"),value["configDigest"],value["candidateDigest"])
+        if authority.get("proofDigest")!=proof["evidenceDigest"]: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
+    except (ValueError,HostSourceError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
+    return value
+
+
+def _publisher_success(state: pathlib.Path, intent: dict[str,Any], status: str, published_snapshot: dict[str,Any], commit: str) -> dict[str,Any]:
+    raw=dump(published_snapshot); published_digest=hashlib.sha256(raw).hexdigest(); published_file="snapshot-"+published_digest+".json"
+    path=state/published_file
+    if path.exists() or path.is_symlink():
+        if read_private_bytes(path,MAX_JSON,"HANDOFF_SUCCESS_INVALID")!=raw: raise HostSourceError("HANDOFF_SUCCESS_INVALID")
+    else: atomic_private(path,published_snapshot)
+    result={"schema":HANDOFF_SUCCESS_SCHEMA,"status":status,"intentSnapshotDigest":intent["snapshotDigest"],
+        "publishedSnapshotDigest":published_digest,"publishedSnapshotFile":published_file,"publicRevision":published_snapshot["revision"],"commit":commit,"completedAt":now()}
+    atomic_private(state/HANDOFF_SUCCESS_NAME,result)
+    intent_path=state/HANDOFF_INTENT_NAME
+    if intent_path.exists(): intent_path.unlink(); _fsync_directory(state)
+    return result
+
+
+def _prune_publisher_blobs(state: pathlib.Path, current_digest: str) -> None:
+    keep={"snapshot-"+current_digest+".json"}
+    success_path=state/HANDOFF_SUCCESS_NAME
+    if success_path.exists() and not success_path.is_symlink():
+        try:
+            success=json.loads(read_private_bytes(success_path,8192,"HANDOFF_SUCCESS_INVALID"))
+            digest=success.get("publishedSnapshotDigest") if isinstance(success,dict) else None
+            if isinstance(digest,str) and re.fullmatch(r"[0-9a-f]{64}",digest): keep.add("snapshot-"+digest+".json")
+        except (HostSourceError,UnicodeError,json.JSONDecodeError):
+            pass
+    candidates=[]
+    for path in state.glob("snapshot-*.json"):
+        try:
+            info=path.lstat()
+            if (not path.is_symlink() and stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode)==0o600
+                and info.st_uid==os.getuid() and info.st_gid==os.getgid() and re.fullmatch(r"snapshot-[0-9a-f]{64}\.json",path.name)):
+                candidates.append((info.st_mtime_ns,path))
+        except OSError: pass
+    keep|={path.name for _,path in sorted(candidates,reverse=True)[:MAX_HANDOFF_BLOBS]}
+    changed=False
+    for _,path in candidates:
+        if path.name not in keep: path.unlink(); changed=True
+    if changed: _fsync_directory(state)
+
+
+def _load_publisher_intent(state: pathlib.Path) -> tuple[dict[str,Any],dict[str,Any],bytes] | None:
+    path=state/HANDOFF_INTENT_NAME
+    if not path.exists() and not path.is_symlink(): return None
+    try: intent=json.loads(read_private_bytes(path,8192,"HANDOFF_INTENT_INVALID"))
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_INTENT_INVALID") from error
+    exact(intent,{"schema","snapshotFile","snapshotDigest","publicRevision","labelsDigest","queuedAt"},"publisher intent")
+    if (intent.get("schema")!=HANDOFF_INTENT_SCHEMA or not isinstance(intent.get("snapshotFile"),str)
+        or intent["snapshotFile"]!="snapshot-"+str(intent.get("snapshotDigest"))+".json"
+        or not re.fullmatch(r"[0-9a-f]{64}",str(intent.get("snapshotDigest")))
+        or not re.fullmatch(r"[0-9a-f]{64}",str(intent.get("publicRevision")))
+        or not re.fullmatch(r"[0-9a-f]{64}",str(intent.get("labelsDigest"))) or parse_time(intent.get("queuedAt")) is None):
+        raise HostSourceError("HANDOFF_INTENT_INVALID")
+    raw=read_private_bytes(state/intent["snapshotFile"],MAX_JSON,"HANDOFF_INTENT_INVALID")
+    if hashlib.sha256(raw).hexdigest()!=intent["snapshotDigest"]: raise HostSourceError("HANDOFF_INTENT_INVALID")
+    try: snapshot=json.loads(raw)
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_INTENT_INVALID") from error
+    try: validate_host(snapshot)
+    except ValueError as error: raise HostSourceError("HANDOFF_INTENT_INVALID") from error
+    if dump(snapshot)!=raw or snapshot.get("revision")!=intent["publicRevision"]: raise HostSourceError("HANDOFF_INTENT_INVALID")
+    return intent,snapshot,raw
+
+
+def handoff_publish(args: argparse.Namespace) -> dict[str,Any]:
+    state=args.state_dir.resolve(strict=True); uid=os.getuid(); gid=os.getgid()
+    _validate_owned_directory(state,0o700,uid,gid,"HANDOFF_STATE_UNSAFE")
+    lock=_acquire_owned_lock(state,HANDOFF_LOCK_NAME,0o600,uid,gid,"HANDOFF_PUBLISHER_LOCK_UNSAFE")
+    try:
+        activation=_load_handoff_activation(state); config=activation["config"]
+        destination=config["destination"]
+        pending=_load_publisher_intent(state)
+        if pending is not None:
+            old_intent,old_snapshot,old_raw=pending
+            try:
+                old_current,old_commit=current_publication(destination["repository"],destination["branch"],destination["path"],publication_token(config["credentialSource"]))
+            except (HostSourceError,RuntimeError,OSError):
+                return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"REMOTE_RECONCILIATION_UNAVAILABLE","snapshotDigest":old_intent["snapshotDigest"]}
+            if old_current is not None and dump(old_current)==old_raw:
+                try: verified=verify_publication(destination["repository"],destination["branch"],destination["path"],publication_token(config["credentialSource"]),old_commit,old_snapshot)
+                except (HostSourceError,RuntimeError,ValueError,OSError): verified={"verified":False}
+                if verified["verified"]: return _publisher_success(state,old_intent,"reconciled",old_snapshot,old_commit)
+                return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"REMOTE_RECONCILIATION_UNAVAILABLE","snapshotDigest":old_intent["snapshotDigest"]}
+            # A successful read proves the prior uncertain write is not current. The
+            # coalescing pointer may now replace that intent with the newest snapshot.
+        manifest,snapshot,raw=_load_handoff(pathlib.Path(config["outgoingDir"]),config["producerUid"],config["handoffGid"])
+        if manifest["labelsDigest"]!=config["labelsDigest"]: raise HostSourceError("HANDOFF_LABEL_APPROVAL_MISMATCH")
+        candidate=state/manifest["blob"]
+        if candidate.exists() or candidate.is_symlink():
+            if read_private_bytes(candidate,MAX_JSON,"HANDOFF_INTENT_INVALID")!=raw: raise HostSourceError("HANDOFF_INTENT_INVALID")
+        else: atomic_private(candidate,snapshot)
+        intent={"schema":HANDOFF_INTENT_SCHEMA,"snapshotFile":candidate.name,"snapshotDigest":manifest["snapshotDigest"],
+            "publicRevision":manifest["publicRevision"],"labelsDigest":manifest["labelsDigest"],"queuedAt":now()}
+        atomic_private(state/HANDOFF_INTENT_NAME,intent)
+        _prune_publisher_blobs(state,intent["snapshotDigest"])
+        token=publication_token(config["credentialSource"])
+        try: current,commit=current_publication(destination["repository"],destination["branch"],destination["path"],token)
+        except (HostSourceError,RuntimeError,OSError):
+            return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"REMOTE_RECONCILIATION_UNAVAILABLE","snapshotDigest":intent["snapshotDigest"]}
+        if current is not None and dump(current)==raw:
+            try: verification=verify_publication(destination["repository"],destination["branch"],destination["path"],token,commit,snapshot)
+            except (HostSourceError,RuntimeError,ValueError,OSError): verification={"verified":False}
+            if verification["verified"]: return _publisher_success(state,intent,"reconciled",current,commit)
+            return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"REMOTE_RECONCILIATION_UNAVAILABLE","snapshotDigest":intent["snapshotDigest"]}
+        if current is not None and unchanged_with_preserved_observation(snapshot,current):
+            try: verification=verify_publication(destination["repository"],destination["branch"],destination["path"],token,commit,current)
+            except (HostSourceError,RuntimeError,ValueError,OSError): verification={"verified":False}
+            if verification["verified"]: return _publisher_success(state,intent,"unchanged",current,commit)
+            return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"REMOTE_RECONCILIATION_UNAVAILABLE","snapshotDigest":intent["snapshotDigest"]}
+        try:
+            published=publish(destination["repository"],destination["branch"],destination["path"],token,snapshot)
+        except (RefConflict,RuntimeError,OSError):
+            try: recovered,recovered_commit=current_publication(destination["repository"],destination["branch"],destination["path"],token)
+            except (HostSourceError,RuntimeError,OSError): recovered,recovered_commit=None,None
+            if recovered is not None and dump(recovered)==raw:
+                try: verification=verify_publication(destination["repository"],destination["branch"],destination["path"],token,recovered_commit,snapshot)
+                except (HostSourceError,RuntimeError,ValueError,OSError): verification={"verified":False}
+                if verification["verified"]: return _publisher_success(state,intent,"reconciled",snapshot,recovered_commit)
+            return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"AMBIGUOUS_PUBLICATION_UNRESOLVED","snapshotDigest":intent["snapshotDigest"]}
+        try: verification=verify_publication(destination["repository"],destination["branch"],destination["path"],token,published,snapshot)
+        except (HostSourceError,RuntimeError,ValueError,OSError): verification={"verified":False}
+        if not verification["verified"]:
+            return {"schema":"fsgg.telemetry.handoff-publish-result/1","status":"pending","reason":"PUBLICATION_READBACK_FAILED","snapshotDigest":intent["snapshotDigest"],"commit":published}
+        return _publisher_success(state,intent,"published",snapshot,published)
+    finally: os.close(lock)
 
 
 def compose(actions: dict[str, Any], deliveries: dict[str,Any], host: dict[str, Any] | None, source_revision: str, host_revision: str | None = None) -> dict[str, Any]:
@@ -1140,6 +1521,9 @@ def main() -> int:
     host=subs.add_parser("host-snapshot"); host.add_argument("--output",type=pathlib.Path,required=True); host.add_argument("--config",type=pathlib.Path); host.add_argument("--producer-executable"); host.add_argument("--labels",type=pathlib.Path); host.add_argument("--credential-source",choices=["environment-or-gh-auth"],default="environment-or-gh-auth"); host.add_argument("--dry-run",action="store_true"); host.add_argument("--repo"); host.add_argument("--branch",default="telemetry-data"); host.add_argument("--path",default="host.json")
     setup=subs.add_parser("publisher-setup"); setup.add_argument("--config",type=pathlib.Path); setup.add_argument("--labels",type=pathlib.Path,required=True); setup.add_argument("--repo",default="FS-GG/.github"); setup.add_argument("--branch",default="telemetry-data"); setup.add_argument("--path",default="host.json"); setup.add_argument("--output",type=pathlib.Path,default=pathlib.Path(os.environ.get("XDG_RUNTIME_DIR","/tmp"))/"fsgg-telemetry-dashboard-host.json"); setup.add_argument("--systemd-dir",type=pathlib.Path,default=pathlib.Path.home()/".config/systemd/user"); setup.add_argument("--install-only",action="store_true"); setup.add_argument("--activate",action="store_true"); setup.add_argument("--approve-labels"); setup.add_argument("--authorize-recurring-publication",action="store_true"); setup.add_argument("--authorize-event-publication",action="store_true")
     event=subs.add_parser("publisher-event"); event.add_argument("--config",type=pathlib.Path)
+    stage=subs.add_parser("handoff-stage"); stage.add_argument("--config",type=pathlib.Path); stage.add_argument("--producer-executable"); stage.add_argument("--labels",type=pathlib.Path,required=True); stage.add_argument("--approve-labels",required=True); stage.add_argument("--outgoing",type=pathlib.Path,required=True); stage.add_argument("--handoff-gid",type=int,required=True)
+    handoff_setup_parser=subs.add_parser("handoff-setup"); handoff_setup_parser.add_argument("--outgoing",type=pathlib.Path,required=True); handoff_setup_parser.add_argument("--state-dir",type=pathlib.Path,required=True); handoff_setup_parser.add_argument("--producer-uid",type=int,required=True); handoff_setup_parser.add_argument("--handoff-gid",type=int,required=True); handoff_setup_parser.add_argument("--approve-labels",required=True); handoff_setup_parser.add_argument("--repo",default="FS-GG/.github"); handoff_setup_parser.add_argument("--branch",default="telemetry-data"); handoff_setup_parser.add_argument("--path",default="host.json"); handoff_setup_parser.add_argument("--candidate-digest",required=True); handoff_setup_parser.add_argument("--cutover-proof-dir",type=pathlib.Path); handoff_setup_parser.add_argument("--operator-uid",type=int); handoff_setup_parser.add_argument("--cutover-gid",type=int); handoff_setup_parser.add_argument("--record-activation",action="store_true"); handoff_setup_parser.add_argument("--authorize-single-publisher-cutover",action="store_true")
+    handoff_publisher=subs.add_parser("handoff-publish"); handoff_publisher.add_argument("--state-dir",type=pathlib.Path,required=True)
     comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--deliveries",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
     args=parser.parse_args()
     if args.cmd=="collect-actions":
@@ -1162,6 +1546,15 @@ def main() -> int:
         return 0
     if args.cmd=="publisher-event":
         print(json.dumps(publisher_event(args),sort_keys=True,separators=(",",":")))
+        return 0
+    if args.cmd=="handoff-stage":
+        print(json.dumps(handoff_stage(args),sort_keys=True,separators=(",",":")))
+        return 0
+    if args.cmd=="handoff-setup":
+        print(json.dumps(handoff_setup(args),sort_keys=True,separators=(",",":")))
+        return 0
+    if args.cmd=="handoff-publish":
+        print(json.dumps(handoff_publish(args),sort_keys=True,separators=(",",":")))
         return 0
     host_value=load(args.host) if args.host and args.host.exists() else None
     atomic(args.output,compose(load(args.actions),load(args.deliveries),host_value,args.source_revision,args.host_revision)); return 0
