@@ -41,6 +41,7 @@ module TelemetryStoreApplication =
     val scopedDashboardSnapshot: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> itemId: string option -> Result<string, string list>
     val scopedDashboardSnapshotWithHooks: path: string -> assessment: TelemetryStore.DurabilityAssessment -> workspaceId: string -> hooks: ScopedDashboardSnapshotHooks -> itemId: string option -> Result<string, string list>
     val exportPublic: path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string option -> outputPath: string -> Result<string, string list>
+    val exportHistorical: sourcePath: string -> sourceAssessment: TelemetryStore.DurabilityAssessment -> targetPath: string -> targetAssessment: TelemetryStore.DurabilityAssessment -> scope: TelemetryReceipt.Scope -> outputPath: string -> Result<string, string list>
     val run: action: string -> args: string list -> int
     val runBudget: action: string -> args: string list -> int
     val runReview: action: string -> args: string list -> int

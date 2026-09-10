@@ -123,6 +123,38 @@ PY
   wait "$pid" || rc=$?
   [ "$rc" -eq 0 ] && ok "installed host performs bounded graceful SIGTERM shutdown" || bad "installed host performs bounded graceful SIGTERM shutdown" "rc=$rc"
 
+  local legacy_store history_export
+  legacy_store="$durable_parent/legacy-${PACKAGE_SHA:0:12}-$$"
+  mkdir -m 700 "$legacy_store"
+  "$ENGINE" init --root "$legacy_store" --workspace legacy-workspace >"$WORK/legacy-init.out" 2>"$WORK/legacy-init.err"
+  python3 - "$legacy_store/telemetry.sqlite3" <<'PY'
+import hashlib,json,sqlite3,sys
+database=sys.argv[1]
+event={'kind':'item','identity':'legacy-package-item','itemId':'legacy-package-item','revision':0}
+canonical=json.dumps(event,sort_keys=True,separators=(',',':'))
+digest=hashlib.sha256(canonical.encode()).hexdigest()
+with sqlite3.connect(database) as db:
+    db.executescript("DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM store_metadata WHERE key='receiptWorkspace'; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;")
+    db.execute("INSERT INTO ingest_facts(identity,kind,item_id,revision,content_digest,canonical) VALUES(?,?,?,?,?,?)",('legacy-package-item','item','legacy-package-item',0,digest,canonical))
+    db.execute("INSERT INTO items(identity,item_id,feature_id) VALUES(?,?,NULL)",('legacy-package-item','legacy-package-item'))
+PY
+  history_export="$WORK/historical-export"
+  "$ENGINE" historical-export --source-root "$legacy_store" --target-root "$store" --workspace package-workspace --producer package-producer --stream runtime --output "$history_export" >"$WORK/historical-export.out" 2>"$WORK/historical-export.err" \
+    && python3 - "$history_export" <<'PY' \
+    && ok "installed host emits a private deterministic schema-8 historical payload" \
+    || bad "installed host emits a private deterministic schema-8 historical payload" "$(cat "$WORK/historical-export.err")"
+import json,os,pathlib,stat,sys
+root=pathlib.Path(sys.argv[1]); manifest=json.loads((root/'manifest.json').read_text())
+assert manifest['schema']=='fsgg.telemetry.historical-export/1'
+assert (manifest['sourceStoreSchema'],manifest['targetStoreSchema'])==(8,9)
+assert manifest['scope']=={'workspaceId':'package-workspace','producerId':'package-producer','streamId':'runtime'}
+assert manifest['disposition']['emitted']==1 and manifest['disposition']['conflicts']==0
+assert len(manifest['batches'])==1
+batch=root/manifest['batches'][0]['file']; payload=json.loads(batch.read_text())
+assert payload['eventCount']==1 and payload['events'][0]['identity']=='legacy-package-item'
+assert stat.S_IMODE(root.stat().st_mode)==0o700 and stat.S_IMODE(batch.stat().st_mode)==0o600
+PY
+
   "$ENGINE" backup --config "$config" --output "$WORK/backup" >"$WORK/backup.out" 2>"$WORK/backup.err" \
     && ok "installed host creates a coherent offline backup" || bad "installed host creates a coherent offline backup" "$(cat "$WORK/backup.err")"
   local restored_root restored_config restored_port restored_base
