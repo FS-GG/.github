@@ -107,6 +107,11 @@ jobs:
           dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj --locked-mode
+          (cd tests/FS.GG.Telemetry.LocalDashboard.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj -c Release --no-restore
       - name: Pack coherent set exactly once
         run: |
           set -euo pipefail
@@ -117,14 +122,22 @@ jobs:
       - name: Create and preflight durable release manifest
         run: |
           set -euo pipefail
+          package="$PWD/artifacts/packages/FS.GG.Coord.Cli.${{ steps.version.outputs.version }}.nupkg"
+          evidence="$PWD/artifacts/packages/standalone-telemetry-evidence.json"
+          runtime_evidence="$PWD/artifacts/packages/standalone-telemetry-runtime-evidence.json"
+          FSGG_PACKAGE_SOURCE_SHA="$FSGG_SOURCE_SHA" bash tests/standalone-telemetry-package/run.sh "$package" "$evidence" "$runtime_evidence"
           python3 scripts/release-saga.py prepare \
             --release-id "github:${{ steps.version.outputs.version }}" \
             --version "${{ steps.version.outputs.version }}" --source-sha "$FSGG_SOURCE_SHA" \
             --policy-version release-saga/1 \
             --previous-channel artifacts/predecessor/stable-channel.json --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
-            --expected-package FS.GG.Drivers --output artifacts/packages/release-manifest.json
+            --expected-package FS.GG.Drivers \
+            --dashboard-assets src/FS.GG.Telemetry.Dashboard/Assets \
+            --standalone-qualification "$runtime_evidence" --output artifacts/packages/release-manifest.json
           python3 scripts/release-saga.py preflight --manifest artifacts/packages/release-manifest.json --feed both
+          python3 tests/standalone-telemetry-budget/test_measure.py
+          python3 tests/standalone-telemetry-dashboard/test_measure.py
       - name: Revalidate predecessor before draft mutation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -205,13 +218,13 @@ jobs:
             # will consume, so make them this run's outputs too. Otherwise the uploaded artifact and
             # the draft would name different `contentId`s for one release, which is the confusion
             # this branch exists to prevent.
-            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg artifacts/packages/
+            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg /tmp/prior/standalone-telemetry-runtime-evidence.json artifacts/packages/
             echo "Existing draft already holds an equivalent coherent set; no asset was replaced."
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$FSGG_SOURCE_SHA" --draft \
               --title "FS.GG coherent set $VERSION (publishing)" \
               --notes "Prepared content-addressed release. This remains draft until both feeds serve all three manifest-bound artifacts."
-            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" artifacts/packages/*.nupkg artifacts/packages/release-manifest.json
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" artifacts/packages/*.nupkg artifacts/packages/*.json
           fi
           # This is a low-level reversible primitive. Both supported callers encode preparation as a
           # job dependency before starting publishers: release-saga-start for operators and

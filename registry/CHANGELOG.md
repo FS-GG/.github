@@ -19,6 +19,12 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-10** — **optional telemetry host `0.1.1` source patch prepared**
+  (owner github; standalone telemetry L2): advances the independent Host source
+  version because the shared Dashboard assembly now also carries the packaged local bootstrap mode
+  and corrected session-end presentation. This does not mutate the 0.1.0 candidate or claim a new
+  Host publication; feed and tag fields remain bound only to verified release state.
+
 - **2026-09-10** — **optional telemetry host `0.1.0` source contract prepared**
   (owner github; standalone telemetry H2): registers the independently versioned
   `FS.GG.Telemetry.Host` source surface without claiming publication. The optional Linux x64 service

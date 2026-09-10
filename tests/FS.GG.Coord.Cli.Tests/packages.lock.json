@@ -155,6 +155,7 @@
           "FS.GG.Coord.Core": "[1.0.0, )",
           "FS.GG.Coord.GitHub": "[1.0.0, )",
           "FS.GG.Telemetry.Client": "[1.0.0, )",
+          "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
           "FS.GG.Telemetry.Store": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
@@ -210,6 +211,12 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.telemetry.dashboard": {
+        "type": "Project",
+        "dependencies": {
           "FSharp.Core": "[10.1.302, )"
         }
       },

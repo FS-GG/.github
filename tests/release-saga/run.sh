@@ -93,6 +93,37 @@ if python3 "$TOOL" predecessor --channel "$WORK/malformed-stable.json" \
   echo "expected a malformed stable-channel receipt to fail closed" >&2; exit 1
 fi
 
+mkdir -p "$WORK/dashboard-assets"
+printf '%s' '<!doctype html>' > "$WORK/dashboard-assets/index.html"
+coord_sha="$(sha256sum "$WORK/artifacts/FS.GG.Coord.Cli.9.8.7.nupkg" | cut -d' ' -f1)"
+jq -n --arg source 0123456789012345678901234567890123456789 --arg package "$coord_sha" \
+  '{schema:"fsgg.telemetry.standalone-qualification/1",qualified:true,binding:{sourceSha:$source,packageSha256:$package,sourceBinding:"prepared-for-release-manifest"},claims:{processCrashAndFilesystemApi:true,physicalPowerLoss:false,mainInstalled:false,publicRelease:false}}' \
+  > "$WORK/standalone-qualification.json"
+python3 "$TOOL" prepare \
+  --release-id telemetry-fixture --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 \
+  --policy-version release-saga/1 --previous-channel "$WORK/previous-stable.json" --artifact-dir "$WORK/artifacts" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --dashboard-assets "$WORK/dashboard-assets" --standalone-qualification "$WORK/standalone-qualification.json" \
+  --output "$WORK/telemetry-manifest.json"
+jq -e '.descriptor.standaloneTelemetry.dashboardAssets[0].path == "index.html" and .descriptor.standaloneTelemetry.qualificationPath == "standalone-qualification.json" and (.descriptor.standaloneTelemetry.dashboardAssetsSha256 | test("^[0-9a-f]{64}$")) and (.descriptor.standaloneTelemetry.qualificationSha256 | test("^[0-9a-f]{64}$"))' "$WORK/telemetry-manifest.json" >/dev/null
+if jq '.binding.sourceSha = "ffffffffffffffffffffffffffffffffffffffff"' "$WORK/standalone-qualification.json" > "$WORK/unbound-qualification.json" \
+  && python3 "$TOOL" prepare --release-id unbound-telemetry --version 9.8.7 \
+    --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+    --previous-channel "$WORK/previous-stable.json" --artifact-dir "$WORK/artifacts" \
+    --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+    --dashboard-assets "$WORK/dashboard-assets" --standalone-qualification "$WORK/unbound-qualification.json" \
+    --output "$WORK/unbound-telemetry.json" >/dev/null 2>&1; then
+  echo "expected source-unbound standalone qualification to fail closed" >&2; exit 1
+fi
+if python3 "$TOOL" prepare --release-id incomplete-telemetry --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \
+  --previous-channel "$WORK/previous-stable.json" --artifact-dir "$WORK/artifacts" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --dashboard-assets "$WORK/dashboard-assets" --output "$WORK/incomplete-telemetry.json" >/dev/null 2>&1; then
+  echo "expected one-sided standalone telemetry evidence to fail closed" >&2; exit 1
+fi
+
 python3 "$TOOL" prepare \
   --release-id fixture-9.8.7 --version 9.8.7 \
   --source-sha 0123456789012345678901234567890123456789 \
@@ -103,6 +134,10 @@ python3 "$TOOL" preflight --manifest "$WORK/manifest.json" --feed both
 cp "$WORK/manifest.json" "$WORK/merge-base.json"
 python3 "$TOOL" assert-identity --manifest "$WORK/manifest.json" --release-id fixture-9.8.7 \
   --version 9.8.7 --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1
+make_package "$WORK/external-coord.nupkg" FS.GG.Coord.Cli 9.8.7 341955db2e8847439fdf05b771ee2c5c
+python3 "$TOOL" verify-external --manifest "$WORK/manifest.json" --package FS.GG.Coord.Cli \
+  --artifact "$WORK/external-coord.nupkg" \
+  | jq -e '.packageId == "FS.GG.Coord.Cli" and .preparedArchiveSha256 != .externalArchiveSha256 and (.payloadSha256 | test("^sha256:[0-9a-f]{64}$"))' >/dev/null
 if python3 "$TOOL" assert-identity --manifest "$WORK/manifest.json" --release-id fixture-9.8.7 \
   --version 9.8.7 --source-sha ffffffffffffffffffffffffffffffffffffffff --policy-version release-saga/1 >/dev/null 2>&1; then
   echo "expected source identity mismatch to fail closed" >&2; exit 1

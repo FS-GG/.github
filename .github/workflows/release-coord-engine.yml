@@ -193,6 +193,11 @@ jobs:
           dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
           dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj --locked-mode
+          (cd tests/FS.GG.Telemetry.LocalDashboard.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.LocalDashboard.Tests/FS.GG.Telemetry.LocalDashboard.Tests.fsproj -c Release --no-restore
 
       - name: Use the saga-prepared package
         env:
@@ -204,6 +209,12 @@ jobs:
           gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
             --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
           bash scripts/release-saga-ci.sh init FS.GG.Coord.Cli "$VERSION" "${{ steps.v.outputs.source_sha }}"
+
+      - name: Qualify the exact prepared standalone telemetry package
+        run: |
+          set -euo pipefail
+          package="$PWD/artifacts/packages/FS.GG.Coord.Cli.${{ steps.v.outputs.version }}.nupkg"
+          bash tests/standalone-telemetry-package/run.sh "$package" "$PWD/artifacts/packages/standalone-telemetry-prepublish.json"
 
       # A TOOL THAT PACKS BUT DOES NOT RUN IS THE FAILURE MODE HERE — the payload is a private
       # ProjectReference (FS.GG.Coord.Core) plus FSharp.Core, and package creation succeeding says nothing
@@ -301,6 +312,54 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/release-saga-ci.sh nuget-record FS.GG.Coord.Cli "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.source_sha }}"
+
+      - name: Requalify the byte-identical public package and retained history
+        run: |
+          set -euo pipefail
+          version="${{ steps.v.outputs.version }}"
+          public_dir="$RUNNER_TEMP/public-telemetry-readback"
+          mkdir -p "$public_dir"
+          public_package="$public_dir/FS.GG.Coord.Cli.$version.nupkg"
+          curl --fail --location --retry 8 --retry-all-errors \
+            "https://api.nuget.org/v3-flatcontainer/fs.gg.coord.cli/$version/fs.gg.coord.cli.$version.nupkg" \
+            --output "$public_package"
+          actual="$(sha256sum "$public_package" | cut -d' ' -f1)"
+          python3 scripts/release-saga.py verify-external --manifest artifacts/packages/release-manifest.json \
+            --package FS.GG.Coord.Cli --artifact "$public_package" > "$public_dir/artifact-identity.raw.json"
+          jq '. + {acquisition:"nuget.org-public-readback"}' "$public_dir/artifact-identity.raw.json" > "$public_dir/artifact-identity.json"
+          FSGG_PACKAGE_SOURCE_SHA="${{ steps.v.outputs.source_sha }}" \
+          FSGG_PACKAGE_INSTALL_SOURCE=public-only \
+          FSGG_RUNTIME_MANIFEST="$PWD/artifacts/packages/release-manifest.json" \
+          FSGG_RUNTIME_PUBLIC_READBACK="$public_dir/artifact-identity.json" \
+          FSGG_RUNTIME_PUBLIC_RELEASE=1 \
+            bash tests/standalone-telemetry-package/run.sh "$public_package" \
+              "$PWD/artifacts/packages/standalone-telemetry-public.json" \
+              "$PWD/artifacts/packages/standalone-telemetry-runtime-public.json"
+          baseline="$public_dir/FS.GG.Coord.Cli.0.87.0.nupkg"
+          curl --fail --location --retry 8 --retry-all-errors \
+            "https://api.nuget.org/v3-flatcontainer/fs.gg.coord.cli/0.87.0/fs.gg.coord.cli.0.87.0.nupkg" \
+            --output "$baseline"
+          baseline_sha="$(sha256sum "$baseline" | cut -d' ' -f1)"
+          jq -n --arg sha "$baseline_sha" '{package:"FS.GG.Coord.Cli",version:"0.87.0",packageSha256:$sha,source:"nuget.org-public-readback"}' > "$public_dir/baseline.json"
+          bash tests/standalone-telemetry-budget/run.sh \
+            --candidate "$public_package" --candidate-sha256 "$actual" --candidate-label public-readback \
+            --candidate-source-sha "${{ steps.v.outputs.source_sha }}" --candidate-manifest artifacts/packages/release-manifest.json \
+            --baseline "$baseline" --baseline-evidence "$public_dir/baseline.json" \
+            --output "$PWD/artifacts/packages/standalone-telemetry-budget-public.json" \
+            --source public-only --mode qualification --samples 20
+
+      - name: Retain public standalone qualification evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: standalone-telemetry-public-${{ steps.v.outputs.version }}
+          path: |
+            artifacts/packages/release-manifest.json
+            artifacts/packages/standalone-telemetry-public.json
+            artifacts/packages/standalone-telemetry-runtime-public.json
+            artifacts/packages/standalone-telemetry-budget-public.json
+            ${{ runner.temp }}/public-telemetry-readback/artifact-identity.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Persist failed release step for exact resume
         if: failure()

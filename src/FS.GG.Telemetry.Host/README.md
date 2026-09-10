@@ -19,7 +19,7 @@ Browser access keys and producer credentials are separate principals. Secrets
 belong in private files referenced by configuration; do not place them in
 arguments, URLs, logs, package contents, or source control.
 
-Version `0.1.0` is independently released under tag
-`telemetry-host/v0.1.0`. It is not part of the Kit, Drivers, and coordination CLI
+Version `0.1.1` is independently released under tag
+`telemetry-host/v0.1.1`. It is not part of the Kit, Drivers, and coordination CLI
 coherent release set. Source delivery does not mean the package has been
 published or activated on Main.

@@ -223,7 +223,7 @@ module Operations =
                         | Some errors -> resultExit "backup-integrity-failed" (Error errors)
                         | None ->
                             let workspaces=config.Stores |> Array.sortBy _.WorkspaceId |> Array.map(fun store->{|workspaceId=store.WorkspaceId;path=store.WorkspaceId;manifestSha256=digestFile(Path.Combine(temporary,store.WorkspaceId,"manifest.json"))|})
-                            let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.0";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
+                            let manifest=JsonSerializer.Serialize {|schema="fsgg.telemetry.host-backup-set/1";hostVersion="0.1.1";supportedStoreSchemaMin=9;supportedStoreSchemaMax=9;configMetadataSha256=configMetadataDigest config;createdAt=DateTimeOffset.UtcNow.ToString("O");workspaces=workspaces|}+"\n"
                             let manifestPath=Path.Combine(temporary,"backup-manifest.json")
                             File.WriteAllText(manifestPath,manifest,UTF8Encoding(false));flushFile manifestPath;syncDirectory temporary
                             Directory.Move(temporary,output);syncDirectory(Path.GetDirectoryName output)

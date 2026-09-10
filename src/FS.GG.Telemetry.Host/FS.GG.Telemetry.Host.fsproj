@@ -11,7 +11,7 @@
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -26,7 +26,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.1.0 — Initial optional Linux x64 host with authenticated workspace-scoped ingestion and private dashboard delivery. Public release and Main activation remain separate protected operations.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.1.1 — Retain the optional Linux x64 host contract while carrying the shared dashboard's local bootstrap asset mode. Public release and Main activation remain separate protected operations.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BrowserSecurity.fsi" />

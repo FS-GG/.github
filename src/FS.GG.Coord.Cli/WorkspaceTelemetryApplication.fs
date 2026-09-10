@@ -67,6 +67,12 @@ module WorkspaceTelemetryApplication =
     type Association = { Workspace:string; Producer:string; Stream:string; Repositories:string list; Destination:Destination }
     type Config = { Path:string; Engine:string; Associations:Association list; Retired:Association list }
     type Binding = { ConfigPath:string; Repository:string; Producer:string; Digest:string }
+    type LocalDashboardBinding =
+        { ConfigPath:string
+          Repository:string
+          WorkspaceId:string
+          StoreRoot:string
+          AssociationDigest:string }
 
     let private option name args = args |> List.indexed |> List.rev |> List.tryPick(fun (i,v)->if v=name then List.tryItem(i+1) args else None)
     let private options name args = args |> List.indexed |> List.choose(fun (i,v)->if v=name then List.tryItem(i+1) args else None)
@@ -309,6 +315,23 @@ module WorkspaceTelemetryApplication =
             | Ok association, Some repo -> Ok {ConfigPath=config.Path;Repository=repo;Producer=association.Producer;Digest=associationDigest association}
             | Error errors, _ -> Error errors
             | _ -> Error ["repository-required"]
+    let resolveLocalDashboard configArg repositoryArg =
+        match load configArg with
+        | Error errors -> Error errors
+        | Ok config ->
+            match select repositoryArg config, repository repositoryArg with
+            | Ok association, Some repo ->
+                match association.Destination with
+                | Local root ->
+                    Ok
+                        { ConfigPath=config.Path
+                          Repository=repo
+                          WorkspaceId=association.Workspace
+                          StoreRoot=root
+                          AssociationDigest=associationDigest association }
+                | Remote _ -> Error ["local-destination-required"]
+            | Error errors, _ -> Error errors
+            | _ -> Error ["repository-required"]
     let tryPublishBound configArg repositoryArg (expectedProducer:string option) (expectedBinding:string option) payload =
         let path=configPath configArg
         if not(File.Exists path) then Error ["unconfigured"] else
@@ -388,8 +411,8 @@ module WorkspaceTelemetryApplication =
         with _ -> Error ["drain-advisory-failure"]
     let tryDrain configArg repositoryArg = tryDrainBound configArg repositoryArg None
     let tryDrainExpected configArg repositoryArg expectedBinding = tryDrainBound configArg repositoryArg expectedBinding
-    let tryPublishBinding binding payload = tryPublishBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Producer) (Some binding.Digest) payload
-    let tryDrainBinding binding = tryDrainBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Digest)
+    let tryPublishBinding (binding:Binding) payload = tryPublishBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Producer) (Some binding.Digest) payload
+    let tryDrainBinding (binding:Binding) = tryDrainBound (Some binding.ConfigPath) (Some binding.Repository) (Some binding.Digest)
     let privateStateRoot configArg repositoryArg =
         load configArg
         |> Result.bind (select repositoryArg)
@@ -401,7 +424,7 @@ module WorkspaceTelemetryApplication =
         load configArg
         |> Result.bind (select repositoryArg)
         |> Result.map (fun association -> match association.Destination with Local root -> Some root | Remote _ -> None)
-    let tryLocalStoreRootBound binding =
+    let tryLocalStoreRootBound (binding:Binding) =
         load (Some binding.ConfigPath)
         |> Result.bind(select (Some binding.Repository))
         |> Result.bind(fun association ->

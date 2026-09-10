@@ -53,6 +53,27 @@ fsgg-coord-engine telemetry workspace activate-remote --workspace workspace-a --
 fsgg-coord-engine telemetry workspace status --repository FS-GG/.github
 ```
 
+The same coherent CLI package includes a private local dashboard. `status` is a
+read-only capability check and creates nothing when configuration is absent.
+`serve` requires one explicit local association and an assessor-qualified store,
+prints a complete one-use loopback bootstrap URL, optionally opens it, and stays
+in the foreground until Ctrl-C or SIGTERM:
+
+```console
+fsgg-coord-engine telemetry dashboard status --repository FS-GG/.github
+fsgg-coord-engine telemetry dashboard serve --repository FS-GG/.github
+fsgg-coord-engine telemetry dashboard serve --repository FS-GG/.github --no-open
+```
+
+The server binds only `127.0.0.1` on an assigned port. The bootstrap capability
+is exchanged once for a bounded HttpOnly same-site session and disappears from
+the browser URL. After logout or expiry, stop and restart `serve` to obtain a
+fresh URL. Every refresh re-resolves the repository association and reads a
+workspace-scoped WAL snapshot; association drift fails closed. The packaged
+assets make no external requests, and installed operation needs no Python, Node,
+Host service, Akka, or ASP.NET runtime. Node and Chromium appear only in the
+development and release qualification harness.
+
 The closed mode-`0600` workspace configuration is discovered through the same explicit/environment/XDG order. A
 repository name must select exactly one active association; clones and renamed repositories require
 `associate-repository`. Legacy host configuration remains an explicit incumbent publisher input and is never

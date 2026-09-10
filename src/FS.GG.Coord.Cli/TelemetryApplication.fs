@@ -87,6 +87,10 @@ module TelemetryApplication =
             shape [ "--config"; "--workspace"; "--repository"; "--remove-repository" ] [] args
         | "telemetry" :: "workspace" :: "cutover" :: args ->
             shape [ "--config"; "--workspace"; "--producer"; "--stream"; "--to"; "--store-root"; "--endpoint"; "--credential-reference"; "--spool-root" ] [] args
+        | "telemetry" :: "dashboard" :: "status" :: args ->
+            shape [ "--config"; "--repository" ] [] args
+        | "telemetry" :: "dashboard" :: "serve" :: args ->
+            shape [ "--config"; "--repository" ] [ "--no-open" ] args
         | "telemetry" :: "runtime" :: "status" :: args ->
             shape [ "--store-root" ] [] args
         | "telemetry" :: "runtime" :: "codex-exec" :: args ->
@@ -585,6 +589,10 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
+        | "telemetry" :: "dashboard" :: "status" :: args ->
+            Some(validated "telemetry dashboard" [ "--config"; "--repository" ] [] args (TelemetryDashboardApplication.run "status"))
+        | "telemetry" :: "dashboard" :: "serve" :: args ->
+            Some(validated "telemetry dashboard" [ "--config"; "--repository" ] [ "--no-open" ] args (TelemetryDashboardApplication.run "serve"))
         | "telemetry" :: "workspace" :: action :: args -> Some(WorkspaceTelemetryApplication.run action args)
         | "telemetry" :: "ci" :: action :: args -> Some(TelemetryCiApplication.run action args)
         | "telemetry" :: "budget" :: action :: args ->

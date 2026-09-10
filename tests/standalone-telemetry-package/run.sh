@@ -2,13 +2,14 @@
 # Source-free qualification of one exact FS.GG.Coord.Cli tool package.
 set -uo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "usage: $0 /absolute/FS.GG.Coord.Cli.VERSION.nupkg /absolute/evidence.json" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "usage: $0 /absolute/FS.GG.Coord.Cli.VERSION.nupkg /absolute/evidence.json [/absolute/runtime-evidence.json]" >&2
   exit 2
 fi
 
 PACKAGE="$1"
 EVIDENCE="$2"
+RUNTIME_EVIDENCE="${3:-}"
 case "$PACKAGE:$EVIDENCE" in /*:/*) ;; *) echo "package and evidence paths must be absolute" >&2; exit 2;; esac
 [ -f "$PACKAGE" ] || { echo "candidate package is missing: $PACKAGE" >&2; exit 2; }
 
@@ -55,7 +56,7 @@ PACKAGE_VERSION="${META[1]:-}"
 PACKAGE_LIST="$(printf '%s\n' "${META[@]:2}")"
 [ "$PACKAGE_ID" = "FS.GG.Coord.Cli" ] && ok "candidate identity is FS.GG.Coord.Cli $PACKAGE_VERSION" || bad "candidate package identity is exact" "$PACKAGE_ID"
 
-for required in FS.GG.Telemetry.Contracts.dll FS.GG.Telemetry.Client.dll FS.GG.Telemetry.Store.dll; do
+for required in FS.GG.Telemetry.Contracts.dll FS.GG.Telemetry.Client.dll FS.GG.Telemetry.Store.dll FS.GG.Telemetry.Dashboard.dll; do
   grep -q "/$required$" <<<"$PACKAGE_LIST" && ok "package carries $required" || bad "package carries $required"
 done
 if grep -Eq '/FS\.GG\.Telemetry\.Host\.dll$|/Akka(\.FSharp)?\.dll$' <<<"$PACKAGE_LIST"; then
@@ -73,18 +74,33 @@ FEED="$WORK/feed"
 TOOLS="$WORK/tools"
 mkdir -p "$FEED" "$TOOLS"
 cp "$PACKAGE" "$FEED/"
+if [ "${FSGG_PACKAGE_INSTALL_SOURCE:-prepared-local}" = "public-only" ]; then
+cat > "$WORK/NuGet.Config" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3"/></packageSources></configuration>
+EOF
+else
 cat > "$WORK/NuGet.Config" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <configuration><packageSources><clear/><add key="candidate" value="$FEED"/></packageSources></configuration>
 EOF
+fi
 INSTALL_LOG="$WORK/install.log"
 if dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$TOOLS" --configfile "$WORK/NuGet.Config" --no-cache >"$INSTALL_LOG" 2>&1; then
-  ok "anonymous local-only tool install succeeds"
+  ok "source-free tool install succeeds"
 else
-  bad "anonymous local-only tool install succeeds" "$(tail -5 "$INSTALL_LOG" | tr '\n' ' ')"
+  bad "source-free tool install succeeds" "$(tail -5 "$INSTALL_LOG" | tr '\n' ' ')"
 fi
 ENGINE="$TOOLS/fsgg-coord-engine"
 [ -x "$ENGINE" ] && ok "installed package exposes fsgg-coord-engine" || bad "installed package exposes fsgg-coord-engine"
+if [ "${FSGG_PACKAGE_INSTALL_SOURCE:-prepared-local}" = "public-only" ]; then
+  INSTALLED_ARCHIVE="$(find "$TOOLS" -type f -iname "fs.gg.coord.cli.$PACKAGE_VERSION.nupkg" -print -quit)"
+  if [ -n "$INSTALLED_ARCHIVE" ] && [ "$(sha256sum "$INSTALLED_ARCHIVE" | cut -d' ' -f1)" = "$PACKAGE_SHA" ]; then
+    ok "public-only install retains the exact downloaded public archive"
+  else
+    bad "public-only install retains the exact downloaded public archive"
+  fi
+fi
 INSTALLED_BYTES="$(find "$TOOLS" -type f -printf '%s\n' | awk '{n+=$1} END {print n+0}')"
 PACKAGE_DELTA=$((PACKAGE_BYTES-BASELINE_PACKAGE_BYTES))
 INSTALLED_DELTA=$((INSTALLED_BYTES-BASELINE_INSTALLED_BYTES))
@@ -106,6 +122,13 @@ if [ "$STATUS_RC" -eq 0 ] && grep -q '"status":"unconfigured"' <<<"$STATUS_OUT" 
   ok "unconfigured status is read-only in a source-free workspace"
 else
   bad "unconfigured status is read-only in a source-free workspace" "rc=$STATUS_RC out=$STATUS_OUT"
+fi
+DASHBOARD_UNCONFIGURED="$(cd "$WORKSPACE" && "$ENGINE" telemetry dashboard status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/dashboard-unconfigured.err")"; DASHBOARD_UNCONFIGURED_RC=$?
+AFTER_DASHBOARD_STATUS="$(find "$WORKSPACE" "$PRIVATE" -mindepth 1 -printf '%P\t%y\n' | sort)"
+if [ "$DASHBOARD_UNCONFIGURED_RC" -eq 0 ] && grep -q '"status":"unconfigured"' <<<"$DASHBOARD_UNCONFIGURED" && [ "$BEFORE" = "$AFTER_DASHBOARD_STATUS" ]; then
+  ok "unconfigured dashboard status is read-only"
+else
+  bad "unconfigured dashboard status is read-only" "rc=$DASHBOARD_UNCONFIGURED_RC out=$DASHBOARD_UNCONFIGURED"
 fi
 if [ "$(find "$WORKSPACE" -maxdepth 1 -name '*.fsproj' | wc -l)" -eq 1 ] \
    && ! grep -ERqi 'FS\.GG\.Telemetry|FS\.GG\.Telemetry\.Host|Akka' "$WORKSPACE" --include='*.fsproj'; then
@@ -165,6 +188,33 @@ if (cd "$WORKSPACE" && "$ENGINE" telemetry workspace activate-local --config "$C
   grep -q '"pending":0' <<<"$LOCAL_STATUS" && ok "observed synthetic command drains with no pending batch" || bad "observed synthetic command drains with no pending batch" "$LOCAL_STATUS"
   RECONCILE="$(cd "$WORKSPACE" && "$ENGINE" telemetry store reconcile --store-root "$STORE" --item L1-PACKAGE 2>"$WORK/reconcile.err")"; RECONCILE_RC=$?
   [ "$RECONCILE_RC" -eq 0 ] && grep -q '"matched":1' <<<"$RECONCILE" && ok "native expected and terminal facts reconcile" || bad "native expected and terminal facts reconcile" "rc=$RECONCILE_RC out=$RECONCILE"
+  DASHBOARD_BEFORE="$(find "$STORE" "$PRIVATE" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
+  DASHBOARD_STATUS="$(cd "$WORKSPACE" && HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY='' "$ENGINE" telemetry dashboard status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/dashboard-status.err")"; DASHBOARD_STATUS_RC=$?
+  DASHBOARD_AFTER="$(find "$STORE" "$PRIVATE" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
+  if [ "$DASHBOARD_STATUS_RC" -eq 0 ] && grep -q '"status":"ready"' <<<"$DASHBOARD_STATUS" && [ "$DASHBOARD_BEFORE" = "$DASHBOARD_AFTER" ]; then
+    ok "installed dashboard status is scoped read-only and offline"
+  else
+    bad "installed dashboard status is scoped read-only and offline" "rc=$DASHBOARD_STATUS_RC out=$DASHBOARD_STATUS"
+  fi
+  : > "$WORK/dashboard-url"
+  : > "$WORK/dashboard-serve.err"
+  (cd "$WORKSPACE" && export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY= && exec "$ENGINE" telemetry dashboard serve --config "$CONFIG" --repository FS-GG/package-fixture --no-open >"$WORK/dashboard-url" 2>"$WORK/dashboard-serve.err") &
+  DASHBOARD_PID=$!
+  DASHBOARD_URL=""
+  for _ in $(seq 1 100); do
+    DASHBOARD_URL="$(head -1 "$WORK/dashboard-url")"
+    [ -n "$DASHBOARD_URL" ] && break
+    kill -0 "$DASHBOARD_PID" 2>/dev/null || break
+    sleep .05
+  done
+  if [ -n "$DASHBOARD_URL" ] && node "$(cd "$(dirname "$0")/../FS.GG.Telemetry.LocalDashboard.Tests" && pwd)/browser-journey.mjs" "$DASHBOARD_URL" package-workspace L1-PACKAGE >"$WORK/dashboard-browser.out" 2>"$WORK/dashboard-browser.err"; then
+    ok "installed package serves the real scoped dashboard through Chromium"
+  else
+    bad "installed package serves the real scoped dashboard through Chromium" "$(cat "$WORK/dashboard-serve.err" "$WORK/dashboard-browser.err" 2>/dev/null | tail -8 | tr '\n' ' ')"
+  fi
+  kill -TERM "$DASHBOARD_PID" 2>/dev/null || true
+  wait "$DASHBOARD_PID" || bad "packaged dashboard exits cleanly on SIGTERM"
+  grep -Fq "$DASHBOARD_URL" "$WORK/dashboard-serve.err" && bad "dashboard bootstrap capability leaked to stderr" || ok "dashboard bootstrap capability is confined to stdout"
   RECEIPT_COUNTS="$(python3 - "$STORE/telemetry.sqlite3" <<'PY'
 import sqlite3, sys
 with sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True) as db:
@@ -173,6 +223,27 @@ print(f'{total}:{applied or 0}')
 PY
 )"
   case "$RECEIPT_COUNTS" in [1-9]*:*) APPLIED="${RECEIPT_COUNTS#*:}"; [ "$APPLIED" -gt 0 ] && ok "durable receipt index contains applied observations" || bad "receipt index has no applied observation";; *) bad "durable receipt index contains observations" "$RECEIPT_COUNTS";; esac
+  if [ -n "$RUNTIME_EVIDENCE" ]; then
+    if [[ "${FSGG_PACKAGE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
+      findmnt -J -T "$STORE" > "$WORK/filesystem-evidence.json"
+      RUNTIME_ARGS=(
+        --cli-path "$ENGINE" --config "$CONFIG" --repository FS-GG/package-fixture
+        --package "$PACKAGE" --source-sha "$FSGG_PACKAGE_SOURCE_SHA"
+        --filesystem-evidence "$WORK/filesystem-evidence.json" --output "$RUNTIME_EVIDENCE"
+      )
+      [ -z "${FSGG_RUNTIME_MANIFEST:-}" ] || RUNTIME_ARGS+=(--manifest "$FSGG_RUNTIME_MANIFEST")
+      [ -z "${FSGG_RUNTIME_PUBLIC_READBACK:-}" ] || RUNTIME_ARGS+=(--public-readback-evidence "$FSGG_RUNTIME_PUBLIC_READBACK")
+      [ -z "${FSGG_RUNTIME_PUBLIC_RELEASE:-}" ] || RUNTIME_ARGS+=(--public-release)
+      if bash "$(cd "$(dirname "$0")/../standalone-telemetry-dashboard" && pwd)/run.sh" \
+          "${RUNTIME_ARGS[@]}"; then
+        ok "qualified runtime budgets pass for startup RSS and 64 KiB durable submission"
+      else
+        bad "qualified runtime budgets pass for startup RSS and 64 KiB durable submission"
+      fi
+    else
+      bad "runtime qualification has an exact candidate source SHA"
+    fi
+  fi
 else
   if grep -Eqi "overlay|network|memory|not durable|unverified|filesystem" "$ACTIVATE_LOG" && [ ! -e "$CONFIG" ] && [ -z "$(find "$STORE" -mindepth 1 -print -quit)" ]; then
     ok "production assessor refuses the current unqualified filesystem without store/config writes"
@@ -202,6 +273,18 @@ else
 fi
 STORE_AFTER_UNINSTALL="$(find "$STORE" "$WORK/remote/private" -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)"
 [ "$STORE_BEFORE_UNINSTALL" = "$STORE_AFTER_UNINSTALL" ] && [ -d "$STORE" ] && ok "tool uninstall preserves acknowledged remote telemetry outcomes" || bad "tool uninstall altered telemetry data"
+if dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$TOOLS" --configfile "$WORK/NuGet.Config" --no-cache >"$WORK/reinstall.log" 2>&1; then
+  ok "source-free reinstall succeeds"
+  if [ "$PROFILE" = eligible-local ]; then
+    REINSTALLED_STATUS="$(cd "$WORKSPACE" && "$ENGINE" telemetry dashboard status --config "$CONFIG" --repository FS-GG/package-fixture 2>"$WORK/reinstalled-status.err")"; REINSTALLED_STATUS_RC=$?
+    [ "$REINSTALLED_STATUS_RC" -eq 0 ] && grep -q '"status":"ready"' <<<"$REINSTALLED_STATUS" && ok "reinstall reads preserved private dashboard history" || bad "reinstall reads preserved private dashboard history" "rc=$REINSTALLED_STATUS_RC out=$REINSTALLED_STATUS"
+    REINSTALLED_HISTORY="$(cd "$WORKSPACE" && "$ENGINE" telemetry store reconcile --store-root "$STORE" --item L1-PACKAGE 2>"$WORK/reinstalled-history.err")"; REINSTALLED_HISTORY_RC=$?
+    [ "$REINSTALLED_HISTORY_RC" -eq 0 ] && grep -q '"matched":1' <<<"$REINSTALLED_HISTORY" && ok "reinstall verifies retained named telemetry history" || bad "reinstall verifies retained named telemetry history" "rc=$REINSTALLED_HISTORY_RC out=$REINSTALLED_HISTORY"
+  fi
+  dotnet tool uninstall "$PACKAGE_ID" --tool-path "$TOOLS" >"$WORK/final-uninstall.log" 2>&1 || bad "final fixture uninstall succeeds"
+else
+  bad "source-free reinstall succeeds" "$(tail -5 "$WORK/reinstall.log" | tr '\n' ' ')"
+fi
 
 mkdir -p "$(dirname "$EVIDENCE")"
 DOTNET_VERSION="$(dotnet --version)"
