@@ -129,6 +129,61 @@ module TelemetryStoreApplicationTests =
         Assert.False(duringDocument.RootElement.GetProperty("revision").GetString() = afterDocument.RootElement.GetProperty("revision").GetString())
 
     [<Fact>]
+    let ``scoped dashboard binds workspace and refuses unprovenanced batches`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> Result.isOk)
+        Assert.Equal(Error ["projection-unavailable"], TelemetryStoreApplication.scopedDashboardSnapshot path approved "workspace-b" None)
+        match TelemetryStoreApplication.publish path approved (batch "legacy-after-enrollment" "usage-legacy" 0L "legacy" 10L) with
+        | Error ["scoped-store-requires-receipt-ingestion"] -> ()
+        | other -> failwithf "unexpected scoped publish result: %A" other
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path,TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "INSERT INTO ingest_batches(ingest_id,content_digest,source_identity,generation,cursor,accepted_count,replay_count) VALUES('legacy-unassigned','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','legacy','g1','c1',0,0);"
+        command.ExecuteNonQuery() |> ignore
+        Assert.Equal(Error ["projection-unavailable"], TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None)
+
+    [<Fact>]
+    let ``scoped dashboard accepts only applied receipt batch provenance`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope = { Workspace="workspace-a"; Producer="producer-a"; Stream="runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        let envelope = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-a","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":0}}]}}}}"""
+        TelemetryReceipt.parse envelope |> unwrap |> ignore
+        TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
+        TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap |> ignore
+        Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot path approved scope.Workspace None |> Result.isOk)
+
+    [<Fact>]
+    let ``receipt backup restores pending obligation into fresh root`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        let backup=path+"-backup"
+        let restored=path+"-restored"
+        try
+            TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+            let scope:TelemetryReceipt.Scope={Workspace="workspace-a";Producer="producer-a";Stream="runtime"}
+            TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+            let envelope=Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"batch-a","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":0}}]}}}}"""
+            TelemetryStoreApplication.submitReceipt path approved scope envelope |> unwrap |> ignore
+            TelemetryStoreApplication.backupReceiptStore path approved scope.Workspace backup |> unwrap |> ignore
+            TelemetryStoreApplication.restoreReceiptStore backup restored approved scope.Workspace |> unwrap |> ignore
+            let receipt=TelemetryStoreApplication.lookupReceipt restored approved scope "batch-a" |> unwrap
+            Assert.Contains("\"status\":\"durably-received\"",receipt)
+            TelemetryStoreApplication.drainReceipts restored approved scope.Workspace |> unwrap |> ignore
+            Assert.True(TelemetryStoreApplication.scopedDashboardSnapshot restored approved scope.Workspace None |> Result.isOk)
+        finally
+            if Directory.Exists backup then Directory.Delete(backup,true)
+            if Directory.Exists restored then Directory.Delete(restored,true)
+
+    [<Fact>]
     let ``UTEL-02 live writer is never displaced and leaves ready batch queued`` () =
         if OperatingSystem.IsLinux() then
             let cleanup, path = root ()

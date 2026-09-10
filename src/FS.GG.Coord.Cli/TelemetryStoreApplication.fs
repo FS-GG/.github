@@ -251,6 +251,18 @@ PRAGMA user_version=9;
         TelemetryStore.validateStoreRoot path assessment
         |> Result.bind (fun root -> validateExistingPermissions root |> Result.map (fun () -> root))
 
+    let private isReceiptScoped root =
+        if not (File.Exists(Path.Combine(root, databaseFileName))) then Ok false else
+        match connect root SqliteOpenMode.ReadOnly with
+        | Error _ -> Error [ "storage-unavailable" ]
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                use command = connection.CreateCommand()
+                command.CommandText <- "SELECT count(*) FROM store_metadata WHERE key='receiptWorkspace' AND value<>'';"
+                Ok(Convert.ToInt64(command.ExecuteScalar()) = 1L)
+            with _ -> Error [ "storage-unavailable" ]
+
     let initialize path assessment =
         match validateRoot path assessment with
         | Error errors -> Error errors
@@ -903,33 +915,42 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         | Error errors, _ | _, Error errors -> Error errors
         | Ok root, Ok batch ->
             try
-                if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ] else
-                let inbox = Path.Combine(root, "inbox")
-                let producer = Path.Combine(inbox, batch.SourceIdentity)
-                Directory.CreateDirectory producer |> ignore
-                if not (OperatingSystem.IsWindows()) then
-                    File.SetUnixFileMode(inbox, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-                    File.SetUnixFileMode(producer, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-                let pending = Directory.EnumerateFiles(producer, "*.ready", SearchOption.TopDirectoryOnly) |> Seq.truncate (maxPendingPerProducer + 1) |> Seq.length
-                if pending >= maxPendingPerProducer then Error [ "producer inbox is full" ] else
-                let ready = Path.Combine(producer, $"%s{batch.IngestId}.%s{batch.ContentDigest}.ready")
-                if File.Exists ready then
-                    let existing = File.ReadAllBytes ready
-                    match TelemetryStore.parseBatch existing with
-                    | Ok current when current.ContentDigest = batch.ContentDigest -> Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.publish-result/1"; status = "already-queued"; producer = batch.SourceIdentity; ingestId = batch.IngestId; digest = batch.ContentDigest |} + "\n")
-                    | _ -> Error [ "ready publication identity collision" ]
+                if not (File.Exists(Path.Combine(root, databaseFileName))) then Error [ "telemetry store is not initialized" ]
                 else
-                    let nonce = Guid.NewGuid().ToString("N")
-                    let temporary = Path.Combine(producer, $".%s{batch.IngestId}.%s{nonce}.tmp")
-                    try
-                        use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)
-                        if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-                        stream.Write bytes; stream.Flush(true); stream.Close()
-                        File.Move(temporary, ready, false)
-                        fsyncDirectory producer
-                        Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.publish-result/1"; status = "queued"; producer = batch.SourceIdentity; ingestId = batch.IngestId; digest = batch.ContentDigest |} + "\n")
-                    finally
-                        if File.Exists temporary then File.Delete temporary
+                    match tryWriterLock root with
+                    | Error errors -> Error errors
+                    | Ok writer ->
+                      use writer=writer
+                      match isReceiptScoped root with
+                      | Error errors -> Error errors
+                      | Ok true -> Error [ "scoped-store-requires-receipt-ingestion" ]
+                      | Ok false ->
+                        let inbox = Path.Combine(root, "inbox")
+                        let producer = Path.Combine(inbox, batch.SourceIdentity)
+                        Directory.CreateDirectory producer |> ignore
+                        if not (OperatingSystem.IsWindows()) then
+                            File.SetUnixFileMode(inbox, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                            File.SetUnixFileMode(producer, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                        let pending = Directory.EnumerateFiles(producer, "*.ready", SearchOption.TopDirectoryOnly) |> Seq.truncate (maxPendingPerProducer + 1) |> Seq.length
+                        if pending >= maxPendingPerProducer then Error [ "producer inbox is full" ] else
+                        let ready = Path.Combine(producer, $"%s{batch.IngestId}.%s{batch.ContentDigest}.ready")
+                        if File.Exists ready then
+                            let existing = File.ReadAllBytes ready
+                            match TelemetryStore.parseBatch existing with
+                            | Ok current when current.ContentDigest = batch.ContentDigest -> Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.publish-result/1"; status = "already-queued"; producer = batch.SourceIdentity; ingestId = batch.IngestId; digest = batch.ContentDigest |} + "\n")
+                            | _ -> Error [ "ready publication identity collision" ]
+                        else
+                            let nonce = Guid.NewGuid().ToString("N")
+                            let temporary = Path.Combine(producer, $".%s{batch.IngestId}.%s{nonce}.tmp")
+                            try
+                                use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)
+                                if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                                stream.Write bytes; stream.Flush(true); stream.Close()
+                                File.Move(temporary, ready, false)
+                                fsyncDirectory producer
+                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.publish-result/1"; status = "queued"; producer = batch.SourceIdentity; ingestId = batch.IngestId; digest = batch.ContentDigest |} + "\n")
+                            finally
+                                if File.Exists temporary then File.Delete temporary
             with error -> Error [ error.Message ]
 
     let private fairReadyFiles root =
@@ -986,49 +1007,53 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
             | Error errors -> Error errors
             | Ok writerLock ->
                 use writerLock = writerLock
-                let selected = fairReadyFiles root
-                let mutable accepted = 0
-                let mutable replayed = 0
-                let mutable quarantined = 0
-                let mutable failures: string list = []
-                let mutable reevaluated = false
-                for ready in selected do
-                    let bytes = try File.ReadAllBytes ready with error -> failures <- error.Message :: failures; Array.empty
-                    let parsed = TelemetryStore.parseBatch bytes
-                    let nameValid (batch: TelemetryStore.Batch) = Path.GetFileName ready = $"%s{batch.IngestId}.%s{batch.ContentDigest}.ready"
-                    match parsed with
-                    | Error errors -> quarantine root ready errors; quarantined <- quarantined + 1
-                    | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
-                    | Ok batch ->
-                        match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
-                        | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_population_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_check_runs", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: process_reviews", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_spans", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_usage_attributions", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: complication_events", StringComparison.Ordinal)) ->
-                            quarantine root ready errors; quarantined <- quarantined + 1
-                        | Error errors -> failures <- (String.concat "; " errors) :: failures
-                        | Ok result ->
-                            reevaluated <- true
-                            use doc = JsonDocument.Parse result
-                            accepted <- accepted + doc.RootElement.GetProperty("accepted").GetInt32()
-                            replayed <- replayed + doc.RootElement.GetProperty("replayed").GetInt32()
-                            try hooks.AfterCommitBeforeDelete(); File.Delete ready; fsyncDirectory(Path.GetDirectoryName ready) with error -> failures <- ("committed but ready removal failed: " + error.Message) :: failures
-                if not reevaluated then
-                    match connect root SqliteOpenMode.ReadWrite with
-                    | Error errors -> failures <- String.concat "; " errors :: failures
-                    | Ok(connection, _) ->
-                        use connection = connection
-                        try
-                            beginImmediate connection
-                            budgetReevaluate connection
-                            execute connection "COMMIT;"
-                        with error -> rollback connection; failures <- error.Message :: failures
-                match List.tryLast selected with
-                | Some last ->
-                    let cursorPath = Path.Combine(root, "drain.cursor")
-                    let temporary = cursorPath + ".tmp"
-                    File.WriteAllText(temporary, DirectoryInfo(Path.GetDirectoryName last).Name, UTF8Encoding(false))
-                    File.Move(temporary, cursorPath, true); fsyncDirectory root
-                | None -> ()
-                if not failures.IsEmpty then Error(List.rev failures)
-                else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.drain-result/1"; accepted = accepted; replayed = replayed; quarantined = quarantined; remaining = pendingCount root |} + "\n")
+                match isReceiptScoped root with
+                | Error errors -> Error errors
+                | Ok true -> Error [ "scoped-store-requires-receipt-ingestion" ]
+                | Ok false ->
+                    let selected = fairReadyFiles root
+                    let mutable accepted = 0
+                    let mutable replayed = 0
+                    let mutable quarantined = 0
+                    let mutable failures: string list = []
+                    let mutable reevaluated = false
+                    for ready in selected do
+                        let bytes = try File.ReadAllBytes ready with error -> failures <- error.Message :: failures; Array.empty
+                        let parsed = TelemetryStore.parseBatch bytes
+                        let nameValid (batch: TelemetryStore.Batch) = Path.GetFileName ready = $"%s{batch.IngestId}.%s{batch.ContentDigest}.ready"
+                        match parsed with
+                        | Error errors -> quarantine root ready errors; quarantined <- quarantined + 1
+                        | Ok batch when not (nameValid batch) -> quarantine root ready [ "ready filename does not match batch identity and digest" ]; quarantined <- quarantined + 1
+                        | Ok batch ->
+                            match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
+                            | Error errors when errors |> List.exists (fun error -> error.Contains("identity conflict", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: budget_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: operational_event_times", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_population_", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: ci_check_runs", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: process_reviews", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_spans", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: activity_usage_attributions", StringComparison.Ordinal) || error.Contains("UNIQUE constraint failed: complication_events", StringComparison.Ordinal)) ->
+                                quarantine root ready errors; quarantined <- quarantined + 1
+                            | Error errors -> failures <- (String.concat "; " errors) :: failures
+                            | Ok result ->
+                                reevaluated <- true
+                                use doc = JsonDocument.Parse result
+                                accepted <- accepted + doc.RootElement.GetProperty("accepted").GetInt32()
+                                replayed <- replayed + doc.RootElement.GetProperty("replayed").GetInt32()
+                                try hooks.AfterCommitBeforeDelete(); File.Delete ready; fsyncDirectory(Path.GetDirectoryName ready) with error -> failures <- ("committed but ready removal failed: " + error.Message) :: failures
+                    if not reevaluated then
+                        match connect root SqliteOpenMode.ReadWrite with
+                        | Error errors -> failures <- String.concat "; " errors :: failures
+                        | Ok(connection, _) ->
+                            use connection = connection
+                            try
+                                beginImmediate connection
+                                budgetReevaluate connection
+                                execute connection "COMMIT;"
+                            with error -> rollback connection; failures <- error.Message :: failures
+                    match List.tryLast selected with
+                    | Some last ->
+                        let cursorPath = Path.Combine(root, "drain.cursor")
+                        let temporary = cursorPath + ".tmp"
+                        File.WriteAllText(temporary, DirectoryInfo(Path.GetDirectoryName last).Name, UTF8Encoding(false))
+                        File.Move(temporary, cursorPath, true); fsyncDirectory root
+                    | None -> ()
+                    if not failures.IsEmpty then Error(List.rev failures)
+                    else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.drain-result/1"; accepted = accepted; replayed = replayed; quarantined = quarantined; remaining = pendingCount root |} + "\n")
 
     let drain path assessment =
         drainWithHooks path assessment { BeforeCommit = ignore; AfterCommitBeforeDelete = ignore }
@@ -1057,6 +1082,34 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
         command.ExecuteNonQuery() |> ignore
     let private receiptWorkspace connection =
         string (receiptScalar connection "SELECT value FROM store_metadata WHERE key='receiptWorkspace';" [])
+    let private verifyScopedProvenance (connection:SqliteConnection) (transaction:SqliteTransaction) workspace =
+        use workspaceCommand = connection.CreateCommand()
+        workspaceCommand.Transaction <- transaction
+        workspaceCommand.CommandText <- "SELECT value FROM store_metadata WHERE key='receiptWorkspace';"
+        let enrolled = workspaceCommand.ExecuteScalar()
+        if isNull enrolled || enrolled = box DBNull.Value || string enrolled <> workspace then Error [ "projection-unavailable" ] else
+        use receiptsCommand = connection.CreateCommand()
+        receiptsCommand.Transaction <- transaction
+        receiptsCommand.CommandText <- "SELECT producer,batch,digest FROM transport_receipts WHERE state='applied' ORDER BY producer,batch LIMIT 10001;"
+        use receiptsReader = receiptsCommand.ExecuteReader()
+        let receipts = Collections.Generic.HashSet<string * string>()
+        let mutable receiptCount = 0
+        while receiptsReader.Read() do
+            receiptCount <- receiptCount + 1
+            if receiptCount <= 10000 then receipts.Add("receipt-" + TelemetryReceipt.key (receiptsReader.GetString 0) (receiptsReader.GetString 1), receiptsReader.GetString 2) |> ignore
+        receiptsReader.Close()
+        if receiptCount > 10000 then Error [ "projection-unavailable" ] else
+        use batchesCommand = connection.CreateCommand()
+        batchesCommand.Transaction <- transaction
+        batchesCommand.CommandText <- "SELECT ingest_id,content_digest FROM ingest_batches ORDER BY ingest_id LIMIT 10001;"
+        use batchesReader = batchesCommand.ExecuteReader()
+        let mutable batchCount = 0
+        let mutable assigned = true
+        while batchesReader.Read() do
+            batchCount <- batchCount + 1
+            if batchCount > 10000 || not (receipts.Contains(batchesReader.GetString 0,batchesReader.GetString 1)) then assigned <- false
+        batchesReader.Close()
+        if assigned then Ok () else Error [ "projection-unavailable" ]
     let private receiptAuthorized connection (scope: TelemetryReceipt.Scope) =
         receiptWorkspace connection = scope.Workspace
         && Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM receipt_producers WHERE producer=$p AND stream=$s;" ["$p",box scope.Producer; "$s",box scope.Stream]) = 1L
@@ -1080,6 +1133,21 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         elif scalarText connection "PRAGMA journal_mode;" <> "wal" || scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;" <> migration9Digest then Error [ "storage-unavailable" ]
                         else action root connection
             with _ -> Error [ "storage-unavailable" ]
+
+    let provisionReceiptWorkspace path assessment workspaceId =
+        if not (TelemetryReceipt.validId workspaceId) then Error [ "invalid-request" ] else
+        receiptLocked path assessment (fun root connection ->
+            let workspace = receiptWorkspace connection
+            if workspace = workspaceId then Ok "{\"schema\":\"fsgg.telemetry.workspace-provision/1\",\"status\":\"already-provisioned\"}\n"
+            elif workspace <> "" then Error [ "unauthorized-scope" ]
+            elif Convert.ToInt64(receiptScalar connection "SELECT count(*) FROM ingest_batches;" []) > 0L || pendingCount root > 0 then Error [ "legacy-unassigned; select a new prospective store" ]
+            else
+                beginImmediate connection
+                try
+                    receiptExecute connection "INSERT INTO store_metadata(key,value) VALUES('receiptWorkspace',$w);" ["$w",box workspaceId]
+                    execute connection "COMMIT;"
+                    Ok "{\"schema\":\"fsgg.telemetry.workspace-provision/1\",\"status\":\"provisioned\"}\n"
+                with error -> rollback connection; raise error)
 
     let enrollReceiptProducer path assessment (scope: TelemetryReceipt.Scope) =
         if [scope.Workspace; scope.Producer; scope.Stream] |> List.exists (TelemetryReceipt.validId >> not) then Error [ "invalid-request" ] else
@@ -1282,6 +1350,131 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
             else Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.receipt-drain/1"; applied = applied; rejected = rejected |} + "\n"))
     let drainReceipts path assessment workspace = drainReceiptsWithHook path assessment workspace ignore
 
+    let private fileDigest path =
+        use stream = File.OpenRead path
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData stream).ToLowerInvariant()
+    let private flushFile path =
+        use stream = new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.Read,4096,FileOptions.WriteThrough)
+        stream.Flush true
+
+    let backupReceiptStore path assessment workspace (outputPath:string) =
+        if not (Path.IsPathFullyQualified outputPath) then Error [ "backup output path must be absolute" ]
+        elif File.Exists outputPath || Directory.Exists outputPath then Error [ "backup output already exists" ]
+        else
+            receiptLocked path assessment (fun root connection ->
+                if receiptWorkspace connection <> workspace then Error [ "unauthorized-scope" ] else
+                recoverReceiptIndex root connection ignore
+                use projectionTransaction=connection.BeginTransaction()
+                match verifyScopedProvenance connection projectionTransaction workspace with
+                | Error errors -> projectionTransaction.Rollback(); Error errors
+                | Ok () ->
+                projectionTransaction.Rollback()
+                let target = Path.GetFullPath outputPath
+                let rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
+                if target.StartsWith(rootPrefix,StringComparison.Ordinal) then Error [ "backup must be outside the store root" ] else
+                let parent=Path.GetDirectoryName target
+                Directory.CreateDirectory parent |> ignore
+                let temporary=Path.Combine(parent,"."+Path.GetFileName(target)+"."+Guid.NewGuid().ToString("N")+".tmp")
+                try
+                    Directory.CreateDirectory temporary |> ignore
+                    if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                    let databaseTarget=Path.Combine(temporary,databaseFileName)
+                    use destination=new SqliteConnection($"Data Source={databaseTarget};Mode=ReadWriteCreate;Pooling=False")
+                    destination.Open(); connection.BackupDatabase destination; destination.Close()
+                    flushFile databaseTarget
+                    let files=ResizeArray<string*string*int64>()
+                    files.Add(databaseFileName,fileDigest databaseTarget,FileInfo(databaseTarget).Length)
+                    let inbox=Path.Combine(root,"receipt-inbox")
+                    if Directory.Exists inbox then
+                        let outputInbox=Path.Combine(temporary,"receipt-inbox")
+                        Directory.CreateDirectory outputInbox |> ignore
+                        for source in Directory.EnumerateFiles(inbox,"*.ready",SearchOption.TopDirectoryOnly) |> Seq.truncate 1025 do
+                            let info=FileInfo source
+                            if not(isNull info.LinkTarget) || info.Length>int64 TelemetryReceipt.MaxEnvelopeBytes then invalidOp "invalid receipt artifact"
+                            let relative=Path.Combine("receipt-inbox",info.Name)
+                            let copied=Path.Combine(temporary,relative)
+                            File.Copy(source,copied,false)
+                            flushFile copied
+                            files.Add(relative.Replace(Path.DirectorySeparatorChar,'/'),fileDigest copied,info.Length)
+                        fsyncDirectory outputInbox
+                    if files.Count>1025 then invalidOp "receipt capacity inconsistent"
+                    let manifest=JsonSerializer.Serialize {| schema="fsgg.telemetry.host-backup/1"; storeSchemaVersion=currentSchemaVersion; workspaceId=workspace; files=files |> Seq.map(fun (name,digest,size)->{|path=name;sha256=digest;bytes=size|}) |> Seq.toArray |}
+                    let outputManifest=Path.Combine(temporary,"manifest.json")
+                    File.WriteAllText(outputManifest,manifest+"\n",UTF8Encoding(false)); flushFile outputManifest
+                    fsyncDirectory temporary
+                    Directory.Move(temporary,target); fsyncDirectory parent
+                    Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.host-backup-result/1"; workspaceId=workspace; output=target; files=files.Count |}+"\n")
+                finally if Directory.Exists temporary then Directory.Delete(temporary,true))
+
+    let restoreReceiptStore (inputPath:string) (path:string) assessment workspace =
+        try
+            if not(Path.IsPathFullyQualified inputPath) || not(Directory.Exists inputPath) || existingAncestors inputPath |> List.exists(fun entry->not(isNull entry.LinkTarget)) then Error [ "backup input is unavailable" ]
+            elif not(Path.IsPathFullyQualified path) || Directory.Exists path || File.Exists path then Error [ "restore target must be a fresh path" ]
+            else
+                match validateRoot path assessment with
+                | Error errors -> Error errors
+                | Ok root ->
+                    let manifestPath=Path.Combine(inputPath,"manifest.json")
+                    if not(File.Exists manifestPath) || FileInfo(manifestPath).Length>1024L*1024L then Error [ "backup-integrity-failed" ] else
+                    use document=JsonDocument.Parse(File.ReadAllBytes manifestPath)
+                    let top=document.RootElement
+                    let topNames=top.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    if topNames.Length<>4 || Array.distinct topNames |> Array.length<>4 || Set.ofArray topNames<>set["schema";"storeSchemaVersion";"workspaceId";"files"] || top.GetProperty("schema").GetString()<>"fsgg.telemetry.host-backup/1" || top.GetProperty("storeSchemaVersion").GetInt32()<>currentSchemaVersion || top.GetProperty("workspaceId").GetString()<>workspace then Error [ "backup-incompatible" ] else
+                    let files=top.GetProperty("files").EnumerateArray() |> Seq.toArray
+                    if files.Length=0 || files.Length>1025 then Error [ "backup-integrity-failed" ] else
+                    let validated=ResizeArray<string*string>()
+                    let paths=Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+                    let mutable valid=true
+                    let mutable totalBytes=0L
+                    for entry in files do
+                        let names=entry.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                        let relative=entry.GetProperty("path").GetString()
+                        let expected=entry.GetProperty("sha256").GetString()
+                        let bytes=entry.GetProperty("bytes").GetInt64()
+                        let source=if isNull relative then "" else Path.GetFullPath(Path.Combine(inputPath,relative))
+                        let prefix=Path.GetFullPath(inputPath).TrimEnd(Path.DirectorySeparatorChar)+string Path.DirectorySeparatorChar
+                        let canonicalReceipt = not(isNull relative) && relative.StartsWith("receipt-inbox/",StringComparison.Ordinal) && relative.EndsWith(".ready",StringComparison.Ordinal) && relative.Length=14+64+6 && relative.Substring(14,64) |> Seq.forall(fun c->Char.IsAsciiHexDigit c && not(Char.IsLetter(c) && Char.IsUpper(c)))
+                        let allowed = relative=databaseFileName || canonicalReceipt
+                        if names.Length<>3 || Array.distinct names |> Array.length<>3 || Set.ofArray names<>set["path";"sha256";"bytes"] || not allowed || not(paths.Add relative) || bytes<0L || bytes>4L*1024L*1024L*1024L || source="" || not(source.StartsWith(prefix,StringComparison.Ordinal)) || not(File.Exists source) || not(isNull(FileInfo(source).LinkTarget)) || FileInfo(source).Length<>bytes || fileDigest source<>expected then valid<-false
+                        else totalBytes<-totalBytes+bytes; validated.Add(relative,source)
+                    let actualFiles=Directory.EnumerateFiles(inputPath,"*",SearchOption.AllDirectories) |> Seq.map(fun file->Path.GetRelativePath(inputPath,file).Replace(Path.DirectorySeparatorChar,'/')) |> Set.ofSeq
+                    let expectedFiles=Set.add "manifest.json" (paths |> Set.ofSeq)
+                    if not valid || totalBytes>4L*1024L*1024L*1024L || actualFiles<>expectedFiles || validated |> Seq.filter(fun (relative,_)->relative=databaseFileName) |> Seq.length <> 1 then Error [ "backup-integrity-failed" ] else
+                    let parent=Path.GetDirectoryName root
+                    Directory.CreateDirectory parent |> ignore
+                    let temporary=Path.Combine(parent,"."+Path.GetFileName(root)+"."+Guid.NewGuid().ToString("N")+".restore")
+                    Directory.CreateDirectory temporary |> ignore
+                    if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(temporary,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                    try
+                        for relative,source in validated do
+                            let target=Path.Combine(temporary,relative)
+                            Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+                            File.Copy(source,target,false)
+                            flushFile target
+                            if fileDigest target<>fileDigest source then invalidOp "copied backup changed"
+                        if Directory.Exists(Path.Combine(temporary,"receipt-inbox")) then fsyncDirectory(Path.Combine(temporary,"receipt-inbox"))
+                        fsyncDirectory temporary
+                        match status temporary assessment with
+                        | Error errors -> Directory.Delete(temporary,true); Error errors
+                        | Ok _ ->
+                          match recoverReceiptCapacity temporary assessment with
+                          | Error errors -> Directory.Delete(temporary,true); Error errors
+                          | Ok _ ->
+                            match connect temporary SqliteOpenMode.ReadOnly with
+                            | Error errors -> Directory.Delete(temporary,true); Error errors
+                            | Ok(restored,_) ->
+                                use restored=restored
+                                use transaction=restored.BeginTransaction()
+                                match verifyScopedProvenance restored transaction workspace with
+                                | Error errors -> transaction.Rollback(); Directory.Delete(temporary,true); Error errors
+                                | Ok () ->
+                                    transaction.Rollback(); Directory.Move(temporary,root); fsyncDirectory parent
+                                    Ok(JsonSerializer.Serialize {| schema="fsgg.telemetry.host-restore-result/1"; workspaceId=workspace; root=root; storeSchemaVersion=currentSchemaVersion |}+"\n")
+                    with error ->
+                        if Directory.Exists temporary then Directory.Delete(temporary,true)
+                        raise error
+        with _ -> Error [ "backup-integrity-failed" ]
+
     let private readSummary (connection: SqliteConnection) itemId : TelemetryStore.Aggregate =
         let count table =
             use command = connection.CreateCommand()
@@ -1424,7 +1617,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
     // schema.  Every database value below is selected on this one connection while
     // one explicit transaction is open.  Keeping the table vocabulary here makes
     // the engine the sole owner of SQLite and migration knowledge.
-    let dashboardSnapshotWithHooks path assessment hooks (itemId: string option) =
+    let private dashboardSnapshotBound path assessment (workspaceId: string option) hooks (itemId: string option) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly |> Result.map (fun value -> root, value)) with
         | Error errors -> Error errors
         | Ok(root, (connection, _)) ->
@@ -1436,6 +1629,14 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 if version <> currentSchemaVersion then Error [ "telemetry store schema requires migration; run telemetry store init" ]
                 elif journal <> "wal" then Error [ "telemetry store journal mode must be WAL" ]
                 else
+                    let projectionAuthorized =
+                        match workspaceId with
+                        | None -> Ok ()
+                        | Some workspace when not (TelemetryReceipt.validId workspace) -> Error [ "unauthorized-scope" ]
+                        | Some workspace -> verifyScopedProvenance connection transaction workspace
+                    match projectionAuthorized with
+                    | Error errors -> Error errors
+                    | Ok () ->
                     let selectedItems =
                         use command = connection.CreateCommand()
                         command.Transaction <- transaction
@@ -1531,8 +1732,17 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                         if Encoding.UTF8.GetByteCount result > 1024 * 1024 then Error [ "dashboard snapshot exceeds 1048576 bytes" ] else Ok result
             with error -> Error [ error.Message ]
 
+    let dashboardSnapshotWithHooks path assessment hooks itemId =
+        dashboardSnapshotBound path assessment None hooks itemId
+
     let dashboardSnapshot path assessment itemId =
         dashboardSnapshotWithHooks path assessment { AfterFirstRead = ignore } itemId
+
+    let scopedDashboardSnapshotWithHooks path assessment workspaceId hooks itemId =
+        dashboardSnapshotBound path assessment (Some workspaceId) hooks itemId
+
+    let scopedDashboardSnapshot path assessment workspaceId itemId =
+        scopedDashboardSnapshotWithHooks path assessment workspaceId { AfterFirstRead = ignore } itemId
 
     type private ActivationRow =
         { Id: string; Runtime: string; ActivatedAt: DateTimeOffset; Clock: string; LateAfterSeconds: int64 }

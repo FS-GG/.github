@@ -58,6 +58,7 @@ type private SlowContent(started:TaskCompletionSource<unit>) =
 
 module RemoteTelemetryTests =
     let scope:TelemetryReceipt.Scope={Workspace="workspace-a";Producer="producer-a";Stream="runtime"}
+    let browserSession={IdleSeconds=300;AbsoluteSeconds=3600;MaximumSessions=32;LoginAttemptsPerMinute=16;LoginAdmission=4;QueryAdmission=4;QueryTimeoutSeconds=10}
     let makeEnvelope (who:TelemetryReceipt.Scope) batch revision = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{who.Workspace}","producerId":"{who.Producer}","streamId":"{who.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"native-batch","sourceIdentity":"native-source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"item","identity":"item-a","itemId":"item-a","revision":{revision}}}]}}}}"""
     let envelope batch = makeEnvelope scope batch 0
     let receipt batch status =
@@ -145,7 +146,7 @@ module RemoteTelemetryTests =
     [<Fact>]
     let ``host config rejects multiple or non-origin listeners`` () =
         for listen in ["https://127.0.0.1:5001/;http://127.0.0.1:5002";"https://user@127.0.0.1:5001";"https://127.0.0.1:5001/path"] do
-            let candidate={ListenUrl=listen;CertificatePath="/missing";CertificatePasswordFile="/missing";ServiceLockPath="/tmp/fsgg.lock";Stores=[||];Credentials=[||]}
+            let candidate={Schema="fsgg.telemetry.host-config/1";ListenUrl=listen;CertificatePath="/missing";CertificatePasswordFile="/missing";ServiceLockPath="/tmp/fsgg.lock";Stores=[||];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             let errors=match Configuration.validate candidate with Error values->values|Ok _->failwith "invalid listener accepted"
             Assert.Contains("listenUrl must be one HTTPS origin",errors)
 
@@ -158,7 +159,7 @@ module RemoteTelemetryTests =
             let link=Path.Combine(root,"link")
             File.WriteAllText(secret,String('s',32)); File.SetUnixFileMode(secret,UnixFileMode.UserRead ||| UnixFileMode.GroupRead)
             File.CreateSymbolicLink(link,secret) |> ignore
-            let candidate={ListenUrl="https://127.0.0.1:1";CertificatePath=secret;CertificatePasswordFile=secret;ServiceLockPath=Path.Combine(root,"lock");Stores=[|{WorkspaceId="workspace-a";Root=Path.Combine(root,"store")}|];Credentials=[|{Reference="producer";SecretFile=link;WorkspaceId="workspace-a";ProducerId="producer-a";StreamId="runtime";Revoked=false}|]}
+            let candidate={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath=secret;CertificatePasswordFile=secret;ServiceLockPath=Path.Combine(root,"lock");Stores=[|{WorkspaceId="workspace-a";Root=Path.Combine(root,"store")}|];Credentials=[|{Reference="producer";SecretFile=link;WorkspaceId="workspace-a";ProducerId="producer-a";StreamId="runtime";Revoked=false}|];BrowserPrincipals=[||];BrowserSession=browserSession}
             let errors=match Configuration.validate candidate with Error values->values|Ok _->failwith "invalid config accepted"
             Assert.Contains<string>(errors,fun e->e.Contains("symbolic link"))
             Assert.Contains<string>(errors,fun e->e.Contains("permissions"))
@@ -183,7 +184,7 @@ module RemoteTelemetryTests =
                     command.Parameters.AddWithValue("$p",enrolled.Producer)|>ignore;command.Parameters.AddWithValue("$b",string batch)|>ignore;command.Parameters.AddWithValue("$d",String('a',64))|>ignore
                     command.ExecuteNonQuery()|>ignore
                 transaction.Commit()
-            let config={ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=stores[0]};{WorkspaceId="workspace-1";Root=stores[1]}|];Credentials=[||]}
+            let config={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=stores[0]};{WorkspaceId="workspace-1";Root=stores[1]}|];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             use state=new Runtime.HostState(config,fun _->TelemetryStore.ApprovedLocalDurable)
             let incoming={scope with Workspace="workspace-0";Producer="producer-0"}
             let bytes=envelope "overload" |> fun value->Encoding.UTF8.GetString(value).Replace("workspace-a","workspace-0").Replace("producer-a","producer-0") |> Encoding.UTF8.GetBytes
@@ -227,7 +228,7 @@ module RemoteTelemetryTests =
                         command.ExecuteNonQuery()|>ignore
                         if storeIndex=0 && producerIndex=0 && batchIndex=0 then replayScope<-enrolled;replayBytes<-bytes
                 transaction.Commit()
-            let config={ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=roots[0]};{WorkspaceId="workspace-1";Root=roots[1]}|];Credentials=[||]}
+            let config={Schema="fsgg.telemetry.host-config/1";ListenUrl="https://127.0.0.1:1";CertificatePath="/unused";CertificatePasswordFile="/unused";ServiceLockPath="/unused";Stores=[|{WorkspaceId="workspace-0";Root=roots[0]};{WorkspaceId="workspace-1";Root=roots[1]}|];Credentials=[||];BrowserPrincipals=[||];BrowserSession=browserSession}
             use state=new Runtime.HostState(config,fun _->TelemetryStore.ApprovedLocalDurable)
             let newBytes=makeEnvelope replayScope "new-batch" 0
             let! overloaded=Runtime.submit state replayScope newBytes CancellationToken.None
@@ -290,7 +291,7 @@ module RemoteTelemetryTests =
             File.WriteAllText(revokedTokenPath,revokedToken)
             File.WriteAllText(otherTokenPath,otherToken)
             for path in [certificatePath;passwordPath;tokenPath;rotatedTokenPath;revokedTokenPath;otherTokenPath] do File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-            let json=$"""{{"ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}]}}"""
+            let json=$"""{{"Schema":"fsgg.telemetry.host-config/1","ListenUrl":"https://127.0.0.1:{port}","CertificatePath":"{certificatePath}","CertificatePasswordFile":"{passwordPath}","ServiceLockPath":"{lockPath}","Stores":[{{"WorkspaceId":"{scope.Workspace}","Root":"{store}"}}],"Credentials":[{{"Reference":"producer-main","SecretFile":"{tokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-rotated","SecretFile":"{rotatedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":false}},{{"Reference":"producer-revoked","SecretFile":"{revokedTokenPath}","WorkspaceId":"{scope.Workspace}","ProducerId":"{scope.Producer}","StreamId":"{scope.Stream}","Revoked":true}},{{"Reference":"producer-other","SecretFile":"{otherTokenPath}","WorkspaceId":"{otherScope.Workspace}","ProducerId":"{otherScope.Producer}","StreamId":"{otherScope.Stream}","Revoked":false}}],"BrowserPrincipals":[],"BrowserSession":{{"IdleSeconds":300,"AbsoluteSeconds":3600,"MaximumSessions":32,"LoginAttemptsPerMinute":16,"LoginAdmission":4,"QueryAdmission":4,"QueryTimeoutSeconds":10}}}}"""
             File.WriteAllText(configPath,json)
             File.SetUnixFileMode(configPath,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             match Configuration.load configPath with Ok _->()|Error errors->Assert.Fail(sprintf "config rejected: %A" errors)
