@@ -621,8 +621,26 @@ def enum(value: Any, values: set[str], name: str) -> str:
     return value
 
 
-def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None) -> dict[str, Any]:
-    _, cfg = config(config_path); store, engine = cfg["storeRoot"], engine_path or cfg["engine"]
+def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[str,str]]:
+    if not path.is_absolute(): raise HostSourceError("HANDOFF_CONFIG_UNSAFE")
+    raw=read_private_bytes(path,65536,"HANDOFF_CONFIG_UNSAFE")
+    def reject_duplicates(pairs: list[tuple[str,Any]]) -> dict[str,Any]:
+        if len(pairs)!=len({name for name,_ in pairs}): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+        return dict(pairs)
+    try: value=json.loads(raw,object_pairs_hook=reject_duplicates)
+    except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_CONFIG_INVALID") from error
+    if (not isinstance(value,dict) or list(value)!=["schema","storeRoot","engine"]
+        or value.get("schema")!="fsgg.telemetry.host-config/1"):
+        raise HostSourceError("HANDOFF_CONFIG_INVALID")
+    store=pathlib.Path(value["storeRoot"]) if isinstance(value.get("storeRoot"),str) else pathlib.Path()
+    engine=value.get("engine")
+    if not store.is_absolute() or not isinstance(engine,str) or not engine or os.path.sep in engine:
+        raise HostSourceError("HANDOFF_CONFIG_INVALID")
+    return path.resolve(strict=True),{"storeRoot":str(store),"engine":engine}
+
+
+def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None, resolved_config: dict[str,str] | None = None) -> dict[str, Any]:
+    cfg=resolved_config or config(config_path)[1]; store, engine = cfg["storeRoot"], engine_path or cfg["engine"]
     envelope=engine_json(engine,["telemetry","item-detail","--format-version","2","--all","--store-root",store])
     if not isinstance(envelope,dict) or set(envelope)!={"schema","observedAt","revision","canonicalSnapshotGzip","operational"} or envelope.get("schema")!="fsgg.telemetry.item-detail/2" or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
@@ -1047,7 +1065,8 @@ def handoff_stage(args: argparse.Namespace) -> dict[str,Any]:
         labels=args.labels.resolve(strict=True); label_bytes=read_private_bytes(labels,65536,"HOST_LABELS_UNSAFE")
         label_digest=hashlib.sha256(label_bytes).hexdigest()
         if args.approve_labels!=label_digest: raise HostSourceError("HANDOFF_LABEL_APPROVAL_MISMATCH")
-        snapshot=build_host(labels,args.config,args.producer_executable); validate_host(snapshot); raw=dump(snapshot)
+        _,producer_config=_explicit_producer_config(args.config)
+        snapshot=build_host(labels,args.config,args.producer_executable,producer_config); validate_host(snapshot); raw=dump(snapshot)
         if read_private_bytes(labels,65536,"EVENT_PRIVATE_INPUT_CHANGED")!=label_bytes: raise HostSourceError("EVENT_PRIVATE_INPUT_CHANGED")
         digest=hashlib.sha256(raw).hexdigest(); blob="snapshot-"+digest+".json"; blob_path=outgoing/blob
         if blob_path.exists() or blob_path.is_symlink():
@@ -1521,7 +1540,7 @@ def main() -> int:
     host=subs.add_parser("host-snapshot"); host.add_argument("--output",type=pathlib.Path,required=True); host.add_argument("--config",type=pathlib.Path); host.add_argument("--producer-executable"); host.add_argument("--labels",type=pathlib.Path); host.add_argument("--credential-source",choices=["environment-or-gh-auth"],default="environment-or-gh-auth"); host.add_argument("--dry-run",action="store_true"); host.add_argument("--repo"); host.add_argument("--branch",default="telemetry-data"); host.add_argument("--path",default="host.json")
     setup=subs.add_parser("publisher-setup"); setup.add_argument("--config",type=pathlib.Path); setup.add_argument("--labels",type=pathlib.Path,required=True); setup.add_argument("--repo",default="FS-GG/.github"); setup.add_argument("--branch",default="telemetry-data"); setup.add_argument("--path",default="host.json"); setup.add_argument("--output",type=pathlib.Path,default=pathlib.Path(os.environ.get("XDG_RUNTIME_DIR","/tmp"))/"fsgg-telemetry-dashboard-host.json"); setup.add_argument("--systemd-dir",type=pathlib.Path,default=pathlib.Path.home()/".config/systemd/user"); setup.add_argument("--install-only",action="store_true"); setup.add_argument("--activate",action="store_true"); setup.add_argument("--approve-labels"); setup.add_argument("--authorize-recurring-publication",action="store_true"); setup.add_argument("--authorize-event-publication",action="store_true")
     event=subs.add_parser("publisher-event"); event.add_argument("--config",type=pathlib.Path)
-    stage=subs.add_parser("handoff-stage"); stage.add_argument("--config",type=pathlib.Path); stage.add_argument("--producer-executable"); stage.add_argument("--labels",type=pathlib.Path,required=True); stage.add_argument("--approve-labels",required=True); stage.add_argument("--outgoing",type=pathlib.Path,required=True); stage.add_argument("--handoff-gid",type=int,required=True)
+    stage=subs.add_parser("handoff-stage"); stage.add_argument("--config",type=pathlib.Path,required=True); stage.add_argument("--producer-executable"); stage.add_argument("--labels",type=pathlib.Path,required=True); stage.add_argument("--approve-labels",required=True); stage.add_argument("--outgoing",type=pathlib.Path,required=True); stage.add_argument("--handoff-gid",type=int,required=True)
     handoff_setup_parser=subs.add_parser("handoff-setup"); handoff_setup_parser.add_argument("--outgoing",type=pathlib.Path,required=True); handoff_setup_parser.add_argument("--state-dir",type=pathlib.Path,required=True); handoff_setup_parser.add_argument("--producer-uid",type=int,required=True); handoff_setup_parser.add_argument("--handoff-gid",type=int,required=True); handoff_setup_parser.add_argument("--approve-labels",required=True); handoff_setup_parser.add_argument("--repo",default="FS-GG/.github"); handoff_setup_parser.add_argument("--branch",default="telemetry-data"); handoff_setup_parser.add_argument("--path",default="host.json"); handoff_setup_parser.add_argument("--candidate-digest",required=True); handoff_setup_parser.add_argument("--cutover-proof-dir",type=pathlib.Path); handoff_setup_parser.add_argument("--operator-uid",type=int); handoff_setup_parser.add_argument("--cutover-gid",type=int); handoff_setup_parser.add_argument("--record-activation",action="store_true"); handoff_setup_parser.add_argument("--authorize-single-publisher-cutover",action="store_true")
     handoff_publisher=subs.add_parser("handoff-publish"); handoff_publisher.add_argument("--state-dir",type=pathlib.Path,required=True)
     comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--deliveries",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
