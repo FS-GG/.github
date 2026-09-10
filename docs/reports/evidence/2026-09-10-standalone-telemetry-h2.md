@@ -1,13 +1,14 @@
-# Standalone telemetry H2 source and package evidence
+# Standalone telemetry H2 release and deployment evidence
 
-Date: 2026-09-10. Scope: H2 source and release evidence for the optional
-standalone telemetry host. Main deployment remains a separate protected
-operation.
+Date: 2026-09-10. Scope: H2 source, release and isolated deployment evidence
+for the optional standalone telemetry host. Main activation remains a separate
+H3 operation.
 
 ## Delivered source boundary
 
-The candidate provides `FS.GG.Telemetry.Host` 0.1.0 as an independently
-versioned Linux x64 .NET tool. It includes the Host, Contracts, Store, private
+The initial package provided `FS.GG.Telemetry.Host` 0.1.0 as an independently
+versioned Linux x64 .NET tool; the accepted shared Dashboard/Store corrections
+ship as 0.1.1. It includes the Host, Contracts, Store, private
 Dashboard projection and fixed assets, and the measured Akka/SQLite runtime
 closure. It does not add Host or Akka to the workspace coordination CLI package
 and is not a member of its three-package coherent release set.
@@ -86,17 +87,41 @@ candidate.
 
 ## Separate completion states
 
-- **Source:** accepted as merge
-  `9a2b71389e3dad6fa81426e99f1822a85774fba3`; all required and post-merge
+- **Source:** the initial Host source was accepted as merge
+  `9a2b71389e3dad6fa81426e99f1822a85774fba3`; the shared Dashboard/Store patch
+  used by Host 0.1.1 was accepted as
+  `431d69d38d71da3b2c293bee8cc05448795ea38f`. All required and post-merge
   checks passed.
-- **Release:** Host 0.1.0 was published by
-  [run 34440033463](https://github.com/FS-GG/.github/actions/runs/34440033463),
-  verified on both feeds, and tagged
-  [`telemetry-host/v0.1.0`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.0).
-  The later shared Dashboard/Store source is versioned as the unpublished 0.1.1
-  patch and does not mutate the immutable 0.1.0 artifact.
-- **Deployment:** pending. Main route/TLS identities, qualified storage,
-  service activation, authenticated producer/browser journeys, companion config
-  recovery, restart, backup/restore, and rollback rehearsal require the exact
-  released package and SystemAdmin authority. The H2 roadmap checkbox remains
-  open until that operational exit is real.
+- **Release:** Host 0.1.1 was finalized by
+  [run 34446544380](https://github.com/FS-GG/.github/actions/runs/34446544380),
+  verified on both feeds, and published as the immutable
+  [`telemetry-host/v0.1.1`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.1)
+  release. The prepared archive SHA-256 is
+  `da004f32f2293539d043e03ac86e33293b57ab1dddd1a258e2b7401fc066acb7`,
+  the release-manifest SHA-256 is
+  `940c9c5572b32da1747d1ba06bce147c38cafbf8bd1bdddc0a0826a467e5c5e2`,
+  the nuget.org signed outer archive SHA-256 is
+  `92357f9457ba9ce3f9beedb7eda8256d9c7cee419b6363cabc6244aaa7fc577e`,
+  and both archives normalize to producer payload
+  `sha256:2bf8d0c3d0be3df545be66ff7ba67eb98ad5d2df157cff5417ceb2176d36dc2a`.
+  The immutable 0.1.0 release remains available as its distinct earlier source
+  and payload.
+- **Deployment rehearsal:** the accepted
+  [SystemAdmin 0.1.1 consumer](https://github.com/EHotwagner/SystemAdmin/pull/8),
+  merge `1117ab4f3a0507f559643a3f85af3c8ba771e2cf`, downloaded and verified the
+  exact release assets. Its
+  [rootless Podman run 34446689525](https://github.com/EHotwagner/SystemAdmin/actions/runs/34446689525)
+  built from the digest-pinned ASP.NET Core 10 image and exercised real
+  producer/browser authentication, durable receipt application, abrupt
+  container kill and recovery, stopped-container recreation, coherent backup,
+  fresh restore and restored receipt readback on an eligible isolated bind
+  filesystem. Failed candidate staging retained the exact installed image;
+  same-version rollback and future schema-10 refusal preserved the schema-9
+  source. The same rootless journey passed again from the accepted merge in
+  [post-merge run 34446839361](https://github.com/EHotwagner/SystemAdmin/actions/runs/34446839361).
+
+H2 is complete for immutable packaging and the selected isolated deployment
+rehearsal. The run did not operate Main, did not test 0.1.1-to-0.1.0 rollback,
+and did not simulate physical power loss. Main route/TLS/firewall identities,
+service supervision, backup retention/RPO/RTO, container-to-Main reachability,
+cross-version rollback and power-loss behavior remain H3 evidence.

@@ -1,8 +1,8 @@
 # Telemetry host package and release boundary
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. Its
-initial source version is `0.1.0`, its command is `fsgg-telemetry-host`, and its
-tag namespace is `telemetry-host/v*`. It is not a fourth member of the
+current released version is `0.1.1`, its command is `fsgg-telemetry-host`, and
+its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
 The supported production profile is Linux x64 with the .NET 10 and ASP.NET Core
@@ -45,7 +45,8 @@ bytes are equal when signing changes them.
 
 Source acceptance does not publish the package. An operator runs the dedicated
 `release-telemetry-host.yml` workflow with an exact commit already contained by
-`main`, version `0.1.0`, and the explicit confirmation phrase. The workflow
+`main`, the source's exact independent Host version, and the explicit
+confirmation phrase. The workflow
 restores locked dependencies, runs the host, projection, browser, package, and
 release fixtures, and prepares one package and manifest.
 
@@ -57,11 +58,26 @@ only after their producer payload verifies against the prepared manifest. The
 immutable tag and GitHub release are created only after both feeds are observed
 and their external hashes are journaled.
 
-The registry records `version: 0.1.0` during source preparation and deliberately
-omits `package-version` and `package-tag`. Those fields are added only after the
-protected release verifies both feeds. Main installation, storage qualification,
-private identity provisioning, listener activation, backup/restore rehearsal,
-restart, and rollback are separate SystemAdmin acceptance facts.
+Host 0.1.1 was published from source
+`431d69d38d71da3b2c293bee8cc05448795ea38f` by
+[run 34446544380](https://github.com/FS-GG/.github/actions/runs/34446544380)
+and is available as the immutable
+[`telemetry-host/v0.1.1`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.1)
+release. Its prepared archive SHA-256 is
+`da004f32f2293539d043e03ac86e33293b57ab1dddd1a258e2b7401fc066acb7`,
+its manifest SHA-256 is
+`940c9c5572b32da1747d1ba06bce147c38cafbf8bd1bdddc0a0826a467e5c5e2`,
+and its normalized producer payload is
+`sha256:2bf8d0c3d0be3df545be66ff7ba67eb98ad5d2df157cff5417ceb2176d36dc2a`.
+The nuget.org-signed outer archive has the distinct SHA-256
+`92357f9457ba9ce3f9beedb7eda8256d9c7cee419b6363cabc6244aaa7fc577e`.
+
+The registry's `telemetry-host` row records the independent source surface.
+The immutable release manifest and release tag carry package publication
+identity; the Host remains outside the registry's three-member GitHub coherent
+set. Main installation, storage qualification, private identity provisioning,
+listener activation, backup/restore, restart and rollback remain separate
+SystemAdmin and H3 acceptance facts.
 
 ## Backup boundary
 
