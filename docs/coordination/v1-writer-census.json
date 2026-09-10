@@ -66,7 +66,7 @@
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
     {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"97d792bf5f89359d62af9b307b315b2199b6065edae9acac6e33e9530ad19e36"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"},
-    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"90a18757fa76709037cdb93bc66d6873327d4343dc5266d32a7bf0c093398a81"},
+    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"994481423d70ab413d394f474c90d829e2f89dcb3076a7bde85a176dc02be8d8"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"protected-admin-writer","sinkKinds":["graphql-mutation"],"sha256":"7a277a9307077d1cee86da7d939e268213c3d365ff1083f0431dbbf58571d7bc"},
     {"path":"scripts/check-claim-fence.py","disposition":"guard-only","sinkKinds":["dynamic-process"],"sha256":"bf5a7f5e078a3bf84b6635a8ff05474ccc60edf426fdc7dc0dc1bd77a976106e","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
     {"path":"scripts/check-claim-generation.py","disposition":"guard-only","sinkKinds":["dynamic-process","gh-pr-merge","rest-write"],"sha256":"7995b5331f2d9564313f6d317f733f53174781aeb3bd50ecfa28755c036553c2","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
