@@ -257,6 +257,24 @@ class RoutineDeliveryTests(unittest.TestCase):
         ))
         self.assertEqual(observed, asdict(summary))
 
+    def test_workspace_ci_hook_routes_config_and_repository_without_store_root(self):
+        summary = MODULE.Summary(
+            "fsgg.routine-delivery/v1", "FS-GG/.github", 7, HEAD, HEAD,
+            "ready", "not-delivered", "not-required", None, 0, None, "current", "unobserved",
+        )
+
+        def runner(command, **kwargs):
+            self.assertEqual(command[:4], ["engine", "telemetry", "ci", "reconcile"])
+            self.assertEqual(command[command.index("--config") + 1], "/private/telemetry.json")
+            self.assertEqual(command[command.index("--repository") + 1], "FS-GG/.github")
+            self.assertNotIn("--store-root", command)
+            return subprocess.CompletedProcess(command, 0, '{"driverHealth":"pending"}', "")
+
+        self.assertEqual("pending", MODULE.observe_candidate(
+            summary, assignment="/private/assignment.json", config="/private/telemetry.json",
+            repository="FS-GG/.github", engine="engine", runner=runner,
+        ))
+
     def test_observation_failure_does_not_change_native_delivery(self):
         callbacks: list[str] = []
 

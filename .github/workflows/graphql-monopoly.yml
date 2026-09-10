@@ -45,6 +45,8 @@ on:
       - "scripts/coord-board-archive.py"
       - "scripts/check-roster-closure.py"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
       - "src/FS.GG.Telemetry.Store/**"
       - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under
@@ -72,6 +74,8 @@ on:
       - "scripts/coord-board-archive.py"
       - "scripts/check-roster-closure.py"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
       - "src/FS.GG.Telemetry.Store/**"
       - "src/FS.GG.Coord.Cli.Lifecycle/**"
       # .github#2725 — `FS.GG.Coord.Cli` now ProjectReferences the CLI kernel, so a change under

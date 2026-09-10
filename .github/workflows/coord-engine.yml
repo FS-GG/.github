@@ -163,6 +163,17 @@ jobs:
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
+      - name: Pack and qualify the standalone telemetry workspace
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/standalone-telemetry-package"
+          dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore --no-build -c Release \
+            -o "$RUNNER_TEMP/standalone-telemetry-package"
+          package="$(find "$RUNNER_TEMP/standalone-telemetry-package" -maxdepth 1 -name 'FS.GG.Coord.Cli.*.nupkg' -print -quit)"
+          bash tests/standalone-telemetry-package/run.sh "$package" \
+            "$RUNNER_TEMP/standalone-telemetry-package/evidence.json"
+          cat "$RUNNER_TEMP/standalone-telemetry-package/evidence.json" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Census every v1 writer from candidate-built typed metadata
         run: python3 scripts/check-v1-writer-census.py --candidate src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 

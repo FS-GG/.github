@@ -30,7 +30,7 @@ module TelemetryRuntimeApplicationTests =
         let publish bytes = published.Add bytes; Ok "queued"
         let actual =
             TelemetryRuntimeApplication.runObservedCodexExecWith executable (assignment "worker-observer") parent relation
-                (Some "/durable/private/fsgg-telemetry") 60L
+                (Some "/durable/private/fsgg-telemetry") 60L None
                 [ "--json"; "--ephemeral"; "-m"; "gpt-test"; "-c"; "model_reasoning_effort=high"; "--sandbox"; "workspace-write"; "synthetic" ] publish
         Assert.Equal(exitCode, actual)
         published |> Seq.collect batchFacts |> Seq.toList
@@ -97,6 +97,24 @@ module TelemetryRuntimeApplicationTests =
             let failing = script root "fake-codex" [ "{\"type\":\"thread.started\",\"thread_id\":\"late-thread\"}" ] 9
             let code = TelemetryRuntimeApplication.runCodexExecWith failing (assignment "worker-fail") [ "--json"; "--ephemeral" ] (fun _ -> Error [ "offline" ])
             Assert.Equal(9, code)
+
+    [<Fact>]
+    let ``workspace binding is inherited by the launched child`` () =
+        if OperatingSystem.IsLinux() then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let executable = Path.Combine(root, "binding-child")
+            File.WriteAllText(executable, "#!/bin/sh\nprintf '%s\\n' \"{\\\"type\\\":\\\"error\\\",\\\"config\\\":\\\"$FSGG_TELEMETRY_CONFIG\\\",\\\"repository\\\":\\\"$FSGG_TELEMETRY_REPOSITORY\\\"}\"\nexit 0\n")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let captured = Path.Combine(root,"binding.txt")
+            File.WriteAllText(executable, $"#!/bin/sh\nprintf '%%s\\n%%s\\n%%s\\n' \"$FSGG_TELEMETRY_CONFIG\" \"$FSGG_TELEMETRY_REPOSITORY\" \"$FSGG_TELEMETRY_BINDING_DIGEST\" > '{captured}'\nexit 0\n")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let code = TelemetryRuntimeApplication.runObservedCodexExecWith executable (assignment "worker-binding") None TelemetryRuntime.Root None 60L (Some("/private/config.json","FS-GG/.github",String('a',64))) ["--json";"--ephemeral"] (fun _ -> Error ["offline"])
+            Assert.Equal(0, code)
+            let output=File.ReadAllText captured
+            Assert.Contains("/private/config.json", output)
+            Assert.Contains("FS-GG/.github", output)
+            Assert.Contains(String('a',64), output)
 
     [<Fact>]
     let ``UTEL-03A bounded publisher records exhaustion without delaying child`` () =
@@ -262,7 +280,7 @@ module TelemetryRuntimeApplicationTests =
             let publish bytes = TelemetryStoreApplication.publish root approved bytes
             let code =
                 TelemetryRuntimeApplication.runObservedCodexExecWith executable (assignment "migration-five-worker") None TelemetryRuntime.Root
-                    (Some root) 60L [ "--json"; "--ephemeral"; "synthetic" ] publish
+                    (Some root) 60L None [ "--json"; "--ephemeral"; "synthetic" ] publish
             Assert.Equal(0, code)
             TelemetryStoreApplication.drain root approved |> unwrap |> ignore
             let reconciliation = TelemetryStoreApplication.reconcile root approved "UTEL-03A" |> unwrap

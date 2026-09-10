@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
 
+sys.dont_write_bytecode = True
 
 def _load_telemetry_defaults():
     try:
@@ -186,7 +187,9 @@ def observe_candidate(
     summary: Summary,
     *,
     assignment: str,
-    store_root: str,
+    store_root: str | None = None,
+    config: str | None = None,
+    repository: str | None = None,
     engine: str,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> str:
@@ -198,9 +201,17 @@ def observe_candidate(
         ) as delivery:
             delivery.write(payload)
             delivery.flush()
+            command = [engine, "telemetry", "ci", "reconcile", "--assignment", assignment,
+                       "--delivery", delivery.name]
+            if store_root is not None:
+                command.extend(["--store-root", store_root])
+            else:
+                if config is not None:
+                    command.extend(["--config", config])
+                if repository is not None:
+                    command.extend(["--repository", repository])
             completed = runner(
-                [engine, "telemetry", "ci", "reconcile", "--assignment", assignment,
-                 "--delivery", delivery.name, "--store-root", store_root],
+                command,
                 check=False, capture_output=True, text=True, timeout=35,
             )
         if completed.returncode == 0:
@@ -539,14 +550,16 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
-    if bool(args.telemetry_assignment) != bool(args.telemetry_store_root):
-        parser().error("--telemetry-assignment and --telemetry-store-root must be supplied together")
+    if args.telemetry_store_root and not args.telemetry_assignment:
+        parser().error("--telemetry-store-root requires --telemetry-assignment")
     identity_values = [args.telemetry_feature, args.telemetry_item, args.telemetry_attempt]
     if any(identity_values) and not all(identity_values):
         parser().error("--telemetry-feature, --telemetry-item and --telemetry-attempt must be supplied together")
     observer = None
     observation_health: list[str] = []
     assignment, store_root = args.telemetry_assignment, args.telemetry_store_root
+    config_path, telemetry_repository = args.telemetry_config, args.repo
+    workspace_transport = bool(config_path and not store_root)
     engine = args.telemetry_engine or "fsgg-coord-engine"
     if not assignment and not store_root:
         try:
@@ -554,6 +567,11 @@ def main(argv: list[str]) -> int:
             config = defaults.discover_config(args.telemetry_config)
             if config is not None:
                 engine = args.telemetry_engine or config.engine
+                workspace_config = bool(getattr(config, "workspace", False))
+                workspace_transport = workspace_config
+                if workspace_config:
+                    config_path = str(config.path)
+                telemetry_repository = getattr(config, "repository", None) or args.repo
                 if all(identity_values):
                     assignment = str(defaults.create_assignment(
                         config, defaults.CI_ASSIGNMENT_SCHEMA,
@@ -561,19 +579,20 @@ def main(argv: list[str]) -> int:
                         attempt=args.telemetry_attempt, parent_attempt=args.telemetry_parent_attempt,
                         producer="routine-delivery",
                     ))
-                    store_root = str(config.store_root)
+                    if not workspace_config:
+                        store_root = str(config.store_root)
                 else:
                     observation_health.append("unavailable")
                     print("fsgg routine telemetry: host is configured but feature/item/attempt identities are missing", file=sys.stderr)
         except (OSError, RuntimeError) as error:
             observation_health.append("unavailable")
             print(f"fsgg routine telemetry: host configuration unavailable: {error}", file=sys.stderr)
-    if assignment and store_root:
+    if assignment and (store_root or config_path or not args.telemetry_store_root):
         def observer(summary: Summary) -> None:
-            observation_health.append(observe_candidate(
-                summary, assignment=assignment, store_root=store_root,
-                engine=engine,
-            ))
+            options = {"assignment": assignment, "store_root": store_root, "engine": engine}
+            if workspace_transport:
+                options.update({"config": config_path, "repository": telemetry_repository})
+            observation_health.append(observe_candidate(summary, **options))
     try:
         code, result = summarize(
             GhApi(), repo=args.repo, pr_number=args.pr, expected_head=args.head,

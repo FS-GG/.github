@@ -572,8 +572,12 @@
        set adds prospective host-local SQLite telemetry commands, repository-owned Codex lifecycle
        observation, exact-head CI population reconciliation, and machine-derived whole-item budget
        inputs. Telemetry remains advisory and future-only; all three packages advance together. -->
+  <!-- 0.87.0 -> 0.88.0 (standalone telemetry L1 source preparation): MINOR on the stable 0.x line.
+       The coordination CLI adds explicit private workspace association, local or HTTPS destinations,
+       prospective cutover and advisory workflow capture. This is source/package validation, not a
+       published coherent release claim; all three package identities advance together. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.87.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.88.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

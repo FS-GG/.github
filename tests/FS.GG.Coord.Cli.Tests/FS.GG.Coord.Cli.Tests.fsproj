@@ -23,6 +23,8 @@
     <Compile Include="TelemetryStoreApplicationTests.fs" />
     <Compile Include="TelemetryReceiptTests.fs" />
     <Compile Include="TelemetryRuntimeApplicationTests.fs" />
+    <Compile Include="WorkspaceTelemetryApplicationTests.fs" />
+    <Compile Include="TelemetryCiApplicationTests.fs" />
     <Compile Include="RoadmapWorkUnitCliTests.fs" />
     <Compile Include="SelfHostCliTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
