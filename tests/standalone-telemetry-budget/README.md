@@ -9,7 +9,7 @@ bash tests/standalone-telemetry-budget/run.sh \
   --candidate-source-sha EXACT_MERGED_SOURCE_SHA \
   --baseline /path/FS.GG.Coord.Cli.0.87.0.nupkg \
   --baseline-evidence /tmp/standalone-baseline087/evidence.json \
-  --output /tmp/standalone-budget.json --mode qualification --samples 20
+  --output /tmp/standalone-budget.json --source public-only --mode qualification --samples 20
 ```
 
-The generated NuGet configuration contains only nuget.org. Each install also names the directory holding the exact prepared input artifact, uses fresh private caches and tool paths, and deletes only its generated measurement tree. Results cover compressed size, apparent installed bytes, file count, and cold tool-install time. They make no dashboard startup, durable-storage, submission, or public-release claim.
+`public-only` uses only credential-free nuget.org and qualifies only when every acquired installed nupkg exactly matches the supplied public readback artifact. `prepared-local` copies only the digest-bound input nupkg into a private generated source and is always preparation or smoke evidence. Both use fresh private caches and tool paths and delete only their generated measurement tree. NuGet does not expose transport byte counts, so that field is explicitly unknown while acquired archive bytes are recorded. Results make no dashboard startup, durable-storage, submission, or public-release claim.
