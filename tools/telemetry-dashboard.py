@@ -1080,7 +1080,8 @@ def _candidate_digest() -> str:
 
 def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: str) -> dict[str,Any]:
     proof=exact(value,{"schema","configDigest","candidateDigest","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState",
-        "timerActiveState","serviceUnit","serviceActiveState","eventActivationReceiptDigest","eventActivationState","observedAt","evidenceDigest"},"cutover proof")
+        "timerActiveState","serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState",
+        "eventActivationReceiptDigest","eventActivationState","observedAt","evidenceDigest"},"cutover proof")
     unsigned={key:value for key,value in proof.items() if key!="evidenceDigest"}
     if (proof.get("schema")!=HANDOFF_CUTOVER_SCHEMA or proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
         or not isinstance(proof.get("incumbentAccountUid"),int) or isinstance(proof.get("incumbentAccountUid"),bool) or proof["incumbentAccountUid"]<0
@@ -1090,7 +1091,10 @@ def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: st
         or proof.get("timerEnabledState")!="disabled" or proof.get("timerActiveState")!="inactive"
         or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(proof.get("serviceUnit")))
         or proof.get("serviceActiveState")!="inactive" or proof.get("eventActivationState")!="absent"
-        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationReceiptDigest")))
+        or not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationPathDigest")))
+        or proof.get("eventActivationPriorState") not in {"removed-by-cutover","already-absent"}
+        or (proof.get("eventActivationPriorState")=="removed-by-cutover" and not re.fullmatch(r"[0-9a-f]{64}",str(proof.get("eventActivationReceiptDigest"))))
+        or (proof.get("eventActivationPriorState")=="already-absent" and proof.get("eventActivationReceiptDigest") is not None)
         or parse_time(proof.get("observedAt")) is None or proof.get("evidenceDigest")!=hashlib.sha256(dump(unsigned)).hexdigest()):
         raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
     return proof

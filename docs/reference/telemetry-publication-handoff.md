@@ -27,7 +27,7 @@ Staging writes and fsyncs a digest-named blob before atomically replacing and fs
 - the approved label digest and fixed FS-GG repository, branch, and path;
 - the SHA-256 digest of the installed publisher script;
 - the `environment-only` publisher credential source; and
-- the incumbent account and user-manager identity, inactive and disabled timer, inactive service, and digest identity plus confirmed removal of its event-publication activation receipt.
+- the incumbent account and user-manager identity, inactive and disabled timer, inactive service, the digest of the expected event-receipt path, its final absent state, and either the removed receipt digest or a typed `already-absent` prior state with a null receipt digest.
 
 The cutover proof is a closed, digest-bound `fsgg.telemetry.publisher-cutover-proof/1` receipt supplied by the privileged host integration. Its directory is operator-owned, exact `2750`, and only group-readable by the publisher; `cutover.json` is exact `0640`, and the operator UID must differ from both publisher and producer UIDs. The activation receipt retains the canonical proof directory, operator UID, handoff GID, and proof digest so review can establish its origin. The proof binds the exact candidate and publisher-config digests. The unprivileged publisher does not run `systemctl` against another account, receive sudo, inspect the old private config, or author the proof. SystemAdmin owns authoritative capture from the actual old account manager and config. Caller-supplied state flags are not a supported proof source.
 

@@ -18,7 +18,8 @@ F=importlib.util.module_from_spec(FIXTURE_SPEC); FIXTURE_SPEC.loader.exec_module
 def cutover(config_digest,candidate_digest):
     value={"schema":D.HANDOFF_CUTOVER_SCHEMA,"configDigest":config_digest,"candidateDigest":candidate_digest,"incumbentAccountUid":1001,
         "managerIdentity":"user@1001.service","timerUnit":"fsgg-telemetry-dashboard.timer","timerEnabledState":"disabled","timerActiveState":"inactive",
-        "serviceUnit":"fsgg-telemetry-dashboard.service","serviceActiveState":"inactive","eventActivationReceiptDigest":"3"*64,
+        "serviceUnit":"fsgg-telemetry-dashboard.service","serviceActiveState":"inactive","eventActivationPathDigest":"4"*64,
+        "eventActivationPriorState":"removed-by-cutover","eventActivationReceiptDigest":"3"*64,
         "eventActivationState":"absent","observedAt":"2026-09-10T12:00:00Z"}
     value["evidenceDigest"]=hashlib.sha256(D.dump(value)).hexdigest()
     return value
@@ -41,7 +42,7 @@ class HandoffPublisherTests(unittest.TestCase):
     def activate(self,outgoing,state,digest):
         args=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
             repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
-            operator_uid=1001,cutover_gid=os.getgid(),
+            operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),
             record_activation=True,authorize_single_publisher_cutover=True)
         with mock.patch.object(D,"_load_cutover_proof",side_effect=lambda directory,uid,gid,producer_uid,config_digest,candidate_digest: cutover(config_digest,candidate_digest)): return D.handoff_setup(args)
 
@@ -81,7 +82,7 @@ class HandoffPublisherTests(unittest.TestCase):
         with temporary:
             self.stage(args); setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
                 repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
-                operator_uid=1001,cutover_gid=os.getgid(),
+                operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),
                 record_activation=True,authorize_single_publisher_cutover=True)
             provider=lambda directory,uid,gid,producer_uid,config_digest,candidate_digest: cutover(config_digest,candidate_digest)
             with mock.patch.object(D,"_load_cutover_proof",side_effect=provider) as load_proof,mock.patch.object(D,"publish") as publish:
@@ -106,6 +107,9 @@ class HandoffPublisherTests(unittest.TestCase):
         self.assertEqual(D._validate_cutover_proof(proof,digest,candidate),proof)
         changed=dict(proof); changed["eventActivationState"]="present"
         with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"): D._validate_cutover_proof(changed,digest,candidate)
+        absent=dict(proof); absent["eventActivationPriorState"]="already-absent"; absent["eventActivationReceiptDigest"]=None; absent.pop("evidenceDigest")
+        absent["evidenceDigest"]=hashlib.sha256(D.dump(absent)).hexdigest()
+        self.assertEqual(D._validate_cutover_proof(absent,digest,candidate),absent)
         with tempfile.TemporaryDirectory() as directory:
             path=pathlib.Path(directory); path.chmod(0o2750)
             with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"): D._load_cutover_proof(path,os.getuid(),os.getgid(),61001,digest,candidate)
