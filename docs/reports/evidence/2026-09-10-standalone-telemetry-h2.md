@@ -1,8 +1,8 @@
 # Standalone telemetry H2 source and package evidence
 
-Date: 2026-09-10. Scope: H2 source preparation for the optional standalone
-telemetry host. Publication and Main deployment remain separate protected
-operations.
+Date: 2026-09-10. Scope: H2 source and release evidence for the optional
+standalone telemetry host. Main deployment remains a separate protected
+operation.
 
 ## Delivered source boundary
 
@@ -86,12 +86,15 @@ candidate.
 
 ## Separate completion states
 
-- **Source:** candidate implementation and the checks listed above are complete;
-  acceptance waits for the exact-head routine PR and its required CI checks.
-- **Release:** pending. The protected `release-telemetry-host.yml` workflow must
-  build from accepted `main`, pass Trusted Publishing authority, publish the
-  verified producer payload to both feeds, and create
-  `telemetry-host/v0.1.0`. No release is claimed here.
+- **Source:** accepted as merge
+  `9a2b71389e3dad6fa81426e99f1822a85774fba3`; all required and post-merge
+  checks passed.
+- **Release:** Host 0.1.0 was published by
+  [run 34440033463](https://github.com/FS-GG/.github/actions/runs/34440033463),
+  verified on both feeds, and tagged
+  [`telemetry-host/v0.1.0`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.0).
+  The later shared Dashboard/Store source is versioned as the unpublished 0.1.1
+  patch and does not mutate the immutable 0.1.0 artifact.
 - **Deployment:** pending. Main route/TLS identities, qualified storage,
   service activation, authenticated producer/browser journeys, companion config
   recovery, restart, backup/restore, and rollback rehearsal require the exact

@@ -157,6 +157,21 @@ module TelemetryReceiptTests =
             Assert.Equal(Error ["storage-unavailable"],TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "next" 0)))
 
     [<Fact>]
+    let ``receipt recovery refuses a missing artifact even when enrollment is also corrupt`` () =
+        withStore (fun root ->
+            TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "missing" 0) |> unwrap |> ignore
+            Directory.GetFiles(Path.Combine(root,"receipt-inbox"),"*.ready") |> Array.exactlyOne |> File.Delete
+            sql root "DELETE FROM receipt_producers WHERE producer='producer-a' AND stream='runtime';"
+            Assert.Equal(Error ["storage-unavailable"],TelemetryStoreApplication.recoverReceiptCapacity root approved))
+
+    [<Fact>]
+    let ``receipt recovery refuses pending content after workspace metadata corruption`` () =
+        withStore (fun root ->
+            TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "workspace-corrupt" 0) |> unwrap |> ignore
+            sql root "UPDATE store_metadata SET value='workspace-b' WHERE key='receiptWorkspace';"
+            Assert.Equal(Error ["storage-unavailable"],TelemetryStoreApplication.recoverReceiptCapacity root approved))
+
+    [<Fact>]
     let ``receipt migration preserves legacy history without assigning it`` () =
         let root = Path.Combine(Path.GetTempPath(), "fsgg-receipt-legacy-" + Guid.NewGuid().ToString("N"))
         try

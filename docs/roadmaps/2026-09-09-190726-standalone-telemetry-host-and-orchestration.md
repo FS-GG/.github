@@ -146,8 +146,8 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [ ] H2 — Immutable host packaging and deployment rehearsal. [Source/package candidate evidence](../reports/evidence/2026-09-10-standalone-telemetry-h2.md) is prepared; protected release and qualified Main rehearsal remain pending.
 - [ ] H3 — Main activation and container durability proof.
 - [ ] P1 — Optional publication migration (not selected; retain incumbent publisher).
-- [x] O0 — Orchestration state and runner contract: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/355), merge `616207d56fedb600f71dc860fbf7603497502f75`. PostgreSQL 16 qualification exercised the real containerized database and the post-merge suite passed; Main pilot and upstream acceptance remain owned by O1–O3.
-- [ ] O1 — Observer and shadow evaluation.
+- [x] O0 — Orchestration state and runner contract: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/355), merge `616207d56fedb600f71dc860fbf7603497502f75`. Sixteen tests on PostgreSQL 18.6 exercised the real containerized database and the post-merge suite passed; Main pilot and upstream acceptance remain owned by O1–O3.
+- [x] O1 — Read-only observer and shadow evaluation: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/356), merge `64acf326a3bdada6680a1f2c8b571220fc71a695`. The accepted source and all post-merge checks passed; candidate dispatch remains absent and Main pilot authority remains owned by O2.
 - [ ] O2 — Trusted bounded Main pilot.
 - [ ] O3 — Controlled adoption.
 

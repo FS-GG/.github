@@ -186,9 +186,24 @@ jobs:
           dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore --no-build -c Release \
             -o "$RUNNER_TEMP/standalone-telemetry-package"
           package="$(find "$RUNNER_TEMP/standalone-telemetry-package" -maxdepth 1 -name 'FS.GG.Coord.Cli.*.nupkg' -print -quit)"
-          bash tests/standalone-telemetry-package/run.sh "$package" \
-            "$RUNNER_TEMP/standalone-telemetry-package/evidence.json"
-          cat "$RUNNER_TEMP/standalone-telemetry-package/evidence.json" >> "$GITHUB_STEP_SUMMARY"
+          evidence="$RUNNER_TEMP/standalone-telemetry-package/evidence.json"
+          runtime="$RUNNER_TEMP/standalone-telemetry-package/runtime.json"
+          FSGG_PACKAGE_SOURCE_SHA="$GITHUB_SHA" \
+            bash tests/standalone-telemetry-package/run.sh "$package" "$evidence" "$runtime" \
+            2>&1 | tee "$RUNNER_TEMP/standalone-telemetry-package/qualification.log"
+          cat "$evidence" "$runtime" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain candidate standalone telemetry qualification
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: standalone-telemetry-candidate-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/standalone-telemetry-package/evidence.json
+            ${{ runner.temp }}/standalone-telemetry-package/runtime.json
+            ${{ runner.temp }}/standalone-telemetry-package/qualification.log
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Census every v1 writer from candidate-built typed metadata
         run: python3 scripts/check-v1-writer-census.py --candidate src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
