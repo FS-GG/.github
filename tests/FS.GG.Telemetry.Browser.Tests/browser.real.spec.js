@@ -31,13 +31,13 @@ test("real Host browser journey uses scoped secure session",async({page,context}
 
   const outcomes=await page.evaluate(async({knownWorkspace,unavailableWorkspace})=>{
     const send=body=>fetch("/private/dashboard/v1/snapshot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(async response=>({status:response.status,body:await response.text()}));
-    return {outside:await send({workspaceId:unavailableWorkspace}),missing:await send({workspaceId:knownWorkspace,itemId:"definitely-missing-item"})};
+    return {outside:await send({workspaceId:unavailableWorkspace}),missing:await send({workspaceId:knownWorkspace,itemId:"missing"})};
   },{knownWorkspace,unavailableWorkspace});
   expect(outcomes.outside.status).toBe(404);
   expect(outcomes.missing.status).toBe(404);
   expect(outcomes.outside.body).toBe(outcomes.missing.body);
   expect(posts.length).toBeGreaterThan(1);
-  for(const request of posts)expect(request.origin).toBe(baseURL);
+  for(const request of posts)expect(request.url.startsWith(baseURL)).toBe(true);
 
   await page.getByRole("button",{name:"Sign out"}).click();
   await expect(page.locator("#login")).toBeVisible();

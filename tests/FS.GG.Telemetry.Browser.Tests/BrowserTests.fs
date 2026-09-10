@@ -5,6 +5,7 @@ open System.IO
 open System.Net
 open System.Net.Http
 open System.Net.Security
+open System.Diagnostics
 open System.Security.Cryptography
 open System.Security.Cryptography.X509Certificates
 open System.Text
@@ -146,6 +147,22 @@ module BrowserTests =
         use reader=new StreamReader(tls,Encoding.ASCII)
         let! line=reader.ReadLineAsync()
         return line }
+    let private runRealBrowser origin access (certificate:X509Certificate2) =
+        if Environment.GetEnvironmentVariable("FSGG_RUN_REAL_BROWSER")="1" then
+            use rsa=certificate.GetRSAPublicKey()
+            let spki=Convert.ToBase64String(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()))
+            let start=ProcessStartInfo("npm","run test:browser -- --reporter=line")
+            start.WorkingDirectory<-__SOURCE_DIRECTORY__
+            start.UseShellExecute<-false
+            start.RedirectStandardOutput<-true
+            start.RedirectStandardError<-true
+            ["FSGG_BROWSER_BASE_URL",origin;"FSGG_BROWSER_PRINCIPAL_ID","reader";"FSGG_BROWSER_ACCESS_KEY",access;"FSGG_BROWSER_KNOWN_WORKSPACE","workspace-a";"FSGG_BROWSER_UNAVAILABLE_WORKSPACE","workspace-b";"FSGG_BROWSER_CERTIFICATE_SPKI",spki]
+            |> List.iter(fun (name,value)->start.Environment[name]<-value)
+            use child=Process.Start start
+            let output=child.StandardOutput.ReadToEnd()
+            let error=child.StandardError.ReadToEnd()
+            Assert.True(child.WaitForExit(30000),"real browser process timed out")
+            Assert.True(child.ExitCode=0,$"real browser journey failed\n{output}\n{error}")
 
     [<Fact>]
     let ``real TLS endpoints enforce independent auth scope origin capacity and private headers`` () = task {
@@ -245,6 +262,7 @@ module BrowserTests =
             use logout=request HttpMethod.Post "/private/dashboard/v1/logout" None (Some origin) (Some replacement)
             use! logoutResponse=client.SendAsync logout
             Assert.Equal(HttpStatusCode.NoContent,logoutResponse.StatusCode)
+            runRealBrowser origin access cert
         finally
             release.Set()
             app.StopAsync().GetAwaiter().GetResult()
