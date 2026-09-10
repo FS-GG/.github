@@ -156,7 +156,7 @@ module BrowserTests =
             start.UseShellExecute<-false
             start.RedirectStandardOutput<-true
             start.RedirectStandardError<-true
-            ["FSGG_BROWSER_BASE_URL",origin;"FSGG_BROWSER_PRINCIPAL_ID","reader";"FSGG_BROWSER_ACCESS_KEY",access;"FSGG_BROWSER_KNOWN_WORKSPACE","workspace-a";"FSGG_BROWSER_UNAVAILABLE_WORKSPACE","workspace-b";"FSGG_BROWSER_CERTIFICATE_SPKI",spki]
+            ["FSGG_BROWSER_BASE_URL",origin;"FSGG_BROWSER_PRINCIPAL_ID","reader";"FSGG_BROWSER_ACCESS_KEY",access;"FSGG_BROWSER_KNOWN_WORKSPACE","workspace-a";"FSGG_BROWSER_UNAVAILABLE_WORKSPACE","workspace-b";"FSGG_BROWSER_CERTIFICATE_SPKI",spki;"FSGG_BROWSER_ASSERT_UNKNOWN_COUNTS","1"]
             |> List.iter(fun (name,value)->start.Environment[name]<-value)
             use child=Process.Start start
             let output=child.StandardOutput.ReadToEnd()
@@ -183,7 +183,7 @@ module BrowserTests =
                 release.Wait()
             if item=Some "missing" then Error["sensitive /path sqlite failure"]
             elif item=Some "throw" then failwith "sensitive /path exception"
-            else Ok(Encoding.UTF8.GetBytes($"{{\"schema\":\"fsgg.telemetry.private-dashboard/1\",\"workspaceId\":\"{workspace}\",\"observedAt\":\"2026-09-10T00:00:00Z\",\"revision\":\"r1\",\"operational\":{{}},\"items\":[]}}"))
+            else Ok(Encoding.UTF8.GetBytes($"{{\"schema\":\"fsgg.telemetry.private-dashboard/1\",\"workspaceId\":\"{workspace}\",\"observedAt\":\"2026-09-10T00:00:00Z\",\"revision\":\"r1\",\"operational\":{{\"pendingBatches\":0,\"appliedReceipts\":0,\"rejectedReceipts\":0,\"consistency\":\"current\"}},\"items\":[{{\"id\":\"unknown-item\",\"state\":{{\"outcome\":\"unknown\",\"population\":\"unknown\"}},\"usage\":{{\"total\":null}},\"runtime\":{{\"terminal\":null,\"admitted\":null}},\"coverage\":{{\"populationCoverage\":\"unknown\",\"ciInventory\":\"unknown\"}}}},{{\"id\":\"zero-item\",\"state\":{{\"outcome\":\"ready\",\"population\":\"complete\"}},\"usage\":{{\"total\":0}},\"runtime\":{{\"terminal\":0,\"admitted\":0}},\"coverage\":{{\"populationCoverage\":\"complete\",\"ciInventory\":\"complete\"}}}}]}}"))
         BrowserEndpoints.map app (options origin 8 32 1) security provider
         do! app.StartAsync()
         try
