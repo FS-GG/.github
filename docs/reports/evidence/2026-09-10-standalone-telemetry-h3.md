@@ -3,9 +3,10 @@
 Date: 2026-09-10. Status: partial Main evidence; H3 remains open.
 
 This report records accepted Main results for the H3 receiver, producer, recovery,
-browser-scope, and credential-rotation work. It contains no credential, private
-key, authorization header, or raw private telemetry. It does not change the H3
-exit criteria or any operator procedure.
+browser-scope, credential-rotation, missing-ingestion, fact-replay, and updater
+work. It contains no credential, private key, authorization header, or raw
+private telemetry. It does not change the H3 exit criteria or any operator
+procedure.
 
 ## Main deployment and accepted history
 
@@ -40,6 +41,54 @@ The accepted operator reports are retained in the private SystemAdmin mailbox:
 [restored-receipt result](https://github.com/EHotwagner/SystemAdmin/blob/40fbf0607f6ef644879beebf7f998d0c5e46de1e/Mailbox/from-main/20260910T142608Z-corrected-restored-receipt.md)
 and [credential-rotation result](https://github.com/EHotwagner/SystemAdmin/blob/6d9b5951566a07c3930bf522b83017b50010fa80/Mailbox/from-main/20260910T144116Z-producer-rotation.md).
 The source correction is [SystemAdmin PR #17](https://github.com/EHotwagner/SystemAdmin/pull/17).
+
+## Missing ingestion remains visible
+
+The installed `fs.gg.coord.cli` 0.88.0 client was exercised with a fresh home,
+private configuration, private spool, synthetic producer identity, and an
+intentionally unreachable local endpoint. The failed submission and a later
+drain retry both reported `unacknowledged-lossy`. The client retained one
+owner-only ready envelope on the development container's overlay filesystem,
+created no outcome, and reported `pending: 1`,
+`pendingCensus: bounded-ready-files`, and `unacknowledgedLossy: true`.
+
+During a readback from `2026-09-10T15:49:51.535921678Z` through
+`2026-09-10T15:49:52.004140830Z`, authenticated Host health independently
+reported `ready`. The live `main-fsharp-dev` association remained configured
+with `pending: 0` and `unacknowledgedLossy: false`. A separate root readback at
+`2026-09-10T15:23:02.918693Z` observed the same ready Host and the same distinct
+pending/lossy disposable state.
+
+The redacted fixture evidence is retained at
+`/tmp/fsgg-h3-ingestion-gap-fixture/evidence.json`; the independent readback is
+`/tmp/fsgg-h3-ingestion-gap-fixture/independent-readback.json`. The retained
+ready envelope remains under that fixture's `spool` directory and its
+`outcomes` directory remains absent. This establishes visible missing or
+unacknowledged ingestion independently of Host service health. This gap fixture
+alone does not establish fact-level replay or deduplication. The aggregate
+workspace status also does not count acknowledged rejected outcomes; those are
+retained as private outcome detail after the ready envelope is removed.
+
+## Fact-level replay
+
+Main replayed the canonical retained envelope once against the correct batch
+route at `2026-09-10T15:50:36.714638Z`. The duplicate POST returned HTTP 200
+with the exact existing applied receipt and digest. Read-only SQLite
+transactions before and after the POST found exactly one unchanged fact, one
+unchanged namespaced ingest batch, and one unchanged applied transport receipt.
+A final receipt lookup returned HTTP 200 with that same applied receipt, and
+authenticated health remained ready.
+
+The probe packet marked its own result refused only because it incorrectly
+required HTTP 202. Verification against released Host 0.1.1 source commit
+`431d69d38d71da3b2c293bee8cc05448795ea38f` confirmed that an existing receipt
+with the same digest correctly returns HTTP 200; HTTP 202 is the new-receipt
+admission branch. The accepted Main
+[replay report](https://github.com/EHotwagner/SystemAdmin/blob/eb7f3f3b307173f81d093e012d39fd8d41c40c89/Mailbox/from-main/20260910T154851Z-h3-replay-correct-batch-route.md)
+retains the complete comparison at
+`/home/eugen/.local/share/fs-gg/telemetry-main/h3-correct-route-replay-4qawvoe9`.
+The earlier wrong-route attempt remains unknown and is not reclassified by this
+successful evidence.
 
 ## Restart, backup, and restored readback
 
@@ -85,9 +134,10 @@ user `developer`; `fsharp-dev` was not restarted. It retained StartedAt
 `2026-09-09T20:53:56.139915248+02:00` across the rehearsal and rotation.
 
 Post-rotation client health at `2026-09-10T14:47:23.273547Z` returned HTTP 200
-and `{"status":"ready"}`. A separate development-container health check also returned ready.
-The updater units were absent/inactive and no other Host maintenance overlapped
-the rotation. The 3.452 seconds is coordinator duration, not RTO.
+and `{"status":"ready"}`. A separate development-container health check also
+returned ready. The updater units were absent/inactive at the time of this
+rotation, and no other Host maintenance overlapped it. The 3.452 seconds is
+coordinator duration, not RTO.
 
 The native Main rotation evidence is retained at:
 
@@ -96,6 +146,24 @@ The native Main rotation evidence is retained at:
 - `/home/eugen/.local/share/fs-gg/telemetry-main/producer-rotation-pr17-psryyfez/final-health.json`
 - `/home/eugen/.local/share/fs-gg/telemetry-main/producer-rotation-pr17-psryyfez/stdout.txt`
 - `/home/eugen/.local/share/fs-gg/telemetry-main/producer-rotation-pr17-psryyfez/stderr.txt` (empty)
+
+## Updater installation and activation
+
+The accepted [SystemAdmin PR #21](https://github.com/EHotwagner/SystemAdmin/pull/21),
+merge `0883ef0cdec1257dc31df00f022787ed2f5875b9`, supplied the updater installed
+for the dedicated rootless account. The exact Main
+[installation report](https://github.com/EHotwagner/SystemAdmin/blob/9512041/Mailbox/from-main/20260910T154417Z-updater-release-root-mode.md)
+records a successful initial result of `current` at Host version 0.1.1 and an
+independent applied readback of `h3-client-activation-proof-v1` with Host health
+ready.
+
+The timer is enabled and active/waiting. Its effective recurring interval is
+five minutes with up to 30 seconds of randomized delay; it is persistent and
+also has a two-minute boot delay. The installation did not restart the Host or
+`fsharp-dev`: both retained their container identity, start time, and image.
+The incumbent publisher timer also remained enabled and active. Root-private
+native installation evidence is retained at
+`/root/fs-gg-telemetry-updater-install.lmMKD5`.
 
 ## H3 exit assessment
 
@@ -110,19 +178,26 @@ The evidence supports these parts of the H3 exit:
 - receiver process/container restart, coherent backup and separate restore retain
   the accepted reference receipt;
 - credential rotation denies the old credential, preserves the accepted receipt,
-  and updates the existing development container without restarting it; and
+  and updates the existing development container without restarting it;
+- a retained unacknowledged disposable batch is visibly pending and potentially
+  lossy while the Main Host independently reports ready;
+- replaying the exact existing envelope returns its applied receipt while the
+  fact, ingest-batch, and transport-receipt counts and selected fields remain
+  unchanged;
+- the installed updater reports the current immutable version, preserves the
+  retained receipt, and waits on its configured recurring timer without
+  restarting the Host or development container; and
 - the tested operator guide and source corrections are delivered in SystemAdmin.
 
 H3 remains unchecked. The roadmap explicitly requires stopping all development
-containers and confirming that Main still serves durable history; that independent
-check is deferred until active source workers have saved their work. The current
-record also does not yet demonstrate Main OS reboot, physical power-loss recovery,
-or measured RPO/RTO. The roadmap phrase “host restart” is therefore supported
-only for a telemetry Host service/container restart; it must not be read as an OS
-reboot claim. Explicit evidence that missing or unacknowledged ingestion remains
-visible independently of service/timer health should also be reconciled before
-closing H3.
+containers and confirming that Main still serves durable history; that
+independent check is deferred until active source workers have saved their work.
+That is the remaining H3 acceptance action. The current record also does not
+demonstrate Main OS reboot, physical power-loss recovery, or measured RPO/RTO.
+The roadmap phrase “host restart” is therefore supported only for a telemetry
+Host service/container restart; it must not be read as an OS reboot claim.
 
 Publisher preparation and cutover are separate P1 work. The private-repository
 publisher input failure and its correction do not weaken the H3 receiver evidence
-and are intentionally excluded from this assessment.
+and are intentionally excluded from this assessment. P1 staging has passed, but
+legacy history has not been migrated and no publication cutover is claimed.
