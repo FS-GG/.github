@@ -240,10 +240,11 @@ module Operations =
                     try
                         let manifestPath=Path.Combine(input,"backup-manifest.json")
                         if not(File.Exists manifestPath) || FileInfo(manifestPath).Length>1024L*1024L then resultExit "backup-integrity-failed" (Error ["backup manifest unavailable"]) else
-                        use document=JsonDocument.Parse(File.ReadAllBytes manifestPath)
+                        let manifestBytes=File.ReadAllBytes manifestPath
+                        use document=JsonDocument.Parse manifestBytes
                         let root=document.RootElement
                         let names=root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
-                        let frozenManifestDigest=digestFile manifestPath
+                        let frozenManifestDigest=digestBytes manifestBytes
                         let createdAt=root.GetProperty("createdAt").GetString()
                         let mutable parsedCreatedAt=DateTimeOffset.MinValue
                         let declared=root.GetProperty("workspaces").EnumerateArray() |> Seq.map(fun entry->
