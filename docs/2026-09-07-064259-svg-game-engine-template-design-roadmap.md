@@ -552,10 +552,10 @@ Names are provisional and must be reconciled against existing skills to avoid du
 ## 11. Roadmap and work packages
 
 The completed [SVG-FOUND-01](roadmaps/svg-game-engine-foundation.md) established the bounded local foundation.
-The next detailed execution window is
-[SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md), beginning with installed profile-2
-tool provisioning under the supported routine route; dependent slices follow its actual tool, model and
-consumer evidence. V0–V6 are not umbrella entry gates. Broader capability inventory and comprehensive stage
+The active detailed execution window is
+[SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md). Its public SDD 1.7.0 installed
+profile-2 tool provisioning is complete; Rendering reducer correspondence is next, followed by Templates
+receiver qualification. V0–V6 are not umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
 Dependencies below name the capabilities needed for implementation or integrated closure. Repository

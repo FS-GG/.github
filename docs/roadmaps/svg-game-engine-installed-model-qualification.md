@@ -2,7 +2,7 @@
 
 Feature identity: **SVG-QUAL-01**.
 
-Status: **Accepted for execution; SVG-QUAL-01.1 is ready**.
+Status: **SVG-QUAL-01.1 complete; SVG-QUAL-01.2 is ready**.
 
 Programme: [SVG game engine and Fable template](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
@@ -40,7 +40,7 @@ producer-owned gap.
 
 ## Ready qualification window
 
-- [ ] **SVG-QUAL-01.1 — Provision and qualify the exact installed profile-2 toolchain — route: routine**
+- [x] **SVG-QUAL-01.1 — Provision and qualify the exact installed profile-2 toolchain — route: routine**
 
   Depends on: SVG-FOUND-01.5.
 
@@ -55,6 +55,31 @@ producer-owned gap.
   wrong-profile objects are refused with stable diagnostics; a profile-1 workspace remains readable and is not
   silently upgraded. Tests use installed package/CLI bytes without a sibling SDD source or implicit ambient
   executable. Acquisition failures leave no accepted partial object.
+
+  Evidence: SDD source [PR #981](https://github.com/FS-GG/FS.GG.SDD/pull/981), head
+  `0c219cf237fb6a6d74997972e9e0f5057a81f788`, merged as
+  `2e3a68bdde232e229952ba5fd4c52bc0661df996`, added the installed `typed-sdd provision` operation after
+  reproducing the 1.6.0 empty-cache refusal and confirming that no supported acquisition operation existed.
+  Release [PR #982](https://github.com/FS-GG/FS.GG.SDD/pull/982), head
+  `5630d508777cb3d3dbb985bc40deebffb600ae91`, merged as
+  `b1a3bc1c46dfc28d7e8a02696f0e7bf4b026df50` and published the additive coherent SDD 1.7.0 set. The exact
+  [no-push candidate run](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34623117701) and serialized
+  [dual-feed public readback](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34623411200) passed. Receipt artifact
+  `10273841192` binds Artifacts package SHA256
+  `7563b15fe2cd5454303910ab4d5a8897a37c47c2b646aed84632eee952709432` and CLI package SHA256
+  `ba944a469c83eaea3f790a310631e9d4728211e10caaa5534ef5c3ff632173cc` to byte-identical GitHub Packages and
+  NuGet.org payloads. Public-package Q2 passed 13/13 and Q3 passed 22/22, including offline author/inspect,
+  exact cache identity, missing/modified/wrong-profile refusal, profile-1 preservation, concurrent provision
+  and failure cleanup. Toolchain evidence records Linux/amd64, profile 2, Quint 0.32.0
+  `939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f`, lmt source
+  `driusan/lmt@62fe18f2f6a6e11c158ff2b2209e1082a4fcd59c` built with Go 1.24.1 and `CGO_ENABLED=1` to
+  `37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10`, and Fable 5.13.0. The toolchain
+  JSON SHA256 is `6e63ff4a9d17d4d8ff1baf2afda662962344b562308f8b6bc40caddd1b68e688`; Q2 and Q3 JUnit SHA256 values
+  are `6661ae90cc412542102601d2e699296cbb15cb53e83a564aad8762e47f5d7fdf` and
+  `778d66af0665bdbd43985877cb7ac7428877dc99bce8ffda55f6735131902e04`. The first tag-triggered
+  [run 34623410870](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34623410870) published and passed dual-feed
+  byte readback but its immediate clean public install met NuGet V3 propagation lag; the paired serialized run
+  qualified the same package bytes without repacking. S.I.R. was not accessed or changed.
 
 - [ ] **SVG-QUAL-01.2 — Bind the retained scene reducer model to real runtimes — route: routine**
 
@@ -84,15 +109,15 @@ producer-owned gap.
   authored files and reports conflicts without destructive scaffold rerun. Effective owner guidance and
   lifecycle selection are observed; installed skills are not presumed refreshed by backfill.
 
-  Local engine/template packages may remain local. Producer publication, template publication, public-feed
-  installed qualification and Release A remain pending and separately authorized.
+  Rendering and Templates packages may remain local. Their publication, installed receiver qualification and
+  Release A remain pending and separately authorized; the SDD 1.7.0 producer toolchain used here is public.
 
 ## Generated-workspace impact
 
 Affected family: explicitly selected `fs-gg-fable-game` / `fable-game` typed-SDD profile-2 qualification
 fixtures. SVG-QUAL-01.1 and .2 change producer/source qualification only. SVG-QUAL-01.3 first changes candidate
-clean and retained receiver fixtures; no installed public scaffold changes until SDD, Rendering and Templates
-publish compatible artifacts and an actual receiver consumes them.
+clean and retained receiver fixtures; no installed public scaffold changes until Rendering and Templates
+publish artifacts compatible with SDD 1.7.0 and an actual receiver consumes them.
 
 Before qualification, an empty installed profile-2 cache refuses without a supported provisioning operation.
 After this feature, the explicit candidate receiver can provision exact verified objects, author/inspect offline
