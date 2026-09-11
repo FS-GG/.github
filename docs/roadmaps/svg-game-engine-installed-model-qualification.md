@@ -2,7 +2,7 @@
 
 Feature identity: **SVG-QUAL-01**.
 
-Status: **SVG-QUAL-01.1 complete; SVG-QUAL-01.2 is ready**.
+Status: **Complete; SVG-QUAL-01.1–01.3 are merged and qualified**.
 
 Programme: [SVG game engine and Fable template](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
@@ -38,7 +38,7 @@ is `939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f`; the accep
 before changing SDD and try its existing supported provisioning route first. Implement only a demonstrated
 producer-owned gap.
 
-## Ready qualification window
+## Qualification window
 
 - [x] **SVG-QUAL-01.1 — Provision and qualify the exact installed profile-2 toolchain — route: routine**
 
@@ -81,7 +81,7 @@ producer-owned gap.
   byte readback but its immediate clean public install met NuGet V3 propagation lag; the paired serialized run
   qualified the same package bytes without repacking. S.I.R. was not accessed or changed.
 
-- [ ] **SVG-QUAL-01.2 — Bind the retained scene reducer model to real runtimes — route: routine**
+- [x] **SVG-QUAL-01.2 — Bind the retained scene reducer model to real runtimes — route: routine**
 
   Depends on: SVG-QUAL-01.1.
 
@@ -95,7 +95,21 @@ producer-owned gap.
   The checked evidence binds the installed SDD/profile/tool identities from SVG-QUAL-01.1 and refuses stale
   generated bindings.
 
-- [ ] **SVG-QUAL-01.3 — Qualify clean and retained typed-SDD receivers — route: routine**
+  Evidence: Rendering [PR #1281](https://github.com/FS-GG/FS.GG.Rendering/pull/1281), final head
+  `b4969145cdc7873f4808df91eb90f30fbcaa110d`, merged as
+  `815783987fbf1d6f2e8165e2ae31ddf0bf61db2d`. Its
+  [installed qualification run](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34627124997) and
+  [deterministic gate](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34627125424) passed; artifact
+  `10273879431` has receipt SHA256 `6c27c77b057e3f3cdff7e04ddc991ebe88af2a792b182e3136461a9517121f01`.
+  Public SDD 1.7.0 authored and inspected the canonical literate profile-2 model offline. The real packaged .NET
+  and Fable reducers replayed the same 192-transition corpus, whose SHA256 is
+  `3e4d85cd1bedd74feb024b5cdc59f8a69035934ef22eccadcd9360905ab727cf`, to byte-identical projection SHA256
+  `cd1b2c74c95a5f25df06ca0921af7d7af9c578d1f589ef6012fea56fadd5c0d2`; targeted action and stale-state
+  mutants failed. The packed Chromium effect boundary also passed. Rendering has no base-loaded routine
+  validator; the PR records that instrumentation gap and the passing canonical local routine/claim fixtures.
+  No package was published and S.I.R. was not accessed or changed.
+
+- [x] **SVG-QUAL-01.3 — Qualify clean and retained typed-SDD receivers — route: routine**
 
   Depends on: SVG-QUAL-01.2.
 
@@ -109,8 +123,28 @@ producer-owned gap.
   authored files and reports conflicts without destructive scaffold rerun. Effective owner guidance and
   lifecycle selection are observed; installed skills are not presumed refreshed by backfill.
 
-  Rendering and Templates packages may remain local. Their publication, installed receiver qualification and
-  Release A remain pending and separately authorized; the SDD 1.7.0 producer toolchain used here is public.
+  Evidence: Templates [PR #462](https://github.com/FS-GG/FS.GG.Templates/pull/462), head
+  `b2401deea6fdf47758a52cbdc8b0ab7e02761515`, merged as
+  `b081808cc8c802d264d8fdeaf417911ca821c211`. The
+  [composition run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34632642934) and dedicated
+  [installed receiver run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34632642477) passed. Artifact
+  `10276747318` has receipt SHA256 `2dc8e1975f121cb4fa0593264211481b2805c1fc6e2f10ce648f7e3e526aee1c`.
+  Separate clean and retained receivers installed public SDD 1.7.0, provisioned the exact profile-2 tools,
+  authored and inspected offline, ran their root .NET/Fable/browser journeys and observed all three selected SVG
+  roots. Local artifacts were Scene 0.4.0-preview.1
+  `64b52a28f27ba20922da2b8e9f002f954ea5211d25441d3e06e5e4c6d1b64ff7`, SvgBrowser 0.4.0-preview.1
+  `b65e343014a58c32ced9bac723ea8e11c9b125d9b1b50be07aa3ad8b3c828a51` and Templates 0.11.0-preview.1
+  `4dc09b321b1f3b4f57f532cd6f342c84e2eb21fafee50738ffd6ab772a5a88da`. The clean 192-transition projection
+  retained SHA256 `cd1b2c74c95a5f25df06ca0921af7d7af9c578d1f589ef6012fea56fadd5c0d2`;
+  the retained semantic amendment produced 32 traces and 384 transitions, including pointer `3`, with projection
+  SHA256 `0337e901452386705ba9f666ba1ca54139fad237a66c27ddafb5af3694345c68`. Wrong tool, wrong profile and stale
+  binding controls refused; authored-file, lifecycle and skill digests were preserved and collisions were
+  reported before writes. Candidate packages remained local, ordinary defaults were unchanged and S.I.R. was
+  not accessed or changed.
+
+  Rendering and Templates packages remain local. Their public publication, public-feed receiver qualification
+  and Release A remain pending under their separate publication and release gates; the SDD 1.7.0 producer
+  toolchain used here is public.
 
 ## Generated-workspace impact
 
