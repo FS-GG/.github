@@ -2,15 +2,16 @@
 
 Feature identity: **SVG-FOUND-01**.
 
-Status: **Portable scene contract and package closure proven; retained SVG browser adapter is next**.
+Status: **Neutral and tactical compatibility consumers complete; preview release packet is next**.
 
 Planning baseline: `.github` main `4d84fd07a71fcff3409cea2915f22b6d664b5431`, 2026-09-11.
 
 Unified part: **SVG game engine foundation and Fable preview**, in the
 [section 9.8 feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 Stage: **section 15 independent producer/product track**, alongside V0–V1.
-Accountable planning owner: `.github`; implementation owners are Rendering,
-Templates and S.I.R., with Game consulted on its existing contracts.
+Accountable planning owner: `.github`; implementation owners are Rendering and
+Templates, with Game consulted on its existing contracts. S.I.R. is a read-only
+characterized donor/reference for this window.
 
 This is the executable foundation window of the
 [SVG engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md), following its
@@ -21,10 +22,10 @@ outcomes; the original programme retains comprehensive capability and release cl
 
 ## Outcome and scope
 
-Establish a small, portable retained SVG scene that a neutral Fable consumer and a S.I.R. adapter can both
-use. A developer can select a semantic object by pointer or keyboard, pan and zoom, update a scene revision,
-and preserve root/layer identity. A continuous-coordinate fixture and a grid fixture share the public scene
-surface.
+Establish a small, portable retained SVG scene that neutral and tactical compatibility Fable consumers can
+both use. A developer can select a semantic object by pointer or keyboard, pan and zoom, update a scene
+revision, and preserve root/layer identity. A continuous-coordinate fixture and a grid fixture share the
+public scene surface.
 
 The ready window ends with source behavior, isolated candidate-package consumers and a reviewable preview
 release/adoption packet. Protected producer or template publication and activation are outside this window.
@@ -50,7 +51,7 @@ when implementation starts; do not infer installed behavior from a source branch
 | Game `24f79084fdd289f34387f91b1d4398c78fde16eb`: [`Game.Core` package project](https://github.com/FS-GG/FS.GG.Game/blob/24f79084fdd289f34387f91b1d4398c78fde16eb/src/Game.Core/FS.GG.Game.Core.fsproj) | Existing pure simulation substrate and curated Fable profile. | Packaged Fable source selects Primitives, Pathfinding, Edges and Los. .NET fixed-step, collision and input APIs are not automatically qualified browser capabilities. This foundation does not require widening that profile. |
 | Templates `61091078337689c6ab1aac139bc03f6a07ca8f99`: [`fable-game`](https://github.com/FS-GG/FS.GG.Templates/tree/61091078337689c6ab1aac139bc03f6a07ca8f99/templates/fs-gg-fable-game) | Implemented Fable/Elmish arena, explicit HTTP DTOs, SignalR, locked dependencies, cross-runtime codecs and browser tests; Game.Core pin remains 0.13.0. | Reusable SVG producer consumption and foundation-specific fresh/upgrade journeys are missing. Preserve transport ownership and existing regression coverage. |
 | [Registry publication record](../../registry/dependencies.yml) | Records Workspace.Template 0.10.0 publication and installation evidence, and published wizard 0.10.1 selection. | The template provider descriptor's “not registry-active” comment is stale. Reconcile it against release/registry evidence; do not recreate an already delivered activation. |
-| S.I.R. `80e1ac9328865ec8d1ee3eeea130560ef22b1b01`: [`App.fs`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/src/SIR.Client.Web/App.fs), [`projection signatures`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/src/SIR.Client/TacticalSceneProjection.fsi), [`integration report`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/docs/issue-138-fable-game-integration-report.md) | Implemented retained tactical SVG and real template adoption, with product-owned gameplay/disclosure. The S.I.R. copyright owner authorized reuse of its code for this programme without AGPL conditions on 2026-09-11. Reuse its acceptance and performance fixtures for characterization. | Generic extraction is not demonstrated. Inventory third-party contributions, dependencies and assets before copying or redistribution; the owner authorization does not determine their separate terms. |
+| S.I.R. `80e1ac9328865ec8d1ee3eeea130560ef22b1b01`: [`App.fs`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/src/SIR.Client.Web/App.fs), [`projection signatures`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/src/SIR.Client/TacticalSceneProjection.fsi), [`integration report`](https://github.com/EHotwagner/S.I.R./blob/80e1ac9328865ec8d1ee3eeea130560ef22b1b01/docs/issue-138-fable-game-integration-report.md) | Read-only characterization of retained tactical SVG and real template adoption, with product-owned gameplay/disclosure. The S.I.R. copyright owner authorized reuse of its code for this programme without AGPL conditions on 2026-09-11. Its disclosed contract characteristics inform the Templates-owned compatibility fixture. | The S.I.R. repository is not an implementation owner and receives no writes or PR. No S.I.R. types, source, assets, packages or dependencies are copied. Inventory third-party material separately before any future copying or redistribution. |
 | SDD source `8d648c8deaf1edc16b942d0cfccee722c3a0a24c`, [original section 8A](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md#8a-quint-first-specifications-and-v2-upgrade-compatibility) | Existing consumer-profile, extraction and correspondence direction; local SDD head records a 1.6.0 release change. | Observe exact installed backend/profile/tool support for the selected engine behavior. A release commit or historical 1.5.0 document is insufficient installed qualification. |
 
 Ownership follows [ADR-0022](../adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md),
@@ -60,16 +61,18 @@ Ownership follows [ADR-0022](../adr/0022-extract-fs-gg-game-as-an-sdd-driven-com
 [ADR-0073](../adr/0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md).
 
 Rendering owns generic scene/SVG/input mechanisms. Game retains simulation and game policy; its core gains no
-Rendering dependency. Templates composes producer artifacts. S.I.R. retains combat, disclosure and tactical
-adaptation. Net owns its existing transport contracts, while Audio is outside the foundation closure. SDD owns
-model tooling, lifecycle and materialization; `.github` owns cross-repository decisions and indexing.
+Rendering dependency. Templates composes producer artifacts and owns the neutral and tactical compatibility
+fixtures. S.I.R. remains a read-only characterized donor/reference and retains its own combat, disclosure and
+tactical adaptation; this window requires no S.I.R. repository change. Net owns its existing transport contracts,
+while Audio is outside the foundation closure. SDD owns model tooling, lifecycle and materialization; `.github`
+owns cross-repository decisions and indexing.
 
 ## Independence and actual prerequisites
 
 | Boundary | Required now or before dependent work | Later activation condition |
 |---|---|---|
 | Repository source delivery | Current authorized routine route, affected owner contracts and focused native checks | No V0–V6 completion prerequisite |
-| S.I.R. donor code | Owner authorization is recorded; inventory third-party contributions, dependencies and assets before affected copying or redistribution | Publication preserves any third-party license and notice obligations found by the inventory |
+| S.I.R. donor boundary | Use only audited disclosed contract characteristics through the Templates-owned reimplementation; make no S.I.R. repository writes and copy no S.I.R. types, source, assets, packages or dependencies | Any future copying or redistribution requires a separate third-party inventory and preserves applicable license and notice obligations |
 | Portable/public contracts | Scene comparison, browser closure proof and an accepted decision for any changed responsibility | Published producer artifacts before external consumer adoption |
 | New modeled behavior | Owning bounded semantic source, supported installed profile/toolchain and real correspondence for the changed behavior | Future common-lifecycle default adoption is separate |
 | Fable template preview | Current supported provider/template path; explicit opt-in candidate consumption | Exact producer publication, template publication and affected receiver adoption |
@@ -151,27 +154,39 @@ remain substantive requirements within that route.
   startup bytes, 0.2 ms median mount and 13.8 ms median input-to-next-frame across 20 samples, with unavailable
   metrics and the absence of M9 threshold/publication claims explicit. No package was published.
 
-- [ ] **SVG-FOUND-01.4 — Exercise neutral and S.I.R. consumers — route: routine**
+- [x] **SVG-FOUND-01.4 — Exercise neutral and tactical compatibility consumers — route: routine**
 
   Depends on: SVG-FOUND-01.3.
 
-  Scope: Templates adds an explicitly selected foundation sample/fixture through existing composition seams;
-  S.I.R. adds the bounded product projection adapter. Use candidate packages for integration; repository-local
-  references may assist development but do not satisfy acceptance.
+  Scope: Templates adds the explicitly selected neutral foundation sample and a bounded tactical compatibility
+  fixture through existing composition seams. S.I.R. remains a read-only characterized donor/reference. Use
+  candidate packages for integration; repository-local references may assist development but do not satisfy
+  acceptance.
 
-  Acceptance: the neutral fixture renders grid and continuous coordinates without S.I.R. types. The S.I.R.
-  fixture preserves disclosed identities, retained layers, camera and relevant selection/focus behavior against
-  its characterized baseline. Hidden facts remain absent from the scene and accessible projection. Existing
-  arena transport and browser regressions remain passing. Superseded donor production code is removed only
-  after supported package adoption; an interim adapter selects one implementation explicitly.
+  Acceptance: the neutral fixture renders grid and continuous coordinates without S.I.R. types. The
+  Templates-owned tactical fixture preserves disclosed identities, retained layers, camera and relevant
+  selection/focus behavior against the read-only characterized baseline. Hidden facts remain absent from the
+  scene and accessible projection. Existing arena transport and browser regressions remain passing. Donor
+  production code is neither changed nor removed; any future adoption remains a separately supported decision.
+
+  Evidence: [Templates PR #459](https://github.com/FS-GG/FS.GG.Templates/pull/459), merged as
+  [commit `d19fc1d4`](https://github.com/FS-GG/FS.GG.Templates/commit/d19fc1d48647edfebad4a706db64648017fead65),
+  delivered the explicit `--svgFoundation true` package-only neutral grid and continuous-coordinate fixture
+  while leaving the default arena unchanged. [Templates PR #460](https://github.com/FS-GG/FS.GG.Templates/pull/460), merged as
+  [commit `2c76c4ba`](https://github.com/FS-GG/FS.GG.Templates/commit/2c76c4ba84fbb1afd53647e302bc6d8a1f34d011),
+  delivered the Templates-owned tactical compatibility fixture against locally packed Rendering Scene and
+  SvgBrowser artifacts. Its executable checks preserve disclosed semantic identities, ordered visible/locked
+  layers, camera, selection and focus, exclude undisclosed identities, and retain revision identity. Both PRs'
+  candidate-package, composition, workspace-integrity, Release build and routine checks passed. No package was
+  published, and no S.I.R. repository write, source copy or dependency was used.
 
 - [ ] **SVG-FOUND-01.5 — Make the preview release and receiver change reviewable — route: routine**
 
   Depends on: SVG-FOUND-01.4.
 
   Scope: Rendering and Templates prepare compatible candidate artifacts, release ordering, exact source/payload
-  identities and a bounded consumer/adoption packet; S.I.R. owns its upgrade fixture. `.github` records only
-  necessary contract/pin effects.
+  identities and a bounded consumer/adoption packet; Templates owns the retained older-workspace upgrade
+  rehearsal. S.I.R. remains read-only. `.github` records only necessary contract/pin effects.
 
   Acceptance: an isolated directory with no sibling checkout installs the locally packed candidate template,
   restores locks, builds and serves the selected foundation scene. A separately retained older workspace adopts
