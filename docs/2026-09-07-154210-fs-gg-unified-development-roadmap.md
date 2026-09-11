@@ -43,8 +43,8 @@ and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
 ## 0. Current progress report
 
-Last reconciled: **2026-09-11 14:14 UTC**. Current frontier: **V0 and V1 in parallel, with the independent
-SVG foundation track through SVG-FOUND-01.4**.
+Last reconciled: **2026-09-11 15:02 UTC**. Current frontier: **V0 and V1 in parallel; the independent
+SVG-FOUND-01 foundation window is complete at its local candidate boundary**.
 
 This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
 installed operation and observed behavior separately because they have different completion authorities. A
@@ -71,7 +71,7 @@ Ordinary CI ticks, waiting and intermediate implementation checkpoints do not re
 | **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
 | **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 0/7/14/30-day observations, receiver carryover, contraction and old-client/clean-install proof. |
 | **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated** | Akka remains a later architectural candidate; concurrent SQLite writer/read coordination is a concrete datapoint in its favor, not an adoption decision. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
-| **SVG-FOUND-01 — SVG game engine foundation** | **Consumer fixtures complete through .4** | Rendering PRs [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) and [#1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280) delivered the portable retained Scene contract and browser adapter. Templates PRs [#459](https://github.com/FS-GG/FS.GG.Templates/pull/459) and [#460](https://github.com/FS-GG/FS.GG.Templates/pull/460) delivered package-only neutral grid/continuous and tactical compatibility fixtures, preserving disclosed identities, layers, camera, selection/focus and hidden-fact exclusion while leaving S.I.R. read-only. | Prepare the exact local candidate packet and separate clean/retained-workspace rehearsals in .5; publication and installed qualification remain later. |
+| **SVG-FOUND-01 — SVG game engine foundation** | **Foundation window complete through .5; publication pending** | Rendering PRs [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) and [#1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280) delivered the portable Scene/browser packages. Templates PRs [#459](https://github.com/FS-GG/FS.GG.Templates/pull/459), [#460](https://github.com/FS-GG/FS.GG.Templates/pull/460) and [#461](https://github.com/FS-GG/FS.GG.Templates/pull/461) delivered neutral/tactical consumers and an exact retained local candidate packet. Its isolated fresh install built and served the selected scene to Chromium; the separate retained upgrade preserved authored and skill digests and reported collisions before writing. S.I.R. remained read-only. | Producer/template publication, registry or default activation and installed public qualification were not performed. They require a later authorized release window. |
 
 No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
 receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
@@ -112,11 +112,9 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
    heartbeat evidence, then run native conformance and acceptance.
 2. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
-3. **SVG-FOUND-01.5 preview packet and receiver rehearsal.** Build an exact local candidate set from the
-   Rendering Scene/SvgBrowser and Templates sources, then prove an isolated fresh install/build/serve and a
-   separate retained older-workspace upgrade with authored-file preservation and conflict reporting. S.I.R.
-   remains a read-only characterized donor/reference. Keep producer/template publication and installed public
-   qualification as separately evidenced later boundaries.
+The independent SVG-FOUND-01 ready window has stopped at its reviewable local candidate boundary. A later
+authorized release window may publish and qualify the exact producer/template set; no publication, registry
+activation or default change is part of the current critical path.
 
 ### 0.5 Known limits and decision state
 
@@ -1224,7 +1222,7 @@ than assuming every family updates together.
 | **Residual experiment — E0** | No general scaffold/default change from research | A prototype result only informs whether to fund the selected E1 capability |
 | **Executor, host or scheduler — E1** | Optional tools, configuration or services for the specifically qualified work class | Each enabled capability's subroadmap includes publication, receiver qualification and a separate class/default decision; a source implementation or successful shadow run is insufficient |
 | **Cooperative work — F0–F5** | Optional client/master enrollment and contribution capabilities for selected workspace/project families | F0–F3 establish protocol, sessions and lab/shadow behavior; F4 enables the authorized canary population; F5 can support a measured receiver/default decision |
-| **SVG game engine foundation — SVG-FOUND-01** | Explicitly selected `fable-game` preview can receive reusable retained SVG scene interaction; existing provider/lifecycle defaults remain as selected | SVG-FOUND-01.4 changes selected source composition; .5 rehearses candidate-template clean creation and separate upgrade. Installed public behavior changes only after exact producer publication, Templates pin adoption/publication and actual receiver consumption; later lifecycle/default activation keeps its own SDD/Templates and applicable epoch prerequisites |
+| **SVG game engine foundation — SVG-FOUND-01** | Explicitly selected `fable-game` preview can receive reusable retained SVG scene interaction; existing provider/lifecycle defaults remain as selected | SVG-FOUND-01.4 changed selected source composition; .5 rehearsed candidate-template clean creation and a separate retained upgrade. Installed public behavior changes only after exact producer publication, Templates pin adoption/publication and actual receiver consumption; later lifecycle/default activation keeps its own SDD/Templates and applicable epoch prerequisites |
 | **Unity replacement client — UNITYC-01** | Explicit opt-in Unity bridge, browser gameplay and WASM authoring composition in `fs-gg-fable-game` | .2 enables the selected source product's reference game; .6 publishes/adopts coherent producer and template bytes and proves separate clean/upgrade receiver journeys. Source merge alone has no installed effect |
 | **4D grid tactics — FOURD-01** | No general scaffold/default change proposed; a later explicitly selected Fable sample could adopt qualified product/Game artifacts | .3 first enables a complete encounter in the selected product source. .6 assesses optional extraction/adoption; any installed receiver effect requires separately evidenced publication and clean/upgrade journeys |
 
