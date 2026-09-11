@@ -2,7 +2,8 @@
 
 Feature identity: **SVG-FOUND-01**.
 
-Status: **Neutral and tactical compatibility consumers complete; preview release packet is next**.
+Status: **Foundation window complete at a reviewable local candidate boundary; publication and installed
+qualification remain pending**.
 
 Planning baseline: `.github` main `4d84fd07a71fcff3409cea2915f22b6d664b5431`, 2026-09-11.
 
@@ -180,7 +181,7 @@ remain substantive requirements within that route.
   candidate-package, composition, workspace-integrity, Release build and routine checks passed. No package was
   published, and no S.I.R. repository write, source copy or dependency was used.
 
-- [ ] **SVG-FOUND-01.5 — Make the preview release and receiver change reviewable — route: routine**
+- [x] **SVG-FOUND-01.5 — Make the preview release and receiver change reviewable — route: routine**
 
   Depends on: SVG-FOUND-01.4.
 
@@ -198,6 +199,23 @@ remain substantive requirements within that route.
   The packet names candidate versions only after compatibility review, required feeds, the supported preview
   selection mechanism, release owner, consumer pins, rollback limits and remaining authority. Preparing it does
   not publish, activate the registry, deploy or change a lifecycle/default.
+
+  Evidence: [Templates PR #461](https://github.com/FS-GG/FS.GG.Templates/pull/461), merged as
+  [commit `31c09270`](https://github.com/FS-GG/FS.GG.Templates/commit/31c092703b35726dcf1173611c675b3cb7db0a29),
+  delivered the [local preview packet and adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/31c092703b35726dcf1173611c675b3cb7db0a29/docs/reports/2026-09-11-svg-foundation-preview-packet.md).
+  CI artifact `10268683063`, `svg-foundation-preview-packet-34611726177-1`, retains the exact
+  `FS.GG.UI.Scene` and `FS.GG.UI.Scene.SvgBrowser` `0.4.0-preview.1` and
+  `FS.GG.Workspace.Template` `0.11.0-preview.1` archives, their hashes, the stable template payload-tree
+  hash, browser observation and upgrade logs for 14 days. Their SHA256 values are Scene
+  `6566625205fc2d0abb0755a30d59d8cafa6ead85094372b2073dcc14a1dbb37d`, SvgBrowser
+  `2c782be29ff0eee32e20e83cebc2d4c9e453227e4e63b28cd63101ddf14b02cf`, template
+  `63df968a8a28db587a72a4abfb1b2c8e599b5502a4dcafee4e10b6cc571303d0`, and payload tree
+  `091923fb94cc6048edf8aaa9706d7d4508bb3e6cc32fc1676fe5159c821229e3`. The isolated fresh journey
+  restored locked packages, built,
+  Fable-compiled and served all three SVG roots to Chromium; the retained older-workspace journey preserved
+  authored-file and installed-skill digests, passed the tactical contract, and refused a collision before any
+  write. Composition and candidate-package workflows passed. No package was published, no registry or default
+  changed, installed public qualification remains pending, and S.I.R. remained untouched.
 
 ## Generated-workspace impact
 
@@ -217,8 +235,9 @@ exact producer set is published, Templates adopts and publishes those immutable 
 direct/provider/wizard receiver consumes that package.
 
 Baseline recorded identities include Workspace.Template 0.10.0 and wizard 0.10.1; the existing game template
-pins Game.Core 0.13.0. Future engine and template release identities remain unset until SVG-FOUND-01.5. New
-guidance additionally needs its owning skill publication and actual SDD materializer adoption where applicable.
+pins Game.Core 0.13.0. The local candidate set is Scene/SvgBrowser `0.4.0-preview.1` and Workspace.Template
+`0.11.0-preview.1`; these are rehearsal identities and have not been published. New guidance additionally
+needs its owning skill publication and actual SDD materializer adoption where applicable.
 
 Existing-workspace adoption is separate: preserve authored domain/content, configuration and lifecycle identity;
 merge explicit package/config changes, detect conflicts and retain rollback inputs. Publishing a scaffold does
