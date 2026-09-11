@@ -128,7 +128,7 @@ remain substantive requirements within that route.
   exploration ran 10,000 traces with current- and stale-selection witnesses, and the real reducer correspondence
   suite detected the stale-revision mutant. No package was published.
 
-- [ ] **SVG-FOUND-01.3 — Render and interact through a retained SVG root — route: routine**
+- [x] **SVG-FOUND-01.3 — Render and interact through a retained SVG root — route: routine**
 
   Depends on: SVG-FOUND-01.2.
 
@@ -140,6 +140,16 @@ remain substantive requirements within that route.
   no owned event listeners or frame work. Record browser/device, scene cost, startup bytes and input-to-paint
   observations with unavailable metrics explicit. These measurements are a foundation baseline, not complete
   M9 qualification.
+
+  Evidence: [Rendering PR #1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280), merged as
+  [commit `d29f272c`](https://github.com/FS-GG/FS.GG.Rendering/commit/d29f272c741d534a8269c4995c3b2da00fb97669),
+  delivered the separate retained SVG browser adapter and its package-only Fable/Chromium fixture. Pointer and
+  keyboard parity, accessible DOM semantics, anchored zoom/pan with inverse picking, retained root/layer identity,
+  stale-revision refusal and twelve leak-free mount/dispose cycles passed. The committed
+  [browser observation](https://github.com/FS-GG/FS.GG.Rendering/blob/d29f272c741d534a8269c4995c3b2da00fb97669/readiness/svg-foundation/svg-browser-observations.json)
+  records Chromium 151 on headless Linux, a two-layer/three-object/ten-node scene, 79,899 raw and 21,483 gzip
+  startup bytes, 0.2 ms median mount and 13.8 ms median input-to-next-frame across 20 samples, with unavailable
+  metrics and the absence of M9 threshold/publication claims explicit. No package was published.
 
 - [ ] **SVG-FOUND-01.4 — Exercise neutral and S.I.R. consumers — route: routine**
 
