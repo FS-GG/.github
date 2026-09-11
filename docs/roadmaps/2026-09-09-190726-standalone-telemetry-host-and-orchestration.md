@@ -301,6 +301,39 @@ acceptance are separate results.
   fixtures before any bounded live qualification. Claude, OpenCode and DeepSeek are intended adapters
   against the same contract; this step does not claim that those implementations already exist.
 
+  Production inspection on September 11 confirms that an adapter factory does not compose the Host:
+  durable execution persistence, runnable executor transport, input/candidate implementations and the
+  production seven-effect driver are still required. Finish this same S2 window in dependency order:
+
+  - S2a — Coordination implements the transactional PostgreSQL execution journal, explicit bounded
+    execution command/receipt/content codecs and subscription admission/reservation/settlement.
+    Preserve existing runner `/1` and execution-launch `/2` meanings. Record commands before exposing
+    them; fence identity, generation, revision and original limits. Unknown tokens/cost are not zero.
+    Real PostgreSQL restart, concurrent append, lost-response and backup/restore tests must preserve
+    the original attempt and pending effects. The selected subscription policy is one nonrenewing
+    attempt with a 30-minute deadline/runtime bound, not a rewrite of an existing permit.
+  - S2b — Coordination adds an executor mode to the existing runner artifact, preserving its `post`
+    mode. A fixed workspace, digest-addressed input reader and real Git candidate inspector verify
+    baseline, allowed changes, head/tree and reproducible candidate objects. Bounded framed transport
+    remains responsive to cancellation. Executable fixtures prove duplicate-process exclusion,
+    crash/reconnect ambiguity, malformed/oversized traffic, candidate tampering and stale refusal;
+    missing container state never proves the previous process did not run.
+  - S2c — Coordination composes Main's actor, durable journal, remote execution provider and actual
+    seven-effect Host driver, including separately authorized GitHub callbacks and durable candidate
+    readback. An executable Host/PostgreSQL/runner test with deterministic external GitHub responses
+    must enter through supported admission and complete/recover the route without preloaded success.
+    Preserve startup pause, fresh reconciliation, exact protected checks and native delivery identity.
+
+  SystemAdmin then supplies one manual launcher under the existing rootless Podman owner: it relays
+  closed authenticated Host messages to the runner's framed standard input/output through
+  `podman exec -i` in the existing container. Main retains its own identity and home protection;
+  it neither launches Podman nor reads the developer login, and the container receives no database
+  credentials. This bounded launcher is new code to qualify, not an existing capability or another
+  persistent broker service. Reuse the existing Host/runner artifact families, publish immutable
+  replacement bytes, and verify served downloads before installed adoption. No general workspace
+  default changes. S2 is complete only after the executable composition is qualified; adapter source
+  acceptance alone leaves it open.
+
 The next installed window adopts immutable accepted artifacts into the selected session context,
 qualifies actual authentication/egress and execution behavior, and produces a fresh deployment preview.
 Preserve the accepted inert SystemAdmin state at `861b0ae70b4e4371812ef088ec5440a1137a3d0c`, including
