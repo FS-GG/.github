@@ -35,7 +35,7 @@ engine APIs, and the S.I.R. repository remains strictly read-only.
 |---:|---|---|---|
 | 1 | **SVG-FOUND-01 — Local foundation** | Minimal portable Scene/SvgBrowser contract, retained interaction, neutral/tactical compatibility consumers and exact local candidate packet | Complete through its [foundation subroadmap](roadmaps/svg-game-engine-foundation.md); does not complete Release A or publication |
 | 2 | **SVG-QUAL-01 — Installed model qualification** | Qualify the installed SDD profile-2 author/inspect route and bind retained reducer semantics to real .NET/Fable consumers | Complete through its [qualification subroadmap](roadmaps/svg-game-engine-installed-model-qualification.md); Release A remains pending |
-| 3 | **SVG-SCENE-02 — Complete scene/renderer contract** | Finish the required C01–C03/C18/C19 scene, vector and browser surface selected for the first preview | Owning Rendering source, browser/package qualification and linked subroadmap evidence |
+| 3 | **SVG-SCENE-02 — Complete scene/renderer contract** | Remaining M0 inventory/decisions, M1 contract foundations and M2 selected renderer; C01/C02 plus C03 rendering/document export and bounded C18/C19 evidence | [Executable subroadmap](roadmaps/svg-game-engine-scene-renderer.md); Rendering/Game contract evidence and Templates isolated consumers. Full C03 import/authoring and integrated C18/C19 remain later; Preview A publication is separate |
 | 4 | **SVG-PREVIEW-A — Installed scene/renderer preview** | Publish and qualify the coherent Rendering/Templates preview A set through installed clean and retained receivers | Protected package publication plus installed receiver qualification; this owns Release A |
 | 5 | **SVG-AUTHOR-01 — Vector content and scene authoring** | Deliver C04–C06 content, asset and scene authoring with versioned interchange | Rendering authoring contracts and generated-consumer journeys |
 | 6 | **SVG-INPUT-01 — Command and workspace interaction** | Deliver C07/C09 commands, docking, keybindings, modal input and accessible device parity | Rendering input/workspace contracts and browser accessibility evidence |
@@ -105,6 +105,14 @@ S.I.R. already contributes:
 - Typed rule authoring, rule dependency/coherence analysis, executable explanations, formal models, and a maintained teaching corpus.
 
 The scaling architecture is partly a target, not a completed extraction. Existing semantic zoom and measurement code do not prove that full viewport culling, layer revision caching, and invalidation-driven presentation have all shipped. M0 must resolve each capability individually. Older architecture documents also contain historical transport and desktop-client directions; the inspected HTTP/SignalR integration and compiled project graph establish the current browser implementation baseline.
+
+Rendering baseline `81578398` retains stable roots and layer elements, but every successful transition still
+clears each layer's object children. Its current browser paint mapping gives stroke-only shapes a fill,
+`Shader.SolidColor` lacks the selected paint-source mapping, geometric hit-test fallback does not cover the
+declared path/text/definition surface, and interactive objects use `role=button` with `aria-selected`. The
+[SVG-SCENE-02 subroadmap](roadmaps/svg-game-engine-scene-renderer.md) treats these as demonstrated retained-node,
+paint and accessibility gaps. Earlier foundation evidence remains valid for its bounded fixture and does not
+qualify the complete renderer surface.
 
 ### Source map
 
@@ -211,6 +219,11 @@ products that omit them. Deferring a promised capability requires an explicit sc
 No S.I.R. capability is considered transferred solely because its screenshot or document is inspected. Each requires source ownership, an implemented generic API, a generated-consumer journey and a Templates-owned external compatibility fixture where applicable.
 
 ## 5. Scene and vector content design
+
+The [SVG-SCENE-02 subroadmap](roadmaps/svg-game-engine-scene-renderer.md) freezes the selected Preview-A SVG
+subset, affine convention, typed document envelope, supported definitions and explicit rejection boundary.
+It is the executable qualification subject for this section and does not replace the later full C03
+import/authoring outcome.
 
 The scene API separates semantic entities from render nodes. A product entity may project multiple shapes or no shape at all. Proposed node kinds include Group, Shape, Path, Text, SymbolInstance, Clip and Mask, with stable node IDs, transforms, opacity, visibility, ordering, style references and optional semantic interaction metadata. Raster references are a separately controlled optional kind. Engine scene coordinates are continuous; grid coordinates and footprints belong to adapters.
 
@@ -465,6 +478,10 @@ not receipt-only PRs or additional authorizers and may remain useful beneath the
 
 ## 9. Performance architecture and qualification
 
+The [SVG-SCENE-02 browser and workload contract](roadmaps/svg-game-engine-scene-renderer.md#browser-and-workload-contract)
+defines the concrete Preview-A fixtures, reference-host evidence and startup/resource budgets. It preserves
+the accepted 100/150 ms browser latency targets and leaves the later 20% world-extent cost qualification intact.
+
 Port the measurement harness before porting performance conclusions. S.I.R.'s source documents distinguish callback timing from paint/compositor work, retain raw traces, and mark unavailable stages. Preserve those distinctions. Its current limits are workload evidence, not universal engine promises.
 
 The renderer accepts immutable scene revisions and tracks revisions per layer. Dirty presentation work is coalesced onto requestAnimationFrame; unchanged scenes cause no scene reconstruction. A deterministic chunk or tree index queries the viewport plus overscan. Selected/focused objects remain accessible through pinned representation or semantic alternatives. Culling never removes them from authoritative state or full export.
@@ -554,7 +571,10 @@ Names are provisional and must be reconciled against existing skills to avoid du
 The completed [SVG-FOUND-01](roadmaps/svg-game-engine-foundation.md) established the bounded local foundation.
 The [SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md) detailed execution window is
 complete: public SDD 1.7.0 provisioning, Rendering reducer correspondence and Templates clean/retained receiver
-qualification all passed. SVG-SCENE-02 is next for planning. V0–V6 are not umbrella entry gates. Broader capability inventory and comprehensive stage
+qualification all passed. [SVG-SCENE-02](roadmaps/svg-game-engine-scene-renderer.md) is the next executable
+window. It completes the selected scene/renderer contract and reconciles remaining M0/M1/M2 obligations against
+actual evidence. SVG-PREVIEW-A subsequently owns publication and public installed qualification. V0–V6 are not
+umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
 Dependencies below name the capabilities needed for implementation or integrated closure. Repository
@@ -629,6 +649,11 @@ transfers unchanged. M10's installed journey therefore does not depend on an une
 artifact, and M11 is not the first publication of every producer dependency. None of this authorizes a
 single-feed exception or omission of currently required payload verification.
 
+SVG-SCENE-02.7 must reconcile every M1/M2 acceptance obligation before handing off Release A. Public session
+envelopes are contract foundations, not proof of M5 runtime implementation; minimal input/editor contract
+reducers do not close M3/M4. C03 remains open until its M3 import/authoring evidence exists. Preview A claims
+only the documented rendering subset while retaining the full programme capability target.
+
 Existing generated projects upgrade through documented package and configuration migrations, not by rerunning a destructive scaffold. Preserve authored files, detect conflicts and retain backups/exported documents. Keep historical replay runners and previous compatible package sets until the supported migration window closes. Rollback restores package/configuration identities without reinterpreting newly written data; a format that cannot downgrade must say so before migration.
 
 ## 13. End-to-end acceptance and definition of done
@@ -685,7 +710,8 @@ The completed [SVG-FOUND-01 foundation subroadmap](roadmaps/svg-game-engine-foun
 portable retained scene, neutral/tactical compatibility consumers and exact local candidate packet. The
 completed [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md)
 then delivered public SDD 1.7.0 provisioning, real Rendering .NET/Fable reducer correspondence and clean and
-retained Templates receiver qualification. Plan SVG-SCENE-02 next from that evidence.
+retained Templates receiver qualification. Execute the accepted
+[SVG-SCENE-02 scene/renderer subroadmap](roadmaps/svg-game-engine-scene-renderer.md) next from that evidence.
 
 Continue in the accepted feature-ledger order. Each feature preserves the full C01–C20, M0–M11, section 13 and
 Release A–D outcome it covers. S.I.R. stays strictly read-only throughout; tactical evidence is produced by
