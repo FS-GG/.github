@@ -69,7 +69,7 @@ Ordinary CI ticks, waiting and intermediate implementation checkpoints do not re
 | **V4 — Closed switch** | **Not entered** | Cutover contracts and protected-operation boundaries exist. | GS2-11–12 freeze, drain, closed switch, verification and executable pre-open rollback. |
 | **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
 | **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 0/7/14/30-day observations, receiver carryover, contraction and old-client/clean-install proof. |
-| **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated** | Akka remains a later architectural candidate; concurrent SQLite writer/read coordination is a concrete datapoint in its favor, not an adoption decision. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
+| **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated; process/usage ownership selected if activated** | Akka remains a later architectural candidate. Concurrent SQLite writer/read coordination and exact native-usage attribution both favor an actor-owned process boundary: a persistent `AgentAttempt` owns each CLI invocation and a telemetry-writer actor owns normal-path projection serialization. This is a future ownership decision, not evidence that the runtime is already adopted. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Qualify the actor/runner usage contract with the selected CLI before adoption. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
 
 No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
 receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
@@ -876,6 +876,20 @@ telemetry-writer actor message contract. This is evidence for the Akka compariso
 mandate: the SQLite lock and native identity/digest deduplication remain necessary across process recovery,
 upgrades and old/new overlap even if an actor owns normal-path drains.
 
+If E1 adopts the Akka execution path, invert agent invocation at the same boundary: a persistent `WorkItem`
+authorizes lineage and a persistent `AgentAttempt` asks a narrow runner to start the agent CLI. Persist admission,
+original-item/root-child-follow-up identity and the requested model before launch. The runner owns the subprocess,
+captures its machine-readable session/response identity and terminal state, and emits exactly one deduplicated
+`UsageObserved` or explicit `UsageMissing` result. Native usage retains input, cached-input subset, output,
+reasoning, provider and accounting-scope fields without estimating from elapsed time. Process exit alone does not
+prove final usage, and a completion candidate does not become delivery authority.
+
+The actor journal owns lifecycle facts; the telemetry-writer actor owns serialized normal-path projection into
+the existing private SQLite store. SQLite locking, immutable event identity and query-time coverage checks remain
+required for crash recovery, upgrade overlap and non-actor writers. A bounded host-side Codex session observer may
+bridge the current runtime, but it is transitional and must preserve missing/ambiguous attribution. Do not build a
+second heuristic correlation architecture that competes with the later actor-owned CLI boundary.
+
 Begin observation with one compact table and inspectable operation history. Rich UI is selected by an
 actual operator question. Enabled charts, graphs and exports still require accessibility, truthful
 partial/stale states, secure content handling, canonical identities and bounded rendering cost; rendering
@@ -953,7 +967,7 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 | **V5 — Open v2 and prove ordinary use** | GS2-13; functional R5 journeys | Protected OpenV2 decision followed by enabled ordinary-v2 process | Permanent v1 fence, actual routine and required protocol journeys, named recovery owner, ObservingV2 |
 | **V6 — Observe, complete carryover and contract v1** | GS2-14; R5 cohort and receiver retirement | Ordinary repair under v2, protected contraction and existing Q10 | 0/7/14/30-day readings, required operational gates, deletion/clean-install proof; R5 efficiency claimed separately only when its own evidence passes |
 | **E0 — Test one residual execution hypothesis** | Shared OR H0/H1 and PB0 investment decision | Bounded research/prototype | Measured unmet need, chosen experiment, comparison protocol, investment/stop limits; stop is an acceptable result |
-| **E1 — Qualify and optionally adopt one shared execution capability** | Shared PB kernel/executor and relevant OR hosting/scheduling scope | Modeled implementation, shadow, separately authorized canary and receiver qualification | One operation class satisfies safety, useful delivery, budget/recovery and comparative-value claims; default decision and unsupported modes explicit |
+| **E1 — Qualify and optionally adopt one shared execution capability** | Shared PB kernel/executor and relevant OR hosting/scheduling scope, including the actor-owned agent CLI boundary | Modeled implementation, shadow, separately authorized canary and receiver qualification | One operation class satisfies safety, useful delivery, budget/recovery and comparative-value claims; each attempt has persisted lineage, process settlement and exact `UsageObserved`/`UsageMissing` coverage; default decision and unsupported modes explicit |
 | **F0–F5 — Cooperative clients receive jobs from a project master** | Retained OR §8A feature, using E1 foundations; see section 9.7 | Protocol modeling, enrolled read-only sessions, sandbox lab, independent verification shadow, separately authorized canary and measured adoption | An enrolled client can receive and execute a bounded job; the master can reject fabricated/stale submissions and independently verify and deliver a valid contribution through reconnect/restart |
 
 ### 9.1 Dependencies and parallelism
@@ -1093,6 +1107,13 @@ executor/host/planner slice. Qualify integrated success, technical failure, repa
 process loss, late success and recovery before simulation/shadow/canary promotion. PB and OR consume the
 same operation and reservation semantics; no parallel build of competing executors.
 
+For agent execution, the E1 slice places CLI process creation beneath `AgentAttempt`. Qualify admission-before-
+launch, exact session binding, root/child/follow-up lineage, structured native usage, cached-input accounting,
+missing-final-usage behavior, cancellation, retry deduplication and recovery after actor or process loss. The
+telemetry-writer actor serializes the existing SQLite projection; the actor journal does not turn telemetry into
+a second completion authority. Provider or CLI versions without a trustworthy terminal usage event remain
+explicitly unsupported or incomplete.
+
 Mutation canaries follow the existing H6 default of OperatingV2 unless a separate accepted sequencing
 decision authorizes otherwise. Restrict the first canary to one reversible class, exact policy, bounded
 population and authorized recovery route. Observation-only success cannot authorize it. Keep the baseline
@@ -1162,7 +1183,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: 0/7/14/30-day observations, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
 | **One residual execution experiment** | E0: one measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | No subroadmap linked yet; conditional |
-| **Shared bounded execution** | E1: one operation class with finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; E0 justifies the component and identifies its required failure cases | No subroadmap linked yet; conditional |
+| **Shared bounded execution** | E1: one operation class with finite attempts, atomic reservations, effect settlement, actor-owned CLI invocation, exact usage/lineage settlement and qualified CLI/runtime correspondence | Coordination; E0 justifies the component and identifies its required failure cases | No subroadmap linked yet; conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; demonstrated hosting need, or the foundations required by a selected cooperative feature | No subroadmap linked yet; conditional |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
