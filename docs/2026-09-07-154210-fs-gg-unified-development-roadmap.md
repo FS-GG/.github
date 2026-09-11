@@ -70,8 +70,8 @@ Ordinary CI ticks, waiting and intermediate implementation checkpoints do not re
 | **V4 — Closed switch** | **Not entered** | Cutover contracts and protected-operation boundaries exist. | GS2-11–12 freeze, drain, closed switch, verification and executable pre-open rollback. |
 | **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
 | **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 0/7/14/30-day observations, receiver carryover, contraction and old-client/clean-install proof. |
-| **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated** | Akka remains a later architectural candidate; concurrent SQLite writer/read coordination is a concrete datapoint in its favor, not an adoption decision. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
-| **Selected standalone O2 — Provider-session execution** | **O2-S1, Codex adapter and S2a source delivered; executor/pilot pending** | [Coordination #368](https://github.com/FS-GG/FS.GG.Coordination/pull/368) delivers the provider-neutral session core; [#369](https://github.com/FS-GG/FS.GG.Coordination/pull/369) delivers the Codex subscription adapter. Their broader optimistic runs passed. [#370](https://github.com/FS-GG/FS.GG.Coordination/pull/370), merge `7e2501f1a6b416e33cc471527e7752e0b5da4f19`, now delivers durable PostgreSQL execution transport and subscription admission. Required qualification, real PostgreSQL recovery/expiry tests and native merge readback passed; optional broader validation remained pending at merge and is monitored. The canonical Quint qualification is split into parallel semantic and performance jobs. The operator contract reflects subscription execution; SystemAdmin's [#52](https://github.com/EHotwagner/SystemAdmin/pull/52) validation repair is source-delivered, not installed. | [O2-S2b/S2c](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) must complete the runnable executor and Main Host composition. Claude, OpenCode and DeepSeek remain intended adapters. Published artifacts, installed adoption, live pilot/recovery and O3 remain due. Prospective `.github` telemetry is now configured; earlier dispatch gaps and unsupported native usage remain explicit. |
+| **E0–E1 / F0–F5 — Execution and cooperation** | **Selected single-host foundation active; wider scope conditional** | The [standalone O0–O3 roadmap](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) already owns the selected Akka.NET actor, bounded execution and durable Main-host work. O2-S1 and S2a source are delivered; executable composition and operational acceptance remain open. This is partial E1 foundation delivery, not completion of E0's comparative measurements or F0–F5 federation. | Reuse the selected contracts and qualified implementation; do not schedule a second actor/executor build or repeat runtime selection for the same scope. Additional planners, federation and broader defaults retain sections 8–9's conditions. O2/O3 does not complete or gate V0/V1. |
+| **Selected standalone O2 — Provider-session execution** | **S1, adapter, S2a and runnable S2b source delivered; Main composition/pilot pending** | [Coordination #368](https://github.com/FS-GG/FS.GG.Coordination/pull/368), [#369](https://github.com/FS-GG/FS.GG.Coordination/pull/369) and [#370](https://github.com/FS-GG/FS.GG.Coordination/pull/370) deliver the neutral session core, Codex subscription adapter and durable PostgreSQL execution transport/admission; their candidate validation passed. [#371](https://github.com/FS-GG/FS.GG.Coordination/pull/371), merge `c28c0777a6d5c68c6d118d4b5f16d722636b9fcf`, delivers the runnable executor and verified Git candidate pipeline. Exact-head bootstrap/coherent validation, 26 focused tests, four actual published-executable fixtures and native merge readback passed. Postmerge runs remain monitored. Canonical Quint qualification is split into parallel semantic and performance jobs. SystemAdmin [#52](https://github.com/EHotwagner/SystemAdmin/pull/52) remains source-only. | [O2-S2c](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) must compose Main's actor and seven-effect Host driver. Claude, OpenCode and DeepSeek remain intended adapters. Published artifacts, installed adoption, live pilot/recovery and O3 remain due. These are the selected E1 foundations, not a future duplicate actor project. Prospective telemetry works; earlier gaps and unsupported native usage remain explicit. |
 | **SVG-FOUND-01 — SVG game engine foundation** | **Foundation window complete through .5; publication pending** | Rendering PRs [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) and [#1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280) delivered the portable Scene/browser packages. Templates PRs [#459](https://github.com/FS-GG/FS.GG.Templates/pull/459), [#460](https://github.com/FS-GG/FS.GG.Templates/pull/460) and [#461](https://github.com/FS-GG/FS.GG.Templates/pull/461) delivered neutral/tactical consumers and an exact retained local candidate packet. Its isolated fresh install built and served the selected scene to Chromium; the separate retained upgrade preserved authored and skill digests and reported collisions before writing. S.I.R. remained read-only. | Producer/template publication, registry or default activation and installed public qualification were not performed. They require a later authorized release window. |
 | **SVG-QUAL-01 — Installed model qualification** | **Complete through .3** | SDD source [PR #981](https://github.com/FS-GG/FS.GG.SDD/pull/981) and release [PR #982](https://github.com/FS-GG/FS.GG.SDD/pull/982) published the exact SDD 1.7.0 provisioning route. Rendering [PR #1281](https://github.com/FS-GG/FS.GG.Rendering/pull/1281), merge `815783987fbf1d6f2e8165e2ae31ddf0bf61db2d`, bound its canonical literate model to 192 identical packaged .NET/Fable transitions and the browser effect boundary. Templates [PR #462](https://github.com/FS-GG/FS.GG.Templates/pull/462), merge `b081808cc8c802d264d8fdeaf417911ca821c211`, qualified separate clean and retained installed profile-2 receivers, including a 384-transition semantic amendment, actual Chromium observations, refusal and preservation controls. S.I.R. remained strictly read-only. | Plan SVG-SCENE-02 from this qualified boundary. Rendering/Templates artifacts remain local; their publication, public-feed receiver qualification, Release A and any default activation remain pending. |
 
@@ -808,6 +808,15 @@ a second general executor. Reuse a verified fix if it has landed before this suc
 
 ## 8. One optional PB/OR extension path
 
+The selected [standalone O0–O3 work](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction)
+has brought forward the trusted single-host Akka.NET execution foundation from this later path.
+Its existing roadmap is the implementation and acceptance ledger: provider-neutral session supervision,
+PostgreSQL execution persistence, bounded subscription admission, the container executor and Main effect
+driver belong there. Sections 8–9 now describe reuse and the remaining extensions, not a second build of
+that foundation. Source delivery, installed qualification, live O2 acceptance and controlled O3 adoption
+remain separate. This synchronization records the already selected scope; it does not claim comparative
+benefit, activate a wider service, or change v2 cutover prerequisites.
+
 ### 8.1 Investment trigger and smallest experiment
 
 After the simplified supported route is measured, select one residual problem: repeated CI setup, an
@@ -868,7 +877,15 @@ be labeled an optimal solution.
 
 ### 8.4 Hosting and runtime selection
 
-Keep a supported CLI/workflow path until measured durability requirements justify a service. If needed,
+For the selected O0–O3 single-host scope, Akka.NET is already the implementation choice: Main owns
+durable orchestration and execution-session actors; a provider-neutral boundary connects the bounded
+container executor. The [source window](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction)
+distinguishes accepted core/adapter/persistence source from the still-pending Main composition, published
+artifacts and live pilot. Do not rerun runtime selection or create a competing executor for this scope.
+Its selected trusted same-user profile retains the explicit deferral of stronger credential isolation;
+it does not qualify hostile contributors or the federation trust boundary below.
+
+Keep the supported CLI/workflow path. For an additional, unselected hosting need,
 compare the same small failure-heavy lifecycle using the existing route, the OR-preferred Akka.NET option,
 and a workflow-oriented option such as Temporal. Test duplicate input, lost provider response, process
 loss, cancellation, schema upgrade and one credible concurrent-child extension. Compare effort, debugging,
@@ -884,9 +901,10 @@ more. Federation adds a separate trust boundary and is deferred until local exec
 UTEL-02 contributes one concrete datapoint to that later selection: concurrent workers producing observations
 for one host-local writer naturally fit actor mailbox serialization, supervision/durable delivery and explicit
 parent-child correlation. Its immutable inbox batch is deliberately compatible with a future per-host
-telemetry-writer actor message contract. This is evidence for the Akka comparison, not an early dependency or
-mandate: the SQLite lock and native identity/digest deduplication remain necessary across process recovery,
-upgrades and old/new overlap even if an actor owns normal-path drains.
+telemetry-writer actor message contract. This remains evidence for additional runtime comparisons, not
+proof of production telemetry-writer actor adoption: the SQLite lock and native identity/digest
+deduplication remain necessary across process recovery, upgrades and old/new overlap even if an actor
+owns normal-path drains.
 
 Begin observation with one compact table and inspectable operation history. Rich UI is selected by an
 actual operator question. Enabled charts, graphs and exports still require accessibility, truthful
@@ -965,7 +983,7 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 | **V5 — Open v2 and prove ordinary use** | GS2-13; functional R5 journeys | Protected OpenV2 decision followed by enabled ordinary-v2 process | Permanent v1 fence, actual routine and required protocol journeys, named recovery owner, ObservingV2 |
 | **V6 — Observe, complete carryover and contract v1** | GS2-14; R5 cohort and receiver retirement | Ordinary repair under v2, protected contraction and existing Q10 | 0/7/14/30-day readings, required operational gates, deletion/clean-install proof; R5 efficiency claimed separately only when its own evidence passes |
 | **E0 — Test one residual execution hypothesis** | Shared OR H0/H1 and PB0 investment decision | Bounded research/prototype | Measured unmet need, chosen experiment, comparison protocol, investment/stop limits; stop is an acceptable result |
-| **E1 — Qualify and optionally adopt one shared execution capability** | Shared PB kernel/executor and relevant OR hosting/scheduling scope | Modeled implementation, shadow, separately authorized canary and receiver qualification | One operation class satisfies safety, useful delivery, budget/recovery and comparative-value claims; default decision and unsupported modes explicit |
+| **E1 — Qualify and optionally adopt one shared execution capability** | Reuse the selected standalone O0–O3 actor/execution foundation; remaining PB/OR hosting, scheduling and comparative-value scope | Continue the owning O2/O3 roadmap for selected work; qualify only additional gaps through modeled implementation, shadow and authorized canary/receiver work | Selected source, installed operation and live acceptance remain distinct; broader class/default and comparative-value claims need their own evidence |
 | **F0–F5 — Cooperative clients receive jobs from a project master** | Retained OR §8A feature, using E1 foundations; see section 9.7 | Protocol modeling, enrolled read-only sessions, sandbox lab, independent verification shadow, separately authorized canary and measured adoption | An enrolled client can receive and execute a bounded job; the master can reject fabricated/stale submissions and independently verify and deliver a valid contribution through reconnect/restart |
 
 ### 9.1 Dependencies and parallelism
@@ -985,6 +1003,9 @@ flowchart TD
     V6 --> Operating[OperatingV2]
     H -. read-only experiment allowed .-> E0[E0 Residual need and bounded experiment]
     E0 --> E1[E1 Pre-canary capability qualification]
+    Selected[Selected standalone trusted single-host scope] --> O2[O2 Akka execution and Main pilot]
+    O2 --> O3[O3 Controlled adoption]
+    O3 -. reuse qualified foundations, not duplicate implementation .-> E1
     Operating --> Canary[Class-specific mutation canary]
     E1 --> Canary
     Canary --> Adopt[E1 Evidence-based adoption decision]
@@ -1100,6 +1121,13 @@ then. Claim each outcome at its actual scope; no efficiency-success label is nee
 
 ### 9.6 E0–E1: later capability development
 
+The single-host actor/execution slice is already selected and underway in
+[standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md).
+Continue that ledger through Main composition, actual pilot/recovery and controlled adoption; do not
+reopen its accepted source milestones as a future E1 project. Its evidence can satisfy matching E1
+foundation requirements, but does not establish unmeasured comparative value, a general default or v2
+migration completion. Remaining E0/E1 extensions follow the conditions below.
+
 E0 selects one measured hypothesis using section 8. E1 implements only the necessary shared kernel and
 executor/host/planner slice. Qualify integrated success, technical failure, repair, budget exhaustion,
 process loss, late success and recovery before simulation/shadow/canary promotion. PB and OR consume the
@@ -1121,6 +1149,11 @@ independent bounded tasks, disjoint or correctly synchronized resources, an inte
 This track implements the client/master feature in section 8.5. It is retained future scope, conditional
 on the demonstrated need and qualified foundations; it is not a prerequisite for simplification or v2
 cutover. The original F0–F5 identifiers remain the traceability keys, with no competing milestone series.
+Reuse the actor supervision, execution identities, bounded admission, durable journal and candidate
+transport delivered and qualified by standalone O0–O3 wherever their contracts match. The trusted local
+runner is not an enrolled remote contributor: bilateral trust, disclosure, tenant isolation, quarantine
+and independent hostile-code verification remain F0–F5 work. Do not count O2/O3 as their completion or
+reimplement its shared foundation under a federation label.
 
 | Stage | Entry and development process | Deliverable and exit |
 |---|---|---|
@@ -1173,9 +1206,9 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: 0/7/14/30-day observations, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
-| **One residual execution experiment** | E0: one measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | No subroadmap linked yet; conditional |
-| **Shared bounded execution** | E1: one operation class with finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; E0 justifies the component and identifies its required failure cases | No subroadmap linked yet; conditional |
-| **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; demonstrated hosting need, or the foundations required by a selected cooperative feature | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the selected O0–O2 single-host scope and O2-S1/S2 provider-session window. Codex subscription execution is first; Claude, OpenCode and DeepSeek share the intended adapter contract. Live pilot and broader adoption remain pending; other hosting scope remains conditional. |
+| **One residual execution experiment** | E0: one additional measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | Conditional additional scope; use the selected [standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) implementation/evidence as a baseline, not a second actor-runtime selection |
+| **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) owns the shared Akka session core, PostgreSQL journal, subscription budget and provider-neutral executor/Host composition. Continue its active O2 window and O3 acceptance; reuse accepted source rather than rebuilding it here. Wider execution profiles remain conditional |
+| **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; continue selected O0–O3, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the selected O0–O3 single-host scope and O2-S1/S2 provider-session window. Akka.NET is selected for this scope, not a future competing experiment. Codex subscription execution is first; Claude, OpenCode and DeepSeek share the intended adapter contract. Live pilot and controlled adoption remain pending; other hosting scope remains conditional. |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
@@ -1365,14 +1398,14 @@ by this documentation merge.
 | [V2 governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md), [architecture amendment](coordination/2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md), [roadmap](github-substrate-v2-roadmap.md) | Retain accepted journal/reconciler architecture and all current GS2 gates; V1–V6 group the remaining outcomes |
 | [Governance-preserving proposal](coordination/2026-09-07-150716-governance-preserving-ci-simplification-design-proposal.md) | Integrate its independent classification, enforcement ownership, freshness and fallback decisions in V0 and sections 3–6 |
 | [OR design H0/H1](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md) | E0 need/baseline and bounded experiment; six graphs and the full planner catalogue are scoped to enabled needs |
-| OR H2–H5 | E1 only when host/durable behavior is justified; one authenticated host, shared executor, verified plans and effect recovery |
+| OR H2–H5 | Selected single-host actor, execution and recovery foundations are owned by standalone O0–O3; reuse their accepted evidence in E1. Additional authenticated hosting, verified planning and federation requirements remain conditional gaps, not a duplicate executor build |
 | OR H6/H7 | Class-specific mutation canary and separately decided normal service use after OperatingV2 by default; preserve supported routine path |
 | OR H8 | Availability expansion only if measured single-node recovery is insufficient |
 | OR F0–F5 federation / cooperative client and master orchestrators | Explicit retained feature in section 8.5 and staged track in section 9.7; later conditional implementation with bilateral admission, generation-bound assignments, hostile-code verification, credential isolation, quotas, revocation and result provenance |
 | OR visualization catalogue | Optional question-driven views; retain identity, accessibility, privacy, truthfulness and bounded rendering for every shipped view |
 | [PB0](coordination/2026-09-06-performance-bounded-development-flow-design-and-roadmap.md) | Share E0 baseline with the completed predecessor; no second measurement service |
-| PB1/PB2 | E1's small canonical workflow, reducer, independent verifier and atomic reservation contract, only if the experiment needs them |
-| PB3/PB4 | Shared bounded executor and enabled batching/review/routing behavior; keep finite repair and durable settlement, defer adaptive modes |
+| PB1/PB2 | Reuse standalone O0–O3's matching canonical state, reducer and bounded reservation contracts; E1 adds only unmet verifier/experimental requirements and qualifies correspondence |
+| PB3/PB4 | Reuse the selected O0–O3 executor rather than build another; batching/review/routing extensions retain their separate justification. Keep finite repair and durable settlement; defer adaptive modes |
 | PB5 | Optional view over canonical state; tables suffice for first qualification |
 | PB6/PB7 | E1 replay/simulation/shadow and separately authorized online comparison; preserve sample sufficiency and delayed-defect follow-up |
 | PB8 | Later class/default decision and measured cadence improvement; no universal controller adoption |
