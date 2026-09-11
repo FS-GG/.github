@@ -295,6 +295,16 @@ acceptance are separate results.
   canonical suite independently of the sharded required workflow; that remaining long-tail path is
   not an individual 75-second test.
 - [ ] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
+  Adapter source substep is delivered by [Coordination PR #369](https://github.com/FS-GG/FS.GG.Coordination/pull/369),
+  exact head `1938c4c99c8c5b09ef9dcf1d073f73cdbf997221`, merge
+  `86559e971122dcb02c4c122dbddf0454d7af1774` at September 11 17:26 UTC.
+  Twelve executable subprocess fixtures passed, including oversized output, blocked stdin, deadlines,
+  descendant cancellation, missing terminal success and ambiguous spawn recovery. The clean-head gate
+  passed Core 371, Host 22 and Architecture 607 tests; required
+  [qualification run 34626067641](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34626067641)
+  passed. The broader optimistic formal partition was still pending at merge and remains monitored
+  for late failure. This is an adapter library, not installed or complete production composition;
+  S2a–S2c below remain required, and no live model invocation or activation occurred.
   Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
   bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
   quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
