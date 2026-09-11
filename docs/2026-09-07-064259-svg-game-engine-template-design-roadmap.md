@@ -9,6 +9,11 @@ Quint change handling, refine capability dependencies, and add generated-workspa
 The [revision analysis](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) records the rationale.
 These are revisions to a proposal; they adopt no routine-policy exception or change to accepted v2 gates.
 
+The [SVG-FOUND-01 foundation subroadmap](roadmaps/svg-game-engine-foundation.md) makes the first bounded
+extraction and browser-consumer window executable as an independent section 15 lane alongside the Unified
+Roadmap's v2 work. It preserves this programme's C/M identities and complete capability scope. Its foundation
+checkboxes own only their named outcomes; they do not mark whole M0–M2 stages or Release A complete.
+
 ## 1. Outcome and definition of completeness
 
 A generated workspace should let a developer create vector artwork, assemble a scene, define gameplay, play locally, connect multiple clients, inspect execution, save and replay sessions, and publish a browser game. The same workspace should support a game player and optional integrated authoring tools. A consumer should not need S.I.R. source or its tactical rules to do any of this.
@@ -384,7 +389,8 @@ Run structural/type checks first, named tests/witnesses next, bounded seeded sim
 | F# manifest-v1 requirements/evidence | Analyze with the published SDD migrator; accept only its supported representation | Readable semantic diff, exact original bytes, rollback inventory and interrupted-transaction recovery |
 | S.I.R. gameplay/rule AST and historical Quint archive | Explicit product-owned correspondence and authority migration | No assumption that the requirements migrator can translate arbitrary gameplay; preserve current rules until replacement is accepted |
 | Existing Quint profile-1 work | Retain exact reader/toolchain or explicitly migrate | Profile-2 adoption cannot silently reinterpret the old contract or fingerprints |
-| New engine work and newly generated studio | Explicit Quint backend and qualified consumer profile | Source/model bindings and installed-artifact evidence before enabling the lane |
+| New modeled engine behavior | Explicit owning model and supported qualified consumer profile for the affected behavior | Source/model bindings and real implementation correspondence; resolve the installed producer seam before claiming the affected behavior qualified |
+| Newly generated Quint-backed studio/profile | Explicit backend/profile selection and installed-artifact qualification | Producer publication, template/materializer adoption and clean/upgrade receiver evidence before enabling that installed profile; this does not gate unrelated foundation audit or source preparation |
 | Existing none/sdd/spec-kit consumers | Inventory and explicit versioned migration | No token alias, silent default flip or destructive scaffold rerun |
 | Old game saves/replays/keymaps | Independent data migration or retained runner | Specification/backend upgrades alone never change data or replay meaning |
 
@@ -504,6 +510,11 @@ coverage rules and delayed-repair observation before claiming efficiency.
 Names are provisional and must be reconciled against existing skills to avoid duplicate guidance. Update or retire the currently delivered `fable-remoting` advice in favor of the accepted HTTP-codec transport contract, using an explicit compatibility transition. Resolve Game skill delivery predicates for `fable-game` against the actual materializer; do not rely on the historical `profile in [game, sample-pack]` annotation or a README claim. Test every selected bundle through direct template and SDD routes, checking exact owner-sourced bodies, manifest rows, predicates and agent-root parity. Include negative selection tests so editor skills do not appear in player-only products accidentally.
 
 ## 11. Roadmap and work packages
+
+The next detailed execution window is [SVG-FOUND-01](roadmaps/svg-game-engine-foundation.md). Start its bounded
+M0 audit now under the supported routine route; dependent slices follow its actual third-party provenance, API,
+model-tool and consumer prerequisites. V0–V6 are not umbrella entry gates. Broader capability inventory and
+comprehensive stage closure remain required at their original boundaries.
 
 Dependencies below name the capabilities needed for implementation or integrated closure. Repository
 assignments describe future work; this document creates no issues or board entries. Work packages are
@@ -629,11 +640,13 @@ Decisions to settle in M0: package boundaries and Scene reuse; exact SVG/text/fi
 
 ## 15. Immediate implementation handoff
 
-The first implementation item is a bounded M0 audit sufficient to authorize the first extraction: donor
-rights, existing Scene/input ownership, Fable closure, characterization cases and the actual package-consumer
-boundary. Extend the audit across the remaining C-rows before their design/implementation decisions and
-retain complete inventory as the M0 outcome; the first useful spike need not wait for every later feature
-question to be answered.
+The first executable window is the linked
+[SVG-FOUND-01 foundation subroadmap](roadmaps/svg-game-engine-foundation.md). Its first item is a bounded M0
+audit sufficient to authorize the first extraction: owner-authorized S.I.R. code reuse, third-party contribution,
+dependency and asset terms, existing Scene/input ownership, Fable closure, characterization cases and the actual
+package-consumer boundary. Extend the audit across the remaining C-rows before their design/implementation
+decisions and retain complete inventory as the M0 outcome; the first useful spike need not wait for every later
+feature question to be answered.
 
 The next item is a minimal interactive scene consumed from published candidate packages by S.I.R. and a
 fresh Fable template, with retained identity and no sibling dependency. It establishes extraction, input,
@@ -643,4 +656,5 @@ Integrate a supported routine-development example early; record unsupported upst
 with their existing owners rather than adding a template-local workaround. Use the resulting source and
 consumer evidence to refine the package graph, true dependencies and consolidated estimate.
 
-No issue creation, implementation, package publication, or board mutation is performed by this planning document.
+This document and its linked foundation plan perform no implementation, issue creation, publication or protected
+operation by themselves; execution follows the user's actual task authority and the owning contracts.
