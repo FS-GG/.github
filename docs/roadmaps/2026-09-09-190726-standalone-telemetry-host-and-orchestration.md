@@ -290,7 +290,10 @@ acceptance are separate results.
   [run 34621712128](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34621712128);
   logical coverage and physically executed process totals are distinct, and composed duration is an
   upper bound rather than measured wall time. Broader optimistic partitions were still running at
-  native merge; a later failure blocks dependent acceptance until resolved.
+  native merge; [run 34621712027](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34621712027)
+  subsequently completed successfully at 17:00 UTC. Its formal partition still runs the serial
+  canonical suite independently of the sharded required workflow; that remaining long-tail path is
+  not an individual 75-second test.
 - [ ] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
   Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
   bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
@@ -306,6 +309,14 @@ PostgreSQL backup/restore and runner-image evidence. Its preview
 effects; it is historical installation evidence, not acceptance of the new subscription path.
 The representative item is [`.github#3421`](https://github.com/FS-GG/.github/issues/3421).
 Its live transfer, bounded execution, native delivery and the O2 failure/recovery exits above remain due.
+The [operator contract](../operations/orchestration-main-pilot.md) now expresses the selected subscription
+trust and accounting requirements without claiming installed capability. SystemAdmin reports the
+source-only validation repair in [PR #52](https://github.com/EHotwagner/SystemAdmin/pull/52), merge
+`3f603f3d05f9fd6ae88defe75536c46c52e82182`, with protected-main qualification green. Its prospective
+validation uses `git diff --check` and `python3 scripts/check-prose-citations.py --root .`; routine
+eligibility remains a separate base-owned PR gate. Installed bindings were not replaced. Before
+dispatch, bind the actual revised operator-document baseline and supported source/artifacts explicitly;
+do not reuse a stale work-item input or installation digest.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 for the enrolled O2 runner; no SDD/Templates lifecycle default or general fresh-workspace content changes.
