@@ -61,6 +61,36 @@ Do not describe this pilot as a hostile-runner security boundary. Do not enable 
 
 Possible triggers: untrusted contributors, unattended execution of unreviewed repositories, broader multi-user deployment, or a requirement to guarantee that stale runners cannot perform protected delivery. Until separately selected, these triggers are limitations to report, not permission to expand this roadmap silently.
 
+### 2.2 Execution providers and subscription sessions
+
+On September 11 the user selected an existing logged-in Codex subscription session for O2 and required
+the architecture to accommodate **Codex, Claude, OpenCode and DeepSeek** from its first version.
+The earlier direct OpenAI API-token, Responses-route and API-price provisioning assumptions are withdrawn.
+They are not missing user inputs for this subscription pilot.
+
+The execution actor supervises a provider-neutral adapter. The adapter owns provider-specific invocation,
+authentication observation, session identifiers, model/effort selection, event decoding, usage mapping,
+cancellation and optional resume. The core must not assume a CLI, HTTP API, subscription, JSONL event
+format, token-price schedule or resume capability. Adding a provider must preserve assignment identity,
+generation checks, candidate durability, journal transitions and GitHub delivery semantics.
+
+Requests bind the selected provider/adapter, authorized workspace and input digest, attempt/generation,
+opaque session reference and finite execution bounds. Observations distinguish launch intent, observed
+start, provider completion, candidate acceptance and independently verified delivery. Persist intent
+before launch; reconcile ambiguous process/session state before retry. Cancellation requested and
+termination observed are separate facts. Reconnection cannot renew an attempt or its budget.
+
+Provider-native usage carries its measurement method and coverage. Unknown usage remains unknown;
+subscription cost is not converted into an invented per-token API charge or measured zero. Only claim
+token/cost limits the adapter can enforce; retain explicit deadline, runtime and attempt bounds.
+
+The SystemAdmin census identified Codex 0.154.0 logged in using ChatGPT under the existing developer
+account in `fsharp-dev`. This establishes the selected session location, not a qualified execution adapter.
+Use that session through its existing ownership boundary. Environment scrubbing reduces accidental
+credential inheritance but does not prevent access to other files/processes owned by the same user.
+The trusted-runner limitation in section 2.1 therefore still applies. GitHub effect authorization and
+runner enrollment remain distinct from model authentication; neither follows from a successful login.
+
 ## 3. Shared correctness contracts
 
 ### 3.1 Identity and authorization
@@ -239,6 +269,49 @@ Select stable item identities and permitted job classes, budget, runner capacity
 Main owns durable actors and operational journal. The container starts only its supervised client/runner after explicit enrollment. Recovery inspects unresolved effects, runners and reservations before dispatch. Persist pause/revocation and budget accounting; a reconnect cannot renew authority or create a fresh empty journal. Lost heartbeat means uncertain outcome, not failed delivery. Reassignment requires reconciliation, and cooperative fencing cannot prevent direct broad-token bypass.
 
 Exit: one representative routine item completes through candidate persistence, required verification, protected-route delivery and native readback. Failure injection covers process creation, claim, artifact submission, PR creation and merge before receipt, plus disconnect/reconnect, stale output and host reboot. Operator can pause and reconcile fallback without duplicate ownership. Telemetry outage does not corrupt or stop otherwise safe orchestration transitions.
+
+#### O2 source window after the provider-session correction
+
+These steps refine O2; they do not add new top-level completion percentages. Coordination owns the
+execution contracts and runtime, SystemAdmin owns installed session integration, and this roadmap
+remains the feature ledger. Source merge, published artifacts, installed capability and live pilot
+acceptance are separate results.
+
+- [x] O2-S1 — Provider-neutral execution/session core — route: routine.
+  [Coordination PR #368](https://github.com/FS-GG/FS.GG.Coordination/pull/368) merged as
+  `f9cadece4305bfbad583cd0d996bc1fcaf250808` on September 11 at 16:38 UTC from reviewed head
+  `d06d1ee89667022964fa6cda33140e0e69d42811`; native readback confirms source delivery.
+  The 15 focused execution tests cover two providers with different capabilities, a thin Akka supervisor, durable launch
+  intent, duplicate/recovery and generation fencing, cancellation, unsupported resume, and explicit
+  unknown/not-applicable accounting. Keep the existing closed runner `/1` messages unchanged; new
+  execution schemas have explicit versions and reject unsupported inputs.
+  The same PR delivers the requested canonical Quint split with independently checked shard inventory,
+  separate performance validation and one authoritative aggregate. Its canonical workflow passed in
+  [run 34621712128](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34621712128);
+  logical coverage and physically executed process totals are distinct, and composed duration is an
+  upper bound rather than measured wall time. Broader optimistic partitions were still running at
+  native merge; a later failure blocks dependent acceptance until resolved.
+- [ ] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
+  Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
+  bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
+  quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
+  fixtures before any bounded live qualification. Claude, OpenCode and DeepSeek are intended adapters
+  against the same contract; this step does not claim that those implementations already exist.
+
+The next installed window adopts immutable accepted artifacts into the selected session context,
+qualifies actual authentication/egress and execution behavior, and produces a fresh deployment preview.
+Preserve the accepted inert SystemAdmin state at `861b0ae70b4e4371812ef088ec5440a1137a3d0c`, including
+PostgreSQL backup/restore and runner-image evidence. Its preview
+`3c88913873cd8c7395274cf1ce96957496c3fe62c4a36f1dc38e45ee73865f67` remained not ready with no pilot
+effects; it is historical installation evidence, not acceptance of the new subscription path.
+The representative item is [`.github#3421`](https://github.com/FS-GG/.github/issues/3421).
+Its live transfer, bounded execution, native delivery and the O2 failure/recovery exits above remain due.
+
+Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
+for the enrolled O2 runner; no SDD/Templates lifecycle default or general fresh-workspace content changes.
+Qualify a clean runner installation and the upgrade of the existing inert deployment separately.
+Telemetry remains advisory; the roadmap dispatch adapter currently reports `not-configured`, so usage
+or bureaucracy percentages cannot be inferred from this work's elapsed time.
 
 ### O3 — Controlled adoption and later options
 
