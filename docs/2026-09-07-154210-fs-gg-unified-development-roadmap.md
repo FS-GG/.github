@@ -43,8 +43,8 @@ and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
 ## 0. Current progress report
 
-Last reconciled: **2026-09-11 11:15 UTC**. Current frontier: **V0 and V1 in parallel, with the independent
-SVG foundation track through SVG-FOUND-01.1**.
+Last reconciled: **2026-09-11 12:03 UTC**. Current frontier: **V0 and V1 in parallel, with the independent
+SVG foundation track through SVG-FOUND-01.2**.
 
 This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
 installed operation and observed behavior separately because they have different completion authorities. A
@@ -71,7 +71,7 @@ Ordinary CI ticks, waiting and intermediate implementation checkpoints do not re
 | **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
 | **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 0/7/14/30-day observations, receiver carryover, contraction and old-client/clean-install proof. |
 | **E0–E1 / F0–F5 — Conditional execution and cooperation** | **Not activated** | Akka remains a later architectural candidate; concurrent SQLite writer/read coordination is a concrete datapoint in its favor, not an adoption decision. | Start only from a demonstrated residual need and the investment decision in sections 8–9. Actor hosting, scheduling or cooperative execution is not on the V0/V1 critical path. |
-| **SVG-FOUND-01 — SVG game engine foundation** | **Boundary complete through .1; implementation not started** | The bounded extraction audit fixes the current Rendering/Game/Templates/S.I.R./SDD revisions, Scene/input ownership cut, minimal supported and rejected SVG subset, browser package closure, grid and free-coordinate fixtures, template identities, owner-authorized S.I.R. reuse and third-party exclusion. | Provision the exact profile-2 tool cache when modeled behavior begins; prove the portable package and both isolated consumers in .2 before retained interaction in .3. |
+| **SVG-FOUND-01 — SVG game engine foundation** | **Portable contract complete through .2** | Rendering PR [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) delivered the reusable retained Scene contract, curated Fable package path, isolated .NET/Fable consumer proof, explicit invalid/unsupported outcomes and revision/selection correspondence with bounded witnesses. | Implement the retained browser SVG root, input and accessibility adapter, lifecycle proof and early performance observations in .3; publication remains later. |
 
 No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
 receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
@@ -112,10 +112,10 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
    heartbeat evidence, then run native conformance and acceptance.
 2. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
-3. **SVG-FOUND-01.2 portable scene contract.** Reuse the completed
-   [SVG-FOUND-01.1 audit](reports/2026-09-11-svg-game-engine-extraction-boundary.md) to prove Rendering's curated
-   Fable package closure and the grid plus free-coordinate consumers. Keep producer/template publication and
-   SDD-profile tool provisioning as their separately evidenced later boundaries.
+3. **SVG-FOUND-01.3 retained SVG root.** Build on Rendering PR
+   [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) to add the browser SVG adapter, normalized pointer
+   and keyboard selection, accessible DOM route, camera interaction, retained-identity lifecycle proof and early
+   performance observations. Keep producer/template publication as a separately evidenced later boundary.
 
 ### 0.5 Known limits and decision state
 

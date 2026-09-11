@@ -2,7 +2,7 @@
 
 Feature identity: **SVG-FOUND-01**.
 
-Status: **Foundation boundary established; portable contract implementation is next**.
+Status: **Portable scene contract and package closure proven; retained SVG browser adapter is next**.
 
 Planning baseline: `.github` main `4d84fd07a71fcff3409cea2915f22b6d664b5431`, 2026-09-11.
 
@@ -108,7 +108,7 @@ remain substantive requirements within that route.
   contract test was unavailable because the locked Playwright dependency is not installed. Delivered by the
   [routine SVG-FOUND-01.1 PR #3422](https://github.com/FS-GG/.github/pull/3422).
 
-- [ ] **SVG-FOUND-01.2 — Prove the portable scene contract and package closure — route: routine**
+- [x] **SVG-FOUND-01.2 — Prove the portable scene contract and package closure — route: routine**
 
   Depends on: SVG-FOUND-01.1's ownership, third-party provenance and supported-tool decisions.
 
@@ -120,6 +120,13 @@ remain substantive requirements within that route.
   stable semantic IDs and transform meaning. Unsupported and non-finite inputs have tested outcomes. Newly
   introduced revision/selection semantics have bounded model witnesses and real reducer correspondence; a
   stale-revision mutation is detected. This does not claim full Scene Fable support or published consumption.
+
+  Evidence: [Rendering PR #1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279), merged as
+  [commit `646817c8`](https://github.com/FS-GG/FS.GG.Rendering/commit/646817c847e034e31ff2e6a2da91e7b847a8eb8b),
+  delivered the [portable Scene evidence report](https://github.com/FS-GG/FS.GG.Rendering/blob/646817c847e034e31ff2e6a2da91e7b847a8eb8b/docs/reports/2026-09-11-svg-found-01-2-portable-scene.md),
+  curated Fable package surface and isolated .NET/Fable consumers. Scene tests passed 94 cases; bounded Quint
+  exploration ran 10,000 traces with current- and stale-selection witnesses, and the real reducer correspondence
+  suite detected the stale-revision mutant. No package was published.
 
 - [ ] **SVG-FOUND-01.3 — Render and interact through a retained SVG root — route: routine**
 
