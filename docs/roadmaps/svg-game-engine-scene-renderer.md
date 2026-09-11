@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1 complete**.
+Status: **Execution active; SVG-SCENE-02.1–.2 complete**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -264,7 +264,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   as a release claim. Missing capabilities remain assigned to their accepted future features. No S.I.R. access
   occurred, and no package, provider or default changed.
 
-- [ ] **SVG-SCENE-02.2 — Deliver portable document, affine and contract envelopes — route: routine**
+- [x] **SVG-SCENE-02.2 — Deliver portable document, affine and contract envelopes — route: routine**
 
   Depends on: .1.
 
@@ -279,6 +279,22 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   envelopes and Game session envelopes have compiling examples and explicit compatibility/support
   classification; no placeholder declaration is claimed to implement M5 sessions. Begin canonical model
   amendments alongside new state semantics, preserving the existing 192-transition corpus.
+
+  Evidence: Game [PR #621](https://github.com/FS-GG/FS.GG.Game/pull/621), merged as
+  [`494bd455`](https://github.com/FS-GG/FS.GG.Game/commit/494bd45591851c03496460e250f6584025fb5e52),
+  delivered Rendering-free session/input/projection/snapshot envelopes with exact compatibility checks,
+  compiling packed .NET/Fable consumers and an explicit `ContractEnvelopeOnly` classification. Rendering
+  [PR #1282](https://github.com/FS-GG/FS.GG.Rendering/pull/1282), merged as
+  [`acfca1e8`](https://github.com/FS-GG/FS.GG.Rendering/commit/acfca1e87866f7c1b4cab3b064e225d8f585a977),
+  delivered the identified document/Scene-leaf envelope, reference and profile-limit validation, affine
+  composition and asset/extension contracts. Its 102 Scene tests and isolated packed .NET/Fable consumers
+  passed translate/rotate/skew/reflection plus singular/non-finite cases and replayed all 192 existing model
+  transitions with unchanged projection SHA256
+  `cd1b2c74c95a5f25df06ca0921af7d7af9c578d1f589ef6012fea56fadd5c0d2`. The
+  [portable-contract report](https://github.com/FS-GG/FS.GG.Rendering/blob/acfca1e87866f7c1b4cab3b064e225d8f585a977/docs/reports/2026-09-11-svg-scene-02-portable-contracts.md)
+  records support boundaries and the SVG-SCENE-02.4 model-amendment seam: .2 adds no reducer state and makes
+  no M5 runtime claim. All candidate packages remain local; no publication/default activation occurred, and
+  S.I.R. remained read-only.
 
 - [ ] **SVG-SCENE-02.3 — Complete the selected SVG paint and definition mapping — route: routine**
 
