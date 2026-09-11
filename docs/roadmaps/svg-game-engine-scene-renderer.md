@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1–.2 complete**.
+Status: **Execution active; SVG-SCENE-02.1–.3 complete**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -296,7 +296,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   no M5 runtime claim. All candidate packages remain local; no publication/default activation occurred, and
   S.I.R. remained read-only.
 
-- [ ] **SVG-SCENE-02.3 — Complete the selected SVG paint and definition mapping — route: routine**
+- [x] **SVG-SCENE-02.3 — Complete the selected SVG paint and definition mapping — route: routine**
 
   Depends on: .2.
 
@@ -311,6 +311,24 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   .NET/Fable document round trips agree without claiming arbitrary SVG import.
   Use analytic DOM/geometry checks and per-browser visual references, with interior-color assertions
   and meaningful tolerances rather than one permissive screenshot threshold.
+
+  Evidence: Rendering [PR #1283](https://github.com/FS-GG/FS.GG.Rendering/pull/1283), merged as
+  [`b3a8a2c4`](https://github.com/FS-GG/FS.GG.Rendering/commit/b3a8a2c4caf6945bb0a2d9570a11d6b27fd8fb96),
+  delivered bounded `fsgg.svg-document/1` serialization and standalone export, selected paint/geometry,
+  typed gradients, symbols, nested clips, alpha/luminance masks, declared fonts and pre-mount stable
+  diagnostics through the public Scene/SvgBrowser surface. Its 105 Scene tests, isolated packed .NET/Fable
+  consumers and Chromium gallery passed at the exact merged head. Typed round trips and exports agreed at
+  SHA256 `92769fe60988b62b044b10c7fcd6f50b921bfeae6a82e20c6073818d2c49f31a`; the existing 192-transition
+  corpus remained unchanged at SHA256
+  `cd1b2c74c95a5f25df06ca0921af7d7af9c578d1f589ef6012fea56fadd5c0d2`. Analytic DOM/definition checks,
+  interior-color assertions and a per-channel visual tolerance of 28 covered the selected Chromium result;
+  isolated reload of the exported SVG preserved local references and matched sampled interiors within two
+  channel values. The
+  [paint/definition report](https://github.com/FS-GG/FS.GG.Rendering/blob/b3a8a2c4caf6945bb0a2d9570a11d6b27fd8fb96/docs/reports/2026-09-11-svg-scene-02-paint-definitions.md)
+  records the exact supported/unsupported boundary: typed document round trip is not arbitrary SVG import,
+  broader browser/accessibility/performance qualification remains .5/.6, and .3 adds no reducer semantics.
+  Rendering remains independent of Game; packages stayed local, no publication/default activation occurred,
+  and S.I.R. remained read-only.
 
 - [ ] **SVG-SCENE-02.4 — Retain nodes and deliver accessible interaction contracts — route: routine**
 
