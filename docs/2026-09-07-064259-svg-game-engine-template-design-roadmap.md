@@ -34,7 +34,7 @@ engine APIs, and the S.I.R. repository remains strictly read-only.
 | Order | Feature | Programme outcome | Completion authority |
 |---:|---|---|---|
 | 1 | **SVG-FOUND-01 — Local foundation** | Minimal portable Scene/SvgBrowser contract, retained interaction, neutral/tactical compatibility consumers and exact local candidate packet | Complete through its [foundation subroadmap](roadmaps/svg-game-engine-foundation.md); does not complete Release A or publication |
-| 2 | **SVG-QUAL-01 — Installed model qualification** | Qualify the installed SDD profile-2 author/inspect route and bind retained reducer semantics to real .NET/Fable consumers | Its [qualification subroadmap](roadmaps/svg-game-engine-installed-model-qualification.md); Release A remains pending |
+| 2 | **SVG-QUAL-01 — Installed model qualification** | Qualify the installed SDD profile-2 author/inspect route and bind retained reducer semantics to real .NET/Fable consumers | Complete through its [qualification subroadmap](roadmaps/svg-game-engine-installed-model-qualification.md); Release A remains pending |
 | 3 | **SVG-SCENE-02 — Complete scene/renderer contract** | Finish the required C01–C03/C18/C19 scene, vector and browser surface selected for the first preview | Owning Rendering source, browser/package qualification and linked subroadmap evidence |
 | 4 | **SVG-PREVIEW-A — Installed scene/renderer preview** | Publish and qualify the coherent Rendering/Templates preview A set through installed clean and retained receivers | Protected package publication plus installed receiver qualification; this owns Release A |
 | 5 | **SVG-AUTHOR-01 — Vector content and scene authoring** | Deliver C04–C06 content, asset and scene authoring with versioned interchange | Rendering authoring contracts and generated-consumer journeys |
@@ -552,10 +552,9 @@ Names are provisional and must be reconciled against existing skills to avoid du
 ## 11. Roadmap and work packages
 
 The completed [SVG-FOUND-01](roadmaps/svg-game-engine-foundation.md) established the bounded local foundation.
-The active detailed execution window is
-[SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md). Its public SDD 1.7.0 installed
-profile-2 tool provisioning is complete; Rendering reducer correspondence is next, followed by Templates
-receiver qualification. V0–V6 are not umbrella entry gates. Broader capability inventory and comprehensive stage
+The [SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md) detailed execution window is
+complete: public SDD 1.7.0 provisioning, Rendering reducer correspondence and Templates clean/retained receiver
+qualification all passed. SVG-SCENE-02 is next for planning. V0–V6 are not umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
 Dependencies below name the capabilities needed for implementation or integrated closure. Repository
@@ -683,11 +682,10 @@ Decisions to settle in M0: package boundaries and Scene reuse; exact SVG/text/fi
 ## 15. Immediate implementation handoff
 
 The completed [SVG-FOUND-01 foundation subroadmap](roadmaps/svg-game-engine-foundation.md) established the
-portable retained scene, neutral/tactical compatibility consumers and exact local candidate packet. The next
-executable window is
-[SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md).
-It first closes the demonstrated installed profile-2 provisioning gap in SDD, then binds Rendering's real
-.NET/Fable reducer and qualifies clean and retained Templates receivers.
+portable retained scene, neutral/tactical compatibility consumers and exact local candidate packet. The
+completed [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md)
+then delivered public SDD 1.7.0 provisioning, real Rendering .NET/Fable reducer correspondence and clean and
+retained Templates receiver qualification. Plan SVG-SCENE-02 next from that evidence.
 
 Continue in the accepted feature-ledger order. Each feature preserves the full C01–C20, M0–M11, section 13 and
 Release A–D outcome it covers. S.I.R. stays strictly read-only throughout; tactical evidence is produced by
