@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1–.3 complete**.
+Status: **Execution active; SVG-SCENE-02.1–.4 complete**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -330,7 +330,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   Rendering remains independent of Game; packages stayed local, no publication/default activation occurred,
   and S.I.R. remained read-only.
 
-- [ ] **SVG-SCENE-02.4 — Retain nodes and deliver accessible interaction contracts — route: routine**
+- [x] **SVG-SCENE-02.4 — Retain nodes and deliver accessible interaction contracts — route: routine**
 
   Depends on: .2; integrate .3's full surface before closure.
 
@@ -344,6 +344,22 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   dispose clears capture and scheduled work. Atomic edit rejection, undo/redo and immutable play-snapshot
   witnesses run through real minimal contract reducers. This proves contract foundations, not complete
   editor/input tooling. Existing supported entry points share the fixes.
+
+  Evidence: Rendering [PR #1284](https://github.com/FS-GG/FS.GG.Rendering/pull/1284), merged as
+  [`3a94881f`](https://github.com/FS-GG/FS.GG.Rendering/commit/3a94881fc01845cc9d8faf9f413db214df94326f),
+  delivered keyed retained-document reconciliation, browser-native paint-order/transformed/clipped hit
+  semantics, collision-free mount namespaces and one semantic selection identity across pointer, keyboard
+  and sibling HTML controls. Native editing/composition is preserved; capture and owned work clear on
+  loss, cancel and disposal. Its minimal public document reducer validates replacements atomically at a
+  strictly increasing revision and supplies undo/redo plus immutable play snapshots. The canonical model
+  amendment preserves the original 192-transition retained corpus byte-for-byte and adds a distinct
+  192-transition document corpus replayed by the real reducer with matching .NET/Fable projections. Focused
+  Scene and KeyboardInput suites, isolated packed .NET/Fable consumers, Chromium browser observations and
+  the installed profile-2 model/reducer gate passed at the exact merged head. The
+  [retained-accessible interaction report](https://github.com/FS-GG/FS.GG.Rendering/blob/3a94881fc01845cc9d8faf9f413db214df94326f/docs/reports/2026-09-12-svg-scene-02-retained-accessible-interaction.md)
+  records the exact policies and evidence. This is a contract foundation, not complete editor/input tooling
+  or .5 browser qualification. Rendering remains independent of Game; candidate packages stayed local, no
+  publication/default activation occurred, and S.I.R. remained read-only.
 
 - [ ] **SVG-SCENE-02.5 — Qualify models and the complete browser surface — route: routine**
 
