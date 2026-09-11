@@ -277,6 +277,13 @@ execution contracts and runtime, SystemAdmin owns installed session integration,
 remains the feature ledger. Source merge, published artifacts, installed capability and live pilot
 acceptance are separate results.
 
+This selected Akka.NET single-host work brings forward the matching shared-execution and hosting
+foundations from [Unified Roadmap E0–E1](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#96-e0e1-later-capability-development).
+Those later entries consume this implementation and its qualified evidence; they do not schedule a
+second actor/executor build. O2/O3 still owes its own operational exits. Federation, stronger isolation,
+additional planners and broader class/default decisions remain separate conditional scope, not results
+implied by this trusted local pilot.
+
 - [x] O2-S1 — Provider-neutral execution/session core — route: routine.
   [Coordination PR #368](https://github.com/FS-GG/FS.GG.Coordination/pull/368) merged as
   `f9cadece4305bfbad583cd0d996bc1fcaf250808` on September 11 at 16:38 UTC from reviewed head
@@ -305,7 +312,7 @@ acceptance are separate results.
   passed. Broader optimistic validation subsequently passed in
   [run 34626067537](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34626067537).
   This is an adapter library, not installed or complete production composition;
-  S2a source is now delivered below; S2b–S2c remain required, and no live model invocation or activation occurred.
+  S2a/S2b source is now delivered below; S2c remains required, and no live model invocation or activation occurred.
   Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
   bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
   quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
@@ -324,7 +331,7 @@ acceptance are separate results.
     passed, including real PostgreSQL concurrency, restart, backup/restore and original-runtime expiry.
     Routine delivery reported `current` with coherent validation `not-required`; optional
     [optimistic run 34633843371](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34633843371)
-    remained pending at merge and is monitored for late failure. No artifact publication or installation
+    subsequently passed. No artifact publication or installation
     is implied. Coordination implements the transactional PostgreSQL execution journal, explicit bounded
     execution command/receipt/content codecs and subscription admission/reservation/settlement.
     Preserve existing runner `/1` and execution-launch `/2` meanings. Record commands before exposing
@@ -332,7 +339,20 @@ acceptance are separate results.
     Real PostgreSQL restart, concurrent append, lost-response and backup/restore tests must preserve
     the original attempt and pending effects. The selected subscription policy is one nonrenewing
     attempt with a 30-minute deadline/runtime bound, not a rewrite of an existing permit.
-  - S2b — Coordination adds an executor mode to the existing runner artifact, preserving its `post`
+  - S2b — Source delivered in [Coordination PR #371](https://github.com/FS-GG/FS.GG.Coordination/pull/371),
+    exact head `e815659121a0cda91058e8ebac3b95a0c5f8b7df`, protected-main merge
+    `c28c0777a6d5c68c6d118d4b5f16d722636b9fcf` at September 11 20:06 UTC. Native merge readback,
+    [bootstrap qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34640178301)
+    and [coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34640178299)
+    passed; routine delivery reported `current` and coherent validation `passed`. Twenty-six focused
+    tests passed on the final head. Four actual locally published-executable fixtures cover long-session
+    readiness, crash/restart before and after process creation, duplicate-launch refusal and responsive
+    cancellation. Earlier local Release qualification passed 607 architecture and 372 unit tests;
+    final-head hosted qualification passed independently. Postmerge runs
+    [34642480216](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34642480216) and
+    [34642480141](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34642480141) remain monitored,
+    not disputed. Local package qualification is not external publication or installed acceptance.
+    Coordination adds an executor mode to the existing runner artifact, preserving its `post`
     mode. A fixed workspace, digest-addressed input reader and real Git candidate inspector verify
     baseline, allowed changes, head/tree and reproducible candidate objects. Bounded framed transport
     remains responsive to cancellation. Executable fixtures prove duplicate-process exclusion,
