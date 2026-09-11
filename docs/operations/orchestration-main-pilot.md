@@ -8,9 +8,19 @@ item or job class during the pilot.
 
 The initial runner is trusted and cooperative. Route generations, enrollment
 and revocation fence the supported route, but they cannot stop a runner that
-has an independently held broad token from writing directly. The enrolled
-runner therefore receives neither a provider credential nor any ambient
-GitHub, package-feed, telemetry, publisher, database or operator credential.
+has independently held authority from writing directly. The selected execution
+context is the existing developer-owned Codex ChatGPT subscription session in
+`fsharp-dev`; do not copy its login data or rebuild the container to adopt it.
+The session and workspace currently live in the container's writable layer.
+
+The execution adapter removes unnecessary GitHub, package-feed, telemetry,
+publisher, database and operator credentials from its child's environment.
+That is hygiene, not containment: the child still shares the developer's
+filesystem and process authority. Stronger credential isolation remains
+deferred. Codex login authorizes model execution, not the Host's GitHub effects;
+candidate publication, PR creation and merge require separately configured and
+verified GitHub authorization. No OpenAI API token or API-price provisioning is
+required for this selected subscription path.
 
 ## Before any dispatch
 
@@ -26,14 +36,30 @@ operator must verify all of the following against current native state:
 3. The runner has been explicitly enrolled with its exact principal,
    fingerprint, generation and finite expiry.
 4. A finite, nonrenewing permit binds that WorkItem, generation, principals,
-   deadline, attempt ceiling, and token, runtime and cost ceilings. Restart or
+   deadline, attempt ceiling, runtime limit and a supported versioned accounting
+   policy. Record provider-native token coverage and unknown or not-applicable
+   subscription cost explicitly; do not turn missing values into zero or claim
+   a hard token ceiling that the adapter cannot enforce. A legacy numeric-cost
+   permit is not silently reinterpreted as a subscription permit. Restart or
    reconnect must not mint a new permit or replenish a reservation.
 5. The effect-free deployment and runner previews are ready, report no effects,
-   and bind the installed host, runner, broker, unit, configuration, store,
-   backup, fence, socket, DNS, TLS, certificate, credential and pricing
-   identities. Refuse dispatch if any binding is absent, stale or changed.
+   and bind the installed Host/executor artifacts, selected container/session
+   context, workspace/input/state roots, configuration, store, backup, fence,
+   limits and accounting policy. Bind the units, broker, socket, DNS, TLS,
+   certificate and credential identities required by the selected transport and
+   effect route. Subscription execution does not require an API-pricing record.
+   Refuse dispatch if any required binding is absent, unsupported, stale or
+   changed; an older inert API-oriented preview cannot qualify this route.
 6. Main has durably accepted a fresh provider readback for the current route,
    ownership generation and workflow revision after the most recent startup.
+
+These requirements describe the intended subscription route, not installed
+capability. Accepted source and immutable artifacts must implement the complete
+Host-to-executor path, durable execution-session journal, digest-bound input and
+independent candidate inspection before a preview can be ready. An adapter
+library or actor factory alone does not satisfy that condition. Preserve the
+existing closed runner wire; unsupported new execution/accounting versions must
+refuse rather than silently fall back.
 
 Telemetry health is not an orchestration authority. An outage must not block a
 transition that the orchestration journal can safely make, but it must never

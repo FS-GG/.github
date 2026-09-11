@@ -290,13 +290,49 @@ acceptance are separate results.
   [run 34621712128](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34621712128);
   logical coverage and physically executed process totals are distinct, and composed duration is an
   upper bound rather than measured wall time. Broader optimistic partitions were still running at
-  native merge; a later failure blocks dependent acceptance until resolved.
+  native merge; [run 34621712027](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34621712027)
+  subsequently completed successfully at 17:00 UTC. Its formal partition still runs the serial
+  canonical suite independently of the sharded required workflow; that remaining long-tail path is
+  not an individual 75-second test.
 - [ ] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
   Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
   bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
   quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
   fixtures before any bounded live qualification. Claude, OpenCode and DeepSeek are intended adapters
   against the same contract; this step does not claim that those implementations already exist.
+
+  Production inspection on September 11 confirms that an adapter factory does not compose the Host:
+  durable execution persistence, runnable executor transport, input/candidate implementations and the
+  production seven-effect driver are still required. Finish this same S2 window in dependency order:
+
+  - S2a — Coordination implements the transactional PostgreSQL execution journal, explicit bounded
+    execution command/receipt/content codecs and subscription admission/reservation/settlement.
+    Preserve existing runner `/1` and execution-launch `/2` meanings. Record commands before exposing
+    them; fence identity, generation, revision and original limits. Unknown tokens/cost are not zero.
+    Real PostgreSQL restart, concurrent append, lost-response and backup/restore tests must preserve
+    the original attempt and pending effects. The selected subscription policy is one nonrenewing
+    attempt with a 30-minute deadline/runtime bound, not a rewrite of an existing permit.
+  - S2b — Coordination adds an executor mode to the existing runner artifact, preserving its `post`
+    mode. A fixed workspace, digest-addressed input reader and real Git candidate inspector verify
+    baseline, allowed changes, head/tree and reproducible candidate objects. Bounded framed transport
+    remains responsive to cancellation. Executable fixtures prove duplicate-process exclusion,
+    crash/reconnect ambiguity, malformed/oversized traffic, candidate tampering and stale refusal;
+    missing container state never proves the previous process did not run.
+  - S2c — Coordination composes Main's actor, durable journal, remote execution provider and actual
+    seven-effect Host driver, including separately authorized GitHub callbacks and durable candidate
+    readback. An executable Host/PostgreSQL/runner test with deterministic external GitHub responses
+    must enter through supported admission and complete/recover the route without preloaded success.
+    Preserve startup pause, fresh reconciliation, exact protected checks and native delivery identity.
+
+  SystemAdmin then supplies one manual launcher under the existing rootless Podman owner: it relays
+  closed authenticated Host messages to the runner's framed standard input/output through
+  `podman exec -i` in the existing container. Main retains its own identity and home protection;
+  it neither launches Podman nor reads the developer login, and the container receives no database
+  credentials. This bounded launcher is new code to qualify, not an existing capability or another
+  persistent broker service. Reuse the existing Host/runner artifact families, publish immutable
+  replacement bytes, and verify served downloads before installed adoption. No general workspace
+  default changes. S2 is complete only after the executable composition is qualified; adapter source
+  acceptance alone leaves it open.
 
 The next installed window adopts immutable accepted artifacts into the selected session context,
 qualifies actual authentication/egress and execution behavior, and produces a fresh deployment preview.
@@ -306,6 +342,14 @@ PostgreSQL backup/restore and runner-image evidence. Its preview
 effects; it is historical installation evidence, not acceptance of the new subscription path.
 The representative item is [`.github#3421`](https://github.com/FS-GG/.github/issues/3421).
 Its live transfer, bounded execution, native delivery and the O2 failure/recovery exits above remain due.
+The [operator contract](../operations/orchestration-main-pilot.md) now expresses the selected subscription
+trust and accounting requirements without claiming installed capability. SystemAdmin reports the
+source-only validation repair in [PR #52](https://github.com/EHotwagner/SystemAdmin/pull/52), merge
+`3f603f3d05f9fd6ae88defe75536c46c52e82182`, with protected-main qualification green. Its prospective
+validation uses `git diff --check` and `python3 scripts/check-prose-citations.py --root .`; routine
+eligibility remains a separate base-owned PR gate. Installed bindings were not replaced. Before
+dispatch, bind the actual revised operator-document baseline and supported source/artifacts explicitly;
+do not reuse a stale work-item input or installation digest.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 for the enrolled O2 runner; no SDD/Templates lifecycle default or general fresh-workspace content changes.
