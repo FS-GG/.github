@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Ready for execution; implementation not started**.
+Status: **Execution active; SVG-SCENE-02.1 complete**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -242,7 +242,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
 
 ## Executable milestones
 
-- [ ] **SVG-SCENE-02.1 — Close the remaining inventory and freeze qualification subjects — route: routine**
+- [x] **SVG-SCENE-02.1 — Close the remaining inventory and freeze qualification subjects — route: routine**
 
   Depends on: SVG-QUAL-01.3.
 
@@ -255,6 +255,14 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   inventory. Bind the existing input/editor/session contract sources and the precise additions required by
   .2/.4. No missing implementation is marked complete by inventory alone. Check native published package
   identities before selecting future candidate versions.
+
+  Evidence: the [M0 inventory and qualification-subject report](../reports/2026-09-11-svg-scene-02-m0-inventory.md)
+  binds exact `.github`, Rendering, Game and Templates revisions; separates source/local/public/installed
+  evidence for C01–C20; records every M0.1–M0.7 disposition; and freezes package axes, the selected/rejected
+  Scene surface, third-party archives, geometry/font spike, browser/workload manifest and migration subjects.
+  Public Scene is already 0.28.0 while SvgBrowser is absent, so the foundation rehearsal number is not reused
+  as a release claim. Missing capabilities remain assigned to their accepted future features. No S.I.R. access
+  occurred, and no package, provider or default changed.
 
 - [ ] **SVG-SCENE-02.2 — Deliver portable document, affine and contract envelopes — route: routine**
 
