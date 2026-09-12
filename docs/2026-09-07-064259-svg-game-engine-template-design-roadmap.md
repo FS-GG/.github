@@ -36,7 +36,7 @@ engine APIs, and the S.I.R. repository remains strictly read-only.
 | 1 | **SVG-FOUND-01 — Local foundation** | Minimal portable Scene/SvgBrowser contract, retained interaction, neutral/tactical compatibility consumers and exact local candidate packet | Complete through its [foundation subroadmap](roadmaps/svg-game-engine-foundation.md); does not complete Release A or publication |
 | 2 | **SVG-QUAL-01 — Installed model qualification** | Qualify the installed SDD profile-2 author/inspect route and bind retained reducer semantics to real .NET/Fable consumers | Complete through its [qualification subroadmap](roadmaps/svg-game-engine-installed-model-qualification.md); Release A remains pending |
 | 3 | **SVG-SCENE-02 — Complete scene/renderer contract** | Remaining M0 inventory/decisions, M1 contract foundations and M2 selected renderer; C01/C02 plus C03 rendering/document export and bounded C18/C19 evidence | Complete through its [scene/renderer subroadmap](roadmaps/svg-game-engine-scene-renderer.md); full C03 import/authoring and integrated C18/C19 remain later; Preview A publication is separate |
-| 4 | **SVG-PREVIEW-A — Installed scene/renderer preview** | Publish and qualify the coherent Rendering/Templates preview A set through installed clean and retained receivers | [Executable Preview-A subroadmap](roadmaps/svg-preview-a.md); .1 recoverable Rendering preparation is complete and .2 protected Rendering publication is next; this feature owns Release A |
+| 4 | **SVG-PREVIEW-A — Installed scene/renderer preview** | Publish and qualify the coherent Rendering/Templates preview A set through installed clean and retained receivers | [Executable Preview-A subroadmap](roadmaps/svg-preview-a.md); .1 recoverable Rendering preparation is complete and .2 is blocked before publication because neither established trusted credential can read a known GitHub Packages archive; this feature owns Release A |
 | 5 | **SVG-AUTHOR-01 — Vector content and scene authoring** | Deliver C04–C06 content, asset and scene authoring with versioned interchange | Rendering authoring contracts and generated-consumer journeys |
 | 6 | **SVG-INPUT-01 — Command and workspace interaction** | Deliver C07/C09 commands, docking, keybindings, modal input and accessible device parity | Rendering input/workspace contracts and browser accessibility evidence |
 | 7 | **SVG-RUNTIME-01 — Sessions and continuous gameplay** | Deliver C08/C10 runtime, fixed-step sessions, collision and representative continuous gameplay | Game/Rendering runtime correspondence and real player journeys |
@@ -573,7 +573,8 @@ The [SVG-QUAL-01](roadmaps/svg-game-engine-installed-model-qualification.md) det
 complete: public SDD 1.7.0 provisioning, Rendering reducer correspondence and Templates clean/retained receiver
 qualification all passed. [SVG-SCENE-02](roadmaps/svg-game-engine-scene-renderer.md) is complete at its exact
 local-candidate handoff. [SVG-PREVIEW-A](roadmaps/svg-preview-a.md) is now the executable window: recoverable
-Rendering release preparation is complete and protected Rendering 0.29.0 publication is next. V0–V6 are not
+Rendering release preparation is complete; protected Rendering 0.29.0 publication is blocked until the
+Rendering Actions principal can read/write all 18 existing archives and create/read the new SvgBrowser package. V0–V6 are not
 umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
@@ -713,7 +714,8 @@ then delivered public SDD 1.7.0 provisioning, real Rendering .NET/Fable reducer 
 retained Templates receiver qualification. The completed
 [SVG-SCENE-02 scene/renderer subroadmap](roadmaps/svg-game-engine-scene-renderer.md) delivered the local Preview-A
 handoff. Continue the accepted [SVG-PREVIEW-A subroadmap](roadmaps/svg-preview-a.md) at .2's separately authorized
-Rendering publication boundary; .1 release custody preparation is complete.
+Rendering publication boundary after the recorded GitHub Packages access grant; .1 release custody preparation
+is complete and no .2 package or tag exists.
 
 Continue in the accepted feature-ledger order. Each feature preserves the full C01–C20, M0–M11, section 13 and
 Release A–D outcome it covers. S.I.R. stays strictly read-only throughout; tactical evidence is produced by
