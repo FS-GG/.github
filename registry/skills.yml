@@ -104,7 +104,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-09-10"
+updated: "2026-09-12"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -170,12 +170,12 @@ skills:
   # fs-gg-rendering. `sha256` + condition authoritative (from the published skill-manifest.json).
   # `source` is the in-template canonical path (the manifest's supplied-by).
   # ------------------------------------------------------------------------------------------------
-  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: b7bcd0eab7cbeae020f87f96d8e8f4a7d79e59da238ef5f3a591ecb7fdd70149, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: bad6df3b6199a983dfa5bd8a37ae6ea7aea37fb559cd8414f35405f06ec2373e, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: 519155cc317fc990fb20bda41011fe4a01576060e7677ebd857084d1e42b1525, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: f787d492d573ae3e676dd972dad7f3c2fd9d02700421825f1dcea9ef0f61792d, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: 93a8fc073ce7e7432cdd5ce1d282e019f3f0673f272d4d548ca0d6a9fea93758, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
-  - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: 62ef6d874041de97e2dc256d45f4499e35551febec2ff09b2c5a70e78ad4f4f0, materializes-when: "profile in [app, game]" }
+  - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: fbd7f29e2f5dee30f3a1c6bb9f3aed16aa3249d3e7a98df1c197e2c5acfe0cd1, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: 37ba120a11ed335ea784bdc6d22c17bc73010733cfb7f971950f7783011f82a7, materializes-when: "profile in [app, game]" }
   # fs-gg-game-shell — homed beside its owner+predicate siblings and reconciled verbatim from
@@ -374,7 +374,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 80952057e092fd2873759bf21c0e320644ebb6a77b81015aa2c1d81b2b20bf4a, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 9b2823685a2fe5548a2ccd91707980c097cdcbce2dbc98277ab3bd087cabb3a5, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
