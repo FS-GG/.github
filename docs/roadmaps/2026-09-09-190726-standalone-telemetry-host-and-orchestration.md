@@ -379,6 +379,33 @@ eligibility remains a separate base-owned PR gate. Installed bindings were not r
 dispatch, bind the actual revised operator-document baseline and supported source/artifacts explicitly;
 do not reuse a stale work-item input or installation digest.
 
+The accepted bounded installed-work horizon keeps replacement, migration and live effects separate:
+
+- [x] O2-I1 — PostgreSQL repeat-start source repair — routine. SystemAdmin
+  [#56](https://github.com/EHotwagner/SystemAdmin/pull/56), head
+  `85b135a88ebf059899e032c5308596c1ee69f388`, merged as
+  `45eb1a39ea5b6e168f9980d881c8ec9220b55cfb`, tree
+  `520a4e28d79dd40055ff3528adc68ab592af95aa`. The create path pins
+  `--read-only=true --read-only-tmpfs=false`, preserves its dedicated runtime mount and hardening, and
+  rejects weakening. Isolated Podman 6.1/crun proof covered SQL write/readback across stop, second start
+  and explicit restart, root-write refusal, runtime/shared-memory writes, final stop and cleanup.
+  Deployment 23/23, runner 10/10, launcher 8/8, routine 59/59 and PR/main qualification passed.
+  Production stayed stopped and unchanged.
+- [ ] O2-I2 — Guarded PostgreSQL replacement and v1 durability — protected operation. Retain the old
+  container and immutable safety copy; inspect the corrected replacement before start; prove v1
+  readiness, logical backup with isolated restore, repeat restart and original-data readback; finish
+  stopped with old container, data, backups and evidence retained. No migration or Host/proxy start.
+- [ ] O2-I3 — Paused v2 host qualification — protected operation. Apply migrations once, bind schema
+  receipts, then prove Host/proxy startup pause, authenticated not-ready,
+  refusal paths and idempotent pause. No runner/model, admission/resume or GitHub effect.
+- [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation. Bind fresh `.github#3421`
+  input and one nonrenewing attempt; prove candidate persistence, required checks, native delivery and
+  O2 failure/reboot recovery with ambiguous-effect reconciliation and the direct-credential limitation.
+
+These are O2 substeps, not top-level milestones. Each unchecked step needs exact authority and fresh
+baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
+remain coverage gaps rather than inferred usage.
+
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 for the enrolled O2 runner; no SDD/Templates lifecycle default or general fresh-workspace content changes.
 Qualify a clean runner installation and the upgrade of the existing inert deployment separately.
