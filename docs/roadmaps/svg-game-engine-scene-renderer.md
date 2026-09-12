@@ -494,7 +494,8 @@ their actual owner contracts. Stop only the affected claim on a real correctness
 authority failure; continue independent authorized work without weakening evidence.
 
 Exit when .1–.7 pass and the Preview-A packet names every actual remaining operation prerequisite.
-The next feature is **SVG-PREVIEW-A**, which publishes the coherent producer/template set and proves
+The next feature is [**SVG-PREVIEW-A**](svg-preview-a.md); its recoverable Rendering preparation is complete,
+and .2 protected Rendering publication is next. It publishes the coherent producer/template set and proves
 public installed clean/upgrade consumers. Release A remains open until that feature closes its actual
 release predicates. C03 import/authoring, complete C18/C19 and Releases B–D remain in their accepted
 later features.
