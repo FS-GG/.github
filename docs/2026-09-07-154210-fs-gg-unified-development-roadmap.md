@@ -43,6 +43,17 @@ and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
 
 ## 0. Current progress report
 
+Standalone O2 source update, **2026-09-12 05:15 UTC**:
+[Coordination #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373) merged as
+`a22c7f97533e7bb4c60a891a49994ca5b0995189` after exact-head bootstrap and coherent validation passed.
+It corrects authoritative Main controls/readiness, selected routine-docs GitHub qualification and
+pending/rate-limit pacing before publication. SystemAdmin reports launcher source
+[#53](https://github.com/EHotwagner/SystemAdmin/pull/53) merged as
+`0740031b6b794e33dcec5fd21d6b8efa469c6115`, with deployment 21/21, runner 10/10 and launcher 8/8
+tests passing. That receiver receipt is mailbox-attributed; this account cannot independently read
+the private repository. Both are source milestones: immutable artifact publication, installed
+qualification, the actual subscription pilot, recovery/reboot proof and O3 remain pending.
+
 Last reconciled: **2026-09-12 04:01 UTC**. Current frontier: **V0 and V1 in parallel; SVG-PREVIEW-A.1
 is complete and .2 protected Rendering 0.29.0 publication is next**.
 

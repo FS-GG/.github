@@ -377,11 +377,30 @@ implied by this trusted local pilot.
     must enter through supported admission and complete/recover the route without preloaded success.
     Preserve startup pause, fresh reconciliation, exact protected checks and native delivery identity.
 
-  SystemAdmin then supplies one manual launcher under the existing rootless Podman owner: it relays
+  Publication qualification repair is delivered in
+  [Coordination #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373), exact head
+  `7d535035028b330a1bf7e19883274ddcedc4d06b`, merge
+  `a22c7f97533e7bb4c60a891a49994ca5b0995189` at September 12 05:10 UTC.
+  [Bootstrap](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34673490556) and
+  [coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34673490540)
+  passed on that head. The repair binds production controls/readiness to authoritative Core state,
+  qualifies the selected internal-docs route against base-owned policy and exact native checks,
+  and paces pending observations and GitHub rate limits. Focused Host 37/37, real PostgreSQL 21/21,
+  unit 372/372, both artifact-helper selftests and locked Release build passed. The HTTP journey
+  pauses while checks are pending, resumes with fresh authority and observes one merge; cancellation
+  acceptance remains distinct from active-provider termination. Artifact publication is still pending.
+
+  SystemAdmin reports the manual launcher source delivered in
+  [PR #53](https://github.com/EHotwagner/SystemAdmin/pull/53), exact head
+  `6471f3b4e66e3b0ec14d374f35e57cfbbf2be7ff`, merge
+  `0740031b6b794e33dcec5fd21d6b8efa469c6115`, with deployment 21/21, runner 10/10 and launcher 8/8
+  tests passing. This is the receiver's mailbox receipt, not independent private-repository readback
+  by this driver. Its contract remains inert and artifact resolution/installed qualification pending.
+  The manual launcher runs under the existing rootless Podman owner: it relays
   closed authenticated Host messages to the runner's framed standard input/output through
   `podman exec -i` in the existing container. Main retains its own identity and home protection;
   it neither launches Podman nor reads the developer login, and the container receives no database
-  credentials. This bounded launcher is new code to qualify, not an existing capability or another
+  credentials. This bounded launcher is source-qualified, not an installed capability or another
   persistent broker service. Reuse the existing Host/runner artifact families, publish immutable
   replacement bytes, and verify served downloads before installed adoption. No general workspace
   default changes. S2 is complete only after the executable composition is qualified; adapter source
