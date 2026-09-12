@@ -40,8 +40,23 @@ workspace, use the [workspace impact map](#99-when-new-workspaces-change).
 For the client orchestrator that connects to a project master and receives jobs, see
 [cooperative orchestrators](#85-cooperative-orchestrators-a-project-master-assigns-jobs-to-contributor-clients)
 and their [F0–F5 roadmap](#97-f0f5-cooperative-orchestrator-development).
+For stable execution policies, context/token optimization and evidence-based improvement, use
+[LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md).
+Its later community milestone includes opt-in data contribution through an isolated Main intake and
+reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
+
+LEARN-01 planning delivery, **2026-09-12 10:03 UTC**:
+[`.github` PR #3449](https://github.com/FS-GG/.github/pull/3449) merged as
+`93ea5e39a5aa89c35942ca1920365352644d4a4b`, delivering the
+[stable-policy orchestration and statistical-learning design](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md).
+It records the selected direction: broad fixed profiles, comprehensive task/decision/outcome observations,
+whole-issue context/token accounting, robust controlled comparisons before finer or adaptive routing,
+and later opt-in community contribution through an isolated HTTPS intake on Main. The first future source
+window is LEARN-01.1–.3; installed experimentation is .4–.5 and community participation is .6.
+This is design delivery only. Implementation, experiments, endpoint/repository creation, data collection
+and runtime policy activation remain unstarted; O2/O3 and GS2 completion authorities are unchanged.
 
 Standalone O2 publication update, **2026-09-12 07:28 UTC**:
 [Coordination #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373) merged as
@@ -59,7 +74,8 @@ artifact binding accepted in [#54](https://github.com/EHotwagner/SystemAdmin/pul
 The installation remains inert. Installed qualification, actual subscription pilot,
 recovery/reboot proof and O3 remain pending.
 
-Last reconciled: **2026-09-12 07:28 UTC**. Current frontier: **V0 and V1 in parallel; SVG-PREVIEW-A.1
+Operational statuses last reconciled: **2026-09-12 07:28 UTC**; LEARN-01 planning delivery recorded
+**2026-09-12 10:03 UTC**. Current operational frontier: **V0 and V1 in parallel; SVG-PREVIEW-A.1
 is complete and .2 protected Rendering 0.29.0 publication is blocked before any release mutation**.
 
 This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
@@ -82,6 +98,7 @@ link to owning evidence and do not replace it; a missing projection is stale rep
 
 | Stage | Indicator | Completed evidence | Remaining exit work |
 |---|---|---|---|
+| **LEARN-01 — Stable policy and statistical learning** | **Design delivered; implementation not started** | [PR #3449](https://github.com/FS-GG/.github/pull/3449) supplies one [feature plan](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) joining existing V0 telemetry, E0 comparison and selected E1/O0–O3 foundations. Context/token efficiency and slow, evidence-based policy refinement are explicit goals. | .1–.3 define the baseline/experiment, extend observation and integrate fixed profiles/context; .4–.5 qualify installed operation and evaluate the first controlled comparison. Later .6 adds consented community contribution via isolated Main intake and disclosure-controlled GitHub aggregates. No implementation, efficiency, O2/O3 or v2 completion is claimed. |
 | **V0 — Simplified baseline and v2 bindings** | **In progress** | Routine delivery is the canonical default for eligible work; protected operations retain explicit authority. The private telemetry engine/store, prospective runtime and CI observation, canonical budget reducer, post-completion activity/review model and public dashboard are operational. The approved physical host runs the exact merged engine with an empty privacy-conservative alias allowlist, host-native recurrence and event activation; a completed-root hook published a verified immutable feed and the deployed page was read back against it. | Finish the R2/R4/R5 evidence denominators. Close remaining automatic parent/child, CI-selection and unsupported native-usage coverage gaps without making telemetry block delivery. |
 | **V1 — Event/queue qualification and incumbent fencing** | **In progress; current GS frontier is GS2-08.2 live operation** | GS2-07.1–07.8 and GS2-08.1 have accepted native receipts. GS2-08.2 protection settings are installed and its operational source is merged. GS2-08.3 writer-census and GS2-08.4 common-precondition source boundaries are merged. | Perform GS2-08.2's separately authorized initialization and monitoring operation and obtain native acceptance. Qualify/accept 08.3–08.6; publish/adopt the bridge through 08.7–08.9 and prove old-client refusal. |
 | **V2 — Callable v2 and migration rehearsal** | **Not entered** | Existing pure adapters and qualification contracts are reusable inputs. | Deliver the installed ordinary entry point joining observation, decision, provider effects and recovery; complete GS2-09 representative migration, retry, rollback and omission proofs. |
@@ -680,6 +697,46 @@ independently block a valid routine merge or add a numerical gate to OpenV2/Oper
 still apply. Functional or authority failure is different: an enabled profile cannot claim qualification
 while its required behavior is broken.
 
+### 7.3.1 Stable policies, context efficiency and statistical learning
+
+The September 12 planning direction is **broad, stable execution policy followed by increasingly precise
+evidence**, detailed in [LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md).
+Collect task characteristics, execution choices and outcomes from the beginning, but begin routing with
+a few fixed profiles. Classification uses information available before assignment and preserves its
+version, uncertainty and provenance. Analysis refreshes do not change policy. Finer task distinctions,
+model/effort/context routing and adaptive allocation need sufficient independent observations, practical
+benefit with uncertainty, repair follow-up and explicit versioned promotion at declared evaluation points.
+Insufficient evidence means continued observation or an inconclusive result, not automatic promotion.
+
+**Context and token efficiency are first-class improvement goals.** Evaluate total original-issue
+resources, including Astra planning, context assembly/retrieval, all workers, retries, reviews,
+integration and delayed repairs. Mandatory instructions, contracts and technical evidence remain present.
+A smaller initial prompt only helps if total resource use improves while completion quality and latency
+remain acceptable. Keep provider-native accounting, subscription capacity and known monetary costs
+distinct. Children, rescue attempts and new PRs do not create extra independent successes or reset costs.
+
+LEARN-01's first proposed controlled comparison holds model, effort, decomposition and process fixed
+while comparing the current context package with a focused package. Randomization, cohort admission,
+assignment units, follow-up, sample/precision requirements and analysis rules are specified before use.
+Its proposed minimum four-week enrollment and bounded evaluation cadence are research-design inputs,
+not new per-PR gates. Historical associations, prediction, simulation and causal experimental results
+have distinct claims. The selected roadmap owns this detail; sections 7.2–7.4 retain their existing
+accounting and intervention definitions. Necessary repairs proceed under their existing authority and
+mark materially affected experiments interrupted rather than silently mixing policy versions.
+
+The later community path keeps local analysis available without sharing. Explicitly opted-in clients
+submit minimized statistical reports to an isolated HTTPS intake on Main, with separate credentials,
+storage and no dispatch or internal-store access. Private validation and disclosure review precede
+public aggregate dataset releases in a dedicated GitHub repository. Sharing observations and joining an
+experiment are separate opt-ins; removing names alone does not establish anonymity. Community
+self-selection, measurement differences and unverified submissions remain visible in analysis.
+Actual hostname/repository selection, publication and deployment belong to LEARN-01.6; no intake or
+collection is activated here, and community participation does not gate the internal comparison.
+
+This design extends the existing observation path and selected O0–O3 runtime. It does not establish
+measured benefit, complete R2/R4/R5 or E0/O2/O3, or add a prerequisite for V0–V6. Live execution and
+experimental enrollment retain their owning operational permissions.
+
 ### 7.4 Narrow bureaucracy budget: tests excluded
 
 The requested bureaucracy budget concerns administrative checks, waiting for checks/CI, and process churn.
@@ -889,6 +946,13 @@ Do not put the full six-graph planning catalogue, every model route, all dashboa
 that first comparison. Bound the experiment to one operation class and the failure cases relevant to it.
 Independent read-only research can occur before v2 completion without becoming a migration prerequisite.
 
+[LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) now supplies
+the selected planning question for context/token efficiency: establish the actual broad-profile baseline,
+then compare one focused context package under a fixed process. Its source/research window can proceed
+before live pilot authority; it does not claim that the residual cost or comparative benefit is already
+measured. The engineering investment cap and the separately bounded observation/follow-up window are
+different budgets. Reuse its dataset and analysis rather than starting another E0 measurement programme.
+
 ### 8.2 Bounded execution component
 
 When justified, Coordination owns a small canonical workflow with finite scope and a non-renewable
@@ -914,6 +978,11 @@ Keep persisted intent and inbox/outbox atomicity explicit for the chosen store. 
 completion authority is created by local receipts.
 
 ### 8.3 OR scheduling over the shared component
+
+The [LEARN-01 feature plan](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md)
+owns broad fixed profiles, context comparison and evidence-conditioned later refinement. Detailed
+observations do not require granular dispatch rules; learned allocation and additional planner investment
+remain conditional on repeatable results from that stable baseline.
 
 Start with a deterministic priority/FIFO policy with aging, actual resource constraints, bounded WIP and
 recovery headroom. Admit work according to the bottleneck's available capacity; increasing implementation
@@ -1183,6 +1252,13 @@ reopen its accepted source milestones as a future E1 project. Its evidence can s
 foundation requirements, but does not establish unmeasured comparative value, a general default or v2
 migration completion. Remaining E0/E1 extensions follow the conditions below.
 
+[LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) is the
+bounded learning extension across V0 observation, E0 comparison and this selected E1 foundation.
+Its .1–.3 window defines measurement/experiment contracts and integrates fixed planning, execution and
+context profiles; .4–.5 qualify installed use and the first evidence-based decision. O2/O3 retain their
+existing pilot, recovery and adoption exits. Later community intake on Main is a separate data-receiver
+boundary with no job-dispatch capability, not cooperative-agent federation or another executor.
+
 E0 selects one measured hypothesis using section 8. E1 implements only the necessary shared kernel and
 executor/host/planner slice. Qualify integrated success, technical failure, repair, budget exhaustion,
 process loss, late success and recovery before simulation/shadow/canary promotion. PB and OR consume the
@@ -1262,6 +1338,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: 0/7/14/30-day observations, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
 | **One residual execution experiment** | E0: one additional measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | Conditional additional scope; use the selected [standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) implementation/evidence as a baseline, not a second actor-runtime selection |
+| **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration; SystemAdmin owns installed Main/runner and later isolated community intake. .1–.3 are the first future source window; live .4–.5 require published/adopted artifacts, actual usage support and applicable O2/O3/operation authority | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449). Reuse UTEL and O0–O3; no implementation or experiment started. Later .6 enables consented community reports through Main and reviewed GitHub aggregate releases, independently of the core comparison. Adaptive extensions remain conditional |
 | **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) owns the shared Akka session core, PostgreSQL journal, subscription budget and provider-neutral executor/Host composition. Continue its active O2 window and O3 acceptance; reuse accepted source rather than rebuilding it here. Wider execution profiles remain conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; continue selected O0–O3, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the selected O0–O3 single-host scope and O2-S1/S2 provider-session window. Akka.NET is selected for this scope, not a future competing experiment. Codex subscription execution is first; Claude, OpenCode and DeepSeek share the intended adapter contract. Live pilot and controlled adoption remain pending; other hosting scope remains conditional. |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
@@ -1315,6 +1392,7 @@ than assuming every family updates together.
 | **Open and ordinary use — V5** | Prepared and admitted workspaces can use enabled normal v2 operations and the qualified routine journey | Authoritative OpenV2, effective receiver configuration and current operation permissions. Already prepared files may stay identical while the permitted runtime behavior changes |
 | **Carryover and retirement — V6** | Clean scaffolds omit retired v1 routes and obsolete ceremony for the adopted profile; upgrades preserve user-owned content under their supported contract | Published retirement changes reach the selected scaffold path and GS2-14 clean-install/old-client proofs pass. OperatingV2 and R5 efficiency remain separate claims |
 | **Residual experiment — E0** | No general scaffold/default change from research | A prototype result only informs whether to fund the selected E1 capability |
+| **Stable policy and statistical learning — LEARN-01** | Optional task/context/window observations and fixed execution profiles; later opt-in community export | .1 changes research inputs and .2–.3 change source capability. .4 first changes an enrolled installed route after actual producer publication, Main/runner adoption and selected SDD/Templates materialization. Qualify clean creation and retained upgrade separately; defaults remain unchanged. .6 separately qualifies local preview/consent, isolated Main intake and reviewed public aggregates; neither sharing nor experiments enroll users automatically |
 | **Executor, host or scheduler — E1** | Optional tools, configuration or services for the specifically qualified work class | Each enabled capability's subroadmap includes publication, receiver qualification and a separate class/default decision; a source implementation or successful shadow run is insufficient |
 | **Cooperative work — F0–F5** | Optional client/master enrollment and contribution capabilities for selected workspace/project families | F0–F3 establish protocol, sessions and lab/shadow behavior; F4 enables the authorized canary population; F5 can support a measured receiver/default decision |
 | **SVG game engine foundation — SVG-FOUND-01** | Explicitly selected `fable-game` preview can receive reusable retained SVG scene interaction; existing provider/lifecycle defaults remain as selected | SVG-FOUND-01.4 changed selected source composition; .5 rehearsed candidate-template clean creation and a separate retained upgrade. Installed public behavior changes only after exact producer publication, Templates pin adoption/publication and actual receiver consumption; later lifecycle/default activation keeps its own SDD/Templates and applicable epoch prerequisites |
@@ -1454,6 +1532,7 @@ by this documentation merge.
 | [V2 governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md), [architecture amendment](coordination/2026-08-30-github-substrate-v2-remaining-migration-architecture-review.md), [roadmap](github-substrate-v2-roadmap.md) | Retain accepted journal/reconciler architecture and all current GS2 gates; V1–V6 group the remaining outcomes |
 | [Governance-preserving proposal](coordination/2026-09-07-150716-governance-preserving-ci-simplification-design-proposal.md) | Integrate its independent classification, enforcement ownership, freshness and fallback decisions in V0 and sections 3–6 |
 | [OR design H0/H1](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md) | E0 need/baseline and bounded experiment; six graphs and the full planner catalogue are scoped to enabled needs |
+| [LEARN-01 stable-policy orchestration and statistical learning](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) | Selected design refinement across V0/E0/E1: reuse UTEL and O0–O3, add decision-time task/context/experiment observation and a controlled context comparison under stable broad profiles. Earn finer/adaptive routing through robust repeated evidence. Later opt-in Main intake and reviewed GitHub aggregates extend participation without duplicating execution or changing internal/GS2 authority; source, installation, experiments and community rollout remain future work |
 | OR H2–H5 | Selected single-host actor, execution and recovery foundations are owned by standalone O0–O3; reuse their accepted evidence in E1. Additional authenticated hosting, verified planning and federation requirements remain conditional gaps, not a duplicate executor build |
 | OR H6/H7 | Class-specific mutation canary and separately decided normal service use after OperatingV2 by default; preserve supported routine path |
 | OR H8 | Availability expansion only if measured single-node recovery is insufficient |
