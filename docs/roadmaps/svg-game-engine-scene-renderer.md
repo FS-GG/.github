@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1–.5 complete**.
+Status: **Execution active; SVG-SCENE-02.1–.6 complete; .7 is the unselected frontier**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -393,7 +393,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   physical touch/mobile GPU remain unclaimed. Rendering remains independent of Game; candidate packages stayed
   local, no publication/default activation occurred, and S.I.R. was not accessed.
 
-- [ ] **SVG-SCENE-02.6 — Meet Preview-A workload and resource budgets — route: routine**
+- [x] **SVG-SCENE-02.6 — Meet Preview-A workload and resource budgets — route: routine**
 
   Depends on: .3–.5.
 
@@ -405,6 +405,20 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   listener leak and excessive-document controls demonstrate that the respective gates fail.
   Report font/content bytes, browser stages and unavailable heap/presentation evidence separately.
   Do not claim complete C19/M9 or physical mobile qualification.
+
+  Evidence: Rendering [PR #1286](https://github.com/FS-GG/FS.GG.Rendering/pull/1286), merged as
+  [`c4e50dcb`](https://github.com/FS-GG/FS.GG.Rendering/commit/c4e50dcb239ccb62453cdd47505f1a8d1095814e),
+  retained the exact-host [Preview-A performance receipt](https://github.com/FS-GG/FS.GG.Rendering/blob/c4e50dcb239ccb62453cdd47505f1a8d1095814e/readiness/svg-scene-02-6/preview-a-performance.json)
+  and [qualification report](https://github.com/FS-GG/FS.GG.Rendering/blob/c4e50dcb239ccb62453cdd47505f1a8d1095814e/docs/reports/2026-09-12-svg-scene-02-preview-a-performance.md).
+  The stable 53-file authoritative-input manifest (`41de81c6…`) bound three 200-sample runs per workload:
+  ordinary p95 was at most 83.517 ms against 100 ms, dense p95 at most 116.913 ms against 150 ms,
+  startup was 214.459 ms against 2 s, executable JS/CSS was 42,294 gzip bytes against 153,600,
+  and the ten-second idle, retained-update and 100-cycle lifecycle predicates passed. Unnecessary-rebuild,
+  listener-leak and excessive-document controls each killed its intended gate. Font and gallery-content bytes
+  and browser stages are separate; retained heap, physical compositor timestamps and physical-mobile evidence
+  remain unavailable. Hosted shared-runner timing remains diagnostic rather than weakening the exact-host
+  predicates. This does not claim complete C19/M9. Candidate packages stayed local, Rendering remained
+  Game-independent, no publication/default activation occurred, and S.I.R. was not accessed.
 
 - [ ] **SVG-SCENE-02.7 — Qualify generated consumers and hand off Preview A — route: routine**
 
