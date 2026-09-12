@@ -2,7 +2,7 @@
 
 Feature identity: **SVG-PREVIEW-A**.
 
-Status: **In progress; SVG-PREVIEW-A.1 complete; SVG-PREVIEW-A.2 is next**.
+Status: **In progress; SVG-PREVIEW-A.1 complete; SVG-PREVIEW-A.2 blocked at protected preflight**.
 
 This is the executable feature plan for the first stable installed SVG preview in the
 [accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md) and
@@ -84,6 +84,41 @@ remains incomplete.
   publish GitHub Packages first and then the identical original files to nuget.org. Download from both feeds
   and compare every payload entry except the explained NuGet `.signature.p7s`. Partial availability is
   incomplete and blocks Templates adoption; recover only by original-byte replay under the contract above.
+
+  **Blocked protected-operation checkpoint, 2026-09-12.** Rendering safeguard
+  [PR #1289](https://github.com/FS-GG/FS.GG.Rendering/pull/1289), merge
+  `c942d4db5d2a55ad4b7fffdffcf4771d25a9789f`, and follow-up PRs
+  [#1290](https://github.com/FS-GG/FS.GG.Rendering/pull/1290) (`28b3d645009300375e330b087b6cf8f46142e709`),
+  [#1291](https://github.com/FS-GG/FS.GG.Rendering/pull/1291) (`4fdab477101d43ebe2aaa1bac210e7a005eaf9b6`),
+  [#1292](https://github.com/FS-GG/FS.GG.Rendering/pull/1292) (`fcfafdf299984f8718501b6f029ebea378518414`),
+  [#1293](https://github.com/FS-GG/FS.GG.Rendering/pull/1293) (`03ac951b4ed0b0d8d9cf2d8bbc024a09405376f2`)
+  and [#1294](https://github.com/FS-GG/FS.GG.Rendering/pull/1294)
+  (`fcccd6358a56f6b8693659ac7c59d60271a6ff90`) installed fail-closed, trusted-main collision and
+  credential diagnostics without changing a version axis. Historical 0.28.0 publication run
+  [32786664161](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/32786664161) bound the established
+  publisher to source `6f0c46f5229a647fd045aee1913096e6774da872` and the repository `GITHUB_TOKEN`
+  with `packages:write`, but that workflow never performed collision proof or archive readback.
+
+  Exact-candidate trusted-main run
+  [34677990563](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34677990563) bound source
+  `c1095290983a428f74a248c278df5f148b4ad1d7`, workflow
+  `fcccd6358a56f6b8693659ac7c59d60271a6ff90`, version 0.29.0, the 19-member plan and NuGet OIDC.
+  The historical repository token could read the GitHub NuGet service, registration and version indexes
+  (`200`, `200`, `200`), listing 0.28.0 and not 0.29.0 for the anchor, but the known
+  `FS.GG.UI.Scene` 0.28.0 archive returned `403`. The established org App installation `143110413` with
+  `packages:read` also returned `403` for that archive. Earlier attempts proved both Bearer and Basic App
+  variants fail. Therefore authenticated archive collision/readback authority is unavailable and the
+  preflight correctly refused before pack, tag or publication. Nuget.org reports all 19 target identities
+  absent; all three target tags are absent. ApiCompat remains **Pass 16 / legitimate first publication 1 /
+  BOM NotApplicable 1 / Unavailable 0**. No archive was published and no tag was created.
+
+  Resume requires an organization package administrator to grant the `FS-GG/FS.GG.Rendering` Actions
+  repository principal read/write access under **Manage Actions access** for the 18 existing packages in
+  the roster (all except `FS.GG.UI.Scene.SvgBrowser`), preserve `packages:write` for the trusted release job,
+  and permit that repository principal to create, link and subsequently read the new
+  `FS.GG.UI.Scene.SvgBrowser` package. The repaired credential must return `200` for the known 0.28.0 archive
+  and authoritative `404` for every 0.29.0 archive before this milestone resumes. Metadata-only access is
+  insufficient. Do not begin .3 while .2 is blocked.
 
 - [ ] **SVG-PREVIEW-A.3 — Adopt public producer pins and prepare Templates 0.11.0 — route: routine**
 
