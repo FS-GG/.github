@@ -19,6 +19,17 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-12** — **SVG Preview A public Rendering and Templates frontier**
+  (owners rendering/templates; SVG-PREVIEW-A): advances `fs-gg-ui-template` 0.28.0 → 0.29.0 and
+  `fs-gg-workspace-template` 0.10.0 → 0.11.0 after immutable dual-feed publication and payload readback.
+  Rendering run [34690467974](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34690467974)
+  verified its 19-package coherent set. Templates recovery run
+  [34703775170](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34703775170) verified all 187
+  package payload entries, and [Templates PR #467](https://github.com/FS-GG/FS.GG.Templates/pull/467)
+  qualified public direct, SDD, typed/profile-2, wizard and retained-upgrade receivers. The
+  `templates → rendering` edge now records Templates' actual 0.29.0 provider pin. SVG remains opt-in;
+  no provider or lifecycle default changes.
+
 - **2026-09-10** — **coord-engine `0.88.0` published frontier** (owner github; standalone telemetry L2): immutable [`coord-engine/v0.88.0`](https://github.com/FS-GG/.github/releases/tag/coord-engine/v0.88.0) and [`coherent-set/v0.88.0`](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.88.0) promote accepted source `d77fe195bc4e133ace8763c2158834410ca72bc0`, content `sha256:81ebba64b1b707c03a77c19007026f5f925f2529e2f90de30366033019ada525`. Preparation run [34467100539](https://github.com/FS-GG/.github/actions/runs/34467100539) produced one Coord/Drivers/Kit set. Initial publishers uploaded it but timed out on nuget.org propagation; exact resume [34468719144](https://github.com/FS-GG/.github/actions/runs/34468719144), component runs [34468800782](https://github.com/FS-GG/.github/actions/runs/34468800782)/[34468798694](https://github.com/FS-GG/.github/actions/runs/34468798694)/[34468796930](https://github.com/FS-GG/.github/actions/runs/34468796930), and promotion [34468803766](https://github.com/FS-GG/.github/actions/runs/34468803766) verified both feeds and sealed stable. Final manifest SHA-256 `35b8ba8ffc8477d3785ca0b7e6c1466b7abaacb88554b3879244fe6476483889`; stable-channel SHA-256 `dab6836cd8b81a994a36d6cc4a2e158583a11281fd51a905a97f2b939da3ddba`. The public Coord run passed the 43-check installed dashboard/history/crash journey and 20 credential-free nuget.org restores on eligible ext4. Advances `coord-engine` `version` and `package-version` 0.87.0 → 0.88.0; compatibility/architecture remains additive and application dependencies remain unchanged.
 
 - **2026-09-10** — **optional telemetry host `0.1.1` source patch prepared**

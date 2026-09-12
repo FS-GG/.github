@@ -525,9 +525,9 @@ if len(rows) != 1:
     raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
 row = rows[0]
 expected = {
-    "version": "0.28.0",
-    "package-version": "0.28.0",
-    "package-tag": "fs-gg-ui-template/v0.28.0",
+    "version": "0.29.0",
+    "package-version": "0.29.0",
+    "package-tag": "fs-gg-ui-template/v0.29.0",
 }
 for key, value in expected.items():
     if str(row.get(key)) != value:
@@ -579,7 +579,7 @@ else
 fi
 p4_mutation wrong-default default typed-sdd "P4 default mismatch"
 p4_mutation lifecycle-loss type 'choice (spec-kit|sdd|none)' "P4 lifecycle vocabulary mismatch"
-p4_mutation rendering-identity version 0.27.0 "P4 identity mismatch"
+p4_mutation rendering-identity version 0.28.0 "P4 identity mismatch"
 p4_mutation orchestrator-floor floor 1.3.0-preview.3 "P4 floor mismatch"
 
 echo
@@ -605,16 +605,16 @@ new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 architecture_template_comparator_is_current() {
   local subject="$1"
-  grep -qF "registry's newest-tracking 0.10.0 pin above" "$subject" \
-    && ! grep -qF "registry's newest-tracking 0.9.0 pin above" "$subject"
+  grep -qF "registry's newest-tracking 0.11.0 pin above" "$subject" \
+    && ! grep -qF "registry's newest-tracking 0.10.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.10.0'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.11.0'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
-  && [[ "$component_templates_rows" == *'| `0.10.0` |'* ]] \
+  && [[ "$component_templates_rows" == *'| `0.11.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.10.0` | `0.10.0` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.11.0` | `0.11.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
   && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
@@ -645,13 +645,13 @@ fi
 
 STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
 cp "$ARCH" "$STALE_ARCH"
-sed -i "s/registry's newest-tracking 0.10.0 pin above/registry's newest-tracking 0.9.0 pin above/" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.11.0 pin above/registry's newest-tracking 0.10.0 pin above/" "$STALE_ARCH"
 if cmp -s "$ARCH" "$STALE_ARCH"; then
-  bad "stale Templates comparator mutation is non-vacuous" "the 0.10.0 comparator was absent"
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.11.0 comparator was absent"
 elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
-  ok "reverting the current Templates comparator to 0.9.0 makes the prose guard red"
+  ok "reverting the current Templates comparator to 0.10.0 makes the prose guard red"
 else
-  bad "reverting the current Templates comparator to 0.9.0 makes the prose guard red"
+  bad "reverting the current Templates comparator to 0.10.0 makes the prose guard red"
 fi
 
 WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"

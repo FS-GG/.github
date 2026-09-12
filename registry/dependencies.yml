@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-09-10"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-09-12"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -519,13 +519,15 @@ contracts:
     # where 0.23.0 gave only `.claude` and `.agents`. New content in scaffolded output is additive,
     # which is why it is a MINOR and not 0.23.1: a patch would drop new directories into projects
     # pinned to 0.23.x. This is a template-only cut; no FS.GG.UI framework member moved.
-    # 0.28.0 is the current Rendering coherent set: all three tags resolve to
-    # 6f0c46f5229a647fd045aee1913096e6774da872 (Rendering PR #1271), and
-    # FS.GG.UI.Template 0.28.0 is present on both feeds. It adds the distinct typed-sdd lane while
-    # preserving omitted/default sdd, explicit none, and legacy spec-kit.
-    version: "0.28.0"
-    package-version: "0.28.0"
-    package-tag: "fs-gg-ui-template/v0.28.0"
+    # 0.29.0 is the verified Preview-A coherent set: all three tags resolve to
+    # c654a33bb206c6f3aa0a3adb310231a0d54aec63. Release run 34690467974 published the same retained
+    # 19-archive set to GitHub Packages and nuget.org and read every payload back exact except the
+    # public feed's expected .signature.p7s. FS.GG.UI.Template's public signed archive SHA-256 is
+    # b2be5047935be7437a05929f683b9e23448924fa68c00d6ab931df3a5e7e1bfc. The opt-in SVG additions
+    # preserve omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
+    version: "0.29.0"
+    package-version: "0.29.0"
+    package-tag: "fs-gg-ui-template/v0.29.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -981,9 +983,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.10.0"   # SOURCE: the five-template FS.GG.Workspace.Template set advances from the P4 Typed SDD provider/profile adoption at 0.9.0 to the accessible fable-game browser baseline and corrected Typed SDD release-floor gate at 0.10.0 (FS-GG/FS.GG.Templates#431/#435/#437). Annotated tag fs-gg-templates/v0.10.0 peels to exact source 565ad45d2dda386e9d1673071cc0b424cfd02be6. PRIOR 0.9.0 at 045183ab25d52b5f96feb9804f12e95d54b7de58.
-    package-version: "0.10.0"   # FEED: release run 32857268949 packed once and both GitHub Packages and nuget.org serve 0.10.0. Canonical/GitHub archive sha256:3c5477ecd3cacba95fd0ea6b3047ea926fc834f779943c1dd93c62c61582b2e6; public signed archive sha256:69cbed30447e6bd4d221e0ce78060c8245d2744fc3993b4c27368aeeb48d11c8 differs only by .signature.p7s. All 154 normalized payload files share manifest digest sha256:859a831b4d69d6568c6716565544b6f36a06c0e7f7bfc52c22b8b39136d90f74; nuspec sha256:7467b12789b433374ec9c95c4d1d81a962363dae1c9bdbe71e6d54264c0962c8 binds the exact source. Fresh isolated installs from both served archives register all five template identities. check-feed-coherence.py asserts literal newest on both feeds.
-    package-tag: "fs-gg-templates/v0.10.0"
+    version: "0.11.0"   # SOURCE: Preview A adds the opt-in generated SVG foundation and exact Rendering [0.29.0] pins without changing provider/lifecycle defaults. FS-GG.Templates#464 merged exact source 6a66e0a31c33feab4c8f650709b585df6ac3d4c4; annotated tag fs-gg-templates/v0.11.0 peels to that commit. PRIOR 0.10.0 at 565ad45d2dda386e9d1673071cc0b424cfd02be6.
+    package-version: "0.11.0"   # FEED: retained original SHA-256 560421d4eafc54b5ac47b7e493531bdfa4faf13f2b46528bc932f0d82d08f490 was published to both feeds by recovery run 34697652000. Trusted readback run 34703775170 compared all 187 payload entries exact, allowing only nuget.org's .signature.p7s; public signed archive SHA-256 41fa91ba1674a4c1140c4054d4e76cff00cd514462dcdb3d9b3e3cdfa22ba4d9. All five identities install, and Templates#467's public receiver matrix passed direct, SDD, typed/profile-2, wizard and retained-0.10.0 upgrade routes. check-feed-coherence.py asserts literal newest on both feeds.
+    package-tag: "fs-gg-templates/v0.11.0"
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
@@ -1050,14 +1052,10 @@ dependencies:
   # SINCE (2026-07-11, coordinated full-platform release): FS.GG.Templates 0.4.0 re-pinned its provider
   # descriptor (providers/rendering.providers.yml → FS.GG.UI.Template) to fs-gg-ui-template 0.8.0, so the
   # edge now reads @0.8.0; the 0.3.1-preview.1 pin above is HISTORICAL.
-  # HELD at @0.8.0 across the fs-gg-ui-template 0.9.0 release (FS.GG.Rendering#492/PR #498). This edge records
-  # what FS.GG.Templates ACTUALLY CONSUMES, not what Rendering last published — and Templates has not re-pinned
-  # yet: the template-dispatch fired correctly and opened FS.GG.Templates#140 ("bump FS.GG.UI.Template to 0.9.0"),
-  # but it is OPEN, so `providers/rendering.providers.yml` on Templates' main still names 0.8.0. Advancing this
-  # edge to @0.9.0 before that PR merges would record a consumption that has not happened — the same
-  # registry-says-what-it-wishes-were-true failure that publish-before-flip (FR-007) exists to prevent, pointed
-  # downstream instead of upstream. Flip it to @0.9.0 when Templates#140 lands.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.8.0 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  # ADVANCED to @0.29.0 after FS.GG.Templates#464 merged the exact public Rendering pins and release 0.11.0
+  # published them. This edge records the consumer's actual provider descriptor; SVG remains opt-in and the
+  # lifecycle default remains sdd.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.29.0 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
