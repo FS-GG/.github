@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1–.4 complete**.
+Status: **Execution active; SVG-SCENE-02.1–.5 complete**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -361,7 +361,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   or .5 browser qualification. Rendering remains independent of Game; candidate packages stayed local, no
   publication/default activation occurred, and S.I.R. remained read-only.
 
-- [ ] **SVG-SCENE-02.5 — Qualify models and the complete browser surface — route: routine**
+- [x] **SVG-SCENE-02.5 — Qualify models and the complete browser surface — route: routine**
 
   Depends on: .2–.4.
 
@@ -375,6 +375,23 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   All three browser families pass declared functional/visual/resize/DPR/touch-emulation/reflow cases.
   The accessible desktop journey is observed with actual assistive technology.
   Failed/unavailable dimensions are not folded into passing aggregate counts.
+
+  Evidence: Rendering [PR #1285](https://github.com/FS-GG/FS.GG.Rendering/pull/1285), merged as
+  [`70f8fbf2`](https://github.com/FS-GG/FS.GG.Rendering/commit/70f8fbf2aedacee0f14ce7548423c51c3c026572),
+  qualified the canonical models and complete selected browser surface. Public `FS.GG.SDD.Cli` 1.7.0
+  provisioned the exact Quint/lmt tools and authored and inspected the profile twice offline. The unchanged
+  retained 192-transition corpus and additive 192-transition document corpus replayed through the real .NET
+  and Fable reducers with matching projections; wrong-order, stale-revision, invalid-reference, lost-capture
+  and non-atomic-edit mutants failed at first divergence in both runtimes. Chromium 151, Firefox 153 and
+  WebKit 26.5 each passed the declared functional, visual, export/reload, resize, DPR, touch-emulation and
+  reflow cases with per-family evidence and interior-color assertions. A real Orca 50.2 process over AT-SPI2
+  observed the accessible desktop journey and its negative noninteractive control; this was not DOM or browser
+  accessibility-tree substitution. The
+  [model/browser qualification report](https://github.com/FS-GG/FS.GG.Rendering/blob/70f8fbf2aedacee0f14ce7548423c51c3c026572/docs/reports/2026-09-12-svg-scene-02-model-browser-qualification.md)
+  links the separate model, replay, three-family browser and Orca receipts and keeps local WebKit host
+  unavailability distinct from the hosted WebKit pass. Geometry, font and browser timing retain native proof;
+  physical touch/mobile GPU remain unclaimed. Rendering remains independent of Game; candidate packages stayed
+  local, no publication/default activation occurred, and S.I.R. was not accessed.
 
 - [ ] **SVG-SCENE-02.6 — Meet Preview-A workload and resource budgets — route: routine**
 
