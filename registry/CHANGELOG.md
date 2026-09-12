@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-12** — **auto-publish evidence: FS.GG.Kit 0.88.0** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.88.0) published the structurally single-packed artifact to [GitHub Packages](https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/0.88.0/FS.GG.Kit.0.88.0.nupkg) and [nuget.org](https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.88.0/fs.gg.kit.0.88.0.nupkg). Both served nuspecs record repository commit d77fe195bc4e133ace8763c2158834410ca72bc0.
+
 - **2026-09-12** — **SVG Preview A public Rendering and Templates frontier**
   (owners rendering/templates; SVG-PREVIEW-A): advances `fs-gg-ui-template` 0.28.0 → 0.29.0 and
   `fs-gg-workspace-template` 0.10.0 → 0.11.0 after immutable dual-feed publication and payload readback.
