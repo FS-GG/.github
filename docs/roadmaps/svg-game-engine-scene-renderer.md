@@ -1,7 +1,7 @@
 # SVG scene and renderer contract
 
 Feature identity: **SVG-SCENE-02**.
-Status: **Execution active; SVG-SCENE-02.1–.6 complete; .7 is the unselected frontier**.
+Status: **Delivered; SVG-SCENE-02.1–.7 complete; SVG-PREVIEW-A publication remains pending**.
 Programme: [SVG engine and Fable workspace](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md).
 Unified part: **SVG game engine and Fable workspace completion**, in the
 [feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -420,7 +420,7 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   predicates. This does not claim complete C19/M9. Candidate packages stayed local, Rendering remained
   Game-independent, no publication/default activation occurred, and S.I.R. was not accessed.
 
-- [ ] **SVG-SCENE-02.7 — Qualify generated consumers and hand off Preview A — route: routine**
+- [x] **SVG-SCENE-02.7 — Qualify generated consumers and hand off Preview A — route: routine**
 
   Depends on: .1–.6.
 
@@ -443,6 +443,23 @@ remain SVG-SCALE-01/M9. The existing 20% extent-cost target is preserved for tha
   Retain exact candidate archives/source hashes, API comparison, package-axis choices, required-feed plan,
   template pins and clean/upgrade evidence. The public producer/template publication and installed public
   receiver journey remain pending for SVG-PREVIEW-A.
+
+  Evidence: Templates [PR #463](https://github.com/FS-GG/FS.GG.Templates/pull/463), merged as
+  [`03fe39dc`](https://github.com/FS-GG/FS.GG.Templates/commit/03fe39dcf37c42b645163348b780bb36b4e43720),
+  delivered the exact local Preview-A consumer and [handoff report](https://github.com/FS-GG/FS.GG.Templates/blob/03fe39dcf37c42b645163348b780bb36b4e43720/docs/reports/2026-09-12-svg-scene-02-preview-a-handoff.md).
+  Isolated `0.29.0-preview.1` Scene, KeyboardInput and SvgBrowser archives plus the
+  `0.11.0-preview.1` template exercised grid and fractional-coordinate consumers, every selected definition,
+  transform, clip, mask, text, semantic selection and standalone export/reload through the public candidate
+  surface. Clean source-only and typed-SDD/profile-2 receivers passed; the typed journeys preserved the
+  separate retained and document 192-transition corpora with matching real .NET/Fable replay. Retained staged
+  adoption preserved authored, lifecycle and skill content, refused collisions before writing, restored the
+  original tree after an injected interruption and proved explicit byte-identical rollback. Exact archives,
+  hashes, API axes, feed order, pins and receipts are retained by the owner workflow. Every bounded M0/M1/M2
+  outcome is reconciled: no M1/M2 source obligation remains for this candidate, while contract-only session
+  declarations do not close M5 and the minimal reducers do not close M3/M4. S.I.R. was not accessed.
+  SVG-SCENE-02 is delivered at this local handoff boundary; SVG-PREVIEW-A still owns byte-identical producer
+  and template publication plus installed public clean/retained receiver qualification. No package was
+  published and no registry or default was activated.
 
 ## Generated-workspace impact
 
