@@ -301,7 +301,7 @@ implied by this trusted local pilot.
   subsequently completed successfully at 17:00 UTC. Its formal partition still runs the serial
   canonical suite independently of the sharded required workflow; that remaining long-tail path is
   not an individual 75-second test.
-- [ ] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
+- [x] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
   Adapter source substep is delivered by [Coordination PR #369](https://github.com/FS-GG/FS.GG.Coordination/pull/369),
   exact head `1938c4c99c8c5b09ef9dcf1d073f73cdbf997221`, merge
   `86559e971122dcb02c4c122dbddf0454d7af1774` at September 11 17:26 UTC.
@@ -312,16 +312,17 @@ implied by this trusted local pilot.
   passed. Broader optimistic validation subsequently passed in
   [run 34626067537](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34626067537).
   This is an adapter library, not installed or complete production composition;
-  S2a/S2b source is now delivered below; S2c remains required, and no live model invocation or activation occurred.
+  S2a/S2b/S2c source and executable composition qualification are now delivered below.
+  External publication, installed acceptance and live model invocation remain pending.
   Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
   bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
   quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
   fixtures before any bounded live qualification. Claude, OpenCode and DeepSeek are intended adapters
   against the same contract; this step does not claim that those implementations already exist.
 
-  Production inspection on September 11 confirms that an adapter factory does not compose the Host:
+  Production inspection on September 11 established that an adapter factory did not compose the Host:
   durable execution persistence, runnable executor transport, input/candidate implementations and the
-  production seven-effect driver are still required. Finish this same S2 window in dependency order:
+  production seven-effect driver were required. This same S2 source window completed in dependency order:
 
   - S2a — Source delivered in [Coordination PR #370](https://github.com/FS-GG/FS.GG.Coordination/pull/370),
     exact head `9c36f7cba396b4ba5cbf26547ea0fce3fd06cd1e`, protected-main merge
@@ -350,15 +351,27 @@ implied by this trusted local pilot.
     cancellation. Earlier local Release qualification passed 607 architecture and 372 unit tests;
     final-head hosted qualification passed independently. Postmerge runs
     [34642480216](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34642480216) and
-    [34642480141](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34642480141) remain monitored,
-    not disputed. Local package qualification is not external publication or installed acceptance.
+    [34642480141](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34642480141) both passed.
+    Local package qualification is not external publication or installed acceptance.
     Coordination adds an executor mode to the existing runner artifact, preserving its `post`
     mode. A fixed workspace, digest-addressed input reader and real Git candidate inspector verify
     baseline, allowed changes, head/tree and reproducible candidate objects. Bounded framed transport
     remains responsive to cancellation. Executable fixtures prove duplicate-process exclusion,
     crash/reconnect ambiguity, malformed/oversized traffic, candidate tampering and stale refusal;
     missing container state never proves the previous process did not run.
-  - S2c — Coordination composes Main's actor, durable journal, remote execution provider and actual
+  - S2c — Source delivered in [Coordination PR #372](https://github.com/FS-GG/FS.GG.Coordination/pull/372),
+    exact head `f00305b592e44e817a55146f4d0aacdfba3fd2c1`, protected-main merge
+    `59e7521d324fe2c7af2aa10a77c2861238f7bedd` at September 11 22:55 UTC. Native merge readback,
+    [bootstrap qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34653800639)
+    and [coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34653800717)
+    passed; routine delivery waited for the `current` coherent result. Focused qualification passed
+    Host 30, Execution 15, packaged-executor 26, Core 372 and real PostgreSQL execution 21 tests;
+    the final compatibility repair also passed nine PostgreSQL pilot tests. The composed journey
+    enters bearer-authenticated admission, restarts a fresh Host actor graph after durable claim
+    settlement before continuation, recovers from PostgreSQL without duplicate claim, and completes
+    all seven effects using a Release packaged runner and deterministic external GitHub transport.
+    This proves source composition and actor-graph restart recovery, not a live GitHub/model run or
+    the later operational host-reboot proof. Coordination composes Main's actor, durable journal, remote execution provider and actual
     seven-effect Host driver, including separately authorized GitHub callbacks and durable candidate
     readback. An executable Host/PostgreSQL/runner test with deterministic external GitHub responses
     must enter through supported admission and complete/recover the route without preloaded success.
