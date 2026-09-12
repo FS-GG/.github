@@ -2,7 +2,7 @@
 
 Feature identity: **SVG-PREVIEW-A**.
 
-Status: **In progress; SVG-PREVIEW-A.1 complete; SVG-PREVIEW-A.2 blocked at protected preflight**.
+Status: **Release A complete through SVG-PREVIEW-A.5; SVG-AUTHOR-01 selected next**.
 
 This is the executable feature plan for the first stable installed SVG preview in the
 [accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md) and
@@ -78,7 +78,7 @@ remains incomplete.
   also checks the 17-member BOM graph, Fable interfaces/profile, SVG public markers, source/repository commit,
   MIT license, and generated template entries. No package was published and no release tag was created.
 
-- [ ] **SVG-PREVIEW-A.2 — Publish and verify Rendering 0.29.0 — route: routine, protected operation**
+- [x] **SVG-PREVIEW-A.2 — Publish and verify Rendering 0.29.0 — route: routine, protected operation**
 
   Obtain exact operation authority and preflight. Pack the 19 archives once, retain and authenticate them,
   publish GitHub Packages first and then the identical original files to nuget.org. Download from both feeds
@@ -120,7 +120,16 @@ remains incomplete.
   and authoritative `404` for every 0.29.0 archive before this milestone resumes. Metadata-only access is
   insufficient. Do not begin .3 while .2 is blocked.
 
-- [ ] **SVG-PREVIEW-A.3 — Adopt public producer pins and prepare Templates 0.11.0 — route: routine**
+  **Completed recovery, 2026-09-12.** After the package-access repair, the immutable tags
+  `fs-gg-ui/v0.29.0`, `fs-gg-ui-template/v0.29.0` and `v0.29.0` all peel to
+  `c654a33bb206c6f3aa0a3adb310231a0d54aec63`. Release run
+  [34690467974](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34690467974) published the retained
+  19-archive set to GitHub Packages and nuget.org and read both feeds back with every payload entry exact
+  except nuget.org's expected `.signature.p7s`. Recovery hardening PRs
+  [#1298–#1301](https://github.com/FS-GG/FS.GG.Rendering/pull/1301), ending at merge
+  `7d60c37641c650759f0c2c761023c89bdfcbbee1`, preserve exact-tag recovery without repacking or retargeting.
+
+- [x] **SVG-PREVIEW-A.3 — Adopt public producer pins and prepare Templates 0.11.0 — route: routine**
 
   Use only public Rendering 0.29.0 inputs. Package bounded adopter, baseline and rollback support bytes and
   qualify staged adoption from public Templates 0.10.0 plus the retained foundation lineage. Preserve authored
@@ -128,14 +137,35 @@ remains incomplete.
   the direct, SDD-provider and wizard two-step routes. The exact packed candidate must restore from public-only
   sources and caches; do not activate a provider or change a default.
 
-- [ ] **SVG-PREVIEW-A.4 — Publish and verify Templates 0.11.0 — route: routine, protected operation**
+  Templates [PR #464](https://github.com/FS-GG/FS.GG.Templates/pull/464), merge
+  `6a66e0a31c33feab4c8f650709b585df6ac3d4c4`, prepared the exact 0.11.0 candidate with public exact
+  Rendering `[0.29.0]` pins, SDK `10.0.400`, bounded adoption and rollback, and clean, retained, direct,
+  SDD and typed/profile-2 qualification. Candidate browser/retained-packet and typed receiver workflows
+  passed; SVG and lifecycle defaults remained unchanged.
+
+- [x] **SVG-PREVIEW-A.4 — Publish and verify Templates 0.11.0 — route: routine, protected operation**
 
   Obtain exact operation authority and preflight. Pack once, checksum and retain the original archive; use that
   same archive for both feeds. Verify all five template identities and both-feed payloads. Recovery is
   original-byte replay only. Reconcile registry/provider pin facts without provider activation or a default
   change.
 
-- [ ] **SVG-PREVIEW-A.5 — Qualify installed public receivers and close Release A — route: routine**
+  Tag `fs-gg-templates/v0.11.0` peels to `6a66e0a31c33feab4c8f650709b585df6ac3d4c4`.
+  Initial run [34696163461](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34696163461) retained the
+  original archive at SHA-256 `560421d4eafc54b5ac47b7e493531bdfa4faf13f2b46528bc932f0d82d08f490`;
+  SDK repair [PR #465](https://github.com/FS-GG/FS.GG.Templates/pull/465), merge
+  `0a968664bcb94e2f40db071906a7e026e524626c`, then recovery run
+  [34697652000](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34697652000) published those unchanged
+  retained bytes to both feeds and created the GitHub release. Readback repair
+  [PR #466](https://github.com/FS-GG/FS.GG.Templates/pull/466), merge
+  `8e9ae550a6a06310770881961360a2cda00df6f9`, and output-propagation repair
+  [PR #468](https://github.com/FS-GG/FS.GG.Templates/pull/468), merge
+  `ccfb9e08261f4fbf309ad7099adbac72c7b7ce0a`, enabled final trusted-feed recovery run
+  [34703775170](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34703775170), which verified all 187 payload
+  entries from GitHub Packages and nuget.org. Nuget.org's signed archive SHA-256 is
+  `41fa91ba1674a4c1140c4054d4e76cff00cd514462dcdb3d9b3e3cdfa22ba4d9`; all five template identities install.
+
+- [x] **SVG-PREVIEW-A.5 — Qualify installed public receivers and close Release A — route: routine**
 
   Use isolated public-only sources and caches. Qualify direct `dotnet new` SVG with lifecycle `none`; SDD 1.7.0
   with `none` and typed/profile 2; the wizard 0.11.1 two-step route; retained Templates 0.10.0 and foundation
@@ -145,12 +175,23 @@ remains incomplete.
   drift. Keep unavailable dimensions explicit and separate. Only then mark Release A complete and select
   **SVG-AUTHOR-01**.
 
+  Templates [PR #467](https://github.com/FS-GG/FS.GG.Templates/pull/467), merge
+  `23298d54c3f44a5a5cd476c999fc473a2ea7e4b1`, and exact-head receiver run
+  [34700795032](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34700795032) passed public direct-none,
+  SDD-none, typed/profile-2, wizard 0.11.1 two-step and retained public 0.10.0 upgrade routes. All routes
+  passed build/test/Fable/serve and the selected browser document, definitions, affine, text, export and
+  tactical behavior. The typed clean/retained receivers replayed separate 192+192 transition corpora through
+  .NET and Fable and killed the action, ordering, stale, reference, capture and atomicity mutants. Public-byte
+  Chromium was rerun; unchanged payload identity binds the accepted three-browser, Orca/AT-SPI and frozen
+  performance receipts. Heap, presentation timestamps and physical mobile remain explicitly unavailable.
+  SVG stays opt-in, no provider or lifecycle default changed, Release A is complete, and **SVG-AUTHOR-01 is
+  the selected next feature**.
+
 ## Workspace impact and projection
 
-Source preparation and producer publication alone do not alter generated workspaces. After .4, a fresh public
-receiver can explicitly choose the released SVG composition: `svg: false` remains omitted and lifecycle `sdd`
-remains omitted. Existing projects change only through the .3 adopter/upgrade contract. Installed behavior is
-not qualified until .5.
+Fresh public receivers can explicitly choose the released SVG composition: `svg: false` remains omitted and
+lifecycle `sdd` remains omitted. Existing projects change only through the bounded adopter/upgrade contract;
+the installed public direct, SDD, typed and wizard routes are qualified by .5.
 
 After every completed milestone, update this plan, the accepted SVG programme, and Unified Roadmap sections 0,
 9.8 and 9.9 with exact PR, merge, checks, publication/readback and unavailable-dimension evidence. These
