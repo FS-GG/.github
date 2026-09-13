@@ -19,6 +19,20 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-13** — **SVG Preview B public authoring/runtime frontier**
+  (owners rendering/game/audio/templates; SVG-PREVIEW-B): records the coherent public set at
+  Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0 after protected dual-feed
+  publication and payload readback. Rendering published its complete 19-package roster; Game
+  release run [34760246867](https://github.com/FS-GG/FS.GG.Game/actions/runs/34760246867) verified
+  all three game packages; Audio release run
+  [34756050483](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34756050483) completed the
+  five-package set including `FS.GG.Audio.WebBrowser`; Templates release run
+  [34763143762](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34763143762) published the
+  exact 0.12.0 archive. [Templates PR #475](https://github.com/FS-GG/FS.GG.Templates/pull/475)
+  qualifies fresh public-only direct, SDD, typed/profile-2, wizard, retained-upgrade, browser and
+  accessibility receivers. The feed gate now checks all five Audio packages. SVG remains opt-in;
+  no provider, lifecycle or coordination-epoch default changes.
+
 - **2026-09-12** — **SVG Preview A public Rendering and Templates frontier**
   (owners rendering/templates; SVG-PREVIEW-A): advances `fs-gg-ui-template` 0.28.0 → 0.29.0 and
   `fs-gg-workspace-template` 0.10.0 → 0.11.0 after immutable dual-feed publication and payload readback.

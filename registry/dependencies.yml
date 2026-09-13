@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-09-12"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-09-13"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -519,15 +519,13 @@ contracts:
     # where 0.23.0 gave only `.claude` and `.agents`. New content in scaffolded output is additive,
     # which is why it is a MINOR and not 0.23.1: a patch would drop new directories into projects
     # pinned to 0.23.x. This is a template-only cut; no FS.GG.UI framework member moved.
-    # 0.29.0 is the verified Preview-A coherent set: all three tags resolve to
-    # c654a33bb206c6f3aa0a3adb310231a0d54aec63. Release run 34690467974 published the same retained
-    # 19-archive set to GitHub Packages and nuget.org and read every payload back exact except the
-    # public feed's expected .signature.p7s. FS.GG.UI.Template's public signed archive SHA-256 is
-    # b2be5047935be7437a05929f683b9e23448924fa68c00d6ab931df3a5e7e1bfc. The opt-in SVG additions
-    # preserve omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.29.0"
-    package-version: "0.29.0"
-    package-tag: "fs-gg-ui-template/v0.29.0"
+    # 0.30.0 is the verified Preview-B coherent set: its three release tags resolve to exact merge
+    # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
+    # source-complete authoring, input, runtime and presentation surfaces while preserving
+    # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
+    version: "0.30.0"
+    package-version: "0.30.0"
+    package-tag: "fs-gg-ui-template/v0.30.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -837,8 +835,8 @@ contracts:
       condition gates the enforcing flip; it now waits on the typed validator assertion shipping and a
       green skill-registry-coherence. See coherence id `skill-registry-published`.
   - id: game-sim-core
-    version: "0.14.0"         # MINOR 0.14.0 (Game#606/PR#607, merge f1ef2297): additive ActionCoverageReport/Journey.checkActionCoverage public surface; coherent Core/Render/Harness set. PRIOR — MINOR 0.13.0: bounded Fable lockstep profile with canonical .NET/Fable oracle bytes.
-    package-version: "0.14.0" # Core/Render/Harness 0.14.0 were packed once by run 32849207929 and independently verified on GitHub Packages and nuget.org; every non-signature payload entry matches. PRIOR — 0.13.0 independently verified across both feeds.
+    version: "0.15.0"         # MINOR 0.14.0 (Game#606/PR#607, merge f1ef2297): additive ActionCoverageReport/Journey.checkActionCoverage public surface; coherent Core/Render/Harness set. PRIOR — MINOR 0.13.0: bounded Fable lockstep profile with canonical .NET/Fable oracle bytes.
+    package-version: "0.15.0" # Core/Render/Harness 0.14.0 were packed once by run 32849207929 and independently verified on GitHub Packages and nuget.org; every non-signature payload entry matches. PRIOR — 0.13.0 independently verified across both feeds.
     owner: game
     # ADR-0022: the platform's new BOTTOM layer. A BCL-only (FSharp.Core-only) deterministic simulation
     # core that reaches up to nothing — holds the primitives extracted from FS.GG.UI.Canvas (Rng /
@@ -850,15 +848,15 @@ contracts:
     profiles:
       fable-lockstep:
         identity: "fs-gg-game-core-fable-lockstep-v1"
-        package: "FS.GG.Game.Core@0.13.0"
+        package: "FS.GG.Game.Core@0.15.0"
         toolchain: ".NET 10 / FSharp.Core 10.1.302 / Fable 5.13.0 / Fable.Package.SDK 1.4.0 / Node 26"
         exact: "Cell ordering; Edges.edgeBetween; Los.lineOfSightBy; Pathfinding.astar"
         portable: "packaged float value types"
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: game-scene-adapter
-    version: "0.14.0"         # coherent MINOR 0.14.0; Render/Harness move with Core while Harness adds the ActionCoverageReport public surface. PRIOR — coherent MINOR 0.13.0 with the bounded Fable lockstep profile.
-    package-version: "0.14.0" # Core/Render/Harness 0.14.0 were packed once by run 32849207929 and independently verified on GitHub Packages and nuget.org; every non-signature payload entry matches. PRIOR — 0.13.0 independently verified across both feeds.
+    version: "0.15.0"         # coherent MINOR 0.14.0; Render/Harness move with Core while Harness adds the ActionCoverageReport public surface. PRIOR — coherent MINOR 0.13.0 with the bounded Fable lockstep profile.
+    package-version: "0.15.0" # Core/Render/Harness 0.14.0 were packed once by run 32849207929 and independently verified on GitHub Packages and nuget.org; every non-signature payload entry matches. PRIOR — 0.13.0 independently verified across both feeds.
     owner: game
     # ADR-0022 §2: the render edge. A pure Scene adapter projecting FS.GG.Game.Core primitives
     # (Point/Rect/Cell, pathfinding routes) onto FS.GG.UI.Scene drawables. The ONE place in FS.GG.Game
@@ -867,8 +865,8 @@ contracts:
     surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables)"
     consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
   - id: fs-gg-audio
-    version: "0.5.0"          # → 0.5.0 (2026-07-26, Audio#114/.github#1440, tag v0.5.0, merge bb2b4f2, release run 30182380163): additive MINOR; coherent Core/Host/Engine/Elmish set. PRIOR: → 0.4.0 (2026-07-21 coordinated milestone republish train, tag v0.4.0): an additive MINOR on the 0.x line (NOT 1.0); the four-package coherent set (Core/Host/Engine/Elmish) shares one <FsGgAudioVersion> and moves together. VERIFIED LIVE on the org feed (FS.GG.Audio.Core newest == 0.4.0); publish-before-flip FR-007 — feed first, this row after; `feed-coherence` had gone RED on main (registry 0.3.0 behind the 0.4.0 feed) and this flip clears it. PRIOR: → 0.3.0 (2026-07-16 full-platform release, additive API + hardening; Wav.PcmData gained a FormatTag field — source-compat only for external constructors, accepted as minor; four-package set moves together). PRIOR: ADVANCED 0.1.0 → 0.2.0: an additive minor on the 0.x line (NOT 1.0), cut as part of the coordinated full-platform release (2026-07-11, tag v0.2.0). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>) and moved together. PRIOR: ADVANCED 0.1.0-preview.1 → 0.1.0: the CHANNEL PROMOTION off -preview (FS.GG.Audio#4). Audio was the org's LAST -preview producer. 0.1.0 carried byte-identical src/ to 0.1.0-preview.1 — the last src/ commit (1a708d5) predated the preview tag; the only commits between them were CI config and the coordination kit. So that promoted finished bits (work items 001-core/002-host/003-elmish/004-engine all complete) rather than inventing content.
-    package-version: "0.5.0"  # → 0.5.0 PUBLISHED on both feeds; GitHub Packages bytes match release assets and nuget.org payloads match excluding .signature.p7s. PRIOR: → 0.4.0 PUBLISHED all four on both feeds (2026-07-21 coordinated milestone republish train, FR-007, tag v0.4.0). FEED newest, VERIFIED LIVE on the org feed 2026-07-21 (scripts/check-feed-coherence.py: FS.GG.Audio.Core/.Host/.Engine/.Elmish newest == 0.4.0). publish-before-flip FR-007: all four live on the feed before this row flipped; `feed-coherence` was RED on main (0.3.0 behind the 0.4.0 feed) until this flip. NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.3.0 — PUBLISHED all four on both feeds (2026-07-16 full-platform release, FR-007, tag v0.3.0). PRIOR 0.2.0 on the org feed + nuget.org — ADVANCED 0.1.0 → 0.2.0 (tag v0.2.0, coordinated full-platform release 2026-07-11). package-version == version == feed(newest) == 0.2.0 (publish-before-flip FR-007: all four published live before this row flipped). NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.1.0: PUBLISHED on the org feed (release run 29043991855, tag v0.1.0); publish-before-flip FR-007 (all four "Your package was pushed" at 2026-07-09T19:22Z, that row flipped after). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing) — the policy went live in cdb1604 and that was its first exercise; NuGet/login@v1 exchanged the OIDC token and all four returned Created.
+    version: "0.6.0"          # → 0.5.0 (2026-07-26, Audio#114/.github#1440, tag v0.5.0, merge bb2b4f2, release run 30182380163): additive MINOR; coherent Core/Host/Engine/Elmish set. PRIOR: → 0.4.0 (2026-07-21 coordinated milestone republish train, tag v0.4.0): an additive MINOR on the 0.x line (NOT 1.0); the four-package coherent set (Core/Host/Engine/Elmish) shares one <FsGgAudioVersion> and moves together. VERIFIED LIVE on the org feed (FS.GG.Audio.Core newest == 0.4.0); publish-before-flip FR-007 — feed first, this row after; `feed-coherence` had gone RED on main (registry 0.3.0 behind the 0.4.0 feed) and this flip clears it. PRIOR: → 0.3.0 (2026-07-16 full-platform release, additive API + hardening; Wav.PcmData gained a FormatTag field — source-compat only for external constructors, accepted as minor; four-package set moves together). PRIOR: ADVANCED 0.1.0 → 0.2.0: an additive minor on the 0.x line (NOT 1.0), cut as part of the coordinated full-platform release (2026-07-11, tag v0.2.0). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>) and moved together. PRIOR: ADVANCED 0.1.0-preview.1 → 0.1.0: the CHANNEL PROMOTION off -preview (FS.GG.Audio#4). Audio was the org's LAST -preview producer. 0.1.0 carried byte-identical src/ to 0.1.0-preview.1 — the last src/ commit (1a708d5) predated the preview tag; the only commits between them were CI config and the coordination kit. So that promoted finished bits (work items 001-core/002-host/003-elmish/004-engine all complete) rather than inventing content.
+    package-version: "0.6.0"  # → 0.5.0 PUBLISHED on both feeds; GitHub Packages bytes match release assets and nuget.org payloads match excluding .signature.p7s. PRIOR: → 0.4.0 PUBLISHED all four on both feeds (2026-07-21 coordinated milestone republish train, FR-007, tag v0.4.0). FEED newest, VERIFIED LIVE on the org feed 2026-07-21 (scripts/check-feed-coherence.py: FS.GG.Audio.Core/.Host/.Engine/.Elmish newest == 0.4.0). publish-before-flip FR-007: all four live on the feed before this row flipped; `feed-coherence` was RED on main (0.3.0 behind the 0.4.0 feed) until this flip. NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.3.0 — PUBLISHED all four on both feeds (2026-07-16 full-platform release, FR-007, tag v0.3.0). PRIOR 0.2.0 on the org feed + nuget.org — ADVANCED 0.1.0 → 0.2.0 (tag v0.2.0, coordinated full-platform release 2026-07-11). package-version == version == feed(newest) == 0.2.0 (publish-before-flip FR-007: all four published live before this row flipped). NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency. PRIOR 0.1.0: PUBLISHED on the org feed (release run 29043991855, tag v0.1.0); publish-before-flip FR-007 (all four "Your package was pushed" at 2026-07-09T19:22Z, that row flipped after). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing) — the policy went live in cdb1604 and that was its first exercise; NuGet/login@v1 exchanged the OIDC token and all four returned Created.
     owner: audio
     # ADR-0023: a standalone render-independent audio component. A pure Core vocabulary (AudioEffect /
     # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +
@@ -879,7 +877,7 @@ contracts:
     # (ADR-0024 step 3, .github#238): the Rendering template's game/sample-pack profiles pin it on their own
     # $(FsGgAudioVersion) axis. This replaces the record-only `fs-gg-audio` SKILL vocabulary (which taught
     # AudioEffect from the retired FS.GG.UI.Canvas surface) with the real playback realization.
-    surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
+    surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host"
     consumers: [audio, rendering]   # audio: WITHIN the component (sample app + test suites). rendering: the template game/sample-pack profiles (ADR-0024 step 3, .github#238, FS.GG.Rendering#156 wired / #162 released). A scaffolded product receives the packages through the template, so Templates consumes them TRANSITIVELY via fs-gg-ui-template — no direct templates→audio edge.
 
   - id: fs-gg-net
@@ -983,9 +981,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.11.0"   # SOURCE: Preview A adds the opt-in generated SVG foundation and exact Rendering [0.29.0] pins without changing provider/lifecycle defaults. FS-GG.Templates#464 merged exact source 6a66e0a31c33feab4c8f650709b585df6ac3d4c4; annotated tag fs-gg-templates/v0.11.0 peels to that commit. PRIOR 0.10.0 at 565ad45d2dda386e9d1673071cc0b424cfd02be6.
-    package-version: "0.11.0"   # FEED: retained original SHA-256 560421d4eafc54b5ac47b7e493531bdfa4faf13f2b46528bc932f0d82d08f490 was published to both feeds by recovery run 34697652000. Trusted readback run 34703775170 compared all 187 payload entries exact, allowing only nuget.org's .signature.p7s; public signed archive SHA-256 41fa91ba1674a4c1140c4054d4e76cff00cd514462dcdb3d9b3e3cdfa22ba4d9. All five identities install, and Templates#467's public receiver matrix passed direct, SDD, typed/profile-2, wizard and retained-0.10.0 upgrade routes. check-feed-coherence.py asserts literal newest on both feeds.
-    package-tag: "fs-gg-templates/v0.11.0"
+    version: "0.12.0"   # SOURCE: Preview B composes exact Rendering 0.30.0, Game 0.15.0 and Audio 0.6.0 without changing provider/lifecycle defaults. Templates#474 merged exact source 7146224843419a10613b0f23c781b38bc88514b8; annotated tag fs-gg-templates/v0.12.0 peels to that commit. PRIOR 0.11.0 at 6a66e0a31c33feab4c8f650709b585df6ac3d4c4.
+    package-version: "0.12.0"   # FEED: release run 34763143762 published the retained original SHA-256 d53f9bd4d695a8293b0aa129b1716216a146c7d5e98848c1707101973243b4db to both feeds and compared payloads exact, allowing only nuget.org's .signature.p7s; public signed archive SHA-256 6a5eefcce4dd5f13774491ed0a5b9cd1d113b4dc6260cc3d4c28d810b35fb7dc. All identities install, and Templates#475's public receiver matrix passed direct, SDD, typed/profile-2, wizard and retained-0.11.0 upgrade routes. check-feed-coherence.py asserts literal newest on both feeds.
+    package-tag: "fs-gg-templates/v0.12.0"
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
@@ -1052,10 +1050,10 @@ dependencies:
   # SINCE (2026-07-11, coordinated full-platform release): FS.GG.Templates 0.4.0 re-pinned its provider
   # descriptor (providers/rendering.providers.yml → FS.GG.UI.Template) to fs-gg-ui-template 0.8.0, so the
   # edge now reads @0.8.0; the 0.3.1-preview.1 pin above is HISTORICAL.
-  # ADVANCED to @0.29.0 after FS.GG.Templates#464 merged the exact public Rendering pins and release 0.11.0
-  # published them. This edge records the consumer's actual provider descriptor; SVG remains opt-in and the
-  # lifecycle default remains sdd.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.29.0 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  # ADVANCED to @0.30.0 after FS.GG.Templates#474 merged the exact Preview-B public producer pins and
+  # release 0.12.0 published them. This edge records the consumer's actual provider descriptor; SVG remains
+  # opt-in and the lifecycle default remains sdd.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.30.0 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
@@ -1067,7 +1065,7 @@ dependencies:
   # ADVANCED 0.9.0 -> 0.10.1 in the jointly-scoped template-only 0.19.1 release
   # (Rendering#1054/PR#1056, merge db9bc7cf, run 30184202520). The public package was independently
   # downloaded from both feeds and carries <FsGgGameVersion>0.10.1.
-  - { from: rendering, to: game,       via: "game-sim-core@0.10.1 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
+  - { from: rendering, to: game,       via: "game-sim-core@0.15.0 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
   # ADR-0024 step 3 (.github#234/#238, FS.GG.Rendering#156 wired / #162+#163 released at template 0.3.1):
   # the game/sample-pack template profiles materialize the REAL FS.GG.Audio realization (buses/fades/
   # ducking/3D; device backend degrading to Null/record), replacing the record-only fs-gg-audio SKILL
@@ -1084,13 +1082,13 @@ dependencies:
   # ADVANCED 0.4.0 -> 0.5.0 in the jointly-scoped template-only 0.19.1 release
   # (Rendering#1054/PR#1056, merge db9bc7cf, run 30184202520). The public package was independently
   # downloaded from both feeds and carries <FsGgAudioVersion>0.5.0.
-  - { from: rendering, to: audio,      via: "fs-gg-audio@0.5.0 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
+  - { from: rendering, to: audio,      via: "fs-gg-audio@0.6.0 (FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   # ADVANCED to game-scene-adapter@0.13.0 with the 2026-07-28 coherent Game bounded-Fable
   # profile release (Game#526/PR#531);
   # its Rendering dependency remains the stable FS.GG.UI.Scene@0.5.0 pin shipped by Game#109/PR#115.
-  - { from: game,      to: rendering,  via: "game-scene-adapter@0.13.0 -> FS.GG.UI.Scene@0.5.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
-  - { from: game,      to: rendering,  via: "keyboard-input@0.5.0 -> FS.GG.UI.KeyboardInput@0.5.0 (FS.GG.Game.Render default command→key keymap consumes the Keymap surface; FS.GG.Game#109 / PR #115, merged against the published stable 0.5.0; .github#365, ADR-0028)" }
+  - { from: game,      to: rendering,  via: "game-scene-adapter@0.15.0 -> FS.GG.UI.Scene@0.30.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "keyboard-input@0.30.0 -> FS.GG.UI.KeyboardInput@0.30.0 (FS.GG.Game.Render default command→key keymap consumes the Keymap surface; FS.GG.Game#109 / PR #115, merged against the published stable 0.5.0; .github#365, ADR-0028)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
@@ -1100,7 +1098,7 @@ dependencies:
   # (ADR-0069/ADR-0071 §4) — a second, direct templates -> game edge alongside the existing
   # templates -> rendering -> game transitive path (rendering's edge is unrelated: template
   # game/sample-pack profiles, not the fable-game provider).
-  - { from: templates, to: game,       via: "game-sim-core@0.13.0 (fs-gg-fable-game consumes the published fs-gg-game-core-fable-lockstep-v1 profile; independently confirmed as EHotwagner/S.I.R.#138's exact Directory.Packages.props pin)" }
+  - { from: templates, to: game,       via: "game-sim-core@0.15.0 (fs-gg-fable-game consumes the published fs-gg-game-core-fable-lockstep-v1 profile; independently confirmed as EHotwagner/S.I.R.#138's exact Directory.Packages.props pin)" }
   # .github#2070: SDD's production scaffold materializer obtains the fable-game provider's
   # owner-sourced skill from Game's independently-versioned delivery package (ADR-0071 §1/ADR-0063).
   - { from: sdd,       to: game,       via: "game-skills@0.7.0 (FS.GG.Game.Skills — fs-gg-game-fable Fable lockstep skill; SDD#817/PR#819 proves the production materializer emits it under locked restore)" }
@@ -1959,7 +1957,7 @@ coherence:
       A PR that flips `package-version` to a version not on the feed fails CI, and a release that
       publishes without flipping the registry turns .github@main red within a day. The six
       package-bearing contracts (fsgg-contracts, governance-reference-gate-set, fs-gg-ui-template,
-      game-sim-core, game-scene-adapter, fs-gg-audio) are covered; fs-gg-audio's four packages are
+      game-sim-core, game-scene-adapter, fs-gg-audio) are covered; fs-gg-audio's five packages are
       each compared, so a partial coherent-set publish is reported rather than hidden behind .Core.
       A NEW package-bearing contract must be mapped in the gate's CONTRACT_PACKAGES table, and
       forgetting to fails the gate rather than silently narrowing its coverage. Verified live at
