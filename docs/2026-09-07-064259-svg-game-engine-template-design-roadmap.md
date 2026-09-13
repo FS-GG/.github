@@ -717,8 +717,10 @@ retained Templates receiver qualification. The completed
 handoff. The accepted [SVG-PREVIEW-A subroadmap](roadmaps/svg-preview-a.md) then published and read back the
 coherent Rendering 0.29.0 and Templates 0.11.0 set and qualified its installed public receivers. Release A is
 complete. Authoring, input, runtime and presentation are complete at the source/generated-candidate boundary;
-Release B is complete through its [release subroadmap](roadmaps/svg-preview-b.md). Continue at
-**SVG-SCALE-01** through its [Scale subroadmap](roadmaps/svg-scale-01.md).
+Release B is complete through its [release subroadmap](roadmaps/svg-preview-b.md). Replay, network and measured
+scale are complete at the source/generated-candidate boundary through the completed
+[SVG-SCALE-01 subroadmap](roadmaps/svg-scale-01.md). Continue at **SVG-PREVIEW-C** through its
+[Release C subroadmap](roadmaps/svg-preview-c.md).
 
 Continue in the accepted feature-ledger order. Each feature preserves the full C01–C20, M0–M11, section 13 and
 Release A–D outcome it covers. S.I.R. stays strictly read-only throughout; tactical evidence is produced by
