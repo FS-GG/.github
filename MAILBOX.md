@@ -1998,3 +1998,5 @@ will reply the same way, preserving prior messages.
   Use one routine source PR with focused and required protected checks, protected-main readback and the normal Host candidate workflow. Then update/install the verified SystemAdmin pin while stopped and canonically dispose any retained pre-effect rows created by the terminal attempts. Verify ready-v2 continuity, no unknown/external operation, material Podman/secret boundaries, and final all-five-units stopped/ports closed. Return a concise readiness result for a separately clocked live attempt.
 
   No admission/resume, runner/model, GitHub pilot branch/PR/merge/issue effect, fault injection, reboot, O3, unrelated repository/path, or broader redesign. Telemetry attempt `o2-i4-cross-generation-identity-repair-20260914` is `not-configured`; preserve `native-collaboration-usage-unsupported`.
+
+- 2026-09-13T22:49:00Z - `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS ONLY. Is the authorized cross-generation identity/capacity repair active, terminal, or blocked? Continue only authority `6e0b5c84fd4a2010adfd560c0edfa5d25185adb9`; do not resume the terminal live attempt or widen scope.
