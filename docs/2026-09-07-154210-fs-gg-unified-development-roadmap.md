@@ -83,9 +83,21 @@ root/pilot continuity, a fresh logical backup and wholly isolated restore, netwo
 confinement, clean stop and second start, explicit restart, repeated data readback and final stop. The
 ordinary immutable lifecycle result is SHA-256
 `302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`; all five O2 units finished
-inactive with guarded ports closed. The top-level roadmap remains **10/12** complete. O2-I3 paused-v2
-Host qualification is next; live pilot, recovery and O3 remain pending. Telemetry remains
+inactive with guarded ports closed. The top-level roadmap remains **10/12** complete. The O2-I3 result
+follows; live pilot, recovery and O3 remain pending. Telemetry remains
 `not-configured`, and native collaboration usage remains unsupported rather than inferred.
+
+Standalone O2-I3 paused-v2 qualification, **2026-09-13 19:28 UTC**: Coordination merge
+`d9ec7b4f807f28f55aa836e5a1be8c9495c30af4` (tree `e4c76146ab9232cb56a3125aa9d785324af009e9`)
+produced candidate run `34777324192` and payload SHA-256
+`afe9faf15cfcf6a1ce08ac9c139e162004a4eda26f02179598d13e0cb8b332e8`; SystemAdmin pins are
+`a7b9bfe99060313d30fa6fb22ad904e3be53bf2c` (tree `adc6ba5fa6b3f186e70ce19cdc68cbeb85c64d44`),
+with installed config/unit SHAs `3ce749afc822572f178016d9bbaeb1b498b865b8c0124890f8f5f6e4ac136d5a` and
+`24702278c3d37b6fb7f3db295190986dfd487c412fee2f244328561ca0141a9c`. Evidence SHA-256
+`1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated paused
+operation, refusal paths, durable replay/restart and final stop without dispatch or GitHub effects.
+Top-level progress remains **10/12**; O2-I4 live pilot and recovery is next. Telemetry remains
+`not-configured`, with native collaboration usage unsupported.
 
 Operational statuses last reconciled: **2026-09-12 07:28 UTC**; LEARN-01 planning delivery recorded
 **2026-09-12 15:14 UTC**. SVG programme status was reconciled **2026-09-13**. Current operational frontier:

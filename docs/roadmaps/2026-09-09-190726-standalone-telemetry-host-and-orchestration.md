@@ -381,23 +381,21 @@ do not reuse a stale work-item input or installation digest.
 
 The accepted bounded installed-work horizon keeps replacement, migration and live effects separate:
 
-- [x] O2-I1 — PostgreSQL repeat-start source repair — routine. SystemAdmin
-  [#56](https://github.com/EHotwagner/SystemAdmin/pull/56), head
-  `85b135a88ebf059899e032c5308596c1ee69f388`, merged as
-  `45eb1a39ea5b6e168f9980d881c8ec9220b55cfb`, tree
-  `520a4e28d79dd40055ff3528adc68ab592af95aa`. The create path pins
-  `--read-only=true --read-only-tmpfs=false`, preserves its dedicated runtime mount and hardening, and
-  rejects weakening. Isolated Podman 6.1/crun proof covered SQL write/readback across stop, second start
-  and explicit restart, root-write refusal, runtime/shared-memory writes, final stop and cleanup.
-  Deployment 23/23, runner 10/10, launcher 8/8, routine 59/59 and PR/main qualification passed.
-  Production stayed stopped and unchanged.
-- [x] O2-I2 — PostgreSQL replacement/v1 durability complete. SystemAdmin
-  `cdf54050b8a63d9d8fa1838831d0f3fea46ef07e`; unit SHA `485f760ccdcaf95dadbf71750c9beda2a5d921ca3db5040177d06a57ab9dc424`;
-  evidence SHA `302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`. Continuity, isolated restore,
-  network-none, restart/readback and final stop passed; five units are inactive and ports closed.
-- [ ] O2-I3 — Paused v2 host qualification — protected operation. Apply migrations once, bind schema
-  receipts, then prove Host/proxy startup pause, authenticated not-ready,
-  refusal paths and idempotent pause. No runner/model, admission/resume or GitHub effect.
+- [x] O2-I1 — PostgreSQL repeat-start repair. SystemAdmin [#56](https://github.com/EHotwagner/SystemAdmin/pull/56),
+  merge `45eb1a39ea5b6e168f9980d881c8ec9220b55cfb`, tree `520a4e28d79dd40055ff3528adc68ab592af95aa`.
+  Podman 6.1/crun proved read-only-root hardening, required writable mounts, SQL persistence and restart.
+- [x] O2-I2 — PostgreSQL replacement/v1 durability. SystemAdmin `cdf54050b8a63d9d8fa1838831d0f3fea46ef07e`;
+  unit `485f760ccdcaf95dadbf71750c9beda2a5d921ca3db5040177d06a57ab9dc424`; evidence
+  `302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`. Continuity, isolated restore,
+  network-none, restart/readback and final stopped/closed state passed.
+- [x] O2-I3 — Paused v2 Host qualification complete. Coordination merge
+  `d9ec7b4f807f28f55aa836e5a1be8c9495c30af4` (tree `e4c76146ab9232cb56a3125aa9d785324af009e9`),
+  run `34777324192`, payload SHA `afe9faf15cfcf6a1ce08ac9c139e162004a4eda26f02179598d13e0cb8b332e8`;
+  SystemAdmin pins `a7b9bfe99060313d30fa6fb22ad904e3be53bf2c` (tree `adc6ba5fa6b3f186e70ce19cdc68cbeb85c64d44`),
+  installed config/unit SHAs `3ce749afc822572f178016d9bbaeb1b498b865b8c0124890f8f5f6e4ac136d5a` /
+  `24702278c3d37b6fb7f3db295190986dfd487c412fee2f244328561ca0141a9c`. Evidence
+  `1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated pause,
+  negative controls, durable restart and final stop with no dispatch or GitHub effect.
 - [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation. Bind fresh `.github#3421`
   input and one nonrenewing attempt; prove candidate persistence, required checks, native delivery and
   O2 failure/reboot recovery with ambiguous-effect reconciliation and the direct-credential limitation.
