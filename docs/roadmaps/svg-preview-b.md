@@ -1,7 +1,7 @@
 # SVG-PREVIEW-B — installed authoring/runtime preview
 
-Status: selected after `SVG-PRESENT-01` source/generated-candidate completion. Route: routine for preparation
-and installed qualification; protected operation for publication.
+Status: complete — Release B. Route: routine for preparation and installed qualification; protected operation
+for publication.
 
 This is the executable Release B plan for the [accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md)
 and the [Unified Roadmap feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
@@ -34,40 +34,61 @@ verified producer releases, but Release B remains incomplete until the installed
 
 ## Milestones
 
-- [ ] **SVG-PREVIEW-B.1 — Prepare coherent producer releases — route: routine**
+- [x] **SVG-PREVIEW-B.1 — Prepare coherent producer releases — route: routine**
 
   Rendering records a 0.30.0 plan over its exact package roster and API baseline; Game prepares its 0.15.0
   version, dependency, lock, and release-contract change; Audio prepares 0.6.0 and updates the release roster
   from four to five packages. Each repository must pass its ordinary and release-configuration checks without
   creating a tag or publishing an archive.
 
-- [ ] **SVG-PREVIEW-B.2 — Publish and verify producer releases — route: protected operation**
+  Completed by the accepted release-preparation changes in Rendering, Game and Audio. Their native package,
+  API-baseline and release-contract checks passed before publication.
+
+- [x] **SVG-PREVIEW-B.2 — Publish and verify producer releases — route: protected operation**
 
   Publish Rendering first, then Game against public Rendering 0.30.0; Audio may publish independently before
   Templates. Verify every expected archive from GitHub Packages and nuget.org, including exact dependency
   ranges, Fable source members, browser resources, repository commit metadata, and release tags. Preserve the
   retained archive/checksum manifests and record any unavailable listening/device dimension separately.
 
-- [ ] **SVG-PREVIEW-B.3 — Adopt public pins and prepare Templates 0.12.0 — route: routine**
+  Rendering 0.30.0 (19 packages), Game 0.15.0 (three packages) and Audio 0.6.0 (five packages) were published
+  to both feeds from retained originals and read back successfully. Game run
+  [34760246867](https://github.com/FS-GG/FS.GG.Game/actions/runs/34760246867) and Audio run
+  [34756050483](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34756050483) retain the release evidence.
+
+- [x] **SVG-PREVIEW-B.3 — Adopt public pins and prepare Templates 0.12.0 — route: routine**
 
   Replace candidate-only version seams with exact public Rendering 0.30.0, Game 0.15.0, and Audio 0.6.0 pins.
   Keep authoring/studio and presentation composition opt-in. Update the bounded adopter manifest and qualify
   public-only direct, SDD, typed/profile-2, wizard, retained 0.10/0.11, interruption, collision, and rollback
   routes. The player bundle must exclude Studio, geometry-worker, native rendering, and native audio modules.
 
-- [ ] **SVG-PREVIEW-B.4 — Publish and verify Templates 0.12.0 — route: protected operation**
+  [Templates PR #474](https://github.com/FS-GG/FS.GG.Templates/pull/474) adopted the exact public producer
+  pins and qualified the direct, SDD, typed/profile-2, wizard, retained-upgrade and player-closure matrix.
+
+- [x] **SVG-PREVIEW-B.4 — Publish and verify Templates 0.12.0 — route: protected operation**
 
   Pack once from the accepted source, retain its checksum-bound archive, execute the release gate against that
   archive, publish the identical original to both feeds, create the immutable tag/release, and read back every
   template payload member and exact dependency pin. Recovery uses only the retained source-run artifact.
 
-- [ ] **SVG-PREVIEW-B.5 — Qualify installed public receivers and close Release B — route: routine**
+  Release run [34763143762](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34763143762) published and
+  read back the retained 0.12.0 archive from both feeds and created the immutable release/tag at exact source
+  `7146224843419a10613b0f23c781b38bc88514b8`.
+
+- [x] **SVG-PREVIEW-B.5 — Qualify installed public receivers and close Release B — route: routine**
 
   From isolated public-only caches, install Templates 0.12.0 through direct, SDD, typed/profile-2, current
   wizard-adopter, and retained upgrade routes. Run blank-to-art, authoring/input, continuous arcade,
   animation/audio/save/archive, accessibility, and rollback journeys in Chromium, Firefox, and WebKit.
   Bind .NET/Fable correspondence and producer evidence to the downloaded public bytes. Only after readback and
   the installed matrix pass may Release B be marked complete and `SVG-REPLAY-01` selected.
+
+  [Templates PR #475](https://github.com/FS-GG/FS.GG.Templates/pull/475) runs the matrix from isolated
+  public-only caches. Workflow run
+  [34764132598](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34764132598) passed the exact source,
+  public-producer and installed public receiver jobs across Chromium, Firefox and WebKit, including Orca/AT-SPI,
+  interruption, collision and rollback evidence.
 
 ## Completion boundary
 

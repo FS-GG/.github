@@ -82,6 +82,7 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Audio.Host":                  ["0.1.0-preview.1"],
   "FS.GG.Audio.Engine":                ["0.1.0-preview.1"],
   "FS.GG.Audio.Elmish":                ["0.1.0-preview.1"],
+  "FS.GG.Audio.WebBrowser":            ["0.1.0-preview.1"],
   "FS.GG.Coord.Cli":                   ["0.3.0", "0.2.0", "0.1.1", "0.1.0"],
   "FS.GG.NewSddWorkspace":             ["0.3.0", "0.3.0-preview.1"],
   "FS.GG.Net.Core":                    ["0.1.0"],
@@ -237,10 +238,12 @@ must_fail "a package missing from the feed (404) fails, not skips" \
   "$BASE" "$(feed_without no404 FS.GG.Game.Core)" "not on the org feed|fixture: absent"
 must_fail "a package the feed serves zero versions for fails" \
   "$BASE" "$(feed_with empty FS.GG.Audio.Host '[]')" "zero versions"
-# fs-gg-audio's four packages ship as one set at one version; a partial publish must be reported
+# fs-gg-audio's five packages ship as one set at one version; a partial publish must be reported
 # rather than hidden behind .Core, which is why every member is compared.
 must_fail "a partial coherent-set publish is reported (one member stale)" \
   "$BASE" "$(feed_with partial FS.GG.Audio.Elmish '["0.0.9"]')" "AHEAD of the feed"
+must_fail "a partial coherent-set publish includes WebBrowser" \
+  "$BASE" "$(feed_with partial-web FS.GG.Audio.WebBrowser '["0.0.9"]')" "AHEAD of the feed"
 
 # A new package-bearing contract nobody mapped is the next unchecked subject. It must be loud.
 UNMAPPED="$WORK/unmapped.yml"
@@ -525,9 +528,9 @@ if len(rows) != 1:
     raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
 row = rows[0]
 expected = {
-    "version": "0.29.0",
-    "package-version": "0.29.0",
-    "package-tag": "fs-gg-ui-template/v0.29.0",
+    "version": "0.30.0",
+    "package-version": "0.30.0",
+    "package-tag": "fs-gg-ui-template/v0.30.0",
 }
 for key, value in expected.items():
     if str(row.get(key)) != value:
@@ -605,16 +608,16 @@ new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 architecture_template_comparator_is_current() {
   local subject="$1"
-  grep -qF "registry's newest-tracking 0.11.0 pin above" "$subject" \
-    && ! grep -qF "registry's newest-tracking 0.10.0 pin above" "$subject"
+  grep -qF "registry's newest-tracking 0.12.0 pin above" "$subject" \
+    && ! grep -qF "registry's newest-tracking 0.11.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.11.0'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.12.0'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
-  && [[ "$component_templates_rows" == *'| `0.11.0` |'* ]] \
+  && [[ "$component_templates_rows" == *'| `0.12.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.11.0` | `0.11.0` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.12.0` | `0.12.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
   && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
@@ -645,13 +648,13 @@ fi
 
 STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
 cp "$ARCH" "$STALE_ARCH"
-sed -i "s/registry's newest-tracking 0.11.0 pin above/registry's newest-tracking 0.10.0 pin above/" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.12.0 pin above/registry's newest-tracking 0.11.0 pin above/" "$STALE_ARCH"
 if cmp -s "$ARCH" "$STALE_ARCH"; then
-  bad "stale Templates comparator mutation is non-vacuous" "the 0.11.0 comparator was absent"
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.12.0 comparator was absent"
 elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
-  ok "reverting the current Templates comparator to 0.10.0 makes the prose guard red"
+  ok "reverting the current Templates comparator to 0.11.0 makes the prose guard red"
 else
-  bad "reverting the current Templates comparator to 0.10.0 makes the prose guard red"
+  bad "reverting the current Templates comparator to 0.11.0 makes the prose guard red"
 fi
 
 WORKFLOW="$REPO_ROOT/.github/workflows/feed-coherence.yml"

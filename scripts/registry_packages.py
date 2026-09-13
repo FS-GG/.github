@@ -45,13 +45,14 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     "fs-gg-ui-template": ["FS.GG.UI.Template"],
     "game-sim-core": ["FS.GG.Game.Core"],
     "game-scene-adapter": ["FS.GG.Game.Render"],
-    # All four ship as one coherent set at one version; a partial publish is a real defect and
+    # All five ship as one coherent set at one version; a partial publish is a real defect and
     # should be reported, so every member is compared rather than just .Core.
     "fs-gg-audio": [
         "FS.GG.Audio.Core",
         "FS.GG.Audio.Host",
         "FS.GG.Audio.Engine",
         "FS.GG.Audio.Elmish",
+        "FS.GG.Audio.WebBrowser",
     ],
     # `.github` is a producer too (ADR-0039 §5) and had no row here, so this gate had no subject for
     # the one package whose staleness degrades every worker in the fleet (.github#1067).

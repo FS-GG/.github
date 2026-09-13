@@ -41,8 +41,8 @@ engine APIs, and the S.I.R. repository remains strictly read-only.
 | 6 | **SVG-INPUT-01 — Command and workspace interaction** | Deliver C07/C09 commands, docking, keybindings, modal input and accessible device parity | **Complete at the source/generated-candidate boundary.** Rendering [PR #1309](https://github.com/FS-GG/FS.GG.Rendering/pull/1309) supplies the merged producer contracts and browser-host evidence; Templates [PR #470](https://github.com/FS-GG/FS.GG.Templates/pull/470) supplies the generated candidate and exact Chromium, Firefox, WebKit and Orca/AT-SPI journeys. Public installation remains pending SVG-PREVIEW-B |
 | 7 | **SVG-RUNTIME-01 — Sessions and continuous gameplay** | Deliver C08/C10 runtime, fixed-step sessions, collision and representative continuous gameplay | **Complete at the source/generated-candidate boundary.** Game [PR #625](https://github.com/FS-GG/FS.GG.Game/pull/625) supplies the final portable producer repair, Rendering [PR #1311](https://github.com/FS-GG/FS.GG.Rendering/pull/1311) supplies the browser/native bridge closure, and Templates [PR #471](https://github.com/FS-GG/FS.GG.Templates/pull/471) supplies the exact generated continuous-player and installed/browser qualification. Public installation remains pending SVG-PREVIEW-B |
 | 8 | **SVG-PRESENT-01 — Animation, browser audio and persistence** | Deliver C11–C13 with reduced-motion, lifecycle and data-migration evidence | **Complete at the source/generated-candidate boundary.** Rendering PRs [#1314](https://github.com/FS-GG/FS.GG.Rendering/pull/1314), [#1315](https://github.com/FS-GG/FS.GG.Rendering/pull/1315), and [#1316](https://github.com/FS-GG/FS.GG.Rendering/pull/1316), Audio [#292](https://github.com/FS-GG/FS.GG.Audio/pull/292), Game [#627](https://github.com/FS-GG/FS.GG.Game/pull/627), and Templates [#472](https://github.com/FS-GG/FS.GG.Templates/pull/472) deliver and qualify the exact composition. Public installation remains pending SVG-PREVIEW-B |
-| 9 | **SVG-PREVIEW-B — Installed authoring/runtime preview** | Publish and qualify the coherent authoring, input, runtime and presentation set | **Selected next** through the [Preview-B subroadmap](roadmaps/svg-preview-b.md). Protected publication and installed clean/upgrade receiver qualification own Release B |
-| 10 | **SVG-REPLAY-01 — Replay, inspection, planning and rules** | Deliver C14–C16 without creating a second semantic authority | Game/SDD producer evidence and implementation correspondence in installed consumers |
+| 9 | **SVG-PREVIEW-B — Installed authoring/runtime preview** | Publish and qualify the coherent authoring, input, runtime and presentation set | **Complete; Release B.** The [Preview-B subroadmap](roadmaps/svg-preview-b.md) records the coherent Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0 publication/readback and installed public receiver matrix |
+| 10 | **SVG-REPLAY-01 — Replay, inspection, planning and rules** | Deliver C14–C16 without creating a second semantic authority | **Selected next** through the [Replay subroadmap](roadmaps/svg-replay-01.md). Game/SDD producer evidence and implementation correspondence in installed consumers |
 | 11 | **SVG-NETWORK-01 — Multiplayer and resync** | Deliver C17 two-client gameplay, reconnect, stale-input refusal and resync | Game/Net/Templates owner contracts and real multi-client journeys |
 | 12 | **SVG-SCALE-01 — Accessibility and measured scale** | Complete C18/C19 browser, density, responsiveness and performance qualification | Rendering browser matrix and measured threshold evidence |
 | 13 | **SVG-PREVIEW-C — Installed replay/network/scale preview** | Publish and qualify the coherent replay, network and scale set | Protected publication and installed clean/upgrade receiver qualification; this owns Release C |
@@ -575,7 +575,7 @@ qualification all passed. [SVG-SCENE-02](roadmaps/svg-game-engine-scene-renderer
 local-candidate handoff. [SVG-PREVIEW-A](roadmaps/svg-preview-a.md) is complete: Rendering 0.29.0 and
 Templates 0.11.0 are published and read back from both feeds, and installed public direct, SDD, typed,
 wizard and retained-upgrade receivers pass. Authoring, input, runtime and presentation are complete at the
-source/generated-candidate boundary; **SVG-PREVIEW-B** is selected next. V0–V6 are not
+source/generated-candidate boundary and Release B is complete; **SVG-REPLAY-01** is selected next. V0–V6 are not
 umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
@@ -717,7 +717,8 @@ retained Templates receiver qualification. The completed
 handoff. The accepted [SVG-PREVIEW-A subroadmap](roadmaps/svg-preview-a.md) then published and read back the
 coherent Rendering 0.29.0 and Templates 0.11.0 set and qualified its installed public receivers. Release A is
 complete. Authoring, input, runtime and presentation are complete at the source/generated-candidate boundary;
-continue at **SVG-PREVIEW-B** through its [release subroadmap](roadmaps/svg-preview-b.md).
+Release B is complete through its [release subroadmap](roadmaps/svg-preview-b.md). Continue at
+**SVG-REPLAY-01** through its [Replay subroadmap](roadmaps/svg-replay-01.md).
 
 Continue in the accepted feature-ledger order. Each feature preserves the full C01–C20, M0–M11, section 13 and
 Release A–D outcome it covers. S.I.R. stays strictly read-only throughout; tactical evidence is produced by
