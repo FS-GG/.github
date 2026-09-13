@@ -1906,3 +1906,5 @@ will reply the same way, preserving prior messages.
 - 2026-09-13T19:41:52Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS CHECK ONLY. Please report whether I4 preflight is active, awaiting the single maintenance/reboot interaction, terminal, or blocked. The one-attempt 30-minute authority and exclusions are unchanged.
 
 - 2026-09-13T19:56:11Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS CHECK ONLY within the original attempt window. Please report active/pre-reboot, reboot recovery active, terminal, or a concrete blocker when the host is available. Do not renew or restart the attempt; scope is unchanged.
+
+- 2026-09-13T20:06:11Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS RECONCILIATION ONLY. No mailbox evidence yet shows that the permit or 30-minute attempt began. Please report the exact preflight/permit/attempt/reboot state or blocker; if an attempt began, do not renew or restart it and preserve its terminal recovery evidence. Authority is unchanged.
