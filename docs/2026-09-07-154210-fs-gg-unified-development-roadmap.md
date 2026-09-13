@@ -74,6 +74,19 @@ artifact binding accepted in [#54](https://github.com/EHotwagner/SystemAdmin/pul
 The installation remains inert. Installed qualification, actual subscription pilot,
 recovery/reboot proof and O3 remain pending.
 
+Standalone O2-I2 installed qualification, **2026-09-13 18:17 UTC**: guarded PostgreSQL replacement
+and v1 durability are complete. SystemAdmin protected `main` is
+`cdf54050b8a63d9d8fa1838831d0f3fea46ef07e`; the installed PostgreSQL unit is SHA-256
+`485f760ccdcaf95dadbf71750c9beda2a5d921ca3db5040177d06a57ab9dc424` and preserves its rootless
+Podman runtime across a full unit stop. The corrected `orchestration_o0` selector passed existing v1
+root/pilot continuity, a fresh logical backup and wholly isolated restore, network-none/no-published-port
+confinement, clean stop and second start, explicit restart, repeated data readback and final stop. The
+ordinary immutable lifecycle result is SHA-256
+`302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`; all five O2 units finished
+inactive with guarded ports closed. The top-level roadmap remains **10/12** complete. O2-I3 paused-v2
+Host qualification is next; live pilot, recovery and O3 remain pending. Telemetry remains
+`not-configured`, and native collaboration usage remains unsupported rather than inferred.
+
 Operational statuses last reconciled: **2026-09-12 07:28 UTC**; LEARN-01 planning delivery recorded
 **2026-09-12 15:14 UTC**. SVG programme status was reconciled **2026-09-13**. Current operational frontier:
 **V0 and V1 in parallel; SVG authoring, input, runtime and presentation source candidates are complete and

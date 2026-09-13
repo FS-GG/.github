@@ -391,10 +391,10 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
   and explicit restart, root-write refusal, runtime/shared-memory writes, final stop and cleanup.
   Deployment 23/23, runner 10/10, launcher 8/8, routine 59/59 and PR/main qualification passed.
   Production stayed stopped and unchanged.
-- [ ] O2-I2 — Guarded PostgreSQL replacement and v1 durability — protected operation. Retain the old
-  container and immutable safety copy; inspect the corrected replacement before start; prove v1
-  readiness, logical backup with isolated restore, repeat restart and original-data readback; finish
-  stopped with old container, data, backups and evidence retained. No migration or Host/proxy start.
+- [x] O2-I2 — PostgreSQL replacement/v1 durability complete. SystemAdmin
+  `cdf54050b8a63d9d8fa1838831d0f3fea46ef07e`; unit SHA `485f760ccdcaf95dadbf71750c9beda2a5d921ca3db5040177d06a57ab9dc424`;
+  evidence SHA `302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`. Continuity, isolated restore,
+  network-none, restart/readback and final stop passed; five units are inactive and ports closed.
 - [ ] O2-I3 — Paused v2 host qualification — protected operation. Apply migrations once, bind schema
   receipts, then prove Host/proxy startup pause, authenticated not-ready,
   refusal paths and idempotent pause. No runner/model, admission/resume or GitHub effect.
