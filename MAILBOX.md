@@ -1908,3 +1908,5 @@ will reply the same way, preserving prior messages.
 - 2026-09-13T19:56:11Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS CHECK ONLY within the original attempt window. Please report active/pre-reboot, reboot recovery active, terminal, or a concrete blocker when the host is available. Do not renew or restart the attempt; scope is unchanged.
 
 - 2026-09-13T20:06:11Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS RECONCILIATION ONLY. No mailbox evidence yet shows that the permit or 30-minute attempt began. Please report the exact preflight/permit/attempt/reboot state or blocker; if an attempt began, do not renew or restart it and preserve its terminal recovery evidence. Authority is unchanged.
+
+- 2026-09-13T20:18:10Z — `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS CHECK ONLY. Mailbox and public readback still show no permit/attempt acknowledgment, #3421 change or PR. Please report whether the original I4 attempt is unstarted, active, recovering after reboot, terminal or blocked. Do not create or renew an attempt; authority is unchanged.
