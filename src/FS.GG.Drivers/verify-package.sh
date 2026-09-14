@@ -14,7 +14,9 @@
 #      (the ADR-0014 record the SDD CLI verifies against at scaffold time).
 #   4. PACKAGE-CLOSED — every relative board-driver link resolves after staged and consumer-shaped
 #      materialization, and a link into withheld operator bytes fails loud.
-#   5. FAILS LOUD — a tampered driver byte is DETECTED by that digest check, never silently delivered.
+#   5. WORKSPACE-CLOSED — the routine policy/helper/native-check inventory derives from owner bytes,
+#      is content-addressed and runnable after materialization with no producer checkout.
+#   6. FAILS LOUD — a tampered driver or workspace byte is DETECTED, never silently delivered.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -139,7 +141,8 @@ dotnet pack "$HERE/FS.GG.Drivers.csproj" -c Release -o "$WORK/out" >/dev/null
 nupkg="$(echo "$WORK"/out/FS.GG.Drivers.*.nupkg)"
 [ -f "$nupkg" ] || fail "no nupkg produced"
 entries="$(unzip -Z1 "$nupkg")"
-for want in "build/FS.GG.Drivers.props" "README.md" "drivers/driver-skill-manifest.json"; do
+for want in "build/FS.GG.Drivers.props" "README.md" "drivers/driver-skill-manifest.json" \
+  "workspace/workspace-files.json"; do
   grep -qx "$want" <<<"$entries" || fail "nupkg is missing $want"
 done
 for row in "${DRIVER_ROWS[@]}"; do
@@ -151,6 +154,31 @@ while IFS=$'\t' read -r id rel; do
 done < <(jq -r '.skills[] | select(.scope == "driver" and (.files | type) == "array")
   | .id as $id | .files[] | [$id, .path] | @tsv' "$MANIFEST")
 echo "   nupkg carries the manifest + every driver SKILL.md + the consumer handle + README"
+
+# The workspace manifest is computed directly from the bounded owner inventory. Assert its exact shape,
+# order, raw digests, executable modes, and payload closure before exercising the installed form below.
+python3 - "$HERE/workspace-inventory.json" "$SRC_ROOT" "$nupkg" <<'PY'
+import hashlib, json, pathlib, stat, sys, zipfile
+
+inventory_path, source_root, archive_path = map(pathlib.Path, sys.argv[1:])
+inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+with zipfile.ZipFile(archive_path) as archive:
+    manifest = json.loads(archive.read("workspace/workspace-files.json"))
+    assert manifest["schema"] == "fsgg/driver-workspace-files/v1"
+    expected = []
+    expected_entries = {"workspace/workspace-files.json"}
+    for item in inventory["files"]:
+        raw = (source_root / item["source"]).read_bytes()
+        executable = bool((source_root / item["source"]).stat().st_mode & stat.S_IXUSR)
+        expected.append({"path": item["path"], "sha256": hashlib.sha256(raw).hexdigest(), "executable": executable})
+        entry = "workspace/files/" + item["path"]
+        expected_entries.add(entry)
+        assert archive.read(entry) == raw, f"workspace payload differs from owner source: {item['path']}"
+    assert manifest["files"] == sorted(expected, key=lambda row: row["path"]), "workspace manifest drift"
+    actual_entries = {name for name in archive.namelist() if name.startswith("workspace/") and not name.endswith("/")}
+    assert actual_entries == expected_entries, f"workspace payload is not closed: {sorted(actual_entries ^ expected_entries)}"
+PY
+echo "   workspace manifest is sorted, closed, content-addressed, and derived from exact owner bytes"
 
 # content_addressed_ok <drivers-dir>: returns 0 iff every `scope: driver` SKILL.md under
 # <drivers-dir>/skills/ digests to its manifest sha256; non-zero (naming the first mismatch) otherwise.
@@ -170,6 +198,42 @@ content_addressed_ok() {
     | .id as $id | (.files // [{path:"SKILL.md", sha256:.sha256, executable:false}])[]
     | [$id, .path, .sha256, (.executable | tostring)] | @tsv' "$dir/driver-skill-manifest.json")
   return 0
+}
+
+# workspace_content_addressed_ok <workspace-dir>: validate the exact installed manifest shape,
+# path safety, closed file set, and raw digests. Executable modes are carried as manifest data because
+# NuGet extraction normalizes archive modes; the materialization leg below applies and checks them.
+# both the clean and corruption legs below call this same function.
+workspace_content_addressed_ok() {
+  python3 - "$1" <<'PY'
+import hashlib, json, pathlib, re, sys
+
+root = pathlib.Path(sys.argv[1])
+try:
+    manifest = json.loads((root / "workspace-files.json").read_text(encoding="utf-8"))
+    assert list(manifest) == ["schema", "files"]
+    assert manifest["schema"] == "fsgg/driver-workspace-files/v1"
+    rows = manifest["files"]
+    assert isinstance(rows, list) and rows
+    paths = [row["path"] for row in rows]
+    assert paths == sorted(paths) and len(paths) == len(set(paths))
+    expected = set()
+    for row in rows:
+        assert list(row) == ["path", "sha256", "executable"]
+        path = row["path"]
+        assert isinstance(path, str) and path and "\\" not in path and not path.startswith(("/", "./"))
+        assert ".." not in path.split("/") and "//" not in path
+        assert isinstance(row["executable"], bool)
+        assert isinstance(row["sha256"], str) and re.fullmatch(r"[0-9a-f]{64}", row["sha256"])
+        source = root / "files" / path
+        raw = source.read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == row["sha256"]
+        expected.add(source.relative_to(root).as_posix())
+    actual = {p.relative_to(root).as_posix() for p in (root / "files").rglob("*") if p.is_file()}
+    assert actual == expected
+except (AssertionError, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+    raise SystemExit(1)
+PY
 }
 
 echo "== 3. content-addressed: every packed byte matches its manifest sha256 =="
@@ -198,7 +262,67 @@ fi
 rm "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
 echo "   consumer-shaped materialization is closed; inline and reference-style withheld-sibling links are rejected"
 
-echo "== 5. a tampered driver byte is REJECTED by that same verify (fail-loud) =="
+echo "== 5. installed workspace helper, policy validator and native-check closure work without source checkout =="
+unzip -q "$nupkg" "workspace/*" -d "$WORK/installed-package"
+workspace_content_addressed_ok "$WORK/installed-package/workspace" \
+  || fail "clean installed workspace payload does not satisfy its receiver contract"
+python3 - "$WORK/installed-package/workspace" "$WORK/receiver" <<'PY'
+import hashlib, json, pathlib, sys
+
+package, receiver = map(pathlib.Path, sys.argv[1:])
+manifest = json.loads((package / "workspace-files.json").read_text(encoding="utf-8"))
+assert manifest["schema"] == "fsgg/driver-workspace-files/v1"
+for item in manifest["files"]:
+    source = package / "files" / item["path"]
+    raw = source.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == item["sha256"]
+    target = receiver / item["path"]
+    assert not target.exists(), f"no-clobber precondition violated: {item['path']}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(raw)
+    target.chmod(0o755 if item["executable"] else 0o644)
+    assert bool(target.stat().st_mode & 0o111) == item["executable"]
+PY
+
+git -C "$WORK/receiver" init -q -b main
+git -C "$WORK/receiver" config user.name fixture
+git -C "$WORK/receiver" config user.email fixture@example.invalid
+git -C "$WORK/receiver" add .
+git -C "$WORK/receiver" commit -qm base
+base="$(git -C "$WORK/receiver" rev-parse HEAD)"
+printf '%s\n' changed > "$WORK/receiver/change.txt"
+git -C "$WORK/receiver" add change.txt
+git -C "$WORK/receiver" commit -qm candidate
+head="$(git -C "$WORK/receiver" rev-parse HEAD)"
+printf '<!-- fsgg:routine-development/v1 head=%s operation=source-change -->\n' "$head" > "$WORK/receiver/pr-body.md"
+python3 "$WORK/receiver/scripts/check-routine-eligibility-envelope.py" \
+  --git-dir "$WORK/receiver" --repository fixture/receiver --default-branch main --base-ref main \
+  --base-revision "$base" --base-sha "$base" --head-ref routine/fixture --head-revision "$head" \
+  --head-sha "$head" --body "$WORK/receiver/pr-body.md" \
+  --validator "$WORK/receiver/scripts/check-claim-generation.py" >/dev/null
+mkdir -p "$WORK/fake-bin"
+printf '%s\n' '#!/usr/bin/env python3' \
+  'import json' \
+  'print(json.dumps({"state":"open","draft":False,"merged":False,"mergeable":True,"mergeable_state":"clean","head":{"sha":"'"$head"'"},"base":{"ref":"main","sha":"'"$base"'"}}))' \
+  > "$WORK/fake-bin/gh"
+chmod +x "$WORK/fake-bin/gh"
+XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:$PATH" \
+  python3 "$WORK/receiver/tools/routine-delivery.py" \
+    --repo fixture/receiver --pr 1 --head "$head" \
+    --telemetry-feature SVG-WORKSPACE-01 --telemetry-item SVG-WORKSPACE-01.2 \
+    --telemetry-attempt installed-package-fixture \
+    > "$WORK/routine-delivery.json" 2> "$WORK/routine-delivery.stderr"
+grep -Fq '"outcome":"ready"' "$WORK/routine-delivery.json" \
+  || fail "installed routine-delivery helper did not complete a stubbed native dry run"
+grep -Fq '"telemetryHealth":"not-configured"' "$WORK/routine-delivery.json" \
+  || fail "installed routine-delivery helper did not load its sibling telemetry dependency"
+for referenced in scripts/check-claim-generation.py scripts/check-routine-eligibility-envelope.py scripts/lib/gate.py; do
+  grep -Fq "$referenced" "$WORK/receiver/.github/workflows/routine-eligibility.yml" \
+    || fail "installed native workflow does not reference $referenced"
+done
+echo "   clean receiver imports the helper closure and admits an exact-head routine source change"
+
+echo "== 6. tampered driver and workspace bytes are REJECTED (fail-loud) =="
 cp -r "$WORK/unpacked/drivers" "$WORK/tampered"
 first_id="${DRIVER_ROWS[0]%%$'\t'*}"
 echo "CORRUPT" >> "$WORK/tampered/skills/$first_id/SKILL.md"     # bytes drift from the recorded sha256
@@ -206,5 +330,11 @@ if content_addressed_ok "$WORK/tampered"; then
   fail "the content-addressed verify PASSED against a tampered '$first_id' — it is not firing"
 fi
 echo "   tampered driver '$first_id' rejected by the content-addressed verify, as required"
+first_workspace_path="$(jq -r '.files[0].path' "$WORK/installed-package/workspace/workspace-files.json")"
+echo CORRUPT >> "$WORK/installed-package/workspace/files/$first_workspace_path"
+if workspace_content_addressed_ok "$WORK/installed-package/workspace"; then
+  fail "the installed workspace verifier PASSED a tampered '$first_workspace_path'"
+fi
+echo "   tampered workspace byte is rejected by the installed receiver verification path"
 
 echo "verify-package: OK"

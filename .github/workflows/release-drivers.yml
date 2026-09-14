@@ -204,6 +204,10 @@ jobs:
               <Error Condition="$([System.String]::Copy($([System.IO.File]::ReadAllText('$(FsggDriversContentDir)/skills/work-board/references/feedback-contract.md'))).Contains('scripts/fsgg-coord telemetry feedback validate')) != 'True'" Text="restored work-board contract does not call the compiled feedback validator" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-normal/SKILL.md')" Text="restored package has no work-board-normal SKILL.md at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-best/SKILL.md')" Text="restored package has no work-board-best SKILL.md at $(FsggDriversContentDir)" />
+              <Error Condition="'$(FsggDriversWorkspaceContentDir)' == ''" Text="build/FS.GG.Drivers.props did not expose the workspace content root" />
+              <Error Condition="!Exists('$(FsggDriversWorkspaceContentDir)/workspace-files.json')" Text="restored package has no workspace-files.json" />
+              <Error Condition="!Exists('$(FsggDriversWorkspaceContentDir)/files/tools/routine-delivery.py')" Text="restored package has no routine-delivery helper" />
+              <Error Condition="!Exists('$(FsggDriversWorkspaceContentDir)/files/.github/workflows/routine-eligibility.yml')" Text="restored package has no native routine eligibility workflow" />
               <Message Importance="high" Text="FS.GG.Drivers: driver bytes reachable at $(FsggDriversContentDir)" />
             </Target>
           </Project>

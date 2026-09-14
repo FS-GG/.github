@@ -37,11 +37,11 @@
   "sources": [
     {"path":".agents/skills/check-board/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["rest-write"],"sha256":"a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".agents/skills/pnext-item/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["gh-pr-merge","rest-write"],"sha256":"5b3a4db7369741c6e4b90b244ecc78ba680210c90c2961b436a591ea526bdf3c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
-    {"path":".agents/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"e85747010fe22c05e5a49191277f88ed8187d0716f9a6818ff7a084fe52d89db","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
+    {"path":".agents/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"6d2a0f53ef6445919ede36f8aee4fca229172b8c2b9fea979828cd5bc503d45c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/hooks/block-merge-and-main-push.sh","disposition":"guard-only","sinkKinds":["gh-pr-merge","git-push"],"sha256":"d65d131bc2b05321f511b97f0ea001a75ef7fd105c159efc13bd28d05f033b4f","nonWriterJustification":"Pre-tool safety hook rejects dangerous commands and does not issue remote mutations."},
     {"path":".claude/skills/check-board/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["rest-write"],"sha256":"a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/skills/pnext-item/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["gh-pr-merge","rest-write"],"sha256":"5b3a4db7369741c6e4b90b244ecc78ba680210c90c2961b436a591ea526bdf3c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
-    {"path":".claude/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"e85747010fe22c05e5a49191277f88ed8187d0716f9a6818ff7a084fe52d89db","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
+    {"path":".claude/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"6d2a0f53ef6445919ede36f8aee4fca229172b8c2b9fea979828cd5bc503d45c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".github/workflows/coord-engine.yml","disposition":"build-only","sinkKinds":[],"sha256":"6bde769be0526a9005bde314fefa3b0d34b0532d9b45e2de13ac0dfdd32c76ce"},
     {"path":".github/workflows/dispatch-sender.yml","disposition":"conditional-remote-writer","sinkKinds":["rest-write"],"sha256":"0874e00420ec87d22885860257ccc731e5c7b4b0dc2ef6ae94318ad80d32cbbe"},
     {"path":".github/workflows/feed-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push","rest-write"],"sha256":"f8aeb6384928f6791557dfe37ec6c2795c18e2cfed3ed896e99f1040e858f6c5"},
@@ -51,7 +51,7 @@
     {"path":".github/workflows/kit-materialize.yml","disposition":"conditional-remote-writer","sinkKinds":["dynamic-process","git-push"],"sha256":"ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37"},
     {"path":".github/workflows/lockfile-sync.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push"],"sha256":"f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec"},
     {"path":".github/workflows/release-coord-engine.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"703d51abf54e75638ea3ce959b95093a0b320adbc799edb4257ab486163e2363"},
-    {"path":".github/workflows/release-drivers.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"159eba92c223ec6b0e5519c840383d76f061062c575585c04febd0314afd7adc"},
+    {"path":".github/workflows/release-drivers.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"61e77fb8184521c6a0015cfc6b3aa57374bd381555d62ff75b651ed7c7a46736"},
     {"path":".github/workflows/release-kit.yml","disposition":"publish-writer","sinkKinds":["git-push","package-publish"],"sha256":"4d9afe857dfe3a08c1e6e7bfbae54c655700fe5c8ee9992114184e264b4d2433"},
     {"path":".github/workflows/release-new-sdd-workspace.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"538b9923a2bcb2bf7a7dfe0a595bd8d243bc84cd20eedc2eb0d4d2615cf5073f"},
     {"path":".github/workflows/release-telemetry-host.yml","disposition":"publish-writer","sinkKinds":["gh-release-write","package-publish"],"sha256":"379fa8e792d30ccfc27ee1019c7912b61bc3a91d78654aaab681094366657fe9"},
@@ -60,12 +60,12 @@
     {"path":".github/workflows/skill-registry-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["gh-pr-merge","git-push","rest-write"],"sha256":"32f9275322622d698ca711ce351e04c406fa6fb5d3b9cf49d6e382ccab0b6b97"},
     {"path":".github/workflows/skillmirror-redrive.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push"],"sha256":"1c12000dbbf3a8e3c8412af25273e0e24f0aa4cbc766401a59111e0d82e26bdb"},
     {"path":".github/workflows/touch-set-drift.yml","disposition":"conditional-remote-writer","sinkKinds":["rest-write"],"sha256":"7c821737b9fb3c35fc9322e05c4ed08a4580e6e7ab9a1a442f9af73a0548729e"},
-    {"path":"Directory.Build.props","disposition":"build-only","sinkKinds":[],"sha256":"b0d95fc6fba2c2e1ee45cb06f8fcf6341beb46c9303e93db392a790f0f52f7e0"},
+    {"path":"Directory.Build.props","disposition":"build-only","sinkKinds":[],"sha256":"3abeea0dd5aa3bae08e162039b40108a6b4e83da88fa4546b25a1c9ffc1ab972"},
     {"path":"Directory.Packages.props","disposition":"build-only","sinkKinds":[],"sha256":"5ac01e6c2e5d8fe8354a556411c51062dae549441bb73addb074b215a192c420"},
     {"path":"dist/dotnet/Directory.Build.props","disposition":"build-only","sinkKinds":[],"sha256":"f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"},
     {"path":"dist/skill-union-assert.sh","disposition":"build-only","sinkKinds":[],"sha256":"e94e25406eda585a770fd29498798067dc1c0bc78c924f581a2b6db23141ce50"},
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
-    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"92af29d95b6d602e397c1ab3f91cc4a8c41008826f3a2469c217dcb182dda960"},
+    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"2dd1a51459b2b4e6730f2433a396f52309d01d2d051738d3723dc115f2168fbd"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"},
     {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"77b1ef83ba7fec9399eae79ae351b9eb971b2e816f7c9513bde690581fff3abc"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"protected-admin-writer","sinkKinds":["graphql-mutation"],"sha256":"7a277a9307077d1cee86da7d939e268213c3d365ff1083f0431dbbf58571d7bc"},
@@ -99,6 +99,6 @@
     {"path":"tests/review-critic-succession-wire/run.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"72220f2c9d26c638d96485dd6232053248fe5f56eb0acbf6ba280186818c12e8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/skill-registry/run.sh","disposition":"test-only","sinkKinds":["git-push"],"sha256":"469d3c01a163c7f0810277fd5d5273a5e2bf946a55bae29c898aa99ffbc3b6ab","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"11aa3f00627dfa9fe10a2c5994659deb82f93a93abcc4c3a41a01ad389fac754","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
-    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"f1dbd51d61b51028b07ea8130f28cfe13a2cfa11803c0d8eb3de9f4ed14faadf"}
+    {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"045d38b4ab93434fc0cd00e0fc927f2923091ab4e5dba886f720167af52eab0e"}
   ]
 }

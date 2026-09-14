@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg/driver-workspace-inventory/v1",
+  "files": [
+    {
+      "source": ".fsgg/routine-development.json",
+      "path": ".fsgg/routine-development.json"
+    },
+    {
+      "source": ".github/workflows/routine-eligibility.yml",
+      "path": ".github/workflows/routine-eligibility.yml"
+    },
+    {
+      "source": "scripts/check-claim-generation.py",
+      "path": "scripts/check-claim-generation.py"
+    },
+    {
+      "source": "scripts/check-routine-eligibility-envelope.py",
+      "path": "scripts/check-routine-eligibility-envelope.py"
+    },
+    {
+      "source": "scripts/lib/gate.py",
+      "path": "scripts/lib/gate.py"
+    },
+    {
+      "source": ".claude/skills/work-roadmap/scripts/fsgg_telemetry_defaults.py",
+      "path": "tools/fsgg_telemetry_defaults.py"
+    },
+    {
+      "source": "tools/routine-delivery.py",
+      "path": "tools/routine-delivery.py"
+    }
+  ]
+}

@@ -130,13 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.88.0 — add explicit standalone workspace telemetry association, local/HTTPS destinations, prospective cutover, and advisory workflow capture on qualified Linux x64.
+    <PackageReleaseNotes>0.89.0 — deliver the installed routine-development policy, helper, and native check closure through the coherent FS.GG.Drivers workspace payload.
 
-FS.GG.Coord.Cli adds durable local-store commands, repository-owned Codex root/child lifecycle
-observation, admitted exact-head CI reconciliation, native delivery outcomes, and machine-derived
-whole-item population and budget inputs. The collector is future-only and advisory: missing telemetry
-stays visible without changing native execution or delivery. FS.GG.Kit and FS.GG.Drivers advance with
-the coherent set.
+FS.GG.Drivers carries a closed, content-addressed inventory generated from the owner files and exposes
+its workspace content root to the SDD receiver. The installed payload includes the active routine policy,
+merge helper and import closure, trusted eligibility workflow, and validators. FS.GG.Kit and
+FS.GG.Coord.Cli advance unchanged with the coherent set.
 
 $(FsggStandingAdvisories)
 

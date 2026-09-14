@@ -25,14 +25,23 @@ def _load_telemetry_defaults():
         import fsgg_telemetry_defaults as defaults
         return defaults
     except ModuleNotFoundError:
-        path = pathlib.Path(__file__).resolve().parents[1] / ".claude" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py"
-        spec = importlib.util.spec_from_file_location("fsgg_telemetry_defaults", path)
-        if spec is None or spec.loader is None:
-            raise
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
+        root = pathlib.Path(__file__).resolve().parents[1]
+        candidates = [
+            pathlib.Path(__file__).resolve().with_name("fsgg_telemetry_defaults.py"),
+            root / ".claude" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py",
+            root / ".agents" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py",
+        ]
+        for path in candidates:
+            if not path.is_file():
+                continue
+            spec = importlib.util.spec_from_file_location("fsgg_telemetry_defaults", path)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            return module
+        raise
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
