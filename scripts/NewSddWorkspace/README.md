@@ -28,6 +28,7 @@ new-sdd-workspace ./Typed Typed --lifecycle typed-sdd
 new-sdd-workspace ./Tool Tool --template console
 new-sdd-workspace ./Portal Portal --template web
 new-sdd-workspace ./Interop Interop --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
+new-sdd-workspace ./Arena Arena --template fable-game --bundle studio
 ```
 
 Run it with **no arguments** on an interactive terminal and it asks for the product name, target
@@ -52,6 +53,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
 | `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the representation backend and forwards it unchanged to `fsgg-sdd scaffold`. Omitted remains `sdd` during P4. `typed-sdd` is the canonical F# specification lane, `none` is Freeform, and `spec-kit` remains legacy/frozen. |
 | `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
+| `--bundle <player\|studio\|tactical\|arcade\|complete>` | `fable-game` composition only. Omitted selects `player`; unrelated providers reject the flag. The value is forwarded as the provider's `bundle` parameter and does not change lifecycle or Rendering profile selection. |
 | `--npm-package <name>` / `--npm-version <exact>` / `--binding-target <browser\|node\|universal>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure and target runtime. They are rejected for other templates. |
 | `--ref <git-ref>` | `FS.GG.Templates` ref to fetch the provider descriptor from (default: `main` = newest coherent set). Pass a tag to pin a reproducible version. |
 | `--pinned` | **skip** the pre-scaffold `fsgg-sdd` self-update and scaffold with the CLI you already have. The default is to update first (see below); pair `--pinned` with `--ref <tag>` for a fully reproducible, pinned scaffold. |
