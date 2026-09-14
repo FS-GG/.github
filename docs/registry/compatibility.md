@@ -131,8 +131,9 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `telemetry-host` | FS-GG/.github | `0.1.1` | — |
 | `new-sdd-workspace` | FS-GG/.github | `0.11.1` | `0.11.1` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.13.0` | `0.13.0` |
-| `game-skills` | FS.GG.Game | `0.8.0` | `0.8.0` |
-| `rendering-skills` | FS.GG.Rendering | `0.1.1` | `0.1.1` |
+| `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
+| `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
+| `audio-skills` | FS.GG.Audio | `0.1.0` | `0.1.0` |
 
 <!-- END GENERATED: fsgg-contract-versions -->
 
@@ -302,17 +303,18 @@ The authoritative count of the `skill-registry` catalog ([`registry/skills.yml`]
 *Generated from `registry/skills.yml` — the authoritative breakdown of the skill catalog by
 `scope` and `owner`. This is the machine-owned count; the prose elsewhere on this page cites it.*
 
-**67 rows** = **19 process** + **35 product** + **5 driver** + **8 operator** (11 `fs-gg-game` + 18 `fs-gg-rendering` + 6 `fs-gg-templates`).
+**72 rows** = **19 process** + **40 product** + **5 driver** + **8 operator** (1 `fs-gg-audio` + 13 `fs-gg-game` + 20 `fs-gg-rendering` + 6 `fs-gg-templates`).
 
 | scope | owner | rows |
 |---|---|---|
 | driver | `.github` | 5 |
 | operator | `.github` | 8 |
 | process | `fs-gg-sdd` | 19 |
-| product | `fs-gg-game` | 11 |
-| product | `fs-gg-rendering` | 18 |
+| product | `fs-gg-audio` | 1 |
+| product | `fs-gg-game` | 13 |
+| product | `fs-gg-rendering` | 20 |
 | product | `fs-gg-templates` | 6 |
-| **total** | | **67** |
+| **total** | | **72** |
 
 <!-- END GENERATED: fsgg-skill-registry-counts -->
 

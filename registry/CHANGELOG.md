@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-14** — — SVG-WORKSPACE-01.1 owner guidance: record verified Rendering Skills 0.2.0, Game Skills 0.9.0 and new Audio Skills 0.1.0 after native dual-feed readback. Register manifest-derived SVG/bundle selections and the pending Audio receiver channel; retain actual SDD consumed pins. Reconcile generated inventory and current Release-C fixtures; installed delivery remains SVG-WORKSPACE-01.2.
+
 - **2026-09-14** — — SVG-PREVIEW-C.4: Templates 0.13.0 is published and all 205 payload entries verified on both feeds (run 34820243790). Record its exact source/tag and Rendering/Game/Audio/Net consumer pins; installed public qualification remains .5.
 
 - **2026-09-14** — — SVG-PREVIEW-C.2 producer publication (Rendering#1322, Game#635, Net#87): record verified Rendering 0.31.0, Game 0.16.0 and Net 0.6.0 dual-feed releases and retained custody/readback runs. Reconcile consumer descriptions with actual published pins: UI.Template 0.31.0 retains Game 0.13.0/Audio 0.5.0, and Game.Render 0.16.0 retains UI 0.10.0. Templates remains 0.12.0 until its separate adoption/publication. No lifecycle/default activation.

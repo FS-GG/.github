@@ -65,6 +65,7 @@ contracts:
   - { id: fs-gg-workspace-template,      version: "0.8.0",           package-version: "0.8.0" }
   - { id: game-skills,                   version: "0.7.0",           package-version: "0.7.0" }
   - { id: rendering-skills,              version: "0.1.0",           package-version: "0.1.0" }
+  - { id: audio-skills,                  version: "0.1.0",           package-version: "0.1.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
 
@@ -93,6 +94,7 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Net.Elmish":                  ["0.1.0"],
   "FS.GG.Workspace.Template":          ["0.8.0"],
   "FS.GG.Game.Skills":                 ["0.7.0"],
+  "FS.GG.Audio.Skills":                ["0.1.0"],
   "FS.GG.Rendering.Skills":            ["0.1.0"]
 }
 JSON
@@ -528,9 +530,9 @@ if len(rows) != 1:
     raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
 row = rows[0]
 expected = {
-    "version": "0.30.0",
-    "package-version": "0.30.0",
-    "package-tag": "fs-gg-ui-template/v0.30.0",
+    "version": "0.31.0",
+    "package-version": "0.31.0",
+    "package-tag": "fs-gg-ui-template/v0.31.0",
 }
 for key, value in expected.items():
     if str(row.get(key)) != value:
@@ -608,18 +610,18 @@ new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 architecture_template_comparator_is_current() {
   local subject="$1"
-  grep -qF "registry's newest-tracking 0.12.0 pin above" "$subject" \
+  grep -qF "registry's newest-tracking 0.13.0 pin above" "$subject" \
     && ! grep -qF "registry's newest-tracking 0.11.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.12.0'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.13.0'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
-  && [[ "$component_templates_rows" == *'| `0.12.0` |'* ]] \
+  && [[ "$component_templates_rows" == *'| `0.13.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.12.0` | `0.12.0` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.13.0` | `0.13.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
-  && [[ "$game_skills_contract_rows" == *'| `0.8.0` | `0.8.0` |'* ]] \
+  && [[ "$game_skills_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
   && [[ "$workspace_contract_map_rows" == *'registry-active .github#2941'* ]] \
   && [[ "$workspace_contract_map_rows" == *'wizard `--template` selection published in `new-sdd-workspace` 0.10.1'* ]] \
@@ -648,9 +650,9 @@ fi
 
 STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
 cp "$ARCH" "$STALE_ARCH"
-sed -i "s/registry's newest-tracking 0.12.0 pin above/registry's newest-tracking 0.11.0 pin above/" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.13.0 pin above/registry's newest-tracking 0.11.0 pin above/" "$STALE_ARCH"
 if cmp -s "$ARCH" "$STALE_ARCH"; then
-  bad "stale Templates comparator mutation is non-vacuous" "the 0.12.0 comparator was absent"
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.13.0 comparator was absent"
 elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
   ok "reverting the current Templates comparator to 0.11.0 makes the prose guard red"
 else

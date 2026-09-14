@@ -1709,9 +1709,9 @@ enforce "requires a non-empty .reason."     '- { owner: owner-two, scope: produc
 enforce "requires a non-empty .tracked-by." '- { owner: owner-two, scope: product, disposition: gap }'
 enforce "requires a non-empty .evidence."   '- { owner: owner-two, scope: product, disposition: provider-scoped, kind: template-payload, provider: p, tracked-by: FS-GG/FS.GG.Rendering#1240 }'
 # ...AND `gap`'s ASYMMETRY IS DELIBERATE, so it is pinned here rather than left to be rediscovered by
-# probing. `gap` requires `tracked-by` and NOT `evidence:`: it asserts that NO artefact carries these
-# bytes, so there is nothing for it to name, and demanding evidence of that negative would only invite
-# a pointer to nothing. A reviewer read the surrounding prose, probed this by hand, and found the
+# probing. `gap` requires `tracked-by` and NOT `evidence:`: it declares missing materialization,
+# and a published owner package alone cannot stand in for installed delivery. A reviewer previously
+# read the surrounding prose, probed this by hand, and found the
 # commentary and the schema disagreeing (.github#2545 repair 1, finding 3) -- the schema was right and
 # the prose was wrong. This case is what stops them drifting apart again.
 { printf 'schemaVersion: 1\nclasses:\n'
@@ -1736,6 +1736,30 @@ enforce "it carries both"    "$PS, tracked-by: FS-GG/FS.GG.Rendering#1240, accep
 enforce "full owner/repo#number" "$PS, tracked-by: .github#1240 }"
 enforce "full owner/repo#number" "$PS, tracked-by: \"see the Rendering row\" }"
 enforce "full owner/repo#number" "$PS, tracked-by: FS-GG/FS.GG.Rendering#0 }"
+# A routine milestone can name its existing durable plan; it cannot replace accountability with
+# arbitrary web content, a draft branch, a query redirect, or a prose reference.
+for bad in \
+  'http://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md' \
+  'https://github.com.example/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md' \
+  'https://github.com/FS-GG/FS.GG.Templates/blob/routine/draft/docs/roadmaps/svg-workspace-01.md' \
+  'https://github.com/FS-GG/FS.GG.Templates/blob/main/README.md' \
+  'https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md?redirect=other'; do
+  enforce "full owner/repo#number" "$PS, tracked-by: \"$bad\" }"
+done
+for roadmap in \
+  'https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md#ready-milestone-window' \
+  'https://github.com/FS-GG/.github/blob/master/docs/roadmaps/example.md' \
+  'https://github.com/FS-GG/FS.GG.Templates/blob/7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0/docs/roadmaps/svg-workspace-01.md'; do
+  for tracked_form in "$PS, tracked-by: \"$roadmap\" }" \
+    "- { owner: owner-two, scope: product, disposition: gap, tracked-by: \"$roadmap\" }"; do
+    { printf 'schemaVersion: 1\nclasses:\n'
+      printf '  - { owner: owner-one, scope: process, disposition: delivered, kind: in-code, channel: A, evidence: e }\n'
+      printf '  %s\n' "$tracked_form"
+    } > "$CH/skills.delivery-channels.yml"
+    out="$(dc "$CH/skills.yml")"
+    [ -z "$out" ] || { echo "FAIL: durable roadmap tracking was reported: $tracked_form"; echo "$out"; exit 1; }
+  done
+done
 # Both accountable forms clear it.
 for good in "$PS, tracked-by: FS-GG/FS.GG.Rendering#1240 }" "$PS, accepted: \"provider-scoped reach is what these rows mean\" }"; do
   { printf 'schemaVersion: 1\nclasses:\n'

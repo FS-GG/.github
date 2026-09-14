@@ -27,7 +27,7 @@
 #                              and EXACTLY ONE of tracked-by | accepted
 #   withheld         authored here, deliberately delivered nowhere.
 #                    requires: reason, evidence
-#   gap              no channel of any kind exists.
+#   gap              no complete materialization channel reaches a scaffold yet.
 #                    requires: tracked-by
 #
 # A two-valued has-channel/no-channel vocabulary would be worse than nothing here, because
@@ -46,10 +46,10 @@
 #
 # `evidence:` IS REQUIRED ON EVERY DISPOSITION THAT CLAIMS A CHANNEL, AND THAT IS NOT CEREMONY —
 # `delivered`, `provider-scoped` and `withheld` all require it; `gap` requires `tracked-by` instead
-# and carries no `evidence:` at all. The asymmetry is deliberate: a `gap` asserts that NO artefact
-# carries these bytes, so there is nothing for it to name, and demanding evidence of that negative
-# would only invite a pointer to nothing. What makes a `gap` accountable is naming who owes closing
-# it. The required-field table above is the authority; this paragraph describes it.
+# and carries no `evidence:` at all. A `gap` asserts no complete channel reaches the scaffold;
+# a published owner package whose receiver transport is still missing remains a gap. Track the
+# missing integration with its actual owner instead of citing the package as proof of installed
+# delivery. The required-field table above is the authority; this paragraph describes it.
 #
 # For the other three, delivery cannot be read off a repository's git tree.
 # FS.GG.Templates' six product bodies live at `template/product-skills/`
@@ -60,6 +60,11 @@
 # verify a declared channel offline; it requires the entry to NAME the artefact that packs, embeds,
 # or withholds the bytes, and leaves the does-it-work verdict to that artefact's own gate.
 #
+# `tracked-by` names a full owner/repo#number or an HTTPS GitHub docs/roadmaps/*.md URL
+# on main, master or an exact commit, optionally with a section anchor. A roadmap-owned routine
+# milestone can therefore name its existing owner without creating a duplicate issue. This is a
+# reference-shape check only; native producer/receiver evidence still decides delivery and closure.
+#
 # HOW TO CHANGE THIS FILE. Authored, never generated: which channel a class rides is a semantic
 # declaration with no upstream to derive from, which is exactly the kind of field ADR-0058 clause 2
 # keeps a fail-closed gate on. Run `python scripts/fsgg-skill-registry-check --repos-root .repos`
@@ -67,7 +72,7 @@
 # `pull_request` and `push: main`, so a change here cannot skip the gate that reads it.
 
 schemaVersion: 1
-updated: 2026-08-15
+updated: 2026-09-14
 
 classes:
   # ---------------------------------------------------------------------------------------------
@@ -115,6 +120,16 @@ classes:
       derived from this catalog is a separate question and is not tracked by this row.
 
   # ---------------------------------------------------------------------------------------------
+  - owner: fs-gg-audio
+    scope: product
+    disposition: gap
+    tracked-by: https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md
+    note: >-
+      SVG-WORKSPACE-01.1 introduces the Audio-owned browser-audio guidance package.
+      SVG-WORKSPACE-01.2 owns the missing SDD receiver transport and installed bundle
+      qualification. Owner publication alone does not prove scaffold delivery.
+
+  # ---------------------------------------------------------------------------------------------
   - owner: fs-gg-game
     scope: product
     disposition: delivered
@@ -122,6 +137,9 @@ classes:
     channel: FS.GG.Game.Skills
     evidence: registry/dependencies.yml (contract `game-skills`, owner game, consumers [sdd])
     note: >-
+      The existing owner channel is delivered. The new SVG-WORKSPACE-01.1 bodies and bundle
+      selections require the pinned receiver adoption in SVG-WORKSPACE-01.2; the earlier
+      installed evidence below does not establish that newer adoption.
       The FIRST instance of the ADR-0063 class (`fs-gg-playtest`, .github#1299), and the precedent
       that settled the route for every owner-authored product class. .github#1308 asked `.github` to
       carry these bytes in FS.GG.Drivers and was closed SUPERSEDED with no `.github` change:
@@ -138,6 +156,9 @@ classes:
     channel: FS.GG.Rendering.Skills
     evidence: registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.1.1)
     note: >-
+      The existing owner channel is delivered. The new SVG-WORKSPACE-01.1 bodies and bundle
+      selections require the pinned receiver adoption in SVG-WORKSPACE-01.2; the earlier
+      installed evidence below does not establish that newer adoption.
       Rendering#1261 published FS.GG.Rendering.Skills 0.1.1 with schema-v2 per-file digests, and
       SDD 1.2.2 consumes it. A fresh public-tool non-rendering scaffold materializes SKILL.md plus
       FeedbackReportTool.fs and feedback-tool.fsx in both agent roots with zero diagnostics.

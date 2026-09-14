@@ -91,9 +91,9 @@ COMPLETENESS OF THE LIST.
                      every template root and are PROJECTED into the payload at pack time — so a
                      disposition that CLAIMS a channel (`delivered`, `provider-scoped`, `withheld`)
                      carries `evidence:` naming the artefact that packs, embeds, or withholds the
-                     bytes. `gap` does not, and cannot: it asserts that no such artefact exists, so
-                     there is nothing to name. Its accountability is `tracked-by` — the issue that
-                     owes closing it — which is why that field is what `gap` requires instead.
+                     bytes. `gap` instead names the missing materialization work: an owner package
+                     without its receiver is not delivered guidance. Its accountability is
+                     `tracked-by` — the issue or durable feature roadmap that owns closing the gap.
 
 And over the CONTENT of a row the manifest also declares (.github#292, epic #266). Checks 1-3 are
 predicates over a row's BYTES; check 5 over its PRESENCE. Nothing compared the one field that is
@@ -313,6 +313,14 @@ DELIVERY_DISPOSITIONS = {
 # GitHub's closing-keyword grammar does not parse the shorthand; a reference a reader cannot resolve
 # names nobody, which is the whole failure this field exists to prevent.
 TRACKED_BY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*#[1-9][0-9]*")
+# Routine roadmap work has a durable owner without a duplicate issue. Accept only an explicit
+# GitHub feature-plan URL on a default branch or exact commit; arbitrary URLs and draft branches
+# do not identify an accepted roadmap. This validates the reference shape, not delivery or closure.
+ROADMAP_TRACKED_BY_RE = re.compile(
+    r"https://github\.com/[A-Za-z0-9][A-Za-z0-9._-]*/"
+    r"(?:\.github|[A-Za-z0-9][A-Za-z0-9._-]*)/blob/(?:main|master|[0-9a-f]{40})/"
+    r"docs/roadmaps/[A-Za-z0-9][A-Za-z0-9._-]*\.md(?:#[A-Za-z0-9][A-Za-z0-9_-]*)?"
+)
 
 
 def canonical_digest(raw: bytes) -> str:
@@ -1026,9 +1034,9 @@ def delivery_channels(registry_path: str, rows: list[dict]) -> list[dict]:
     belongs to the producer's and consumer's own gates.
 
     `gap` REQUIRES `tracked-by` AND NOT `evidence:`, and the asymmetry is the schema being honest
-    rather than an omission. A `gap` asserts that no artefact carries these bytes at all; requiring it
-    to name one would be requiring evidence of a negative, and the only field that could be supplied
-    is a pointer to nothing. What makes a `gap` accountable is naming who owes closing it. See
+    rather than an omission. A `gap` asserts that no complete channel reaches the scaffold;
+    a published owner artifact without its receiver transport is still a gap, not proof of installed
+    delivery. What makes a `gap` accountable is naming who owes the missing integration. See
     `DELIVERY_DISPOSITIONS` for the required-field table this sentence describes.
 
     Offline: two YAML reads, no `--repos-root`, no network. That is what lets the fixture next door
@@ -1134,12 +1142,14 @@ def delivery_channels(registry_path: str, rows: list[dict]) -> list[dict]:
         # way, a value that is present must be resolvable by a reader.
         tracked = entry.get("tracked-by")
         if tracked is not None and not (
-            isinstance(tracked, str) and TRACKED_BY_RE.fullmatch(tracked)
+            isinstance(tracked, str)
+            and (TRACKED_BY_RE.fullmatch(tracked) or ROADMAP_TRACKED_BY_RE.fullmatch(tracked))
         ):
             findings.append(
                 finding(
                     f"{owner}/{scope}",
-                    f"`tracked-by` must be a full owner/repo#number reference and is {tracked!r} — "
+                    f"`tracked-by` must be a full owner/repo#number reference or a durable GitHub "
+                    f"docs/roadmaps/*.md URL and is {tracked!r} — "
                     "the board's own <repo>#<n> shorthand is deliberately not accepted (.github#2107)",
                 )
             )
