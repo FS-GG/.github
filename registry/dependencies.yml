@@ -1015,30 +1015,33 @@ contracts:
       # This advance also subsumes the former fable-game materializer gap recorded at #407: the
       # selected compiler is newer than the 1.0.0 release that first carried that fix.
   - id: game-skills
-    version: "0.8.0"   # SOURCE: FS-GG/FS.GG.Game#552 published 0.7.0 (closed via PR#554, merge 7fa79f29023468a6bcd4ef7ef5b696abeba508ec, tag skills/v0.7.0), then 0.8.0 (tag skills/v0.8.0 -> 7b8d24479a83b64a68645f47dd943f9b615e7064; `gh api compare/skills/v0.7.0...skills/v0.8.0` = two unrelated docs-only commits, #557/#558 — no fs-gg-game-fable change).
-    package-version: "0.8.0"   # FEED: check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest live on the feed for every package-bearing contract, unconditionally — it is NOT a "what a consumer has adopted" field. .github#2070's first cut pinned 0.7.0 (the version FS.GG.SDD#817/PR#819 explicitly proved materializes) reasoning by consumer-adoption, and the gate correctly reddened (BEHIND the feed) on PR#2344 head 824c4c2f; this is the repair. Independently re-downloaded fs.gg.game.skills.0.8.0.nupkg (SHA-256 e058642649510e730da168d97610fe96d12805870112127227a64b15e9b1b9f0) and re-extracted game-skills/skills/fs-gg-game-fable/SKILL.md: sha256sum 443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50 — IDENTICAL to 0.7.0's, so SDD#817/PR#819's materializer proof (against that exact digest) still holds at 0.8.0; nothing about the proven skill body changed between the two versions. Also matches the digest already recorded at registry/skills.yml:207.
+    version: "0.9.0"
+    package-version: "0.9.0"
     owner: game
-    # ADR-0071 §1 / ADR-0063: FS.GG.Game owns the skill that teaches use of its published Fable
-    # lockstep profile and ships it through this independently-versioned package; SDD's scaffold
-    # materializer obtains the skill bytes from here at scaffold time (owner-sourced, never copied by
-    # Templates or the generated workspace). First cross-repo consumer edge: FS-GG/FS.GG.SDD#817
-    # (closed via PR#819, merge aa1d6d4c1d105a0dba87a39230cfea1fb90dafc9) pins this exact version and
-    # proves the production materializer emits `fs-gg-game-fable` with its published digest under
-    # locked restore from the public read path.
-    surface: "FS.GG.Game.Skills package — the fs-gg-game-fable owner-sourced product skill (Fable lockstep guidance), materialized by SDD's production scaffold materializer for fable-game workspaces (materializes-when: profile in [game, sample-pack] per registry/skills.yml:207)"
+    # SVG-WORKSPACE-01.1: Game #636 published skills/v0.9.0 at e685f33a219830e18f204bb80d08ff16d0cd5727.
+    # Native read-only recovery run 34828061816 retained and verified both feed archives;
+    # the original release had no CI archive custody. SDD's actual consumer pin remains below.
+    surface: "FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; installed adoption is SVG-WORKSPACE-01.2"
     consumers: [sdd]
   - id: rendering-skills
-    version: "0.1.1"
-    # FEED: Rendering#1261's schema-v2 package is the literal newest stable
-    # FS.GG.Rendering.Skills version on both feeds. `check-feed-coherence.py` keeps this
-    # package-bearing contract honest on every run.
-    package-version: "0.1.1"
+    version: "0.2.0"
+    package-version: "0.2.0"
     owner: rendering
-    # ADR-0063: Rendering owns these product-skill bytes and SDD's production scaffold
-    # materializer obtains them from the independently versioned owner package, rather than
-    # from a frozen copy in a template or generated workspace.
-    surface: "FS.GG.Rendering.Skills 0.1.1 package — Rendering-owned product skills with schema-v2 per-file digests, materialized by FS.GG.SDD.Cli 1.2.2's production scaffold materializer for every provider"
+    # SVG-WORKSPACE-01.1: skills/v0.2.0 names 7ed2948b9fcc79f95e7ab2e0207b2540d77df361.
+    # Release 34833403039 retained the original archive before either push and verified
+    # both feed payloads. SDD's actual consumer pin remains independently recorded below.
+    surface: "FS.GG.Rendering.Skills 0.2.0 package — owner-sourced SVG assets/performance and Fable workspace guidance with schema-v2 per-file digests and bundle predicates; installed adoption is SVG-WORKSPACE-01.2"
     consumers: [sdd]
+  - id: audio-skills
+    version: "0.1.0"
+    package-version: "0.1.0"
+    owner: audio
+    # SVG-WORKSPACE-01.1: skills/v0.1.0 names 5dc82cf258664bf839d355d13542a17e25b47d16.
+    # Recovery retained the org archive before the authorized NuGet push; native read-only
+    # verification run 34829313855 completed both-feed qualification without another publish.
+    surface: "FS.GG.Audio.Skills package — Audio-owned browser effect guidance with schema-v2 per-file digests; SDD transport is owned by SVG-WORKSPACE-01.2"
+    consumers: []
+
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:

@@ -19,7 +19,7 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 <!-- BEGIN GENERATED: fsgg-release-inventory -->
 *Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*
 
-Registry release inventory: 12 package-bearing contracts across 8 producers; 11 coherent release sets.
+Registry release inventory: 13 package-bearing contracts across 8 producers; 12 coherent release sets.
 
 | owner | contract | source version | published version | coherent set | surface |
 |---|---|---|---|---|---|
@@ -33,8 +33,9 @@ Registry release inventory: 12 package-bearing contracts across 8 producers; 11 
 | `github` | `coord-engine` | `0.88.0` | `0.88.0` | `github:0.88.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
 | `github` | `new-sdd-workspace` | `0.11.1` | `0.11.1` | `github:0.11.1` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 | `templates` | `fs-gg-workspace-template` | `0.13.0` | `0.13.0` | `templates:0.13.0` | FS.GG.Workspace.Template package, five packaged `dotnet new` identities: four workspace-provider identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F# ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069); `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned npm package/declaration closure, ADR-0072 §3, first proved by the unreleased EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered pre-existing governance overlay template folded into this package at the same rename.  |
-| `game` | `game-skills` | `0.8.0` | `0.8.0` | `game:0.8.0` | FS.GG.Game.Skills package — the fs-gg-game-fable owner-sourced product skill (Fable lockstep guidance), materialized by SDD's production scaffold materializer for fable-game workspaces (materializes-when: profile in [game, sample-pack] per registry/skills.yml:207) |
-| `rendering` | `rendering-skills` | `0.1.1` | `0.1.1` | `rendering:0.1.1` | FS.GG.Rendering.Skills 0.1.1 package — Rendering-owned product skills with schema-v2 per-file digests, materialized by FS.GG.SDD.Cli 1.2.2's production scaffold materializer for every provider |
+| `game` | `game-skills` | `0.9.0` | `0.9.0` | `game:0.9.0` | FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; installed adoption is SVG-WORKSPACE-01.2 |
+| `rendering` | `rendering-skills` | `0.2.0` | `0.2.0` | `rendering:0.2.0` | FS.GG.Rendering.Skills 0.2.0 package — owner-sourced SVG assets/performance and Fable workspace guidance with schema-v2 per-file digests and bundle predicates; installed adoption is SVG-WORKSPACE-01.2 |
+| `audio` | `audio-skills` | `0.1.0` | `0.1.0` | `audio:0.1.0` | FS.GG.Audio.Skills package — Audio-owned browser effect guidance with schema-v2 per-file digests; SDD transport is owned by SVG-WORKSPACE-01.2 |
 
 <!-- END GENERATED: fsgg-release-inventory -->
 

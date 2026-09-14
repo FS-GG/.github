@@ -618,10 +618,10 @@ text = path.read_text()
 start = text.find("  - id: game-scene-adapter\n")
 if start < 0:
     raise SystemExit("fixture coherent-set producer missing")
-package = text.find('    package-version: "0.14.0"', start)
+package = text.find('    package-version: "0.16.0"', start)
 if package < 0:
     raise SystemExit("fixture coherent-set package version missing")
-path.write_text(text[:package] + text[package:].replace('    package-version: "0.14.0"', '    package-version: "9.9.9"', 1))
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.16.0"', '    package-version: "9.9.9"', 1))
 PY
 expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:9.9.9"
 
@@ -635,17 +635,17 @@ text = path.read_text()
 start = text.find("  - id: fs-gg-audio\n")
 if start < 0:
     raise SystemExit("fixture audio producer missing")
-package = text.find('    package-version: "0.5.0"', start)
+package = text.find('    package-version: "0.6.0"', start)
 if package < 0:
     raise SystemExit("fixture audio package version missing")
-path.write_text(text[:package] + text[package:].replace('    package-version: "0.5.0"', '    package-version: "0.5.1"', 1))
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.6.0"', '    package-version: "0.6.1"', 1))
 PY
-expect_projection_stale "changing a published package version changes its real release grouping" "audio:0.5.1"
+expect_projection_stale "changing a published package version changes its real release grouping" "audio:0.6.1"
 
 seed
 bash "$WORK/tree/scripts/generate-projections"
-if grep -Fq -- 'audio:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md" \
-  && grep -Fq -- 'net:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md"; then
+if grep -Fq -- 'audio:0.6.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md" \
+  && grep -Fq -- 'net:0.6.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md"; then
   echo "PASS  same-version Audio and Net remain independent coherent sets"
   pass=$((pass+1))
 else

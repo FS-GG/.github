@@ -91,6 +91,8 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     # .github#2639: the matching owner-sourced Rendering product-skill package.  Keeping this
     # in the shared map means feed-coherence detects its drift and feed-autofix can repair it.
     "rendering-skills": ["FS.GG.Rendering.Skills"],
+    # SVG-WORKSPACE-01.1: Audio owns browser guidance on an independent skills axis.
+    "audio-skills": ["FS.GG.Audio.Skills"],
 }
 
 # The ONE row whose `version` is feed-derived and whose reconcile is bespoke (framework/template-only
