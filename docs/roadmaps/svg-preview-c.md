@@ -1,6 +1,6 @@
 # SVG-PREVIEW-C — installed replay, network and scale preview
 
-Status: producer preparation (.1) complete; producer publication (.2) is next. Route: routine for release preparation and installed qualification;
+Status: producer publication (.2) complete; Templates adoption (.3) is next. Route: routine for release preparation and installed qualification;
 protected operation for publication.
 
 This is the executable Release C plan for the
@@ -73,12 +73,23 @@ activation are reported independently.
   .2 must create and retain authoritative source-run custody from the accepted merged commits through each
   producer's release workflow before any feed mutation. No Release-C tag or archive was published by .1.
 
-- [ ] **SVG-PREVIEW-C.2 — Publish and verify producer releases — route: protected operation**
+- [x] **SVG-PREVIEW-C.2 — Publish and verify producer releases — route: protected operation**
 
   Publish Rendering first, then Game and Net against their exact public dependencies. Verify every expected
   archive from GitHub Packages and nuget.org, including payload members, dependency ranges, Fable sources,
   repository commit metadata and immutable tags. Preserve custody and readback manifests; recover only by
   authenticated original-byte replay.
+
+  Rendering run [34806339482](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34806339482)
+  published/read back all 19 archives at source `96810c3c66ba888ecd03a0e10fe6374fd88917f9` and the three
+  exact 0.31.0 tags. Custody artifact `10333198495` retains the original bytes and manifest.
+  Game run [34815287187](https://github.com/FS-GG/FS.GG.Game/actions/runs/34815287187) published/read back
+  all three 0.16.0 archives at `996832a6ebb5c893199627b0ecc46f7c1da848cd`, tag `v0.16.0`, with custody
+  artifact `10336430350` and readback artifact `10336470968`.
+  Net run [34815521271](https://github.com/FS-GG/FS.GG.Net/actions/runs/34815521271) published/read back
+  all six 0.6.0 archives at `ada81df43ab344fccbab701493b5d0c585627a32`, tag `v0.6.0`, with custody
+  artifact `10335663605` and readback artifact `10335649243`. Both feeds match the retained payloads;
+  only nuget.org's signature addition changes archive bytes. Templates remains public at 0.12.0 pending .3–.5.
 
 - [ ] **SVG-PREVIEW-C.3 — Adopt public pins and prepare Templates 0.13.0 — route: routine**
 
