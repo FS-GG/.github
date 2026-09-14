@@ -343,7 +343,7 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 4ec457c4ad2c5b1c8c8a2b530700fc06edbb4c188cae55f9ae57f86245e03e4f, materializes-when: "always" }
+  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 0ef5eb6927f398dbfa3ea3aeaf03b10064ed2a944e35e25e19c773760b5a54d8, materializes-when: "always" }
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -385,7 +385,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: e85747010fe22c05e5a49191277f88ed8187d0716f9a6818ff7a084fe52d89db, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 41075d075df8657b85293aed5ce9236df440e4c6412cf74abadf3a12d50bba90, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
