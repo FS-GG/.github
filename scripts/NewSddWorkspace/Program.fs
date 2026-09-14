@@ -68,6 +68,9 @@ type Options =
       /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
       /// keeps the bare-CLI invocation byte-identical to before this flag existed.
       Profile: string option
+      /// The fable-game composition bundle. The provider default is player; the option remains
+      /// absent for every other provider so bundle never becomes a Rendering profile alias.
+      Bundle: string option
       /// The npm package/version closure a fable-bindings provider materializes. Both are required
       /// for that provider and meaningless for every other provider.
       NpmPackage: string option
@@ -107,6 +110,7 @@ let assembleWizardOptions (target: string) (product: string) : Options =
       Governance = true
       Pinned = false
       Profile = None
+      Bundle = None
       NpmPackage = None
       NpmVersion = None
       BindingTarget = None
@@ -125,12 +129,16 @@ let assembleWizardTemplateOptions
     (target: string)
     (product: string)
     (template: string)
+    (bundle: string option)
     (npmPackage: string option)
     (npmVersion: string option)
     (bindingTarget: string option)
     : Options =
     { assembleWizardOptions target product with
         Template = template
+        Bundle =
+            if template = "fable-game" then Some(bundle |> Option.defaultValue "player")
+            else None
         NpmPackage = npmPackage
         NpmVersion = npmVersion
         BindingTarget = bindingTarget }
@@ -1198,6 +1206,9 @@ let private header (opts: Options) =
     match opts.Profile with
     | Some profile -> grid.AddRow("[grey]profile[/]", Markup.Escape profile) |> ignore
     | None -> ()
+    match opts.Bundle with
+    | Some bundle -> grid.AddRow("[grey]bundle[/]", Markup.Escape bundle) |> ignore
+    | None -> ()
     match opts.NpmPackage, opts.NpmVersion with
     | Some packageName, Some version -> grid.AddRow("[grey]npm[/]", Markup.Escape(sprintf "%s@%s" packageName version)) |> ignore
     | _ -> ()
@@ -1274,6 +1285,15 @@ let private profiles =
       "governed", "scene/app pre-wired for the governance gates"
       "sample-pack", "a pack of sample scenes" ]
 
+/// Fable-game compositions are distinct from Rendering profiles. Player is the provider default;
+/// the other values add Studio and/or editable examples without changing lifecycle selection.
+let private bundles =
+    [ "player", "playable SVG arena (default)"
+      "studio", "arena with Create/Arrange/Play/Review tools"
+      "tactical", "Studio plus the editable tactical example"
+      "arcade", "Studio plus the editable arcade example"
+      "complete", "Studio and every editable example" ]
+
 let private templates =
     [ "rendering", "FS.GG.Rendering application (supports --profile)"
       "console", "minimal F# executable"
@@ -1322,6 +1342,8 @@ let private usage () =
     AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   rendering-only profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
+    AnsiConsole.MarkupLine "  [green]--bundle[/] <name>    fable-game composition bundle (default: player)"
+    AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", bundles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--npm-package[/] <name>  fable-bindings package name (requires --npm-version)"
     AnsiConsole.MarkupLine "  [green]--npm-version[/] <exact> fable-bindings exact package version (requires --npm-package)"
     AnsiConsole.MarkupLine "  [green]--binding-target[/] <target> fable-bindings runtime target: browser, node, or universal"
@@ -1351,6 +1373,7 @@ type private Draft =
       Template: string option
       Lifecycle: string option
       Profile: string option
+      Bundle: string option
       NpmPackage: string option
       NpmVersion: string option
       BindingTarget: string option
@@ -1370,6 +1393,7 @@ let private emptyDraft =
       Template = None
       Lifecycle = None
       Profile = None
+      Bundle = None
       NpmPackage = None
       NpmVersion = None
       BindingTarget = None
@@ -1402,6 +1426,10 @@ let private paramsPanel (d: Draft) =
     row "lifecycle" (d.Lifecycle |> Option.map (fun p -> sprintf "[aqua]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
     match d.Template, d.Profile with
     | Some "rendering", _ -> row "profile" (d.Profile |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+    | _ -> ()
+    match d.Template, d.Bundle with
+    | Some "fable-game", Some bundle -> row "bundle" (sprintf "[magenta]%s[/]" (Markup.Escape bundle))
+    | Some "fable-game", None -> row "bundle" pendingCell
     | _ -> ()
     match d.Template, d.NpmPackage, d.NpmVersion with
     | Some "fable-bindings", Some packageName, Some version -> row "npm" (sprintf "[magenta]%s@%s[/]" (Markup.Escape packageName) (Markup.Escape version))
@@ -1505,6 +1533,7 @@ let private equivalentCommand (d: Draft) =
     (match d.Template with Some t when t <> "rendering" -> parts.Add(sprintf "--template %s" t) | _ -> ())
     (match d.Lifecycle with Some lifecycle when lifecycle <> "sdd" -> parts.Add(sprintf "--lifecycle %s" lifecycle) | _ -> ())
     (match d.Template, d.Profile with Some "rendering", Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
+    (match d.Template, d.Bundle with Some "fable-game", Some b when b <> "player" -> parts.Add(sprintf "--bundle %s" b) | _ -> ())
     (match d.NpmPackage, d.NpmVersion with Some packageName, Some version -> parts.Add(sprintf "--npm-package %s --npm-version %s" packageName version) | _ -> ())
     (match d.BindingTarget with Some bindingTarget -> parts.Add(sprintf "--binding-target %s" bindingTarget) | _ -> ())
     (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
@@ -1587,6 +1616,26 @@ let private interactive () : Options option =
     let mutable npmPackage = None
     let mutable npmVersion = None
     let mutable bindingTarget = None
+    let mutable bundle = None
+    if template = "fable-game" then
+        draftView draft
+        let bundleChoices =
+            bundles
+            |> List.map (fun (name, description) -> sprintf "%s — %s" name description)
+        let bundleChoice =
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("Which [green]bundle[/] should this game use?")
+                    .PageSize(bundleChoices.Length)
+                    .AddChoices(bundleChoices))
+        bundle <-
+            (bundles, bundleChoices)
+            ||> List.zip
+            |> List.find (fun (_, choice) -> choice = bundleChoice)
+            |> fst
+            |> fst
+            |> Some
+        draft <- { draft with Bundle = bundle }
     if requiresNpmClosure template then
         draftView draft
         let packageName =
@@ -1624,7 +1673,7 @@ let private interactive () : Options option =
     AnsiConsole.MarkupLine "[yellow]Initialization runs only after you start an agent in the new workspace for the first time; this wizard installs the handoff but does not initialize the repository.[/]"
     AnsiConsole.WriteLine()
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some(assembleWizardTemplateOptions target product template npmPackage npmVersion bindingTarget)
+        Some(assembleWizardTemplateOptions target product template bundle npmPackage npmVersion bindingTarget)
     else
         None
 
@@ -1632,12 +1681,15 @@ let private interactive () : Options option =
 
 let private parse (argv: string list) : Result<Options, string> =
     let knownProfiles = profiles |> List.map fst
+    let knownBundles = bundles |> List.map fst
     let knownTemplates = templates |> List.map fst
     let knownLifecycles = [ "none"; "sdd"; "typed-sdd"; "spec-kit" ]
     let validate (opts: Options) =
         match opts.Profile, opts.Template with
         | Some _, template when not (supportsProfile template) ->
             Error(sprintf "--profile is only supported by the rendering template (selected: %s)" template)
+        | _, template when opts.Bundle.IsSome && template <> "fable-game" ->
+            Error(sprintf "--bundle is only supported by the fable-game template (selected: %s)" template)
         | _, template when requiresNpmClosure template && (opts.NpmPackage.IsNone || opts.NpmVersion.IsNone) ->
             Error "--template fable-bindings requires both --npm-package and --npm-version"
         | _, template when requiresNpmClosure template && opts.BindingTarget.IsNone ->
@@ -1650,6 +1702,7 @@ let private parse (argv: string list) : Result<Options, string> =
             Error "--binding-target must be browser, node, or universal"
         | _, template when requiresNpmClosure template && (opts.NpmVersion |> Option.exists (fun version -> String.IsNullOrWhiteSpace version || version.Equals("latest", StringComparison.OrdinalIgnoreCase) || version.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0)) ->
             Error "--npm-version must be an exact version (not latest or a range)"
+        | _ when opts.Template = "fable-game" -> Ok { opts with Bundle = Some(opts.Bundle |> Option.defaultValue "player") }
         | _ -> Ok opts
     // A `--flag`-looking token is a missing value, not a value — the same guard repos.sh's
     // `need_val` applies. Without it, `new-sdd-workspace ./x P --profile --ref v1` swallows
@@ -1680,6 +1733,14 @@ let private parse (argv: string list) : Result<Options, string> =
             else
                 Error(sprintf "unknown profile '%s' (choose one of: %s)" value (String.Join(", ", knownProfiles)))
         | [ "--profile" ] -> Error "--profile needs a value"
+        | "--bundle" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--bundle needs a value (got flag '%s')" value)
+        | "--bundle" :: value :: t ->
+            if List.contains value knownBundles then
+                flags { acc with Bundle = Some value } t
+            else
+                Error(sprintf "unknown bundle '%s' (choose one of: %s)" value (String.Join(", ", knownBundles)))
+        | [ "--bundle" ] -> Error "--bundle needs a value"
         | "--npm-package" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--npm-package needs a value (got flag '%s')" value)
         | "--npm-package" :: value :: t -> flags { acc with NpmPackage = Some value } t
@@ -1736,6 +1797,7 @@ let private parse (argv: string list) : Result<Options, string> =
               Governance = true
               Pinned = false
               Profile = None
+              Bundle = None
               NpmPackage = None
               NpmVersion = None
               BindingTarget = None
@@ -1862,6 +1924,8 @@ let private run (opts: Options) : int =
                 match opts.NpmPackage, opts.NpmVersion with
                 | Some packageName, Some version -> [ "--param"; sprintf "npmPackage=%s" packageName; "--param"; sprintf "npmVersion=%s" version ]
                 | _ -> []
+            let bundleParam =
+                opts.Bundle |> Option.map (fun bundle -> [ "--param"; sprintf "bundle=%s" bundle ]) |> Option.defaultValue []
             let bindingTargetParam =
                 opts.BindingTarget |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ]) |> Option.defaultValue []
             let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" opts.Lifecycle ]
@@ -1869,6 +1933,7 @@ let private run (opts: Options) : int =
                 runProcess true "fsgg-sdd"
                     ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
                      @ profileParam
+                     @ bundleParam
                      @ npmParams
                      @ bindingTargetParam
                      @ lifecycleParam

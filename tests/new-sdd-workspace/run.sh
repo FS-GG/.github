@@ -100,6 +100,16 @@ expect_err "an unknown --profile value is rejected against the known set (#388)"
   "unknown profile 'bogus'" -- "$TGT" P --profile bogus
 expect_err "--profile with no following token needs a value" \
   "--profile needs a value" -- "$TGT" P --profile
+expect_err "--bundle swallowing the next flag as its value is caught" \
+  "--bundle needs a value (got flag '--ref')" -- "$TGT" P --template fable-game --bundle --ref v1
+expect_err "--bundle with no following token needs a value" \
+  "--bundle needs a value" -- "$TGT" P --template fable-game --bundle
+expect_err "an unknown --bundle value is rejected against the closed set" \
+  "unknown bundle 'bogus'" -- "$TGT" P --template fable-game --bundle bogus
+expect_err "bundle is rejected by the omitted rendering compatibility provider" \
+  "--bundle is only supported by the fable-game template" -- "$TGT" P --bundle player
+expect_err "bundle is rejected by an explicitly unrelated provider" \
+  "--bundle is only supported by the fable-game template" -- "$TGT" P --template console --bundle player
 expect_err "--template with no following token needs a value" \
   "--template needs a value" -- "$TGT" P --template
 expect_err "an unknown --template is rejected before any scaffold" \
@@ -148,6 +158,9 @@ expect_ok "the bare two-positional form parses (Profile defaults to the provider
   -- "$TGT" P
 for template in rendering console web fable-game; do
   expect_ok "--template $template parses" -- "$TGT" P --template "$template"
+done
+for bundle in player studio tactical arcade complete; do
+  expect_ok "--bundle $bundle parses for fable-game" -- "$TGT" P --template fable-game --bundle "$bundle"
 done
 
 # Project production route. The double rejects the exact defects found in ordinary review: it
@@ -466,8 +479,9 @@ chmod +x "$STUB_DIR/fsgg-sdd"
 
 expect_execution() {
   local desc="$1" template="$2" expected_params="$3"; shift 3
-  local target="$WORK/real-$template"
-  local log="$WORK/$template.log"
+  execution_case=$((execution_case+1))
+  local target="$WORK/real-$template-$execution_case"
+  local log="$WORK/$template-$execution_case.log"
   local rc=0
   OUT="$(PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --pinned --no-governance --no-coordination "$@" 2>&1)" || rc=$?
   local params_ok=1
@@ -488,6 +502,7 @@ expect_execution() {
   fi
 }
 
+execution_case=0
 expect_execution "omitted --template keeps the rendering compatibility route" rendering "profile=game" --profile game
 expect_execution "omitted lifecycle forwards the Standard SDD default" rendering "lifecycle=sdd"
 expect_execution "explicit Standard SDD remains distinct" rendering "lifecycle=sdd" --lifecycle sdd
@@ -496,7 +511,10 @@ expect_execution "explicit Freeform is forwarded unchanged" rendering "lifecycle
 expect_execution "legacy Spec Kit remains selectable and frozen" rendering "lifecycle=spec-kit" --lifecycle spec-kit
 expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
 expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
-expect_execution "fable-game routes to its provider and descriptor" fable-game "productName=Product" --template fable-game
+expect_execution "fable-game omission forwards its player default" fable-game "bundle=player" --template fable-game
+for bundle in studio tactical arcade complete; do
+  expect_execution "fable-game forwards the $bundle bundle" fable-game "bundle=$bundle" --template fable-game --bundle "$bundle"
+done
 expect_execution "fable-bindings forwards its scoped closure and target" fable-bindings "target=universal" --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target universal
 
 # ── retrofit subcommand: its own parser, then a clean no-network refusal (#1343) ──────────────────
@@ -539,6 +557,12 @@ for h in --help -h; do
     bad "$h should print usage and exit 0" "got rc=$rc"$'\n'"$OUT"
   fi
 done
+
+if cli --help && grep -qF -- "--bundle" <<<"$OUT" && grep -qF -- "player, studio, tactical, arcade, complete" <<<"$OUT"; then
+  ok "help documents the fable-game bundle flag and its closed value set"
+else
+  bad "help documents the fable-game bundle flag and its closed value set" "$OUT"
+fi
 
 # ── Meta: the hermetic harness held — no valid parse leaked a real scaffold ───────────────────────
 if [ ! -e "$TGT" ]; then
