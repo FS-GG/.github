@@ -11,7 +11,7 @@ Authored: **2026-09-09 19:07:26 UTC**. Status: **execution underway; ten of twel
 
 Deliver durable telemetry for mount-free development and lightweight standalone workspace tooling over the same evidence contracts. Add durable board orchestration later as an independently selected capability. Keep human effort concentrated in initial configuration and consequential changes; retries, receipts, routine authorization checks and recovery belong in software.
 
-This roadmap records the user's agreement to proceed with the design, include receipt correctness, and **defer stronger runner GitHub credential isolation**. Its initial document-only authorization was superseded by the later execution instruction recorded below. On September 10, the user selected **manual Main installation**: implementation prepares the Podman container and guide, and the user runs it on Main. The released telemetry deployment instructions are linked under H3 and section 7; the remaining orchestration setup is still a planning guide, not an installed capability.
+This roadmap records the user's agreement to proceed with the design, include receipt correctness, and **defer stronger runner GitHub credential isolation**. Its initial document-only authorization was superseded by the later execution instruction recorded below. On September 10, the user selected **manual Main installation**: implementation prepares the Podman containers and guide, and the user runs them on Main. On September 14, the user selected the remaining orchestration topology: host systemd manages the lifecycle of exactly two rootless Podman containers, one combined orchestration container and one PostgreSQL container. The released telemetry deployment instructions are linked under H3 and section 7; this orchestration topology is selected and implementation is underway, but it is not yet an installed capability.
 
 ## 1. Sources, scope and relationship to existing work
 
@@ -30,7 +30,7 @@ Source ownership should follow the telemetry engine and released workspace tooli
 
 Included: shared observation/receipt contracts, durable storage integration, workspace identity, local dashboard, authenticated remote receiver, package/deployment lifecycle, optional publication integration, optional durable orchestration and runner recovery.
 
-Excluded from this implementation scope: restored host mounts, actor remoting from containers, PostgreSQL migration for telemetry, cluster failover, historical transcript discovery, product-runtime tracking, automatic package upgrades, general host command execution, and stronger runner credential isolation. Container replacement safety, broad-token refresh and browser/native build prerequisites remain separate SystemAdmin work.
+Excluded from this implementation scope: restored broad host mounts, actor remoting between orchestration processes, PostgreSQL migration for telemetry, cluster failover, historical transcript discovery, product-runtime tracking, automatic package upgrades, general host command execution, and stronger runner credential isolation. Container replacement safety, broad-token refresh and browser/native build prerequisites remain separate SystemAdmin work.
 
 ## 2. Architecture and explicit decisions
 
@@ -41,7 +41,7 @@ Excluded from this implementation scope: restored host mounts, actor remoting fr
 | Processing | Bounded drain after work and explicit recovery | Bounded admission and ordinary Akka.NET actors around the existing engine |
 | Dashboard | Bundled read-only UI, foreground loopback server on demand | Separately authenticated and workspace-authorized private UI |
 | Publication | Off unless separately selected | Separate process/account and destination credential; existing publisher may initially remain |
-| Orchestration | Optional separate installation with qualified persistence | Separate execution host and operational journal; container reconnects as client/runner |
+| Orchestration | Optional separate installation with qualified persistence | One rootless orchestration container for Host and trusted runner; separate rootless PostgreSQL container |
 
 Keep one authoritative telemetry destination per activated stream. Do not silently dual-write, probe other stores, or send ordinary product telemetry to Main. Telemetry unavailability leaves normal work usable and visibly reports missing evidence.
 
@@ -51,7 +51,20 @@ Akka actors coordinate acceptance, drain, export and health; durable artifacts a
 
 For this mount-free fsharp-dev profile, Main owns durable storage. A container-local spool is best effort until remote acceptance. Native users may select validated local durable storage. Never label overlay storage durable because stop/start happens to retain it.
 
-### 2.1 Deferred: stronger runner credential isolation
+### 2.1 Selected two-container orchestration topology
+
+Main's systemd user manager owns only fixed lifecycle and ordering for exactly two rootless Podman containers:
+
+1. `fsgg-orchestration` contains the Coordination Host and its trusted bounded runner/model child. The Host owns scheduling, journal transitions, candidate acceptance and GitHub delivery. It starts and supervises the compiled runner directly through bounded framed standard input/output; no host-side relay or `podman exec` participates in ordinary execution.
+2. `fsgg-orchestration-postgresql` contains PostgreSQL and owns its separately backed-up durable volume. It can be upgraded, restored and health-checked independently of the application container.
+
+The containers communicate through one private Podman network or Unix socket selected by SystemAdmin. PostgreSQL is not published on a host interface. The orchestration container receives only the selected worktree and bounded state/configuration/credential paths needed by the pilot. It receives no Podman socket, host PID namespace, host user namespace, broad home-directory mount or privilege to create containers. Its root filesystem is read-only apart from declared writable state, workspace and temporary paths. Secrets arrive as read-only files. The Host control listener remains private and is published only where the operator contract requires it.
+
+SystemAdmin owns the OCI image, rootless Podman arguments, persistent database volume and systemd unit definitions. Coordination owns a single immutable application bundle containing the compiled Host and runner, their source/artifact bindings and the local child-process contract. Systemd starts PostgreSQL first, waits for database readiness before starting orchestration, stops orchestration first, and restarts only from fixed unit definitions. Application code performs storage recovery and remains paused until its existing readiness and authorization conditions pass.
+
+This is the selected deployment boundary for the rest of O2. The earlier host-native Host plus `podman exec` launcher remains historical source-qualification evidence; it must not be installed for O2-I4.
+
+### 2.2 Deferred: stronger runner credential isolation
 
 **Off for this roadmap's initial implementation and pilot. May be added later as a separately scoped enhancement.** Do not remove or narrow the user's existing interactive GitHub credentials as part of telemetry delivery, introduce a new credential broker, or add human approval to every assignment.
 
@@ -61,7 +74,7 @@ Do not describe this pilot as a hostile-runner security boundary. Do not enable 
 
 Possible triggers: untrusted contributors, unattended execution of unreviewed repositories, broader multi-user deployment, or a requirement to guarantee that stale runners cannot perform protected delivery. Until separately selected, these triggers are limitations to report, not permission to expand this roadmap silently.
 
-### 2.2 Execution providers and subscription sessions
+### 2.3 Execution providers and subscription sessions
 
 On September 11 the user selected an existing logged-in Codex subscription session for O2 and required
 the architecture to accommodate **Codex, Claude, OpenCode and DeepSeek** from its first version.
@@ -88,7 +101,7 @@ The SystemAdmin census identified Codex 0.154.0 logged in using ChatGPT under th
 account in `fsharp-dev`. This establishes the selected session location, not a qualified execution adapter.
 Use that session through its existing ownership boundary. Environment scrubbing reduces accidental
 credential inheritance but does not prevent access to other files/processes owned by the same user.
-The trusted-runner limitation in section 2.1 therefore still applies. GitHub effect authorization and
+The trusted-runner limitation in section 2.2 therefore still applies. GitHub effect authorization and
 runner enrollment remain distinct from model authentication; neither follows from a successful login.
 
 ## 3. Shared correctness contracts
@@ -248,7 +261,7 @@ Exit: a single authorized publisher operates; private dashboards still need no p
 
 Extend the owning OR-first design with durable ProjectOrchestrator, canonical WorkItem, operation, scheduler reservation and command/attempt identities. Keep WorkItem ownership outside board membership. Select and qualify an operational persistence backend independently of telemetry SQLite; specify serialization, migrations, journal/outbox recovery and backup. Do not introduce cluster failover initially.
 
-Specify assignments, expected revisions, generations, bounded budgets/deadlines, command receipts, pause/cancel/revoke and runner enrollment. Define the trusted-runner limitation from section 2.1 in API/operator documentation. Identify existing upstream activation prerequisites before pilot selection.
+Specify assignments, expected revisions, generations, bounded budgets/deadlines, command receipts, pause/cancel/revoke and runner enrollment. Define the trusted-runner limitation from section 2.2 in API/operator documentation. Identify existing upstream activation prerequisites before pilot selection.
 
 Define candidate artifact survival: an acknowledged candidate references an immutable digest and baseline/head in owner-controlled durable storage or a qualified durable remote Git ref. A local path, console message or telemetry event is not a durable candidate. Before acceptance, unpushed changes can be lost with the container. Bound artifact size/type/retention and treat contents as untrusted. Specify retry, partial upload and cleanup behavior without exposing host paths.
 
@@ -264,9 +277,9 @@ Exit: candidate cannot dispatch in observer/shadow mode, stale proposals cannot 
 
 ### O2 — One-board trusted routine pilot on Main
 
-Select stable item identities and permitted job classes, budget, runner capacity, startup policy and ownership generation. Reconcile stable-driver in-flight work and transfer only that scope; exclude it from the stable route. Run bounded deterministic scheduling and disposable implementation attempts under the section 2.1 trust assumption.
+Select stable item identities and permitted job classes, budget, runner capacity, startup policy and ownership generation. Reconcile stable-driver in-flight work and transfer only that scope; exclude it from the stable route. Run bounded deterministic scheduling and disposable implementation attempts under the section 2.2 trust assumption.
 
-Main owns durable actors and operational journal. The container starts only its supervised client/runner after explicit enrollment. Recovery inspects unresolved effects, runners and reservations before dispatch. Persist pause/revocation and budget accounting; a reconnect cannot renew authority or create a fresh empty journal. Lost heartbeat means uncertain outcome, not failed delivery. Reassignment requires reconciliation, and cooperative fencing cannot prevent direct broad-token bypass.
+The orchestration container owns the durable actors and operational journal stored in the separate PostgreSQL container. It starts the Host and its supervised trusted runner/model child; systemd does not relay application messages or invoke work inside a development container. Recovery inspects unresolved effects, runners and reservations before dispatch. Persist pause/revocation and budget accounting; a process restart cannot renew authority or create a fresh empty journal. Lost heartbeat means uncertain outcome, not failed delivery. Reassignment requires reconciliation, and cooperative fencing cannot prevent direct broad-token bypass.
 
 Exit: one representative routine item completes through candidate persistence, required verification, protected-route delivery and native readback. Failure injection covers process creation, claim, artifact submission, PR creation and merge before receipt, plus disconnect/reconnect, stale output and host reboot. Operator can pause and reconcile fallback without duplicate ownership. Telemetry outage does not corrupt or stop otherwise safe orchestration transitions.
 
@@ -302,82 +315,25 @@ implied by this trusted local pilot.
   canonical suite independently of the sharded required workflow; that remaining long-tail path is
   not an individual 75-second test.
 - [x] O2-S2 — Codex subscription CLI adapter and runner integration — route: routine.
-  Adapter source substep is delivered by [Coordination PR #369](https://github.com/FS-GG/FS.GG.Coordination/pull/369),
-  exact head `1938c4c99c8c5b09ef9dcf1d073f73cdbf997221`, merge
-  `86559e971122dcb02c4c122dbddf0454d7af1774` at September 11 17:26 UTC.
-  Twelve executable subprocess fixtures passed, including oversized output, blocked stdin, deadlines,
-  descendant cancellation, missing terminal success and ambiguous spawn recovery. The clean-head gate
-  passed Core 371, Host 22 and Architecture 607 tests; required
-  [qualification run 34626067641](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34626067641)
-  passed. Broader optimistic validation subsequently passed in
-  [run 34626067537](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34626067537).
-  This is an adapter library, not installed or complete production composition;
-  S2a/S2b/S2c source and executable composition qualification are now delivered below.
-  External publication, installed acceptance and live model invocation remain pending.
-  Depends on accepted S1. Qualify argument-safe process launch, stdin prompts, a fixed workspace,
-  bounded concurrent output, actual event parsing, candidate verification, authentication refusal,
-  quota/error outcomes, deadlines, cancellation and capability-qualified recovery. Use executable
-  fixtures before any bounded live qualification. Claude, OpenCode and DeepSeek are intended adapters
-  against the same contract; this step does not claim that those implementations already exist.
+  [Coordination PR #369](https://github.com/FS-GG/FS.GG.Coordination/pull/369) delivered the provider-neutral
+  adapter and bounded subprocess behavior; [PR #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373)
+  completed publication qualification and immutable Host/runner artifacts. The detailed
+  [S2a/S2b/S2c source receipts](../reports/2026-09-12-o2-source-qualification.md) retain exact commits,
+  checks, test totals and compatibility requirements.
 
-  The detailed [S2a/S2b/S2c source receipts](../reports/2026-09-12-o2-source-qualification.md)
-  retain exact commits, checks, tests and compatibility requirements. These substeps delivered
-  durable transport/admission, the packaged executor/candidate pipeline and Main's seven-effect
-  composition. Source qualification is not installed/live or host-reboot acceptance.
+  SystemAdmin [PR #53](https://github.com/EHotwagner/SystemAdmin/pull/53) and
+  [PR #54](https://github.com/EHotwagner/SystemAdmin/pull/54) qualified the former manual relay and
+  artifact binding. Those results remain historical evidence. The September 14 decision supersedes
+  that installation path: the Host and runner ship in one orchestration-container bundle, and the Host
+  supervises the runner as a local child. The old host relay and `podman exec` launcher are not
+  prerequisites for the remaining pilot.
 
-  Publication qualification repair is delivered in
-  [Coordination #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373), exact head
-  `7d535035028b330a1bf7e19883274ddcedc4d06b`, merge
-  `a22c7f97533e7bb4c60a891a49994ca5b0995189` at September 12 05:10 UTC.
-  [Bootstrap](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34673490556) and
-  [coherent validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34673490540)
-  passed on that head. The repair binds production controls/readiness to authoritative Core state,
-  qualifies the selected internal-docs route against base-owned policy and exact native checks,
-  and paces pending observations and GitHub rate limits. Focused Host 37/37, real PostgreSQL 21/21,
-  unit 372/372, both artifact-helper selftests and locked Release build passed. The HTTP journey
-  pauses while checks are pending, resumes with fresh authority and observes one merge; cancellation
-  acceptance remains distinct from active-provider termination. Protected Host and runner workflows
-  [34675488727](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34675488727) and
-  [34675488512](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34675488512) subsequently
-  published and served-verified immutable artifacts from exact merge `a22c7f97533e7bb4c60a891a49994ca5b0995189`.
-
-  SystemAdmin reports the manual launcher source delivered in
-  [PR #53](https://github.com/EHotwagner/SystemAdmin/pull/53), exact head
-  `6471f3b4e66e3b0ec14d374f35e57cfbbf2be7ff`, merge
-  `0740031b6b794e33dcec5fd21d6b8efa469c6115`, with deployment 21/21, runner 10/10 and launcher 8/8
-  tests passing. This is the receiver's mailbox receipt, not independent private-repository readback
-  by this driver. SystemAdmin further reports the corrected artifact binding delivered in
-  [PR #54](https://github.com/EHotwagner/SystemAdmin/pull/54), exact head
-  `4e3d73c6c1db853a9ea05b3b60817b8454fd39a5`, merge
-  `346b09c861b869482a3a0c779af00c1f33b77da0`. Independent receiver downloads and exact preparers
-  reproduced the producer receipts; deployment 22/22, runner 10/10 and launcher 8/8 passed.
-  Its contract remains inert and installed qualification pending.
-  The manual launcher runs under the existing rootless Podman owner: it relays
-  closed authenticated Host messages to the runner's framed standard input/output through
-  `podman exec -i` in the existing container. Main retains its own identity and home protection;
-  it neither launches Podman nor reads the developer login, and the container receives no database
-  credentials. This bounded launcher is source-qualified, not an installed capability or another
-  persistent broker service. The existing Host/runner artifact families supply the accepted immutable
-  replacement bytes for installed adoption. No general workspace
-  default changes. S2 is complete only after the executable composition is qualified; adapter source
-  acceptance alone leaves it open.
-
-The next installed window adopts immutable accepted artifacts into the selected session context,
-qualifies actual authentication/egress and execution behavior, and produces a fresh deployment preview.
-Preserve the accepted inert SystemAdmin state at `861b0ae70b4e4371812ef088ec5440a1137a3d0c`, including
-PostgreSQL backup/restore and runner-image evidence. Its preview
-`3c88913873cd8c7395274cf1ce96957496c3fe62c4a36f1dc38e45ee73865f67` remained not ready with no pilot
-effects; it is historical installation evidence, not acceptance of the new subscription path.
-The representative item is [`.github#3421`](https://github.com/FS-GG/.github/issues/3421).
-Its live transfer, bounded execution, native delivery and the O2 failure/recovery exits above remain due.
-The [operator contract](../operations/orchestration-main-pilot.md) now expresses the selected subscription
-trust and accounting requirements without claiming installed capability. SystemAdmin reports the
-source-only validation repair in [PR #52](https://github.com/EHotwagner/SystemAdmin/pull/52), merge
-`3f603f3d05f9fd6ae88defe75536c46c52e82182`, with protected-main qualification green. Its prospective
-validation uses `git diff --check` and `python3 scripts/check-prose-citations.py --root .`; routine
-eligibility remains a separate base-owned PR gate. Installed bindings were not replaced. Before
-dispatch, bind the actual revised operator-document baseline and supported source/artifacts explicitly;
-do not reuse a stale work-item input or installation digest.
+The next installed window adopts the combined immutable application bundle into the selected two-container
+deployment and qualifies authentication, egress and execution. Preserve the stopped SystemAdmin data and
+backup evidence while replacing the old topology. The representative item remains
+[`.github#3421`](https://github.com/FS-GG/.github/issues/3421); its live transfer, delivery and reboot-recovery
+exits remain due. The [operator contract](../operations/orchestration-main-pilot.md) records the subscription
+trust and accounting requirements. Bind fresh accepted source and artifact identities before dispatch.
 
 The accepted bounded installed-work horizon keeps replacement, migration and live effects separate:
 
@@ -396,17 +352,24 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
   `24702278c3d37b6fb7f3db295190986dfd487c412fee2f244328561ca0141a9c`. Evidence
   `1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated pause,
   negative controls, durable restart and final stop with no dispatch or GitHub effect.
-- [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation. Bind fresh `.github#3421`
-  input and one nonrenewing attempt; prove candidate persistence, required checks, native delivery and
-  O2 failure/reboot recovery with ambiguous-effect reconciliation and the direct-credential limitation.
+- [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation.
+  - [ ] O2-I4a — Coordination publishes one immutable Linux x64 application bundle containing the Host
+    and runner, with a local child-process contract and exact source/payload verification.
+  - [ ] O2-I4b — SystemAdmin builds the rootless orchestration image, installs fixed systemd user units
+    for the orchestration and PostgreSQL containers, migrates the paused v2 state, and proves stopped,
+    restart and database-restore behavior without a Podman socket or broad host mounts.
+  - [ ] O2-I4c — Bind fresh `.github#3421` input and one nonrenewing attempt; prove provider authentication,
+    candidate persistence, required checks, native delivery and O2 failure/reboot recovery with
+    ambiguous-effect reconciliation and the direct-credential limitation.
 
 These are O2 substeps, not top-level milestones. Each unchecked step needs exact authority and fresh
 baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
 remain coverage gaps rather than inferred usage.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
-for the enrolled O2 runner; no SDD/Templates lifecycle default or general fresh-workspace content changes.
-Qualify a clean runner installation and the upgrade of the existing inert deployment separately.
+of the two-container deployment for the enrolled O2 scope; no SDD/Templates lifecycle default or general
+fresh-workspace content changes. Qualify a clean orchestration-container installation and migration of the
+existing inert Host/launcher deployment separately.
 Telemetry remains advisory. On September 11 the existing enrolled fdev telemetry client was associated
 with this repository and the roadmap adapter reported `ready`; prospective root observation submission
 then succeeded. Earlier dispatch coverage was missing and is not reconstructed. Native collaboration
@@ -469,7 +432,7 @@ For this environment, the ordinary user need not install Akka or PostgreSQL, adm
 1. For a native standalone workspace, choose local telemetry and the on-demand dashboard. For mount-free fsharp-dev, choose Main's remote receiver. Choose orchestration separately only when agent execution is wanted.
 2. Identify the workspace and intended repositories, storage owner and users allowed to read history. Decide whether an existing store continues, a prospective cutover starts, or an explicit import is needed.
 3. Review the release-specific prerequisites and artifact provenance. The optional .NET tool's installation CLI and runtime requirements must be checked separately. Use exact versions and approved sources, never a mutable latest alias.
-4. For Main, verify the operator can manage the selected service accounts, private storage, TLS and firewall. Resolve container-to-host reachability without host mounts, D-Bus or a Podman socket.
+4. For Main, verify the operator can manage rootless Podman user units, private storage and any selected private control listener. The orchestration and PostgreSQL containers communicate only through their selected private channel. Do not mount D-Bus, the Podman socket or a broad host directory into the orchestration container.
 5. Before replacing a real container, use the separate SystemAdmin safe-replacement procedure to preserve unpublished/untracked work. Telemetry durability does not back up the workspace.
 
 Success: the selected profile and durable destination are explicit, and required artifacts/privileges exist. Missing prerequisites produce actionable status without silently selecting another destination.
@@ -505,7 +468,7 @@ Review an allowlisted output preview, public labels and fixed destination. Provi
 2. Review pilot scope using stable item identities, job classes, budget, runner capacity and the cooperative-fencing limitation. Stronger runner credential isolation remains off. Avoid untrusted contributors.
 3. Choose startup policy: paused/read-only by default, or explicit bounded auto-resume. This policy survives restart and does not broaden work authority.
 4. Have the stable route and candidate reconcile in-flight work and transfer the selected scope/generation. Do not merely start a second board driver with an overlapping filter.
-5. Enroll the supervised container client/runner. Main retains project/work actors and operational state; startup in fsharp-dev must not create another owner or update Main.
+5. Start the two fixed systemd user units. PostgreSQL becomes ready first; the orchestration container then recovers the Host and starts its trusted runner/model child locally. The development container does not run an orchestration owner or receive commands through `podman exec`.
 6. Follow the first routine item through assignment, durable candidate, verification where required, delivery and native readback. Confirm that killing a planning session preserves budget/state and disconnecting a runner produces uncertainty rather than duplicate dispatch.
 7. Expand only the selected scope after pilot evidence passes. Existing grants allow routine checks and assignments to execute without fresh human prompts.
 
