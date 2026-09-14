@@ -1,6 +1,6 @@
 # SVG-PREVIEW-C — installed replay, network and scale preview
 
-Status: producer publication (.2) complete; Templates adoption (.3) is next. Route: routine for release preparation and installed qualification;
+Status: Templates source adoption (.3) complete; Templates publication (.4) is next. Route: routine for release preparation and installed qualification;
 protected operation for publication.
 
 This is the executable Release C plan for the
@@ -91,12 +91,27 @@ activation are reported independently.
   artifact `10335663605` and readback artifact `10335649243`. Both feeds match the retained payloads;
   only nuget.org's signature addition changes archive bytes. Templates remains public at 0.12.0 pending .3–.5.
 
-- [ ] **SVG-PREVIEW-C.3 — Adopt public pins and prepare Templates 0.13.0 — route: routine**
+- [x] **SVG-PREVIEW-C.3 — Adopt public pins and prepare Templates 0.13.0 — route: routine**
 
   Replace replay/network/scale candidate seams with exact public producer pins while retaining explicit
   preview selection. Regenerate the public API mirror, retire candidate omission entries and update the
   bounded adopter. Qualify direct, SDD, typed/profile-2, wizard, retained 0.10–0.12, interruption, conflict
   and rollback routes. The ordinary Player closure must exclude optional Studio and analysis tooling.
+
+  Templates [PR #480](https://github.com/FS-GG/FS.GG.Templates/pull/480) merged as
+  `6acdfc5f5da41156db0aeaffcd54885b3b9e66be`, from qualified head
+  `89f35c393529efe316fff61e5c24728101251383`. The generated preview pins public Rendering 0.31.0,
+  Game 0.16.0, Net 0.6.0 and Audio 0.6.0, with zero public-API mirror omissions. Source qualification
+  run [34818598332](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34818598332), artifact
+  `10337705570`, passed direct, SDD, wizard/adopter and retained 0.10–0.12 routes, preservation,
+  interruption and rollback, plus presentation, authoring, input, replay, scale/accessibility and network
+  authority/reconnect/review in Chromium, Firefox and WebKit. Typed/profile-2 receivers passed run
+  [34818598319](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34818598319); composition/coherence
+  passed [34818598873](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34818598873), and pretag
+  pack/checksum/custody validation passed [34818598496](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34818598496).
+  A generated FSharp.Core lock mismatch was repaired to the shipped SDK 10.0.400 before acceptance.
+  This is source adoption only: public Templates remains 0.12.0, SVG stays opt-in, and .5 must separately
+  establish public-package receiver and performance evidence.
 
 - [ ] **SVG-PREVIEW-C.4 — Publish and verify Templates 0.13.0 — route: protected operation**
 
