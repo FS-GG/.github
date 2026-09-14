@@ -1,6 +1,6 @@
 # SVG-PREVIEW-C — installed replay, network and scale preview
 
-Status: Templates publication (.4) complete; installed public qualification (.5) is next. Route: routine for release preparation and installed qualification;
+Status: complete — Release C published and installed public receivers qualified on 2026-09-14. Route: routine for release preparation and installed qualification;
 protected operation for publication.
 
 This is the executable Release C plan for the
@@ -131,7 +131,7 @@ activation are reported independently.
   retains the original package asset. Publication is complete; .5 remains the separate installed-public
   replay/network/scale and retained-upgrade acceptance boundary.
 
-- [ ] **SVG-PREVIEW-C.5 — Qualify installed public receivers and close Release C — route: routine**
+- [x] **SVG-PREVIEW-C.5 — Qualify installed public receivers and close Release C — route: routine**
 
   From clean public-only caches, install Templates 0.13.0 through direct, SDD, typed/profile-2, current wizard
   and retained-upgrade routes. Run replay equality/divergence/rules, two-browser authority/reconnect/review,
@@ -139,10 +139,31 @@ activation are reported independently.
   bytes. Bind evidence to exact package hashes. Close Release C and select `SVG-WORKSPACE-01` only after every
   public receiver passes without weakening a threshold or treating activation as implied.
 
+  Public receiver run [34822927445](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927445)
+  passed at Templates candidate `aad05bf840afe4a5292e785aee5adf33c9c37a5f`.
+  Artifact `10339327277` retains qualification JSON SHA-256
+  `d335c04623604367ef267ecb95fee7607fceae3cb8ba8d3e0792cb516dc7fa65`, the signed public Templates
+  archive identity and hashes for all seven consumed producer archives. Direct, SDD none/default/typed,
+  wizard/adopter and retained 0.10–0.12 routes passed; collisions refused without writes, interruptions
+  rolled back and authored files survived. Chromium, Firefox and WebKit passed presentation, authoring,
+  input, replay/rules, dense/extent/responsive/accessibility and two-client authority/reconnect/review.
+
+  A fresh exact-release-source Rendering reference run replaced a stale source-mismatched timing receipt.
+  Its retained receipt SHA-256 is `98ba3cf0a2a1db103ca7ac1711017062bf2c3697d59a0880e376c3629c5953b6`.
+  The frozen v2 reference-host criteria passed: ordinary p95 66.861–66.881 ms against 100 ms, dense p95
+  100.263–108.469 ms against 150 ms, extent cost ratio 1.0, zero live-node growth and zero missed-frame ratio.
+  Before reuse, the public receiver verifies every released Rendering Fable source member against that
+  receipt and the exact release commit. Reference Chromium 151.0.7922.34 measurements remain separate
+  from installed shared-runner Chromium 140.0.7339.16 diagnostics; no physical-device or retained-heap
+  result is inferred. Templates [PR #481](https://github.com/FS-GG/FS.GG.Templates/pull/481) merged as
+  `7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0`; full composition run
+  [34822927819](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927819) and release-route
+  validation [34822927433](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927433) also passed.
+
 ## Completion boundary
 
-Release C will claim supported installed replay/network/scale preview capability through M7–M9 and C14–C19.
-It will not claim complete C20 composition, Release D or lifecycle/default activation. Those remain owned by
+Release C establishes supported installed replay/network/scale preview capability through M7–M9 and C14–C19.
+It does not establish complete C20 composition, Release D or lifecycle/default activation. Those remain owned by
 `SVG-WORKSPACE-01`, `SVG-RELEASE-D` and their explicit activation boundary.
 
 
@@ -152,3 +173,11 @@ Rendering's symbology recipe pin and its manifest digest advance with the UI tem
 versioned `FS.GG.Rendering.Skills` package remains public at 0.1.1 and is outside this 19-package UI release
 roster. These source changes do not establish updated installed product skills; reconcile that separate
 package and its installed consumers under `SVG-WORKSPACE-01`/C20.
+
+## Next feature
+
+[SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) is selected after this closure and the unified section 0 update. Its
+first window is .1–.3: owner-published guidance, installed SDD delivery, and generated default SVG/bundle
+composition. Complete C20, actual generated-development/deployment journeys and Release D remain required.
+The later lifecycle-default effect retains its actual common-base, migration and OperatingV2 prerequisites;
+independent product and explicit typed-profile work can continue.
