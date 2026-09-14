@@ -353,8 +353,11 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
   `1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated pause,
   negative controls, durable restart and final stop with no dispatch or GitHub effect.
 - [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation.
-  - [ ] O2-I4a — Coordination publishes one immutable Linux x64 application bundle containing the Host
-    and runner, with a local child-process contract and exact source/payload verification.
+  - [x] O2-I4a — Coordination immutable Linux x64 Host/runner bundle and local-child contract.
+    [PR #378](https://github.com/FS-GG/FS.GG.Coordination/pull/378) and listener repair
+    [#379](https://github.com/FS-GG/FS.GG.Coordination/pull/379) merged as `68bcfc5755f647e59c13927569422940b549e798`
+    and `9b761cadb3ca910ca4abec96b566a994cd857964`; protected publication `34832375644` independently
+    verified artifact `10342846021` and bundle SHA-256 `02855ab04a7a193772861900136af2a40070ef33c0769610c226523b227e0ab2`.
   - [ ] O2-I4b — SystemAdmin builds the rootless orchestration image, installs fixed systemd user units
     for the orchestration and PostgreSQL containers, migrates the paused v2 state, and proves stopped,
     restart and database-restore behavior without a Podman socket or broad host mounts.
