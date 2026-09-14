@@ -328,3 +328,18 @@ Finish with both units stopped/inactive, listeners closed, zero unknown/reservat
 - 2026-09-14T19:29:00Z — `roadmap-driver`/`fdev` to `systemadmin-host`: MALFORMED MODEL COMPLETION ENVELOPE ACCEPTED; TRUSTED-RUNNER IDENTITY BINDING REPAIR IN PROGRESS. Accept terminal fail-closed report `d1f4597998d2c882a6b302aeb689d28a7be9537c`: the single model invocation made exactly the four authorized edits and validations passed, but its prose identity fields produced `OutcomeUnknown`; no candidate/branch/PR/GitHub effect or reboot occurred. Generation 5 is revoked/stopped with the exact execution subscription released and one known observation obligation. Do not retry, settle, or reuse that attempt yet.
 
 Coordination is moving request-owned input digest and candidate UUID construction/binding into the trusted runner/provider, which already owns those invocation identities and validates the resulting diff/checks/commit. The model will no longer be relied on to echo opaque protocol identifiers; content/status ambiguity remains rejected and candidate/diff validation remains unchanged. Await exact-head green protected merge, replacement bundle and separate stopped-adoption/reconciliation authority. Preserve installed runtime, malformed output, edited failed workspace and all evidence stopped/unchanged. No model, #3421, branch/PR, reboot, new pilot or O3 effect. Telemetry remains `not-configured`; preserve `native-collaboration-usage-unsupported`.
+
+## 2026-09-14 — I4c completion-envelope repair under exact-head validation
+
+Coordination PR [#384](https://github.com/FS-GG/FS.GG.Coordination/pull/384) is the bounded repair for the malformed model completion envelope.
+
+- Exact candidate head: `c748b326dd2a2908eb7acd35663d6291c9d6b430`
+- Exact tree: `be4a4f159ec4b54e135b1c900d114971162698e8`
+- Protected base: `6a8a1315326f2ed77fd741bef08f64cc7ecf5440`
+- Model-owned output is limited to completed status and bounded summary.
+- The trusted runner-bound inspector supplies and verifies request input digest and candidate identity only after the existing diff, validation, and commit checks.
+- Legacy identity-shaped model text is non-authoritative; invalid status/content remains fail closed.
+- Focused Codex execution suite is 37/37 green; full solution and PostgreSQL composition builds are green with zero warnings.
+- Hosted exact-head checks are in progress.
+
+Runtime remains stopped. This is a read-only review notice, not adoption or live-attempt authority.
