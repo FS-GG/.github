@@ -47,6 +47,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+SVG-WORKSPACE-01.2 **completed**, **2026-09-14**: SDD **1.8.0** and the shared **0.89.0**
+routine producer are published.
+SDD [#984](https://github.com/FS-GG/FS.GG.SDD/pull/984) and native release/readback
+[34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599) bind retained original
+archives to both feeds and qualify installed neutral Quint profile-1/profile-2 authoring, inspection,
+refusal, recovery and bounded migration in an actual network namespace. The receiver embeds the
+published Game/Rendering/Audio owner manifests and Drivers' seven-file routine workspace payload.
+The [Templates receiver checkpoint](https://github.com/FS-GG/FS.GG.Templates/pull/483) records a
+five-bundle installed audit against the exact retained **Templates 0.14.0 candidate**, including both
+agent roots, owner sidecars and negative selections, explicit legacy flags and no-clobber upgrade.
+Candidate source `f4d2ee63a6e1200e733d7f36fdcbafa07c7907ef` and no-push native run
+[34850052710](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34850052710) identify those
+unpublished Templates bytes. This audit qualifies receiver transport and selection, not the complete
+`.3` product: a discovered response-file bypass of the candidate's old/new-selector guard still requires
+a fail-closed Templates repair. Native composition
+[34850362401](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34850362401) passed and the
+canonical checkpoint merged as `c658fc38c72c62360794843f11cafa874e7d85bc`. **`.3` complete game
+composition is next**; final Release D and its lifecycle-default conditions remain ahead.
+
 SVG-WORKSPACE-01.1 owner guidance published, **2026-09-14**: Rendering Skills **0.2.0**,
 Game Skills **0.9.0** and Audio Skills **0.1.0** are available on both feeds. Native readback runs
 [Rendering 34833403039](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34833403039),
@@ -56,9 +75,9 @@ source commits and matching feed payloads. Rendering retained its original befor
 retained the recovered org archive before its public push. Game's original run retained no CI archive;
 its read-only recovery establishes feed equality and exact owner contents, without claiming original custody.
 The [Templates subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md)
-records the native evidence. **SVG-WORKSPACE-01.2 installed SDD delivery is next**. Catalog registration
-and public guidance do not yet install the new selections, workspace tools or bundle behavior; current
-SDD consumer pins remain independently recorded. C20, Release D and lifecycle activation remain ahead.
+records the native evidence. Owner publication was the `.1` boundary; `.2` above now establishes
+installed receiver transport. Complete generated game composition remains `.3`; C20, Release D and
+lifecycle activation remain ahead.
 
 SVG-PREVIEW-C.5 and **Release C completed**, **2026-09-14**: Templates
 [PR #481](https://github.com/FS-GG/FS.GG.Templates/pull/481) merged as
@@ -227,14 +246,14 @@ link to owning evidence and do not replace it; a missing projection is stale rep
 | **SVG-NETWORK-01 — Multiplayer and resync** | **Complete at source/generated-candidate boundary** | The [network plan](roadmaps/svg-network-01.md) binds Game #633/#634, Net #86 and Templates [#477](https://github.com/FS-GG/FS.GG.Templates/pull/477)/[#478](https://github.com/FS-GG/FS.GG.Templates/pull/478) to authoritative two-client reconnect, refusal, resync and replay. | Public installation remains Release C. |
 | **SVG-SCALE-01 — Accessibility and measured scale** | **Complete at source/generated-candidate boundary** | The [scale plan](roadmaps/svg-scale-01.md) binds Rendering #1319–#1321 and Templates [#479](https://github.com/FS-GG/FS.GG.Templates/pull/479) to frozen Chromium budgets and Chromium/Firefox/WebKit accessibility evidence. | Public installation remains Release C; unavailable measurement dimensions stay disclosed. |
 | **SVG-PREVIEW-C — Installed replay/network/scale preview** | **Complete — Release C** | The [Release-C plan](roadmaps/svg-preview-c.md) targets Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Templates 0.13.0, retaining Audio 0.6.0 and SDD 1.7.0. | Producer and Templates publication, dual-feed verification and public clean/retained receiver qualification are complete. SVG remains opt-in; C20 and Release D are separate. |
-| **SVG-WORKSPACE-01 — Complete generated workspace** | **.1 complete; .2–.3 ready** | The [Templates-owned plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) landed with Templates #481 and is selected after Release C closure. | Publish owner guidance, install it through SDD, compose the default SVG game/bundles, then qualify complete development, upgrade and deployment journeys. Release D and the lifecycle-default activation remain separate. |
+| **SVG-WORKSPACE-01 — Complete generated workspace** | **.1–.2 complete; .3 active** | The [Templates-owned plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) landed with Templates #481 and is selected after Release C closure. | Owner guidance and installed SDD delivery are complete. Compose the default SVG game/bundles, close template compatibility validation, then qualify complete development, upgrade and deployment journeys. Release D and the lifecycle-default activation remain separate. |
 
 #### SVG milestone projection
 
 This table is a concise navigation projection. The linked feature subroadmaps and owner-native PRs, commits,
 checks, artifacts and operation receipts remain authoritative.
 
-Reconciled SVG feature-milestone states: **68 completed; SVG-WORKSPACE-01.2 installed SDD delivery next**.
+Reconciled SVG feature-milestone states: **69 completed; SVG-WORKSPACE-01.3 complete game composition next**.
 The latest published producer set is Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Audio 0.6.0.
 Templates 0.13.0 is the qualified installed Release-C baseline. SVG workspace composition and final Release D
 remain ahead; provider, lifecycle and general template defaults remain unchanged.
@@ -291,6 +310,7 @@ remain ahead; provider, lifecycle and general template defaults remain unchanged
 | **SVG-PREVIEW-C.4** | **Completed** | Templates release [34820243790](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34820243790) and [custody/readback evidence](roadmaps/svg-preview-c.md#milestones) | Templates 0.13.0 is public on both feeds, with 205 exact payload entries. Installed-public acceptance remains .5. |
 | **SVG-PREVIEW-C.5** | **Completed** | Templates [#481](https://github.com/FS-GG/FS.GG.Templates/pull/481), merge `7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0`, and public receiver run [34822927445](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927445) | Release C is complete through public clean/retained replay/network/scale qualification. C20, Release D and later activation remain separate. |
 | **SVG-WORKSPACE-01.1** | **Completed — owner guidance published** | [Owner publication/readback evidence](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md#ready-milestone-window), Rendering [34833403039](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34833403039), Game [34828061816](https://github.com/FS-GG/FS.GG.Game/actions/runs/34828061816), Audio [34829313855](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34829313855) | Public Rendering/Game/Audio skills are verified; SDD installation and bundle selection remain .2, generated workspace composition .3, and final Release D remains separate. |
+| **SVG-WORKSPACE-01.2** | **Completed — published installed receiver** | SDD [#984](https://github.com/FS-GG/FS.GG.SDD/pull/984), public readback [34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599), and Templates [#483](https://github.com/FS-GG/FS.GG.Templates/pull/483), merge `c658fc38…` | Public SDD 1.8.0/Drivers 0.89.0 deliver exact owner guidance and routine tools; offline authority and five-bundle candidate transport pass. Full Templates composition and contradiction validation remain .3; public adoption and lifecycle activation remain Release D. |
 
 No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
 receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
@@ -331,14 +351,15 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
    heartbeat evidence, then run native conformance and acceptance.
 2. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
-3. **Execute SVG-PREVIEW-B.** Authoring, input, runtime and presentation are complete at the exact
-   source/generated-candidate boundary. Follow the [Preview-B subroadmap](roadmaps/svg-preview-b.md) to publish
-   Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0, then qualify public clean and retained
-   receivers while preserving the opt-in/default boundary.
+3. **Execute SVG-WORKSPACE-01.3.** Releases A–C and workspace owner guidance/installed SDD delivery
+   are complete. Follow the [Templates subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md)
+   to compose the default cooperative SVG arena and optional Studio/tactical/arcade bundles, including
+   fail-closed old/new selector validation. Then qualify complete development, upgrade and hosted deployment
+   journeys. Final public Templates/wizard adoption and eligible lifecycle-default activation remain Release D.
 
-The independent SVG foundation, model and scene windows now have a public installed Release-A receiver.
-Rendering 0.29.0, Templates 0.11.0 and SDD 1.7.0 are public and qualified together. No provider activation or
-default change is implied by Release A.
+The current public game baseline is Release C: Rendering 0.31.0, Game 0.16.0, Net 0.6.0, Audio 0.6.0 and
+Templates 0.13.0. SDD 1.8.0 adds the qualified receiver transport; Templates 0.14.0 remains an identified
+candidate. These producer deliveries do not activate the later lifecycle default.
 
 ### 0.5 Known limits and decision state
 
@@ -1490,7 +1511,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
 | **Cooperative canary and adoption** | F4–F5: one enrolled peer and work class reaches independently verified delivery, then a measured adoption decision | Coordination with project/receiver owners; F3 evidence, OperatingV2 under the existing default and separate canary authority | No subroadmap linked yet; conditional |
-| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A/B and replay/network/scale source/generated candidates are complete. Release C public qualification is complete; SVG-WORKSPACE-01.1 owner guidance is published, with .2–.3 ready; later defaults keep their own authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
+| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A/B and replay/network/scale source/generated candidates are complete. Release C public qualification is complete; SVG-WORKSPACE-01.1–.2 owner guidance and installed SDD transport are complete, with .3 active; later defaults keep their own authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
 | **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates; accepted Xantham evaluation and existing bindings workflow | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md) |
 | **Fable SC2 client and custom WASM control** | Section 15 product track: browser tactical client, native SC2 gateway and portable module contract; independent of v2 prerequisites | Proposed product owner; this design does not start implementation or deployment | [SC2C-01 design and feature roadmap](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md) |
 | **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | Proposed product owner: EHotwagner/FSBarV2; HighBarV3 owns native adapter changes; design delivery does not start implementation or deployment | [BARC-01 repository research, design and feature roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md) |

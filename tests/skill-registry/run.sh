@@ -1629,7 +1629,7 @@ expected = {
     "disposition": "delivered",
     "kind": "package",
     "channel": "FS.GG.Rendering.Skills",
-    "evidence": "registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.1.1)",
+    "evidence": "registry/dependencies.yml (contract `rendering-skills`, owner rendering, consumers [sdd], schema-v2 package 0.2.0)",
 }
 if entry is None:
     raise SystemExit("FAIL: the shipped Rendering/product delivery-channel entry is missing")

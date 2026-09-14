@@ -615,7 +615,7 @@ architecture_template_comparator_is_current() {
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.13.0'* ]] \
-  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.10.1'* ]] \
+  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.11.1'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
   && [[ "$component_templates_rows" == *'| `0.13.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
@@ -625,7 +625,7 @@ if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
   && [[ "$workspace_contract_map_rows" == *'registry-active .github#2941'* ]] \
   && [[ "$workspace_contract_map_rows" == *'wizard `--template` selection published in `new-sdd-workspace` 0.10.1'* ]] \
-  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.10.1, scaffold-provider@SDD |'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.11.1, scaffold-provider@SDD |'* ]] \
   && [[ "$workspace_contract_map_rows" != *'registry-active .github#2070; wizard `--template` selection pending its own release'* ]] \
   && [[ "$workspace_contract_map_rows" != *'| `.github` wizard (pending release) |'* ]] \
   && [[ "$new_sdd_registry_block" == *'release 0.10.0 introduced the'* ]] \

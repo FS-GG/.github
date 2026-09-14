@@ -101,7 +101,7 @@ published *at*:
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Scene, layout, input, viewer/host, controls, themes; Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. ADR-0071/0072/0073 define the `console`, `web`, `fable-game`, and `fable-bindings` providers; `FS.GG.Workspace.Template` 0.13.0 is published and registry-active (see the versions table in §5 for the current pin), and `new-sdd-workspace` 0.10.1 selects each through `--template`. | the `rendering` scaffold provider + `fs-gg-governance` overlay; `FS.GG.Workspace.Template` package (`fs-gg-console`, `fs-gg-web`, `fs-gg-governance`, `fs-gg-fable-game`, `fs-gg-fable-bindings`), on the org feed + nuget.org |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. ADR-0071/0072/0073 define the `console`, `web`, `fable-game`, and `fable-bindings` providers; `FS.GG.Workspace.Template` 0.13.0 is published and registry-active (see the versions table in §5 for the current pin), and `new-sdd-workspace` 0.11.1 selects each through `--template`. | the `rendering` scaffold provider + `fs-gg-governance` overlay; `FS.GG.Workspace.Template` package (`fs-gg-console`, `fs-gg-web`, `fs-gg-governance`, `fs-gg-fable-game`, `fs-gg-fable-bindings`), on the org feed + nuget.org |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
@@ -406,16 +406,20 @@ session traffic — ADR-0073 dropped Fable.Remoting from that role because the u
 `Fable.Remoting.MsgPack` package does not compile under the pinned Fable compiler
 (`FS.GG.Templates#370`) and the one upstream report is unfixed and unacknowledged; SignalR's role,
 and the rest of ADR-0071's design, are unchanged — and consumes Game's producer-owned
-`fs-gg-game-core-fable-lockstep-v1` profile at `FS.GG.Game.Core` 0.13.0. Templates owns generic
+`fs-gg-game-core-fable-lockstep-v1` profile at `FS.GG.Game.Core` 0.16.0. Templates owns generic
 Fable workspace skills; Game owns the lockstep skill and publishes it in the independently
-versioned `FS.GG.Game.Skills` package (registry `package-version` **0.8.0** — the feed's literal
+versioned `FS.GG.Game.Skills` package (registry `package-version` **0.9.0** — the feed's literal
 newest, registry contract `game-skills`), materialized from its declared owner under ADR-0063.
-FS.GG.SDD#817/PR#819 proved SDD's production scaffold materializer pins and emits the Game Skills
-0.7.0 `fs-gg-game-fable` skill from the public read path (FS.GG.Game#552/PR#554; SDD's own
-`packages.lock.json` still requests `[0.7.0, )`) — that skill body is byte-identical at 0.8.0, so
-the proof holds at the registry's newer pin too. The registry rows for `fs-gg-workspace-template`
-and `game-skills` were activated in .github#2070 (epic #2067 rollout phases 1-5). The wizard selector
-is published in `new-sdd-workspace` 0.10.1 (.github#2968), and `FS.GG.Workspace.Template` 0.13.0
+SDD [PR #984](https://github.com/FS-GG/FS.GG.SDD/pull/984) advances the receiver to SDD 1.8.0,
+embedding Game Skills 0.9.0, Rendering Skills 0.2.0 and Audio Skills 0.1.0 from their closed owner
+manifests, plus Drivers 0.89.0's routine policy, helper and native workflow. Public qualification
+[34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599) verifies the retained
+package payloads on both feeds and the installed Quint profile. Complete bundle composition remains
+the Templates-owned [SVG workspace milestone .3](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md).
+The earlier Game Skills 0.7.0 transport was established by SDD#817/PR#819. The registry rows for
+`fs-gg-workspace-template` and `game-skills` were activated in .github#2070 (epic #2067 rollout
+phases 1-5). The wizard selector was introduced in 0.10.1 (.github#2968); its current published
+version is 0.11.1. `FS.GG.Workspace.Template` 0.13.0
 preserves the P4 additive Typed SDD adoption across all five registered identities while adding the
 accessible fable-game browser baseline and corrected Typed SDD release-floor gate (Templates#431/#435/#437;
 .github#2941), after verification on both feeds. The
@@ -554,8 +558,10 @@ The contracts that hold the system together:
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
-| `fs-gg-workspace-template` | Templates | the `FS.GG.Workspace.Template` package (see the versions table below for the current pin) with `dotnet new fs-gg-console`, `fs-gg-web`, `fs-gg-governance`, `fs-gg-fable-game`, and `fs-gg-fable-bindings` identities (registry-active .github#2941; wizard `--template` selection published in `new-sdd-workspace` 0.10.1) | `.github` wizard 0.10.1, scaffold-provider@SDD |
-| `game-skills` | Game | the independently versioned `FS.GG.Game.Skills` owner package (see the versions table below for the current pin), carrying the Fable-lockstep `fs-gg-game-fable` product skill | SDD scaffold materializer, generated `fs-gg-fable-game` workspaces |
+| `fs-gg-workspace-template` | Templates | the `FS.GG.Workspace.Template` package (see the versions table below for the current pin) with `dotnet new fs-gg-console`, `fs-gg-web`, `fs-gg-governance`, `fs-gg-fable-game`, and `fs-gg-fable-bindings` identities (registry-active .github#2941; wizard `--template` selection published in `new-sdd-workspace` 0.10.1) | `.github` wizard 0.11.1, scaffold-provider@SDD |
+| `game-skills` | Game | the independently versioned `FS.GG.Game.Skills` owner package, carrying Fable, lockstep, replay and rules guidance with verified file digests and bundle predicates | SDD scaffold materializer, generated `fs-gg-fable-game` workspaces |
+| `rendering-skills` | Rendering | the independently versioned `FS.GG.Rendering.Skills` owner package, including SVG assets/performance guidance and verified sidecars | SDD scaffold materializer |
+| `audio-skills` | Audio | the independently versioned `FS.GG.Audio.Skills` owner package and its browser-audio guidance | SDD scaffold materializer |
 | `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`), Templates (`fs-gg-fable-game` lockstep profile) |
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
