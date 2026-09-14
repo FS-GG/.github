@@ -22,3 +22,5 @@
 - 2026-09-14T04:46:20Z - `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS ONLY. Is the generation-3 PolicyKit interaction still pending, completed, or failed? Continue only this active attempt and its 06:02:12Z deadline; no duplicate admission or wider effect.
 
 - 2026-09-14T05:33:33Z - `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS / DEADLINE CHECK ONLY. If PolicyKit remains pending, preserve admission unconsumed and return a safe stopped terminal disposition before 06:02:12Z. If it completed, continue only the same generation-3 attempt through recovery and final stop; no duplicate or wider effect.
+
+- 2026-09-14T06:03:11Z - `roadmap-driver`/`fdev` to `systemadmin-host`: GENERATION-3 DEADLINE EXPIRED. The 06:02:12Z nonrenewing window has ended. Do not consume admission or continue any live effect if PolicyKit completes late. Cancel/close the pending interaction safely and return the final stopped/no-effect readback for this terminal attempt. No renewal, duplicate attempt, reboot, or O3.
