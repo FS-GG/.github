@@ -1800,7 +1800,7 @@ grep -q "\[delivery-channel\] fs-gg-rendering/product" <<<"$out" \
   || { echo "FAIL: removing the entry did not red the gate"; echo "$out"; exit 1; }
 grep -q "fs-gg-feedback-report" <<<"$out" \
   || { echo "FAIL: the finding does not name the row this item is about"; echo "$out"; exit 1; }
-grep -q "18 row(s)" <<<"$out" \
+grep -q "20 row(s)" <<<"$out" \
   || { echo "FAIL: the finding does not report the class's row count"; echo "$out"; exit 1; }
 run --registry "$CH/inverted.yml" --repos-root "$CHROOT" >/dev/null 2>&1 \
   && { echo "FAIL: the inverted pair must exit non-zero"; exit 1; }
