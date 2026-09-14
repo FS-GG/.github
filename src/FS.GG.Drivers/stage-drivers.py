@@ -17,7 +17,8 @@ DERIVED, NOT RESTATED (ADR-0058). The delivered set lives in exactly ONE authore
 SKILL.md bodies. This stager reads that manifest and stages exactly its `scope: driver` rows; it restates
 no list of driver names, so a driver added/retired in the emitter needs no edit here.
 
-WHAT IT STAGES, under <out-dir> (the package packs it under `drivers/`):
+WHAT IT STAGES, under <out-dir> (the package packs skills under `drivers/` and the repository payload
+under the sibling `workspace/` root):
 
   driver-skill-manifest.json          the manifest VERBATIM — the delivered set's authority + sha256s
   skills/<id>/<relative file>         the complete directory for each `scope: driver` row
