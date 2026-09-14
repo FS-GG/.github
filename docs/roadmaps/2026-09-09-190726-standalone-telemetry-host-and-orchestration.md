@@ -358,9 +358,12 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
     [#379](https://github.com/FS-GG/FS.GG.Coordination/pull/379) merged as `68bcfc5755f647e59c13927569422940b549e798`
     and `9b761cadb3ca910ca4abec96b566a994cd857964`; protected publication `34832375644` independently
     verified artifact `10342846021` and bundle SHA-256 `02855ab04a7a193772861900136af2a40070ef33c0769610c226523b227e0ab2`.
-  - [ ] O2-I4b — SystemAdmin builds the rootless orchestration image, installs fixed systemd user units
-    for the orchestration and PostgreSQL containers, migrates the paused v2 state, and proves stopped,
-    restart and database-restore behavior without a Podman socket or broad host mounts.
+  - [x] O2-I4b — SystemAdmin [#98](https://github.com/EHotwagner/SystemAdmin/pull/98) and
+    [#99](https://github.com/EHotwagner/SystemAdmin/pull/99), with Coordination settlement repair
+    [#380](https://github.com/FS-GG/FS.GG.Coordination/pull/380), installed the fixed two-container units
+    and migrated v2 state. Adoption receipt `b9a9c8e8a44c0e298fdb3c3102f2973cb55e27d380c5448017bc194b6c546dce`
+    proves zero unknown operations, continuity, boundary and ordered restart; cold-backup receipt
+    `8f233a8104a086d7c633f40c1d2d2931e9182b1732ec818f5579a7371cdfbbc6` and terminal stop passed.
   - [ ] O2-I4c — Bind fresh `.github#3421` input and one nonrenewing attempt; prove provider authentication,
     candidate persistence, required checks, native delivery and O2 failure/reboot recovery with
     ambiguous-effect reconciliation and the direct-credential limitation.
