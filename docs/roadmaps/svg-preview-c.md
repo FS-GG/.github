@@ -1,6 +1,6 @@
 # SVG-PREVIEW-C — installed replay, network and scale preview
 
-Status: Templates source adoption (.3) complete; Templates publication (.4) is next. Route: routine for release preparation and installed qualification;
+Status: Templates publication (.4) complete; installed public qualification (.5) is next. Route: routine for release preparation and installed qualification;
 protected operation for publication.
 
 This is the executable Release C plan for the
@@ -113,11 +113,23 @@ activation are reported independently.
   This is source adoption only: public Templates remains 0.12.0, SVG stays opt-in, and .5 must separately
   establish public-package receiver and performance evidence.
 
-- [ ] **SVG-PREVIEW-C.4 — Publish and verify Templates 0.13.0 — route: protected operation**
+- [x] **SVG-PREVIEW-C.4 — Publish and verify Templates 0.13.0 — route: protected operation**
 
   Pack once from the accepted source, retain and authenticate the original archive, publish those same bytes
   to both feeds, create the immutable tag/release and read back every template payload member and producer
   pin. Recovery uses only the retained source-run artifact.
+
+  Templates release run [34820243790](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34820243790)
+  succeeded from exact source `6acdfc5f5da41156db0aeaffcd54885b3b9e66be`. The immutable annotated
+  `fs-gg-templates/v0.13.0` tag peels to that source. Artifact `10337733099` retains the original archive
+  and checksum; its nupkg SHA-256 is `d93b122cb50fd27bed0cc34d21ce20835c7f6a0c7769c811e3fc30720417b42d`.
+  The workflow tested that retained archive before pushing it to both feeds. Readback artifact
+  `10339235374` proves all **205 payload entries** match on each feed; GitHub Packages retains the original
+  archive hash, while nuget.org's added signature produces
+  `ab72f74a76d59ad4be6f11f367bbdf1b27f8bdedae7a2e3afecbe0e4b3fac10c`.
+  The [GitHub Release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.13.0)
+  retains the original package asset. Publication is complete; .5 remains the separate installed-public
+  replay/network/scale and retained-upgrade acceptance boundary.
 
 - [ ] **SVG-PREVIEW-C.5 — Qualify installed public receivers and close Release C — route: routine**
 
