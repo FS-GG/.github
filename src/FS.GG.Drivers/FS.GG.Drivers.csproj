@@ -98,9 +98,14 @@
          the coherent scalar. -->
     <!-- 0.75.5 -> 0.76.0: coherent MINOR. The sibling Kit adds the workspace initialization skill;
          driver members, bytes, destinations, and behavior are unchanged. -->
+    <!-- 0.88.0 -> 0.89.0: coherent MINOR. FS.GG.Drivers adds an explicit content-addressed
+         repository-workspace payload for the routine policy, merge helper, trusted eligibility
+         workflow and validator closure. This makes the already-shipped work-roadmap guidance usable
+         from an installed scaffold without a source checkout. Kit and Coord.Cli advance with the
+         coherent scalar; their payload behavior is otherwise unchanged. -->
     <Version>$(FsggCoherentSetVersion)</Version>
 
-    <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
+    <Description>The .github-authored driver skills and their repository-root policy/helper/native-check closure as one versioned artifact. The SDD CLI pins and restores it online, then materializes its content-addressed manifests into a scaffold offline (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>
     <Company>FS-GG</Company>
     <PackageTags>fsgg;driver;skills;workroadmap;scaffold;dotnet</PackageTags>
@@ -142,11 +147,18 @@
 
   <Target Name="AddDriversContent" DependsOnTargets="StageDrivers">
     <ItemGroup>
-      <_DriversStaged Include="$(DriversStagingDir)/**/*" />
+      <_DriversStaged Include="$(DriversStagingDir)/**/*" Exclude="$(DriversStagingDir)/workspace/**/*" />
+      <_WorkspaceStaged Include="$(DriversStagingDir)/workspace/**/*" />
       <!-- Constant folder PackagePath: NuGet appends each glob item's RecursiveDir-relative path
            (driver-skill-manifest.json, skills/work-roadmap/SKILL.md, …) under drivers/. -->
       <TfmSpecificPackageFile Include="@(_DriversStaged)">
         <PackagePath>drivers/</PackagePath>
+      </TfmSpecificPackageFile>
+      <!-- Repository-root files are a separate receiver contract. Keeping them outside drivers/
+           lets SDD preserve the existing skill materializer while applying no-clobber semantics to
+           exact workspace destinations. -->
+      <TfmSpecificPackageFile Include="@(_WorkspaceStaged)">
+        <PackagePath>workspace/</PackagePath>
       </TfmSpecificPackageFile>
     </ItemGroup>
   </Target>

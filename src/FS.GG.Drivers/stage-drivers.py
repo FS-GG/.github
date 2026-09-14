@@ -21,6 +21,8 @@ WHAT IT STAGES, under <out-dir> (the package packs it under `drivers/`):
 
   driver-skill-manifest.json          the manifest VERBATIM — the delivered set's authority + sha256s
   skills/<id>/<relative file>         the complete directory for each `scope: driver` row
+  workspace/workspace-files.json      closed manifest for repository-root routine delivery files
+  workspace/files/<repository path>   exact owner bytes named by that manifest
 
 Only `scope: driver` rows are staged. A `scope: operator` row (ADR-0057, e.g. `drive-board`) is
 `.github`-authored but materialized NOWHERE — it runs only in the operator checkout where every repo is a
@@ -51,6 +53,7 @@ import sys
 # Repo root = two levels up from this file (src/FS.GG.Drivers/stage-drivers.py -> repo root).
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MANIFEST_PATH = os.path.join(REPO_ROOT, "registry", "driver-skill-manifest.json")
+WORKSPACE_INVENTORY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspace-inventory.json")
 
 # The delivered class. `operator` (ADR-0057) is authored-but-materialized-nowhere, so it is not carried.
 DELIVERED_SCOPES = {"driver"}
@@ -66,6 +69,72 @@ def canonical_digest(raw: bytes) -> str:
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
     return hashlib.sha256(raw).hexdigest()
+
+
+def safe_relative(value: object, *, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or os.path.isabs(value)
+        or ".." in value.split("/")
+        or "\\" in value
+        or value.startswith("./")
+        or "//" in value
+    ):
+        die(f"workspace inventory has unsafe {field}: {value!r}")
+    return value
+
+
+def stage_workspace(out: str) -> int:
+    try:
+        with open(WORKSPACE_INVENTORY_PATH, encoding="utf-8") as handle:
+            inventory = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        die(f"workspace inventory is missing or invalid at {WORKSPACE_INVENTORY_PATH}: {exc}")
+    if not isinstance(inventory, dict) or inventory.get("schema") != "fsgg/driver-workspace-inventory/v1":
+        die("workspace inventory has the wrong schema")
+    rows = inventory.get("files")
+    if not isinstance(rows, list) or not rows:
+        die("workspace inventory must contain a non-empty files array")
+
+    staged_rows = []
+    seen_paths: set[str] = set()
+    seen_sources: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"source", "path"}:
+            die(f"workspace inventory row must contain exactly source and path: {row!r}")
+        source = safe_relative(row.get("source"), field="source")
+        path = safe_relative(row.get("path"), field="path")
+        if path in seen_paths or source in seen_sources:
+            die(f"workspace inventory repeats source or destination: {row!r}")
+        seen_paths.add(path)
+        seen_sources.add(source)
+        src = os.path.join(REPO_ROOT, *source.split("/"))
+        try:
+            with open(src, "rb") as handle:
+                raw = handle.read()
+            executable = bool(os.stat(src).st_mode & 0o111)
+        except OSError as exc:
+            die(f"workspace source missing: {source} ({exc})")
+        dest = os.path.join(out, "workspace", "files", *path.split("/"))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as handle:
+            handle.write(raw)
+        os.chmod(dest, 0o755 if executable else 0o644)
+        staged_rows.append({
+            "path": path,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "executable": executable,
+        })
+
+    staged_rows.sort(key=lambda row: row["path"])
+    manifest = {"schema": "fsgg/driver-workspace-files/v1", "files": staged_rows}
+    manifest_path = os.path.join(out, "workspace", "workspace-files.json")
+    os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+    with open(manifest_path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(manifest, handle, indent=2, ensure_ascii=False)
+        handle.write("\n")
+    return len(staged_rows)
 
 
 def main(argv: list) -> int:
@@ -155,7 +224,11 @@ def main(argv: list) -> int:
     if staged == 0:
         die("no scope:driver rows in the manifest — nothing to deliver (a truncated/empty manifest?).")
 
-    sys.stdout.write(f"stage-drivers: staged {staged} driver skill(s) + the manifest into {out}\n")
+    workspace_files = stage_workspace(out)
+    sys.stdout.write(
+        f"stage-drivers: staged {staged} driver skill(s) + {workspace_files} workspace file(s) "
+        f"and their manifests into {out}\n"
+    )
     return 0
 
 

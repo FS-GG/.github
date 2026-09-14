@@ -13,6 +13,9 @@
     $(FsggDriversContentDir) points at the package's content root, which holds:
       driver-skill-manifest.json      the delivered set + whole-directory integrity records
       skills/<id>/<relative-path>     every file for each `scope: driver` row
+    $(FsggDriversWorkspaceContentDir) points at the sibling workspace payload, which holds:
+      workspace-files.json           closed repository-workspace payload manifest
+      files/<path>                    exact owner bytes at their repository-relative destination
 
     The consumer reads driver-skill-manifest.json, and for each row whose `materializes-when` predicate
     holds, lays the complete skills/<id>/ directory into the scaffold's skill roots, verifying it against the
@@ -20,6 +23,7 @@
   -->
   <PropertyGroup>
     <FsggDriversContentDir Condition="'$(FsggDriversContentDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../drivers'))</FsggDriversContentDir>
+    <FsggDriversWorkspaceContentDir Condition="'$(FsggDriversWorkspaceContentDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../workspace'))</FsggDriversWorkspaceContentDir>
   </PropertyGroup>
 
 </Project>

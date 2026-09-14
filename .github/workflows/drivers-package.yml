@@ -16,6 +16,12 @@ on:
   pull_request:
     paths:
       - "src/FS.GG.Drivers/**"
+      - ".fsgg/routine-development.json"
+      - ".github/workflows/routine-eligibility.yml"
+      - "tools/routine-delivery.py"
+      - "scripts/check-claim-generation.py"
+      - "scripts/check-routine-eligibility-envelope.py"
+      - "scripts/lib/gate.py"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "tests/skill-registry/catalog-triggers.json"
@@ -28,6 +34,12 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Drivers/**"
+      - ".fsgg/routine-development.json"
+      - ".github/workflows/routine-eligibility.yml"
+      - "tools/routine-delivery.py"
+      - "scripts/check-claim-generation.py"
+      - "scripts/check-routine-eligibility-envelope.py"
+      - "scripts/lib/gate.py"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "tests/skill-registry/catalog-triggers.json"

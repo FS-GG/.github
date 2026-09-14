@@ -576,8 +576,12 @@
        The coordination CLI adds explicit private workspace association, local or HTTPS destinations,
        prospective cutover and advisory workflow capture. This is source/package validation, not a
        published coherent release claim; all three package identities advance together. -->
+  <!-- 0.88.0 -> 0.89.0 (SVG-WORKSPACE-01.2 shared producer): MINOR on the stable 0.x line.
+       FS.GG.Drivers adds the closed routine policy/helper/native-check workspace payload required by
+       installed work-roadmap receivers. FS.GG.Kit and FS.GG.Coord.Cli advance unchanged because the
+       three package identities share one coherent version and release transaction. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.88.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.89.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

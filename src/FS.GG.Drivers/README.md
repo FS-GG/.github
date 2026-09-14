@@ -30,6 +30,8 @@ directs owner-authored skills onto.
 ```
 drivers/driver-skill-manifest.json     the delivered set + whole-directory manifests
 drivers/skills/<id>/<relative-path>    every file for each `scope: driver` row (e.g. work-roadmap)
+workspace/workspace-files.json         closed manifest of repository-root routine delivery files
+workspace/files/<path>                 exact owner bytes at their repository-relative destinations
 build/FS.GG.Drivers.props              a consumer handle: $(FsggDriversContentDir) → the content root
 ```
 
@@ -47,6 +49,12 @@ locate the packed bytes; the CLI reads `driver-skill-manifest.json`, and for eac
 `materializes-when` holds, lays the complete `skills/<id>/` directory into the scaffold's skill roots
 and verifies its file set, bytes, and executable modes
 against the recorded `sha256`. See ADR-0063 for the materializer design.
+
+The same props file exposes `$(FsggDriversWorkspaceContentDir)` for the repository-root payload. Its
+manifest is generated from `workspace-inventory.json` at pack time, directly from the owner files. It
+records a sorted, closed set of destination paths, raw SHA-256 values, and executable bits. A receiver
+must validate the complete set before writing, preserve existing files on any collision, and then
+materialize `files/<path>` at that exact repository-relative path.
 
 ## Deriving, not restating
 
