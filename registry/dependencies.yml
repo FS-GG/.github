@@ -523,9 +523,9 @@ contracts:
     # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.30.0"
-    package-version: "0.30.0"
-    package-tag: "fs-gg-ui-template/v0.30.0"
+    version: "0.31.0"
+    package-version: "0.31.0"
+    package-tag: "fs-gg-ui-template/v0.31.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
