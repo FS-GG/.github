@@ -878,7 +878,7 @@ contracts:
     # $(FsGgAudioVersion) axis. This replaces the record-only `fs-gg-audio` SKILL vocabulary (which taught
     # AudioEffect from the retired FS.GG.UI.Canvas surface) with the real playback realization.
     surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host"
-    consumers: [audio, rendering]   # audio: WITHIN the component (sample app + test suites). rendering: the template game/sample-pack profiles (ADR-0024 step 3, .github#238, FS.GG.Rendering#156 wired / #162 released). A scaffolded product receives the packages through the template, so Templates consumes them TRANSITIVELY via fs-gg-ui-template — no direct templates→audio edge.
+    consumers: [audio, rendering, templates]   # Templates 0.13.0 directly pins Core/WebBrowser 0.6.0 in the opt-in SVG player; Rendering retains its independent native-audio pin.
 
   - id: fs-gg-net
     version: "0.6.0"   # SOURCE: SVG Preview C ordered reconnect/backpressure reducer; Net#87 merge ada81df43ab344fccbab701493b5d0c585627a32.
@@ -894,7 +894,7 @@ contracts:
     # handshake) and an in-process code-first gRPC service. The wire-contract registry dimension it will
     # eventually carry (3 provenances) is SDD-first schema growth tracked by SDD#589.
     surface: "FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub"
-    consumers: []   # no FS-GG consumers: the SC2 and BAR clients are app repos, not FS-GG components (ADR-0052). Legal empty under schemaVersion 2.
+    consumers: [templates]   # Templates 0.13.0 directly pins Net 0.6.0 for the opt-in authoritative-session/reconnect adapter.
   - id: keyboard-input
     version: "0.5.0"          # Rendering-owned keyboard input-config SURFACE — the FS.GG.UI.KeyboardInput Keymap value type + rebind operations (FS.GG.Rendering#331), public Keymap.resolve + conflict diagnostics (FS.GG.Rendering#332), and the input-config-screen surface. FIRST available at the fs-gg-ui coherent-set version 0.5.0 (FS.GG.UI.KeyboardInput 0.5.0; every prior published version predated the Keymap merge). Registered per .github#365 (ADR-0028: the keyboard input-config mechanism/policy boundary). NO separate `package-version` here: the package (FS.GG.UI.KeyboardInput) is a member of the fs-gg-ui coherent set already tracked by the `fs-gg-ui-template` contract (pin == 0.5.0) — this row versions the consumed SURFACE, not a second package delivery. check-feed-coherence therefore leaves it out of the package-bearing set (correct — no double-count).
     owner: rendering
@@ -981,9 +981,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.12.0"   # SOURCE: Preview B composes exact Rendering 0.30.0, Game 0.15.0 and Audio 0.6.0 without changing provider/lifecycle defaults. Templates#474 merged exact source 7146224843419a10613b0f23c781b38bc88514b8; annotated tag fs-gg-templates/v0.12.0 peels to that commit. PRIOR 0.11.0 at 6a66e0a31c33feab4c8f650709b585df6ac3d4c4.
-    package-version: "0.12.0"   # FEED: release run 34763143762 published the retained original SHA-256 d53f9bd4d695a8293b0aa129b1716216a146c7d5e98848c1707101973243b4db to both feeds and compared payloads exact, allowing only nuget.org's .signature.p7s; public signed archive SHA-256 6a5eefcce4dd5f13774491ed0a5b9cd1d113b4dc6260cc3d4c28d810b35fb7dc. All identities install, and Templates#475's public receiver matrix passed direct, SDD, typed/profile-2, wizard and retained-0.11.0 upgrade routes. check-feed-coherence.py asserts literal newest on both feeds.
-    package-tag: "fs-gg-templates/v0.12.0"
+    version: "0.13.0"   # SOURCE: Templates#480, merge 6acdfc5f5da41156db0aeaffcd54885b3b9e66be; public producer adoption for SVG Preview C.
+    package-version: "0.13.0"   # FEED: run 34820243790 published/read back all 205 payload entries on both feeds; original artifact 10337733099, readback artifact 10339235374.
+    package-tag: "fs-gg-templates/v0.13.0"   # Immutable tag peels to 6acdfc5f5da41156db0aeaffcd54885b3b9e66be.
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
@@ -1050,10 +1050,9 @@ dependencies:
   # SINCE (2026-07-11, coordinated full-platform release): FS.GG.Templates 0.4.0 re-pinned its provider
   # descriptor (providers/rendering.providers.yml → FS.GG.UI.Template) to fs-gg-ui-template 0.8.0, so the
   # edge now reads @0.8.0; the 0.3.1-preview.1 pin above is HISTORICAL.
-  # ADVANCED to @0.30.0 after FS.GG.Templates#474 merged the exact Preview-B public producer pins and
-  # release 0.12.0 published them. This edge records the consumer's actual provider descriptor; SVG remains
-  # opt-in and the lifecycle default remains sdd.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.30.0 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  # ADVANCED to @0.31.0 after Templates#480 and the 0.13.0 dual-feed release. This edge records the
+  # consumer's actual provider descriptor and direct SVG pins; SVG remains opt-in and lifecycle remains sdd.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.31.0 composed via scaffold-provider (lifecycle=sdd); SVG preview directly pins UI.Scene/SvgBrowser/KeyboardInput 0.31.0" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
@@ -1097,7 +1096,9 @@ dependencies:
   # (ADR-0069/ADR-0071 §4) — a second, direct templates -> game edge alongside the existing
   # templates -> rendering -> game transitive path (rendering's edge is unrelated: template
   # game/sample-pack profiles, not the fable-game provider).
-  - { from: templates, to: game,       via: "game-sim-core@0.15.0 (fs-gg-fable-game consumes the published fs-gg-game-core-fable-lockstep-v1 profile; independently confirmed as EHotwagner/S.I.R.#138's exact Directory.Packages.props pin)" }
+  - { from: templates, to: game,       via: "game-sim-core@0.16.0 (Templates 0.13.0 pins the published Fable lockstep profile, replay/rules and authoritative-session APIs)" }
+  - { from: templates, to: audio,      via: "fs-gg-audio@0.6.0 (Templates 0.13.0 directly pins Core/WebBrowser in the opt-in SVG presentation player)" }
+  - { from: templates, to: net,        via: "fs-gg-net@0.6.0 (Templates 0.13.0 directly pins the authoritative-session/reconnect transport)" }
   # .github#2070: SDD's production scaffold materializer obtains the fable-game provider's
   # owner-sourced skill from Game's independently-versioned delivery package (ADR-0071 §1/ADR-0063).
   - { from: sdd,       to: game,       via: "game-skills@0.7.0 (FS.GG.Game.Skills — fs-gg-game-fable Fable lockstep skill; SDD#817/PR#819 proves the production materializer emits it under locked restore)" }
