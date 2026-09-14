@@ -1020,8 +1020,8 @@ contracts:
     owner: game
     # SVG-WORKSPACE-01.1: Game #636 published skills/v0.9.0 at e685f33a219830e18f204bb80d08ff16d0cd5727.
     # Native read-only recovery run 34828061816 retained and verified both feed archives;
-    # the original release had no CI archive custody. SDD's actual consumer pin remains below.
-    surface: "FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; installed adoption is SVG-WORKSPACE-01.2"
+    # the original release had no CI archive custody. SDD #984 adopts this exact owner release.
+    surface: "FS.GG.Game.Skills 0.9.0 package — owner-sourced game, Fable, replay and rules guidance with schema-v2 per-file digests and workspace bundle predicates; embedded by the SDD 1.8 receiver"
     consumers: [sdd]
   - id: rendering-skills
     version: "0.2.0"
@@ -1029,8 +1029,8 @@ contracts:
     owner: rendering
     # SVG-WORKSPACE-01.1: skills/v0.2.0 names 7ed2948b9fcc79f95e7ab2e0207b2540d77df361.
     # Release 34833403039 retained the original archive before either push and verified
-    # both feed payloads. SDD's actual consumer pin remains independently recorded below.
-    surface: "FS.GG.Rendering.Skills 0.2.0 package — owner-sourced SVG assets/performance and Fable workspace guidance with schema-v2 per-file digests and bundle predicates; installed adoption is SVG-WORKSPACE-01.2"
+    # both feed payloads. SDD #984 adopts this exact owner release with verified sidecars.
+    surface: "FS.GG.Rendering.Skills 0.2.0 package — owner-sourced SVG assets/performance and Fable workspace guidance with schema-v2 per-file digests and bundle predicates; embedded by the SDD 1.8 receiver"
     consumers: [sdd]
   - id: audio-skills
     version: "0.1.0"
@@ -1039,8 +1039,8 @@ contracts:
     # SVG-WORKSPACE-01.1: skills/v0.1.0 names 5dc82cf258664bf839d355d13542a17e25b47d16.
     # Recovery retained the org archive before the authorized NuGet push; native read-only
     # verification run 34829313855 completed both-feed qualification without another publish.
-    surface: "FS.GG.Audio.Skills package — Audio-owned browser effect guidance with schema-v2 per-file digests; SDD transport is owned by SVG-WORKSPACE-01.2"
-    consumers: []
+    surface: "FS.GG.Audio.Skills package — Audio-owned browser effect guidance with schema-v2 per-file digests; SDD 1.8 embeds the owner manifest and preserves Audio ownership in scaffold provenance"
+    consumers: [sdd]
 
 
 # Hard dependency edges (downstream -> upstream).
@@ -1104,7 +1104,9 @@ dependencies:
   - { from: templates, to: net,        via: "fs-gg-net@0.6.0 (Templates 0.13.0 directly pins the authoritative-session/reconnect transport)" }
   # .github#2070: SDD's production scaffold materializer obtains the fable-game provider's
   # owner-sourced skill from Game's independently-versioned delivery package (ADR-0071 §1/ADR-0063).
-  - { from: sdd,       to: game,       via: "game-skills@0.7.0 (FS.GG.Game.Skills — fs-gg-game-fable Fable lockstep skill; SDD#817/PR#819 proves the production materializer emits it under locked restore)" }
+  - { from: sdd,       to: game,       via: "game-skills@0.9.0 (SDD#984 embeds the exact Game owner manifest, Fable/replay/rules guidance and bundle predicates)" }
+  - { from: sdd,       to: rendering,  via: "rendering-skills@0.2.0 (SDD#984 embeds SVG workspace guidance and verified owner sidecars, preserving explicit Game-first shared-ID selection)" }
+  - { from: sdd,       to: audio,      via: "audio-skills@0.1.0 (SDD#984 adds Audio-owned skill transport and no-clobber provenance)" }
   # .github#135: the contract-coherence gate validates THIS registry with SDD's typed Fsgg.Registry validator.
   - { from: github,    to: sdd,        via: "registry-schema@1 (Fsgg.Registry / fsgg-sdd validates registry/dependencies.yml; gate pins FS.GG.SDD.Cli — ADR-0015)" }
   # ADR-0017 (.github#163/#168): registry/skills.yml is reconciled FROM the producer skill-manifests.

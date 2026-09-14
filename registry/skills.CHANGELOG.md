@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-14** — SVG WORKSPACE RECEIVER (`publishing-and-deployment`; owner `.github`; SDD #984, shared producer #3472): reconciled the generated operator publishing inventory and its digest in the current driver manifest after SDD 1.8.0 adopted Game Skills 0.9.0, Rendering Skills 0.2.0 and Audio Skills 0.1.0. Delivery-channel evidence now records the public installed receiver; bundle composition remains the Templates-owned `.3` work. No skill schema or independent package version changes.
+
 - **2026-09-14** — RECONCILE (`work-roadmap`, `publishing-and-deployment`; owner `.github`; producer PR #3472): refreshed the two owner digests after installed routine transport, same-PR repair guidance and coherent `0.89.0` publication. registry = manifest = bytes.
 
 - **2026-09-14** — SVG WORKSPACE GUIDANCE (`SVG-WORKSPACE-01.1`; Rendering #1324, Game #636, Audio #300): reconciled the owning schema-v2 manifests, adding Rendering SVG assets/performance, Game replay/rules and Audio browser-audio guidance. Added the `bundle` predicate vocabulary, ten existing Fable selections and four current body digests. The legacy shared collision owner remains unchanged; Audio receiver transport is tracked under `.2`. Registry bytes and predicates match the owner sources; published versions and installed adoption remain separate dependency/channel facts.

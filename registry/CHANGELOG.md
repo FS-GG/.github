@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-14** — SVG-WORKSPACE-01.2 SDD owner-package adoption (github; SDD#984): record the merged SDD 1.8 receiver's actual Game Skills 0.9.0, Rendering Skills 0.2.0 and Audio Skills 0.1.0 dependencies. Public release run 34845942599 verifies both feeds and installed Quint; the public Fable scaffold verifies owner bodies, routine transport and no-clobber upgrade. Record the Audio delivery channel and current architecture. Candidate bundle qualification remains pending.
+
 - **2026-09-14** — SVG-WORKSPACE-01.2 shared routine producer publication (github; SVG-WORKSPACE-01.2): record coherent `0.89.0` after exact-source release-saga recovery, native public qualification, both-feed normalized-payload verification and promotion. The three package members remain one coherent set; no engine wire surface changed.
 
 - **2026-09-14** — — SVG-WORKSPACE-01.1 owner guidance: record verified Rendering Skills 0.2.0, Game Skills 0.9.0 and new Audio Skills 0.1.0 after native dual-feed readback. Register manifest-derived SVG/bundle selections and the pending Audio receiver channel; retain actual SDD consumed pins. Reconcile generated inventory and current Release-C fixtures; installed delivery remains SVG-WORKSPACE-01.2.
