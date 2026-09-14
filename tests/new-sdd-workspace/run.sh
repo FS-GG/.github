@@ -558,7 +558,7 @@ for h in --help -h; do
   fi
 done
 
-if cli --help && printf '%s' "$OUT" | grep -qF -- "--bundle" && printf '%s' "$OUT" | grep -qF -- "player, studio, tactical, arcade, complete"; then
+if cli --help && grep -qF -- "--bundle" <<<"$OUT" && grep -qF -- "player, studio, tactical, arcade, complete" <<<"$OUT"; then
   ok "help documents the fable-game bundle flag and its closed value set"
 else
   bad "help documents the fable-game bundle flag and its closed value set" "$OUT"
