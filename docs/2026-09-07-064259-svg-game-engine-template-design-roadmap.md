@@ -44,8 +44,8 @@ engine APIs, and the S.I.R. repository remains strictly read-only.
 | 9 | **SVG-PREVIEW-B — Installed authoring/runtime preview** | Publish and qualify the coherent authoring, input, runtime and presentation set | **Complete; Release B.** The [Preview-B subroadmap](roadmaps/svg-preview-b.md) records the coherent Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0 publication/readback and installed public receiver matrix |
 | 10 | **SVG-REPLAY-01 — Replay, inspection, planning and rules** | Deliver C14–C16 without creating a second semantic authority | **Complete at the source/generated-candidate boundary.** Game PRs [#630](https://github.com/FS-GG/FS.GG.Game/pull/630), [#631](https://github.com/FS-GG/FS.GG.Game/pull/631), and [#632](https://github.com/FS-GG/FS.GG.Game/pull/632) supply replay, planning, rules and formal correspondence; Templates [PR #476](https://github.com/FS-GG/FS.GG.Templates/pull/476) supplies the installed typed-SDD and three-browser generated tools. Public installation remains pending SVG-PREVIEW-C |
 | 11 | **SVG-NETWORK-01 — Multiplayer and resync** | Deliver C17 two-client gameplay, reconnect, stale-input refusal and resync | **Complete at the source/generated-candidate boundary.** Game PRs [#633](https://github.com/FS-GG/FS.GG.Game/pull/633) and [#634](https://github.com/FS-GG/FS.GG.Game/pull/634), Net [PR #86](https://github.com/FS-GG/FS.GG.Net/pull/86), and Templates PRs [#477](https://github.com/FS-GG/FS.GG.Templates/pull/477) and [#478](https://github.com/FS-GG/FS.GG.Templates/pull/478) supply the authority, delivery, replay and three-browser journey. Public installation remains pending SVG-PREVIEW-C |
-| 12 | **SVG-SCALE-01 — Accessibility and measured scale** | Complete C18/C19 browser, density, responsiveness and performance qualification | **Selected next** through the [Scale subroadmap](roadmaps/svg-scale-01.md). Rendering/browser measurements and exact generated accessibility evidence |
-| 13 | **SVG-PREVIEW-C — Installed replay/network/scale preview** | Publish and qualify the coherent replay, network and scale set | Protected publication and installed clean/upgrade receiver qualification; this owns Release C |
+| 12 | **SVG-SCALE-01 — Accessibility and measured scale** | Complete C18/C19 browser, density, responsiveness and performance qualification | **Complete at the source/generated-candidate boundary** through the [Scale subroadmap](roadmaps/svg-scale-01.md), Rendering #1319–#1321 and Templates #479; public installation remains Release C |
+| 13 | **SVG-PREVIEW-C — Installed replay/network/scale preview** | Publish and qualify the coherent replay, network and scale set | **Selected** through the [Release-C subroadmap](roadmaps/svg-preview-c.md); producer preparation, protected publication and installed clean/upgrade qualification own Release C |
 | 14 | **SVG-WORKSPACE-01 — Complete generated workspace** | Complete C20 skills, samples, documentation, packaging, upgrade and section 13 journeys | Templates/SDD installed receiver evidence; lifecycle/default effects remain separately authorized |
 | 15 | **SVG-RELEASE-D — Complete workspace release** | Qualify all C01–C20, M0–M11 and section 13 outcomes as the complete supported workspace | Protected coherent publication, installed qualification and every Release D condition |
 
@@ -575,7 +575,8 @@ qualification all passed. [SVG-SCENE-02](roadmaps/svg-game-engine-scene-renderer
 local-candidate handoff. [SVG-PREVIEW-A](roadmaps/svg-preview-a.md) is complete: Rendering 0.29.0 and
 Templates 0.11.0 are published and read back from both feeds, and installed public direct, SDD, typed,
 wizard and retained-upgrade receivers pass. Authoring, input, runtime and presentation are complete at the
-source/generated-candidate boundary and Release B is complete; **SVG-REPLAY-01** is selected next. V0–V6 are not
+source/generated-candidate boundary and Release B is complete. Replay, networking and scale candidates
+are also complete; **SVG-PREVIEW-C** is selected. V0–V6 are not
 umbrella entry gates. Broader capability inventory and comprehensive stage
 closure remain required at their original boundaries.
 
