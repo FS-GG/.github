@@ -569,15 +569,16 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
    heartbeat evidence, then run native conformance and acceptance.
 2. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
-3. **Execute SVG-RELEASE-D publication and compatible activation.** SVG-WORKSPACE-01.1–.6 are complete and
-   frozen with the accepted local Caddy deployment boundary. The [Release-D plan](roadmaps/svg-release-d.md)
-   now publishes exact Templates 0.14.0 and wizard 0.11.2, qualifies clean public-only receivers and activates
-   the SVG product default under supported lifecycles. Durable hosting continues separately in Templates #491;
-   the single-lifecycle default remains gated by actual OperatingV2 and the owning SDD change.
+3. **Finish SVG-RELEASE-D lifecycle activation after OperatingV2.** SVG-WORKSPACE-01.1–.6 and
+   SVG-RELEASE-D.1–.4 are complete with the accepted local Caddy deployment boundary, public Templates 0.14.0
+   and wizard 0.11.2, public-only receiver qualification, and the SVG product default active under supported
+   lifecycles. SDD 2.0.0 now supplies the released Quint-default producer capability and explicit F# compatibility.
+   Durable hosting continues separately in Templates #491; only the protected single-lifecycle activation remains,
+   and it is gated by actual OperatingV2 evidence that producer publication cannot manufacture.
 
-The current public game baseline is Release C: Rendering 0.31.0, Game 0.16.0, Net 0.6.0, Audio 0.6.0 and
-Templates 0.13.0. SDD 1.8.0 adds the qualified receiver transport; Templates 0.14.0 remains an identified
-candidate. These producer deliveries do not activate the later lifecycle default.
+The current public game baseline is the compatible Release-D workspace through milestone .4: Rendering 0.31.0,
+Game 0.16.0, Net 0.6.0, Audio 0.6.0, Templates 0.14.0 and wizard 0.11.2. SDD 2.0.0 supplies the qualified
+Quint-default producer capability. These producer deliveries do not activate the later single-lifecycle default.
 
 ### 0.5 Known limits and decision state
 
