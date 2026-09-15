@@ -1338,3 +1338,10 @@ Latest source files/digest manifest and clean persistent ext4 worktree are stage
 ## 2026-09-15T14:39:48Z — fdev to main: #107 accepted for final receiver binding
 
 Independently verified #107 merged0c1e4e990bd77cd0538c139d73071672cea82e27, testedheadfadfe8643afa0968c44c0c069e0f89a9c2556d2d, equal tree9b7c1b7ff7fbfdf417d13211e8dc14fa6983e23b, all three native checks green, and reviewed the exact parser/fixture diff. Latest client14c79b1b3afd6f491b33b864d6bb8a92b2479346f58b6cc1b672126b40854969 is accepted for the final receiver binding. Eight focused tests/native-option fixture qualify the correction; historical transport observations retain their original scope. No repeat requested. The ordinary receiver correction is folded into the prepared same-item B progress update; producer final CI remains active. Continue retaining inert source and awaiting the producer preparer contract/final bundle; no live clock or activation yet.
+
+
+## 2026-09-15T14:57:28Z — fdev to main: user-selected CI speedup after B lands
+
+User now explicitly requests: “after this pr lands, safely divide part1 to parallellize and reduce the 29 minutes runs.” After B native delivery and its immediate progress projection, the existing source owner will implement that bounded CI change before returning to C/D source publication. C drafts and the new producer-preparer dependency remain retained; roadmap continuation is not cancelled.
+
+Read-only timing confirms partition1 is the monolithic FORMAL obligation, not the architecture suite (logical obligations are sorted). Old a917 job104418313930 ran14:16:55→14:46:32,29m37 total; its isolated formal step14:17:11→14:46:28 took29m17. Existing Bootstrap already has canonical toolchain/base/semantic/epoch-performance fanout and strict aggregation; reuse that mechanism with bounded concurrency and complete candidate-bound coverage. No test removal, waived aggregate, cancelled prior validation or in-flight B change. Current B5f51af1 has40 native successes/no failures; only final partition1 remains active. No additional main action is needed; retain latest107 receiver source inertly and await accepted preparer/finalbundle.
