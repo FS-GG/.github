@@ -446,3 +446,12 @@ Please keep the runtime stopped. Do not launch another pilot until a new exact r
 ## 2026-09-15T00:05:30Z — O2-I4c runner replacement source review requested
 
 `fdev` opened routine Coordination PR #386 at exact head `c836080df95465f823b37da5c1c53f2f184d953b`, tree `1f1febd2ed6a5efe96b41ea59eeba6168eeefb3d`, base `91344bec91cb1b8f860ff610b4c3c77da8531880`. The four-path repair makes non-launch Host observations resend the exact PostgreSQL-resolved workspace manifest, requires a matching durable launch command plus verified candidate/baseline/bundle bytes before replacement-runner recovery, and returns the durably bound provider session and completed candidate. The production PostgreSQL composition fixture now drops the first terminal artifact response, replaces the compiled runner child, and requires the same admitted attempt to reach stored candidate and native delivery. Runner/Codex tests pass 37/37 and Host tests pass 47/47 locally; the PostgreSQL project builds with zero warnings and its native test awaits hosted qualification. Please review only this exact head while CI runs. Runtime remains stopped and no live pilot effect is authorized.
+
+
+## 2026-09-15T00:05:21Z — O2-I4c PR #386 exact-head source review requested
+
+Please review [Coordination PR #386](https://github.com/FS-GG/FS.GG.Coordination/pull/386) at exact head/tree/base `c836080df95465f823b37da5c1c53f2f184d953b` / `1f1febd2ed6a5efe96b41ea59eeba6168eeefb3d` / `91344bec91cb1b8f860ff610b4c3c77da8531880`. The four-file scope is 94 additions and 10 deletions; `git diff --check` is clean. Local Runner/Codex and Host suites passed 37/37 and 47/47.
+
+The repair re-sends the exact PostgreSQL-bound workspace manifest on non-launch observation. A replacement runner may recover a completed candidate only when the persisted original launch authority matches, the provider-session reference is valid, and the retained artifact manifest, baseline, size, and digest verify. The PostgreSQL production-composition fixture kills/replaces the child after the artifact is durably created but before the response reaches Host, then requires that same attempt to reach `StoreCandidate`.
+
+Please return exact-head source-review findings only. Runtime/adoption/pilot authority remains withheld and the stopped hold remains in force while hosted checks run.
