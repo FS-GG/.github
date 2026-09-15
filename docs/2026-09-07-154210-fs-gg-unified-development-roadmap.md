@@ -47,6 +47,30 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **formal validation parallelized**, **2026-09-15**:
+Coordination [PR #390](https://github.com/FS-GG/FS.GG.Coordination/pull/390) merged tested head
+`a68fec32b0b031b0520766f05dd845cc83f778c7` as `5c42ae5dc8e535e7c07be54460978da2a491b79f`;
+both bind tree `5085237c67299609cf71f624293159291e01eb94`. All required native checks and the
+complete coherent aggregate passed. A shared six-execution matrix runs the canonical base, 15 semantic
+scenarios and epoch scenario alongside the other obligations. Strict aggregation requires all 17 formal
+fragments with current candidate/source/contract/toolchain bindings, then restores logical partition 1
+for the unchanged six-obligation final aggregate. Missing valid reuse still requires current qualification;
+prior-receipt search examines at most 25 candidates and never cancels coherent validation.
+
+Successful [native run 34993852935](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34993852935)
+reduced whole-workflow job elapsed time from **35m50s to 22m51s (36.2%)** against accepted B's
+[run 34982237662](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34982237662).
+Formal execution through aggregation took **18m44s**, or **21m05s including preparation**, versus the
+old formal job's **29m46s**. Fresh retained TRX results prove **378/378 unit** and **609/609 architecture**
+tests passed. Their optimistic dispatch now actually executes the suites. Summed job time increased from
+**45m04s to 105m31s** with real suite execution and fanout overhead; this is observed runner occupation,
+not billed usage or a cost-saving claim. These are single-run observations, not a statistical performance bound.
+
+Lost-host retirement, the source-owned new-admission preparer, final bundle adoption and the distinct
+local reboot pilot remain pending under the
+[owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o2-local-continuation.md).
+O2/O3 and **10/12** remain unchanged; no workspace default or runtime was activated.
+
 O2-I4c **paused recovery source delivered**, **2026-09-15**:
 Coordination [PR #389](https://github.com/FS-GG/FS.GG.Coordination/pull/389) binds candidate
 `5f51af1e713dec698f5e7c3ee2e4722288ef3ea3`, tree `5815c9b000b52c35da599281fd569ee16a0d95cd`;
@@ -68,9 +92,8 @@ records recovery and lost-host retirement. SystemAdmin's receiver correction
 Its current caller SHA-256 is `14c79b1b3afd6f491b33b864d6bb8a92b2479346f58b6cc1b672126b40854969`;
 eight focused tests preserve unknown, false and true termination observations distinctly. The earlier
 transport fixture remains scoped evidence; no model or sandbox probe was repeated for this parser fix.
-The next source correction splits the measured 29-minute formal partition with bounded concurrency and
-requires actual unit/architecture test execution evidence. Final bundle publication/adoption, original-attempt
-retirement and the distinct local reboot pilot remain
+The subsequent formal-partition correction and actual test-dispatch evidence are recorded above.
+Final bundle publication/adoption, original-attempt retirement and the distinct local reboot pilot remain
 pending. O2/O3 and **10/12** remain unchanged; no workspace default or runtime was activated.
 
 O2-I4c **bounded recovery caller delivered**, **2026-09-15**:
