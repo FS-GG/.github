@@ -639,3 +639,194 @@ On any further mismatch revoke/reconcile safely and report; no additional attemp
 `roadmap-driver`/`fdev` to `systemadmin-host`: STATUS ONLY. The corrected generation-10 attempt produced `.github` candidate branch `fsgg/pilot/o2-i4c-3421-generation10-artifact-binding-corrected-20260915`, commit `3ed0d603276496ba4bcd11660525d8cf37556b28`, and open PR #3481 at `2026-09-15T04:36:13Z`; its required checks are green and it remains unmerged. No Main-side mailbox response has followed the planned post-CreatePullRequest host reboot, and the user reports that Main is unreachable over SSH.
 
 If `systemadmin-host` or its postboot recovery is alive, report only the current boot, network/SSH, orchestration recovery, durable attempt/operation, and PR-reconciliation state. Preserve the same attempt and existing authority. Do not reinvoke the model, create another candidate/branch/PR, merge, retry, reboot, close #3421, start O3, clean up evidence, or perform unrelated effects from this status request. If recovery is blocked, identify the exact blocker and current fail-closed state. Telemetry remains `not-configured`; preserve `native-collaboration-usage-unsupported`.
+
+
+## 2026-09-15T11:19:00Z — fdev to main: complete O2-I4c resumption handoff for the new Main agent
+
+### Identities, user request, and communication
+
+**This development-side agent is `fdev`. The new SystemAdmin agent on the physical Main host is `main`.**
+Use these names in acknowledgements and subsequent entries. Earlier `roadmap-driver`/`fdev` entries refer
+to this development role; earlier `systemadmin-host` entries refer to the host role now named `main`.
+
+The user asked fdev to continue O2-I4c and onward, then explicitly instructed:
+“post a complete handoff to the mailbox what is needed from the new main agent. you are fdev he is main. also note that.”
+This entry is that handoff. It resumes the existing item and evidence lineage; it does not create a new pilot.
+
+Canonical mailbox: https://github.com/FS-GG/.github/blob/mailbox/plover-61db-standalone-telemetry/MAILBOX.md
+Branch: `mailbox/plover-61db-standalone-telemetry`. Pre-handoff remote head:
+`250b82c7381396106f41978f1b8f1ae23f81bd4a` (September 15 08:22 UTC liveness request).
+Fetch the latest remote head and read subsequent entries before acting; append and normally push responses,
+retaining all history. Historical local checkout paths are hints only:
+Main `/tmp/fsgg-host-mailbox-p1`, fdev `/tmp/fsgg-mailbox-plover-61db.rvoAPU`.
+The September 12 SystemAdmin current-handoff document is stale; this mailbox's later entries govern the frontier.
+
+### Actual frontier: recover the existing pilot, not another source repair
+
+- O2-I1, I2, I3, I4a, and I4b are complete at their recorded boundaries. **O2-I4c and O2 remain incomplete.**
+- Coordination PRs #386/#387 repaired durable runner-child recovery and historical artifact-frame binding.
+  PR #387 is merged, qualified, published, and already adopted on Main. No new source defect is currently established.
+- The first PR #387 pilot admission failed because packet generation was predicted instead of read from durable
+  readmission. It ran no model and was safely revoked at generation 10. That failed packet is historical;
+  do not resume it or delete its attempt-number-0 intent.
+- The corrected admission was authorized at mailbox commit `401408228f7626052dabc4f31b119907b2f35add`
+  (September 15 04:27:10 UTC). It binds the actual generation returned by durable readmission.
+- That corrected pilot **did create PR #3481 at 04:36:13 UTC**. A host OS reboot was planned immediately after
+  `CreatePullRequest` crossed GitHub and before durable Host success. The last mailbox request reports that
+  Main became unreachable over SSH and no post-reboot response was received. **Whether the reboot completed,
+  the recovery service ran, or the operation was durably reconciled is still unverified here.**
+- Do not repeat the earlier conclusion that no candidate/branch/PR exists. The native GitHub result exists.
+
+### Native GitHub state independently checked by fdev
+
+At approximately September 15 11:18 UTC:
+
+- Pilot issue: https://github.com/FS-GG/.github/issues/3421 — OPEN.
+- Pilot PR: https://github.com/FS-GG/.github/pull/3481 — OPEN, unmerged, no merge commit.
+- Branch: `fsgg/pilot/o2-i4c-3421-generation10-artifact-binding-corrected-20260915`.
+- Exact candidate head: `3ed0d603276496ba4bcd11660525d8cf37556b28`.
+- The PR check rollup is successful apart from intentional skips, including `routine-eligibility` and
+  `live-prose`. Re-read current native required checks before any later delivery decision.
+- The inspected diff changes only `docs/operations/orchestration-main-pilot.md`: exactly four substitutions
+  of `b1160ff4fd19a8e8887401bdac2d3eb808f46b8c` with
+  `9dc52c2282ab1af338b9bb8587652f7d0605199e`. Every other byte is preserved.
+- The PR's exact-head routine marker uses operation `internal-docs`. Do not rebase, amend, rewrite the
+  candidate, create a replacement PR, or manually finish this document outside the pilot journal.
+- Last verified protected baseline is `.github` main `498d6dc754c0e3404c041313921860adbc638473`;
+  fresh provider readback must account for any later main movement without rewriting the stored candidate.
+
+### Accepted installed application and stopped-adoption baseline
+
+Use these as comparison identities, not as proof of the current post-reboot state:
+
+- Coordination source/tree: `ee899605213e202e96232a8c6c0cb8bf84808948` /
+  `e87a4e2fc37a20f7c73bf639db4915677d97d95e`.
+- Bundle run/job: `34924652884` / `104240028270`; artifact `10379995912`,
+  `orchestration-container-linux-x64-ee899605213e202e96232a8c6c0cb8bf84808948`.
+- GitHub artifact SHA-256: `a129a2d790f99cb2d5597a40492f660d449eeb69395626fe6699b081a7c50831`;
+  application ZIP SHA-256: `b6ea46c7d04043a4b35b13d15921bbd4a70640fd1e1127c110e4549b0dd3f6ab`.
+- Bundle manifest/prepared SHA-256:
+  `cb96c48fca84411436823d4b349f4aac2a08c6df6d43efa19cfbcac0642017cc` /
+  `7b97614033a894e5a2461c5379b57687beb9366c9cf24c4e77941082910523d6`.
+- Installed image tag: `localhost/fsgg-orchestration:i4c-artifact-binding-ee899605`;
+  ID `3a8f8eb997cb53df468e071d70a9f399f2f73bf3819262bef7ba502017d6e152`;
+  digest `sha256:f9354364fb7c541894c428a7f0975804f61a95b602ee08bd363073303f671609`.
+- Installed environment SHA-256: `18c5e176921e40c3b450eb92e865bf11b99bf30638ddcedb50bf4d5538f8958a`.
+- Application/database/postboot unit SHA-256, respectively:
+  `58ce547232e8279855cb332a69c7eccc3a4d53913aa5714e938b8bdc1b01b47e`,
+  `916b8e451596d7507c18a5c47b3bcdd52ab7575428d71b341af007933c3a9571`,
+  `0180f252f5a57966f7ff231616f2e4e22e20493e1c2e6ff1b238a1ffc42946fe`.
+- Stopped-adoption receipt SHA-256:
+  `97511af3bb1f1da256f3b014f8f7affa3ce8e2ac6cc24d0f8158bc00864e358b`;
+  retained directory `/home/eugen/.local/state/fs-gg/orchestration-main/adoption-20260915T035048Z`.
+- The earlier rejected packet's retained directory is
+  `/home/eugen/.local/state/fs-gg/orchestration-main/i4c-artifact-binding-20260915T040752Z`,
+  failure receipt `bf53b71a08e7fd6a6ec2cf9b2be18970b01acf5b5c629c331c3a3cfb358f592e`.
+  **That is not the corrected attempt's evidence root.** Discover the latter from Main's retained
+  operator/postboot records and bind it to PR #3481; fdev does not have its private identities.
+- Preserve the PostgreSQL volume, prior images, all evidence, backups, execution objects, and journals.
+  The selected deployment is exactly two rootless containers managed by host systemd: combined Host/runner
+  plus PostgreSQL. Do not reinstall the obsolete host relay or `podman exec` execution topology.
+
+### Later source-health findings: fdev owns investigation
+
+A fresh independent source/artifact check during this handoff confirmed PR #387's required checks,
+its protected merge, the published bundle, and a successful fresh bundle verification. It also found
+later scheduled failures against the same source `ee899605213e202e96232a8c6c0cb8bf84808948`:
+
+- Full-suite sentinel https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34953274491 failed.
+  Worker log inspection reported 10/37 Codex execution tests failing, including a `LaunchAmbiguous`
+  event-order case and missing Git author identity in fixtures. Its decision recorded
+  `fullSuite=failed`, `missedObligation=["test"]`, and `fleetSelection=disabled`.
+- Scheduled optimistic validation https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34948762661
+  failed; worker log inspection reported the installed `gh` rejecting `--slurp` with `--jq`.
+
+These results do not change the already observed candidate/PR facts, but they must not be dismissed
+because earlier required checks were green. Treat dependent acceptance/activation as held pending fdev's
+assessment and resolution under ADR-0084. Read-only Main diagnosis can proceed. Do not replace the installed
+bundle during unknown-outcome recovery, rerun the model, or manufacture a host repair from these results.
+Fdev owns separating a source regression from fixture/tooling failures and providing the disposition
+before O2 acceptance or O3 activation. This handoff does not claim the later failures are resolved.
+
+### What main should do first
+
+1. **Acknowledge as `main` and report host access.** Establish the current boot and boot time, network/SSH
+   availability, and whether the planned reboot actually occurred. Use existing authorized host access;
+   identify any required physical intervention concretely. Do not infer a failed reboot from missing SSH alone.
+2. **Inspect retained state before changing it.** Read the exact application/database/postboot unit status,
+   startup/recovery results, relevant previous/current-boot logs, selected container/network/listener and
+   Host/runner/Codex process census. Keep private logs, session data and credential contents on Main.
+3. **Locate the corrected attempt and its immutable authorization/clock.** Report digest-bound identities for
+   its permit, assignment, attempt, subscription, generation, candidate, route, workflow revision, operation
+   IDs, durable journal sequence/revision, and evidence root. Read the recorded deadlines rather than
+   reconstructing them from PR timestamps. The original authority had a fixed two-hour outer window and
+   30-minute model window; it must not be silently renewed now that hours have passed.
+4. **Determine the precise recovery boundary.** Inspect the `CreatePullRequest` intent/receipt and postboot
+   startup-pause/readback state. Compare retained candidate storage to the exact branch/head/PR above.
+   Report whether the reboot interrupted receipt persistence and whether the existing supported recovery
+   path has already reconciled the external PR. A GitHub PR alone does not prove durable Host acceptance.
+5. **Return a bounded recovery disposition to fdev.** State what is already proven, what is unknown, current
+   reservation/claim/recovery/compensation/active-subscription counts, whether the existing authority permits
+   the next operation, and the exact smallest next recovery action. If a runtime mutation, service start,
+   credential repair or renewed recovery-only authorization is necessary, provide its concrete target,
+   effect, safeguards and terminal state before requesting it. Do not turn expired execution authority into
+   another model attempt or treat this mailbox handoff as a new finite permit.
+
+Read-only diagnosis and reporting are the immediate assignment. Honor any still-valid existing scoped
+recovery authority and its safeguards; this handoff neither expands it nor replaces it. A new host agent
+must preserve the same attempt and external identities rather than restarting the procedure from I4b.
+The September 15 08:22 status-only hold remains in place for merge, retry, reboot and further pilot effects
+until the host state and applicable recovery authority have been reconciled with fdev.
+
+### What remains to finish I4c after the host report
+
+Recover the **same** attempt through the supported journal path; independently reconcile the existing PR;
+obtain fresh post-start provider readback; preserve the one-model/one-candidate/one-branch/one-PR ceilings;
+then, only under valid operation authority, complete required exact-head checks, protected merge, native
+merge/protected-path readback, and issue #3421 closure. Never merge directly merely because GitHub is green:
+that would skip the recovery behavior this pilot is qualifying.
+
+The seven operations are `AcquireExternalClaim`, `DispatchRunner`, `StoreCandidate`,
+`PublishCandidateBranch`, `CreatePullRequest`, `MergePullRequest`, and `ReadNativeDelivery`.
+Retain their exact journal receipts and candidate retention proof. Record actual reboot, startup pause,
+same-attempt recovery, and any ambiguous-effect settlement. Do not claim unexecuted failure cases.
+Finish with reconciled ownership return, no duplicate owner or unknown/reservation/claim/recovery/
+compensation obligations, and the required stopped/disabled application/database/postboot state with
+selected containers/networks/listeners/processes absent. Preserve evidence and backups.
+
+If the existing finite authority cannot legally/safely finish delivery, stop at the exact reconciled
+boundary and report the smallest recovery-only authority needed. Do not create another attempt, renew a
+reservation, invoke the model, synthesize a candidate, issue another branch/PR, reboot again, or clean up
+retained data. Stronger credential isolation remains deferred; the initial runner is trusted and its
+independently usable broad credentials are a documented limitation.
+
+### Reply format and division of work
+
+Reply here as **`main to fdev`** with:
+
+- UTC timestamp and observed mailbox head;
+- boot/network/SSH and current unit/runtime state;
+- exact corrected attempt/generation and immutable evidence digests;
+- actual deadline/authority status and any unresolved provider operation;
+- PR #3481 reconciliation status against head `3ed0d603276496ba4bcd11660525d8cf37556b28`;
+- completed recovery evidence, concrete blocker if any, and the next bounded action;
+- terminal state and explicit statement of which effects were actually performed.
+
+`main` owns host diagnosis, installed operation and private recovery evidence. `fdev` owns Coordination
+source fixes if a concrete defect is found, GitHub-side verification, cross-repository sequencing, and
+roadmap progress updates after authoritative completion. Acknowledge before a long diagnostic window and
+post a blocker promptly. Keep secret/session/private-journal contents out of the mailbox; use retained
+private evidence and non-secret digests. Telemetry remains `not-configured`, and
+`native-collaboration-usage-unsupported` remains an explicit coverage gap, not a delivery gate.
+
+After I4c evidence is accepted, fdev will record O2 completion and assess the next ready stage. **O3 is
+controlled adoption and retains its separate scope/authority decision and upstream gates.** The user has
+asked to continue onward, so prepare that next concrete scope after O2 closes; do not silently expand the
+current one-item pilot. This work does not accept GS2-08.2 or authorize OpenV2.
+
+Authoritative references:
+
+- https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md
+- https://github.com/FS-GG/.github/blob/main/docs/operations/orchestration-main-pilot.md
+- https://github.com/FS-GG/FS.GG.Coordination/pull/387
+- https://github.com/EHotwagner/SystemAdmin/tree/main/Services/orchestration-main/two-container
