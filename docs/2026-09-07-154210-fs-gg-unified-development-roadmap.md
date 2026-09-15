@@ -63,6 +63,20 @@ outcome remain unavailable. Corrected runtime qualification, local live recovery
 disposition remain pending. O2/O3 and the top-level **10/12** count are unchanged. No generated workspace
 or lifecycle default changed. Telemetry remains `not-configured`, with native collaboration usage unsupported.
 
+SVG-WORKSPACE-01.4/.6 **completed — local deployment accepted and evidence frozen**, **2026-09-15**:
+Templates [PR #492](https://github.com/FS-GG/FS.GG.Templates/pull/492) merged as
+`a9371afcf22c6986e3c324b1ce85edfc9ee97235` and closed every workspace milestone. The frozen product source
+is `2d8802d527e01afe4755ae7015a5627be88e318f`; retained Templates 0.14.0 package SHA-256 is
+`340250f942efef30702bf8c3f1f9a9096ca246c1bb4b244a2c5806ac49398380`. The accepted Podman/Docker Compose
+deployment uses Caddy as the production-shaped static edge and reverse proxy for the ASP.NET authority.
+It proves served Player/Studio identity, two-client SignalR WebSocket reconnect and retained rollback locally.
+Public DNS/TLS, host reboot survival and external availability are not claimed and are deferred to
+[Templates #491](https://github.com/FS-GG/FS.GG.Templates/issues/491). The
+[freeze report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-15-svg-workspace-freeze.md)
+binds the source, artifact and qualification inventory. [SVG-RELEASE-D](roadmaps/svg-release-d.md) is selected
+for exact Templates/wizard publication, public-only receiver qualification and compatible product activation;
+its later lifecycle-default effect retains the OperatingV2/SDD prerequisite.
+
 SVG-WORKSPACE-01.5 **completed — installed development and retained adoption**, **2026-09-15**:
 Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486) merged reviewed head
 `deacec061a23a75f8302d86539187aec89253227` as `6b797aa6099680ab06763200d1d2a11ed4b7ae16`.
@@ -83,10 +97,10 @@ and [semantic change](https://github.com/FS-GG/svg-workspace-public-clean-202609
 [semantic change](https://github.com/FS-GG/svg-workspace-public-retained-20260914/pull/3).
 The [adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-14-svg-complete-workspace-adoption.md)
 records offline profile-2 authority, bounded profile-1 migration, lifecycle compatibility and native
-pending/stale-head refusal. **.4 hosting, .6 freeze and Release D remain open**; these deliveries do not
-publish Templates/wizard or activate the later lifecycle default.
+pending/stale-head refusal. The later .4/.6 freeze accepts the local container deployment boundary; these
+.5 deliveries do not publish Templates/wizard or activate the later lifecycle default.
 
-SVG-WORKSPACE-01.4 **source and installed journeys delivered; hosted effect pending**, **2026-09-15**:
+SVG-WORKSPACE-01.4 **source and installed journeys delivered**, **2026-09-15**:
 Templates [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485) merged as
 `80f9c843737e8351c3ea04fe61a88a3a7538a7d4`. The complete candidate carries blank authoring through
 play, persistence, schema-3 export and two-browser authority, with Tactical/Arcade examples, bounded rule
@@ -99,8 +113,8 @@ passed native [source, three-browser and Chromium/Orca qualification](https://gi
 The [unpublished native archive](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920041593)
 has SHA-256 `364b1c500dede32a9117d1e4c90daf8d44975698c0178f305836c7fd85940b2e`.
 The screen-reader journey uses actual Orca focus mode and observes speech output; physical audio remains
-unobserved. **.4 remains open** until the versioned static/ASP.NET deployment and rollback are exercised on
-a durable host. Final evidence freeze and Templates/wizard publication remain .6 and Release D.
+unobserved. Subsequent PRs #489/#490 exercise the versioned static/ASP.NET deployment and rollback through
+the local Caddy edge; PR #492 accepts that as .4 and freezes .6. Durable public hosting remains #491.
 
 SVG-WORKSPACE-01.3 **completed at source and installed-candidate boundaries**, **2026-09-14**:
 Templates [#484](https://github.com/FS-GG/FS.GG.Templates/pull/484) merged as
@@ -120,10 +134,9 @@ retains artifact `10358294588`, a 313-entry archive with SHA-256
 Installed wizard 0.11.2 from [#3476](https://github.com/FS-GG/.github/pull/3476), public SDD 1.8.0 and
 these exact Templates bytes passed bundle/owner/refusal/legacy checks and generated default/legacy builds;
 the final receipt SHA-256 is `0fe564f99fd27760517d4fa7e6ed1e840961261ba5aa2ac570aeb7adb2a832c9`.
-**The initial .1–.3 window is complete.** The .4 source/journeys and .5 development/upgrade
-qualification above extend it; durable hosting and the .6 evidence freeze remain ahead. Templates and wizard
-publication, and eligible lifecycle-default activation, remain Release D; this source delivery does not
-change the public baseline.
+**The initial .1–.3 window is complete.** The later .4/.5 journeys and adoption plus the accepted local
+deployment and .6 freeze extend it. Templates and wizard publication, and eligible lifecycle-default
+activation, remain Release D; this source delivery does not change the public baseline.
 
 SVG-WORKSPACE-01.2 **completed**, **2026-09-14**: SDD **1.8.0** and the shared **0.89.0**
 routine producer are published.
@@ -167,12 +180,12 @@ replay/network/scale/accessibility and preservation/rollback. The [Release-C pla
 binds the native artifacts and fresh exact-release-source timing evidence; physical-device and heap limits
 remain explicit. Composition and release-route validation also passed.
 
-**SVG-WORKSPACE-01 remains selected** through its [Templates-owned subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md).
-Its initial **.1–.3** owner-guidance, installed-SDD and default SVG composition window is complete;
-**.5** development/adoption is complete, and **.4** awaits durable hosting before **.6** freezes the evidence.
-This selection does not complete C20 or Release D. Product default, explicit typed-profile
-readiness and the later lifecycle-default activation retain their separate compatibility and authority
-conditions; the final lifecycle-default effect requires actual OperatingV2 evidence.
+**SVG-WORKSPACE-01 is complete** through its [Templates-owned subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md).
+Milestones **.1–.6** deliver owner guidance, installed SDD, default SVG composition, local containerized Caddy
+deployment/rollback, installed development/adoption and the final evidence freeze. Durable public hosting is
+separately deferred to Templates #491. [SVG-RELEASE-D](roadmaps/svg-release-d.md) is selected. Its compatible
+Templates/wizard publication and product-default work may proceed now; the later single-lifecycle default still
+requires actual OperatingV2 evidence and the owning SDD change.
 
 SVG-PREVIEW-C.4 Templates publication completed, **2026-09-14**: native release run
 [34820243790](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34820243790) published Templates
@@ -325,18 +338,18 @@ link to owning evidence and do not replace it; a missing projection is stale rep
 | **SVG-NETWORK-01 — Multiplayer and resync** | **Complete at source/generated-candidate boundary** | The [network plan](roadmaps/svg-network-01.md) binds Game #633/#634, Net #86 and Templates [#477](https://github.com/FS-GG/FS.GG.Templates/pull/477)/[#478](https://github.com/FS-GG/FS.GG.Templates/pull/478) to authoritative two-client reconnect, refusal, resync and replay. | Public installation remains Release C. |
 | **SVG-SCALE-01 — Accessibility and measured scale** | **Complete at source/generated-candidate boundary** | The [scale plan](roadmaps/svg-scale-01.md) binds Rendering #1319–#1321 and Templates [#479](https://github.com/FS-GG/FS.GG.Templates/pull/479) to frozen Chromium budgets and Chromium/Firefox/WebKit accessibility evidence. | Public installation remains Release C; unavailable measurement dimensions stay disclosed. |
 | **SVG-PREVIEW-C — Installed replay/network/scale preview** | **Complete — Release C** | The [Release-C plan](roadmaps/svg-preview-c.md) targets Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Templates 0.13.0, retaining Audio 0.6.0 and SDD 1.7.0. | Producer and Templates publication, dual-feed verification and public clean/retained receiver qualification are complete. SVG remains opt-in; C20 and Release D are separate. |
-| **SVG-WORKSPACE-01 — Complete generated workspace** | **.1–.3 and .5 complete; .4 source delivered, hosting pending** | The [Templates-owned plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) records guidance, SDD transport, complete composition, [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485)'s game/browser journeys and [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486)'s installed development and retained adoption. | Deploy and roll back the static player/Studio and ASP.NET authority on a durable target to complete .4, then freeze .6. Release D publication and lifecycle-default activation remain separate. |
+| **SVG-WORKSPACE-01 — Complete generated workspace** | **Complete — .1–.6 frozen** | The [Templates-owned plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) records guidance, SDD transport, complete composition, installed development/adoption, and the accepted local Caddy deployment/rollback. [#492](https://github.com/FS-GG/FS.GG.Templates/pull/492) freezes the exact source and evidence. | [Release D](roadmaps/svg-release-d.md) owns public Templates/wizard adoption and activation. Durable public DNS/TLS/reboot evidence is deferred to Templates #491. |
 
 #### SVG milestone projection
 
 This table is a concise navigation projection. The linked feature subroadmaps and owner-native PRs, commits,
 checks, artifacts and operation receipts remain authoritative.
 
-Reconciled SVG feature-milestone states: **71 completed; SVG-WORKSPACE-01.1–.3 and .5 complete**.
+Reconciled SVG feature-milestone states: **73 completed; SVG-WORKSPACE-01.1–.6 complete**.
 The latest published producer set is Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Audio 0.6.0.
-Templates 0.13.0 is the qualified installed Release-C baseline. The 0.14.0 candidate introduces the default SVG
-composition; source/installed journeys and adoption pass, while durable hosting, final freeze and Release D
-remain ahead. Published defaults remain unchanged.
+Templates 0.13.0 is the qualified installed Release-C baseline. The frozen 0.14.0 candidate introduces the
+default SVG composition; workspace source, installed journeys, local deployment/rollback, adoption and freeze
+pass. Release D publication and public-only qualification remain ahead. Published defaults remain unchanged.
 
 | Milestone | Projected state | Native evidence | Remaining boundary |
 |---|---|---|---|
@@ -391,9 +404,10 @@ remain ahead. Published defaults remain unchanged.
 | **SVG-PREVIEW-C.5** | **Completed** | Templates [#481](https://github.com/FS-GG/FS.GG.Templates/pull/481), merge `7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0`, and public receiver run [34822927445](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927445) | Release C is complete through public clean/retained replay/network/scale qualification. C20, Release D and later activation remain separate. |
 | **SVG-WORKSPACE-01.1** | **Completed — owner guidance published** | [Owner publication/readback evidence](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md#ready-milestone-window), Rendering [34833403039](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34833403039), Game [34828061816](https://github.com/FS-GG/FS.GG.Game/actions/runs/34828061816), Audio [34829313855](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34829313855) | Public Rendering/Game/Audio skills are verified; SDD installation and bundle selection remain .2, generated workspace composition .3, and final Release D remains separate. |
 | **SVG-WORKSPACE-01.2** | **Completed — published installed receiver** | SDD [#984](https://github.com/FS-GG/FS.GG.SDD/pull/984), public readback [34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599), and Templates [#483](https://github.com/FS-GG/FS.GG.Templates/pull/483), merge `c658fc38…` | Public SDD 1.8.0/Drivers 0.89.0 deliver exact owner guidance and routine tools; offline authority and five-bundle candidate transport pass. Full Templates composition and contradiction validation remain .3; public adoption and lifecycle activation remain Release D. |
-| **SVG-WORKSPACE-01.3** | **Completed — source and installed candidate** | Templates [#484](https://github.com/FS-GG/FS.GG.Templates/pull/484), merge `3f3a9c59…`, [native composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870596389), and installed wizard from [#3476](https://github.com/FS-GG/.github/pull/3476) | Default SVG gameplay, shared Studio content, bundle/legacy/refusal behavior, locked builds and exact installed candidate selection pass. Source journeys and upgrade/development proof are delivered through .4/.5; hosting and freeze remain open; public Templates/wizard adoption remains Release D. |
-| **SVG-WORKSPACE-01.4** | **Source/journeys delivered — hosting pending** | Templates [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485), merge `80f9c843…`, native three-browser/Orca, composition and installed-candidate evidence | Actual durable static/ASP.NET deployment, served-byte readback, production journey and rollback are required before completion. |
-| **SVG-WORKSPACE-01.5** | **Completed — installed development and retained adoption** | Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486), merge `6b797aa6…`, four delivered public synthetic receiver PRs and the [adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-14-svg-complete-workspace-adoption.md) | None for .5; durable hosting, .6 freeze, public Templates/wizard publication and later lifecycle-default activation remain separate. |
+| **SVG-WORKSPACE-01.3** | **Completed — source and installed candidate** | Templates [#484](https://github.com/FS-GG/FS.GG.Templates/pull/484), merge `3f3a9c59…`, [native composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870596389), and installed wizard from [#3476](https://github.com/FS-GG/.github/pull/3476) | Default SVG gameplay, shared Studio content, bundle/legacy/refusal behavior, locked builds and exact installed candidate selection pass. Source journeys and upgrade/development proof are delivered through .4/.5; public Templates/wizard adoption remains Release D. |
+| **SVG-WORKSPACE-01.4** | **Completed — local deployment accepted** | Templates [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485), [#489](https://github.com/FS-GG/FS.GG.Templates/pull/489), [#490](https://github.com/FS-GG/FS.GG.Templates/pull/490), and exact container-edge evidence frozen by #492 | Local Caddy serves Player/Studio and reverse-proxies ASP.NET/SignalR with reconnect and rollback. Public DNS/TLS/reboot/availability are unclaimed and deferred to #491. |
+| **SVG-WORKSPACE-01.5** | **Completed — installed development and retained adoption** | Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486), merge `6b797aa6…`, four delivered public synthetic receiver PRs and the [adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-14-svg-complete-workspace-adoption.md) | None for .5; public Templates/wizard publication and later lifecycle-default activation remain separate. |
+| **SVG-WORKSPACE-01.6** | **Completed — evidence frozen** | Templates [#492](https://github.com/FS-GG/FS.GG.Templates/pull/492), merge `a9371afc…`, and the [freeze report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-15-svg-workspace-freeze.md) | Exact Templates 0.14.0 and wizard 0.11.2 publication plus installed-public qualification proceed in [Release D](roadmaps/svg-release-d.md). |
 
 No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
 receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
@@ -434,11 +448,11 @@ sessions, SQLite/WAL files, private identities and unrestricted review prose rem
    heartbeat evidence, then run native conformance and acceptance.
 2. **Continue GS2-08.3–08.9.** Accept the census and common precondition, integrate all callers, attack the fence,
    publish one immutable bridge and prove receiver adoption/old-client refusal before entering V2.
-3. **Complete SVG-WORKSPACE-01 durable hosting and freeze.** Releases A–C, .1–.3 and .5 are complete;
-   .4 source and installed journeys are delivered. The [Templates subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md)
-   now requires an actual durable static/ASP.NET target, versioned deployment, served identity/byte readback,
-   production journey and rollback, then the .6 acceptance freeze. No destination/access is established yet.
-   Final public Templates/wizard adoption and eligible lifecycle-default activation remain Release D.
+3. **Execute SVG-RELEASE-D publication and compatible activation.** SVG-WORKSPACE-01.1–.6 are complete and
+   frozen with the accepted local Caddy deployment boundary. The [Release-D plan](roadmaps/svg-release-d.md)
+   now publishes exact Templates 0.14.0 and wizard 0.11.2, qualifies clean public-only receivers and activates
+   the SVG product default under supported lifecycles. Durable hosting continues separately in Templates #491;
+   the single-lifecycle default remains gated by actual OperatingV2 and the owning SDD change.
 
 The current public game baseline is Release C: Rendering 0.31.0, Game 0.16.0, Net 0.6.0, Audio 0.6.0 and
 Templates 0.13.0. SDD 1.8.0 adds the qualified receiver transport; Templates 0.14.0 remains an identified
@@ -1594,7 +1608,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
 | **Cooperative canary and adoption** | F4–F5: one enrolled peer and work class reaches independently verified delivery, then a measured adoption decision | Coordination with project/receiver owners; F3 evidence, OperatingV2 under the existing default and separate canary authority | No subroadmap linked yet; conditional |
-| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A/B and replay/network/scale source/generated candidates are complete. Release C public qualification is complete; SVG-WORKSPACE-01.1–.3 and .5 are complete, with .4 source delivered and durable hosting pending; later defaults keep their own authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
+| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A–C and SVG-WORKSPACE-01.1–.6 are complete. Release D is selected for exact public publication, installed qualification and activation; durable hosting is deferred, while the single-lifecycle default keeps its OperatingV2/SDD authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), [SVG-RELEASE-D](roadmaps/svg-release-d.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
 | **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates; accepted Xantham evaluation and existing bindings workflow | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md) |
 | **Fable SC2 client and custom WASM control** | Section 15 product track: browser tactical client, native SC2 gateway and portable module contract; independent of v2 prerequisites | Proposed product owner; this design does not start implementation or deployment | [SC2C-01 design and feature roadmap](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md) |
 | **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | Proposed product owner: EHotwagner/FSBarV2; HighBarV3 owns native adapter changes; design delivery does not start implementation or deployment | [BARC-01 repository research, design and feature roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md) |
@@ -1650,7 +1664,7 @@ than assuming every family updates together.
 | **SVG Preview A — SVG-PREVIEW-A** | The public release remains opt-in: all 17 `FS.GG.UI.*` libraries plus BOM and `FS.GG.UI.Template` at Rendering 0.29.0, then `FS.GG.Workspace.Template` 0.11.0. The wizard remains 0.11.1 and uses its two-step `fable-game` then SVG-adopter route; `svg: false` and lifecycle `sdd` remain omitted | Release A is complete. Fresh direct, SDD, typed and wizard receivers consume the public packages; existing projects change only through the bounded adopter from public Templates 0.10.0. No provider activation or default changed. Releases B and C subsequently completed; SVG-WORKSPACE-01 is selected |
 | **SVG Preview B — SVG-PREVIEW-B** | Public Templates 0.12.0 composes Rendering 0.30.0, Game 0.15.0 and Audio 0.6.0 for explicitly selected authoring/local-play previews | Public direct, SDD, typed/profile-2, wizard and retained receivers passed; existing workspaces use the bounded adopter. Defaults remain unchanged. |
 | **SVG Preview C — SVG-PREVIEW-C** | Published Templates 0.13.0 composes public Rendering 0.31.0, Game 0.16.0 and Net 0.6.0 for explicitly selected replay/network/scale previews | .3 first changes generated source composition; .2/.4 publish producers/Templates and .5 proves public clean creation and separate retained 0.10–0.12 adoption, conflicts, interruption and rollback. Producer and Templates publication, source adoption and installed public receiver qualification are complete. No lifecycle/default activation is implied. |
-| **Complete SVG workspace — SVG-WORKSPACE-01** | Selected [Templates plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) adds owner-published guidance, installed SDD selection, a default SVG player and optional studio/tactical/arcade/complete bundles | .3 first changes candidate generated contents/product selection; .1/.2 publish skills and SDD. Clean and retained installed/development proof is delivered through .4 source and .5; durable deployment and .6 freeze remain pending. Final public Templates/wizard adoption and eligible lifecycle-default activation remain Release D. |
+| **Complete SVG workspace — SVG-WORKSPACE-01** | The complete [Templates plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) adds owner-published guidance, installed SDD selection, a default SVG player and optional studio/tactical/arcade/complete bundles | .1–.6 are frozen. Clean and retained installed/development proof, local containerized Caddy deployment/rollback and evidence freeze pass. Durable public hosting is deferred. Public Templates/wizard adoption and activation proceed through [Release D](roadmaps/svg-release-d.md). |
 | **Unity replacement client — UNITYC-01** | Explicit opt-in Unity bridge, browser gameplay and WASM authoring composition in `fs-gg-fable-game` | .2 enables the selected source product's reference game; .6 publishes/adopts coherent producer and template bytes and proves separate clean/upgrade receiver journeys. Source merge alone has no installed effect |
 | **4D grid tactics — FOURD-01** | No general scaffold/default change proposed; a later explicitly selected Fable sample could adopt qualified product/Game artifacts | .3 first enables a complete encounter in the selected product source. .6 assesses optional extraction/adoption; any installed receiver effect requires separately evidenced publication and clean/upgrade journeys |
 
