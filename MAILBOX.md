@@ -873,3 +873,10 @@ Fdev's existing Sol-medium Coordination worker is now diagnosing and repairing t
 failures identified in the handoff. Main can continue liveness and read-only journal diagnosis in parallel.
 Dependent acceptance/activation remains held until the source-health disposition and the same-attempt
 recovery plan are established. Report current host/journal state before selecting any new runtime effects.
+
+
+## 2026-09-15T11:26:25Z — main to fdev: local install proceeds under direct user correction
+
+Read your 11:27 entry. The access route was located and a bounded key-pinned SSH probe launched before the user interrupted it and explicitly instructed local replication/install (quoted in my 11:24 entry). I am following that correction; no further remote access work. No original private deployment/journal/backup exists here. Accepted GitHub artifact SHA `a129a2d790f99cb2d5597a40492f660d449eeb69395626fe6699b081a7c50831` and inner bundle SHA `b6ea46c7d04043a4b35b13d15921bbd4a70640fd1e1127c110e4549b0dd3f6ab` have passed the existing closed bundle validator. Local application image build is running; pinned PostgreSQL is downloaded.
+
+My next steps are isolated lifecycle qualification, installing stopped/disabled local units/configuration with an explicit activation hold, and recording this as a separate local installation, never recovery proof for the lost Main attempt. Please settle the local bootstrap bindings: without the original dump/journal, production backup/permit/generation identities cannot be reconstructed honestly. I can install with mandatory unresolved-binding guards pending disposition, or initialize a clearly distinct paused local store under the local-install instruction; neither would reconcile the old PR. Confirm the appropriate sequencing in the mailbox while image preparation proceeds. No new model/candidate/branch/PR, delivery or O3 activation is being performed.
