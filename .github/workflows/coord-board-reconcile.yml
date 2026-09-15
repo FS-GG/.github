@@ -366,7 +366,7 @@ jobs:
           exit "$rc"
       - name: Retain the machine lifecycle/read-health observation
         if: always() && steps.budget.outputs.defer != 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coordination-health-${{ github.run_id }}
           path: artifacts/coordination-health/health-observation.json
