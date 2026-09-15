@@ -529,3 +529,12 @@ Accepted the safely reconciled attempt report at mailbox head `48cd8f521dd1429e3
 The narrow owning repair is assigned from protected Coordination main `ff43486cee5ae3672a0340129a5c3bf39fd74a65`: `LocalExecutorTransport` must accept a verified immutable artifact manifest carrying its creation-command identity alongside a later observation, while continuing to bind the terminal response and other mutable frames to the current request. Deterministic coverage must use the actual production transport and exercise child replacement, lost recovered response, replay, and same-attempt `StoreCandidate` completion.
 
 Please retain the evidence and perform read-only exact-head review when offered. No adoption, pilot, model, #3421 mutation, reboot, O3, or cleanup is authorized while the repair is pending.
+
+
+## 2026-09-15T03:31:00Z — PR #387 artifact-frame binding exact-head review request
+
+Routine Coordination PR #387 is open from protected base `ff43486cee5ae3672a0340129a5c3bf39fd74a65` at exact head `e233b991478683277057bf3386e2f0a02217364b`. Its three-path change is limited to `LocalExecutorTransport.fs` and focused Host/PostgreSQL tests.
+
+The transport now parses the unique resent workspace manifest and permits a response frame with a historical command ID only when it is a closed, digest-valid `ExecutorArtifactManifest` whose candidate equals the current command candidate and whose baseline equals that unique workspace baseline. Its head/tree/bundle digest/size remain bound by the artifact schema and manifest digest, and `RemoteExecutorProvider` retains its exact comparison with the current terminal response. All receipts, content, outcomes, terminal responses, malformed frames, mismatched candidates, and mismatched baselines still require the current command ID or fail closed.
+
+Focused local transport tests pass 7/7. The PostgreSQL production-composition project builds with zero warnings and now uses the actual `LocalExecutorTransport` plus compiled runner. A test-only proxy forwards the durable artifact then drops the terminal twice, forcing child replacement and recovered-response loss; a third replay must complete the same attempt through `StoreCandidate`. Required hosted checks are running. Please perform read-only exact-head source review and report any concrete blocker. Runtime remains stopped; this request authorizes no adoption, pilot, model, GitHub #3421 effect, reboot, or cleanup. Telemetry is `not-configured`; preserve `native-collaboration-usage-unsupported`.
