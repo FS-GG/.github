@@ -47,6 +47,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **source-health repair delivered; headless operator return qualified**, **2026-09-15**:
+Coordination [PR #388](https://github.com/FS-GG/FS.GG.Coordination/pull/388) merged tested head
+`1024cd709748c7332272ae44cc4fac0f20addbea` as `55b2154e7adfdefa5f4993901eb45d04fed44905`;
+both bind tree `133ef8431f28253c5103b81bc6d285a4a42d7a80`. All required native/coherent checks,
+including formal validation, passed. The change repairs the runner's concurrent startup observation,
+fixture identities/deadlines, scheduled test-project/PostgreSQL selection, and the GitHub CLI invocation.
+No interim runtime bundle was published or installed; the recovery-capable bundle remains pending.
+Main also qualified local headless operator login and exact-session return with two bounded fixture-only
+turns in about 159 seconds. Native receipt SHA-256 is
+`19411082c1dae8bf8a896d2915ad40a75dcfac8a8dd212cdd31a473611bee945`.
+Both transient units stopped/unloaded; pilot model calls and live effects were zero. This does not prove
+physical reboot, live recovery commands or token refresh. Supported paused recovery, original-attempt
+retirement and the new local live pilot remain pending; O2/O3 and **10/12** remain unchanged.
+
 O2-I4c **local subject and operator-return source delivered**, **2026-09-15**:
 SystemAdmin [PR #101](https://github.com/EHotwagner/SystemAdmin/pull/101) merged tested head
 `45e120bb6c3069b10c7afb948d5d4c354d625a51` as `69cd2ae8c3c927ecbc68f51f62652ffa1761fcd0`;
