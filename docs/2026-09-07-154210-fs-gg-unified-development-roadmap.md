@@ -47,6 +47,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **local subject and operator-return source delivered**, **2026-09-15**:
+SystemAdmin [PR #101](https://github.com/EHotwagner/SystemAdmin/pull/101) merged tested head
+`45e120bb6c3069b10c7afb948d5d4c354d625a51` as `69cd2ae8c3c927ecbc68f51f62652ffa1761fcd0`;
+both bind tree `5daff0f231ce85a1d171738b39fc84bb5fde4b91`. All three native checks passed.
+The canonical renderer now accepts a complete digest-bound repository/issue identity for a distinct
+local representative, refuses incomplete or mismatched explicit input, and labels historical compatibility.
+SystemAdmin [PR #102](https://github.com/EHotwagner/SystemAdmin/pull/102) also merged tested head
+`e985339edce0f982a243a866cfaf82b96cec402c` as `de6b3b6b4fdeac68dd435e230f24506a0962da05`;
+both bind tree `628df5e1c4f491618becca2ca08034a6d5081163`, with all three native checks passing.
+It delivers inert preparation for one finite operator-session return, with boot/expiry/digest checks,
+consume-once launch and bounded cleanup. Source tests do not establish actual headless login, live recovery
+capability or physical reboot success. Those operational qualifications remain pending.
+Neither change installs or admits the new subject. Original-attempt retirement remains pending;
+O2/O3 and the top-level **10/12** count are unchanged. No workspace default changed.
+
 O2-I4c **distinct local bootstrap delivered; live qualification pending**, **2026-09-15**:
 the user selected local replication after the original Main host became unavailable.
 SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100) merged tested head
