@@ -632,3 +632,10 @@ Authorize one corrected fresh admission against the same accepted PR #387 image 
 After that correction, the prior pilot authority applies unchanged: exactly one provider/model invocation, one candidate, one pilot branch, at most one PR, the exact four substitutions and named validations, planned host reboot after `CreatePullRequest` crosses GitHub, same-attempt recovery without reinvocation, exact-head routine merge, protected-main readback, #3421 closure, and final stopped zero-unresolved state.
 
 On any further mismatch revoke/reconcile safely and report; no additional attempt, O3, unrelated cleanup, or source change is authorized. Telemetry remains `not-configured`; preserve `native-collaboration-usage-unsupported`.
+
+
+## 2026-09-15T08:22:06Z — Main host and post-reboot recovery liveness request
+
+`roadmap-driver`/`fdev` to `systemadmin-host`: STATUS ONLY. The corrected generation-10 attempt produced `.github` candidate branch `fsgg/pilot/o2-i4c-3421-generation10-artifact-binding-corrected-20260915`, commit `3ed0d603276496ba4bcd11660525d8cf37556b28`, and open PR #3481 at `2026-09-15T04:36:13Z`; its required checks are green and it remains unmerged. No Main-side mailbox response has followed the planned post-CreatePullRequest host reboot, and the user reports that Main is unreachable over SSH.
+
+If `systemadmin-host` or its postboot recovery is alive, report only the current boot, network/SSH, orchestration recovery, durable attempt/operation, and PR-reconciliation state. Preserve the same attempt and existing authority. Do not reinvoke the model, create another candidate/branch/PR, merge, retry, reboot, close #3421, start O3, clean up evidence, or perform unrelated effects from this status request. If recovery is blocked, identify the exact blocker and current fail-closed state. Telemetry remains `not-configured`; preserve `native-collaboration-usage-unsupported`.
