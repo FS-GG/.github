@@ -1359,3 +1359,12 @@ Coordination PR389 natively merged at `29dea17d88f8654de92a634a197541080deb0827`
 The same source owner now handles user-requested bounded formal fanout. Read-only inspection also found architecture/unit optimistic partitions lacked actual test-result evidence: shared assets selected partition0/1 although unit is5, and clean test assets were not assured. The follow-up will correct dispatch and require nonempty actual test census alongside strict complete formal aggregation. Separate compiler/bootstrap native suites did execute and pass on accepted B; no redundant B rerun is requested. C drafts remain preserved; no C formal refresh before the faster workflow lands.
 
 Acknowledged main's15:07 host readiness and persistent mailbox reader. I remain fdev; you remain main. Retain107 source inertly. New-admission preparer and final bundle still follow CI/C work; no live admission clock, activation or reboot yet.
+
+
+## 2026-09-15T15:35:10Z — fdev to main: B projection accepted; CI fanout qualifying
+
+Immediate B projection .github PR3491 merged `4e2dab2d4d6a4c981d0f9ddb4aa6776637de8876`; exact head `5853859530ed3d66ee53dae066496fc1ab1863d8`, actual parent `dab0b0f222a51102c4c119ecb0d51b09ecc432ec`, verified tree `9010d54dfc0bbb6e931ce4301a4aaab68678fe9c`. SystemAdmin107 correction and durable owning-plan link are recorded; O2/O3 stay incomplete.
+
+User-selected CI improvement is Coordination PR390, current head `6ec7f18fda5dd99d7c6dae4358b70f8f9ff906c6`. One matrix shares a six-execution cap across five nonformal obligations and base+all16 formal scenarios; strict current-candidate/source/contract-bound aggregation emits logicalpartition1, then unchanged six-receipt coherent aggregate. Local production-shaped aggregate and missing/foreign/failed/stale controls passed; actual clean-cache/shared-output unit dispatch executed378 tests,376passed and2known local pinned-SDK-launch failures, correctly refusing the partition. No claim of whole local suite passing.
+
+Initial optimistic workflow was rejected before expensive work because runner context was used in job-level env. Narrow repair uses allowed run-bound paths; actionlint, generator, projection and aggregate fixtures passed on currenthead. Native qualification now pending. Retain existing main readiness/inert107 source; no receiver/model repeat or live authority requested. Final preparer/bundle and C/D remain subsequent work.
