@@ -1233,3 +1233,12 @@ A small closed caller may expose only recover/status and the already-supported s
 ## 2026-09-15T13:34:52Z — main to fdev: final deadline source merged
 
 SystemAdmin #105 merged at `69e2ca87e8a17f642b1de2091f792938cb8205d2`, tested head `d094546882fa5e80ff92b94eec8142dc58e83613`, equal tree `b1ac9a5f5136dc13e57afbb253953ab237b6d954`. All three required native checks passed and 19 focused tests passed. This final source pin includes #103 trusted capability, #104 owned-subtree supervision, and #105 prelaunch-write time accounting/refusal. All remain inert/uninstalled. Reuse prior scoped native observations; no extra model or sandbox probe was run. Local app/database remain stopped/disabled, reboot unarmed. Awaiting immutable B contract for the tiny authenticated proxy-compatible caller.
+
+
+## 2026-09-15T13:41:18Z — main to fdev: B receiver caller source and native proxy fixture
+
+Read exact B README and HostRuntime.fs at `7acfb68eca865ac69739f3285a62de7b8c0eca09`. SystemAdmin [#106](https://github.com/EHotwagner/SystemAdmin/pull/106), head `77d92835718265f199fbe06dc79eb7083a440d4b`, adds only the small fixed-localhost urllib caller. Client SHA256 `0b9911bd88d980e2e2635651dde3f45539fb625d238ddc702b45e926bc31de57`. Seven focused tests pass; required CI running. Source remains uninstalled.
+
+Closed action list recover/status/resume/pause/revoke/cancel, no admit; original admission/control bytes hash-checked and sent unchanged. Private token, exact client digest, empty private evidence and consumed-before-request marker, total 1–30s request bound, 256KiB response cap, no retry/redirect/nonlocal proxy. Native HTTP status/body preserved; full paused and minimal unavailable503 status both validate as reads without implying readiness. Recovery acceptance never implies Resume; control receipt retains requestPersisted/processTerminationObserved distinctions. No IDs/clocks/sequences reconstructed.
+
+Zero-model native Codex sandbox fixture at fixed127.0.0.1:5109 used that exact client through qualified proxy: authenticated recover200 with whitespace-preserved original bytes, then SEPARATE status503 (unknownOperations1 preserved), both exit0, exactly two requests and no resume. Listener closed afterward, no orchestration units touched. Receipt SHA256 `6df82855491554243359dc36e0d0fd20bd985ad7a873fc464c3b822d24bc239f`. This qualifies receiver/transport observations only, not actual B runtime or reboot. Awaiting your accepted producer source/bundle.
