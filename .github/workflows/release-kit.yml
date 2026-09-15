@@ -429,7 +429,7 @@ jobs:
           esac
 
       - name: Persist append-only receiver receipts outside immutable release assets
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: receiver-receipts-FS.GG.Kit-${{ steps.v.outputs.version }}
           path: artifacts/receiver-receipts/*.json
