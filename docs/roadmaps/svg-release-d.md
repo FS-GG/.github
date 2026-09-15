@@ -33,21 +33,32 @@ activation and lifecycle-default activation are separate claims.
 
 ## Milestones
 
-- [ ] **SVG-RELEASE-D.1 — Publish and verify Templates 0.14.0 — route: protected operation**
+- [x] **SVG-RELEASE-D.1 — Publish and verify Templates 0.14.0 — route: protected operation**
 
   Create `fs-gg-templates/v0.14.0` on the exact frozen Templates source. Publish the one retained package to
   GitHub Packages and nuget.org and read both feeds back. Verify package identity, every payload member,
   dependency locks, repository commit metadata and release asset custody. Nuget.org's added signature may
   change the archive hash, but all non-signature payload members must equal the retained original.
 
-- [ ] **SVG-RELEASE-D.2 — Publish and verify wizard 0.11.2 — route: protected operation**
+  Completed by immutable tag `fs-gg-templates/v0.14.0` and release run
+  [34969670370](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34969670370): both feeds returned
+  all 402 normalized payload entries exactly. The nuget.org signed archive is
+  `sha256:a5f218d10bbac42b11afcfb401806c8f0f56261cf79876cc76710471d3666563`.
+
+- [x] **SVG-RELEASE-D.2 — Publish and verify wizard 0.11.2 — route: protected operation**
 
   After Templates public readback, create `new-sdd-workspace/v0.11.2` on the exact frozen wizard source.
   Publish the same archive to both feeds, retain its checksum and verify payload equality, evaluated version,
   repository commit metadata and the Templates 0.14.0 selection. No later `.github` documentation commit is
   substituted for the frozen tool source.
 
-- [ ] **SVG-RELEASE-D.3 — Qualify public-only installed receivers — route: routine**
+  Completed by immutable tag `new-sdd-workspace/v0.11.2` and release run
+  [34972041225](https://github.com/FS-GG/.github/actions/runs/34972041225). Independent reads from both
+  feeds contain the same 25 normalized payload entries and bind repository commit
+  `3935b6bb81dc242635bbb8b400537d07de3b954b`; the public signed archive is
+  `sha256:c3f6d1333c34511dfef2c1ce3518191749f622689ee57d822a4f083fee35118d`.
+
+- [x] **SVG-RELEASE-D.3 — Qualify public-only installed receivers — route: routine**
 
   Use empty package caches and no sibling source repositories. Install Templates 0.14.0 directly and through
   public wizard 0.11.2. Cover omitted/default Player and explicit Studio, Tactical, Arcade and Complete bundles
@@ -56,12 +67,21 @@ activation and lifecycle-default activation are separate claims.
   rollback controls, locked builds, three-browser journeys, Orca observation, two-client authority/reconnect,
   and the local containerized Caddy deployment/rollback boundary. Bind the result to downloaded package hashes.
 
-- [ ] **SVG-RELEASE-D.4 — Activate the compatible SVG product default — route: routine**
+  Completed by [Templates PR #493](https://github.com/FS-GG/FS.GG.Templates/pull/493), public qualification
+  run [34973748082](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34973748082). The 11m38s gate used
+  nuget.org-only product inputs and passed every listed bundle/lifecycle/adoption/browser/accessibility/network
+  claim plus the Caddy reverse-proxy edge.
+
+- [x] **SVG-RELEASE-D.4 — Activate the compatible SVG product default — route: routine**
 
   Update the public provider/registry pins to Templates 0.14.0 and wizard 0.11.2 after .3 passes. The omitted
   bundle must create the SVG Player and explicit bundle selections must retain their documented contents under
   every currently supported lifecycle. Verify a fresh installed receiver from the effective public registry.
   This is product-default activation only; it neither changes the coordination epoch nor selects one lifecycle.
+
+  Completed by the registry activation that advances both public package rows to Templates 0.14.0 and wizard
+  0.11.2, regenerates every version projection, validates the typed registry, and checks both effective pins
+  against the newest archives on GitHub Packages and nuget.org. The installed receiver evidence is milestone .3.
 
 - [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: protected effect**
 
@@ -76,3 +96,6 @@ Milestones .1–.4 establish the public complete SVG workspace and its product d
 choices. Release D is fully complete only when .5 also establishes the authorized lifecycle default. Durable
 public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
 changing the frozen package contents.
+
+Current state: the compatible complete SVG workspace is published and active through .4. Full Release D remains
+open only at .5, owned by SDD#927 and the actual OperatingV2 transition.
