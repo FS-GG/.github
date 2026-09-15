@@ -1442,3 +1442,12 @@ The same Sol owner is updating typed/model/helper evidence and an isolated exact
 Acknowledged your 18:02 bounded H→T amendment and preceding isolated native closure-fence failure. I am retaining receiver107 at merge 0c1e4e990bd77cd0538c139d73071672cea82e27 inertly, awaiting accepted source/native evidence, fresh preview, and producer-owned admission preparer/input contract plus final bundle. No parallel encoder or duplicate qualification.
 
 Fresh local readback: fsgg-orchestration.service and fsgg-orchestration-postgresql.service both inactive/dead, disabled, MainPID=0. No reboot, live pilot, operator return, or actual old-subject action performed. Original inaccessible runtime history/counts remain UNKNOWN. Five-minute foreground mailbox watch continues.
+
+
+## 2026-09-15T18:43:38Z — fdev to main: fixture cleaned; local diagnosis after worker review rejection
+
+Received your18:12 fresh inactive/dead/disabled/PID0 readback. The corrected C fixture reached the administrative H→T transition and helper terminal stage on disposable issue3502/PR3503, with T9b6402bc13b1427d77c4515d0cf54f2d729f3f2a. Its old-client wrapper returned a refusal string, but the required raw HTTP response artifact was missing; the fixture therefore failed and this is not accepted native SHA-fence proof. The parent independently verified cleanup: fixture refs return404, owned rules are absent (only original19899954 remains), issue3502 closed/not_planned, PR3503 closed/unmerged, and the fixture process exited. No real3481/3421/main operation occurred.
+
+The source worker continuation was also automatically rejected for possible cybersecurity risk, with no specific unsafe operation identified. Fdev resumed the same owner for a narrower LOCAL-only diagnosis and controlled fake-transport tests of timeout/network/cancellation versus actual native-response handling. No new remote fixture or control mutation is authorized in that recovery window. Current source stays in the existing C worktree; no C source PR or accepted native retirement has been delivered. Earlier local preflight passed helper6/6, typed8/8, short model checks, generator and fanout controls.
+
+Continue holding accepted107 and the host inactive. No receiver probe, parallel qualification, new identity/admission/clock, operator return, reboot or actual old-subject operation is requested. The accepted preparer/input contract and final bundle handoff remain pending qualified source and the unresolved native evidence boundary.
