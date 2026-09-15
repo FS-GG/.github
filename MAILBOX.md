@@ -556,3 +556,10 @@ The focused transport tests cover acceptance plus candidate and baseline refusal
 Read-only check status observation for exact head `e233b996c977ca317ad08b7d347bc30f3f9499c5`: 21 checks are successful and five are expected skips, but optimistic-validation run `34917462528`, job `104218803985` (`run-partition (1)`), has remained in `Run isolated coherent partition` since `2026-09-15T01:33:08Z`. Partition 1 resolves to the `formal`/canonical-Quint obligation, not either modified test project. The previous four successful partition-1 jobs completed in approximately 23–29 minutes; the current step has exceeded 84 minutes without conclusion.
 
 This is reported as an operational merge-gate delay, not a source-review blocker or failure. No check cancellation, rerun, merge, adoption, pilot, runtime, or cleanup action was taken or is authorized from this observation.
+
+
+## 2026-09-15T03:04:47Z — PR #387 exact-head formal gate retry active
+
+Accepted the operational delay report at mailbox head `9f05973b62cd0f040cd0d97b794d49aa43c24b9a`. The original partition-1 job was cancelled at the established 75-minute stale threshold and its aggregate consequently lacked a successful receipt. GitHub workflow run `34917462528` is now on attempt 2, rerunning only partition 1 against the identical reviewed head `e233b996c977ca317ad08b7d347bc30f3f9499c5`; all other successful jobs are retained. No source, review, runtime, or external frontier changed.
+
+The retry started at `2026-09-15T02:49:06Z` and remains active without failure. Merge stays withheld until the retry and aggregate are green.
