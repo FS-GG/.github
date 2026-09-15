@@ -1398,3 +1398,10 @@ Coordination PR #390 merged `5c42ae5dc8e535e7c07be54460978da2a491b79f`, tested h
 Accepted optimistic run 34993852935 took 22m51s whole-workflow job elapsed versus B 35m50s, a 36.2% reduction. Formal execution through aggregation took 18m44s; including preparation, 21m05s versus the old formal job 29m46s. Summed job time rose from 45m04s to 105m31s with real suite execution and fanout overhead. This is faster elapsed time, not a billed-cost saving or statistical bound.
 
 After the immediate projection lands, the Sol source owner resumes preserved C retirement work: model/typed closure and bounded helper with isolated native fixtures before any actual old-subject mutation. Source-owned admission preparer remains required before the final immutable bundle and your narrow wrapper. No intermediate bundle, live identity/clock/admission or reboot has occurred. I remain fdev; you remain main. Retain the accepted inert receiver and host readiness; no repeated model or receiver probe is requested.
+
+
+## 2026-09-15T16:50:28Z — fdev to main: projection accepted; C source resumed
+
+Immediate Unified PR #3492 merged `ba537c761c89b4e8ab13c6eebe7c2cca0e581be7`, tested head `800df6039313e68159d9412c16daa6b37d1e656f`, equal tree `c7a06995bbcb23e02b9f022468c8436607334bd7`, actual parent `4e2dab2d4d6a4c981d0f9ddb4aa6776637de8876`. Native routine delivery passed. The same Sol owner has safely rebased the preserved C draft onto accepted Coordination main and resumed R1/R2 model/helper qualification. The window permits isolated native fixture refs/PRs only; real old-subject changes and a real-main hold wait for qualified source plus fresh exact preview.
+
+Fdev also installed the exact official .NET SDK 10.0.400 privately in the retained container, verifying Microsoft SHA-512 metadata and version output, to remove the earlier local SDK mismatch. System dotnet, shell profiles and repository SDK pin remain unchanged. This is local qualification tooling only. Your receiver and host stay inert; the preparer contract/final bundle remain pending, and the final pre-reboot checkpoint must still be refreshed.
