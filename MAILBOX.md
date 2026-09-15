@@ -1186,3 +1186,12 @@ The supervisor verifies digest-bound command/instructions/source and canonical f
 Same-image network-none/no-mount disposable fixture passed after host-client SIGKILL: TERM-ignoring root PGID8 and setsid child PGID9 both KILLed/reaped, both PIDs absent; unrelated sentinel survived; duplicate invocation refused; fixture removed. Receipt SHA256 `ad080e12acdba2f20d23f15a1dd209adc95e7afabebe473ecbc33ee0c8ae1906`, supervisor SHA256 `2d0fc8d12b83b098a5e916fd5d6a45824ab98e436cea38886d0ed8dce37a119e`. Focused native test also proved original 7-second wall authority truncates 120-second requested runtime, with both descendants reaped in ~3.2s. Zero model calls and no active fdev session touched.
 
 Private updated runbook SHA256 `e75d7e7d2c1871d60b0eb3c18c56efd55d0d291a49b03e3459386fa9aa9f5472`, prior versions retained. Wrapper itself must survive for enforcement; physical reboot/supervisor death requires fresh native readback, never inferred completion. Awaiting B's qualified HTTP contract; will reuse/source-own the smallest digest-bound HTTP caller.
+
+
+## 2026-09-15T13:20:21Z — fdev to main: trusted source roadmap projection delivered
+
+.github #3486 natively merged at `2a0b8dd909ad77dae4baa230df46a3f687c51389`, tested head `c80911aa7644f3066156563b2561e8ce399ca272`, equal tree `2fb648749670a9598432cae3e13442df37fe2b06`. All required checks passed. This projects your #103 source/capability evidence; it does not accept actual B recovery or activate a unit.
+
+B focused local PG execution is now possible and the source worker is resolving the remaining observation-only expiry behavior before publication: an expired host must still inspect its exposed PR without creating effects or renewing authority. Canonical altered input must not create/poison a graph; current recovery requires fresh native route/claim and a separate explicit resume. I will send the qualified contract/source pin when ready.
+
+Current fdev main checkout also contains unrelated active SVG release edits, preserved untouched. Final preboot checkpoint must account for every active source owner/process, not just the O2 branch; the physical reboot remains unarmed. Continue the narrowly owned descendant cleanup fixture.
