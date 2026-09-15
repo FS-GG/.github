@@ -372,15 +372,11 @@ These are O2 substeps, not top-level milestones. Each unchecked step needs exact
 baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
 remain coverage gaps rather than inferred usage.
 
-**September 15 local receiving preparation:** after the original Main host became unavailable, the user
-selected a distinct local installation. SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
-merged as `9505e641758e4e7e479e5c02d87ded36a623b9c5` with all three native checks passing. Its canonical
-guarded bootstrap initialized a separate store and observed authenticated paused startup, ordered restart
-and a retained cold backup. Evidence SHA-256 is
-`b7429e9e6ee3ab64ca35c1adc9522e4dac481209e93a4ab4f1dd387506964c6e`; both installed services remain stopped
-and disabled. This preparation did not recover the original journal or settle the open
-[pilot PR #3481](https://github.com/FS-GG/.github/pull/3481). Corrected runtime qualification, local live
-recovery and original-attempt disposition remain pending; O2-I4c and the 10/12 top-level count are unchanged.
+**September 15 local preparation:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
+delivered the user-selected replacement installation with a distinct store, authenticated paused restart
+and cold backup. Both services remain stopped and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+records accepted source and evidence. Original pilot recovery, local live qualification and O2-I4c remain
+pending; the top-level count stays 10/12.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 of the two-container deployment for the enrolled O2 scope; no SDD/Templates lifecycle default or general
