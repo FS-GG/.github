@@ -47,6 +47,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **paused recovery source delivered**, **2026-09-15**:
+Coordination [PR #389](https://github.com/FS-GG/FS.GG.Coordination/pull/389) binds candidate
+`5f51af1e713dec698f5e7c3ee2e4722288ef3ea3`, tree `5815c9b000b52c35da599281fd569ee16a0d95cd`;
+merge `29dea17d88f8654de92a634a197541080deb0827` has the same tree and all required native checks passed.
+Its authenticated recovery route reconstructs the durable graph
+from unchanged admission bytes, obtains fresh repository/issue/claim readback and remains paused until
+a separate resume. Immutable execution and delivery deadlines bound model work to 30 minutes and the
+whole attempt to two hours; older admissions gain no extended authority. Expired or displaced authority
+permits observation of exposed effects without new dispatch or model work.
+Focused PostgreSQL replacement tests passed with the packaged executor and controlled GitHub responses;
+this is source evidence, with external GitHub delivery still owned by the live pilot. Current-source
+formal qualification ran all 16 bounded scenarios; receipt SHA-256 is
+`ed4e865ad31e184cbeaa3f8641a41c76cc32fdc564249b7fc7802a89bb81f474`.
+The [owning local-continuation plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o2-local-continuation.md)
+records recovery and lost-host retirement. SystemAdmin's receiver correction
+[PR #107](https://github.com/EHotwagner/SystemAdmin/pull/107) merged as
+`0c1e4e990bd77cd0538c139d73071672cea82e27`, with candidate/merge tree
+`9b7c1b7ff7fbfdf417d13211e8dc14fa6983e23b` and all three native checks passing.
+Its current caller SHA-256 is `14c79b1b3afd6f491b33b864d6bb8a92b2479346f58b6cc1b672126b40854969`;
+eight focused tests preserve unknown, false and true termination observations distinctly. The earlier
+transport fixture remains scoped evidence; no model or sandbox probe was repeated for this parser fix.
+The next source correction splits the measured 29-minute formal partition with bounded concurrency and
+requires actual unit/architecture test execution evidence. Final bundle publication/adoption, original-attempt
+retirement and the distinct local reboot pilot remain
+pending. O2/O3 and **10/12** remain unchanged; no workspace default or runtime was activated.
+
 O2-I4c **bounded recovery caller delivered**, **2026-09-15**:
 SystemAdmin [PR #106](https://github.com/EHotwagner/SystemAdmin/pull/106) merged tested head
 `8f6596c3b54cb4928cd7b7ddc76ce77dffd6ea19` as `25db883dd57b33806e44bf1b037973f5f10a01b0`;
@@ -1674,7 +1700,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: 0/7/14/30-day observations, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
 | **One residual execution experiment** | E0: one additional measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | Conditional additional scope; use the selected [standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) implementation/evidence as a baseline, not a second actor-runtime selection |
 | **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration; SystemAdmin owns installed Main/runner and later isolated community intake. .1–.3 are the first future source window; live .4–.5 require published/adopted artifacts, actual usage support and applicable O2/O3/operation authority | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449). Reuse UTEL and O0–O3; no implementation or experiment started. Later .6 enables consented community reports through Main and reviewed GitHub aggregate releases, independently of the core comparison. Adaptive extensions remain conditional |
-| **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) owns the shared Akka session core, PostgreSQL journal, subscription budget and provider-neutral executor/Host composition. Continue its active O2 window and O3 acceptance; reuse accepted source rather than rebuilding it here. Wider execution profiles remain conditional |
+| **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction) owns the shared Akka session core, PostgreSQL journal, subscription budget and provider-neutral executor/Host composition. Continue its active O2 window and O3 acceptance, including the [owning local-continuation plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o2-local-continuation.md); reuse accepted source rather than rebuilding it here. Wider execution profiles remain conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; continue selected O0–O3, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the selected O0–O3 single-host scope and O2-S1/S2 provider-session window. Akka.NET is selected for this scope, not a future competing experiment. Codex subscription execution is first; Claude, OpenCode and DeepSeek share the intended adapter contract. Live pilot and controlled adoption remain pending; other hosting scope remains conditional. |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |

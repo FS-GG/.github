@@ -364,19 +364,20 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
     and migrated v2 state. Adoption receipt `b9a9c8e8a44c0e298fdb3c3102f2973cb55e27d380c5448017bc194b6c546dce`
     proves zero unknown operations, continuity, boundary and ordered restart; cold-backup receipt
     `8f233a8104a086d7c633f40c1d2d2931e9182b1732ec818f5579a7371cdfbbc6` and terminal stop passed.
-  - [ ] O2-I4c — Bind fresh `.github#3421` input and one nonrenewing attempt; prove provider authentication,
-    candidate persistence, required checks, native delivery and O2 failure/reboot recovery with
-    ambiguous-effect reconciliation and the direct-credential limitation.
+  - [ ] O2-I4c — Complete the distinct local nonrenewing pilot and qualified administrative retirement
+    of original `.github#3421`; prove authentication, candidate persistence, checks, native delivery and
+    failure/reboot recovery, preserving ambiguous-effect reconciliation and the direct-credential limit.
 
 These are O2 substeps, not top-level milestones. Each unchecked step needs exact authority and fresh
 baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
 remain coverage gaps rather than inferred usage.
 
-**September 15 local preparation:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
-delivered the user-selected replacement installation with a distinct store, authenticated paused restart
-and cold backup. Both services remain stopped and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
-records accepted source and evidence, including receiver [#101](https://github.com/EHotwagner/SystemAdmin/pull/101) and inert operator-return [#102](https://github.com/EHotwagner/SystemAdmin/pull/102). Original pilot recovery, local live qualification and O2-I4c remain
-pending; the top-level count stays 10/12.
+**September 15:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
+delivered a distinct local store, authenticated paused restart and cold backup. Services remain stopped
+and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+records source and receiver evidence. Coordination’s local-continuation plan is linked in
+[Unified section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
+Original retirement and local live qualification remain pending; the count stays 10/12.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 of the two-container deployment for the enrolled O2 scope; no SDD/Templates lifecycle default or general
