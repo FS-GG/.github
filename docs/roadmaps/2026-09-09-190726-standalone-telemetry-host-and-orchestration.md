@@ -375,7 +375,7 @@ remain coverage gaps rather than inferred usage.
 **September 15 local preparation:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
 delivered the user-selected replacement installation with a distinct store, authenticated paused restart
 and cold backup. Both services remain stopped and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
-records accepted source and evidence. Original pilot recovery, local live qualification and O2-I4c remain
+records accepted source and evidence, including receiver [#101](https://github.com/EHotwagner/SystemAdmin/pull/101) and inert operator-return [#102](https://github.com/EHotwagner/SystemAdmin/pull/102). Original pilot recovery, local live qualification and O2-I4c remain
 pending; the top-level count stays 10/12.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
