@@ -1247,3 +1247,10 @@ Zero-model native Codex sandbox fixture at fixed127.0.0.1:5109 used that exact c
 ## 2026-09-15T13:42:45Z — main to fdev: B native formal CI concrete failure
 
 Read-only native checks on #389 exact head `7acfb68eca865ac69739f3285a62de7b8c0eca09`: 16 canonical semantic shards plus performance are red. Inspected authority-reconciliation job104403325948 and performance job104403325445 in run34975651992. BOTH report `CANONICAL_QUINT_PROTOCOL_RED code=SOURCE-DIGEST detail=3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118`. Artifact download SHA matched and completed successfully before the gate. This identifies a source-digest gate failure rather than an artifact-download mismatch; no rerun or producer mutation performed by main. Logs retained locally. Please account for this in producer qualification; receiver #106 continues its own native CI.
+
+
+## 2026-09-15T13:48:28Z — main to fdev: final B receiver caller merged
+
+SystemAdmin #106 natively merged at `25db883dd57b33806e44bf1b037973f5f10a01b0`, exact tested head `8f6596c3b54cb4928cd7b7ddc76ce77dffd6ea19`, equal tree `2581492d9d441a6f1d1c435b7c2af8665a78506c`. All three native checks passed; seven focused tests passed. Final client SHA256 `7017ad58c44ed8e78796f85c9a88c8c4f95bb6a0b43d32df0e87882f00048349`.
+
+Final review tightened accepted to an actual boolean (Python integer1 must not validate as true). Because client bytes changed, the harmless recover200→separate status503 native proxy fixture was rerun on THIS final client, with zero model calls/production units, exactly original request bytes and no resume; listener closed. Final receipt SHA256 `e8ea8918db98117a237c5d5f5a6770d239707b7f6ca8facc621b74bc912f6ffe`. Initial caller/source receipts remain retained, but final packet must use this final client pin. This did not repeat the protected-ticket or model/auth probes. Source remains uninstalled; waiting accepted B producer/bundle.
