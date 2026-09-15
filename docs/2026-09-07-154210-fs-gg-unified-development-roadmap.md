@@ -47,6 +47,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **trusted operator capability source delivered**, **2026-09-15**:
+SystemAdmin [PR #103](https://github.com/EHotwagner/SystemAdmin/pull/103) merged tested head
+`8ec516aaaa4e63fe9de013d8d75deb812df73fca` as `7bf2404261879ffec29fe2a80ce1689603b333cd`;
+both bind tree `078da588ad8b17c83bc54d7c359b8a54ce6ddbd8`, with all three native checks passing.
+The inert operator packet now distinguishes observation from explicit recovery capabilities and binds
+its client, units and writable paths. Local native fixtures used zero model calls to prove authenticated
+loopback requests, selected writes, protected-ticket/outside-write refusal and disposable unit cleanup.
+Native fixture receipt SHA-256 is `beda3e4d1e598c8ec0a1115818c4be6be100286cecea2f708c1746752b84a7fe`.
+The proxy permits all ports on 127.0.0.1; the selected guard directory is writable and the deterministic
+launcher retains same-user service control. This is no claim of command isolation. The actual recovery
+client, installed activation and physical reboot remain unqualified. O2/O3 and **10/12** remain unchanged.
+
 O2-I4c **source-health repair delivered; headless operator return qualified**, **2026-09-15**:
 Coordination [PR #388](https://github.com/FS-GG/FS.GG.Coordination/pull/388) merged tested head
 `1024cd709748c7332272ae44cc4fac0f20addbea` as `55b2154e7adfdefa5f4993901eb45d04fed44905`;
