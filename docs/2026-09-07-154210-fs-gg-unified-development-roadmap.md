@@ -47,6 +47,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **bounded recovery caller delivered**, **2026-09-15**:
+SystemAdmin [PR #106](https://github.com/EHotwagner/SystemAdmin/pull/106) merged tested head
+`8f6596c3b54cb4928cd7b7ddc76ce77dffd6ea19` as `25db883dd57b33806e44bf1b037973f5f10a01b0`;
+both bind tree `2581492d9d441a6f1d1c435b7c2af8665a78506c`, with all three native checks passing.
+The small proxy-compatible caller preserves exact input bytes and separates recovery, status and control;
+its SHA-256 is `7017ad58c44ed8e78796f85c9a88c8c4f95bb6a0b43d32df0e87882f00048349`.
+The exact final client's zero-model localhost fixture observed separate recovery200 and paused-status503
+requests with original bytes and no resume; receipt SHA-256 is
+`e8ea8918db98117a237c5d5f5a6770d239707b7f6ca8facc621b74bc912f6ffe`.
+Focused source tests also cover strict boolean acceptance and numeric-value refusal.
+This source includes [PR #105](https://github.com/EHotwagner/SystemAdmin/pull/105)'s qualified correction
+charging preparation writes to the original launch deadline (merge `69e2ca87e8a17f642b1de2091f792938cb8205d2`).
+The actual producer recovery bundle and installed process/reboot qualification remain pending. No pilot
+admission or existing development-session reentry occurred; O2/O3 and **10/12** remain unchanged.
+
 O2-I4c **finite owned-process return mechanism delivered**, **2026-09-15**:
 SystemAdmin [PR #104](https://github.com/EHotwagner/SystemAdmin/pull/104) merged tested head
 `6f7dfa97b21ca43f959c55246726e92b6d09b1d3` as `b0e0854c2219a153cbae806cf7144d5844976cd1`;
