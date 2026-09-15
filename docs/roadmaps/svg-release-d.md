@@ -1,0 +1,78 @@
+# SVG-RELEASE-D — complete workspace publication and activation
+
+Status: selected on 2026-09-15. Route: protected operation for immutable publication; routine for installed
+qualification and documentation. Durable public hosting is deferred and does not gate the compatible release.
+
+This is the executable Release D plan for the
+[accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md). It
+publishes the frozen complete workspace, proves the public bytes through installed consumers, and activates
+the SVG product default within every currently supported lifecycle. The later single-lifecycle default remains
+a distinct effect gated by the actual OperatingV2/SDD authority transition.
+
+## Frozen release inputs
+
+- `FS.GG.Workspace.Template` **0.14.0** is frozen at Templates commit
+  `2d8802d527e01afe4755ae7015a5627be88e318f`, tree
+  `058b964b75f1b8daa672ee21b4f33155bcff2ed0`, template subtree
+  `90eefebdeb982c3270b2bacde462d0f11c11e42f`.
+- The retained original `FS.GG.Workspace.Template.0.14.0.nupkg` has SHA-256
+  `340250f942efef30702bf8c3f1f9a9096ca246c1bb4b244a2c5806ac49398380` from candidate release run
+  [34965730359](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34965730359), artifact `10395590118`.
+- `FS.GG.NewSddWorkspace` **0.11.2** is frozen at `.github` commit
+  `3935b6bb81dc242635bbb8b400537d07de3b954b`; its package source has not changed on `main` since that merge.
+- Rendering **0.31.0**, Game **0.16.0**, Net **0.6.0**, Audio **0.6.0**, SDD **1.8.0**, Drivers
+  **0.89.0**, and the owner skill packages recorded by `SVG-WORKSPACE-01` are already public prerequisites.
+- The [workspace freeze](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-15-svg-workspace-freeze.md)
+  accepts the local Podman/Docker Compose plus Caddy deployment boundary. It claims served-byte identity,
+  SignalR WebSocket proxy/reconnect and rollback, but not public DNS/TLS, host reboot survival or external
+  availability. Those remain [Templates issue #491](https://github.com/FS-GG/FS.GG.Templates/issues/491).
+
+Tags and packages are immutable. Recovery replays only authenticated retained archives; it never moves a tag,
+overwrites a package or rebuilds a partial release. Publication, installed qualification, compatible product
+activation and lifecycle-default activation are separate claims.
+
+## Milestones
+
+- [ ] **SVG-RELEASE-D.1 — Publish and verify Templates 0.14.0 — route: protected operation**
+
+  Create `fs-gg-templates/v0.14.0` on the exact frozen Templates source. Publish the one retained package to
+  GitHub Packages and nuget.org and read both feeds back. Verify package identity, every payload member,
+  dependency locks, repository commit metadata and release asset custody. Nuget.org's added signature may
+  change the archive hash, but all non-signature payload members must equal the retained original.
+
+- [ ] **SVG-RELEASE-D.2 — Publish and verify wizard 0.11.2 — route: protected operation**
+
+  After Templates public readback, create `new-sdd-workspace/v0.11.2` on the exact frozen wizard source.
+  Publish the same archive to both feeds, retain its checksum and verify payload equality, evaluated version,
+  repository commit metadata and the Templates 0.14.0 selection. No later `.github` documentation commit is
+  substituted for the frozen tool source.
+
+- [ ] **SVG-RELEASE-D.3 — Qualify public-only installed receivers — route: routine**
+
+  Use empty package caches and no sibling source repositories. Install Templates 0.14.0 directly and through
+  public wizard 0.11.2. Cover omitted/default Player and explicit Studio, Tactical, Arcade and Complete bundles
+  with lifecycle `none`, `sdd`, `typed-sdd` and retained supported Spec Kit compatibility where applicable.
+  Verify exact owner guidance, SDD 1.8 transport, clean generation, retained 0.10–0.13 adoption, collision and
+  rollback controls, locked builds, three-browser journeys, Orca observation, two-client authority/reconnect,
+  and the local containerized Caddy deployment/rollback boundary. Bind the result to downloaded package hashes.
+
+- [ ] **SVG-RELEASE-D.4 — Activate the compatible SVG product default — route: routine**
+
+  Update the public provider/registry pins to Templates 0.14.0 and wizard 0.11.2 after .3 passes. The omitted
+  bundle must create the SVG Player and explicit bundle selections must retain their documented contents under
+  every currently supported lifecycle. Verify a fresh installed receiver from the effective public registry.
+  This is product-default activation only; it neither changes the coordination epoch nor selects one lifecycle.
+
+- [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: protected effect**
+
+  Proceed only after the owning SDD work and actual OperatingV2 evidence satisfy the accepted lifecycle/default
+  prerequisites. Update the lifecycle default through its authority sources, qualify clean and retained public
+  receivers, and preserve explicit compatible legacy selections. Until then, report .1–.4 as the published
+  compatible complete SVG workspace, not as full Release D closure.
+
+## Completion boundary
+
+Milestones .1–.4 establish the public complete SVG workspace and its product default across supported lifecycle
+choices. Release D is fully complete only when .5 also establishes the authorized lifecycle default. Durable
+public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
+changing the frozen package contents.
