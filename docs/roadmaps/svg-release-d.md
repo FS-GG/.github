@@ -1,7 +1,8 @@
 # SVG-RELEASE-D — complete workspace publication and activation
 
-Status: selected on 2026-09-15. Route: protected operation for immutable publication; routine for installed
-qualification and documentation. Durable public hosting is deferred and does not gate the compatible release.
+Status: complete through .4 on 2026-09-15; .5 is waiting on OperatingV2. Route: protected operation for immutable
+publication; routine for installed qualification and documentation. Durable public hosting is deferred and does
+not gate the compatible release.
 
 This is the executable Release D plan for the
 [accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md). It
@@ -86,10 +87,14 @@ activation and lifecycle-default activation are separate claims.
 
 - [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: protected effect**
 
-  Proceed only after the owning SDD work and actual OperatingV2 evidence satisfy the accepted lifecycle/default
-  prerequisites. Update the lifecycle default through its authority sources, qualify clean and retained public
-  receivers, and preserve explicit compatible legacy selections. Until then, report .1–.4 as the published
-  compatible complete SVG workspace, not as full Release D closure.
+  The owning SDD capability is complete: SDD [#927](https://github.com/FS-GG/FS.GG.SDD/issues/927),
+  [#934](https://github.com/FS-GG/FS.GG.SDD/issues/934), and release
+  [2.0.0](https://github.com/FS-GG/FS.GG.SDD/releases/tag/v2.0.0) deliver the Quint-backed default,
+  explicit F# compatibility, implementation correspondence, and public package/readback qualification.
+  Proceed only after actual OperatingV2 evidence satisfies the remaining accepted lifecycle/default prerequisite.
+  Then update the lifecycle default through its authority sources, qualify clean and retained public receivers,
+  and preserve explicit compatible legacy selections. Until then, report .1–.4 as the published compatible
+  complete SVG workspace, not as full Release D closure.
 
 ## Completion boundary
 
@@ -98,5 +103,6 @@ choices. Release D is fully complete only when .5 also establishes the authorize
 public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
 changing the frozen package contents.
 
-Current state: the compatible complete SVG workspace is published and active through .4. Full Release D remains
-open only at .5, owned by SDD#927 and the actual OperatingV2 transition.
+Current state: the compatible complete SVG workspace is published and active through .4, and the SDD producer
+half of .5 is public as 2.0.0. Full Release D remains open only for the authoritative OperatingV2 transition and
+the receiver/default activation it authorizes; successful producer publication does not manufacture that epoch.
