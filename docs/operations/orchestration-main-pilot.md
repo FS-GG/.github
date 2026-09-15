@@ -150,10 +150,10 @@ separate decision after this evidence and the remaining upstream gates pass.
 ## Authoritative source contracts
 
 - [Standalone telemetry, durable host and optional orchestration roadmap](../roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md)
-- [Coordination state and runner contract](https://github.com/FS-GG/FS.GG.Coordination/blob/b1160ff4fd19a8e8887401bdac2d3eb808f46b8c/docs/architecture/orchestration-state-and-runner-contract.md)
-- [Coordination pilot permit boundary](https://github.com/FS-GG/FS.GG.Coordination/blob/b1160ff4fd19a8e8887401bdac2d3eb808f46b8c/docs/architecture/pilot-permit-boundary.md)
-- [Coordination hosted-writer boundary](https://github.com/FS-GG/FS.GG.Coordination/blob/b1160ff4fd19a8e8887401bdac2d3eb808f46b8c/docs/architecture/orchestration-hosted-writer.md)
-- [Coordination paused administration host and runner wire](https://github.com/FS-GG/FS.GG.Coordination/blob/b1160ff4fd19a8e8887401bdac2d3eb808f46b8c/docs/architecture/orchestration-administration-host.md)
+- [Coordination state and runner contract](https://github.com/FS-GG/FS.GG.Coordination/blob/9dc52c2282ab1af338b9bb8587652f7d0605199e/docs/architecture/orchestration-state-and-runner-contract.md)
+- [Coordination pilot permit boundary](https://github.com/FS-GG/FS.GG.Coordination/blob/9dc52c2282ab1af338b9bb8587652f7d0605199e/docs/architecture/pilot-permit-boundary.md)
+- [Coordination hosted-writer boundary](https://github.com/FS-GG/FS.GG.Coordination/blob/9dc52c2282ab1af338b9bb8587652f7d0605199e/docs/architecture/orchestration-hosted-writer.md)
+- [Coordination paused administration host and runner wire](https://github.com/FS-GG/FS.GG.Coordination/blob/9dc52c2282ab1af338b9bb8587652f7d0605199e/docs/architecture/orchestration-administration-host.md)
 - [Accepted Main deployment and runner broker source](https://github.com/EHotwagner/SystemAdmin/tree/1387ffdd0c61e6c8fcdd0670ded45842dfedf28b/Services/orchestration-main)
 
 The linked revisions are source contracts, not live receipts. Keep credentials,
