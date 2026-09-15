@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-09-14"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-09-15"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -951,8 +951,8 @@ contracts:
     surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion and private dashboard, independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.
   - id: new-sdd-workspace
-    version: "0.11.1"          # SOURCE SemVer 0.11.1: PATCH; restores the creation-time template question removed in 0.11.0, preserves the selected provider through confirmation, and gathers the exact package closure required by fable-bindings. SOURCE/PUBLISHED from f0f6d13313c90ae38bff42416e90b6b36bc7161d; annotated tag new-sdd-workspace/v0.11.1 peels to that source. PRIOR 0.11.0 SOURCE/PUBLISHED from a4e3ccb93fc983c950409526b125fe03ab9c106a: the interactive wizard asked only product and target, embedded the initialize-sdd-workspace handoff, and deferred repository/board/collaborator/npm facts until they exist. PRIOR 0.10.1: forward patch cut from exact source 264725f374e3f05da46d7c3089462076a1f9bf7a after 0.10.0 introduced additive none|sdd|typed-sdd|spec-kit lifecycle selection with omitted/default sdd, exact provider forwarding, and executable default/lifecycle-loss mutation controls (.github#2968/#2925).
-    package-version: "0.11.1"  # FEED newest, independently verified on GitHub Packages and nuget.org after release run 33369748748; all 25 normalized payload entries are byte-identical with payload digest sha256:5874479e1ee24f959dfa79da051d1ed0dd50dc91d6cc60f4d0019ee669b3bc5c. Org archive SHA-256 c02471b15167d98951e3ac006c913e71613dd8b05bbb229eb625b0e2a837a288; public signed archive SHA-256 9c5337aeccc731c68242d176f471b8f4f5e85124642f6543f9c6092f55dadb30. Both served nuspecs bind version 0.11.1 and repository commit f0f6d13313c90ae38bff42416e90b6b36bc7161d; publish-before-flip is satisfied. PRIOR 0.11.0.
+    version: "0.11.2"          # SOURCE SemVer 0.11.2: PATCH; adds the fable-game player/studio/tactical/arcade/complete bundle selector while keeping omitted/default player and forwarding lifecycle independently. SOURCE/PUBLISHED from 3935b6bb81dc242635bbb8b400537d07de3b954b; annotated tag new-sdd-workspace/v0.11.2 peels to that exact source. PRIOR 0.11.1 restored the creation-time template question and fable-bindings closure.
+    package-version: "0.11.2"  # FEED newest after release run 34972041225. Independent GitHub Packages/nuget.org readback verified all 25 normalized payload entries byte-identical and both nuspecs bind repository commit 3935b6bb81dc242635bbb8b400537d07de3b954b. Org archive SHA-256 1670be8529416c08af0c22e948de37c4b772d673a7ee0176902f852d65aeda5b; public signed archive SHA-256 c3f6d1333c34511dfef2c1ce3518191749f622689ee57d822a4f083fee35118d. Publish-before-flip is satisfied.
     owner: github             # Registry.fs resolves owner against repoIds + the literal `github`. `.github` owns the scaffolder: ADR-0016 retired FS.GG.Templates' local `new-fullstack` for this single org CLI, and its release workflow lives here because the tool does (mirrors coord-engine).
     # ADR-0016's single org scaffolder (renamed new-sdd-fullstack → new-sdd-workspace, package
     # FS.GG.NewSddFullstack → FS.GG.NewSddWorkspace). A `dotnet new`-style CLI humans install
@@ -981,9 +981,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.13.0"   # SOURCE: Templates#480, merge 6acdfc5f5da41156db0aeaffcd54885b3b9e66be; public producer adoption for SVG Preview C.
-    package-version: "0.13.0"   # FEED: run 34820243790 published/read back all 205 payload entries on both feeds; original artifact 10337733099, readback artifact 10339235374.
-    package-tag: "fs-gg-templates/v0.13.0"   # Immutable tag peels to 6acdfc5f5da41156db0aeaffcd54885b3b9e66be.
+    version: "0.14.0"   # SOURCE: frozen SVG-WORKSPACE-01 complete bundle and local Caddy deployment boundary at Templates commit 2d8802d527e01afe4755ae7015a5627be88e318f; package version was already frozen there before later roadmap-only merges.
+    package-version: "0.14.0"   # FEED: run 34969670370 published/read back all 402 normalized payload entries exactly on both feeds. Original candidate SHA-256 340250f942efef30702bf8c3f1f9a9096ca246c1bb4b244a2c5806ac49398380; GitHub Packages archive bca6ed8ce679f34204245bfba5f44340e91e225155b054dfc3a2297bf351c829; public signed archive a5f218d10bbac42b11afcfb401806c8f0f56261cf79876cc76710471d3666563.
+    package-tag: "fs-gg-templates/v0.14.0"   # Immutable tag peels to exact frozen source 2d8802d527e01afe4755ae7015a5627be88e318f.
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain

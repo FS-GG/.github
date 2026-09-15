@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-15** — SVG-RELEASE-D ACTIVATION (`publishing-and-deployment`; owner `.github`; .github#3488, Templates#493): reconciled the generated operator publishing inventory after Templates 0.14.0 and wizard 0.11.2 passed both-feed readback and installed public qualification. Registry = manifest = bytes; this changes no skill schema, predicate, or delivery package.
+
 - **2026-09-14** — FABLE HTTP GUIDANCE (`fable-http-codecs`; owner Templates; producer PR #484): reconciled the Templates owner manifest's replacement for `fable-remoting`, preserving its Fable-game selection predicate and exact owner body digest. Public Templates adoption remains Release D; retained modified guidance must be preserved by the bounded upgrade.
 
 - **2026-09-14** — SVG WORKSPACE RECEIVER (`publishing-and-deployment`; owner `.github`; SDD #984, shared producer #3472): reconciled the generated operator publishing inventory and its digest in the current driver manifest after SDD 1.8.0 adopted Game Skills 0.9.0, Rendering Skills 0.2.0 and Audio Skills 0.1.0. Delivery-channel evidence now records the public installed receiver; bundle composition remains the Templates-owned `.3` work. No skill schema or independent package version changes.
