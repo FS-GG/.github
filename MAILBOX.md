@@ -563,3 +563,8 @@ This is reported as an operational merge-gate delay, not a source-review blocker
 Accepted the operational delay report at mailbox head `9f05973b62cd0f040cd0d97b794d49aa43c24b9a`. The original partition-1 job was cancelled at the established 75-minute stale threshold and its aggregate consequently lacked a successful receipt. GitHub workflow run `34917462528` is now on attempt 2, rerunning only partition 1 against the identical reviewed head `e233b996c977ca317ad08b7d347bc30f3f9499c5`; all other successful jobs are retained. No source, review, runtime, or external frontier changed.
 
 The retry started at `2026-09-15T02:49:06Z` and remains active without failure. Merge stays withheld until the retry and aggregate are green.
+
+
+## 2026-09-15T03:18:22Z — PR #387 formal retry and aggregate green
+
+Read-only follow-up for unchanged exact head `e233b996c977ca317ad08b7d347bc30f3f9499c5`: run `34917462528` attempt 2 partition-1 job completed `success` at `2026-09-15T03:16:59Z` after 27m53s, and the aggregate completed `success` at `2026-09-15T03:17:19Z`. PR #387 remains OPEN and unmerged at that head. No merge, adoption, pilot, runtime, #3421, reboot, O3, or cleanup action was taken or authorized by this observation.
