@@ -68,6 +68,9 @@ The inert operator packet now distinguishes observation from explicit recovery c
 its client, units and writable paths. Local native fixtures used zero model calls to prove authenticated
 loopback requests, selected writes, protected-ticket/outside-write refusal and disposable unit cleanup.
 Native fixture receipt SHA-256 is `beda3e4d1e598c8ec0a1115818c4be6be100286cecea2f708c1746752b84a7fe`.
+Its expected duplicate-ticket refusal ended the harness before it wrote an overall passed status;
+the individual observations above remain verified, with duplicate refusal covered separately.
+Readback audit SHA-256 is `47c3266d12d2852af12c9b1bc2e6849c9a297525700cae42f733687bb9a70d1f`.
 The proxy permits all ports on 127.0.0.1; the selected guard directory is writable and the deterministic
 launcher retains same-user service control. This is no claim of command isolation. The actual recovery
 client, installed activation and physical reboot remain unqualified. O2/O3 and **10/12** remain unchanged.
