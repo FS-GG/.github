@@ -47,6 +47,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **finite owned-process return mechanism delivered**, **2026-09-15**:
+SystemAdmin [PR #104](https://github.com/EHotwagner/SystemAdmin/pull/104) merged tested head
+`6f7dfa97b21ca43f959c55246726e92b6d09b1d3` as `b0e0854c2219a153cbae806cf7144d5844976cd1`;
+both bind tree `6e43ad9ebb07dc7b22ac8fe4c828cfa4eed4daa7`. All three native checks passed.
+Its inert Linux supervisor enforces fixed authority/runtime bounds and a durable one-use ticket,
+then adopts and reaps owned descendants across separate process groups. A disposable container fixture
+proved cleanup after the host command was killed, including a separate-session child, while an unrelated
+process survived. The fixture made zero model calls; receipt SHA-256 is
+`ad080e12acdba2f20d23f15a1dd209adc95e7afabebe473ecbc33ee0c8ae1906`.
+This qualifies the return mechanism while its supervisor survives. Actual session return, final deployment
+binding and physical reboot remain pending; no existing development session was restarted. O2/O3 and
+**10/12** remain unchanged.
+
 O2-I4c **trusted operator capability source delivered**, **2026-09-15**:
 SystemAdmin [PR #103](https://github.com/EHotwagner/SystemAdmin/pull/103) merged tested head
 `8ec516aaaa4e63fe9de013d8d75deb812df73fca` as `7bf2404261879ffec29fe2a80ce1689603b333cd`;
@@ -55,6 +68,9 @@ The inert operator packet now distinguishes observation from explicit recovery c
 its client, units and writable paths. Local native fixtures used zero model calls to prove authenticated
 loopback requests, selected writes, protected-ticket/outside-write refusal and disposable unit cleanup.
 Native fixture receipt SHA-256 is `beda3e4d1e598c8ec0a1115818c4be6be100286cecea2f708c1746752b84a7fe`.
+Its expected duplicate-ticket refusal ended the harness before it wrote an overall passed status;
+the individual observations above remain verified, with duplicate refusal covered separately.
+Readback audit SHA-256 is `47c3266d12d2852af12c9b1bc2e6849c9a297525700cae42f733687bb9a70d1f`.
 The proxy permits all ports on 127.0.0.1; the selected guard directory is writable and the deterministic
 launcher retains same-user service control. This is no claim of command isolation. The actual recovery
 client, installed activation and physical reboot remain unqualified. O2/O3 and **10/12** remain unchanged.
