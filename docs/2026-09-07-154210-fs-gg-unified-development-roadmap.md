@@ -47,6 +47,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+O2-I4c **distinct local bootstrap delivered; live qualification pending**, **2026-09-15**:
+the user selected local replication after the original Main host became unavailable.
+SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100) merged tested head
+`ec234c46814f8714a720a5410451da243a66fe07` as `9505e641758e4e7e479e5c02d87ded36a623b9c5`;
+both bind tree `f402e0cb9e535051a0796a0f1b2abef4c4ea62a7`. All three native checks passed.
+The replacement host has a distinct initialized store, an actual initialization-generated backup identity,
+guarded canonical units, authenticated paused readback across an ordered restart, and a retained cold backup.
+Bootstrap evidence SHA-256 is `b7429e9e6ee3ab64ca35c1adc9522e4dac481209e93a4ab4f1dd387506964c6e`;
+the installed binding receipt is `7c2f621ca8a62dbd03c6c565e70bbfdf218a0a125a238052d4130c65e1e09a1a`.
+Both services are stopped and disabled; the bootstrap had no model or GitHub effect capabilities.
+This proves separate local preparation. Original [PR #3481](https://github.com/FS-GG/.github/pull/3481)
+remains open at candidate `3ed0d603276496ba4bcd11660525d8cf37556b28`; its original journal and post-reboot
+outcome remain unavailable. Corrected runtime qualification, local live recovery, and original-attempt
+disposition remain pending. O2/O3 and the top-level **10/12** count are unchanged. No generated workspace
+or lifecycle default changed. Telemetry remains `not-configured`, with native collaboration usage unsupported.
+
 SVG-WORKSPACE-01.5 **completed — installed development and retained adoption**, **2026-09-15**:
 Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486) merged reviewed head
 `deacec061a23a75f8302d86539187aec89253227` as `6b797aa6099680ab06763200d1d2a11ed4b7ae16`.

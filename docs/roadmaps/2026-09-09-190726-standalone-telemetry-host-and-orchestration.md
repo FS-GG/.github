@@ -372,6 +372,12 @@ These are O2 substeps, not top-level milestones. Each unchecked step needs exact
 baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
 remain coverage gaps rather than inferred usage.
 
+**September 15 local preparation:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
+delivered the user-selected replacement installation with a distinct store, authenticated paused restart
+and cold backup. Both services remain stopped and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+records accepted source and evidence. Original pilot recovery, local live qualification and O2-I4c remain
+pending; the top-level count stays 10/12.
+
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 of the two-container deployment for the enrolled O2 scope; no SDD/Templates lifecycle default or general
 fresh-workspace content changes. Qualify a clean orchestration-container installation and migration of the
