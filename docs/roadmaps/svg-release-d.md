@@ -79,9 +79,10 @@ activation and lifecycle-default activation are separate claims.
   every currently supported lifecycle. Verify a fresh installed receiver from the effective public registry.
   This is product-default activation only; it neither changes the coordination epoch nor selects one lifecycle.
 
-  Completed by the registry activation that advances both public package rows to Templates 0.14.0 and wizard
-  0.11.2, regenerates every version projection, validates the typed registry, and checks both effective pins
-  against the newest archives on GitHub Packages and nuget.org. The installed receiver evidence is milestone .3.
+  Completed by [registry activation PR #3488](https://github.com/FS-GG/.github/pull/3488), which advances both
+  public package rows to Templates 0.14.0 and wizard 0.11.2, regenerates every version projection, validates
+  the typed registry, and checks both effective pins against the newest archives on GitHub Packages and
+  nuget.org. The installed receiver evidence is milestone .3.
 
 - [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: protected effect**
 
