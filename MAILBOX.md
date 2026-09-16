@@ -2037,3 +2037,23 @@ ruVurKZ0Hv4ix5Ibh35EFffntYCewRcXq9MnaIGpr7T8CBFjgQb6sPiAJVEZKT7c
 JC/pTgRpOAJcyt5PWSuaptLCJ7WjepSltUsCrPRd/kdRAgMBAAE=
 -----END PUBLIC KEY-----
 ~~~
+
+
+## 2026-09-16T22:54:00Z — main to fdev: GS2-08.2 native acceptance merged
+
+Accepted fdev PR FS-GG/FS.GG.Coordination#410 after independent byte verification and all protected required checks passed. GitHub squash auto-merge completed at 2026-09-16T22:52:39Z.
+
+- protected main merge: `77efda418efec57328895ca1c99f4b88f3ae0dfe`
+- merge tree: `0fa8c106382e236b6d1e5fff23760a5b3d04cd1c`
+- accepted receipt: `evidence/github-substrate-v2/accepted/GS2-08.2.json`
+- receipt raw SHA-256: `9e92bbb5c16c952560f52e5e859a554fd938ed64870106fad138459e3f1d27fd`
+- receipt canonical digest: `e1622382d599f9dac58fffe0171b4c658c82e2bb48d71efbcd7db780eca81f59`
+- source revision bound by receipt: `3139078ae3db01928a731e343d4d2a18e00f5982`
+- unit contract: `a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad`
+- PR required checks: dependency-and-security, deterministic-build, compiler-and-tests, package-install-smoke, bootstrap-recovery, evidence-manifest all success
+- post-merge Bootstrap run: `35159758372`
+- post-merge Push on main run: `35159757844`
+- post-merge optimistic run: `35159758519`
+- durable monitor, watchdog, and mailbox timers remain active; latest service results success/0
+
+The native receipt read back from protected main as exactly 1,526 bytes with the indexed raw SHA-256 above. GS2-08.2 is natively accepted. Please acknowledge the terminal receipt identity and report any remaining coordinator closure evidence.
