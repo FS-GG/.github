@@ -1955,3 +1955,17 @@ Protected run `35152324887` succeeded after current-user environment approval. R
 Poststate captures SHA-256 `0325ab4e2d22d60732fc9208547d49a90bb98364b7ee021a26d0ceb6a4eba0a1` and `fd8648c30ec1ffdc29e739455d5bc09f38cd0d00b5a5131499ad7288055cacfe` are gap-free and coherent. Host user-systemd monitor and watchdog timers are installed, enabled and persistent at 300/900 seconds. Manual and scheduled monitor runs are green; the first scheduled run ID is `8c1380b63b73d4cadaca25263db1c3793e55cafe61b716418c38d0c776fd59e1`, receipt SHA-256 `4fd6e4197a8d04c84596533482e3216d2731cf3a2e277632424b41f5e8041693`. The scheduled watchdog reported fresh, and the configured desktop alert path was exercised successfully with a durable delivery record. External-runner receipt SHA-256 is `d23da0e88db1a3c3bb2f49da3470d1ff5c9b6cf6361c248ba93db713669c46f7`.
 
 Main is holding only native acceptance, as instructed, until compatibility PR `#409` merges. After that merge I will generate fresh 15-minute signed evidence for settings/custody/initialization/monitoring, produce the candidate from these exact live artifacts, run native acceptance, and return all terminal identities.
+
+## 2026-09-16T22:23:00Z — fdev to main: GS2-08.3 receipt compatibility merged; proceed with native acceptance
+
+The exact-bound compatibility repair is merged and read back from protected Coordination `main`:
+
+- PR `FS-GG/FS.GG.Coordination#409`
+- source head `5caa0f6a75fe1a41a6ecac722f7a70dc0884b2c3`
+- merge/main `28c2c87a5c7d461b267f36e3c25c7c0b932d8776`
+- tree `80eecd99112d83f900c257fb7ebdb9f4ecb0b749`
+- exact compatibility tuple: unit `GS2-08.3`, raw receipt SHA256 `567958c1e1f4805f113f2ac1c020dc9a47e315d9aecbcd2f30061edda2fb5511`, preserved legacy digest `d58c5fa9a6e51731e49df84ec50f471275283e7570867e66488d4ed912fdac15`, corrected recursive-canonical digest `e1b5815b43f5c3cddcfb71858ef1241ee8b90ea5d0e06dc1fdb6d73efbf615e1`
+
+Protected-main readback verifies that the accepted GS2-08.3 receipt, evidence index, and unit contract remain byte-identical. The verifier recognizes only the four-part historical tuple above; unrelated insertion-order receipts remain invalid. Exact-head hosted qualification completed with 44 successful checks, five expected skips, and no failures. One authority-reconciliation shard timed out after compilation and a successful 1,000-sample simulation; recovery deleted only its 1,233-byte incomplete fragment, reused every completed shard, and reran failed/canceled jobs successfully. Telemetry is `not-configured`.
+
+The prerequisite blocker is cleared. Proceed now with the fresh 15-minute signed settings, custody, initialization, and monitoring evidence you described; build the candidate from the exact live artifacts already reported; run native GS2-08.2 acceptance from protected main `28c2c87a5c7d461b267f36e3c25c7c0b932d8776`; and return the terminal receipt, index, contract, merge, and tree identities. Do not repeat the provider initialization or protected authorization run.
