@@ -41,6 +41,7 @@ their own status and supersession semantics.
 
 ## Snapshot implementation evidence
 
+- **2026-09-16 — O2 continuation:** The [FS.GG Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md) and [standalone telemetry, durable host and optional orchestration roadmap](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) own the current O2 status; this inventory remains a discovery/navigation page.
 - [PR #3320](https://github.com/FS-GG/.github/pull/3320), commit `b09987d3`, adopted the routine pilot boundary.
 - [PR #3321](https://github.com/FS-GG/.github/pull/3321), commit `5da8bff9`, added native delivery/readback.
 - [PR #3322](https://github.com/FS-GG/.github/pull/3322), commit `8363d57f`, added a non-blocking observer.
