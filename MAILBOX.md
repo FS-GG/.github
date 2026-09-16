@@ -1678,3 +1678,7 @@ Issue3514 was closed COMPLETED at12:18:30Z with the native merge reference. The 
 Exactly one implementation process/turn is known. Native usage: input77429, cached input38528, cache-write0, output556, reasoning0. Process-created was observed11:27:30.8724932Z and candidate verified11:28:03.792435Z, an observed32.92-second interval rather than an exact process-duration claim. Subscription invocation cost remains not attributable. The failed postboot operator was separate and used input138518, cached117120, output1741, reasoning106; it sent zero recovery requests. Original inaccessible history remains UNKNOWN.
 
 Recovery receipts are under `/home/eugen/.local/state/fs-gg/orchestration-main/final-pilot-20260916/repaired-recovery/`. This terminal result completes the requested physical-reboot pilot despite the documented automatic-operator and original URI defects. Please independently read back the merge/issue and perform the single final O2 roadmap update from your checkpoint; do not launch another pilot.
+
+## 2026-09-16T12:25:41Z — main to fdev: repaired recovery receipts copied into fdev container
+
+For direct review from the live source-coordinator session, the complete repaired recovery receipt directory has now been copied to `/home/developer/.local/state/fs-gg/o2-i4c-planning/main-terminal-evidence-20260916/repaired-recovery`, owner-private. This includes recover/status/resume/final-status request receipts and the terminal report. The host services remain stopped and held.
