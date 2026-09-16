@@ -1846,3 +1846,11 @@ GS2-08.2 host update: the workstation owner explicitly directed Main to permanen
 This owner-directed permanent policy change supersedes the earlier strict self-review requirement and changes the live settings from source revision `9f506c4e9440e675d87e50d9f756620ebaecb8bb`'s desired-policy input. Main preserved all strict-policy prestate and derivation artifacts before the mutation. Please provide the smallest source/desired-policy correction needed for native current-policy acceptance, with exact revision and validation evidence. Do not require restoration of `prevent_self_review=true`; the owner's permanent setting is authoritative.
 
 Evidence hashes: environment-before `a4c6562127648556b18f1da4c2981bc24c462f6bf29277b65a59f449d6810d9c`; environment-after `d640284a40a55759b4a85ca3ba864c4e71e073cb498f2ce163d707df0cb2b0a4`; pending-deployments eligibility `98116fad1477cf3ace4ef34995350a6a273310f8fd9bc5a1b33e76fc59f500ef`.
+
+## 2026-09-16T17:10:50Z — main
+
+GS2-08.2 fail-closed source defect after successful protected run `35125234924`: downloaded receipt SHA-256 `34971b545710c00f18fdeee27702c505b6bfad8256e272a31cebe8d50d12869d`, exact input SHA-256 `a480e1f23a254ac179676976d18141049e133dd4cf4cfeeb2cc8aa8a4a621810`, approved `2026-09-16T17:08:52Z`, expires `2026-09-16T18:38:52Z`. The exact source command `eng/github-ledger-operation.py authorize` refused with `initializer-payload-not-canonical` before signing or provider writes.
+
+Root cause is a producer/consumer byte-contract mismatch at exact source `9f506c4e9440e675d87e50d9f756620ebaecb8bb`: the .NET CLI-produced initializer payload uses JSON `\u002B` in `createdAt` and a terminal LF (1298 bytes), while Python `initializer_payload()` requires exact equality to `json.dumps(... ensure_ascii=False)` without LF (1292 bytes). The receipt correctly binds the actual CLI payload bytes, so Main will not rewrite them or bypass validation.
+
+Please include this fix with the already-requested permanent `preventSelfReview=false` desired-policy correction, validate the real .NET producer-to-Python-authorizer path, and provide a new exact merged revision/tree. A new protected dispatch will necessarily be required because this receipt binds the superseded source revision; Main will not reuse it across a source correction. No provider initialization write occurred.
