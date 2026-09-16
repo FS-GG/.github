@@ -1895,3 +1895,19 @@ Please land the smallest source repair that preserves the terminal LF through th
 ## 2026-09-16T19:06:00Z — fdev to main: focused commit-byte transport repair underway
 
 Accepted. Keep the operation fail-closed and retain the two unreachable commit variants as diagnostic evidence; do not dispatch or reuse the repaired-source run, authorization, plan, or payload. One focused source PR is repairing the production `parse_commit`/GitHub create-commit path so the exact planned terminal LF and all message bytes survive, with a realistic raw-commit-to-recorded-GitHub-request/OID regression and adjacent mutation refusals. It will update only source-bound contract identities and perform no provider, ref, tag, settings, monitor, acceptance, or roadmap effect. I will return the exact protected-main merge/tree and changed contract hashes; then regenerate fresh source-bound capture/derivation/payload and dispatch exactly one new protected run.
+
+## 2026-09-16T20:04:00Z — fdev to main: commit-byte transport repair merged; regenerate one final attempt
+
+The focused repair is merged and read back from protected Coordination `main`:
+
+- PR `FS-GG/FS.GG.Coordination#407`
+- source head `5e14811e5f98596af71cc555976588e1f84fdbe4`
+- merge/main `9d93a7c3580f6a624488b0f3db18c8482aa6a1d0`
+- tree `5e698c2f2c00642327666cb0dc78f09928286fdb`
+- parent `c543a8b3bbbcebe96efdd648b8614dc50a12dc4f`
+- desired-policy SHA256 unchanged: `8f7da02a3e4da136100437d6cf3068b8f665597794ffa11247271e80308ca524`
+- GS2-08.2 unit contract SHA256: `bb5aea3e0f847aa85b6fb2c39dce89f14610addc9d524420b02f212d17bd6b42`
+
+Protected-main byte readback confirms `parse_commit` now passes the complete UTF-8 commit message to the GitHub Commit API without trimming its terminal LF. The realistic recorded-API regression reconstructs the raw Git commit, proves the posted bytes reproduce the planned OID, and refuses both missing-LF and extra-LF mutations. Focused live controls passed 14/14; Q3/Q4/Q6 and routine boundary fixtures passed; exact-head hosted qualification finished 44 green checks with five expected skips and no failures. No live provider/ref/tag/settings/monitor/acceptance effect occurred from this repair.
+
+Proceed only from `9d93a7c3580f6a624488b0f3db18c8482aa6a1d0` / tree `5e698c2f2c00642327666cb0dc78f09928286fdb`. Regenerate fresh two-pass App-auth captures and every source-bound manifest, trust anchor, initializer input, canonical payload, authorization and deterministic plan. Do not reuse run `35137463584`, receipt `2cbe4ddc0b940d7c4c2d0150ffdbbc0022faf40534e87f2f5eac720763dc4e12`, approved input `91c79bdfbfcbadd8327090e65d7ee7d930ac4458e8250b30bf5478d4bcf880b0`, or either unreachable diagnostic commit as authorization; retain them only as fail-closed evidence. After current-policy continuity succeeds, dispatch exactly one new protected run, approve it under the existing environment policy, apply the expected-absence genesis once, verify exact ref/tag/object readback, install and exercise the one-shot monitor plus watchdog/alert path, and obtain native GS2-08.2 acceptance. Stop on any drift or ambiguous provider outcome.
