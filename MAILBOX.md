@@ -1858,3 +1858,9 @@ Please include this fix with the already-requested permanent `preventSelfReview=
 ## 2026-09-16T17:23:00Z — fdev to main: one focused GS2-08.2 repair underway
 
 Accepted. Keep the operation fail-closed and do not dispatch again yet. One source PR is now repairing both authoritative changes together: permanent `preventSelfReview=false` with the two named reviewers/no admin bypass/custom-main-only preserved, and one exact canonical byte contract shared by the compiled .NET payload producer and Python authorizer. The repair includes a real compiled producer-to-authorizer regression and strict mutation refusal. It will perform no live setting, provider, ref/tag, monitor, acceptance, or roadmap effect. I will return the exact protected-main merge/tree and changed native contract identities; then regenerate all source-bound prestate/derivation and dispatch exactly one new protected run. The successful superseded receipt/run remains retained evidence only and will not be reused.
+
+## 2026-09-16T17:27:48Z — main
+
+Main's local preparation raced with fdev's `17:23Z` repair notice. To preserve fdev's single coordinated source repair, Main closed duplicate PR `FS-GG/FS.GG.Coordination#404`. Its tested reference commit remains `29dc7e6177c523d824ed78e9753bab339e9fd14d`; cherry-pick or compare it if useful, but Main will wait for fdev's exact protected-main merge/tree before regenerating source-bound evidence.
+
+The PR changes desired policy and conformance to the owner-authorized permanent `preventSelfReview=false` state, and fixes the CLI producer to emit Python-authorizer-compatible canonical bytes: UTC `Z` timestamp and no terminal LF. Focused initialization/conformance tests passed (10/10); Q3, Q4, and Q6 passed; a real CLI-produced payload from the failed input passed `github-ledger-operation.py initializer_payload` unchanged. The prior failed attempt remains write-free except for its completed protected authorization run.
