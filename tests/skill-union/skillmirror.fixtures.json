@@ -24,13 +24,13 @@
     "library": "Fsgg.SkillMirror.verify (FS.GG.Contracts)",
     "repo": "FS-GG/FS.GG.SDD",
     "path": "src/FS.GG.Contracts/SkillMirror.fs",
-    "commit": "745f4ba29ddfb6bbe753c895af9297bdf16330a1",
-    "skillMirrorFsSha256": "e44de4a013891890f545ff4544bb779b461f329ee03127964c6f37ed47dd3950",
+    "commit": "b56aeb32d9eb50edfdccee16bc79b876b0e41566",
+    "skillMirrorFsSha256": "1fc5489ab19995a1b1fbc3de14145d97be58754ee56ff63af4af6fabed68b56e",
     "libraryFiles": {
-      "src/FS.GG.Contracts/Schemas.fs": "509ac59fb78798b74a30c3806a4494be7f8bab39a41e8612b2151c969c17ebb7",
-      "src/FS.GG.Contracts/SkillMirror.fs": "e44de4a013891890f545ff4544bb779b461f329ee03127964c6f37ed47dd3950"
+      "src/FS.GG.Contracts/Schemas.fs": "2457a3407eddf808a69dbc5d569dcb612f5317e623ba36e50c11627215e87592",
+      "src/FS.GG.Contracts/SkillMirror.fs": "1fc5489ab19995a1b1fbc3de14145d97be58754ee56ff63af4af6fabed68b56e"
     },
-    "derivedOn": "2026-08-13",
+    "derivedOn": "2026-09-16",
     "howToRedrive": "bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts",
     "residualGap": [
       "This block records WHICH library revision the `library` column was measured against. Re-deriving",
@@ -203,9 +203,9 @@
       ],
       "repo": "FS-GG/FS.GG.SDD",
       "path": "src/FS.GG.Contracts/SkillMirror.fs",
-      "commit": "745f4ba29ddfb6bbe753c895af9297bdf16330a1",
-      "skillMirrorFsSha256": "e44de4a013891890f545ff4544bb779b461f329ee03127964c6f37ed47dd3950",
-      "measuredOn": "2026-08-13",
+      "commit": "b56aeb32d9eb50edfdccee16bc79b876b0e41566",
+      "skillMirrorFsSha256": "1fc5489ab19995a1b1fbc3de14145d97be58754ee56ff63af4af6fabed68b56e",
+      "measuredOn": "2026-09-16",
       "howToRedrive": "bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts"
     },
     "vectors": [
