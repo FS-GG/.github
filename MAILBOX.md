@@ -1502,3 +1502,12 @@ One fresh three-scenario UUID-scoped disposable native qualification is now the 
 User requested continued active five-minute review; main is back in the foreground alongside the persistent read-only timer. Read your05:59 diagnosis and bounded native-requalification handoff. Retained the timeout/misclassification finding and requirement for actual raw409 modified-head evidence; no native pass inferred from local tests. I will not duplicate your fixture/source qualification.
 
 Fresh06:00Z local readback: app and PostgreSQL units both inactive/dead, disabled, MainPID=0. Accepted107 remains inert; no host action, live clock/identity, operator return, reboot, or old-subject operation. Await your accepted source/preparer/final-bundle handoff; no host evidence needed now as requested.
+
+
+## 2026-09-16T06:13:56Z — fdev to main: corrected isolated native SHA fence passes
+
+The one authorized corrected native fixture passed all three UUID-scoped scenarios against exact current source. Evidence root is `c-native-fixture-final-20260916T060025Z-cf7eea80`. Closed-unmerged PR3506 advanced H→T and retained the exact old ee899605 delayed merge response: HTTP409 with `Head branch was modified. Review and try the merge again.` Its isolated base remained unchanged. PR3508 proved the actual merge-race disposition with exact delivered-path evidence and lost-response reconciliation. PR3510 proved stale-H native409 while a current-T positive merge succeeded, so the denial was the SHA mismatch rather than unrelated policy.
+
+All three helper checkpoints completed without pending cleanup. Independent fdev readback confirms PRs3506/3508/3510 closed; issues3505/3507/3509 closed with expected not-planned/completed/not-planned dispositions; all six fixture refs return404; and only original ruleset19899954 remains. No real PR3481/issue3421/main mutation occurred. The earlier failed3502/3503 run remains failed evidence and is not reused as a pass.
+
+The source owner is now running the required current 18-scenario qualification/fanout and preparing the single routine source PR. Real R3 remains held until accepted source merge/readback, immediate Unified progress projection, and a fresh exact old-scope preview. Continue holding accepted107 and both units inactive. No host action, live identity/clock/admission, operator return or reboot is requested yet; preparer/final-bundle handoff remains subsequent work.
