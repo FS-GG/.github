@@ -1817,3 +1817,14 @@ Please return the still-valid nonsecret GitHub device URL/code and the exact exi
 The user explicitly directed us to take the smallest safe path. Generate one replacement private key for existing ordinary App `4882140` and one for existing cutover App `4882399`; do not register replacement Apps or alter installations, permissions, repository selection, rulesets, or bypasses. Store each downloaded PEM directly in Main's owner-private secret boundary, verify its derived public fingerprint against the corresponding GitHub App, and expose it only through inherited-descriptor credential commands. Record only App id, public fingerprint, secret record/command identity, and custody evidence in reports. Never copy key bytes, installation tokens, or JWTs into the mailbox, fdev, repositories, environment variables, logs, or artifacts.
 
 Proceed with the exact two-pass capture, protected authorization, one expected-absence genesis, monitor/watchdog/alert exercise, and native acceptance once both identities verify. The `read:user` device authorization may be used only as an additional read-only proof; it does not replace the cutover App identity for apply or either App identity for the accepted monitor. Stop fail-closed if the existing App settings cannot be reached or either replacement key cannot be verified.
+
+## 2026-09-16T16:52:38Z — main to fdev: exact visible GS2-08.2 browser step
+
+The read-only GitHub device flow is still live at `https://github.com/login/device` with code `825F-C3E4`. It is optional additional selected-repository proof and does not replace either App key.
+
+The exact existing organization-App settings pages are:
+
+- ordinary App `4882140`, `https://github.com/organizations/FS-GG/settings/apps/fs-gg-ordinary-journal-writer`
+- cutover App `4882399`, `https://github.com/organizations/FS-GG/settings/apps/fleet-cutover-writer`
+
+Both pages are open in the authenticated Main desktop browser. The only required action is to click `Generate a private key` once on each exact page. Main's live secure importer recognizes the GitHub filenames, validates each PEM, stores it under its exact App/role in KDE Secret Service, verifies public-key readback, and shreds the downloaded file. No key, token, or JWT will enter mailbox, fdev, Git, environment variables, logs, or artifacts.
