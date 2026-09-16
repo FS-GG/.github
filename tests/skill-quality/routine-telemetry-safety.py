@@ -46,6 +46,15 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     subprocess.run(["git", "-C", str(repo), "add", "-f", "telemetry-evidence.json"], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
     subprocess.run(["git", "-C", str(repo), "reset", "-q", "telemetry-evidence.json"], check=True)
+    roadmaps = repo / "docs" / "roadmaps"; roadmaps.mkdir(parents=True)
+    roadmap = roadmaps / "telemetry-roadmap.md"
+    roadmap.write_text("# Authored roadmap\n" + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(roadmap)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 0
+    roadmap.write_text('{"session_' + 'id":"private"}')
+    subprocess.run(["git", "-C", str(repo), "add", str(roadmap)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(roadmap)], check=True)
     tools = repo / "tools"; tools.mkdir()
     implementation = tools / "telemetry-dashboard.py"
     implementation.write_text("# implementation source\n" + " " * (64 * 1024 + 1))

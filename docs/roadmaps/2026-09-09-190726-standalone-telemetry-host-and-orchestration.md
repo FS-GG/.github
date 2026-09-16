@@ -7,11 +7,11 @@ description: "Proposed implementation stages, receipt semantics, deferred runner
 
 # Standalone telemetry, durable host and optional orchestration roadmap
 
-Authored: **2026-09-09 19:07:26 UTC**. Status: **execution underway; ten of twelve selected milestones are complete**.
+Authored: **2026-09-09 19:07:26 UTC**. Status: **execution underway; eleven of twelve selected milestones are complete**.
 
 Deliver durable telemetry for mount-free development and lightweight standalone workspace tooling over the same evidence contracts. Add durable board orchestration later as an independently selected capability. Keep human effort concentrated in initial configuration and consequential changes; retries, receipts, routine authorization checks and recovery belong in software.
 
-This roadmap records the user's agreement to proceed with the design, include receipt correctness, and **defer stronger runner GitHub credential isolation**. Its initial document-only authorization was superseded by the later execution instruction recorded below. On September 10, the user selected **manual Main installation**: implementation prepares the Podman containers and guide, and the user runs them on Main. On September 14, the user selected the remaining orchestration topology: host systemd manages the lifecycle of exactly two rootless Podman containers, one combined orchestration container and one PostgreSQL container. The released telemetry deployment instructions are linked under H3 and section 7; this orchestration topology is selected and implementation is underway, but it is not yet an installed capability.
+This roadmap records the user's agreement to proceed with the design, include receipt correctness, and **defer stronger runner GitHub credential isolation**. Its initial document-only authorization was superseded by the later execution instruction recorded below. On September 10, the user selected **manual Main installation**: implementation prepares the Podman containers and guide, and the user runs them on Main. On September 14, the user selected the remaining orchestration topology: host systemd manages the lifecycle of exactly two rootless Podman containers, one combined orchestration container and one PostgreSQL container. The released telemetry deployment instructions are linked under H3 and section 7. The topology is installed and qualified through the bounded O2 pilot; its units are stopped and disabled after acceptance.
 
 ## 1. Sources, scope and relationship to existing work
 
@@ -191,11 +191,10 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [x] P1 — Selected publication migration. [Accepted Main evidence](../reports/evidence/2026-09-10-standalone-telemetry-p1.md) records the preserved failed-first-attempt proof and rollback, hardened SYSTEM-unit qualification, digest-bound generation-2 cutover, exactly one replacement recurrence, exact public readback, retained last-good state, and duplicate-free response-loss/restart reconciliation. The response-loss test reconstructed persisted state rather than interrupting the network, and the isolated publisher still uses an existing broad-scope OAuth token.
 - [x] O0 — Orchestration state and runner contract: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/355), merge `616207d56fedb600f71dc860fbf7603497502f75`. Sixteen tests on PostgreSQL 18.6 exercised the real containerized database and the post-merge suite passed; Main pilot and upstream acceptance remain owned by O1–O3.
 - [x] O1 — Read-only observer and shadow evaluation: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/356), merge `64acf326a3bdada6680a1f2c8b571220fc71a695`. The accepted source and all post-merge checks passed; candidate dispatch remains absent and Main pilot authority remains owned by O2.
-- [ ] O2 — Trusted bounded Main pilot. The [typed adapter and pilot source](https://github.com/FS-GG/FS.GG.Coordination/pull/357) was accepted at merge `ea356adfcfdb13fab6e71989e3aed310d094af6d`, and all three post-merge workflows passed. The actual Main pilot, its selected scope and native delivery readback remain pending.
+- [x] O2 — Trusted bounded Main pilot. The final generation-1 attempt survived one physical reboot, recovered from its unchanged admission after a focused source repair, and completed [`.github` PR #3515](https://github.com/FS-GG/.github/pull/3515) through native merge/readback at `cf840ff9f760d2fdebcdca84caf0ae24f75b8dfa`. Issue [#3514](https://github.com/FS-GG/.github/issues/3514), the claim and the pilot branch are closed; all installed units are stopped and disabled.
 - [ ] O3 — Controlled adoption.
 
-Ten of the twelve selected milestones are complete (83%). O2 and O3 remain
-pending.
+Eleven of the twelve selected milestones are complete (92%). O3 remains pending.
 
 Execution uses the routine route under the user's September 9 instruction to complete this roadmap and make necessary decisions. The proposal's earlier document-only authorization records its original scope; it does not undo that later execution instruction. Stronger runner credential isolation remains deferred. Existing upstream gates and independently checked operation boundaries remain in force.
 
@@ -293,7 +292,7 @@ acceptance are separate results.
 This selected Akka.NET single-host work brings forward the matching shared-execution and hosting
 foundations from [Unified Roadmap E0–E1](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#96-e0e1-later-capability-development).
 Those later entries consume this implementation and its qualified evidence; they do not schedule a
-second actor/executor build. O2/O3 still owes its own operational exits. Federation, stronger isolation,
+second actor/executor build. O3 still owes its controlled-adoption exit. Federation, stronger isolation,
 additional planners and broader class/default decisions remain separate conditional scope, not results
 implied by this trusted local pilot.
 
@@ -328,12 +327,12 @@ implied by this trusted local pilot.
   supervises the runner as a local child. The old host relay and `podman exec` launcher are not
   prerequisites for the remaining pilot.
 
-The next installed window adopts the combined immutable application bundle into the selected two-container
-deployment and qualifies authentication, egress and execution. Preserve the stopped SystemAdmin data and
-backup evidence while replacing the old topology. The representative item remains
-[`.github#3421`](https://github.com/FS-GG/.github/issues/3421); its live transfer, delivery and reboot-recovery
-exits remain due. The [operator contract](../operations/orchestration-main-pilot.md) records the subscription
-trust and accounting requirements. Bind fresh accepted source and artifact identities before dispatch.
+The accepted installed window adopted the combined immutable application bundle into the selected
+two-container deployment and qualified authentication, egress, execution and recovery. Original
+[`.github#3421`](https://github.com/FS-GG/.github/issues/3421) was retired without inventing inaccessible
+history; distinct local [`.github#3514`](https://github.com/FS-GG/.github/issues/3514) supplied the live pilot.
+The [operator contract](../operations/orchestration-main-pilot.md) records the subscription trust and
+accounting requirements.
 
 The accepted bounded installed-work horizon keeps replacement, migration and live effects separate:
 
@@ -352,7 +351,7 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
   `24702278c3d37b6fb7f3db295190986dfd487c412fee2f244328561ca0141a9c`. Evidence
   `1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated pause,
   negative controls, durable restart and final stop with no dispatch or GitHub effect.
-- [ ] O2-I4 — Trusted bounded live pilot and recovery — protected operation.
+- [x] O2-I4 — Trusted bounded live pilot and recovery — protected operation.
   - [x] O2-I4a — Coordination immutable Linux x64 Host/runner bundle and local-child contract.
     [PR #378](https://github.com/FS-GG/FS.GG.Coordination/pull/378) and listener repair
     [#379](https://github.com/FS-GG/FS.GG.Coordination/pull/379) merged as `68bcfc5755f647e59c13927569422940b549e798`
@@ -364,9 +363,12 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
     and migrated v2 state. Adoption receipt `b9a9c8e8a44c0e298fdb3c3102f2973cb55e27d380c5448017bc194b6c546dce`
     proves zero unknown operations, continuity, boundary and ordered restart; cold-backup receipt
     `8f233a8104a086d7c633f40c1d2d2931e9182b1732ec818f5579a7371cdfbbc6` and terminal stop passed.
-  - [ ] O2-I4c — Complete the distinct local nonrenewing pilot and qualified administrative retirement
-    of original `.github#3421`; prove authentication, candidate persistence, checks, native delivery and
-    failure/reboot recovery, preserving ambiguous-effect reconciliation and the direct-credential limit.
+  - [x] O2-I4c — The distinct local nonrenewing pilot and qualified administrative retirement completed.
+    Coordination [#393](https://github.com/FS-GG/FS.GG.Coordination/pull/393) retired inaccessible
+    `.github#3421` with the same-tree H-to-T fence; [#396](https://github.com/FS-GG/FS.GG.Coordination/pull/396)
+    supplied the final generation-bound admission/bundle. After one physical reboot, the retained attempt
+    recovered through the focused repository-root repair in [#397](https://github.com/FS-GG/FS.GG.Coordination/pull/397)
+    and natively merged [`.github` #3515](https://github.com/FS-GG/.github/pull/3515).
 
 These are O2 substeps, not top-level milestones. Each unchecked step needs exact authority and fresh
 baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
@@ -377,7 +379,27 @@ delivered a distinct local store, authenticated paused restart and cold backup. 
 and disabled. The [current progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
 records source and receiver evidence. Coordination’s local-continuation plan is linked in
 [Unified section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
-Original retirement and local live qualification remain pending; the count stays 10/12.
+Original retirement and local live qualification subsequently completed as recorded below.
+
+**September 16:** Coordination retirement merge `333b82b75c8a67f65cdc29199383de482f88828e`
+closed the inaccessible old scope as `AdministrativelyRetiredWithLostHistory`. Admission merge
+`34afb5f336d4f90e358879f2c254b37310efcfa3` produced the final bundle and generation-1 admission. The live
+attempt created exact candidate `18a8df69135f29d719b2736847006843ec225dd8` before the physical boot identity
+changed from `12690d45-efc6-4eb5-99d8-cc1484046873` to
+`e24b787b-b7db-4cf4-ae04-cfe7f9f886b7`.
+
+The first automatic postboot helper resumed a saved read-only session and sent no recovery request;
+SystemAdmin [#108](https://github.com/EHotwagner/SystemAdmin/pull/108) now rejects mismatched persisted
+permission profiles. The first manual recovery exposed a trailing-slash repository URL and made no state
+mutation. Coordination [#397](https://github.com/FS-GG/FS.GG.Coordination/pull/397), merge
+`1d3b683d804cb369914a3fbb29757c36c533e130`, repaired that URI and produced served-verified bundle run
+`35093350816`. The same attempt then recovered from byte-identical admission, resumed at generation 1,
+merged [`.github` #3515](https://github.com/FS-GG/.github/pull/3515) as
+`cf840ff9f760d2fdebcdca84caf0ae24f75b8dfa`, closed issue #3514, removed its claim and branch, and stopped
+all units. Exactly one implementation turn is known: input 77,429, cached input 38,528, output 556 and
+reasoning output 0; subscription cost remains unknown. No second model attempt or reboot occurred. The
+automatic helper correction was not requalified across another reboot; the successful manual same-attempt
+recovery supplies O2's reboot and native-delivery exit. O2 is complete; O3 is the sole remaining milestone.
 
 Workspace impact: S1/S2 change source capability. The first enabled runtime change is explicit adoption
 of the two-container deployment for the enrolled O2 scope; no SDD/Templates lifecycle default or general
