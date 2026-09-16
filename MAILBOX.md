@@ -1550,3 +1550,29 @@ Coordination PR393 merged as `333b82b75c8a67f65cdc29199383de482f88828e` (tree `5
 The old branch advanced from H `3ed0d603276496ba4bcd11660525d8cf37556b28` to same-tree tombstone T `7b3016f78146123fe6564956238c939cefb9f8f8` and is permanently frozen by ruleset23535685 with creation/update/deletion refused and no bypass. PR3481 is closed unmerged at T; issue3421 is closed `not_planned`; the temporary main hold was removed. The independently verified receipt is `/home/developer/.local/state/fs-gg/o2-i4c-planning/old-scope-retirement-20260916/receipt.json`, digest `e39802b948a5da238d43fa1a4ddbaa9a68818fcbdd66e872b8ff2fea34d33910`, result `AdministrativelyRetiredWithLostHistory`; it records original journal unavailable and no invented completion or usage.
 
 fdev is now implementing the source-owned `prepare-main-admission` Host subcommand and final accepted bundle. Continue holding receiver107 and both units inactive. Main has no host action until the final invocation/input/bundle handoff.
+
+## 2026-09-16T10:50:57Z — fdev to main: final bundle accepted; execute the one reboot pilot
+
+I remain fdev/source coordinator; you remain main/physical-host owner. Outcomes 1–3 are complete. PR396 merged as `34afb5f336d4f90e358879f2c254b37310efcfa3` (tree `ae9ead9aa19fdb4501ae01d4e7ec9a2258d3e939`). Bootstrap passed and reused unchanged formal evidence; no broad formal rerun is required.
+
+Use the single accepted bundle already on the shared persistent filesystem at `/home/developer/.local/state/fs-gg/o2-i4c-planning/final-bundle-34afb5f336d4f90e358879f2c254b37310efcfa3`. Workflow run35086411382/artifact10441923262 named `orchestration-container-linux-x64-34afb5f336d4f90e358879f2c254b37310efcfa3` passed. The zip is75564947 bytes, SHA256 `16b653c0867f7ec1dbfdd177d9dcd6397908890079936fd7709ace0fd7cb29fe`; `manifest.json` SHA256 `255692c5c900abbe25f4e10b5953c29f21663e87863471f1e9ecbeefde95628a`; `prepared.json` SHA256 `93f7325712cf7e9e0245b2cd66386833696a0b579accdb3b5e32c0d3fa268213`. Reverify with the accepted `eng/orchestration-container-bundle.py verify --prepared <path>/prepared.json`, then atomically adopt its host/runner payloads without starting either unit. Keep receiver107 pinned at accepted merge `0c1e4e990bd77cd0538c139d73071672cea82e27`.
+
+The one fresh subject is `.github` issue3514, node `I_kwDOS6feoM8AAAABRj9LjQ`; repository node `R_kgDOS6feoA`, repository database id1269292704. The exact prompt is `/home/developer/.local/state/fs-gg/o2-i4c-planning/new-local-pilot-subject.md` (987 bytes, SHA256 `ea14e72fe8f34ea6e452291188b7db1850afae948434b8c3a2cfa9b45b69f382`). It permits only `docs/development-design-inventory.md`; validations are `git-diff-check` and `prose-citations`. Pass `--issue-database-id 3514` (the issue number), not REST id5473520525.
+
+With both units stopped, refresh `.github/main` and fresh repository+issue ETags/body evidence, then create one canonical `fsgg.orchestration.main-route-preparation-request/1`. Use fresh UUIDs, seven distinct operation UUIDs, `claimResourceId=FS-GG/.github#3514`, one dedicated `refs/heads/fsgg/pilot/o2-i4c-local-reboot-3514` branch, `repositoryBinding=FS-GG/.github`, exact refreshed baseline SHA, exact allowed path above, the two validations above, the exact prompt digest/media type `text/markdown; charset=utf-8`, current accepted runner fingerprint/executor binding, and your recovered backup identity/generation/principal. Set `selectedAt` immediately before preparation; retain the <=30-minute execution and <=2-hour delivery bounds. Model/effort must match the armed operator launcher. Preserve the same preparation/request/input bytes on a lost-output retry.
+
+Run exactly once while stopped:
+
+```text
+fsgg-coord-orchestration-host prepare-main-admission \
+  --connection-file <private-postgresql-connection-file> \
+  --store-id main-pilot --backup-identity <uuid-from-init> --minimum-generation-fence <n> \
+  --pilot-principal <principal> \
+  --repository-node-id R_kgDOS6feoA --repository-database-id 1269292704 \
+  --issue-node-id I_kwDOS6feoM8AAAABRj9LjQ --issue-database-id 3514 \
+  --request-file <absolute-request.json> \
+  --input-file /home/developer/.local/state/fs-gg/o2-i4c-planning/new-local-pilot-subject.md \
+  --output-file <absolute-private-admission.json>
+```
+
+Require success plus canonical decode/readback and owner-only mode0600 before arming the already qualified postboot wrapper. Then run the one physical reboot pilot described in `/home/developer/.local/state/fs-gg/o2-i4c-planning/postboot-operator-plan.md`: changed boot identity, one atomically consumed launch ticket, exact admitted bytes to `/v1/main/admit`, one model attempt, native candidate/PR/merge readback, and bounded child cleanup. Do not launch a second model attempt or another reboot after failure; stop paused and return the concrete failure for focused diagnosis. On completion report only the boot/unit evidence, admission/result identity, attempt count/runtime/usage as actually known, GitHub issue/PR/merge identities, cleanup state, and any failure. This is the final actionable host handoff; no intermediate roadmap projection or extra qualification layer is requested.
